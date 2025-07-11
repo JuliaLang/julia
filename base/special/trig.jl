@@ -725,6 +725,146 @@ function acos(x::T) where T <: Union{Float32, Float64}
     end
 end
 
+# Not used at run time, so prevent unnecessary specialization/inference.
+Base.@nospecializeinfer function _exact_string_to_floating_point((@nospecialize type::Type{<:AbstractFloat}), string::String, precision::Int)
+    bf = BigFloat(string; precision)
+    f = type(bf)
+    (f == bf) || throw(ArgumentError("not exact"))
+    f
+end
+
+"""
+    _sinpi_kernel_wide_polynomial_f16::Tuple{Vararg{Float32}}
+
+Floating-point constants defining a minimax polynomial, computed with Sollya like so:
+
+```sollya
+f = sin(pi * x);
+i = [-1/8, 1/4];
+m = [|1, 3, 5, 7|];
+d = [|single...|];
+p = fpminimax(f, m, d, i);
+supnorm(p, f, i, relative, 1b-200);
+e = abs(f(x) - p(x)) / abs(f(x));
+plot(e, i);
+p;
+```
+
+The relative error of the polynomial produced by `fpminimax` is below `2.8e-8`.
+
+* Calculated with the `supnorm` call in the Sollya code above.
+
+* This value accounts for the representation of the coefficients in machine precision.
+
+* This value underestimates the complete error when evaluating the polynomial in machine precision.
+"""
+const _sinpi_kernel_wide_polynomial_f16 = (
+    _exact_string_to_floating_point(Float32, "3.1415927410125732421875"),
+    _exact_string_to_floating_point(Float32, "-5.1677227020263671875"),
+    _exact_string_to_floating_point(Float32, "2.5502727031707763671875"),
+    _exact_string_to_floating_point(Float32, "-0.593835175037384033203125"),
+)
+
+"""
+    _sinpi_kernel_wide_polynomial_f32::Tuple{Vararg{Float64}}
+
+Floating-point constants defining a minimax polynomial, computed with Sollya like so:
+
+```sollya
+prec = 400;
+f = sin(pi * x);
+i = [-1/8, 1/4];
+m = [|1, 3, 5, 7, 9|];
+d = [|double...|];
+p = fpminimax(f, m, d, i);
+supnorm(p, f, i, relative, 1b-200);
+e = abs(f(x) - p(x)) / abs(f(x));
+plot(e, i);
+p;
+```
+
+The relative error of the polynomial produced by `fpminimax` is below `4.6e-12`.
+
+* Calculated with the `supnorm` call in the Sollya code above.
+
+* This value accounts for the representation of the coefficients in machine precision.
+
+* This value underestimates the complete error when evaluating the polynomial in machine precision.
+"""
+const _sinpi_kernel_wide_polynomial_f32 = (
+    _exact_string_to_floating_point(Float64, "3.141592653575500104778939203242771327495574951171875"),
+    _exact_string_to_floating_point(Float64, "-5.16771276881935026636938346200622618198394775390625"),
+    _exact_string_to_floating_point(Float64, "2.550162618972915407056234471383504569530487060546875"),
+    _exact_string_to_floating_point(Float64, "-0.599201360341684807764295328524895012378692626953125"),
+    _exact_string_to_floating_point(Float64, "8.099587813821683413006979890269576571881771087646484375e-2"),
+)
+
+"""
+    _cospi_kernel_wide_polynomial_f16::Tuple{Vararg{Float32}}
+
+Floating-point constants defining a minimax polynomial, computed with Sollya like so:
+
+```sollya
+f = cos(pi * x);
+i = [-1/8, 1/4];
+m = [|0, 2, 4, 6|];
+d = [|single...|];
+p = fpminimax(f, m, d, i);
+supnorm(p, f, i, relative, 1b-200);
+e = abs(f(x) - p(x)) / abs(f(x));
+plot(e, i);
+p;
+```
+
+The relative error of the polynomial produced by `fpminimax` is below `6.0e-8`.
+
+* Calculated with the `supnorm` call in the Sollya code above.
+
+* This value accounts for the representation of the coefficients in machine precision.
+
+* This value underestimates the complete error when evaluating the polynomial in machine precision.
+"""
+const _cospi_kernel_wide_polynomial_f16 = (
+    _exact_string_to_floating_point(Float32, "0.999999940395355224609375"),
+    _exact_string_to_floating_point(Float32, "-4.934782505035400390625"),
+    _exact_string_to_floating_point(Float32, "4.05737972259521484375"),
+    _exact_string_to_floating_point(Float32, "-1.3042089939117431640625"),
+)
+
+"""
+    _cospi_kernel_wide_polynomial_f32::Tuple{Vararg{Float64}}
+
+Floating-point constants defining a minimax polynomial, computed with Sollya like so:
+
+```sollya
+prec = 400;
+f = cos(pi * x);
+i = [-1/8, 1/4];
+m = [|0, 2, 4, 6, 8|];
+d = [|double...|];
+p = fpminimax(f, m, d, i);
+supnorm(p, f, i, relative, 1b-200);
+e = abs(f(x) - p(x)) / abs(f(x));
+plot(e, i);
+p;
+```
+
+The relative error of the polynomial produced by `fpminimax` is below `5.7e-11`.
+
+* Calculated with the `supnorm` call in the Sollya code above.
+
+* This value accounts for the representation of the coefficients in machine precision.
+
+* This value underestimates the complete error when evaluating the polynomial in machine precision.
+"""
+const _cospi_kernel_wide_polynomial_f32 = (
+    _exact_string_to_floating_point(Float64, "0.99999999994393740099241085772518999874591827392578125"),
+    _exact_string_to_floating_point(Float64, "-4.934802158259088855629670433700084686279296875"),
+    _exact_string_to_floating_point(Float64, "4.05870692154277179497512406669557094573974609375"),
+    _exact_string_to_floating_point(Float64, "-1.3350359059651226711906701893894933164119720458984375"),
+    _exact_string_to_floating_point(Float64, "0.2312609234105421907035093909144052304327487945556640625"),
+)
+
 # Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
 @inline function sinpi_kernel(x::Float64)
     sinpi_kernel_wide(x)
@@ -742,8 +882,7 @@ end
 end
 @inline function sinpi_kernel_wide(x::Float32)
     x = Float64(x)
-    return x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
-                            2.5501626483206374, -0.5992021090314925, 0.08100185277841528))
+    return x*evalpoly(x*x, _sinpi_kernel_wide_polynomial_f32)
 end
 
 @inline function sinpi_kernel(x::Float16)
@@ -751,7 +890,7 @@ end
 end
 @inline function sinpi_kernel_wide(x::Float16)
     x = Float32(x)
-    return x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0))
+    return x*evalpoly(x*x, _sinpi_kernel_wide_polynomial_f16)
 end
 
 # Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
@@ -773,15 +912,14 @@ end
 end
 @inline function cospi_kernel_wide(x::Float32)
     x = Float64(x)
-    return evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
-                          -1.3352624040152927, 0.23531426791507182, -0.02550710082498761))
+    return evalpoly(x*x, _cospi_kernel_wide_polynomial_f32)
 end
 @inline function cospi_kernel(x::Float16)
     Float16(cospi_kernel_wide(x))
 end
 @inline function cospi_kernel_wide(x::Float16)
     x = Float32(x)
-    return evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0))
+    return evalpoly(x*x, _cospi_kernel_wide_polynomial_f16)
 end
 
 """
