@@ -306,7 +306,6 @@
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
 
-;; Check if an expression contains thisfunction
 (define (contains-thisfunction? expr)
   (expr-contains-p (lambda (x) (and (pair? x) (eq? (car x) 'thisfunction))) expr))
 
