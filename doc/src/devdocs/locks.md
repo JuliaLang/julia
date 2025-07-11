@@ -97,7 +97,7 @@ No Julia code may be called while holding a lock above this point.
 
 * `world_counter_lock`
 
-### Level 
+### Level 7
 
 * `JuliaOJIT::EmissionMutex` (`std::recursive_mutex`)
 
