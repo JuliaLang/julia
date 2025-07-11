@@ -5174,7 +5174,6 @@ f(x) = yt(x)
                                    final-name)))
                        (cond (tail  (emit-return tail e1))
                              (value e1)
-                             ((symbol? e1) (emit e1) #f)
                              (else (emit e1) #f))))
                    (error "thisfunction used in context with no arguments"))))
 
