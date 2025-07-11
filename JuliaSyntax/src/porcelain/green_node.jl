@@ -132,7 +132,9 @@ function GreenNode(cursor::GreenTreeCursor)
     end
 end
 
-function build_tree(T::Type{GreenNode}, stream::ParseStream; kws...)
+function build_tree(::Type{GreenNode}, stream::ParseStream;
+                    # unused, but required since `_parse` is written generic
+                    filename=nothing, first_line=1, keep_parens=false)
     cursor = GreenTreeCursor(stream)
     if has_toplevel_siblings(cursor)
         # There are multiple toplevel nodes, e.g. because we're using this

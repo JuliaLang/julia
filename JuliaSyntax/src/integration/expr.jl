@@ -643,7 +643,10 @@ end
     return retexpr
 end
 
-function build_tree(::Type{Expr}, stream::ParseStream; filename=nothing, first_line=1, kws...)
+function build_tree(::Type{Expr}, stream::ParseStream;
+                    filename=nothing, first_line=1,
+                    # unused, but required since `_parse` is written generic
+                    keep_parens=false)
     source = SourceFile(stream, filename=filename, first_line=first_line)
     return build_tree(Expr, stream, source)
 end
