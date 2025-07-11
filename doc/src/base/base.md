@@ -397,6 +397,7 @@ Base.Sys.total_memory
 Base.Sys.free_physical_memory
 Base.Sys.total_physical_memory
 Base.Sys.uptime
+Base.Sys.sysimage_cpu_target_str
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
