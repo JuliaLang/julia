@@ -1213,16 +1213,12 @@
                   (argname    (if (overlay? name) (caddr name) name))
                   ;;
                   ;; fill in first (closure) argument
-                  (self-name  (if (decl? argname)
-                                  (let ((var (decl-var argname)))
-                                    (if (nodot-sym-ref? var) var '|#self#|))
-                                  (if (nodot-sym-ref? argname) argname '|#self#|)))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
-                                            `(|::| ,self-name ,(cadr n))
+                                            `(|::| |#self#| ,(cadr n))
                                             n)))
                   (farg    (if (decl? argname)
                                (adj-decl argname)
-                               `(|::| ,self-name (call (core Typeof) ,argname))))
+                               `(|::| |#self#| (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
