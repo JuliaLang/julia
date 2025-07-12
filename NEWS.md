@@ -56,6 +56,9 @@ New library features
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 * `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
 
+* `match(regex, string, idx)` now supports updating `idx::Ref{Int}` to
+  point at the first character after a successful match ([#51429])
+
 Standard library changes
 ------------------------
 
