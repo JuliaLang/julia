@@ -1675,7 +1675,7 @@ of the `begin/end` case (as if used for each loop iteration).
 # `@testset let`
 
 When `@testset let` is used, the macro starts a *transparent* test set with
-the given object added as a context object to any failing test contained
+the given object added as a context object to any failing or erroring test contained
 therein. This is useful when performing a set of related tests on one larger
 object and it is desirable to print this larger object when any of the
 individual tests fail. Transparent test sets do not introduce additional levels
@@ -1687,6 +1687,9 @@ parent test set (with the context object appended to any failing tests.)
 
 !!! compat "Julia 1.10"
     Multiple `let` assignments are supported since Julia 1.10.
+
+!!! compat "Julia 1.13"
+    Context is shown when a test errors since Julia 1.13.
 
 # Special implicit world age increment for `@testset begin`
 

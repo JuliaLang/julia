@@ -76,6 +76,7 @@ Standard library changes
 #### Test
 
 * Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
+* Transparent test sets (`@testset let`) now show context when tests error ([#58727]).
 
 #### InteractiveUtils
 
