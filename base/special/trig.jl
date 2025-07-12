@@ -726,7 +726,7 @@ function acos(x::T) where T <: Union{Float32, Float64}
 end
 
 # Not used at run time, so prevent unnecessary specialization/inference.
-Base.@nospecializeinfer function _exact_string_to_floating_point((@nospecialize type::Type{<:AbstractFloat}), string::String, precision::Int)
+Base.@nospecializeinfer function _exact_string_to_floating_point((@nospecialize type::Type{<:AbstractFloat}), string::String, precision::Int = 1000)
     bf = BigFloat(string; precision)
     f = type(bf)
     (f == bf) || throw(ArgumentError("not exact"))
