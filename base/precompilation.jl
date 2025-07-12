@@ -983,7 +983,7 @@ function _precompilepkgs(pkgs::Vector{String},
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
                                 failed_deps[pkg_config] = (strict || is_project_dep) ? string(sprint(showerror, err), "\n", strip(errmsg)) : ""
                                 !fancyprint && @lock print_lock begin
-                                    println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
+                                    println(io, " "^12, color_string("  ✗ ", Base.error_color()), name)
                                 end
                             else
                                 rethrow()
