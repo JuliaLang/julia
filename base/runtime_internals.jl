@@ -1478,15 +1478,7 @@ end
 function matches_to_methods(ms::Array{Any,1}, tn::Core.TypeName, mod)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
-    # Remove shadowed methods with identical type signatures
-    prev = nothing
-    filter!(ms) do m
-        l = prev
-        repeated = (l isa Method && m.sig == l.sig)
-        prev = m
-        return !repeated
-    end
-    # Remove methods not part of module (after removing shadowed methods)
+    # Remove methods not part of module
     mod === nothing || filter!(ms) do m
         return parentmodule(m) ∈ mod
     end
