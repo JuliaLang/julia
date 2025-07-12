@@ -100,13 +100,6 @@ julia> @time some_computation()
   2.123456 seconds (1.50 M allocations: 58.725 MiB, 17.17% gc time)
 ```
 
-This shows:
-
-* Total execution time
-* Number of allocations
-* Memory allocated
-* Percentage of time spent in garbage collection
-
 ### GC Logging
 
 Enable detailed GC logging to understand collection patterns:
@@ -144,23 +137,14 @@ The best way to minimize GC impact is to reduce unnecessary allocations:
 
 ### Memory-Efficient Patterns
 
-* Use `Vector{Float64}` instead of `Vector{Any}` when possible
 * Avoid global variables that change type
 * Use `const` for global constants
-* Consider memory pools for frequently allocated/freed objects
 
 ### Profiling Memory Usage
 
 For detailed guidance on profiling memory allocations and identifying performance bottlenecks, see the [Profiling](@ref man-profiling) section.
 
 ## [Advanced Configuration](@id man-gc-advanced)
-
-### Environment Variables
-
-Additional GC-related environment variables:
-
-* `JULIA_GC_WAIT_FOR_DEBUGGER`: Pause for debugger attachment during GC (debug builds only)
-* `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`: Enable heap snapshot collection during profiling
 
 ### Integration with System Memory Management
 
@@ -172,15 +156,6 @@ Julia works best when:
 * Container memory limits are set appropriately with `--heap-size-hint`
 
 ## [Troubleshooting Memory Issues](@id man-gc-troubleshooting)
-
-### Out of Memory Errors
-
-If you encounter out-of-memory errors:
-
-1. **Check system memory**: Ensure adequate RAM and swap space
-2. **Use heap size hints**: Set `--heap-size-hint` to limit memory usage
-3. **Profile allocations**: Identify and reduce unnecessary allocations
-4. **Consider chunking**: Process data in smaller chunks for large datasets
 
 ### High GC Overhead
 
@@ -198,6 +173,5 @@ While Julia's GC prevents most memory leaks, issues can still occur:
 * **Global references**: Avoid holding references to large objects in global variables
 * **Closures**: Be careful with closures that capture large amounts of data
 * **C interop**: Ensure proper cleanup when interfacing with C libraries
-* **Circular references**: While handled by the GC, they can delay collection
 
 For more detailed information about Julia's garbage collector internals, see the Garbage Collection section in the Developer Documentation.
