@@ -346,6 +346,7 @@ end
     @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
     @test (@which (::Vector{Float64})').name === :adjoint
     @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
+    @test (@which (::Int)^4).name === :literal_pow
     @test (@which +(some_x::Int, some_y::Float64)).name === :+
     @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
     @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
@@ -380,6 +381,11 @@ end
     @test (@code_typed optimize=false ::Vector{Int} .= ::Int)[2] == Vector{Int}
     @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ ::Vector{Int})[2] == Vector{Float64}
     @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
+
+    @testset "Callable objects" begin
+        @test (@code_typed (::Base.Fix2{typeof(+), Float64})(3))[2] == Float64
+        @test (@code_typed optimize=false (::Returns{Float64})(::Int64; name::String))[2] == Float64
+    end
 end
 
 module MacroTest
