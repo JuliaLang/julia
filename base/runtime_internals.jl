@@ -181,47 +181,26 @@ _function_macro_error() = (@noinline; error("@__FUNCTION__ can only be used with
 Get the innermost enclosing function object.
 
 !!! note
-    In functions like `f() = [(@__FUNCTION__) for _ in 1:10]`, this would
-    refer to the generator function in the comprehension, NOT the enclosing
-    function `f`. Similarly, in a closure function, this will refer to the
-    closure function object rather than the enclosing function. Note that
-    macros like [`@spawn`](@ref Threads.@spawn), [`@async`](@ref), etc., also
-    create closures.
-
-!!! note
-    This does not work in the context of callable structs as there is no
-    function to refer to, and will result in an `UndefVarError`.
+    Some macros, including [`@spawn`](@ref Threads.@spawn), [`@async`](@ref), etc.,
+    wrap their code in closures. When `@__FUNCTION__` is used within such code,
+    it will refer to the closure created by the macro rather than the enclosing
+    user-defined function. This follows the same scoping behavior as `return`:
+    just as `return` exits the closure and not the outer function, `@__FUNCTION__`
+    refers to the closure and not the outer function.
 
 # Examples
 
-`@__FUNCTION__` is useful for closures that need to refer to themselves,
-as otherwise the function object would be captured as a variable and boxed.
+`@__FUNCTION__` enables recursive anonymous functions:
 
 ```jldoctest
-julia> function make_fib()
-           fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
-           return fib
-       end
-make_fib (generic function with 1 method)
-
-julia> make_fib()(7)
-21
-```
-
-If we had instead used `fib(n - 1) + fib(n - 2)` directly, `fib` would be boxed,
-leading to type instabilities.
-
-Note that `@__FUNCTION__` is also available for anonymous functions:
-
-```jldoctest
-julia> factorial = n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1);
+julia> factorial = (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1));
 
 julia> factorial(5)
 120
 ```
 
-`@__FUNCTION__` can also be combined with `nameof` to get the symbol for an
-enclosing function:
+`@__FUNCTION__` can be combined with `nameof` to identify a function's
+name from within its body:
 
 ```jldoctest
 julia> bar() = nameof(@__FUNCTION__);
