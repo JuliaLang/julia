@@ -248,7 +248,7 @@ function InferenceParams(
         #=max_tuple_splat::Int=# 32,
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
-        #=ipo_slot_refinement::Bool=# false,
+        #=ipo_slot_refinement::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false,

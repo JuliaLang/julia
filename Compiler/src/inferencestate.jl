@@ -372,13 +372,6 @@ function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt
     bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
     bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
     bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
-    if ipo_slot_refinement_enabled(interp)
-        refinements = VarTable(undef, nslots)
-        refinement_propagation = SlotRefinementPropagationState(cfg)
-    else
-        refinements = VarTable()
-        refinement_propagation = nothing
-    end
     argtypes = result.argtypes
 
     argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
@@ -391,10 +384,15 @@ function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt
         end
         slottypes[i] = argtyp
         bb_vartable1[i] = VarState(argtyp, i > nargtypes)
-        if ipo_slot_refinement_enabled(interp)
-            refinements[i] = VarState((i > nargtypes) ? Any : argtypes[i], i > nargtypes)
-        end
     end
+
+    refinement_propagation = nothing
+    if ipo_slot_refinement_enabled(interp) && is_ipo_slot_refinement_profitable(argtypes)
+        refinements = [VarState(argtype, true) for argtype in argtypes]
+    else
+        refinements = VarTable()
+    end
+
     src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
     ssaflags = copy(src.ssaflags)
 
@@ -451,6 +449,21 @@ function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt
     end
 
     return this
+end
+
+function is_ipo_slot_refinement_profitable(argtypes)
+    for argtype in argtypes
+        !isconcretetype(argtype) && return true
+        isstructtype(argtype) && may_have_undefs(argtype) && return true
+    end
+    return false
+end
+
+function may_have_undefs(@nospecialize(T::Type))
+    fldcnt = fieldcount_noerror(T)
+    fldcnt === nothing && return true
+    minf = datatype_min_ninitialized(T)
+    return minf < fldcnt
 end
 
 gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)

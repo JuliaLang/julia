@@ -4423,6 +4423,8 @@ function ipo_slot_refinement_enabled(interp::AbstractInterpreter)
     return inf_params.ipo_slot_refinement
 end
 
+is_ipo_slot_refinement_profitable(state::InferenceState) = !isempty(state.refinements)
+
 function is_argument_slot(frame::InferenceState, slot::SlotNumber)
     def = frame.linfo.def
     isa(def, Method) || return false
@@ -4443,6 +4445,7 @@ end
 
 function apply_refinements_for_ipo!(frame::InferenceState, 𝕃ᵢ::AbstractLattice,
                                   refinements#=::Iterable{SlotRefinement}=#)
+    is_ipo_slot_refinement_profitable(frame) || return
     for refinement in refinements
         is_argument_slot(frame, refinement.slot) || continue
         apply_refinement!(frame.refinements, 𝕃ᵢ, refinement)
@@ -4456,6 +4459,11 @@ function apply_refinements!(vartable::VarTable, 𝕃ᵢ::AbstractLattice, refine
         changes !== nothing && changes.var == refinement.slot && continue
         apply_refinement!(vartable, 𝕃ᵢ, refinement)
     end
+end
+
+function SlotRefinementPropagationState(frame::InferenceState)
+    cfg = compute_basic_blocks(frame.src.code)
+    return SlotRefinementPropagationState(cfg)
 end
 
 function SlotRefinementPropagationState(cfg::CFG)
@@ -4523,10 +4531,19 @@ function SlotRefinementPropagationState(cfg::CFG)
     return SlotRefinementPropagationState(postdomtree, paths, initial_refinements, updates, merge_points, terminating_blocks, top_level_blocks)
 end
 
+function get_ipo_slot_refinement_state!(frame::InferenceState)
+    state = frame.refinement_propagation
+    state !== nothing && return state
+    state = SlotRefinementPropagationState(frame)
+    frame.refinement_propagation = state
+    return state
+end
+
 function record_refinements!(frame::InferenceState, block::BBIndex,
                              interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#)
     ipo_slot_refinement_enabled(interp) || return
-    state = frame.refinement_propagation::SlotRefinementPropagationState
+    is_ipo_slot_refinement_profitable(frame) || return
+    state = get_ipo_slot_refinement_state!(frame)
     path = state.paths[block]
     updates = state.updates[path]
     record_refinements!(frame, updates, interp, refinements)
@@ -4575,7 +4592,8 @@ end
 
 function should_eagerly_apply_refinements_for_ipo(interp::AbstractInterpreter, frame::InferenceState, bb::Int)
     ipo_slot_refinement_enabled(interp) || return false
-    state = frame.refinement_propagation::SlotRefinementPropagationState
+    is_ipo_slot_refinement_profitable(frame) || return
+    state = get_ipo_slot_refinement_state!(frame)
     return should_eagerly_apply_refinements_for_ipo(state, bb)
 end
 
@@ -4583,8 +4601,10 @@ should_eagerly_apply_refinements_for_ipo(state::SlotRefinementPropagationState, 
 
 function merge_refinements_from_predecessors!(frame::InferenceState, vartable::VarTable, interp::AbstractInterpreter)
     ipo_slot_refinement_enabled(interp) || return
+    is_ipo_slot_refinement_profitable(frame) || return
+    state = frame.refinement_propagation
+    state === nothing && return
     block = frame.currbb
-    state = frame.refinement_propagation::SlotRefinementPropagationState
     in(block, state.merge_points) || return
     𝕃ᵢ = typeinf_lattice(interp)
     preds = frame.cfg.blocks[block].preds
@@ -4603,7 +4623,9 @@ end
 
 function finish_merging_global_refinements!(frame::InferenceState, interp::AbstractInterpreter)
     ipo_slot_refinement_enabled(interp) || return
-    state = frame.refinement_propagation::SlotRefinementPropagationState
+    is_ipo_slot_refinement_profitable(frame) || return
+    state = frame.refinement_propagation
+    state === nothing && return
     length(state.terminating_blocks) ≥ 2 || return
     𝕃ᵢ = typeinf_lattice(interp)
     paths = nonthrowing_paths(state, frame, state.terminating_blocks; finished = true)
