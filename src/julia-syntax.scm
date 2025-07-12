@@ -306,9 +306,6 @@
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
 
-(define (contains-thisfunction? expr)
-  (expr-contains-p (lambda (x) (and (pair? x) (eq? (car x) 'thisfunction))) expr))
-
 (define (make-generator-function name sp-names arg-names body)
   (let ((arg-names (append sp-names
                            (map (lambda (n)
@@ -555,7 +552,7 @@
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
-                                   (if (and name (contains-thisfunction? `(block ,@stmts)))
+                                   (if (and name (has-thisfunction? `(block ,@stmts)))
                                        (cons `(meta thisfunction-original ,name) annotations)
                                        annotations)))
           rett)
@@ -2919,6 +2916,7 @@
    'generator
    (lambda (e)
      (check-no-return e)
+     (check-no-thisfunction e)
      (expand-generator e #f '()))
 
    'flatten
@@ -3003,6 +3001,13 @@
   (if (has-return? e)
       (error "\"return\" not allowed inside comprehension or generator")))
 
+(define (has-thisfunction? e)
+  (expr-contains-p thisfunction? e (lambda (x) (not (function-def? x)))))
+
+(define (check-no-thisfunction e)
+  (if (has-thisfunction? e)
+      (error "\"thisfunction\" not allowed inside comprehension or generator")))
+
 (define (has-break-or-continue? e)
   (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
                    e
@@ -3011,6 +3016,7 @@
 
 (define (lower-comprehension ty expr itrs)
   (check-no-return expr)
+  (check-no-thisfunction expr)
   (if (has-break-or-continue? expr)
       (error "break or continue outside loop"))
   (let ((result    (make-ssavalue))
