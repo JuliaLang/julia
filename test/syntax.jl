@@ -4409,4 +4409,8 @@ end
         result = Cols(1, 2, 3)
         @test occursin("Cols", result)
     end
+
+    let @generated foo() = Expr(:thisfunction)
+        @test foo() === foo
+    end
 end
