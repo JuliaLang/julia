@@ -329,6 +329,18 @@ catch err13464
     @test startswith(err13464.msg, "expression is not a function call")
 end
 
+@testset "Single-argument forms" begin
+    a = which(+, (Int, Int))
+    b = which((typeof(+), Int, Int))
+    c = which(Tuple{typeof(+), Int, Int})
+    @test a == b == c
+
+    a = functionloc(+, (Int, Int))
+    b = functionloc((typeof(+), Int, Int))
+    c = functionloc(Tuple{typeof(+), Int, Int})
+    @test a == b == c
+end
+
 # PR 57909
 @testset "Support for type annotations as arguments" begin
     @test (@which (::Vector{Int})[::Int]).name === :getindex

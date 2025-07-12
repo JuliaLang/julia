@@ -960,6 +960,7 @@ Returns the method that would be called by the given type signature (as a tuple 
 function which(@nospecialize(tt#=::Type=#))
     return _which(tt).method
 end
+which(@nospecialize(argtypes::Tuple)) = which(to_tuple_type(argtypes))
 
 """
     which(module, symbol)
