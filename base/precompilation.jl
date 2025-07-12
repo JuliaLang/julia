@@ -920,7 +920,7 @@ function _precompilepkgs(pkgs::Vector{String},
             flags, cacheflags = config
             task = @async begin
                 try
-                    loaded = haskey(Base.loaded_modules, pkg)
+                    loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
                     for dep in deps # wait for deps to finish
                         wait(was_processed[(dep,config)])
                     end
