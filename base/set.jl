@@ -814,11 +814,11 @@ julia> replace([1, missing], missing=>0)
 """
 function replace(A, old_new::Pair...; count::Union{Integer,Nothing}=nothing)
     V = promote_valuetype(old_new...)
-    if count isa Nothing
-        T = promote_type(subtract_singletontype(eltype(A), old_new...), V)
+    if isnothing(count)
+        T = _replace_eltype(A, subtract_singletontype(eltype(A), old_new...), V)
         replace_pairs!(_similar_or_copy(A, T), A, typemax(Int), old_new)
     else
-        U = promote_type(eltype(A), V)
+        U = _replace_eltype(A, eltype(A), V)
         replace_pairs!(_similar_or_copy(A, U), A, check_count(count), old_new)
     end
 end
@@ -826,6 +826,11 @@ end
 promote_valuetype(x::Pair{K, V}) where {K, V} = V
 promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
     promote_type(V, promote_valuetype(y...))
+
+_replace_eltype(::Any, T::Type, S::Type) = promote_type(T, S)
+function _replace_eltype(::AbstractDict, ::Type{Pair{K1,V1}}, ::Type{Pair{K2,V2}}) where {K1,V1,K2,V2}
+    return Pair{promote_type(K1, K2), promote_type(V1, V2)}
+end
 
 # Subtract singleton types which are going to be replaced
 function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
