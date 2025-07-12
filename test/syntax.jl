@@ -1526,8 +1526,11 @@ end
 @test Meta.lower(@__MODULE__, :(return 0 for i=1:2)) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
 @test Meta.lower(@__MODULE__, :([ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
 @test Meta.lower(@__MODULE__, :(Int[ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :([ $(Expr(:thisfunction)) for i=1:2 ])) == Expr(:error, "\"thisfunction\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :($(Expr(:thisfunction)) for i=1:2)) == Expr(:error, "\"thisfunction\" not allowed inside comprehension or generator")
 @test [ ()->return 42 for i = 1:1 ][1]() == 42
 @test Function[ identity() do x; return 2x; end for i = 1:1 ][1](21) == 42
+@test @eval let f=[ ()->$(Expr(:thisfunction)) for i = 1:1 ][1]; f() === f; end
 
 # issue #27155
 macro test27155()
@@ -4350,4 +4353,64 @@ end
 let f = NoSpecClosure.K(1)
     @test f(2) == 1
     @test typeof(f).parameters == Core.svec()
+end
+
+@testset "Expr(:thisfunction)" begin
+    # regular functions can use Expr(:thisfunction) to refer to the function itself
+    @eval regular_func() = $(Expr(:thisfunction))
+    @test regular_func() === regular_func
+
+    # This also works in callable structs, which refers to the instance
+    struct CallableStruct
+        value::Int
+    end
+    @eval (obj::CallableStruct)() = $(Expr(:thisfunction))
+    @eval (obj::CallableStruct)(x) = $(Expr(:thisfunction)).value + x
+
+    let cs = CallableStruct(42)
+        @test cs() === cs
+        @test cs(10) === 52
+    end
+
+    struct RecursiveCallableStruct; end
+    @eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
+
+    @test RecursiveCallableStruct()(10) === 55
+
+    # In closures, var"#self#" should refer to the enclosing function,
+    # NOT the enclosing struct instance
+    struct CallableStruct2; end
+    @eval function (obj::CallableStruct2)()
+        function inner_func()
+            $(Expr(:thisfunction))
+        end
+        inner_func
+    end
+
+    let cs = CallableStruct2()
+        @test cs()() === cs()
+        @test cs()() !== cs
+    end
+
+    # Keywords
+    let
+        @eval f2(; n=1) = n <= 1 ? n : n * $(Expr(:thisfunction))(; n=n-1)
+        result = f2(n=5)
+        @test result == 120
+    end
+
+    # Struct constructor with thisfunction
+    let
+        @eval struct Cols{T<:Tuple}
+            cols::T
+            operator
+            Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string($(Expr(:thisfunction))))
+        end
+        result = Cols(1, 2, 3)
+        @test occursin("Cols", result)
+    end
+
+    let @generated foo() = Expr(:thisfunction)
+        @test foo() === foo
+    end
 end
