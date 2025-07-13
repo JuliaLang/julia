@@ -1143,6 +1143,7 @@ end
 
 function propagate_refinements(callee::InferenceState, caller::InferenceState, stmt, interp::AbstractInterpreter)
     ipo_slot_refinement_enabled(interp) || return nothing
+    is_ipo_slot_refinement_profitable(callee) || return nothing
     isexpr(stmt, :(=), 2) && (stmt = stmt.args[2])
     isexpr(stmt, :call) || return nothing
     stmt.args[1] === GlobalRef(Core, :_apply_iterate) && return nothing

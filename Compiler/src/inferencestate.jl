@@ -387,10 +387,11 @@ function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt
     end
 
     refinement_propagation = nothing
+    refinements = VarTable()
     if ipo_slot_refinement_enabled(interp) && is_ipo_slot_refinement_profitable(argtypes)
-        refinements = [VarState(argtype, true) for argtype in argtypes]
-    else
-        refinements = VarTable()
+        for argtype in argtypes
+            push!(refinements, VarState(argtype, true))
+        end
     end
 
     src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]

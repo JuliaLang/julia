@@ -4372,10 +4372,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             if refinements !== nothing
                 apply_refinements!(currstate, 𝕃ᵢ, refinements, changes)
-                if should_eagerly_apply_refinements_for_ipo(interp, frame, currbb)
-                    apply_refinements_for_ipo!(frame, 𝕃ᵢ, refinements)
-                else
-                    record_refinements!(frame, currbb, interp, refinements)
+                if is_ipo_slot_refinement_profitable(frame)
+                    if should_eagerly_apply_refinements_for_ipo(interp, frame, currbb)
+                        apply_refinements_for_ipo!(frame, 𝕃ᵢ, refinements)
+                    else
+                        record_refinements!(frame, currbb, interp, refinements)
+                    end
                 end
             end
             if rt === nothing
@@ -4592,7 +4594,6 @@ end
 
 function should_eagerly_apply_refinements_for_ipo(interp::AbstractInterpreter, frame::InferenceState, bb::Int)
     ipo_slot_refinement_enabled(interp) || return false
-    is_ipo_slot_refinement_profitable(frame) || return
     state = get_ipo_slot_refinement_state!(frame)
     return should_eagerly_apply_refinements_for_ipo(state, bb)
 end
