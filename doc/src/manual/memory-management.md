@@ -9,7 +9,7 @@ Julia features a garbage collector with the following characteristics:
 * **Non-moving**: Objects are not relocated in memory during garbage collection
 * **Generational**: Younger objects are collected more frequently than older ones
 * **Parallel and partially concurrent**: The GC can use multiple threads and run concurrently with your program
-* **Mostly precise**: The GC accurately identifies object references with minimal conservative scanning
+* **Mostly precise**: The GC accurately identifies object references for pure Julia code, and it provides conservative scanning APIs for users calling Julia from C
 
 The garbage collector automatically reclaims memory used by objects that are no longer reachable from your program, freeing you from manual memory management in most cases.
 
