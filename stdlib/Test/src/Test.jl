@@ -214,15 +214,17 @@ struct Error <: Result
     orig_expr::String
     value::String
     backtrace::String
+    context::Union{Nothing, String}
     source::LineNumberNode
 
-    function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
+    function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode, context::Union{Nothing, String}=nothing)
         if test_type === :test_error
             bt = scrub_exc_stack(bt, nothing, extract_file(source))
         end
         if test_type === :test_error || test_type === :nontest_error
             bt_str = try # try the latest world for this, since we might have eval'd new code for show
-                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                    # Apply REPL backtrace scrubbing to hide REPL internals, similar to how REPL.jl handles it
+                    Base.invokelatest(sprint, Base.show_exception_stack, Base.scrub_repl_backtrace(bt); context=stdout)
                 catch ex
                     "#=ERROR showing exception stack=# " *
                         try
@@ -248,7 +250,13 @@ struct Error <: Result
             string(orig_expr),
             value,
             bt_str,
+            context,
             source)
+    end
+
+    # Internal constructor for creating Error with pre-processed values (used by ContextTestSet)
+    function Error(test_type::Symbol, orig_expr::String, value::String, backtrace::String, context::Union{Nothing, String}, source::LineNumberNode)
+        return new(test_type, orig_expr, value, backtrace, context, source)
     end
 end
 
@@ -267,6 +275,9 @@ function Base.show(io::IO, t::Error)
     elseif t.test_type === :test_error
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
+        if t.context !== nothing
+            println(io, "     Context: ", t.context)
+        end
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     elseif t.test_type === :test_unbroken
@@ -751,13 +762,13 @@ function do_test(result::ExecutionResult, orig_expr)
                     Fail(:test, orig_expr, result.data, value, nothing, result.source, false)
         else
             # If the result is non-Boolean, this counts as an Error
-            Error(:test_nonbool, orig_expr, value, nothing, result.source)
+            Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
         end
     else
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
+        testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source, nothing)
     end
     isa(testres, Pass) || trigger_test_failure_break(result)
     record(get_testset(), testres)
@@ -770,11 +781,11 @@ function do_broken_test(result::ExecutionResult, orig_expr)
         value = result.value
         if isa(value, Bool)
             if value
-                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source, nothing)
             end
         else
             # If the result is non-Boolean, this counts as an Error
-            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source)
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
         end
     end
     record(get_testset(), testres)
@@ -1107,6 +1118,13 @@ function record(c::ContextTestSet, t::Fail)
     context = string(c.context_name, " = ", c.context)
     context = t.context === nothing ? context : string(t.context, "\n              ", context)
     record(c.parent_ts, Fail(t.test_type, t.orig_expr, t.data, t.value, context, t.source, t.message_only))
+end
+function record(c::ContextTestSet, t::Error)
+    context = string(c.context_name, " = ", c.context)
+    context = t.context === nothing ? context : string(t.context, "\n              ", context)
+    # Create a new Error with the same data but updated context using internal constructor
+    new_error = Error(t.test_type, t.orig_expr, t.value, t.backtrace, context, t.source)
+    record(c.parent_ts, new_error)
 end
 
 #-----------------------------------------------------------------------
@@ -1657,7 +1675,7 @@ of the `begin/end` case (as if used for each loop iteration).
 # `@testset let`
 
 When `@testset let` is used, the macro starts a *transparent* test set with
-the given object added as a context object to any failing test contained
+the given object added as a context object to any failing or erroring test contained
 therein. This is useful when performing a set of related tests on one larger
 object and it is desirable to print this larger object when any of the
 individual tests fail. Transparent test sets do not introduce additional levels
@@ -1669,6 +1687,9 @@ parent test set (with the context object appended to any failing tests.)
 
 !!! compat "Julia 1.10"
     Multiple `let` assignments are supported since Julia 1.10.
+
+!!! compat "Julia 1.13"
+    Context is shown when a test errors since Julia 1.13.
 
 # Special implicit world age increment for `@testset begin`
 
@@ -1844,7 +1865,7 @@ function testset_beginend_call(args, tests, source)
             if is_failfast_error(err)
                 get_testset_depth() > 1 ? rethrow() : failfast_print()
             else
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
             end
         finally
             copy!(default_rng(), default_rng_orig)
@@ -1932,7 +1953,7 @@ function testset_forloop(args, testloop, source)
             if is_failfast_error(err)
                 get_testset_depth() > 1 ? rethrow() : failfast_print()
             else
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
             end
         end
     end

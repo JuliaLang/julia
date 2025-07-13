@@ -687,13 +687,15 @@ typedef union {
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
+#define METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC 0b1000  // indicates there exists some other method that is not more specific than this one
+#define METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC 0b10000  // precompiled version of METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
 int jl_engine_hasreserved(jl_method_instance_t *m, jl_value_t *owner) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode);
+JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode, uint8_t trim_mode);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(

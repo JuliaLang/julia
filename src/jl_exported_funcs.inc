@@ -238,6 +238,7 @@
     XX(jl_init_) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
+    XX(jl_init_with_image) \
     XX(jl_init_with_image_file) \
     XX(jl_init_with_image_handle) \
     XX(jl_install_sigint_handler) \
@@ -264,6 +265,7 @@
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
+    XX(jl_is_compilable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \

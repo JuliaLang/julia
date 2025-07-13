@@ -5,6 +5,7 @@ New language features
 ---------------------
 
   - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+  - New `nth` function to access the `n`-th element of a generic iterable. ([#56580])
   - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
     is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
     ([JuliaLang/JuliaSyntax.jl#525], [#57143])
@@ -15,6 +16,8 @@ Language changes
 is considered a bug fix ([#47102])
 
   - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
+
+* Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -43,6 +46,7 @@ New library functions
 
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+* `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
 
 New library features
 --------------------
@@ -72,6 +76,7 @@ Standard library changes
 #### Test
 
 * Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
+* Transparent test sets (`@testset let`) now show context when tests error ([#58727]).
 
 #### InteractiveUtils
 

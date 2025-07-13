@@ -390,7 +390,7 @@ let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
-        error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
+        error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"), nothing)
         @test Test.record(ts, error_mock; print_result=false) isa Test.Error
         fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
         @test Test.record(ts, fail_mock; print_result=false) isa Test.Fail
@@ -1890,5 +1890,61 @@ end
         @test _escape_call(:(Main.f.(x, y))) == (; func=:(Broadcast.BroadcastFunction($(esc(:(Main.f))))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(Main.f))))
         @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
+    end
+end
+
+@testset "Context display in @testset let blocks" begin
+    # Mock parent testset that just captures results
+    struct MockParentTestSet <: Test.AbstractTestSet
+        results::Vector{Any}
+        MockParentTestSet() = new([])
+    end
+    Test.record(ts::MockParentTestSet, t) = (push!(ts.results, t); t)
+    Test.finish(ts::MockParentTestSet) = ts
+
+    @testset "context shown when a context testset fails" begin
+        mock_parent1 = MockParentTestSet()
+        ctx_ts1 = Test.ContextTestSet(mock_parent1, :x, 42)
+
+        fail_result = Test.Fail(:test, "x == 99", "42 == 99", "42", nothing, LineNumberNode(1, :test), false)
+        Test.record(ctx_ts1, fail_result)
+
+        @test length(mock_parent1.results) == 1
+        recorded_fail = mock_parent1.results[1]
+        @test recorded_fail isa Test.Fail
+        @test recorded_fail.context !== nothing
+        @test occursin("x = 42", recorded_fail.context)
+    end
+
+    @testset "context shown when a context testset errors" begin
+        mock_parent2 = MockParentTestSet()
+        ctx_ts2 = Test.ContextTestSet(mock_parent2, :x, 42)
+
+        # Use internal constructor to create Error with pre-processed values
+        error_result = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts2, error_result)
+
+        @test length(mock_parent2.results) == 1
+        recorded_error = mock_parent2.results[1]
+        @test recorded_error isa Test.Error
+        @test recorded_error.context !== nothing
+        @test occursin("x = 42", recorded_error.context)
+
+        # Context shows up in string representation
+        error_str = sprint(show, recorded_error)
+        @test occursin("Context:", error_str)
+        @test occursin("x = 42", error_str)
+
+        # Multiple variables context
+        mock_parent3 = MockParentTestSet()
+        ctx_ts3 = Test.ContextTestSet(mock_parent3, :(x, y), (42, "hello"))
+
+        error_result2 = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts3, error_result2)
+
+        recorded_error2 = mock_parent3.results[1]
+        @test recorded_error2 isa Test.Error
+        @test recorded_error2.context !== nothing
+        @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
     end
 end

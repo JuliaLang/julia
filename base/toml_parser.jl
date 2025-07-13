@@ -258,10 +258,10 @@ end
 mutable struct ParserError <: Exception
     type::ErrorType
 
-    # Arbitrary data to store at the
+    # Data to store at the
     # call site to be used when formatting
     # the error
-    data
+    data::Union{Char, Nothing}
 
     # These are filled in before returning from parse function
     str       ::Union{String,   Nothing}
@@ -276,7 +276,7 @@ ParserError(type) = ParserError(type, nothing)
 # Defining these below can be useful when debugging code that erroneously returns a
 # ParserError because you get a stacktrace to where the ParserError was created
 #ParserError(type) = error(type)
-#ParserError(type, data) = error(type,data)
+#ParserError(type, data) = error(type, data)
 
 # Many functions return either a T or a ParserError
 const Err{T} = Union{T, ParserError}
@@ -284,7 +284,7 @@ const Err{T} = Union{T, ParserError}
 function format_error_message_for_err_type(error::ParserError)
     msg = err_message[error.type]
     if error.type == ErrInvalidBareKeyCharacter
-        c_escaped = escape_string(string(error.data)::String)
+        c_escaped = escape_string(string(error.data::Char))
         msg *= ": '$c_escaped'"
     end
     return msg

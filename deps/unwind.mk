@@ -20,7 +20,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xfz $<
+	cd $(dir $<) && $(TAR) -xfz $<
 	touch -c $(SRCCACHE)/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 
@@ -102,7 +102,7 @@ $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz: | $(SRCCACHE)
 
 $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/source-extracted: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xf $<
+	cd $(dir $<) && $(TAR) -xf $<
 	mv $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).src $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)
 	echo 1 > $@
 
