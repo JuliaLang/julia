@@ -8,6 +8,8 @@ include("testenv.jl")
 replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
 showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
 
+const IRShow = Base.Compiler.IRShow
+
 @testset "IOContext" begin
     io = IOBuffer()
     ioc = IOContext(io)
@@ -703,7 +705,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123.0000000000000000\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -858,7 +860,7 @@ struct S45879{P} end
 let ms = methods(S45879)
     @test ms isa Base.MethodList
     @test length(ms) == 0
-    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name)) isa String
 end
 
 function f49475(a=12.0; b) end
@@ -1275,6 +1277,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(y, x)
     push!(y, z)
     @test replstr(x) == "1-element Vector{Any}:\n Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}([#= circular reference @-3 =#] => [#= circular reference @-2 =#])]"
+    @test replstr(x, :color => true) == "1-element Vector{Any}:\n Any[Any[\e[33m#= circular reference @-2 =#\e[39m], Base.ImmutableDict{Vector{Any}, Vector{Any}}([\e[33m#= circular reference @-3 =#\e[39m] => [\e[33m#= circular reference @-2 =#\e[39m])]"
     @test repr(z) == "Base.ImmutableDict{Vector{Any}, Vector{Any}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
@@ -1569,8 +1572,61 @@ struct var"%X%" end  # Invalid name without '#'
             typeof(+),
             var"#f#",
             typeof(var"#f#"),
+
+            # Integers should round-trip (#52677)
+            1, UInt(1),
+            Int8(1),  Int16(1),  Int32(1),  Int64(1),
+            UInt8(1), UInt16(1), UInt32(1), UInt64(1),
+
+            # Float round-trip
+            Float16(1),                  Float32(1),                  Float64(1),
+            Float16(1.5),                Float32(1.5),                Float64(1.5),
+            Float16(0.4893243538921085), Float32(0.4893243538921085), Float64(0.4893243538921085),
+            # Examples that require the full 5, 9, and 17 digits of precision
+            Float16(0.00010014),         Float32(1.00000075f-36),     Float64(-1.561051336605761e-182),
+            floatmax(Float16),           floatmax(Float32),           floatmax(Float64),
+            floatmin(Float16),           floatmin(Float32),           floatmin(Float64),
+            Float16(0.0),                0.0f0,                       0.0,
+            Float16(-0.0),               -0.0f0,                      -0.0,
+            Inf16,                       Inf32,                       Inf,
+            -Inf16,                      -Inf32,                      -Inf,
+            nextfloat(Float16(0)),       nextfloat(Float32(0)),       nextfloat(Float64(0)),
+            NaN16,                       NaN32,                       NaN,
+            Float16(1e3),                1f7,                         1e16,
+            Float16(-1e3),               -1f7,                        -1e16,
+            Float16(1e4),                1f8,                         1e17,
+            Float16(-1e4),               -1f8,                        -1e17,
+
+            # Pointers should round-trip
+            Ptr{Cvoid}(0), Ptr{Cvoid}(typemax(UInt)), Ptr{Any}(0), Ptr{Any}(typemax(UInt)),
+
+            # :var"" escaping rules differ from strings (#58484)
+            :foo,
+            :var"bar baz",
+            :var"a $b",         # No escaping for $ in raw string
+            :var"a\b",          # No escaping for backslashes in middle
+            :var"a\\",          # Backslashes must be escaped at the end
+            :var"a\\\\",
+            :var"a\"b",
+            :var"a\"",
+            :var"\\\"",
+            :+, :var"+-",
+            :(=), :(:), :(::),  # Requires quoting
+            Symbol("a\nb"),
+
+            Val(Float16(1.0)), Val(1f0),      Val(1.0),
+            Val(:abc),         Val(:(=)),     Val(:var"a\b"),
+
+            Val(1),       Val(Int8(1)),  Val(Int16(1)),  Val(Int32(1)),  Val(Int64(1)),  Val(Int128(1)),
+            Val(UInt(1)), Val(UInt8(1)), Val(UInt16(1)), Val(UInt32(1)), Val(UInt64(1)), Val(UInt128(1)),
+
+            # BROKEN
+            # Symbol("a\xffb"),
+            # User-defined primitive types
+            # Non-canonical NaNs
+            # BFloat16
         )
-        @test v == eval(Meta.parse(static_shown(v)))
+        @test v === eval(Meta.parse(static_shown(v)))
     end
 end
 
@@ -1597,7 +1653,7 @@ struct f_with_params{t} <: Function end
 end
 
 let io = IOBuffer()
-    show(io, MIME"text/html"(), ModFWithParams.f_with_params.body.name.mt)
+    show(io, MIME"text/html"(), methods(ModFWithParams.f_with_params{Int}()))
     @test occursin("ModFWithParams.f_with_params", String(take!(io)))
 end
 
@@ -1707,6 +1763,13 @@ end
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
 end
 
+@testset "`displaysize` return type inference" begin
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{IO})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{IOContext})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{Base.TTY})
+end
+
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
@@ -1732,6 +1795,29 @@ end
               string("4×30 Matrix{Float64}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
                      " ⋮                        ⋮              ⋱            ⋮                   ")
+
+    @testset "extremely large arrays" begin
+        struct MyBigFill{T,N} <: AbstractArray{T,N}
+            val :: T
+            axes :: NTuple{N,Base.OneTo{BigInt}}
+        end
+        MyBigFill(val, sz::Tuple{}) = MyBigFill{typeof(val),0}(val, sz)
+        MyBigFill(val, sz::NTuple{N,BigInt}) where {N} = MyBigFill(val, map(Base.OneTo, sz))
+        MyBigFill(val, sz::Tuple{Vararg{Integer}}) = MyBigFill(val, map(BigInt, sz))
+        Base.size(M::MyBigFill) = map(length, M.axes)
+        Base.axes(M::MyBigFill) = M.axes
+        function Base.getindex(M::MyBigFill{<:Any,N}, ind::Vararg{Integer,N}) where {N}
+            checkbounds(M, ind...)
+            M.val
+        end
+        function Base.isassigned(M::MyBigFill{<:Any,N}, ind::Vararg{BigInt,N}) where {N}
+            checkbounds(M, ind...)
+            true
+        end
+        M = MyBigFill(4, (big(2)^65, 3))
+        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: …"
+        @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{$Int, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
+    end
 end
 
 module UnexportedOperators
@@ -1749,10 +1835,10 @@ end
     anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
-    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.singletonname) (generic function with 1 method)"
     mkclosure = x->y->x+y
     clo = mkclosure(10)
-    @test repr("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", clo) == "$(typeof(clo).name.singletonname) (generic function with 1 method)"
     @test repr(UnionAll) == "UnionAll"
 end
 
@@ -1860,6 +1946,9 @@ end
     B = @view ones(2)[r]
     Base.showarg(io, B, false)
     @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
+
+    Base.showarg(io, reshape(UnitRange{Int64}(1,1)), false)
+    @test String(take!(io)) == "reshape(::UnitRange{Int64})"
 end
 
 @testset "Methods" begin
@@ -1899,15 +1988,6 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
-
-    # issue #26354; make sure testing for symbol visibility doesn't cause
-    # spurious binding resolutions
-    show(IOContext(b, :module => TestShowType), Base.Pair)
-    @test !Base.isbindingresolved(TestShowType, :Pair)
-    @test String(take!(b)) == "Core.Pair"
-    show(IOContext(b, :module => TestShowType), Base.Complex)
-    @test Base.isbindingresolved(TestShowType, :Complex)
-    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin
@@ -1932,9 +2012,9 @@ end
     @test replstr(view(A, [1], :)) == "1×1 view(::Matrix{Float64}, [1], :) with eltype Float64:\n 0.0"
 
     # issue #27680
-    @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
-              "Set([(1.0, 1.0), (3.0, 3.0), (2.0, 2.0)])" :
-              "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+    @test showstr(Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+              "Set([(2.0, 2.0), (1.0, 1.0), (3.0, 3.0)])" :
+              "Set([(2.0, 2.0), (1.0, 1.0), (3.0, 3.0)])")
 
     # issue #27747
     let t = (x = Integer[1, 2],)
@@ -2083,7 +2163,7 @@ end
 function compute_annotations(f, types)
     src = code_typed(f, types, debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
+    la, lb, ll = IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
     return join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
@@ -2138,6 +2218,8 @@ eval(Meta._parse_string("""function my_fun28173(x)
     return y
 end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
+    @test_throws "must be one of the following" sprint(IRShow.show_ir, src; context = :debuginfo => :_)
+    @test !contains(sprint(IRShow.show_ir, src; context = :debuginfo => :source_inline), "a"^80)
     ir = Core.Compiler.inflate_ir(src)
     src.debuginfo = Core.DebugInfo(src.debuginfo.def) # IRCode printing defaults to incomplete line info printing, so turn it off completely for CodeInfo too
     let source_slotnames = String["my_fun28173", "x"],
@@ -2167,18 +2249,16 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test pop!(lines2) == "18 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
-    # verbose linetable
-    io = IOBuffer()
-    Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
-    seekstart(io)
-    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+    # debuginfo = :source
+    output = sprint(Base.IRShow.show_ir, ir, Base.IRShow.default_config(ir; debuginfo=:source))
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), split(output, '\n')) == 10
+    @test output == sprint(show, ir; context = :debuginfo => :source)
+    @test output != sprint(show, ir)
+    @test_throws "must be one of the following" sprint(show, ir; context = :debuginfo => :_)
 
     # Test that a bad :invoke doesn't cause an error during printing
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
-    io = IOBuffer()
-    Base.IRShow.show_ir(io, ir)
-    seekstart(io)
-    @test contains(String(take!(io)), "Expr(:invoke, nothing")
+    @test contains(string(ir), "Expr(:invoke, nothing")
 end
 
 # Verify that extra instructions at the end of the IR
@@ -2352,9 +2432,9 @@ end
 
 # begin/end indices
 @weak_test_repr "a[begin, end, (begin; end)]"
-@test repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
-@test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
 @test_repr "a[(bla;)]"
 @test_repr "a[(;;)]"
@@ -2410,6 +2490,7 @@ end
 @test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
+@test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -2538,7 +2619,7 @@ end
     mktemp() do f, io
         redirect_stdout(io) do
             let io = IOBuffer()
-                for i = 1:10
+                for i = 1:length(Base.Compiler.ALL_PASS_NAMES)
                     # make sure we don't error on printing IRs at any optimization level
                     ir = only(Base.code_ircode(sin, (Float64,); optimize_until=i))[1]
                     @test try; show(io, ir); true; catch; false; end
@@ -2790,4 +2871,32 @@ Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
     str = sprint(io->show(io, MIME("text/plain"), x))
     @test contains(str, "NoLengthDict")
     @test contains(str, "1 => 2")
+end
+
+# Issue 56936
+@testset "code printing of var\"keyword\" identifiers" begin
+    @test_repr """:(var"do" = 1)"""
+    @weak_test_repr """:(let var"let" = 1; var"let"; end)"""
+end
+
+# Issue 57076
+@testset "show raw string given var\"str\"" begin
+    # In show_sym, only backslashes and quotes should be escaped when printing var"this".
+    @test_repr """:(var"\$" = 1)"""
+    @test_repr """:(var"\\"" = 1)""" # var name is one quote character
+    @test_repr """:(var"~!@#\$%^&*[]_+?" = 1)"""
+    @test_repr """:(var"\a\b\t\n\v\f\r\e" = 1)"""
+    @test_repr """:(var"\x01\u03c0\U03c0" = 1)"""
+end
+
+# test `print_signature_only::Bool` argument of `Base.show_method`
+f_show_method(x::T) where T<:Integer = :integer
+let m = only(methods(f_show_method))
+    let io = IOBuffer()
+        Base.show_method(io, m; print_signature_only=true)
+        @test "f_show_method(x::T) where T<:Integer" == String(take!(io))
+    end
+    let s = sprint(show, m; context=:print_method_signature_only=>true)
+        @test "f_show_method(x::T) where T<:Integer" == s
+    end
 end

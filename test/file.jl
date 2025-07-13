@@ -459,6 +459,11 @@ end
     end
 end
 
+# Issue #51710 and PR #54855
+@test_throws MethodError stat(7)
+@test_throws MethodError ispath(false)
+@test_throws MethodError ispath(1)
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
@@ -466,7 +471,7 @@ if Sys.iswindows()
 else
     @test filesize(dir) > 0
 end
-# We need both: one to check passed time, one to comapare file's mtime()
+# We need both: one to check passed time, one to compare file's mtime()
 nowtime = time_ns() / 1e9
 nowwall = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
@@ -1378,7 +1383,7 @@ if !Sys.iswindows()
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
         @test !ispath(d)
-        # comare s, with d_mv
+        # compare s, with d_mv
         @test isfile(s) == isfile(d_mv)
         @test islink(s) == islink(d_mv)
         islink(s) && @test readlink(s) == readlink(d_mv)
@@ -2160,3 +2165,5 @@ end
     @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
 end
+
+@test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct

@@ -6,9 +6,6 @@
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #include "threading.h"
-#ifdef __GLIBC__
-#include <malloc.h> // for malloc_trim
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,6 +115,37 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
         jl_gc_register_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
     else
         jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
+}
+
+// =========================================================================== //
+// malloc wrappers, aligned allocation
+// =========================================================================== //
+
+#if defined(_OS_WINDOWS_)
+// helper function based partly on wine msvcrt80+ heap.c
+// but with several fixes to improve the correctness of the computation and remove unnecessary parameters
+#define SAVED_PTR(x) ((void *)((DWORD_PTR)((char *)x - sizeof(void *)) & \
+                               ~(sizeof(void *) - 1)))
+static size_t _jl_aligned_msize(void *p)
+{
+    void *alloc_ptr = *(void**)SAVED_PTR(p);
+    return _msize(alloc_ptr) - ((char*)p - (char*)alloc_ptr);
+}
+#undef SAVED_PTR
+#endif
+
+size_t memory_block_usable_size(void *p, int isaligned) JL_NOTSAFEPOINT
+{
+#if defined(_OS_WINDOWS_)
+    if (isaligned)
+        return _jl_aligned_msize(p);
+    else
+        return _msize(p);
+#elif defined(_OS_DARWIN_)
+    return malloc_size(p);
+#else
+    return malloc_usable_size(p);
+#endif
 }
 
 // =========================================================================== //
@@ -505,31 +533,27 @@ JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
     return jl_gc_alloc(ptls, sz, NULL);
 }
 
-// allocation wrappers that save the size of allocations, to allow using
-// jl_gc_counted_* functions with a libc-compatible API.
+// allocator entry points
+
+JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
+{
+    return jl_gc_alloc_(ptls, sz, ty);
+}
 
 JL_DLLEXPORT void *jl_malloc(size_t sz)
 {
-    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + JL_SMALL_BYTE_ALIGNMENT);
-    if (p == NULL)
-        return NULL;
-    p[0] = sz;
-    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
+    return jl_gc_counted_malloc(sz);
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz
 STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
     size_t nmsz = nm*sz;
-    int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
-    if (p == NULL)
-        return NULL;
-    p[0] = nmsz;
-    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
+    return jl_gc_counted_calloc(nmsz, 1);
 }
 
 JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 {
-    if (nm > SSIZE_MAX/sz - JL_SMALL_BYTE_ALIGNMENT)
+    if (nm > SSIZE_MAX/sz)
         return NULL;
     return _unchecked_calloc(nm, sz);
 }
@@ -537,36 +561,15 @@ JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 JL_DLLEXPORT void jl_free(void *p)
 {
     if (p != NULL) {
-        int64_t *pp = (int64_t *)p - 2;
-        size_t sz = pp[0];
-        jl_gc_counted_free_with_size(pp, sz + JL_SMALL_BYTE_ALIGNMENT);
+        size_t sz = memory_block_usable_size(p, 0);
+        return jl_gc_counted_free_with_size(p, sz);
     }
 }
 
 JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
 {
-    int64_t *pp;
-    size_t szold;
-    if (p == NULL) {
-        pp = NULL;
-        szold = 0;
-    }
-    else {
-        pp = (int64_t *)p - 2;
-        szold = pp[0] + JL_SMALL_BYTE_ALIGNMENT;
-    }
-    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold, sz + JL_SMALL_BYTE_ALIGNMENT);
-    if (pnew == NULL)
-        return NULL;
-    pnew[0] = sz;
-    return (void *)(pnew + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
-}
-
-// allocator entry points
-
-JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
-{
-    return jl_gc_alloc_(ptls, sz, ty);
+    size_t old = p ? memory_block_usable_size(p, 0) : 0;
+    return jl_gc_counted_realloc_with_old_size(p, old, sz);
 }
 
 // =========================================================================== //
@@ -586,17 +589,8 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 // tracking Memorys with malloc'd storage
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
     // This is **NOT** a GC safe point.
-    mallocmemory_t *ma;
-    if (ptls->gc_tls_common.heap.mafreelist == NULL) {
-        ma = (mallocmemory_t*)malloc_s(sizeof(mallocmemory_t));
-    }
-    else {
-        ma = ptls->gc_tls_common.heap.mafreelist;
-        ptls->gc_tls_common.heap.mafreelist = ma->next;
-    }
-    ma->a = (jl_genericmemory_t*)((uintptr_t)m | !!isaligned);
-    ma->next = ptls->gc_tls_common.heap.mallocarrays;
-    ptls->gc_tls_common.heap.mallocarrays = ma;
+    void *a = (void*)((uintptr_t)m | !!isaligned);
+    small_arraylist_push(&ptls->gc_tls_common.heap.mallocarrays, a);
 }
 
 // =========================================================================== //
@@ -704,6 +698,24 @@ JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
 {
     jl_throw(jl_memory_exception);
+}
+
+// Sweeping mtarraylist_buffers:
+// These buffers are made unreachable via `mtarraylist_resizeto` from mtarraylist.c
+// and are freed at the end of GC via jl_gc_sweep_stack_pools_and_mtarraylist_buffers
+void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls = gc_all_tls_states[i];
+        if (ptls == NULL) {
+            continue;
+        }
+        small_arraylist_t *buffers = &ptls->lazily_freed_mtarraylist_buffers;
+        void *buf;
+        while ((buf = small_arraylist_pop(buffers)) != NULL) {
+            free(buf);
+        }
+    }
 }
 
 #ifdef __cplusplus

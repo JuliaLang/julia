@@ -12,7 +12,6 @@ Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
 Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
 Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
-
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
     errs = sprint(Base.showerror, err)
@@ -216,13 +215,14 @@ Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
 
 macro except_str(expr, err_type)
     source_info = __source__
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
             try
                 $(esc(expr))
             catch err
             end
-            err === nothing && error("expected failure, but no exception thrown")
+            err === nothing && error($errmsg)
             @testset let expr=$(repr(expr))
                 $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
             end
@@ -255,6 +255,7 @@ end
 
 macro except_stackframe(expr, err_type)
     source_info = __source__
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
        let err = nothing
            local st
@@ -263,7 +264,7 @@ macro except_stackframe(expr, err_type)
            catch err
                st = stacktrace(catch_backtrace())
            end
-           err === nothing && error("expected failure, but no exception thrown")
+           err === nothing && error($errmsg)
            @testset let expr=$(repr(expr))
                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
            end
@@ -297,6 +298,7 @@ err_str = @except_str 1 + 2 MethodError
 err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
 
+global Array
 Array() = 1
 err_str = @except_str Array([1]) MethodError
 @test occursin("import Base.Array", err_str)
@@ -404,6 +406,8 @@ let err_str,
     @test occursin("MethodError: no method matching Bool()", err_str)
     err_str = @except_str :a() MethodError
     @test occursin("MethodError: objects of type Symbol are not callable", err_str)
+    err_str = @except_str missing(1) MethodError
+    @test occursin("MethodError: objects of type Missing are not callable", err_str)
     err_str = @except_str EightBitType() MethodError
     @test occursin("MethodError: no method matching $(curmod_prefix)EightBitType()", err_str)
     err_str = @except_str i() MethodError
@@ -417,7 +421,10 @@ let err_str,
     err_str = @except_str FunctionLike()() MethodError
     @test occursin("MethodError: no method matching (::$(curmod_prefix)FunctionLike)()", err_str)
     err_str = @except_str [1,2](1) MethodError
-    @test occursin("MethodError: objects of type Vector{$Int} are not callable\nUse square brackets [] for indexing an Array.", err_str)
+    @test occursin("MethodError: objects of type Vector{$Int} are not callable.\n"*
+        "In case you did not try calling it explicitly, check if a Vector{$Int}"*
+        " has been passed as an argument to a method that expects a callable instead.\n"*
+        "In case you're trying to index into the array, use square brackets [] instead of parentheses ().", err_str)
     # Issue 14940
     err_str = @except_str randn(1)() MethodError
     @test occursin("MethodError: objects of type Vector{Float64} are not callable", err_str)
@@ -435,7 +442,7 @@ let err_str
     @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 
-
+import Core: String
 method_defs_lineno = @__LINE__() + 1
 String() = throw(ErrorException("1"))
 (::String)() = throw(ErrorException("2"))
@@ -791,8 +798,22 @@ backtrace()
     @test occursin("g28442", output[3])
     @test lstrip(output[5])[1:3] == "[2]"
     @test occursin("f28442", output[5])
-    @test occursin("the above 2 lines are repeated 5000 more times", output[7])
-    @test lstrip(output[8])[1:7] == "[10003]"
+    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
+    if is_windows_32_bit
+        # These tests are currently broken (intermittently/non-determistically) on 32-bit Windows.
+        # https://github.com/JuliaLang/julia/issues/55900
+        # Instead of skipping them entirely, we skip one, and we loosen the other.
+
+        # Broken test: @test occursin("the above 2 lines are repeated 5000 more times", output[7])
+        @test occursin("the above 2 lines are repeated ", output[7])
+        @test occursin(" more times", output[7])
+
+        # Broken test: @test lstrip(output[8])[1:7] == "[10003]"
+        @test_broken false
+    else
+        @test occursin("the above 2 lines are repeated 5000 more times", output[7])
+        @test lstrip(output[8])[1:7] == "[10003]"
+    end
 end
 
 @testset "Line number correction" begin
@@ -836,7 +857,8 @@ end
 
     # Check error message first
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type FieldFoo has no field `c`", errorMsg)
+    @test occursin("FieldError: type", errorMsg)
+    @test occursin("FieldFoo has no field `c`", errorMsg)
     @test occursin("available fields: `a`, `b`", errorMsg)
     @test occursin("Available properties: `x`, `y`", errorMsg)
 
@@ -859,6 +881,103 @@ end
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)
+end
+
+module FieldErrorTest
+struct Point end
+p = Point()
+end
+
+@testset "FieldError with changing fields" begin
+    # https://discourse.julialang.org/t/better-error-message-for-modified-structs-in-julia-1-12/129265
+    err_str1 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("FieldErrorTest.Point", err_str1)
+    @eval FieldErrorTest struct Point{T}
+        x::T
+        y::T
+    end
+    err_str2 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("@world", err_str2)
+    @test occursin("FieldErrorTest.Point", err_str2)
+end
+
+# UndefVar error hints
+module A53000
+    export f
+    f() = 0.0
+end
+
+module C_outer_53000
+    import ..A53000: f
+    public f
+
+    module C_inner_53000
+    import ..C_outer_53000: f
+    export f
+    end
+end
+
+module D_53000
+    public f
+    f() = 1.0
+end
+
+C_inner_53000 = "I'm a decoy with the same name as C_inner_53000!"
+
+Base.Experimental.register_error_hint(Base.UndefVarError_hint, UndefVarError)
+
+@testset "undefvar error hints" begin
+    old_modules_order = Base.loaded_modules_order
+    append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
+    test = @test_throws UndefVarError f
+    ex = test.value::UndefVarError
+    errormsg = sprint(Base.showerror, ex)
+    mod = @__MODULE__
+    @test occursin("Hint: a global variable of this name also exists in $mod.A53000.", errormsg)
+    @test occursin("Hint: a global variable of this name also exists in $mod.D_53000.", errormsg)
+    @test occursin("- Also declared public in $mod.C_outer_53000", errormsg)
+    @test occursin("- Also exported by $mod.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", errormsg)
+    copy!(Base.loaded_modules_order, old_modules_order)
+end
+@testset " test the functionality of `UndefVarError_hint` against import clashes" begin
+    @eval module X
+        module A
+        export x
+        x = 1
+        end # A
+
+        module B
+        export x
+        x = 2
+        end # B
+
+        using .A, .B
+
+    end # X
+
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
+end
+
+# Module for UndefVarError world age testing
+module TestWorldAgeUndef end
+
+@testset "UndefVarError world age hint" begin
+    ex = try
+        TestWorldAgeUndef.newvar
+    catch e
+        e
+    end
+    @test ex isa UndefVarError
+
+    Core.eval(TestWorldAgeUndef, :(newvar = 42))
+
+    err_str = sprint(Base.showerror, ex)
+    @test occursin("The binding may be too new: running in world age", err_str)
+    @test occursin("while current world is", err_str)
 end
 
 # test showing MethodError with type argument
@@ -898,6 +1017,20 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
        e
     end::MethodError
     @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
+end
+
+# Test hint for functions in modules of argument types (issue #58682)
+module TestModuleHint
+    struct Bar end
+    length(x::Bar) = 42
+end
+let ex = try
+        # Call Base.length on TestModuleHint.Bar - should suggest importing TestModuleHint.length
+        length(TestModuleHint.Bar())
+    catch e
+        e
+    end::MethodError
+    @test occursin("may have intended to extend", sprint(Base.showerror, ex))
 end
 
 # Test that implementation detail of include() is hidden from the user by default
@@ -1245,3 +1378,10 @@ end
 
 f33793(x::Float32, y::Float32) = 1
 @test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))
+
+# https://github.com/JuliaLang/julia/issues/56325
+let err_str
+    f56325 = x->x+1
+    err_str = @except_str f56325(1,2) MethodError
+    @test occursin("The anonymous function", err_str)
+end

@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.include(Main, "Base.jl")
+Base.include("Base.jl") # finish populating Base (currently just has the Compiler)
 
+# Set up Main module by importing from Base
 using .Base
+using .Base.MainInclude # ans, err, and sometimes Out
 
-# Set up Main module
-using Base.MainInclude # ans, err, and sometimes Out
+ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
 
 # These definitions calls Base._include rather than Base.include to get
 # one-frame stacktraces for the common case of using include(fname) in Main.
@@ -14,8 +15,8 @@ using Base.MainInclude # ans, err, and sometimes Out
     include([mapexpr::Function,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own
-definition of `include`, which evaluates the file in that module.
+Every `Module` (except those defined with `baremodule`) has a private 1-argument definition
+of `include`, which evaluates the file in that module, for use inside that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
@@ -29,22 +30,32 @@ actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`i
 
 Use [`Base.include`](@ref) to evaluate a file into another module.
 
+!!! note
+    Julia's syntax lowering recognizes an explicit call to a literal `include`
+    at top-level and inserts an implicit `@Core.latestworld` to make any include'd
+    definitions visible to subsequent code. Note however that this recognition
+    is *syntactic*. I.e. assigning `const myinclude = include` may require
+    and explicit `@Core.latestworld` call after `myinclude`.
+
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
-const include = Base.IncludeInto(Main)
+Base.IncludeInto
 
 """
     eval(expr)
 
 Evaluate an expression in the global scope of the containing module.
-Every `Module` (except those defined with `baremodule`) has its own 1-argument
-definition of `eval`, which evaluates expressions in that module.
+Every `Module` (except those defined with `baremodule`) has a private 1-argument definition
+of `eval`, which evaluates expressions in that module, for use inside that module.
 """
+Core.EvalInto
+
+const include = Base.IncludeInto(Main)
 const eval = Core.EvalInto(Main)
 
 # Ensure this file is also tracked
-pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
+pushfirst!(Base._included_files, (Main, abspath(@__FILE__)))
 
 # set up depot & load paths to be able to find stdlib packages
 Base.init_depot_path()

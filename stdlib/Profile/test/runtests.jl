@@ -95,6 +95,9 @@ for options in ((format=:tree, C=true),
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
+    file, _ = mktemp()
+    Profile.print(file; options...)
+    @test filesize(file) > 0
 end
 
 @testset "Profile.print() groupby options" begin
@@ -152,6 +155,20 @@ end
 @test z == 10
 end
 
+@testset "@profile no scope" begin
+    @profile no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    @profile_walltime no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    Profile.Allocs.@profile no_scope_57858_2 = 1
+    @test @isdefined no_scope_57858_2
+    Profile.Allocs.clear()
+end
+
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
@@ -199,6 +216,34 @@ end
         nothing
     end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
+end
+
+import InteractiveUtils
+
+@generated function compile_takes_1_second(x)
+    t = time_ns()
+    while time_ns() < t + 1e9
+        # busy wait for 1 second
+    end
+    return :(x)
+end
+@testset "Module short names" begin
+    Profile.clear()
+    @profile begin
+        @eval compile_takes_1_second(1) # to increase chance of profiling hitting compilation code
+        InteractiveUtils.peakflops()
+    end
+    io = IOBuffer()
+    ioc = IOContext(io, :displaysize=>(1000,1000))
+    Profile.print(ioc, C=true)
+    str = String(take!(io))
+    slash = Sys.iswindows() ? "\\" : "/"
+    @test occursin("@Compiler" * slash, str)
+    @test occursin("@Base" * slash, str)
+    @test occursin("@InteractiveUtils" * slash, str)
+    @test occursin("@LinearAlgebra" * slash, str)
+    @test occursin("@juliasrc" * slash, str)
+    @test occursin("@julialib" * slash, str)
 end
 
 # Profile deadlocking in compilation (debuginfo registration)
@@ -323,6 +368,8 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
+@static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
 
@@ -352,6 +399,7 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
 end
 
 @testset "PageProfile" begin

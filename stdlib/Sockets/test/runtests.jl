@@ -547,14 +547,12 @@ end
         fetch(r)
     end
 
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let addr = Sockets.InetAddr(ip"192.0.2.5", 4444)
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
         r = @async close(s)
         @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
-        close(srv)
     end
 end
 
@@ -639,11 +637,26 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
-    try
-        getipaddr(IPv6) in getipaddrs(IPv6)
-    catch
-        if !isempty(getipaddrs(IPv6))
-            @test "getipaddr(IPv6) errored when it shouldn't have!"
+
+    has_ipv4 = !isempty(getipaddrs(IPv4))
+    if has_ipv4
+        @test getipaddr(IPv4) in getipaddrs(IPv4)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv4)
+    end
+
+    has_ipv6 = !isempty(getipaddrs(IPv6))
+    if has_ipv6
+        @test getipaddr(IPv6) in getipaddrs(IPv6)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv6)
+    end
+
+    @testset "getipaddr() prefers IPv4 over IPv6" begin
+        if has_ipv4
+            @test getipaddr() isa IPv4
+        else
+            @test getipaddr() isa IPv6
         end
     end
 

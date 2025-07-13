@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core.Compiler: has_typevar
+using .Compiler: has_typevar
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
@@ -11,6 +11,13 @@ end
 # first a few multiline show functions for types defined before the MIME type:
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
+
+function show(io::IO, ::MIME"text/plain", r::UnitRange)
+    show(io, r)
+    if !(get(io, :compact, false)::Bool) && isempty(r)
+        print(io, " (empty range)")
+    end
+end
 
 function show(io::IO, ::MIME"text/plain", r::LinRange)
     isempty(r) && return show(io, r)
@@ -32,16 +39,16 @@ end
 
 function _isself(ft::DataType)
     ftname = ft.name
-    isdefined(ftname, :mt) || return false
-    name = ftname.mt.name
-    mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
-    return isdefined(mod, name) && ft == typeof(getfield(mod, name))
+    name = ftname.singletonname
+    ftname.name === name && return false
+    mod = parentmodule(ft)
+    return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
-    name = ft.name.mt.name
+    name = ft.name.singletonname
     if isa(f, Core.IntrinsicFunction)
         print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
@@ -383,12 +390,12 @@ julia> io = IOBuffer();
 
 julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "\\e[31mstring\\e[39m"
 
 julia> printstyled(io, "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "string"
 ```
 
@@ -435,7 +442,7 @@ get(io::IO, key, default) = default
 keys(io::IOContext) = keys(io.dict)
 keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)::Tuple{Int,Int}
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
@@ -443,7 +450,7 @@ function show_circular(io::IOContext, @nospecialize(x))
     for (k, v) in io.dict
         if k === :SHOWN_SET
             if v === x
-                print(io, "#= circular reference @-$d =#")
+                printstyled(io, "#= circular reference @-$d =#"; color = :yellow)
                 return true
             end
             d += 1
@@ -531,26 +538,24 @@ function active_module()
     return invokelatest(active_module, active_repl)::Module
 end
 
-module UsesCoreAndBaseOnly
+module UsesBaseOnly
 end
 
 function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
-    ft = typeof(f)
-    mt = ft.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table
+    fname = typeof(f).name
+    if fname.name === fname.singletonname
         fallback(io, f)
     elseif compact
-        print(io, mt.name)
-    elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
-        getfield(mt.module, mt.name) === f
+        print(io, fname.singletonname)
+    elseif isdefined(fname, :module) && isdefinedglobal(fname.module, fname.singletonname) && isconst(fname.module, fname.singletonname) &&
+            getglobal(fname.module, fname.singletonname) === f
         # this used to call the removed internal function `is_exported_from_stdlib`, which effectively
-        # just checked for exports from Core and Base.
-        mod = get(io, :module, UsesCoreAndBaseOnly)
-        if !(isvisible(mt.name, mt.module, mod) || mt.module === mod)
-            print(io, mt.module, ".")
+        # just checked for exports from Base.
+        mod = get(io, :module, UsesBaseOnly)
+        if !(isvisible(fname.singletonname, fname.module, mod) || fname.module === mod)
+            print(io, fname.module, ".")
         end
-        show_sym(io, mt.name)
+        show_sym(io, fname.singletonname)
     else
         fallback(io, f)
     end
@@ -618,7 +623,7 @@ function make_typealias(@nospecialize(x::Type))
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
     for p in uniontypes(unwrap_unionall(x))
@@ -627,8 +632,8 @@ function make_typealias(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
                     if alias isa UnionAll
                         (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
@@ -820,7 +825,7 @@ function make_typealiases(@nospecialize(x::Type))
     Any === x && return aliases, Union{}
     x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
@@ -831,14 +836,14 @@ function make_typealiases(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)
-                    mod in mod2 || (mod === Base && Core in mods) || continue
+                    mod in mod2 || (mod === Base && Core in mod2) || continue
                     env = env::SimpleVector
                     applied = alias
                     if !isempty(env)
@@ -958,7 +963,7 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     # give a helpful hint for function types
     if x isa DataType && x !== UnionAll && !(get(io, :compact, false)::Bool)
         tn = x.name::Core.TypeName
-        globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+        globname = tn.singletonname
         if is_global_function(tn, globname)
             print(io, " (singleton type of function ")
             show_sym(io, globname)
@@ -1021,19 +1026,31 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
-    return owner !== C_NULL && from_owner === owner &&
-        !isdeprecated(parent, sym) &&
-        isdefined(from, sym) # if we're going to return true, force binding resolution
+    isdeprecated(parent, sym) && return false
+    isdefinedglobal(from, sym) || return false
+    isdefinedglobal(parent, sym) || return false
+    parent_binding = convert(Core.Binding, GlobalRef(parent, sym))
+    from_binding = convert(Core.Binding, GlobalRef(from, sym))
+    while true
+        from_binding === parent_binding && return true
+        partition = lookup_binding_partition(tls_world_age(), from_binding)
+        is_some_explicit_imported(binding_kind(partition)) || break
+        from_binding = partition_restriction(partition)::Core.Binding
+    end
+    parent_partition = lookup_binding_partition(tls_world_age(), parent_binding)
+    from_partition = lookup_binding_partition(tls_world_age(), from_binding)
+    if is_defined_const_binding(binding_kind(parent_partition)) && is_defined_const_binding(binding_kind(from_partition))
+        return parent_partition.restriction === from_partition.restriction
+    end
+    return false
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
-    if globname !== nothing
+    if globname !== nothing && isconcretetype(tn.wrapper) && tn !== DataType.name # ignore that typeof(DataType)===DataType, since it is valid but not useful
         globname_str = string(globname::Symbol)
-        if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-                isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
-                isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
+        if '#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
+                isdefinedglobal(tn.module, globname) && isconst(tn.module, globname) &&
+                isa(getglobal(tn.module, globname), tn.wrapper)
             return true
         end
     end
@@ -1045,10 +1062,13 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_some_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
-            max_world = @atomic partition.max_world
-            max_world == typemax(UInt) && return nothing
-            return Int(partition.min_world):Int(max_world)
+        if is_defined_const_binding(binding_kind(partition))
+            cval = partition_restriction(partition)
+            if isa(cval, Type) && cval <: tn.wrapper
+                max_world = @atomic partition.max_world
+                max_world == typemax(UInt) && return nothing
+                return Int(partition.min_world):Int(max_world)
+            end
         end
         isdefined(partition, :next) || return nothing
         partition = @atomic partition.next
@@ -1061,7 +1081,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
         # intercept this case and print `UnionAll` instead.
         return print(io, "UnionAll")
     end
-    globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+    globname = tn.singletonname
     globfunc = is_global_function(tn, globname)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
@@ -1353,7 +1373,13 @@ end
 show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
 function show(io::IO, codeinst::Core.CodeInstance)
     print(io, "CodeInstance for ")
-    show_mi(io, codeinst.def)
+    def = codeinst.def
+    if isa(def, Core.ABIOverride)
+        show_mi(io, def.def)
+        print(io, " (ABI Overridden)")
+    else
+        show_mi(io, def::MethodInstance)
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
@@ -1383,35 +1409,6 @@ function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
             end
         end
     end
-end
-
-# These sometimes show up as Const-values in InferenceFrameInfo signatures
-show(io::IO, r::Core.Compiler.UnitRange) = show(io, r.start : r.stop)
-show(io::IO, mime::MIME{Symbol("text/plain")}, r::Core.Compiler.UnitRange) = show(io, mime, r.start : r.stop)
-
-function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
-    mi = mi_info.mi
-    def = mi.def
-    if isa(def, Method)
-        if isdefined(def, :generator) && mi === def.generator
-            print(io, "InferenceFrameInfo generator for ")
-            show(io, def)
-        else
-            print(io, "InferenceFrameInfo for ")
-            argnames = [isa(a, Core.Const) ? (isa(a.val, Type) ? "" : a.val) : "" for a in mi_info.slottypes[1:mi_info.nargs]]
-            show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
-        end
-    else
-        di = mi.cache.inferred.debuginfo
-        file, line = IRShow.debuginfo_firstline(di)
-        file = string(file)
-        line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-        print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
-    end
-end
-
-function show(io::IO, tinf::Core.Compiler.Timings.Timing)
-    print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
@@ -1688,7 +1685,8 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) ||
+        (s === :<| || s === :|| || s == :?)
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
@@ -1780,9 +1778,15 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
+const keyword_syms = Set([
+    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
+    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
+    :try, :using, :while ])
+
 function is_valid_identifier(sym)
-    return isidentifier(sym) || (
-        _isoperator(sym) &&
+    return (isidentifier(sym) && !(sym in keyword_syms)) ||
+        (_isoperator(sym) &&
         !(sym in (Symbol("'"), :(::), :?)) &&
         !is_syntactic_operator(sym)
     )
@@ -1826,7 +1830,7 @@ function show_sym(io::IO, sym::Symbol; allow_macroname=false)
         print(io, '@')
         show_sym(io, Symbol(sym_str[2:end]))
     else
-        print(io, "var", repr(string(sym))) # TODO: this is not quite right, since repr uses String escaping rules, and Symbol uses raw string rules
+        print(io, "var\"", escape_raw_string(string(sym)), '"')
     end
 end
 
@@ -2561,10 +2565,10 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
         uwmod = parentmodule(uw)
-        if qualified && !isexported(uwmod, uw.name.mt.name) && uwmod !== Main
+        if qualified && !isexported(uwmod, uw.name.singletonname) && uwmod !== Main
             print_within_stacktrace(io, uwmod, '.', bold=true)
         end
-        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
     elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2643,7 +2647,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
-    str = String(take!(buf))
+    str = takestring!(buf)
     str = type_limited_string_from_context(out, str)
     print(out, str)
     nothing
@@ -2752,7 +2756,7 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
         end
         prev = di
     end
-    return String(take!(output))
+    return unsafe_takestring!(output)
 end
 
 function print_type_bicolor(io, type; kwargs...)
@@ -2850,33 +2854,7 @@ function show(io::IO, vm::Core.TypeofVararg)
     end
 end
 
-module IRShow
-    const Compiler = Core.Compiler
-    using Core.IR
-    import ..Base
-    import .Compiler: IRCode, CFG, scan_ssa_use!,
-        isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
-        Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx
-    Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
-    Base.size(r::Compiler.StmtRange) = Compiler.size(r)
-    Base.first(r::Compiler.StmtRange) = Compiler.first(r)
-    Base.last(r::Compiler.StmtRange) = Compiler.last(r)
-    Base.length(is::Compiler.InstructionStream) = Compiler.length(is)
-    Base.iterate(is::Compiler.InstructionStream, st::Int=1) = (st <= Compiler.length(is)) ? (is[st], st + 1) : nothing
-    Base.getindex(is::Compiler.InstructionStream, idx::Int) = Compiler.getindex(is, idx)
-    Base.getindex(node::Compiler.Instruction, fld::Symbol) = Compiler.getindex(node, fld)
-    Base.getindex(ir::IRCode, ssa::SSAValue) = Compiler.getindex(ir, ssa)
-    include("compiler/ssair/show.jl")
-
-    const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
-        :source => src -> statementidx_lineinfo_printer(src),
-        # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-        :none => src -> Base.IRShow.lineinfo_disabled,
-        )
-    const default_debuginfo = Ref{Symbol}(:none)
-    debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
-end
+Compiler.load_irshow!()
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
@@ -2893,34 +2871,63 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     print(io, ")")
 end
 
-function show(io::IO, inferred::Core.Compiler.InferenceResult)
-    mi = inferred.linfo
-    tt = mi.specTypes.parameters[2:end]
-    tts = join(["::$(t)" for t in tt], ", ")
-    rettype = inferred.result
-    if isa(rettype, Core.Compiler.InferenceState)
-        rettype = rettype.bestguess
+show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
+
+show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
+function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
+    args = String[let
+        e = stmt.edges[i]
+        v = !isassigned(stmt.values, i) ? "#undef" :
+            sprint(; context=io) do io′
+                show_unquoted(io′, stmt.values[i], indent)
+            end
+        "$prefix$e => $v"
+        end for i in 1:length(stmt.edges)
+    ]
+    print(io, "φ ", '(')
+    join(io, args, ", ")
+    print(io, ')')
+end
+
+function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, ::Int)
+    print(io, "φᶜ (")
+    first = true
+    for v in stmt.values
+        first ? (first = false) : print(io, ", ")
+        show_unquoted(io, v, indent)
     end
-    if isa(mi.def, Method)
-        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::PiNode, indent::Int, ::Int)
+    print(io, "π (")
+    show_unquoted(io, stmt.val, indent)
+    print(io, ", ")
+    printstyled(io, stmt.typ, color=:cyan)
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, ::Int)
+    print(io, "ϒ (")
+    isdefined(stmt, :val) ?
+        show_unquoted(io, stmt.val, indent) :
+        print(io, "#undef")
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, ::Int)
+    if !isdefined(stmt, :val)
+        print(io, "unreachable")
     else
-        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+        print(io, "return ")
+        show_unquoted(io, stmt.val, indent)
     end
 end
 
-show(io::IO, sv::Core.Compiler.InferenceState) =
-    (print(io, "InferenceState for "); show(io, sv.linfo))
-
-show(io::IO, ::Core.Compiler.NativeInterpreter) =
-    print(io, "Core.Compiler.NativeInterpreter(...)")
-
-show(io::IO, cache::Core.Compiler.CachedMethodTable) =
-    print(io, typeof(cache), "(", Core.Compiler.length(cache.cache), " entries)")
-
-function show(io::IO, limited::Core.Compiler.LimitedAccuracy)
-    print(io, "Core.Compiler.LimitedAccuracy(")
-    show(io, limited.typ)
-    print(io, ", #= ", Core.Compiler.length(limited.causes), " cause(s) =#)")
+show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
+function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
+    print(io, "goto ", prefix, stmt.dest, " if not ")
+    show_unquoted(io, stmt.cond, indent)
 end
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
@@ -3169,7 +3176,7 @@ Print to a stream `io`, or return a string `str`, giving a brief description of
 a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
-e.g. `10-element Array{Int64,1}`.
+e.g. `10-element Vector{Int64}` or `9×4×5 Array{Float64, 3}`.
 
 # Examples
 ```jldoctest
@@ -3184,7 +3191,7 @@ summary(io::IO, x) = print(io, typeof(x))
 function summary(x)
     io = IOBuffer()
     summary(io, x)
-    String(take!(io))
+    takestring!(io)
 end
 
 ## `summary` for AbstractArrays
@@ -3284,7 +3291,9 @@ showindices(io) = nothing
 function showarg(io::IO, r::ReshapedArray, toplevel)
     print(io, "reshape(")
     showarg(io, parent(r), false)
-    print(io, ", ", join(r.dims, ", "))
+    if !isempty(r.dims)
+        print(io, ", ", join(r.dims, ", "))
+    end
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(r))
     return nothing
@@ -3379,28 +3388,55 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     else
         print(io, max_world)
     end
+    if (partition.kind & PARTITION_MASK_FLAG) != 0
+        first = false
+        print(io, " [")
+        if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
+            print(io, "exported")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "deprecated")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "depwarn")
+        end
+        print(io, "]")
+    end
     print(io, " - ")
     kind = binding_kind(partition)
-    if is_some_const_binding(kind)
+    if kind == PARTITION_KIND_BACKDATED_CONST
+        print(io, "backdated constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
-    elseif kind == BINDING_KIND_GUARD
+    elseif kind == PARTITION_KIND_CONST_IMPORT
+        print(io, "constant binding (declared with `import`) to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_UNDEF_CONST
+        print(io, "undefined const binding")
+    elseif kind == PARTITION_KIND_GUARD
         print(io, "undefined binding - guard entry")
-    elseif kind == BINDING_KIND_FAILED
+    elseif kind == PARTITION_KIND_FAILED
         print(io, "ambiguous binding - guard entry")
-    elseif kind == BINDING_KIND_DECLARED
-        print(io, "undefined, but declared using `global` - guard entry")
-    elseif kind == BINDING_KIND_IMPLICIT
-        print(io, "implicit `using` from ")
+    elseif kind == PARTITION_KIND_DECLARED
+        print(io, "weak global binding declared using `global` (implicit type Any)")
+    elseif kind == PARTITION_KIND_IMPLICIT_GLOBAL
+        print(io, "implicit `using` resolved to global ")
+        print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPLICIT_CONST
+        print(io, "implicit `using` resolved to constant ")
         print(io, partition_restriction(partition))
-    elseif kind == BINDING_KIND_EXPLICIT
+    elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
-        print(io, partition_restriction(partition))
-    elseif kind == BINDING_KIND_IMPORTED
+        print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPORTED
         print(io, "explicit `import` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == BINDING_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end
@@ -3415,7 +3451,7 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
     print(io, "Binding ")
     print(io, bnd.globalref)
     if !isdefined(bnd, :partitions)
-        print(io, "No partitions")
+        print(io, " - No partitions")
     else
         partition = @atomic bnd.partitions
         while true

@@ -3,7 +3,7 @@
 module Order
 
 
-import ..@__MODULE__, ..parentmodule
+import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 import .Base:
     AbstractVector, @propagate_inbounds, isless, identity, getindex, reverse,
@@ -111,7 +111,7 @@ ReverseOrdering(by::By) = By(by.by, ReverseOrdering(by.order))
 ReverseOrdering(perm::Perm) = Perm(ReverseOrdering(perm.order), perm.data)
 
 """
-    lt(o::Ordering, a, b) -> Bool
+    lt(o::Ordering, a, b)::Bool
 
 Test whether `a` is less than `b` according to the ordering `o`.
 """

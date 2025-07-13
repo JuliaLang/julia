@@ -329,12 +329,15 @@ void jl_task_wait_empty(void)
     jl_task_t *ct = jl_current_task;
     if (jl_atomic_load_relaxed(&ct->tid) == 0 && jl_base_module) {
         jl_wait_empty_begin();
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("wait"));
-        wait_empty = ct;
         size_t lastage = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        if (f)
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("wait"), ct->world_age);
+        wait_empty = ct;
+        if (f) {
+            JL_GC_PUSH1(&f);
             jl_apply_generic(f, NULL, 0);
+            JL_GC_POP();
+        }
         // we are back from jl_task_get_next now
         ct->world_age = lastage;
         wait_empty = NULL;
@@ -437,7 +440,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     // responsibility, so need to make sure thread 0 will take care
                     // of us.
                     if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
-                        wakeup_thread(ct, 0);
+                        jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
+
                 }
                 if (uvlock) {
                     int enter_eventloop = may_sleep(ptls);
@@ -499,8 +503,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
                 // the other threads will just wait for an individual wake signal to resume
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
-                int8_t gc_state = jl_gc_safe_enter(ptls);
-                uv_mutex_lock(&ptls->sleep_lock);
+                int8_t gc_state = jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
                 while (may_sleep(ptls)) {
                     if (ptls->tid == 0) {
                         task = wait_empty;

@@ -5,11 +5,13 @@ of Julia multi-threading features.
 
 ## Starting Julia with multiple threads
 
-By default, Julia starts up with a single thread of execution. This can be verified by using the
-command [`Threads.nthreads()`](@ref):
+By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
+This can be verified by using the command [`Threads.nthreads()`](@ref):
 
-```jldoctest
-julia> Threads.nthreads()
+```julia
+julia> Threads.nthreads(:default)
+1
+julia> Threads.nthreads(:interactive)
 1
 ```
 
@@ -22,6 +24,9 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 (`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
 (see [Command-line Options](@ref command-line-interface) for more details).
 
+See [threadpools](@ref man-threadpools) for how to control how many `:default` and `:interactive` threads are in
+each threadpool.
+
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
@@ -29,6 +34,11 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 !!! compat "Julia 1.7"
     Using `auto` as value of the environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) requires at least Julia 1.7.
     In older versions, this value is ignored.
+
+!!! compat "Julia 1.12"
+    Starting by default with 1 interactive thread, as well as the 1 worker thread, was made as such in Julia 1.12
+    If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
+
 Lets start Julia with 4 threads:
 
 ```bash
@@ -37,7 +47,7 @@ $ julia --threads 4
 
 Let's verify there are 4 threads at our disposal.
 
-```julia-repl
+```jldoctest; filter = r"[0-9]+"
 julia> Threads.nthreads()
 4
 ```
@@ -96,10 +106,17 @@ using Base.Threads
 Interactive tasks should avoid performing high latency operations, and if they
 are long duration tasks, should yield frequently.
 
-Julia may be started with one or more threads reserved to run interactive tasks:
+By default Julia starts with one interactive thread reserved to run interactive tasks, but that number can
+be controlled with:
 
 ```bash
 $ julia --threads 3,1
+julia> Threads.nthreads(:interactive)
+1
+
+$ julia --threads 3,0
+julia> Threads.nthreads(:interactive)
+0
 ```
 
 The environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) can also be used similarly:
@@ -128,6 +145,8 @@ julia> nthreads(:interactive)
 julia> nthreads()
 3
 ```
+!!! note
+    Explicitly asking for 1 thread by doing `-t1` or `JULIA_NUM_THREADS=1` does not add an interactive thread.
 
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
@@ -193,7 +212,7 @@ Note that [`Threads.@threads`](@ref) does not have an optional reduction paramet
 
 ### Using `@threads` without data-races
 
-The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
 Lets say we want to make the function `sum_single` below multithreaded.
 ```julia-repl

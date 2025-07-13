@@ -160,10 +160,11 @@ static void jl_uv_call_close_callback(jl_value_t *val)
 {
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
-    args[0] = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
-            jl_symbol("_uv_hook_close")); // topmod(typeof(val))._uv_hook_close
+    args[0] = jl_eval_global_var(
+            jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
+            jl_symbol("_uv_hook_close"),
+            jl_current_task->world_age); // topmod(typeof(val))._uv_hook_close
     args[1] = val;
-    assert(args[0]);
     jl_apply(args, 2); // TODO: wrap in try-catch?
     JL_GC_POP();
 }
@@ -1160,6 +1161,8 @@ JL_DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 
 JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
 {
+    if (!handle)
+        return UV__EOF;
     if (handle->type != UV_TTY) return 0;
     uv_tty_mode_t mode_enum = UV_TTY_MODE_NORMAL;
     if (mode)

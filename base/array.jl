@@ -316,10 +316,16 @@ end
 # It is also mitigated by using a constant string.
 _throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
-copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
+_copyto2arg!(dest, src) = copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+
+copyto!(dest::Array, src::Array) = _copyto2arg!(dest, src)
+copyto!(dest::Array, src::Memory) = _copyto2arg!(dest, src)
+copyto!(dest::Memory, src::Array) = _copyto2arg!(dest, src)
 
 # also to avoid ambiguities in packages
-copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
+copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
 
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
@@ -346,12 +352,13 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
-@eval function copy(a::Array{T}) where {T}
-    # `jl_genericmemory_copy_slice` only throws when the size exceeds the max allocation
-    # size, but since we're copying an existing array, we're guaranteed that this will not happen.
+@eval function copy(a::Array)
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
     @_nothrow_meta
     ref = a.ref
-    newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
+    newmem = typeof(ref.mem)(undef, length(a))
+    @inbounds unsafe_copyto!(memoryref(newmem), ref, length(a))
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
@@ -616,11 +623,9 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 ## Constructors ##
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
-end
 
 ## copying iterators to containers
 
@@ -769,28 +774,15 @@ end
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
-if isdefined(Core, :Compiler)
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                T = ($I).f
-            else
-                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
-            end
-            promote_typejoin_union(T)
+macro default_eltype(itr)
+    I = esc(itr)
+    return quote
+        if $I isa Generator && ($I).f isa Type
+            T = ($I).f
+        else
+            T = Base._return_type(_iterator_upper_bound, Tuple{typeof($I)})
         end
-    end
-else
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                promote_typejoin_union($I.f)
-            else
-                Any
-            end
-        end
+        promote_typejoin_union(T)
     end
 end
 
@@ -910,10 +902,6 @@ function grow_to!(dest, itr, st)
     return dest
 end
 
-## Iteration ##
-
-iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
-
 ## Indexing: getindex ##
 
 """
@@ -925,7 +913,7 @@ Retrieve the value(s) stored at the given key or index within a collection. The 
 See also [`get`](@ref), [`keys`](@ref), [`eachindex`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String, Int64} with 2 entries:
   "b" => 2
@@ -981,7 +969,7 @@ Store the given value at the given key or index within a collection. The syntax 
 x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> a = Dict("a"=>1)
 Dict{String, Int64} with 1 entry:
   "a" => 1
@@ -1001,7 +989,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -1080,6 +1068,41 @@ end
 
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
+function _growbeg_internal!(a::Vector, delta::Int, len::Int)
+    @_terminates_locally_meta
+    ref = a.ref
+    mem = ref.mem
+    offset = memoryrefoffset(ref)
+    newlen = len + delta
+    memlen = length(mem)
+    if offset + len - 1 > memlen || offset < 1
+        throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+    end
+    # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
+    # the +1 is because I didn't want to have an off by 1 error.
+    newmemlen = max(overallocation(len), len + 2 * delta + 1)
+    newoffset = div(newmemlen - newlen, 2) + 1
+    # If there is extra data after the end of the array we can use that space so long as there is enough
+    # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
+    # Specifically, we want to ensure that we will only do this operation once before
+    # increasing the size of the array, and that we leave enough space at both the beginning and the end.
+    if newoffset + newlen < memlen
+        newoffset = div(memlen - newlen, 2) + 1
+        newmem = mem
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+        for j in offset:newoffset+delta-1
+            @inbounds _unsetindex!(mem, j)
+        end
+    else
+        newmem = array_new_memory(mem, newmemlen)
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+    end
+    if ref !== a.ref
+        throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+    end
+    setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
+end
+
 function _growbeg!(a::Vector, delta::Integer)
     @_noub_meta
     delta = Int(delta)
@@ -1095,38 +1118,44 @@ function _growbeg!(a::Vector, delta::Integer)
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
-        @noinline (function()
-        @_terminates_locally_meta
-        memlen = length(mem)
-        if offset + len - 1 > memlen || offset < 1
-            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
-        end
-        # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
-        # the +1 is because I didn't want to have an off by 1 error.
-        newmemlen = max(overallocation(len), len + 2 * delta + 1)
-        newoffset = div(newmemlen - newlen, 2) + 1
-        # If there is extra data after the end of the array we can use that space so long as there is enough
-        # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
-        # Specifically, we want to ensure that we will only do this operation once before
-        # increasing the size of the array, and that we leave enough space at both the beginning and the end.
-        if newoffset + newlen < memlen
-            newoffset = div(memlen - newlen, 2) + 1
-            newmem = mem
-            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-            for j in offset:newoffset+delta-1
-                @inbounds _unsetindex!(mem, j)
-            end
-        else
-            newmem = array_new_memory(mem, newmemlen)
-            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        end
-        if ref !== a.ref
-            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
-        end
-        setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
-        end)()
+        @noinline _growbeg_internal!(a, delta, len)
     end
     return
+end
+
+function _growend_internal!(a::Vector, delta::Int, len::Int)
+    ref = a.ref
+    mem = ref.mem
+    memlen = length(mem)
+    newlen = len + delta
+    offset = memoryrefoffset(ref)
+    newmemlen = offset + newlen - 1
+    if offset + len - 1 > memlen || offset < 1
+        throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+    end
+
+    if offset - 1 > div(5 * newlen, 4)
+        # If the offset is far enough that we can copy without resizing
+        # while maintaining proportional spacing on both ends of the array
+        # note that this branch prevents infinite growth when doing combinations
+        # of push! and popfirst! (i.e. when using a Vector as a queue)
+        newmem = mem
+        newoffset = div(newlen, 8) + 1
+    else
+        # grow either by our computed overallocation factor
+        # or exactly the requested size, whichever is larger
+        # TODO we should possibly increase the offset if the current offset is nonzero.
+        newmemlen2 = max(overallocation(memlen), newmemlen)
+        newmem = array_new_memory(mem, newmemlen2)
+        newoffset = offset
+    end
+    newref = @inbounds memoryref(newmem, newoffset)
+    unsafe_copyto!(newref, ref, len)
+    if ref !== a.ref
+        @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+    end
+    setfield!(a, :ref, newref)
+return
 end
 
 function _growend!(a::Vector, delta::Integer)
@@ -1142,33 +1171,7 @@ function _growend!(a::Vector, delta::Integer)
     setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
-        @noinline (function()
-        if offset + len - 1 > memlen || offset < 1
-            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
-        end
-
-        if offset - 1 > div(5 * newlen, 4)
-            # If the offset is far enough that we can copy without resizing
-            # while maintaining proportional spacing on both ends of the array
-            # note that this branch prevents infinite growth when doing combinations
-            # of push! and popfirst! (i.e. when using a Vector as a queue)
-            newmem = mem
-            newoffset = div(newlen, 8) + 1
-        else
-            # grow either by our computed overallocation factor
-            # or exactly the requested size, whichever is larger
-            # TODO we should possibly increase the offset if the current offset is nonzero.
-            newmemlen2 = max(overallocation(memlen), newmemlen)
-            newmem = array_new_memory(mem, newmemlen2)
-            newoffset = offset
-        end
-        newref = @inbounds memoryref(newmem, newoffset)
-        unsafe_copyto!(newref, ref, len)
-        if ref !== a.ref
-            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
-        end
-        setfield!(a, :ref, newref)
-        end)()
+        @noinline _growend_internal!(a, delta, len)
     end
     return
 end
@@ -1362,7 +1365,7 @@ function append! end
 
 function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     items isa Tuple && (items = map(x -> convert(T, x), items))
-    n = length(items)
+    n = Int(length(items))::Int
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, firstindex(items), n)
     return a
@@ -1370,7 +1373,7 @@ end
 
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
-append!(a::AbstractVector, iter...) = (for v in iter; append!(a, v); end; return a)
+append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
@@ -1457,7 +1460,7 @@ function _prepend!(a::Vector, ::IteratorSize, iter)
 end
 
 """
-    resize!(a::Vector, n::Integer) -> Vector
+    resize!(a::Vector, n::Integer) -> a
 
 Resize `a` to contain `n` elements. If `n` is smaller than the current collection
 length, the first `n` elements will be retained. If `n` is larger, the new elements are not
@@ -1486,7 +1489,8 @@ julia> a[1:6]
  1
 ```
 """
-function resize!(a::Vector, nl::Integer)
+function resize!(a::Vector, nl_::Integer)
+    nl = Int(nl_)::Int
     l = length(a)
     if nl > l
         _growend!(a, nl-l)
@@ -1660,6 +1664,7 @@ ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
 ```
 """
 function popat!(a::Vector, i::Integer)
+    @_propagate_inbounds_meta
     x = a[i]
     _deleteat!(a, i, 1)
     x
@@ -2453,19 +2458,28 @@ end
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
-findfirst(p::Union{Fix2{typeof(isequal),Int},Fix2{typeof(==),Int}}, r::OneTo{Int}) =
-    1 <= p.x <= r.stop ? p.x : nothing
+findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::OneTo) where {T<:Integer} =
+    1 <= p.x <= r.stop ? convert(keytype(r), p.x) : nothing
 
-findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange) where {T<:Integer} =
-    first(r) <= p.x <= last(r) ? firstindex(r) + Int(p.x - first(r)) : nothing
+findfirst(::typeof(iszero), ::OneTo) = nothing
+findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r))
+
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
+    first(r) <= p.x <= last(r) || return nothing
+    i1 = first(keys(r))
+    return i1 + oftype(i1, p.x - first(r))
+end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = convert(S, p.x - first(r))::S
+    d = p.x - first(r)
     iszero(d % step(r)) || return nothing
-    return d ÷ step(r) + 1
+    return convert(keytype(r), d ÷ step(r) + 1)
 end
+
+findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
+findfirst(::typeof(isone), r::AbstractRange) = findfirst(==(one(first(r))), r)
 
 """
     findprev(A, i)
@@ -2637,6 +2651,17 @@ end
 findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findprev(testf, A, last(keys(A)))
 
+# for monotonic ranges, there is a unique index corresponding to a value, so findfirst and findlast are identical
+function findlast(p::Union{Fix2{typeof(isequal),<:Integer},Fix2{typeof(==),<:Integer},typeof(iszero),typeof(isone)},
+        r::AbstractUnitRange{<:Integer})
+    findfirst(p, r)
+end
+
+function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero),typeof(isone)},
+        r::StepRange{T,S}) where {T,S}
+    findfirst(p, r)
+end
+
 """
     findall(f::Function, A)
 
@@ -2802,14 +2827,14 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
-function _findin(a::Union{AbstractArray, Tuple}, b)
+function _findin(a::Union{AbstractArray, Tuple}, b::AbstractSet)
     ind  = Vector{eltype(keys(a))}()
-    bset = Set(b)
     @inbounds for (i,ai) in pairs(a)
-        ai in bset && push!(ind, i)
+        ai in b && push!(ind, i)
     end
     ind
 end
+_findin(a::Union{AbstractArray, Tuple}, b) = _findin(a, Set(b))
 
 # If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than
@@ -3141,10 +3166,6 @@ function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     mem_len = length(mem) + 1 - memoryrefoffset(ref)
     len = Core.checked_dims(dims...)
     @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
-    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
-        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = memoryref(mem)
-    end
     return ref
 end
 

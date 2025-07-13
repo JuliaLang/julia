@@ -25,7 +25,7 @@ struct Slices{P,SM,AX,S,N} <: AbstractSlices{S,N}
     """
     parent::P
     """
-    A tuple of length `ndims(parent)`, denoting how each dimension should be handled:
+    A tuple of length at least `ndims(parent)`, denoting how each dimension should be handled:
       - an integer `i`: this is the `i`th dimension of the outer `Slices` object.
       - `:`: an "inner" dimension
     """
@@ -39,34 +39,39 @@ end
 unitaxis(::AbstractArray) = Base.OneTo(1)
 
 function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
+    length(slicemap) >= ndims(A) ||
+        throw(ArgumentError("Slices cannot be constructed with a slicemap of fewer elements than the parent has dimensions"))
     N = length(ax)
-    argT = map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), slicemap)
+    parent_axes = ntuple(d -> axes(A, d), length(slicemap))
+    argT = map((a,l) -> l === (:) ? Colon : eltype(a), parent_axes, slicemap)
     S = Base.promote_op(view, P, argT...)
     Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 
 _slice_check_dims(N) = nothing
 function _slice_check_dims(N, dim, dims...)
-    1 <= dim <= N || throw(DimensionMismatch("Invalid dimension $dim"))
+    1 <= dim || throw(DimensionMismatch("Invalid dimension $dim"))
     dim in dims && throw(DimensionMismatch("Dimensions $dims are not unique"))
     _slice_check_dims(N,dims...)
 end
 
 @constprop :aggressive function _eachslice(A::AbstractArray{T,N}, dims::NTuple{M,Integer}, drop::Bool) where {T,N,M}
     _slice_check_dims(N,dims...)
+    N_ = foldl(max, dims; init=N)
+
     if drop
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,3), axes(A,1))
         # slicemap = (2, :, 1, :)
         ax = map(dim -> axes(A,dim), dims)
-        slicemap = ntuple(dim -> something(findfirst(isequal(dim), dims), (:)), N)
+        slicemap = ntuple(dim -> something(findfirst(isequal(dim), dims), (:)),  N_)
         return Slices(A, slicemap, ax)
     else
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,1), OneTo(1), axes(A,3), OneTo(1))
         # slicemap = (1, :, 3, :)
-        ax = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N)
-        slicemap = ntuple(dim -> dim in dims ? dim : (:), N)
+        ax = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N_)
+        slicemap = ntuple(dim -> dim in dims ? dim : (:), N_)
         return Slices(A, slicemap, ax)
     end
 end
@@ -77,13 +82,13 @@ end
 """
     eachslice(A::AbstractArray; dims, drop=true)
 
-Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
-views that select all the data from the other dimensions in `A`. `dims` can either be an
-integer or a tuple of integers.
+Create a sliced object, usually [`Slices`](@ref), that is an array of slices over dimensions
+`dims` of `A`, returning views that select all the data from the other dimensions in `A`.
+`dims` can either be an integer or a tuple of integers.
 
-If `drop = true` (the default), the outer `Slices` will drop the inner dimensions, and
+If `drop = true` (the default), the outer slices will drop the inner dimensions, and
 the ordering of the dimensions will match those in `dims`. If `drop = false`, then the
-`Slices` will have the same dimensionality as the underlying array, with inner
+slices object will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
 See [`stack`](@ref)`(slices; dims)` for the inverse of `eachslice(A; dims::Integer)`.
@@ -225,7 +230,6 @@ constructed by [`eachcol`](@ref).
 const ColumnSlices{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Colon,Int},AX,S,1}
 
 
-IteratorSize(::Type{Slices{P,SM,AX,S,N}}) where {P,SM,AX,S,N} = HasShape{N}()
 axes(s::Slices) = s.axes
 size(s::Slices) = map(length, s.axes)
 

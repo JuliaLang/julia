@@ -137,6 +137,9 @@
 // GC threads
 #define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
 
+// heap size hint
+#define HEAP_SIZE_HINT                  "JULIA_HEAP_SIZE_HINT"
+
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0

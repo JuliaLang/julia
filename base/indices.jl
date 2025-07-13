@@ -132,7 +132,7 @@ function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = not
     if i ≢ nothing
         print(msg, ", mismatch at dim ", i)
     end
-    throw(DimensionMismatch(String(take!(msg))))
+    throw(DimensionMismatch(takestring!(msg)))
 end
 
 function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
@@ -576,3 +576,7 @@ first(iter::LinearIndices) = 1
 first(iter::LinearIndices{1}) = (@inline; first(axes1(iter.indices[1])))
 last(iter::LinearIndices) = (@inline; length(iter))
 last(iter::LinearIndices{1}) = (@inline; last(axes1(iter.indices[1])))
+
+function show(io::IO, iter::LinearIndices)
+    print(io, "LinearIndices(", iter.indices, ")")
+end

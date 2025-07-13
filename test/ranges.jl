@@ -65,6 +65,10 @@ using .Main.OffsetArrays
 
     unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
     @test_throws unitrangeerrstr UnitRange('a', 'b')
+
+    @test step(false:true) === true # PR 56405
+    @test eltype((false:true) + (Int8(0):Int8(1))) === Int8
+    @test eltype((false:true:true) + (Int8(0):Int8(1))) === Int8
 end
 
 using Dates, Random
@@ -434,15 +438,55 @@ end
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
         @test findfirst(==(0), Base.OneTo(10)) === nothing
         @test findfirst(==(11), Base.OneTo(10)) === nothing
+        @test @inferred((r -> Val(findfirst(iszero, r)))(Base.OneTo(10))) == Val(nothing)
+        @test findfirst(isone, Base.OneTo(10)) === 1
+        @test findfirst(isone, Base.OneTo(0)) === nothing
         @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
         @test findfirst(==(2), Int16(3):Int16(7)) === nothing
         @test findfirst(isequal(8), 3:7) === nothing
+        @test findfirst(==(0), UnitRange(-0.5, 0.5)) === nothing
+        @test findfirst(==(2), big(1):big(2)) === 2
         @test findfirst(isequal(7), 1:2:10) == 4
+        @test findfirst(iszero, -5:5) == 6
+        @test findfirst(iszero, 2:5) === nothing
+        @test findfirst(iszero, 6:5) === nothing
+        @test findfirst(isone, -5:5) == 7
+        @test findfirst(isone, 2:5) === nothing
+        @test findfirst(isone, 6:5) === nothing
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) === nothing
         @test findfirst(==(11), 1:2:10) === nothing
         @test findfirst(==(-7), 1:-1:-10) == 9
         @test findfirst(==(2),1:-1:2) === nothing
+        @test findfirst(iszero, 5:-2:-5) === nothing
+        @test findfirst(iszero, 6:-2:-6) == 4
+        @test findfirst(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
+    end
+    @testset "findlast" begin
+        @test findlast(==(1), Base.IdentityUnitRange(-1:1)) == 1
+        @test findlast(isequal(3), Base.OneTo(10)) == 3
+        @test findlast(==(0), Base.OneTo(10)) === nothing
+        @test findlast(==(11), Base.OneTo(10)) === nothing
+        @test @inferred((() -> Val(findlast(iszero, Base.OneTo(10))))()) == Val(nothing)
+        @test findlast(isone, Base.OneTo(10)) == 1
+        @test findlast(isone, Base.OneTo(0)) === nothing
+        @test findlast(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findlast(==(2), Int16(3):Int16(7)) === nothing
+        @test findlast(isequal(8), 3:7) === nothing
+        @test findlast(==(0), UnitRange(-0.5, 0.5)) === nothing
+        @test findlast(==(2), big(1):big(2)) === 2
+        @test findlast(isequal(7), 1:2:10) == 4
+        @test findlast(iszero, -5:5) == 6
+        @test findlast(iszero, 2:5) === nothing
+        @test findlast(iszero, 6:5) === nothing
+        @test findlast(==(7), 1:2:10) == 4
+        @test findlast(==(10), 1:2:10) === nothing
+        @test findlast(==(11), 1:2:10) === nothing
+        @test findlast(==(-7), 1:-1:-10) == 9
+        @test findlast(==(2),1:-1:2) === nothing
+        @test findlast(iszero, 5:-2:-5) === nothing
+        @test findlast(iszero, 6:-2:-6) == 4
+        @test findlast(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -654,6 +698,18 @@ end
         @test Duck(4) ∉ Duck(5):-2:Duck(1)
         @test Duck(4) ∈ Duck(1):Duck(5)
         @test Duck(0) ∉ Duck(1):Duck(5)
+    end
+    @testset "unique" begin
+        struct MyStepRangeLen{T,R} <: AbstractRange{T}
+           x :: R
+        end
+        MyStepRangeLen(s::StepRangeLen{T}) where {T} = MyStepRangeLen{T,typeof(s)}(s)
+        Base.first(s::MyStepRangeLen) = first(s.x)
+        Base.last(s::MyStepRangeLen) = last(s.x)
+        Base.length(s::MyStepRangeLen) = length(s.x)
+        Base.step(s::MyStepRangeLen) = step(s.x)
+        sr = StepRangeLen(1,0,4)
+        @test unique(MyStepRangeLen(sr)) == unique(sr)
     end
 end
 @testset "indexing range with empty range (#4309)" begin
@@ -1255,6 +1311,20 @@ end
     @test convert(StepRange, 0:5) === 0:1:5
     @test convert(StepRange{Int128,Int128}, 0.:5) === Int128(0):Int128(1):Int128(5)
 
+    @test StepRange(1:1:4) === 1:1:4
+    @test StepRange{Int32}(1:1:4) === StepRange{Int32,Int}(1,1,4)
+
+    struct MyStepRange57718{T,S} <: OrdinalRange{T,S}
+        r :: StepRange{T,S}
+    end
+    Base.first(mr::MyStepRange57718) = first(mr.r)
+    Base.last(mr::MyStepRange57718) = last(mr.r)
+    Base.step(mr::MyStepRange57718) = step(mr.r)
+    Base.length(mr::MyStepRange57718) = length(mr.r)
+
+    @test StepRange(MyStepRange57718(1:1:4)) === 1:1:4
+    @test StepRange{Int32}(MyStepRange57718(1:1:4)) === StepRange{Int32,Int}(1,1,4)
+
     @test_throws ArgumentError StepRange(1.1,1,5.1)
 
     @test promote(0f0:inv(3f0):1f0, 0.:2.:5.) === (0:1/3:1, 0.:2.:5.)
@@ -1510,8 +1580,8 @@ end
             (range(10, stop=20, length=5), 1, 5),
             (range(10.3, step=-2, length=7), 7, 1),
            ]
-        @test minimum(r) === r[imin]
-        @test maximum(r) === r[imax]
+        @test minimum(r) === minimum(r, init=typemax(eltype(r))) === r[imin]
+        @test maximum(r) === maximum(r, init=typemin(eltype(r))) === r[imax]
         @test imin === argmin(r)
         @test imax === argmax(r)
         @test extrema(r) === (r[imin], r[imax])
@@ -2014,8 +2084,10 @@ end
 end
 
 @testset "allocation of TwicePrecision call" begin
-    @test @allocated(0:286.493442:360) == 0
-    @test @allocated(0:286:360) == 0
+    let
+        @test @allocated(0:286.493442:360) == 0
+        @test @allocated(0:286:360) == 0
+    end
 end
 
 @testset "range with start and stop" begin
@@ -2739,4 +2811,21 @@ end
     Base.getindex(r::MyUnitRange, i::Int) = getindex(r.range, i)
     @test promote(MyUnitRange(2:3), Base.OneTo(3)) == (2:3, 1:3)
     @test promote(MyUnitRange(UnitRange(3.0, 4.0)), Base.OneTo(3)) == (3.0:4.0, 1.0:3.0)
+end
+
+@testset "StepRange(::StepRangeLen)" begin
+    ind = StepRangeLen(2, -1, 2)
+    @test StepRange(ind) == ind
+    @test StepRange(ind) isa StepRange{eltype(ind), typeof(step(ind))}
+    @test StepRange{Int8}(ind) == ind
+    @test StepRange{Int8}(ind) isa StepRange{Int8}
+    @test StepRange{Int8,Int8}(ind) == ind
+    @test StepRange{Int8,Int8}(ind) isa StepRange{Int8,Int8}
+
+    r = StepRangeLen(3, 0, 4)
+    @test_throws "step cannot be zero" StepRange(r)
+
+    r = StepRangeLen(Date(2020,1,1), Day(1), 4)
+    @test StepRange(r) == r
+    @test StepRange(r) isa StepRange{Date,Day}
 end
