@@ -6,6 +6,14 @@ include $(SRCDIR)/llvm-options.mk
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
 LLVM_GIT_URL:=https://github.com/JuliaLang/llvm-project.git
 LLVM_TAR_URL=https://api.github.com/repos/JuliaLang/llvm-project/tarball/$1
+# LLVM's tarball contains symlinks to non-existent targets. This breaks the
+# the default msys strategy `deepcopy` symlink strategy. To workaround this,
+# switch to `native` which tries native windows symlinks (possible if the
+# machine is in developer mode) - or if not, falls back to cygwin-style
+# symlinks. We don't particularly care either way - we just need to symlinks
+# to succeed. We could guard this by a uname check, but it's harmless elsewhere,
+# so let's not incur the additional overhead.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: export MSYS=winsymlinks:native
 $(eval $(call git-external,llvm,LLVM,CMakeLists.txt,,$(SRCCACHE)))
 
 LLVM_BUILDDIR := $(BUILDDIR)/$(LLVM_SRC_DIR)
