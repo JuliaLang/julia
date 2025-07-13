@@ -175,11 +175,18 @@ reinstall-$(strip $1):
 	+$$(MAKE) stage-$(strip $1)
 	+$$(MAKE) install-$(strip $1)
 
+ifeq ($(BUILD_OS),WINNT)
+# MSys2 has issues with symbolic links
+CREATE_TAR_FLAGS := --dereference -cf
+else
+CREATE_TAR_FLAGS := -cf
+endif
+
 $$(build_staging)/$2.tar: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
-	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -cf $$@.tmp .
+	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) $$(CREATE_TAR_FLAGS) $$@.tmp .
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
