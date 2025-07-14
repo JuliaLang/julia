@@ -16,6 +16,11 @@ function test_ir_reflection(freflect, f, types)
     nothing
 end
 
+function test_ir_reflection(freflect, argtypes)
+    @test !isempty(freflect(argtypes))
+    nothing
+end
+
 function test_bin_reflection(freflect, f, types)
     iob = IOBuffer()
     freflect(iob, f, types)
@@ -27,6 +32,9 @@ end
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
     tester(freflect, f, (types.parameters...,))
+    tt = Base.signature_type(f, types)
+    tester(freflect, tt)
+    tester(freflect, (tt.parameters...,))
     nothing
 end
 
@@ -43,6 +51,7 @@ end
 
 test_code_reflections(test_ir_reflection, code_lowered)
 test_code_reflections(test_ir_reflection, code_typed)
+test_code_reflections(test_ir_reflection, Base.code_ircode)
 
 io = IOBuffer()
 Base.print_statement_costs(io, map, (typeof(sqrt), Tuple{Int}))
@@ -110,6 +119,7 @@ not_const = 1
 @test isconst(@__MODULE__, :a_const) == true
 @test isconst(Base, :pi) == true
 @test isconst(@__MODULE__, :pi) == true
+@test isconst(GlobalRef(@__MODULE__, :pi)) == true
 @test isconst(@__MODULE__, :not_const) == false
 @test isconst(@__MODULE__, :is_not_defined) == false
 
@@ -345,6 +355,7 @@ tlayout = TLayout(5,7,11)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test [fieldoffset(TLayout, s) for s = (:x, :y, :z)] == [0, 2, 4]
 @test fieldnames(Complex) === (:re, :im)
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws ArgumentError fieldname(TLayout, 0)
@@ -359,6 +370,10 @@ tlayout = TLayout(5,7,11)
 # issue #30505
 @test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
 @test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
+
+@test [fieldindex(TLayout, i) for i = (:x, :y, :z)] == [1, 2, 3]
+@test fieldname(TLayout, fieldindex(TLayout, :z)) === :z
+@test fieldindex(TLayout, fieldname(TLayout, 3)) === 3
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws ArgumentError fieldnames(Union{})
@@ -522,13 +537,13 @@ test_typed_ir_printing(g15714, Tuple{Vector{Float32}},
 #@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     lrepr = string(li),
     mrepr = string(li.def),
     lmime = repr("text/plain", li),
     mmime = repr("text/plain", li.def)
 
-    @test lrepr == lmime == "MethodInstance for fieldtype(...)"
+    @test lrepr == lmime == "MethodInstance for fieldtype(::Vararg{Any})"
     @test mrepr == "fieldtype(...) @ Core none:0"       # simple print
     @test mmime == "fieldtype(...)\n     @ Core none:0" # verbose print
 end
@@ -568,8 +583,34 @@ fLargeTable() = 4
 fLargeTable(::Union, ::Union) = "a"
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
 fLargeTable(::Union, ::Union) = "b"
-@test length(methods(fLargeTable)) == 206
+@test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
+
+# issue #58479
+fLargeTable(::Type) = "Type"
+fLargeTable(::Type{<:DataType}) = "DataType"
+@test fLargeTable(Type) == "Type"
+@test fLargeTable(DataType) == "DataType"
+@test fLargeTable(Type{DataType}) == "DataType"
+@test fLargeTable(Type{UnionAll}) == "DataType"
+@test fLargeTable(Type{Int}) == "DataType"
+@test fLargeTable(Type{Vector}) == "Type"
+@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Union{}}) == "Type"
+@test fLargeTable(Union{}) == "DataType"
+@test fLargeTable(Type{<:DataType}) == "Type"
+fLargeTable(::Type{<:UnionAll}) = "UnionAll"
+@test fLargeTable(UnionAll) == "UnionAll"
+@test fLargeTable(Type{Vector}) == "UnionAll"
+@test fLargeTable(Type{Int}) == "DataType"
+@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Union{}}) == "Type"
+@test_throws MethodError fLargeTable(Union{})
+@test fLargeTable(Type{<:DataType}) == "Type"
+@test fLargeTable(Type{Vector{T}} where T) == "DataType"
+@test fLargeTable(Union{DataType,Type{Vector{T}} where T}) == "DataType"
+@test fLargeTable(Union{DataType,UnionAll,Type{Vector{T}} where T}) == "Type"
+@test fLargeTable(Union{Type{Vector},Type{Vector{T}} where T}) == "Type"
 
 # issue #15280
 function f15280(x) end
@@ -585,9 +626,9 @@ function module_depth(from::Module, to::Module)
 end
 function has_backslashes(mod::Module)
     for n in names(mod, all = true, imported = true)
-        isdefined(mod, n) || continue
+        isdefinedglobal(mod, n) || continue
         Base.isdeprecated(mod, n) && continue
-        f = getfield(mod, n)
+        f = getglobal(mod, n)
         if isa(f, Module) && module_depth(Main, f) <= module_depth(Main, mod)
             continue
         end
@@ -649,6 +690,10 @@ end
 # code_typed_by_type
 @test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
+
+# functor-like code_typed(...)
+@test Base.code_typed((Type{<:Val},))[2][2] == Val
+@test Base.code_typed((typeof(sin), Float64))[1][2] === Float64
 
 # New reflection methods in 0.6
 struct ReflectionExample{T<:AbstractFloat, N}
@@ -930,6 +975,7 @@ f(x::Int; y=3) = x + y
 @test hasmethod(f, Tuple{Int})
 @test hasmethod(f, Tuple{Int}, ())
 @test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:x,))
 @test !hasmethod(f, Tuple{Int}, (:jeff,))
 @test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
 g(; b, c, a) = a + b + c
@@ -969,10 +1015,6 @@ f20872(::Val, ::Val) = false
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
 @test which(Tuple{typeof(f20872), Val{1}, Val{2}}).sig == Tuple{typeof(f20872), Val, Val}
 
-module M29962 end
-# make sure checking if a binding is deprecated does not resolve it
-@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
-
 # @locals
 using Base: @locals
 let
@@ -1009,11 +1051,12 @@ _test_at_locals2(1,1,0.5f0)
 
 @testset "issue #31687" begin
     import InteractiveUtils._dump_function
+    import InteractiveUtils.ArgInfo
 
     @noinline f31687_child(i) = f31687_nonexistent(i)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
-    _dump_function(f31687_parent, Tuple{},
+    _dump_function(ArgInfo(f31687_parent, Tuple{}),
                    #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
                    #=binary=#false)
@@ -1102,9 +1145,12 @@ end
     @test 1+1 == 2
     mi1 = Base.method_instance(+, (Int, Int))
     @test mi1.def.name == :+
-    # Note `jl_method_lookup` doesn't returns CNull if not found
-    mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
-    @test mi1 == mi2
+    mi2 = Base.method_instance((typeof(+), Int, Int))
+    @test mi2.def.name == :+
+    # Note `jl_method_lookup` doesn't return CNull if not found
+    mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
+    @test mi1 == mi3
+    @test mi2 == mi3
 end
 
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
@@ -1214,6 +1260,8 @@ end
 
 @test Base.ismutationfree(Type{Union{}})
 
+@test !Base.ismutationfree(Core.SimpleVector)
+
 module TestNames
 
 public publicized
@@ -1298,3 +1346,24 @@ end
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
 
 @test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
+
+# which should not look through const bindings, even if they have the same value
+# as a previous implicit import
+module SinConst
+const sin = Base.sin
+end
+
+@test which(SinConst, :sin) === SinConst
+
+# `which` should error if there is not a unique binding that a constant was imported from
+module X1ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+module X2ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+using .X1ConstConflict, .X2ConstConflict
+
+@test_throws ErrorException which(@__MODULE__, :xconstconflict)

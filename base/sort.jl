@@ -96,7 +96,7 @@ function issorted(itr;
     end
 end
 
-function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
+function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering; scratch::Union{Nothing, Vector} = nothing)
     # TODO move k from `alg` to `kw`
     # Don't perform InitialOptimizations before Bracketing. The optimizations take O(n)
     # time and so does the whole sort. But do perform them before recursive calls because
@@ -105,7 +105,7 @@ function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Orde
     _sort!(v, BoolOptimization(
         Small{12}( # Very small inputs should go straight to insertion sort
             BracketedSort(k))),
-        o, (;))
+        o, (; scratch))
     maybeview(v, k)
 end
 
@@ -166,8 +166,8 @@ julia> a
 ```
 """
 partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
-             lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-    partialsort!(v, k, ord(lt,by,rev,order))
+             lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward, kws...) =
+    partialsort!(v, k, ord(lt,by,rev,order); kws...)
 
 """
     partialsort(v, k, by=identity, lt=isless, rev=false)
@@ -186,10 +186,10 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
     len = hi - lo
-    @inbounds while len != 0
+    while len != 0
         half_len = len >>> 0x01
         m = lo + half_len
-        if lt(o, v[m], x)
+        if lt(o, @inbounds(v[m]), x)
             lo = m + 1
             len -= half_len + 1
         else
@@ -206,9 +206,9 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     u = T(1)
     lo = lo - u
     hi = hi + u
-    @inbounds while lo != hi - u
+    while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, x, v[m])
+        if lt(o, x, @inbounds(v[m]))
             hi = m
         else
             lo = m
@@ -224,11 +224,11 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     u = T(1)
     lo = ilo - u
     hi = ihi + u
-    @inbounds while lo != hi - u
+    while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        if lt(o, @inbounds(v[m]), x)
             lo = m
-        elseif lt(o, x, v[m])
+        elseif lt(o, x, @inbounds(v[m]))
             hi = m
         else
             a = searchsortedfirst(v, x, lo+u, m, o)
@@ -336,13 +336,13 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 5) # multiple matches
 4:5
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
-3:2
+3:2 (empty range)
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
-7:6
+7:6 (empty range)
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
-1:0
+1:0 (empty range)
 
 julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=first) # compare the keys of the pairs
 2:3
@@ -426,7 +426,7 @@ julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) #
 """ searchsortedlast
 
 """
-    insorted(x, v; by=identity, lt=isless, rev=false) -> Bool
+    insorted(x, v; by=identity, lt=isless, rev=false)::Bool
 
 Determine whether a vector `v` contains any value equivalent to `x`.
 The vector `v` must be sorted according to the order defined by the keywords.
@@ -1620,7 +1620,7 @@ defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
 defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
-defalg(v::NTuple) = DEFAULT_STABLE
+defalg(v) = DEFAULT_STABLE
 
 """
     sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
@@ -1700,12 +1700,15 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
  (2, "b")
  (1, "c")
 
-julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) # same as sort(0:3, by=abs(x->x-2))
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs))
 4-element Vector{Int64}:
  2
  1
  3
  0
+
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) == sort(0:3, by=x->abs(x-2))
+true
 
 julia> sort([2, NaN, 1, NaN, 3]) # correct sort with default lt=isless
 5-element Vector{Float64}:
@@ -1737,8 +1740,18 @@ end
 
 """
     sort(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    sort(v::NTuple; kws...)::NTuple
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
+
+When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
+collected and then sorted in place.
+
+!!! compat "Julia 1.12"
+    Sorting `NTuple`s requires Julia 1.12 or later.
+
+!!! compat "Julia 1.13"
+    Sorting keys sets and values iterators requires Julia 1.13 or later.
 
 # Examples
 ```jldoctest
@@ -1755,9 +1768,17 @@ julia> v
  3
  1
  2
+
+julia> sort(values(Dict('a'=>2, 'b'=>1)))
+2-element Vector{Int64}:
+ 1
+ 2
 ```
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+
+const COLLECT_ON_SORT_TYPES = Union{Base.KeySet, Base.ValueIterator}
+sort(v::COLLECT_ON_SORT_TYPES; kws...) = sort!(collect(v); kws...)
 
 function sort(x::NTuple;
               alg::Algorithm=defalg(x),

@@ -188,7 +188,7 @@ mutable struct LazyGenericDomtree{IsPostDom}
 end
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = IsPostDom ?
+    return @zone "CC: DOMTREE_2" x.domtree = IsPostDom ?
         construct_postdomtree(x.ir) :
         construct_domtree(x.ir)
 end
@@ -219,16 +219,29 @@ const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
 const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
 const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization required
 
-mutable struct TryCatchFrame
+abstract type Handler end
+get_enter_idx(handler::Handler) = get_enter_idx_impl(handler)::Int
+
+mutable struct TryCatchFrame <: Handler
     exct
     scopet
     const enter_idx::Int
     scope_uses::Vector{Int}
-    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) =
+        new(exct, scopet, enter_idx)
 end
+TryCatchFrame(stmt::EnterNode, pc::Int) =
+    TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc)
+get_enter_idx_impl((; enter_idx)::TryCatchFrame) = enter_idx
 
-struct HandlerInfo
-    handlers::Vector{TryCatchFrame}
+struct SimpleHandler <: Handler
+    enter_idx::Int
+end
+SimpleHandler(::EnterNode, pc::Int) = SimpleHandler(pc)
+get_enter_idx_impl((; enter_idx)::SimpleHandler) = enter_idx
+
+struct HandlerInfo{T<:Handler}
+    handlers::Vector{T}
     handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
 end
 
@@ -261,7 +274,7 @@ mutable struct InferenceState
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    handler_info::Union{Nothing,HandlerInfo}
+    handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
@@ -279,7 +292,7 @@ mutable struct InferenceState
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
     callstack #::Vector{AbsIntState}
-    parentid::Int # index into callstack of the parent frame that originally added this frame (call frame_parent to extract the current parent of the SCC)
+    parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
     frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
     cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
 
@@ -289,6 +302,10 @@ mutable struct InferenceState
     bestguess #::Type
     exc_bestguess
     ipo_effects::Effects
+    time_start::UInt64
+    time_caches::Float64
+    time_paused::UInt64
+    time_self_ns::UInt64
 
     #= flags =#
     # Whether to restrict inference of abstract call sites to avoid excessive work
@@ -318,7 +335,7 @@ mutable struct InferenceState
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        handler_info = compute_trycatch(code)
+        handler_info = ComputeTryCatch{TryCatchFrame}()(code)
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
@@ -379,6 +396,7 @@ mutable struct InferenceState
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
+            _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
 
@@ -421,10 +439,16 @@ is_inferred(result::InferenceResult) = result.result !== nothing
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
-compute_trycatch(ir::IRCode) = compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
+struct ComputeTryCatch{T<:Handler} end
+
+const compute_trycatch = ComputeTryCatch{SimpleHandler}()
+
+(compute_trycatch::ComputeTryCatch{SimpleHandler})(ir::IRCode) =
+    compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
 
 """
-    compute_trycatch(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo}
+    (::ComputeTryCatch{Handler})(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
+    const compute_trycatch = ComputeTryCatch{SimpleHandler}()
 
 Given the code of a function, compute, at every statement, the current
 try/catch handler, and the current exception stack top. This function returns
@@ -433,9 +457,9 @@ a tuple of:
     1. `handler_info.handler_at`: A statement length vector of tuples
        `(catch_handler, exception_stack)`, which are indices into `handlers`
 
-    2. `handler_info.handlers`: A `TryCatchFrame` vector of handlers
+    2. `handler_info.handlers`: A `Handler` vector of handlers
 """
-function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing)
+function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing) where Handler
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
@@ -454,10 +478,10 @@ function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothi
         stmt = code[pc]
         if isa(stmt, EnterNode)
             (;handlers, handler_at) = handler_info =
-                (handler_info === nothing ? HandlerInfo(TryCatchFrame[], fill((0, 0), n)) : handler_info)
+                (handler_info === nothing ? HandlerInfo{Handler}(Handler[], fill((0, 0), n)) : handler_info)
             l = stmt.catch_dest
-            (bbs !== nothing) && (l = first(bbs[l].stmts))
-            push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
+            (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
+            push!(handlers, Handler(stmt, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
@@ -500,7 +524,7 @@ function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothi
                 break
             elseif isa(stmt, EnterNode)
                 l = stmt.catch_dest
-                (bbs !== nothing) && (l = first(bbs[l].stmts))
+                (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
                 if l != 0
@@ -526,7 +550,7 @@ function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothi
                     end
                     cur_hand = cur_stacks[1]
                     for i = 1:l
-                        cur_hand = handler_at[handlers[cur_hand].enter_idx][1]
+                        cur_hand = handler_at[get_enter_idx(handlers[cur_hand])][1]
                     end
                     cur_stacks = (cur_hand, cur_stacks[2])
                     cur_stacks == (0, 0) && break
@@ -551,21 +575,23 @@ function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothi
 end
 
 # check if coverage mode is enabled
-function should_insert_coverage(mod::Module, debuginfo::DebugInfo)
-    coverage_enabled(mod) && return true
-    JLOptions().code_coverage == 3 || return false
+should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mod, debuginfo, true)
+
+function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
+    instrumentation_enabled(mod, only_if_affects_optimizer) && return true
+    JLOptions().code_coverage == 3 || JLOptions().malloc_log == 3 || return false
     # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
-    return _should_insert_coverage(debuginfo)
+    return _should_instrument(debuginfo)
 end
 
-_should_insert_coverage(mod::Symbol) = is_file_tracked(mod)
-_should_insert_coverage(mod::Method) = _should_insert_coverage(mod.file)
-_should_insert_coverage(mod::MethodInstance) = _should_insert_coverage(mod.def)
-_should_insert_coverage(mod::Module) = false
-function _should_insert_coverage(info::DebugInfo)
+_should_instrument(loc::Symbol) = is_file_tracked(loc)
+_should_instrument(loc::Method) = _should_instrument(loc.file)
+_should_instrument(loc::MethodInstance) = _should_instrument(loc.def)
+_should_instrument(loc::Module) = false
+function _should_instrument(info::DebugInfo)
     linetable = info.linetable
-    linetable === nothing || (_should_insert_coverage(linetable) && return true)
-    _should_insert_coverage(info.def) && return true
+    linetable === nothing || (_should_instrument(linetable) && return true)
+    _should_instrument(info.def) && return true
     return false
 end
 
@@ -796,6 +822,8 @@ mutable struct IRInterpretationState
     const mi::MethodInstance
     world::WorldWithRange
     curridx::Int
+    time_caches::Float64
+    time_paused::UInt64
     const argtypes_refined::Vector{Bool}
     const sptypes::Vector{VarState}
     const tpdum::TwoPhaseDefUseMap
@@ -830,7 +858,8 @@ mutable struct IRInterpretationState
         tasks = WorkThunk[]
         edges = Any[]
         callstack = AbsIntState[]
-        return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds), curridx, argtypes_refined, ir.sptypes, tpdum,
+        return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds),
+                curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
                 ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0)
     end
 end
@@ -889,14 +918,17 @@ function frame_module(sv::AbsIntState)
     return def.module
 end
 
-function frame_parent(sv::InferenceState)
+frame_parent(sv::AbsIntState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+
+function cycle_parent(sv::InferenceState)
     sv.parentid == 0 && return nothing
     callstack = sv.callstack::Vector{AbsIntState}
     sv = callstack[sv.cycleid]::InferenceState
     sv.parentid == 0 && return nothing
     return callstack[sv.parentid]
 end
-frame_parent(sv::IRInterpretationState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+cycle_parent(sv::IRInterpretationState) = frame_parent(sv)
+
 
 # add the orphan child to the parent and the parent to the child
 function assign_parentchild!(child::InferenceState, parent::AbsIntState)
@@ -967,12 +999,12 @@ ascending the tree from the given `AbsIntState`).
 Note that cycles may be visited in any order.
 """
 struct AbsIntStackUnwind
-    sv::AbsIntState
+    callstack::Vector{AbsIntState}
+    AbsIntStackUnwind(sv::AbsIntState) = new(sv.callstack::Vector{AbsIntState})
 end
-iterate(unw::AbsIntStackUnwind) = (unw.sv, length(unw.sv.callstack::Vector{AbsIntState}))
-function iterate(unw::AbsIntStackUnwind, frame::Int)
+function iterate(unw::AbsIntStackUnwind, frame::Int=length(unw.callstack))
     frame == 0 && return nothing
-    return ((unw.sv.callstack::Vector{AbsIntState})[frame], frame - 1)
+    return (unw.callstack[frame], frame - 1)
 end
 
 struct AbsIntCycle

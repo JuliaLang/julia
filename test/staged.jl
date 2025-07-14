@@ -312,7 +312,7 @@ end
     :(global x33243 = 2)
 end
 @test_throws ErrorException f33243()
-global x33243
+global x33243::Any
 @test f33243() === 2
 @test x33243 === 2
 
@@ -381,7 +381,7 @@ let
     @test length(ir.cfg.blocks) == 1
 end
 
-function generate_lambda_ex(world::UInt, source::LineNumberNode,
+function generate_lambda_ex(world::UInt, source::Method,
                             argnames, spnames, @nospecialize body)
     stub = Core.GeneratedFunctionStub(identity, Core.svec(argnames...), Core.svec(spnames...))
     return stub(world, source, body)
@@ -389,7 +389,7 @@ end
 
 # Test that `Core.CachedGenerator` works as expected
 struct Generator54916 <: Core.CachedGenerator end
-function (::Generator54916)(world::UInt, source::LineNumberNode, args...)
+function (::Generator54916)(world::UInt, source::Method, args...)
     return generate_lambda_ex(world, source,
         (:doit54916, :func, :arg), (), :(func(arg)))
 end
@@ -432,7 +432,7 @@ function overdubbee54341(a, b)
     a + b
 end
 const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
-function overdub_generator54341(world::UInt, source::LineNumberNode, selftype, fargtypes)
+function overdub_generator54341(world::UInt, source::Method, selftype, fargtypes)
     if length(fargtypes) != 2
         return generate_lambda_ex(world, source,
             (:overdub54341, :args), (), :(error("Wrong number of arguments")))
@@ -449,3 +449,33 @@ end
 @test first(only(code_typed((Int,Int)) do x, y; @inline overdub54341(x, y); end)) isa Core.CodeInfo
 @test first(only(code_typed((Int,)) do x; @inline overdub54341(x, 1); end)) isa Core.CodeInfo
 @test_throws "Wrong number of arguments" overdub54341(1, 2, 3)
+
+# Test the module resolution scope of generated methods that are type constructors
+module GeneratedScope57417
+    using Test
+    import ..generate_lambda_ex
+    const x = 1
+    struct Generator; end
+    @generated (::Generator)() = :x
+    f(x::Int) = 1
+    module OtherModule
+        import ..f
+        const x = 2
+        @generated f(::Float64) = :x
+    end
+    import .OtherModule: f
+    @test Generator()() == 1
+    @test f(1.0) == 2
+
+    function g_generator(world::UInt, source::Method, _)
+        return generate_lambda_ex(world, source, (:g,), (), :(return x))
+    end
+
+    @eval function g()
+        $(Expr(:meta, :generated, g_generator))
+        $(Expr(:meta, :generated_only))
+    end
+    @test g() == 1
+end
+
+@test_throws "syntax: expression too large" code_lowered(ntuple, (Returns{Nothing}, Val{1000000}))

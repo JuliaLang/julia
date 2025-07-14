@@ -3,7 +3,7 @@
 ## Introduction
 
 Julia Base contains a range of functions and macros appropriate for performing
-scientific and numerical computing, but is also as broad as those of many general purpose programming
+scientific and numerical computing, but is also as broad as those of many general-purpose programming
 languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
@@ -139,6 +139,8 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
+Base.ispositive
+Base.isnegative
 Base.isunordered
 Base.ifelse
 Core.typeassert
@@ -166,6 +168,7 @@ Core.replacefield!
 Core.swapfield!
 Core.setfieldonce!
 Core.isdefined
+Core.isdefinedglobal
 Base.@isdefined
 Base.convert
 Base.promote
@@ -190,6 +193,7 @@ Base.typeintersect
 Base.promote_type
 Base.promote_rule
 Base.promote_typejoin
+Base.iskindtype
 Base.isdispatchtuple
 ```
 
@@ -206,6 +210,7 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.fieldindex
 Core.fieldtype
 Base.fieldtypes
 Base.fieldcount
@@ -247,6 +252,7 @@ Base.instances
 Core.Any
 Core.Union
 Union{}
+Core.TypeofBottom
 Core.UnionAll
 Core.Tuple
 Core.NTuple
@@ -396,6 +402,7 @@ Base.Sys.loadavg
 Base.Sys.isexecutable
 Base.Sys.isreadable
 Base.Sys.iswritable
+Base.Sys.which
 Base.Sys.username
 Base.@static
 ```

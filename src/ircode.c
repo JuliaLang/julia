@@ -547,7 +547,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
     }
 }
 
-static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall,
+static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall, uint8_t has_image_globalref,
                                             uint8_t nospecializeinfer, uint8_t isva,
                                             uint8_t inlining, uint8_t constprop, uint8_t nargsmatchesmethod,
                                             jl_array_t *ssaflags)
@@ -555,6 +555,7 @@ static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t 
     jl_code_info_flags_t flags;
     flags.bits.propagate_inbounds = propagate_inbounds;
     flags.bits.has_fcall = has_fcall;
+    flags.bits.has_image_globalref = has_image_globalref;
     flags.bits.nospecializeinfer = nospecializeinfer;
     flags.bits.isva = isva;
     flags.bits.inlining = inlining;
@@ -988,7 +989,7 @@ static int codelocs_nstmts(jl_string_t *cl) JL_NOTSAFEPOINT
 
 #define IR_DATASIZE_FLAGS         sizeof(uint16_t)
 #define IR_DATASIZE_PURITY        sizeof(uint16_t)
-#define IR_DATASIZE_INLINING_COST sizeof(uint16_t)
+#define IR_DATASIZE_INLINING_COST sizeof(uint8_t)
 #define IR_DATASIZE_NSLOTS        sizeof(int32_t)
 typedef enum {
     ir_offset_flags         = 0,
@@ -1036,14 +1037,14 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     };
 
     uint8_t nargsmatchesmethod = code->nargs == m->nargs;
-    jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall,
+    jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall, code->has_image_globalref,
                                                  code->nospecializeinfer, code->isva,
                                                  code->inlining, code->constprop,
                                                  nargsmatchesmethod,
                                                  code->ssaflags);
     write_uint16(s.s, checked_size(flags.packed, IR_DATASIZE_FLAGS));
     write_uint16(s.s, checked_size(code->purity.bits, IR_DATASIZE_PURITY));
-    write_uint16(s.s, checked_size(code->inlining_cost, IR_DATASIZE_INLINING_COST));
+    write_uint8(s.s, checked_size(jl_encode_inlining_cost(code->inlining_cost), IR_DATASIZE_INLINING_COST));
 
     size_t nslots = jl_array_nrows(code->slotflags);
     assert(nslots >= m->nargs && nslots < INT32_MAX); // required by generated functions
@@ -1108,6 +1109,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
+    if (!jl_is_string(data))
+        return (jl_code_info_t*)jl_nothing;
     JL_TIMING(AST_UNCOMPRESS, AST_UNCOMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
@@ -1134,10 +1137,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->constprop = flags.bits.constprop;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
+    code->has_image_globalref = flags.bits.has_image_globalref;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
     code->isva = flags.bits.isva;
     code->purity.bits = read_uint16(s.s);
-    code->inlining_cost = read_uint16(s.s);
+    code->inlining_cost = jl_decode_inlining_cost(read_uint8(s.s));
 
     size_t nslots = read_int32(s.s);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
@@ -1194,7 +1198,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     ios_close(s.s);
     JL_UNLOCK(&m->writelock); // Might GC
     if (metadata) {
-        code->parent = metadata->def;
+        code->parent = jl_get_ci_mi(metadata);
         jl_gc_wb(code, code->parent);
         code->rettype = metadata->rettype;
         jl_gc_wb(code, code->rettype);
@@ -1228,12 +1232,56 @@ JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_string_t *data)
     return flags.bits.has_fcall;
 }
 
-JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_string_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_has_image_globalref(jl_string_t *data)
 {
+    if (jl_is_code_info(data))
+        return ((jl_code_info_t*)data)->has_image_globalref;
+    assert(jl_is_string(data));
+    jl_code_info_flags_t flags;
+    flags.packed = jl_string_data(data)[ir_offset_flags];
+    return flags.bits.has_image_globalref;
+}
+
+// create a compressed u16 value with range 0..3968, 3 bits exponent, 5 bits mantissa, implicit first digit, rounding up, full accuracy over 0..63
+JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost)
+{
+    unsigned shift = 0;
+    unsigned mantissa;
+    if (inlining_cost <= 0x1f) {
+        mantissa = inlining_cost;
+    }
+    else {
+        while (inlining_cost >> 5 >> shift != 0)
+            shift++;
+        assert(1 <= shift && shift <= 11);
+        mantissa = (inlining_cost >> (shift - 1)) & 0x1f;
+        mantissa += (inlining_cost & ((1 << (shift - 1)) - 1)) != 0; // round up if trailing bits non-zero, overflowing into exp
+    }
+    unsigned r = (shift << 5) + mantissa;
+    if (r > 0xff)
+        r = 0xff;
+    return r;
+}
+
+JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost)
+{
+    unsigned shift = inlining_cost >> 5;
+    if (inlining_cost == 0xff)
+        return 0xffff;
+    else if (shift == 0)
+        return inlining_cost;
+    else
+        return (0x20 | (inlining_cost & 0x1f)) << (shift - 1);
+}
+
+JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_value_t *data)
+{
+    if (jl_is_uint8(data))
+        return jl_decode_inlining_cost(*(uint8_t*)data);
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inlining_cost;
     assert(jl_is_string(data));
-    uint16_t res = jl_load_unaligned_i16(jl_string_data(data) + ir_offset_inlining_cost);
+    uint16_t res = jl_decode_inlining_cost(*(uint8_t*)(jl_string_data(data) + ir_offset_inlining_cost));
     return res;
 }
 
@@ -1604,14 +1652,12 @@ void jl_init_serializer(void)
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
-                     jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_array_uint32_type, jl_code_info_type,
                      jl_typeofbottom_type, jl_typeofbottom_type->super,
                      jl_namedtuple_type, jl_array_int32_type,
                      jl_uint32_type, jl_uint64_type,
-                     jl_type_type_mt, jl_nonfunction_mt,
                      jl_opaque_closure_type,
                      jl_memory_any_type,
                      jl_memory_uint8_type,

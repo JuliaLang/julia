@@ -100,6 +100,18 @@ using Dates
     @test Array{eltype(a)}(a) !== a
     @test Vector(a) !== a
 end
+@testset "effect inference for `reshape` for `Array`" begin
+    for Arr ∈ (Array{<:Any, 0}, Vector, Matrix, Array{<:Any, 3})
+        for Shape ∈ (Tuple{Int}, Tuple{Int, Int})
+            effects = Base.infer_effects(reshape, Tuple{Arr{Float32}, Shape})
+            @test Base.Compiler.is_effect_free(effects)
+            @test Base.Compiler.is_terminates(effects)
+            @test Base.Compiler.is_notaskstate(effects)
+            @test Base.Compiler.is_noub(effects)
+            @test Base.Compiler.is_nortcall(effects)
+        end
+    end
+end
 @testset "reshaping SubArrays" begin
     a = Array(reshape(1:5, 1, 5))
     @testset "linearfast" begin
@@ -307,34 +319,40 @@ end
     @test_throws ArgumentError dropdims(a, dims=3)
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
-
-
-    a = rand(8, 7)
-    @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
-    @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
-    @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
-    @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
-
-    @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
-    @test_throws UndefKeywordError insertdims(a)
-    @test_throws ArgumentError insertdims(a, dims=0)
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
-    @test_throws ArgumentError insertdims(a, dims=4)
-    @test_throws ArgumentError insertdims(a, dims=6)
-
-    # insertdims and dropdims are inverses
-    b = rand(1,1,1,5,1,1,7)
-    for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
-        @test dropdims(insertdims(a; dims); dims) == a
-        @test insertdims(dropdims(b; dims); dims) == b
+    @testset "insertdims" begin
+        a = rand(8, 7)
+        @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
+        @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
+        @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
+        @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
+        @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
+        @test_throws UndefKeywordError insertdims(a)
+        @test_throws ArgumentError insertdims(a, dims=0)
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
+        @test_throws ArgumentError insertdims(a, dims=4)
+        @test_throws ArgumentError insertdims(a, dims=6)
+        A = reshape(1:6, 2, 3)
+        @test_throws ArgumentError insertdims(A, dims=(2, 2))
+        D = insertdims(A, dims=())
+        @test size(D) == size(A)
+        @test D == A
+        E = ones(2, 3, 4)
+        F = insertdims(E, dims=(2, 4, 6))
+        @test size(F) == (2, 1, 3, 1, 4, 1)
+        # insertdims and dropdims are inverses
+        b = rand(1,1,1,5,1,1,7)
+        for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
+            @test dropdims(insertdims(a; dims); dims) == a
+            @test insertdims(dropdims(b; dims); dims) == b
+        end
     end
 
     sz = (5,8,7)
@@ -1755,6 +1773,12 @@ end
     end
 end
 
+@testset "reverse zero dims" begin
+    a = fill(3)
+    @test a == reverse(a)
+    @test a === reverse!(a)
+end
+
 @testset "isdiag, istril, istriu" begin
     # Scalar
     @test isdiag(3)
@@ -2191,7 +2215,7 @@ end
 
 # All we really care about is that we have an optimized
 # implementation, but the seed is a useful way to check that.
-@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed ⊻ Base.HASH_SEED
 @test hash(CartesianIndex(1, 2)) != hash((1, 2))
 
 @testset "itr, iterate" begin
@@ -2378,7 +2402,7 @@ end
     M = [1 2 3; 4 5 6; 7 8 9]
     @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
-    @test_throws DimensionMismatch eachslice(M, dims = 4)
+    @test eachslice(M, dims = 4) == [[1 2 3; 4 5 6; 7 8 9;;;]]
 
     SR = @inferred eachrow(M)
     @test SR[2] isa eltype(SR)
@@ -2443,6 +2467,32 @@ end
         @test_throws BoundsError A[2,3] = [4,5]
         @test_throws BoundsError A[2,3] .= [4,5]
     end
+
+    @testset "trailing dimensions" begin
+        v = collect(1:3)
+
+        S2  = eachslice(v; dims = 2, drop=true)
+        @test S2 isa AbstractSlices{<:AbstractVector, 1}
+        @test size(S2) == (1,)
+        @test S2[1] == v
+
+        S2K = eachslice(v; dims = 2, drop=false)
+        @test S2K isa AbstractSlices{<:AbstractVector, 2}
+        @test size(S2K) == (1,1)
+        @test S2K[1,1] == v
+
+        M = reshape(1:6, 2, 3)
+
+        S13 = eachslice(M; dims = (1,3))
+        @test size(S13) == (2,1)
+        @test S13[2,1] == M[2,:,1]
+
+        S13K = eachslice(M; dims = (1,3), drop=false)
+        @test size(S13K) == (2,1,1)
+        @test S13K[1,1,1] == M[1,:]
+        @test S13K[2,1,1] == M[2,:]
+    end
+
 end
 
 ###
@@ -2942,7 +2992,7 @@ end
 
 Base.ArithmeticStyle(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-Float64(x::F21666) = Float64(x.x)
+Base.Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic

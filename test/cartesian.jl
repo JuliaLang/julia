@@ -573,3 +573,57 @@ end
     end
     @test t3 == (1, 2, 0)
 end
+
+@testset "CartesianIndex show" begin
+    c = CartesianIndex()
+    @test sprint(show, c) == "CartesianIndex()"
+    c = CartesianIndex(3)
+    @test sprint(show, c) == "CartesianIndex(3)"
+    c = CartesianIndex(3, 3)
+    @test sprint(show, c) == "CartesianIndex(3, 3)"
+end
+
+@testset "CartesianIndex indexing with begin/end" begin
+    I = CartesianIndex(3,4)
+    @test I[begin] == I[1]
+    @test I[end] == I[2]
+end
+
+@testset "in for a CartesianIndex StepRangeLen" begin
+    @testset for l in [0, 1, 4], r in Any[
+            StepRangeLen(CartesianIndex(), CartesianIndex(), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(0), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(1), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(4), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(-4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, 4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, -4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, 2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, 2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, -2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, -2), l),
+            StepRangeLen(CartesianIndex(-1, 2, 0), CartesianIndex(0, 0, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2, 0), CartesianIndex(0, 0, -2), l),
+            ]
+
+        if length(r) == 0
+            @test !(first(r) in r)
+            @test !(last(r) in r)
+        end
+        for x in r
+            @test x in r
+            if step(r) != oneunit(x)
+                @test !((x + oneunit(x)) in r)
+            end
+        end
+        @test !(CartesianIndex(ntuple(x->0, ndims(r))) in r)
+        @test !(CartesianIndex(ntuple(x->typemax(Int), ndims(r))) in r)
+        @test !(CartesianIndex(ntuple(x->typemin(Int), ndims(r))) in r)
+        if ndims(r) > 1
+            @test !(CartesianIndex(ntuple(x->0, ndims(r)-1)...) in r)
+        end
+    end
+end

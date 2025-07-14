@@ -16,7 +16,7 @@ The keyword `debuginfo` controls the amount of code metadata present in the outp
 Note that an error will be thrown if `types` are not concrete types when `generated` is
 `true` and any of the corresponding methods are an `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+function code_lowered(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); generated::Bool=true, debuginfo::Symbol=:default)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo === :default
@@ -28,7 +28,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     ret = CodeInfo[]
-    for m in method_instances(f, t, world)
+    for m in method_instances(argtypes, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
                 code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
@@ -46,105 +46,17 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     return ret
 end
 
-# high-level, more convenient method lookup functions
-
-function visit(f, mt::Core.MethodTable)
-    mt.defs !== nothing && visit(f, mt.defs)
-    nothing
-end
-function visit(f, mc::Core.TypeMapLevel)
-    function avisit(f, e::Memory{Any})
-        for i in 2:2:length(e)
-            isassigned(e, i) || continue
-            ei = e[i]
-            if ei isa Memory{Any}
-                for j in 2:2:length(ei)
-                    isassigned(ei, j) || continue
-                    visit(f, ei[j])
-                end
-            else
-                visit(f, ei)
-            end
-        end
-    end
-    if mc.targ !== nothing
-        avisit(f, mc.targ::Memory{Any})
-    end
-    if mc.arg1 !== nothing
-        avisit(f, mc.arg1::Memory{Any})
-    end
-    if mc.tname !== nothing
-        avisit(f, mc.tname::Memory{Any})
-    end
-    if mc.name1 !== nothing
-        avisit(f, mc.name1::Memory{Any})
-    end
-    mc.list !== nothing && visit(f, mc.list)
-    mc.any !== nothing && visit(f, mc.any)
-    nothing
-end
-function visit(f, d::Core.TypeMapEntry)
-    while d !== nothing
-        f(d.func)
-        d = d.next
-    end
-    nothing
-end
-struct MethodSpecializations
-    specializations::Union{Nothing, Core.MethodInstance, Core.SimpleVector}
-end
-"""
-    specializations(m::Method) → itr
-
-Return an iterator `itr` of all compiler-generated specializations of `m`.
-"""
-specializations(m::Method) = MethodSpecializations(isdefined(m, :specializations) ? m.specializations : nothing)
-function iterate(specs::MethodSpecializations)
-    s = specs.specializations
-    s === nothing && return nothing
-    isa(s, Core.MethodInstance) && return (s, nothing)
-    return iterate(specs, 0)
-end
-iterate(specs::MethodSpecializations, ::Nothing) = nothing
-function iterate(specs::MethodSpecializations, i::Int)
-    s = specs.specializations::Core.SimpleVector
-    n = length(s)
-    i >= n && return nothing
-    item = nothing
-    while i < n && item === nothing
-        item = s[i+=1]
-    end
-    item === nothing && return nothing
-    return (item, i)
-end
-length(specs::MethodSpecializations) = count(Returns(true), specs)
-
-function length(mt::Core.MethodTable)
-    n = 0
-    visit(mt) do m
-        n += 1
-    end
-    return n::Int
-end
-isempty(mt::Core.MethodTable) = (mt.defs === nothing)
-
-uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
-                             isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
-                             error("Code for this Method is not available.")
-function _uncompressed_ir(m::Method)
-    s = m.source
-    if s isa String
-        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
-    end
-    return s::CodeInfo
+function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+    tt = signature_type(f, t)
+    return code_lowered(tt; generated, debuginfo)
 end
 
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
 
-function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
-    tt = signature_type(f, t)
+function method_instances(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}), world::UInt)
+    tt = to_tuple_type(argtypes)
     results = Core.MethodInstance[]
     # this make a better error message than the typeassert that follows
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
@@ -155,13 +67,24 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     return results
 end
 
-function method_instance(@nospecialize(f), @nospecialize(t);
-                         world=Base.get_world_counter(), method_table=nothing)
+function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     tt = signature_type(f, t)
+    return method_instances(tt, world)
+end
+
+function method_instance(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}});
+                         world=Base.get_world_counter(), method_table=nothing)
+    tt = to_tuple_type(argtypes)
     mi = ccall(:jl_method_lookup_by_tt, Any,
                 (Any, Csize_t, Any),
                 tt, world, method_table)
     return mi::Union{Nothing, MethodInstance}
+end
+
+function method_instance(@nospecialize(f), @nospecialize(t);
+                         world=Base.get_world_counter(), method_table=nothing)
+    tt = signature_type(f, t)
+    return method_instance(tt; world, method_table)
 end
 
 default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
@@ -242,23 +165,22 @@ struct CodegenParams
     use_jlplt::Cint
 
     """
-    If enabled, only provably reachable code (from functions marked with `entrypoint`) is included
-    in the output system image. Errors or warnings can be given for call sites too dynamic to handle.
-    The option is disabled by default. (0=>disabled, 1=>safe (static errors), 2=>unsafe, 3=>unsafe plus warnings)
+        If enabled emit LLVM IR for all functions even if wouldn't be compiled
+        for some reason (i.e functions that return a constant value).
     """
-    trim::Cint
+    force_emit_all::Cint
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0))
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim))
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all))
     end
 end
 
@@ -305,13 +227,42 @@ julia> code_typed(+, (Float64, Float64))
 1 ─ %1 = Base.add_float(x, y)::Float64
 └──      return %1
 ) => Float64
+
+julia> code_typed((typeof(-), Float64, Float64))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Base.sub_float(x, y)::Float64
+└──      return %1
+) => Float64
+
+julia> code_typed((Type{Int}, UInt8))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Core.zext_int(Core.Int64, x)::Int64
+└──      return %1
+) => Int64
+
+julia> code_typed((Returns{Int64},))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 =   builtin Base.getfield(obj, :value)::Int64
+└──      return %1
+) => Int64
 ```
 """
+function code_typed end
+
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs...)
     if isa(f, Core.OpaqueClosure)
         return code_typed_opaque_closure(f, types; kwargs...)
     end
     tt = signature_type(f, types)
+    return code_typed_by_type(tt; kwargs...)
+end
+
+# support 'functor'-like queries, such as `(::Foo)(::Int, ::Int)` via `code_typed((Foo, Int, Int))`
+function code_typed(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...)
+    tt = to_tuple_type(argtypes)
     return code_typed_by_type(tt; kwargs...)
 end
 
@@ -462,7 +413,7 @@ internals.
   when looking up methods, use current world age if not specified.
 - `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
   optional, controls the abstract interpreter to use, use the native interpreter if not specified.
-- `optimize_until::Union{Integer,AbstractString,Nothing} = nothing`: optional,
+- `optimize_until::Union{Int,String,Nothing} = nothing`: optional,
   controls the optimization passes to run.
   If it is a string, it specifies the name of the pass up to which the optimizer is run.
   If it is an integer, it specifies the number of passes to run.
@@ -496,6 +447,11 @@ function code_ircode(@nospecialize(f), @nospecialize(types = default_tt(f)); kwa
     return code_ircode_by_type(tt; kwargs...)
 end
 
+function code_ircode(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...)
+    tt = to_tuple_type(argtypes)
+    return code_ircode_by_type(tt; kwargs...)
+end
+
 """
     code_ircode_by_type(types::Type{<:Tuple}; ...)
 
@@ -506,7 +462,7 @@ function code_ircode_by_type(
     @nospecialize(tt::Type);
     world::UInt=get_world_counter(),
     interp=nothing,
-    optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
+    optimize_until::Union{Int,String,Nothing}=nothing,
 )
     passed_interp = interp
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
@@ -1004,6 +960,7 @@ Returns the method that would be called by the given type signature (as a tuple 
 function which(@nospecialize(tt#=::Type=#))
     return _which(tt).method
 end
+which(@nospecialize(argtypes::Tuple)) = which(to_tuple_type(argtypes))
 
 """
     which(module, symbol)
@@ -1020,20 +977,14 @@ end
 # function reflection
 
 """
-    nameof(f::Function) -> Symbol
+    nameof(f::Function)::Symbol
 
 Get the name of a generic `Function` as a symbol. For anonymous functions,
 this is a compiler-generated name. For explicitly-declared subtypes of
 `Function`, it is the name of the function's type.
 """
 function nameof(f::Function)
-    t = typeof(f)
-    mt = t.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table, so name is not unique to this function type
-        return nameof(t)
-    end
-    return mt.name
+    return typeof(f).name.singletonname
 end
 
 function nameof(f::Core.IntrinsicFunction)
@@ -1042,7 +993,7 @@ function nameof(f::Core.IntrinsicFunction)
 end
 
 """
-    parentmodule(f::Function) -> Module
+    parentmodule(f::Function)::Module
 
 Determine the module containing the (first) definition of a generic
 function.
@@ -1050,7 +1001,7 @@ function.
 parentmodule(f::Function) = parentmodule(typeof(f))
 
 """
-    parentmodule(f::Function, types) -> Module
+    parentmodule(f::Function, types)::Module
 
 Determine the module containing the first method of a generic function `f` matching
 the specified `types`.
@@ -1064,7 +1015,7 @@ function parentmodule(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    parentmodule(m::Method) -> Module
+    parentmodule(m::Method)::Module
 
 Return the module in which the given method `m` is defined.
 
@@ -1074,7 +1025,7 @@ Return the module in which the given method `m` is defined.
 parentmodule(m::Method) = m.module
 
 """
-    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter()) -> Bool
+    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter())::Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
@@ -1129,11 +1080,11 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
     match === nothing && return false
     kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)
+    kws = kws[((match::Method).nargs + 1):end] # remove positional arguments
     isempty(kws) && return true # some kwfuncs simply forward everything directly
     for kw in kws
         endswith(String(kw), "...") && return true
     end
-    kwnames = collect(kwnames)
     return issubset(kwnames, kws)
 end
 
@@ -1185,7 +1136,7 @@ function bodyfunction(basemethod::Method)
 end
 
 """
-    Base.isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
+    Base.isambiguous(m1, m2; ambiguous_bottom=false)::Bool
 
 Determine whether two methods `m1` and `m2` may be ambiguous for some call
 signature. This test is performed in the context of other methods of the same
@@ -1369,6 +1320,19 @@ macro invoke(ex)
     return esc(out)
 end
 
+getglobalref(gr::GlobalRef, world::UInt) = ccall(:jl_eval_globalref, Any, (Any, UInt), gr, world)
+
+function invokelatest_gr(gr::GlobalRef, args...; kwargs...)
+    @inline
+    kwargs = merge(NamedTuple(), kwargs)
+    world = get_world_counter()
+    f = getglobalref(gr, world)
+    if isempty(kwargs)
+        return invoke_in_world(world, f, args...)
+    end
+    return invoke_in_world(world, Core.kwcall, kwargs, f, args...)
+end
+
 """
     @invokelatest f(args...; kwargs...)
 
@@ -1382,22 +1346,11 @@ It also supports the following syntax:
 - `@invokelatest xs[i]` expands to `Base.invokelatest(getindex, xs, i)`
 - `@invokelatest xs[i] = v` expands to `Base.invokelatest(setindex!, xs, v, i)`
 
-```jldoctest
-julia> @macroexpand @invokelatest f(x; kw=kwv)
-:(Base.invokelatest(f, x; kw = kwv))
-
-julia> @macroexpand @invokelatest x.f
-:(Base.invokelatest(Base.getproperty, x, :f))
-
-julia> @macroexpand @invokelatest x.f = v
-:(Base.invokelatest(Base.setproperty!, x, :f, v))
-
-julia> @macroexpand @invokelatest xs[i]
-:(Base.invokelatest(Base.getindex, xs, i))
-
-julia> @macroexpand @invokelatest xs[i] = v
-:(Base.invokelatest(Base.setindex!, xs, v, i))
-```
+!!! note
+    If `f` is a global, it will be resolved consistently
+    in the (latest) world as the call target. However, all other arguments
+    (as well as `f` itself if it is not a literal global) will be evaluated
+    in the current world age.
 
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
@@ -1411,11 +1364,45 @@ julia> @macroexpand @invokelatest xs[i] = v
 macro invokelatest(ex)
     topmod = _topmod(__module__)
     f, args, kwargs = destructure_callex(topmod, ex)
-    out = Expr(:call, GlobalRef(Base, :invokelatest))
-    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
-    push!(out.args, f)
-    append!(out.args, args)
-    return esc(out)
+
+    if !isa(f, GlobalRef)
+        out_f = Expr(:call, GlobalRef(Base, :invokelatest))
+        isempty(kwargs) || push!(out_f.args, Expr(:parameters, kwargs...))
+
+        if isexpr(f, :(.))
+            s = gensym()
+            check = quote
+                $s = $(f.args[1])
+                isa($s, Module)
+            end
+            push!(out_f.args, Expr(:(.), s, f.args[2]))
+        else
+            push!(out_f.args, f)
+        end
+        append!(out_f.args, args)
+
+        if @isdefined(s)
+            f = :(GlobalRef($s, $(f.args[2])))
+        elseif !isa(f, Symbol)
+            return esc(out_f)
+        else
+            check = :($(Expr(:isglobal, f)))
+        end
+    end
+
+    out_gr = Expr(:call, GlobalRef(Base, :invokelatest_gr))
+    isempty(kwargs) || push!(out_gr.args, Expr(:parameters, kwargs...))
+    push!(out_gr.args, isa(f, GlobalRef) ? QuoteNode(f) :
+                       isa(f, Symbol) ? QuoteNode(GlobalRef(__module__, f)) :
+                       f)
+    append!(out_gr.args, args)
+
+    if isa(f, GlobalRef)
+        return esc(out_gr)
+    end
+
+    # f::Symbol
+    return esc(:($check ? $out_gr : $out_f))
 end
 
 function destructure_callex(topmod::Module, @nospecialize(ex))

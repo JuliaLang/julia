@@ -81,7 +81,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
     if m.sig !== Tuple # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
         sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
-        kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
+        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
@@ -131,13 +131,17 @@ function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
     if isdefined(@__MODULE__, :Sys)
-        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
-        STDLIB = Sys.STDLIB::String
-        if BUILD_STDLIB_PATH != STDLIB
+        if Sys.BUILD_STDLIB_PATH != Sys.STDLIB
             # BUILD_STDLIB_PATH gets defined in sysinfo.jl
             npath = normpath(path)
-            npath′ = replace(npath, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
-            return npath == npath′ ? path : npath′
+            npath′ = replace(npath, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+            path = npath == npath′ ? path : npath′
+        end
+        if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
+            compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
+            if dirname(path) == compiler_folder
+                return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
+            end
         end
     end
     return path
@@ -177,6 +181,7 @@ end
 Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
+functionloc(@nospecialize(argtypes::Union{Tuple, Type{<:Tuple}})) = functionloc(which(argtypes))
 
 function functionloc(@nospecialize(f))
     mt = methods(f)
@@ -210,7 +215,9 @@ show(io::IO, m::Method; kwargs...) = show_method(IOContext(io, :compact=>true), 
 
 show(io::IO, ::MIME"text/plain", m::Method; kwargs...) = show_method(io, m; kwargs...)
 
-function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_width = 1)
+function show_method(io::IO, m::Method;
+                     modulecolor = :light_black, digit_align_width = 1,
+                     print_signature_only::Bool = get(io, :print_method_signature_only, false)::Bool)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
@@ -246,19 +253,21 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
         show_method_params(io, tv)
     end
 
-    if !(get(io, :compact, false)::Bool) # single-line mode
-        println(io)
-        digit_align_width += 4
+    if !print_signature_only
+        if !(get(io, :compact, false)::Bool) # single-line mode
+            println(io)
+            digit_align_width += 4
+        end
+        # module & file, re-using function from errorshow.jl
+        print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
     end
-    # module & file, re-using function from errorshow.jl
-    print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
-    mt = ms.mt
-    name = mt.name
-    hasname = isdefined(mt.module, name) &&
-              typeof(getfield(mt.module, name)) <: Function
+    tn = ms.tn
+    name = tn.singletonname
+    hasname = isdefined(tn.module, name) &&
+              typeof(getfield(tn.module, name)) <: Function
     n = length(ms)
     m = n==1 ? "method" : "methods"
     print(io, "# $n $m")
@@ -267,18 +276,18 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     if hasname
         what = (startswith(sname, '@') ?
                     "macro"
-               : mt.module === Core && mt.defs isa Core.TypeMapEntry && (mt.defs.func::Method).sig === Tuple ?
+               : tn.module === Core && tn.wrapper <: Core.Builtin ?
                     "builtin function"
                : # else
                     "generic function")
         print(io, " for ", what, " ", namedisplay, " from ")
 
-        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(ms.mt.module))
+        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(tn.module))
 
-        printstyled(io, ms.mt.module, color=col)
+        printstyled(io, tn.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
-    elseif mt === _TYPE_NAME.mt
+    elseif tn === _TYPE_NAME || iskindtype(tn.wrapper)
         print(io, " for type constructor")
     else
         print(io, " for callable object")
@@ -289,6 +298,8 @@ end
 # Determine the `modulecolor` value to pass to `show_method`
 function _modulecolor(method::Method)
     mmt = get_methodtable(method)
+    # TODO: this looks like a buggy bit of internal hacking, so disable for now
+    return nothing
     if mmt === nothing || mmt.module === parentmodule(method)
         return nothing
     end
@@ -310,10 +321,10 @@ function _modulecolor(method::Method)
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
-    mt = ms.mt
-    name = mt.name
-    hasname = isdefined(mt.module, name) &&
-              typeof(getfield(mt.module, name)) <: Function
+    tn = ms.tn
+    name = tn.singletonname
+    hasname = isdefined(tn.module, name) &&
+              typeof(getfield(tn.module, name)) <: Function
     if header
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
@@ -359,7 +370,7 @@ end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
-show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
+show(io::IO, mt::Core.MethodTable) = print(io, mt.module, ".", mt.name, " is a Core.MethodTable with ", length(mt), " methods.")
 
 function inbase(m::Module)
     if m == Base
@@ -454,7 +465,6 @@ function show(io::IO, ::MIME"text/html", m::Method)
 end
 
 function show(io::IO, mime::MIME"text/html", ms::MethodList)
-    mt = ms.mt
     show_method_list_header(io, ms, str -> "<b>"*str*"</b>")
     print(io, "<ul>")
     for meth in ms
@@ -464,8 +474,6 @@ function show(io::IO, mime::MIME"text/html", ms::MethodList)
     end
     print(io, "</ul>")
 end
-
-show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, MethodList(mt))
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})

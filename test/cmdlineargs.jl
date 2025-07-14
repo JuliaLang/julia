@@ -130,9 +130,6 @@ end
                             ("--startup-file=no",   false),
                             ("--startup-file=yes",  true),
 
-                            # ("--sysimage-native-code=no",   false), # takes a lot longer (30s)
-                            ("--sysimage-native-code=yes",  true),
-
                             ("--pkgimages=yes", true),
                             ("--pkgimages=no",  false),
                         )
@@ -243,6 +240,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
+    # Test to make sure that command line --help and --help-hidden do not return a description which is more than 100 characters wide
+    @test isempty(filter(x->length(x) > 100, readlines(`$exename -h`)))
+    @test isempty(filter(x->length(x) > 100, readlines(`$exename --help-hidden`)))
+
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
         let expanded = abspath(expanduser("~/foo/Project.toml"))
@@ -255,6 +256,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     let expanded = abspath(Base.load_path_expand("@foo"))
         @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
+    end
+
+    # --project=@script handling
+    let expanded = abspath(joinpath(@__DIR__, "project", "ScriptProject"))
+        script = joinpath(expanded, "bin", "script.jl")
+        # Check running julia with --project=@script both within and outside the script directory
+        @testset "--@script from $name" for (name, dir) in [("project", expanded), ("outside", pwd())]
+            @test joinpath(expanded, "Project.toml") == readchomp(Cmd(`$exename --project=@script $script`; dir))
+            @test joinpath(expanded, "SubProject", "Project.toml") == readchomp(Cmd(`$exename --project=@script/../SubProject $script`; dir))
+        end
     end
 
     # handling of `@temp` in --project and JULIA_PROJECT
@@ -341,6 +352,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -t, --threads
     code = "print(Threads.threadpoolsize())"
+    code2 = "print(Threads.maxthreadid())"
     cpu_threads = ccall(:jl_effective_threads, Int32, ())
     @test string(cpu_threads) ==
         read(`$exename --threads auto -e $code`, String) ==
@@ -351,6 +363,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_THREADS" => nt) do
             @test read(`$exename --threads=2 -e $code`, String) ==
                 read(`$exename -t 2 -e $code`, String) == "2"
+            if nt === nothing
+                @test read(`$exename -e $code2`, String) == "2" #default + interactive
+            elseif nt == "1"
+                @test read(`$exename -e $code2`, String) == "1" #if user asks for 1 give 1
+            end
         end
     end
     # We want to test oversubscription, but on manycore machines, this can
@@ -383,29 +400,33 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test p.exitcode == 1 && p.termsignal == 0
     end
 
-    # --gcthreads
-    code = "print(Threads.ngcthreads())"
-    cpu_threads = ccall(:jl_effective_threads, Int32, ())
-    @test string(cpu_threads) ==
-          read(`$exename --threads auto -e $code`, String) ==
-          read(`$exename --threads=auto -e $code`, String) ==
-          read(`$exename -tauto -e $code`, String) ==
-          read(`$exename -t auto -e $code`, String)
-    for nt in (nothing, "1")
-        withenv("JULIA_NUM_GC_THREADS" => nt) do
-            @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+    # FIXME: Issue #57103 --gcthreads does not have the same semantics
+    # for Stock GC and MMTk, so the tests below are specific to the Stock GC
+    @static if Base.USING_STOCK_GC
+        # --gcthreads
+        code = "print(Threads.ngcthreads())"
+        cpu_threads = ccall(:jl_effective_threads, Int32, ())
+        @test string(cpu_threads) ==
+            read(`$exename --threads auto -e $code`, String) ==
+            read(`$exename --threads=auto -e $code`, String) ==
+            read(`$exename -tauto -e $code`, String) ==
+            read(`$exename -t auto -e $code`, String)
+        for nt in (nothing, "1")
+            withenv("JULIA_NUM_GC_THREADS" => nt) do
+                @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+            end
+            withenv("JULIA_NUM_GC_THREADS" => nt) do
+                @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+            end
         end
-        withenv("JULIA_NUM_GC_THREADS" => nt) do
-            @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+
+        withenv("JULIA_NUM_GC_THREADS" => 2) do
+            @test read(`$exename -e $code`, String) == "2"
         end
-    end
 
-    withenv("JULIA_NUM_GC_THREADS" => 2) do
-        @test read(`$exename -e $code`, String) == "2"
-    end
-
-    withenv("JULIA_NUM_GC_THREADS" => "2,1") do
-        @test read(`$exename -e $code`, String) == "3"
+        withenv("JULIA_NUM_GC_THREADS" => "2,1") do
+            @test read(`$exename -e $code`, String) == "3"
+        end
     end
 
     # --machine-file
@@ -749,7 +770,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test errors_not_signals(`$exename -E "$code" --depwarn=error`)
 
         @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
-            (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
+            (true, "true", "WARNING: Use of Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
 
         @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
             (true, "true", "")
@@ -794,7 +815,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
-    @test errors_not_signals(`$exename --worker=true`)
+    # shorten the worker timeout as this test relies on it timing out
+    withenv("JULIA_WORKER_TIMEOUT" => "10") do
+        @test errors_not_signals(`$exename --worker=true`)
+    end
 
     # --trace-compile
     let
@@ -816,6 +840,26 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             stderr=io)
         _stderr = String(take!(io))
         @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
+    # Base.@trace_compile (local version of the 2 above args)
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            """
+            f(x::Int) = 1
+            applyf(container) = f(container[1])
+            Base.@trace_compile @eval applyf([100])
+            Base.@trace_compile @eval applyf(Any[100])
+            f(::Bool) = 2
+            Base.@trace_compile @eval applyf([true])
+            Base.@trace_compile @eval applyf(Any[true])
+            """,
+            `$exename -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test length(findall(r"precompile\(", _stderr)) == 5
+        @test length(findall(r" # recompile", _stderr)) == 1
     end
 
     # --trace-dispatch
@@ -1019,7 +1063,7 @@ let exename = `$(Base.julia_cmd().exec[1]) -t 1`
         p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
         close(err.in)
         let s = read(err, String)
-            @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
+            @test s == "ERROR: Image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test errors_not_signals(p)
         @test p.exitcode == 1
@@ -1049,17 +1093,12 @@ run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, de
 @test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
     (false, "", "ERROR: --lisp must be specified as the first argument")
 
-# --sysimage-native-code={yes|no}
-let exename = `$(Base.julia_cmd()) --startup-file=no`
-    @test readchomp(`$exename --sysimage-native-code=yes -E
-        "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "true"
-    @test readchomp(`$exename --sysimage-native-code=no -E
-        "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
-end
-
 # backtrace contains line number info (esp. on windows #17179)
-for precomp in ("yes", "no")
-    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
+let
+    # TODO: Make this safe in the presence of two single-thread threadpools with
+    # --sysimage-native-code=no, though that option is deprecated.
+    # see https://github.com/JuliaLang/julia/issues/57198
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no -E 'sqrt(-2)'`)
     @test !succ
     @test out == ""
     @test occursin(r"\.jl:(\d+)", bt)
@@ -1162,6 +1201,10 @@ end
     end
 end
 
+# FIXME: Issue #57103: MMTK currently does not use --heap-size-hint since it only
+# supports setting up a hard limit unlike the Stock GC
+# which takes it as a soft limit. For now, we skip the tests below for MMTk
+@static if Base.USING_STOCK_GC
 @testset "heap size hint" begin
     #heap-size-hint, we reserve 250 MB for non GC memory (llvm, etc.)
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$((500-250)*1024*1024)"
@@ -1180,6 +1223,13 @@ end
     @test abs(Float64(maxmem) - hint)/maxmem < 0.05
 
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=10M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$(1*1024*1024)"
+end
+
+@testset "hard heap limit" begin
+    cmd = `$(Base.julia_cmd()) --hard-heap-limit=30M -E "mutable struct ListNode; v::Int64; next::Union{ListNode, Nothing}; end\n
+        l = ListNode(0, nothing); while true; l = ListNode(0, l); end"`
+    @test !success(cmd)
+end
 end
 
 ## `Main.main` entrypoint
@@ -1218,3 +1268,82 @@ end
         @test parse(UInt64,read(`$exename --heap-size-hint=$str -E "Base.JLOptions().heap_size_hint"`, String)) == val
     end
 end
+
+@testset "--hard-heap-limit" begin
+    exename = `$(Base.julia_cmd())`
+    @test errors_not_signals(`$exename --hard-heap-limit -e "exit(0)"`)
+    @testset "--hard-heap-limit=$str" for str in ["asdf","","0","1.2vb","b","GB","2.5GB̂","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
+        @test errors_not_signals(`$exename --hard-heap-limit=$str -e "exit(0)"`)
+    end
+    k = UInt64(1) << 10
+    m = UInt64(1) << 20
+    g = UInt64(1) << 30
+    t = UInt64(1) << 40
+    one_hundred_mb_strs_and_vals = [
+        ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
+    ]
+    @testset "--hard-heap-limit=$str" for (str, val) in one_hundred_mb_strs_and_vals
+        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+    end
+    two_and_a_half_gigabytes_strs_and_vals = [
+        ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
+    ]
+    @testset "--hard-heap-limit=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
+        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+    end
+    one_terabyte_strs_and_vals = [
+        ("1TB", 1t), ("1024GB", 1t),
+    ]
+    @testset "--hard-heap-limit=$str" for (str, val) in one_terabyte_strs_and_vals
+        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+    end
+end
+
+@testset "--heap-target-increment" begin
+    exename = `$(Base.julia_cmd())`
+    @test errors_not_signals(`$exename --heap-target-increment -e "exit(0)"`)
+    @testset "--heap-target-increment=$str" for str in ["asdf","","0","1.2vb","b","GB","2.5GB̂","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
+        @test errors_not_signals(`$exename --heap-target-increment=$str -e "exit(0)"`)
+    end
+    k = UInt64(1) << 10
+    m = UInt64(1) << 20
+    g = UInt64(1) << 30
+    t = UInt64(1) << 40
+    one_hundred_mb_strs_and_vals = [
+        ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
+    ]
+    @testset "--heap-target-increment=$str" for (str, val) in one_hundred_mb_strs_and_vals
+        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+    end
+    two_and_a_half_gigabytes_strs_and_vals = [
+        ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
+    ]
+    @testset "--heap-target-increment=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
+        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+    end
+    one_terabyte_strs_and_vals = [
+        ("1TB", 1t), ("1024GB", 1t),
+    ]
+    @testset "--heap-target-increment=$str" for (str, val) in one_terabyte_strs_and_vals
+        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+    end
+end
+
+@testset "--timeout-for-safepoint-straggler" begin
+    exename = `$(Base.julia_cmd())`
+    timeout = 120
+    @test parse(Int,read(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, String)) == timeout
+end
+
+@testset "--strip-metadata" begin
+    mktempdir() do dir
+        @test success(pipeline(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`, stderr=stderr, stdout=stdout))
+        if isfile(joinpath(dir, "sys.o.a"))
+            Base.Linking.link_image(joinpath(dir, "sys.o.a"), joinpath(dir, "sys.so"))
+            @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $(dir)/sys.so -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
+        end
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
+@test success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)

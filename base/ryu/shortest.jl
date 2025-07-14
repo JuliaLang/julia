@@ -196,6 +196,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
         e10 = 0
 
         if maxsignif !== nothing && b > maxsignif
+            roundup = false
             b_allzero = true
             # reduce to max significant digits
             while true
@@ -224,7 +225,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     return b, e10
 end
 
-function writeshortest(buf::Vector{UInt8}, pos, x::T,
+function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
                        plus=false, space=false, hash=true,
                        precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
                        typed=false, compact=false) where {T}
@@ -250,8 +251,10 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
             pos += 1
         end
         if precision == -1
-            @inbounds buf[pos] = UInt8('0')
-            pos += 1
+            if hash
+                @inbounds buf[pos] = UInt8('0')
+                pos += 1
+            end
             if typed && x isa Float32
                 @inbounds buf[pos] = UInt8('f')
                 @inbounds buf[pos + 1] = UInt8('0')

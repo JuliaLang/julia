@@ -16,6 +16,8 @@ export quot,
        show_sexpr,
        @dump
 
+public parse
+
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 import Base: isexpr
 
@@ -158,7 +160,7 @@ Takes the expression `x` and returns an equivalent expression in lowered form
 for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-lower(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
+lower(m::Module, @nospecialize(x)) = Core._lower(x, m, "none", 0, typemax(Csize_t), false)[1]
 
 """
     @lower [m] x
@@ -362,6 +364,19 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         x.edges .+= slot_offset
         return x
     end
+    if isa(x, Core.UpsilonNode)
+        if !isdefined(x, :val)
+            return x
+        end
+        return Core.UpsilonNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.PhiCNode)
+        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                           slot_offset, statement_offset, boundscheck)
+    end
     if isa(x, Core.ReturnNode)
        # Unreachable doesn't have val defined
        if !isdefined(x, :val)
@@ -381,6 +396,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.EnterNode)
+        if x.catch_dest == 0
+            return x
+        end
         return Core.EnterNode(x, x.catch_dest + statement_offset)
     end
     if isa(x, Expr)
@@ -409,7 +427,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt8}})
+                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt16, Bool}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,
