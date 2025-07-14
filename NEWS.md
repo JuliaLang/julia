@@ -4,7 +4,7 @@ Julia v1.12 Release Notes
 New language features
 ---------------------
 
-* New experimental option `--trim` that creates smaller binaries by only including code that is reachable from the
+* New experimental option `--trim` that creates smaller binaries by only including code that is proven to be reachable from the
   entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). Not all
   code is expected to work with this option, and since it is experimental you may encounter problems.
 * Redefinition of constants is now well defined and follows world age semantics ([#57253]). Additional redefinitions
