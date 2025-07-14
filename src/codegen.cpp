@@ -3862,8 +3862,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
     bool isboxed = layout->flags.arrayelem_isboxed;
     bool isunion = layout->flags.arrayelem_isunion;
-    bool isatomic = kind == (jl_value_t*)jl_atomic_sym;
-    bool needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
+    bool isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
+    bool needlock = layout->flags.arrayelem_islocked;
     size_t elsz = layout->size;
     size_t al = layout->alignment;
     if (al > JL_HEAP_ALIGNMENT)
@@ -4231,7 +4231,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             size_t al = layout->alignment;
             if (al > JL_HEAP_ALIGNMENT)
                 al = JL_HEAP_ALIGNMENT;
-            bool needlock = isatomic && !isboxed && elsz > MAX_ATOMIC_SIZE;
+            bool needlock = layout->flags.arrayelem_islocked;
             AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                     ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                     : get_llvm_atomic_order(order);
@@ -4317,7 +4317,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 *ret = jl_cgval_t(); // unreachable
                 return true;
             }
-            bool isatomic = kind == (jl_value_t*)jl_atomic_sym;
+            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
+            bool isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
             if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
                 emit_atomic_error(ctx, "memoryref_isassigned: non-atomic memory cannot be accessed atomically");
                 *ret = jl_cgval_t(); // unreachable
@@ -4333,13 +4334,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             jl_value_t *boundscheck = argv[3].constant;
             emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, fname);
-            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
             Value *mem = emit_memoryref_mem(ctx, ref, layout);
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *oob = bounds_check_enabled(ctx, boundscheck) ? ctx.builder.CreateIsNull(mlen) : nullptr;
             bool isboxed = layout->flags.arrayelem_isboxed;
             if (isboxed || layout->first_ptr >= 0) {
-                bool needlock = isatomic && !isboxed && layout->size > MAX_ATOMIC_SIZE;
+                bool needlock = layout->flags.arrayelem_islocked;
                 AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                         ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                         : get_llvm_atomic_order(order);
@@ -4359,13 +4359,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     ctx.builder.SetInsertPoint(passBB);
                 }
                 Value *elem = emit_memoryref_ptr(ctx, ref, layout);
-                if (needlock) {
+                if (!isboxed)
+                    elem = emit_ptrgep(ctx, elem, layout->first_ptr * sizeof(void*));
+                else if (needlock)
                     // n.b. no actual lock acquire needed, as the check itself only needs to load a single pointer and check for null
                     // elem += sizeof(lock);
                     elem = emit_ptrgep(ctx, elem, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
-                }
-                if (!isboxed)
-                    elem = emit_ptrgep(ctx, elem, layout->first_ptr * sizeof(void*));
                 // emit this using the same type as BUILTIN(memoryrefget)
                 // so that LLVM may be able to load-load forward them and fold the result
                 auto tbaa = isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf;
