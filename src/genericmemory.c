@@ -262,8 +262,8 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
 
 JL_DLLEXPORT jl_value_t *jl_genericmemoryref(jl_genericmemory_t *mem, size_t i)
 {
-    int isatomic = (jl_tparam0(jl_typetagof(mem)) == (jl_value_t*)jl_atomic_sym);
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(mem))->layout;
+    int isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
     jl_genericmemoryref_t m;
     m.mem = mem;
     m.ptr_or_offset = (layout->flags.arrayelem_isunion || layout->size == 0) ? (void*)i : (void*)((char*)mem->ptr + layout->size * i);
@@ -342,8 +342,8 @@ static jl_value_t *jl_ptrmemrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, i
 
 JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
 {
-    assert(isatomic == (jl_tparam0(jl_typetagof(m.mem)) == (jl_value_t*)jl_atomic_sym));
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
+    assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
     if (layout->flags.arrayelem_isboxed)
         return jl_ptrmemrefget(m, isatomic);
     jl_value_t *eltype = jl_tparam1(jl_typetagof(m.mem));
@@ -365,7 +365,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
     assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
     jl_value_t *r;
     size_t fsz = jl_datatype_size(eltype);
-    int needlock = isatomic && fsz > MAX_ATOMIC_SIZE;
+    int needlock = layout->flags.arrayelem_islocked;
     if (isatomic && !needlock) {
         r = jl_atomic_new_bits(eltype, data);
     }
@@ -393,9 +393,6 @@ static int _jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic)
     if (layout->flags.arrayelem_isboxed) {
     }
     else if (layout->first_ptr >= 0) {
-        int needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
-        if (needlock)
-            elem = elem + LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT) / sizeof(jl_value_t*);
         elem = &elem[layout->first_ptr];
     }
     else {
@@ -411,7 +408,8 @@ JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int is
 
 JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic)
 {
-    assert(isatomic == (jl_tparam0(jl_typetagof(m.mem)) == (jl_value_t*)jl_atomic_sym));
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
+    assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
     jl_value_t *eltype = jl_tparam1(jl_typetagof(m.mem));
     if (eltype != (jl_value_t*)jl_any_type && !jl_typeis(rhs, eltype)) {
         JL_GC_PUSH1(&rhs);
@@ -419,7 +417,6 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, j
             jl_type_error("memoryrefset!", eltype, rhs);
         JL_GC_POP();
     }
-    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     if (layout->flags.arrayelem_isboxed) {
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         if (isatomic)
@@ -449,7 +446,7 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, j
     }
     if (layout->size != 0) {
         assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
-        int needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
+        int needlock = layout->flags.arrayelem_islocked;
         size_t fsz = jl_datatype_size((jl_datatype_t*)jl_typeof(rhs)); // need to shrink-wrap the final copy
         if (isatomic && !needlock) {
             jl_atomic_store_bits(data, rhs, fsz);

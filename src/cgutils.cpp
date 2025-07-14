@@ -3299,7 +3299,7 @@ static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *
         if (jl_is_genericmemoryref_type(sty))
             sty = (jl_datatype_t*)jl_field_type_concrete(sty, 1);
         size_t sz = sty->layout->size;
-        if (sty->layout->flags.arrayelem_isunion)
+        if (sty->layout->flags.arrayelem_isunion && add_isunion)
             sz++;
         auto elsize = ConstantInt::get(ctx.types().T_size, sz);
         return elsize;
@@ -4716,8 +4716,8 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
 
     } else {
         data = emit_genericmemoryptr(ctx, boxmem, layout, 0);
-        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jl_tparam1(typ));
-        data = ctx.builder.CreateInBoundsGEP(elty, data, idx0);
+        idx0 = ctx.builder.CreateMul(idx0, emit_genericmemoryelsize(ctx, boxmem, mem.typ, false), "", true, true);
+        data = ctx.builder.CreatePtrAdd(data, idx0);
     }
 
     return _emit_memoryref(ctx, boxmem, data, layout, typ);

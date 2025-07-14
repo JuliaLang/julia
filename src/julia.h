@@ -575,10 +575,12 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
+        uint16_t arrayelem_isatomic : 1;
+        uint16_t arrayelem_islocked : 1;
         // If set, this type's egality can be determined entirely by comparing
         // the non-padding bits of this datatype.
         uint16_t isbitsegal : 1;
-        uint16_t padding : 10;
+        uint16_t padding : 8;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -1668,6 +1670,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_addrspacecore(v) jl_typetagis(v,jl_addrspacecore_type)
 #define jl_is_abioverride(v) jl_typetagis(v,jl_abioverride_type)
 #define jl_genericmemory_isbitsunion(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isunion)
+#define jl_genericmemory_isatomic(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isatomic)
+#define jl_genericmemory_islocked(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_islocked)
 #define jl_is_array_any(v)    jl_typetagis(v,jl_array_any_type)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
