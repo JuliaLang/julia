@@ -44,7 +44,7 @@ s = open(file)
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
 close(s)
-@test_throws ErrorException mmap(file, Vector{Ref}) # must be bit-type
+@test_throws ArgumentError mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
 file = tempname() # new name to reduce chance of issues due slow windows fs
