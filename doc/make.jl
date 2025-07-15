@@ -166,6 +166,7 @@ Manual = [
     "manual/code-loading.md",
     "manual/profile.md",
     "manual/stacktraces.md",
+    "manual/memory-management.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
     "manual/style-guide.md",
