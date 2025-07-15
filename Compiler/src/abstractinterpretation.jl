@@ -3527,20 +3527,6 @@ function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, 
     # It is possible for arguments (GlobalRef/:static_parameter) to throw,
     # but these will be recomputed during SSA construction later.
     override = decode_statement_effects_override(sv)
-    if override.consistent
-        m = sv.linfo.def
-        if isa(m, Method)
-            # N.B.: We'd like deleted_world here, but we can't add an appropriate edge at this point.
-            # However, in order to reach here in the first place, ordinary method lookup would have
-            # had to add an edge and appropriate invalidation trigger.
-            valid_worlds = WorldRange(m.primary_world, typemax(UInt))
-            if sv.world.this in valid_worlds
-                update_valid_age!(sv, valid_worlds)
-            else
-                override = EffectsOverride(override, consistent=false)
-            end
-        end
-    end
     effects = override_effects(effects, override)
     set_curr_ssaflag!(sv, flags_for_effects(effects), IR_FLAGS_EFFECTS)
     merge_effects!(interp, sv, effects)
@@ -4428,7 +4414,7 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # "causes" since we ignored those in the comparison
         newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
     end
-    # if this `Conditional` is from from `@isdefined condt.slot`, refine its `undef` information
+    # if this `Conditional` is from `@isdefined condt.slot`, refine its `undef` information
     newundef = condt.isdefined ? !then_or_else : vtype.undef
     return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, newundef), #=conditional=#true)
 end

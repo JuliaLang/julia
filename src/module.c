@@ -470,6 +470,25 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_bindin
     return NULL;
 }
 
+JL_DLLEXPORT size_t jl_binding_backedges_length(jl_binding_t *b)
+{
+    JL_LOCK(&b->globalref->mod->lock);
+    size_t len = 0;
+    if (b->backedges)
+        len = jl_array_len(b->backedges);
+    JL_UNLOCK(&b->globalref->mod->lock);
+    return len;
+}
+
+JL_DLLEXPORT jl_value_t *jl_binding_backedges_getindex(jl_binding_t *b, size_t i)
+{
+    JL_LOCK(&b->globalref->mod->lock);
+    assert(b->backedges);
+    jl_value_t *ret = jl_array_ptr_ref(b->backedges, i-1);
+    JL_UNLOCK(&b->globalref->mod->lock);
+    return ret;
+}
+
 static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
 {
     jl_task_t *ct = jl_current_task;
@@ -482,9 +501,10 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->parent = parent ? parent : m;
     m->istopmod = 0;
     m->uuid = uuid_zero;
-    static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
+    static _Atomic(unsigned int) mcounter; // simple counter backup, in case hrtime is not incrementing
+    unsigned int count = jl_atomic_fetch_add_relaxed(&mcounter, 1);
     // TODO: this is used for ir decompression and is liable to hash collisions so use more of the bits
-    m->build_id.lo = bitmix(jl_hrtime() + (++mcounter), jl_rand());
+    m->build_id.lo = bitmix(jl_hrtime() + count, jl_rand());
     if (!m->build_id.lo)
         m->build_id.lo++; // build id 0 is invalid
     m->build_id.hi = ~(uint64_t)0;
@@ -526,7 +546,9 @@ jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default
 {
     jl_module_t *m = jl_new_module__(name, parent);
     JL_GC_PUSH1(&m);
+    JL_LOCK(&world_counter_lock);
     jl_add_default_names(m, default_using_core, self_name);
+    JL_UNLOCK(&world_counter_lock);
     JL_GC_POP();
     return m;
 }
@@ -1455,10 +1477,14 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // u
     } else {
         jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
     }
-    if (jl_bkind_is_some_guard(jl_binding_kind(bpart)))
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_some_guard(kind))
         return 0;
-    if (jl_bkind_is_defined_constant(jl_binding_kind(bpart))) {
-        // N.B.: No backdated check for isdefined
+    if (jl_bkind_is_defined_constant(kind)) {
+        if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST)) {
+            return !(jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR);
+        }
+        // N.B.: No backdated admonition for isdefined
         return 1;
     }
     return jl_atomic_load(&b->value) != NULL;
@@ -1619,6 +1645,7 @@ void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *inv
 
 JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
 {
+    JL_LOCK(&b->globalref->mod->lock);
     if (!b->backedges) {
         b->backedges = jl_alloc_vec_any(0);
         jl_gc_wb(b, b->backedges);
@@ -1626,9 +1653,11 @@ JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
                jl_array_ptr_ref(b->backedges, jl_array_len(b->backedges)-1) == edge) {
         // Optimization: Deduplicate repeated insertion of the same edge (e.g. during
         // definition of a method that contains many references to the same global)
+        JL_UNLOCK(&b->globalref->mod->lock);
         return;
     }
     jl_array_ptr_1d_push(b->backedges, edge);
+    JL_UNLOCK(&b->globalref->mod->lock);
 }
 
 // Called for all GlobalRefs found in lowered code. Adds backedges for cross-module
@@ -1669,8 +1698,14 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     // Until the first such replacement, we can fast-path validation.
     // For these purposes, we consider the `Main` module to be a non-sysimg module.
     // This is legal, because we special case the `Main` in check_safe_import_from.
-    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0)
+    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0) {
+        // During incremental compilation replacement of image bindings is forbidden;
+        // We use this to avoid inserting backedges while loading pkgimages.
+        // `check_safe_newbinding` checks an equivalent condition on `b->globalref->mod`,
+        // but doesn't quite query `jl_object_in_image`, so assert here to be extra sure.
+        assert(!(jl_options.incremental && jl_generating_output()));
         jl_atomic_store_relaxed(&jl_first_image_replacement_world, new_world);
+    }
 
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
     jl_binding_partition_t *new_bpart = new_binding_partition();

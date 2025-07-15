@@ -38,6 +38,12 @@ CMAKE_CC := "$$(which $(shell echo $(CC_ARG) | cut -d' ' -f1))"
 CMAKE_CXX := "$$(which $(shell echo $(CXX_ARG) | cut -d' ' -f1))"
 CMAKE_CC_ARG := $(shell echo $(CC_ARG) | cut -s -d' ' -f2-)
 CMAKE_CXX_ARG := $(shell echo $(CXX_ARG) | cut -s -d' ' -f2-)
+else ifneq (,$(findstring MINGW,$(RAW_BUILD_OS)))
+# `cmake` is mingw-native and needs `cygpath -w`, rather than `cygpath -m`, which is the msys2 conversion default
+CMAKE_CC := "$(shell echo $(call cygpath_w, $(shell which $(CC_BASE))))"
+CMAKE_CXX := "$(shell echo $(call cygpath_w, $(shell which $(CXX_BASE))))"
+CMAKE_CC_ARG := $(CC_ARG)
+CMAKE_CXX_ARG := $(CXX_ARG)
 else
 CMAKE_CC := "$$(which $(CC_BASE))"
 CMAKE_CXX := "$$(which $(CXX_BASE))"
@@ -66,6 +72,14 @@ else ifeq ($(CMAKE_GENERATOR),make)
 CMAKE_GENERATOR_COMMAND := -G "Unix Makefiles"
 else
 $(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
+endif
+
+# Detect MSYS2 with cygwin CMake rather than MinGW cmake - the former fails to
+# properly drive MinGW tools
+ifneq (,$(findstring MINGW,$(RAW_BUILD_OS)))
+ifneq (,$(shell ldd $(shell which cmake) | grep msys-2.0.dll))
+override CMAKE := echo "ERROR: CMake is Cygwin CMake, not MinGW CMake. Build will fail. Use 'pacman -S mingw-w64-{i686,x86_64}-cmake'."; exit 1; $(CMAKE)
+endif
 endif
 
 # If the top-level Makefile is called with environment variables,

@@ -202,16 +202,6 @@ jobs:
             //   console.log('ERROR: Failed to add add prReviewLabel');
             // }
 
-            // Post a comment
-            const commentBody = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selectedAssignee}\` to this pull request.\n\n\`@${selectedAssignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.\n\nNote: If you are a Julia committer, please make sure that your organization membership is public.`
-            console.log('Attempting to post bot comment on the PR...');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: commentBody,
-            });
-
             // Exit with error if any problems were encountered earlier
             if (weDidEncounterError) {
               const msg = 'ERROR: Encountered at least one problem while running the script';

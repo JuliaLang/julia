@@ -387,6 +387,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @inline
     eachindex(IndexStyle(A,B...), A, B...)
 end
+eachindex(::IndexLinear, A::Union{Array, Memory}) = unchecked_oneto(length(A))
 eachindex(::IndexLinear, A::AbstractArray) = (@inline; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@inline; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
@@ -796,7 +797,7 @@ julia> similar(1:10, 1, 4)
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
 elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
 
-```julia-repl
+```jldoctest; filter = r"[01]"
 julia> similar(trues(10,10), 2)
 2-element BitVector:
  0
@@ -1234,10 +1235,18 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 # While the definitions for IndexLinear are all simple enough to inline on their
 # own, IndexCartesian's CartesianIndices is more complicated and requires explicit
 # inlining.
-function iterate(A::AbstractArray, state=(eachindex(A),))
+iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
+iterate_starting_state(A, ::IndexLinear) = firstindex(A)
+iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
+@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
+@inline function _iterate(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
+end
+@inline function _iterate(A::AbstractArray, state::Integer)
+    checkbounds(Bool, A, state) || return nothing
+    A[state], state + one(state)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
@@ -2558,8 +2567,15 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     end
 
     # discover number of rows or columns
+    # d1 dimension is increased by 1 to appropriately handle 0-length arrays
     for i ∈ 1:dims[d1]
         outdims[d1] += cat_size(as[i], d1)
+    end
+
+    # adjustment to handle 0-length arrays
+    first_dim_zero = outdims[d1] == 0
+    if first_dim_zero
+        outdims[d1] = dims[d1]
     end
 
     currentdims = zeros(Int, N)
@@ -2567,7 +2583,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     elementcount = 0
     for i ∈ eachindex(as)
         elementcount += cat_length(as[i])
-        currentdims[d1] += cat_size(as[i], d1)
+        currentdims[d1] += first_dim_zero ? 1 : cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
             for d ∈ (d2, 3:N...)
@@ -2594,6 +2610,10 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
             throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
         end
+    end
+    # restore 0-length adjustment
+    if first_dim_zero
+        outdims[d1] = 0
     end
 
     outlen = prod(outdims)
@@ -3559,81 +3579,6 @@ pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 # sizehint! does not nothing by default
 sizehint!(a::AbstractVector, _) = a
 
-## hashing AbstractArray ##
-
-const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
-function hash(A::AbstractArray, h::UInt)
-    h ⊻= hash_abstractarray_seed
-    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
-    # Instead hash the tuple of firsts and lasts along each dimension
-    h = hash(map(first, axes(A)), h)
-    h = hash(map(last, axes(A)), h)
-
-    # For short arrays, it's not worth doing anything complicated
-    if length(A) < 8192
-        for x in A
-            h = hash(x, h)
-        end
-        return h
-    end
-
-    # Goal: Hash approximately log(N) entries with a higher density of hashed elements
-    # weighted towards the end and special consideration for repeated values. Colliding
-    # hashes will often subsequently be compared by equality -- and equality between arrays
-    # works elementwise forwards and is short-circuiting. This means that a collision
-    # between arrays that differ by elements at the beginning is cheaper than one where the
-    # difference is towards the end. Furthermore, choosing `log(N)` arbitrary entries from a
-    # sparse array will likely only choose the same element repeatedly (zero in this case).
-
-    # To achieve this, we work backwards, starting by hashing the last element of the
-    # array. After hashing each element, we skip `fibskip` elements, where `fibskip`
-    # is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
-    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension
-    # and only end up hashing one slice of the array (as might happen with powers of
-    # two). Finally, we find the next distinct value from the one we just hashed.
-
-    # This is a little tricky since skipping an integer number of values inherently works
-    # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
-    ks = keys(A)
-    key_to_linear = LinearIndices(ks) # Index into this map to compute the linear index
-    linear_to_key = vec(ks)           # And vice-versa
-
-    # Start at the last index
-    keyidx = last(ks)
-    linidx = key_to_linear[keyidx]
-    fibskip = prevfibskip = oneunit(linidx)
-    first_linear = first(LinearIndices(linear_to_key))
-    n = 0
-    while true
-        n += 1
-        # Hash the element
-        elt = A[keyidx]
-        h = hash(keyidx=>elt, h)
-
-        # Skip backwards a Fibonacci number of indices -- this is a linear index operation
-        linidx = key_to_linear[keyidx]
-        linidx < fibskip + first_linear && break
-        linidx -= fibskip
-        keyidx = linear_to_key[linidx]
-
-        # Only increase the Fibonacci skip once every N iterations. This was chosen
-        # to be big enough that all elements of small arrays get hashed while
-        # obscenely large arrays are still tractable. With a choice of N=4096, an
-        # entirely-distinct 8000-element array will have ~75% of its elements hashed,
-        # with every other element hashed in the first half of the array. At the same
-        # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
-        if rem(n, 4096) == 0
-            fibskip, prevfibskip = fibskip + prevfibskip, fibskip
-        end
-
-        # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
-        keyidx = findprev(!isequal(elt), A, keyidx)
-        keyidx === nothing && break
-    end
-
-    return h
-end
-
 # The semantics of `collect` are weird. Better to write our own
 function rest(a::AbstractArray{T}, state...) where {T}
     v = Vector{T}(undef, 0)
@@ -3641,7 +3586,6 @@ function rest(a::AbstractArray{T}, state...) where {T}
     sizehint!(v, length(a))
     return foldl(push!, Iterators.rest(a, state...), init=v)
 end
-
 
 ## keepat! ##
 

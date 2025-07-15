@@ -197,7 +197,7 @@ loaded
       From worker 2:    loaded
 ```
 
-As usual, this does not bring `DummyModule` into scope on any of the process, which requires
+As usual, this does not bring `DummyModule` into scope on any of the processes, which requires
 [`using`](@ref) or [`import`](@ref). Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 

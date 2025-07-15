@@ -106,7 +106,7 @@ sizeof(a::GenericMemory) = Core.sizeof(a)
 # multi arg case will be overwritten later. This is needed for bootstrapping
 function isassigned(a::GenericMemory, i::Int)
     @inline
-    @boundscheck (i - 1)%UInt < length(a)%UInt || return false
+    @boundscheck checkbounds(Bool, a, i) || return false
     return @inbounds memoryref_isassigned(memoryref(a, i), default_access_order(a), false)
 end
 
@@ -222,10 +222,6 @@ promote_rule(a::Type{Memory{T}}, b::Type{Memory{S}}) where {T,S} = el_same(promo
 Memory{T}(x::AbstractArray{S,1}) where {T,S} = copyto_axcheck!(Memory{T}(undef, size(x)), x)
 
 ## copying iterators to containers
-
-## Iteration ##
-
-iterate(A::Memory, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
 
 ## Indexing: getindex ##
 

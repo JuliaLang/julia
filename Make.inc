@@ -431,9 +431,10 @@ export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
-BUILD_OS := $(shell uname)
+RAW_BUILD_OS = $(shell uname)
+BUILD_OS := $(RAW_BUILD_OS)
 
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+ifneq (,$(findstring CYGWIN,$(RAW_BUILD_OS)))
 XC_HOST ?= $(shell uname -m)-w64-mingw32
 endif
 
@@ -520,6 +521,10 @@ DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
 # Compiler specific stuff
+
+ifneq ($(USECLANG)$(USEGCC),)
+$(error "These internal variables are not overridable. Set CC instead.")
+endif
 
 ifeq (default,$(origin CC))
 CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
@@ -826,6 +831,9 @@ ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 $(error "please install either GNU tar or bsdtar")
 endif
 endif
+
+# Do not try to extract owner uids, even if we're root (e.g. in sandboxes)
+TAR += --no-same-owner
 
 ifeq ($(WITH_GC_VERIFY), 1)
 JCXXFLAGS += -DGC_VERIFY
@@ -1661,8 +1669,8 @@ endif
 # Note: we're passing *FLAGS here computed based on your system compiler to
 # clang. If that causes you problems, you might want to build and/or run
 # specific clang-sa-* files with clang explicitly selected:
-#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang USECLANG=1 analyzegc
-#   make USECLANG=1 clang-sa-*
+#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang analyzegc
+#   make clang-sa-*
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
