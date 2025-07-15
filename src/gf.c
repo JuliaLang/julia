@@ -3096,7 +3096,7 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
             s_dispatch = (JL_STREAM*) &f_dispatch;
         }
     }
-    // NOTE: Sometimes the specType is just `Tuple`, which is not useful to print.
+    // NOTE: For builtin functions, the specType is just `Tuple`, which is not useful to print.
     if (!jl_has_free_typevars(mi->specTypes) && (jl_datatype_t*)mi->specTypes != jl_tuple_type) {
         jl_printf(s_dispatch, "precompile(");
         jl_static_show(s_dispatch, mi->specTypes);
