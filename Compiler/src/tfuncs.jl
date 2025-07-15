@@ -88,7 +88,13 @@ function add_tfunc(@nospecialize(f::Builtin), minarg::Int, maxarg::Int, @nospeci
 end
 
 add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
-add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
+
+# FIXME: the inlining cost for this built-in should be 0 (just like throw), but it is set to
+# 1000 to avoid regressions associated with the Compiler inlining too eagerly, especially when
+# encounting `if @generated` expressions.
+#
+# c.f. https://github.com/JuliaLang/julia/issues/58915#issuecomment-3070231392
+add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x)->Bottom), 1000)
 
 # the inverse of typeof_tfunc
 # returns (type, isexact, isconcrete, istype)
