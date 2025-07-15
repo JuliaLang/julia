@@ -313,7 +313,7 @@ function method_morespecific_via_interferences(method1::Method, method2::Method)
         return false
     end
     ms = method_in_interferences_recursive(method2, method1, IdSet{Method}())
-    # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{}
+    # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
     return ms
 end
 

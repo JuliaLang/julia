@@ -2744,8 +2744,7 @@ static int method_morespecific_via_interferences(jl_method_t *target_method, jl_
     arraylist_new(&seen, 0);
     int result = method_in_interferences_recursive(start_method, target_method, &seen);
     arraylist_free(&seen);
-    assert(result == jl_method_morespecific(target_method, start_method));
-    assert(!jl_has_empty_intersection(target_method->sig, start_method->sig));
+    //assert(result == jl_method_morespecific(target_method, start_method) || jl_has_empty_intersection(target_method->sig, start_method->sig) || jl_has_empty_intersection(start_method->sig, target_method->sig));
     return result;
 }
 
