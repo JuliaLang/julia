@@ -2342,4 +2342,11 @@ let src = code_typed1(callcall_f58996, (Any,))
     @test count(isinvoke(Returns(true)), src.code) == 0
 end
 
+f59013_using_sparams(::T) where {T} = T
+f59013(x) = f59013_using_sparams(x)
+let src = code_typed1(f59013, (Any,))
+    @test length(src.code) == 2
+    @test iscall((src, f59013_using_sparams), src.code[1])
+end
+
 end # module inline_tests
