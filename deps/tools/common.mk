@@ -77,8 +77,8 @@ endif
 # Detect MSYS2 with cygwin CMake rather than MinGW cmake - the former fails to
 # properly drive MinGW tools
 ifneq (,$(findstring MINGW,$(RAW_BUILD_OS)))
-ifneq (,$(shell ldd $(shell which cmake) | grep msys))
-$(error CMake is Cygwin CMake, not MinGW CMake. Build will fail. Use `pacman -S mingw-w64-x86_64-cmake`.)
+ifneq (,$(shell ldd $(shell which cmake) | grep msys-2.0.dll))
+override CMAKE := echo "ERROR: CMake is Cygwin CMake, not MinGW CMake. Build will fail. Use 'pacman -S mingw-w64-{i686,x86_64}-cmake'."; exit 1; $(CMAKE)
 endif
 endif
 
