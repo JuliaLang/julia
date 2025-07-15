@@ -3096,7 +3096,8 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
             s_dispatch = (JL_STREAM*) &f_dispatch;
         }
     }
-    if (!jl_has_free_typevars(mi->specTypes)) {
+    // NOTE: Sometimes the specType is just `Tuple`, which is not useful to print.
+    if (!jl_has_free_typevars(mi->specTypes) && (jl_datatype_t*)mi->specTypes != jl_tuple_type) {
         jl_printf(s_dispatch, "precompile(");
         jl_static_show(s_dispatch, mi->specTypes);
         jl_printf(s_dispatch, ")\n");
@@ -3865,6 +3866,8 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     nargs++; // add F to argument count
     jl_value_t *FT = jl_typeof(F);
 
+    bool_t took_slow_path = 0;  // For --trace-dispatch logging
+
     /*
       search order:
       check associative hash based on callsite address for leafsig match
@@ -3911,6 +3914,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     if (i == 4) {
         // if no method was found in the associative cache, check the full cache
         JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
+        took_slow_path = 1;
         jl_methcache_t *mc = jl_method_table->cache;
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
         entry = NULL;
@@ -3950,6 +3954,7 @@ have_entry:
     }
     else {
         assert(tt);
+        took_slow_path = 1;
         // cache miss case
         jl_methcache_t *mc = jl_method_table->cache;
         mfunc = jl_mt_assoc_by_type(mc, tt, world);
@@ -3963,7 +3968,15 @@ have_entry:
             jl_method_error(F, args, nargs, world);
             // unreachable
         }
-        // mfunc is about to be dispatched
+    }
+
+#ifdef JL_TRACE
+    if (traceen)
+        jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def.method->file), mfunc->def.method->line);
+#endif
+
+    // mfunc is about to be dispatched - log --trace-dispatch
+    if (__unlikely(took_slow_path)) {
         uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
         if (force_trace_dispatch || jl_options.trace_dispatch != NULL) {
             uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
@@ -3976,10 +3989,6 @@ have_entry:
         }
     }
 
-#ifdef JL_TRACE
-    if (traceen)
-        jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def.method->file), mfunc->def.method->line);
-#endif
     return mfunc;
 }
 
