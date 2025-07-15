@@ -1332,7 +1332,7 @@ mutable struct DoAllocNoEscapeSparam{T}
         finalizer(finalizer_sparam, new{T}(x))
     end
 end
-let src = code_typed1(Tuple{Any}) do x
+let src = code_typed1(Tuple{Int}) do x
         for i = 1:1000
             DoAllocNoEscapeSparam(x)
         end
@@ -1341,8 +1341,7 @@ let src = code_typed1(Tuple{Any}) do x
     nnothrow_invokes = count(isinvoke(:nothrow_side_effect), src.code)
     @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
           count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes
-    # TODO: Our effect modeling is not yet strong enough to fully eliminate this
-    @test_broken count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0
 end
 
 # Test finalizer varargs
@@ -2312,6 +2311,35 @@ end
 g_noinline_invoke(x) = f_noinline_invoke(x)
 let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
     @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
+end
+
+# https://github.com/JuliaLang/julia/issues/58915
+f58915(nt) = @inline Base.setindex(nt, 2, :next)
+# This function should fully-inline, i.e. it should have only built-in / intrinsic calls
+# and no invokes or dynamic calls of user code
+let src = code_typed1(f58915, Tuple{@NamedTuple{next::UInt32,prev::UInt32}})
+    # Any calls should be built-in calls
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
+    # There should be no invoke at all
+    @test count(isinvoke(Returns(true)), src.code) == 0
+end
+
+# https://github.com/JuliaLang/julia/issues/58915#issuecomment-3061421895
+let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
+    @test count(isinvoke(:merge_fallback), src.code) == 0
+    @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
+# https://github.com/JuliaLang/julia/pull/58996#issuecomment-3073496955
+f58996(::Int) = :int
+f58996(::String) = :string
+call_f58996(x) = f58996(x)
+callcall_f58996(x) = call_f58996(x);
+let src = code_typed1(callcall_f58996, (Any,))
+    # Any calls should be built-in calls
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
+    # There should be no invoke at all
+    @test count(isinvoke(Returns(true)), src.code) == 0
 end
 
 end # module inline_tests
