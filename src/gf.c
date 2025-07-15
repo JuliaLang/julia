@@ -3107,6 +3107,19 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
     JL_UNLOCK(&dispatch_statement_out_lock);
 }
 
+static void record_dispatch_statement_on_first_dispatch(jl_method_instance_t *mfunc) {
+    uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
+    if (force_trace_dispatch || jl_options.trace_dispatch != NULL) {
+        uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
+        uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
+        if (!was_dispatched) {
+            miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
+            jl_atomic_store_relaxed(&mfunc->flags, miflags);
+            record_dispatch_statement(mfunc);
+        }
+    }
+}
+
 // If waitcompile is 0, this will return NULL if compiling is on-going in the JIT. This is
 // useful for the JIT itself, since it just doesn't cause redundant work or missed updates,
 // but merely causes it to look into the current JIT worklist.
@@ -3866,8 +3879,6 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     nargs++; // add F to argument count
     jl_value_t *FT = jl_typeof(F);
 
-    bool_t took_slow_path = 0;  // For --trace-dispatch logging
-
     /*
       search order:
       check associative hash based on callsite address for leafsig match
@@ -3914,7 +3925,6 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     if (i == 4) {
         // if no method was found in the associative cache, check the full cache
         JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
-        took_slow_path = 1;
         jl_methcache_t *mc = jl_method_table->cache;
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
         entry = NULL;
@@ -3945,6 +3955,11 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
             jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
         }
+        if (entry) {
+            // mfunc was found in slow path, so log --trace-dispatch
+            jl_method_instance_t *mfunc = entry->func.linfo;
+            record_dispatch_statement_on_first_dispatch(mfunc);
+        }
     }
 
     jl_method_instance_t *mfunc;
@@ -3954,7 +3969,6 @@ have_entry:
     }
     else {
         assert(tt);
-        took_slow_path = 1;
         // cache miss case
         jl_methcache_t *mc = jl_method_table->cache;
         mfunc = jl_mt_assoc_by_type(mc, tt, world);
@@ -3968,26 +3982,14 @@ have_entry:
             jl_method_error(F, args, nargs, world);
             // unreachable
         }
+        // mfunc was found in slow path, so log --trace-dispatch
+        record_dispatch_statement_on_first_dispatch(mfunc);
     }
 
 #ifdef JL_TRACE
     if (traceen)
         jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def.method->file), mfunc->def.method->line);
 #endif
-
-    // mfunc is about to be dispatched - log --trace-dispatch
-    if (__unlikely(took_slow_path)) {
-        uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
-        if (force_trace_dispatch || jl_options.trace_dispatch != NULL) {
-            uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
-            uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
-            if (!was_dispatched) {
-                miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
-                jl_atomic_store_relaxed(&mfunc->flags, miflags);
-                record_dispatch_statement(mfunc);
-            }
-        }
-    }
 
     return mfunc;
 }
