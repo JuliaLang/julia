@@ -35,8 +35,10 @@ Multi-threading changes
 * New types are defined to handle the pattern of code that must run once per process, called
   a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
   the first time it is called, and then always return the same result value of type `T`
-  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
-  similar usage with threads or tasks. ([#TBD])
+  every subsequent time afterwards. There are also `OncePerThread{T}`, `OncePerTask{T}`, and
+  `OncePerDepot{T}` types for similar usage with threads, tasks, or depots respectively.
+  `OncePerDepot{T}` provides cross-process safety by storing results in the depot's `tokens`
+  directory and using `mkpidlock` for coordination. ([#TBD])
 
 Build system changes
 --------------------

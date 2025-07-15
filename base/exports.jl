@@ -110,6 +110,7 @@ export
     Pair,
     PartialQuickSort,
     OncePerProcess,
+    OncePerDepot,
     OncePerTask,
     OncePerThread,
     PermutedDimsArray,
