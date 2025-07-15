@@ -5,8 +5,15 @@
 # apparently not on FreeBSD). Ref PR #22352
 
 CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
+
+CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
+CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
+else
+# Defeat bad automatic cross compile detection (e.g. clang on mingw)
+# CMAKE_COMMON += -DCMAKE_CROSSCOMPILING=0
 endif
 ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
@@ -15,8 +22,6 @@ CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLA
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LD="$(LD)"
 
-CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
-CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
 ifneq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir)
 endif
@@ -61,7 +66,12 @@ endif
 CMAKE_COMMON += -DCMAKE_LINKER="$$(which $(LD))" -DCMAKE_AR="$$(which $(AR))" -DCMAKE_RANLIB="$$(which $(RANLIB))"
 
 ifeq ($(OS),WINNT)
+ifeq ($(BUILD_OS),WINNT)
+# Don't make CMake think we're cross compiling, but do make sure it knows we're Windows
+CMAKE_COMMON += -DCMAKE_HOST_SYSTEM_NAME=Windows
+else
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
+endif
 CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
 endif
 

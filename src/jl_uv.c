@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Needs to come before windows platform headers
+#include "support/dtypes.h"
+
 #ifdef _OS_WINDOWS_
 #include <ws2tcpip.h>
 #include <malloc.h>

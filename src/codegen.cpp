@@ -239,13 +239,13 @@ extern void __stack_chk_fail();
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
 extern void ___chkstk_ms(void);
 #else
 extern void __chkstk(void);
 #endif
 #else
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
 #undef _alloca
 extern void _alloca(void);
 #else
@@ -10050,13 +10050,13 @@ static void init_jit_functions(void)
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
     add_named_global("__julia_personality", &__julia_personality);
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
     add_named_global("___chkstk_ms", &___chkstk_ms);
 #else
     add_named_global("__chkstk", &__chkstk);
 #endif
 #else
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
     add_named_global("_alloca", &_alloca);
 #else
     add_named_global("_chkstk", &_chkstk);

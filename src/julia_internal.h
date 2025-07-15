@@ -182,7 +182,16 @@ JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #endif
 #endif
 
+#if defined(HAVE_SSP) && defined(_OS_DARWIN_)
+// On Darwin, this is provided by libSystem and imported
+extern JL_DLLIMPORT uintptr_t __stack_chk_guard;
+#elif defined(HAVE_SSP)
+// Added by compiler runtime in final link - not DLLIMPORT
+extern uintptr_t __stack_chk_guard;
+#else
+// The system doesn't have it - we define our own
 extern JL_DLLEXPORT uintptr_t __stack_chk_guard;
+#endif
 
 // If this is detected in a backtrace of segfault, it means the functions
 // that use this value must be reworked into their async form with cb arg

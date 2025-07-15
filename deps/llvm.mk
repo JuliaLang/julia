@@ -292,6 +292,12 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-e
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured
+ifeq ($(OS),WINNT)
+ifeq ($(USEGCC),1)
+	echo "LLVM source build is currently known to fail using GCC due to exceeded export table limits. Try clang."
+	exit 1
+endif
+endif
 	cd $(LLVM_BUILDDIR_withtype) && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
