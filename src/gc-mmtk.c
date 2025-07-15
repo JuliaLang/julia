@@ -3,6 +3,10 @@
 #include "mmtkMutator.h"
 #include "threading.h"
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 // File exists in the binding
 #include "mmtk.h"
 

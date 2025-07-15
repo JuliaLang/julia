@@ -8,6 +8,10 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
 #endif
@@ -931,7 +935,16 @@ void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 {
     jl_atomic_store_relaxed(&lock->owner, (jl_task_t*)NULL);
     lock->count = 0;
+#if defined(_COMPILER_TSAN_ENABLED_) && defined(ENABLE_TIMINGS)
+    __tsan_mutex_pre_divert(lock, 0);
+#endif
     jl_profile_lock_init(lock, name);
+#ifdef _COMPILER_TSAN_ENABLED_
+#ifdef ENABLE_TIMINGS
+    __tsan_mutex_post_divert(lock, 0);
+#endif
+    __tsan_mutex_create(lock, __tsan_mutex_write_reentrant);
+#endif
 }
 
 void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
@@ -941,11 +954,17 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         lock->count++;
         return;
     }
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_pre_divert(lock, 0);
+#endif
     // Don't use JL_TIMING for instant acquires, results in large blowup of events
     jl_profile_lock_start_wait(lock);
     if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
         lock->count = 1;
         jl_profile_lock_acquired(lock);
+#ifdef _COMPILER_TSAN_ENABLED_
+        __tsan_mutex_post_divert(lock, 0);
+#endif
         return;
     }
     JL_TIMING(LOCK_SPIN, LOCK_SPIN);
@@ -953,6 +972,9 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
             jl_profile_lock_acquired(lock);
+#ifdef _COMPILER_TSAN_ENABLED_
+            __tsan_mutex_post_divert(lock, 0);
+#endif
             return;
         }
         if (jl_running_under_rr(0)) {
@@ -973,6 +995,9 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         jl_cpu_suspend();
         owner = jl_atomic_load_relaxed(&lock->owner);
     }
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_post_divert(lock, 0);
+#endif
 }
 
 static void jl_lock_frame_push(jl_task_t *self, jl_mutex_t *lock)
@@ -998,23 +1023,43 @@ static void jl_lock_frame_pop(jl_task_t *self)
 
 void _jl_mutex_lock(jl_task_t *self, jl_mutex_t *lock)
 {
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_pre_lock(lock, __tsan_mutex_write_reentrant);
+#endif
     JL_SIGATOMIC_BEGIN_self();
     _jl_mutex_wait(self, lock, 1);
     jl_lock_frame_push(self, lock);
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_post_lock(lock, __tsan_mutex_write_reentrant, 1);
+#endif
 }
 
 int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock)
 {
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_pre_lock(lock, __tsan_mutex_try_lock | __tsan_mutex_write_reentrant);
+#endif
     jl_task_t *owner = jl_atomic_load_acquire(&lock->owner);
+    int ret = 0;
     if (owner == self) {
         lock->count++;
-        return 1;
+        ret = 1;
+        goto done;
     }
     if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
         lock->count = 1;
-        return 1;
+        ret = 1;
+        goto done;
     }
-    return 0;
+done:
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_post_lock(lock,
+                           __tsan_mutex_try_lock |
+                               (ret ? 0 : __tsan_mutex_try_lock_failed) |
+                               __tsan_mutex_write_reentrant,
+                           1);
+#endif
+    return ret;
 }
 
 int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock)
@@ -1030,6 +1075,9 @@ int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock)
 void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
 {
 #ifndef __clang_gcanalyzer__
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_pre_unlock(lock, 0);
+#endif
     assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
@@ -1044,6 +1092,9 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
         }
         jl_profile_lock_release_end(lock);
     }
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_post_unlock(lock, 0);
+#endif
 #endif
 }
 
