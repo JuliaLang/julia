@@ -431,9 +431,10 @@ export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
-BUILD_OS := $(shell uname)
+RAW_BUILD_OS = $(shell uname)
+BUILD_OS := $(RAW_BUILD_OS)
 
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+ifneq (,$(findstring CYGWIN,$(RAW_BUILD_OS)))
 XC_HOST ?= $(shell uname -m)-w64-mingw32
 endif
 
