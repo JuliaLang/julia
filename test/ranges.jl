@@ -755,6 +755,8 @@ end
         @test length(typemin(T):typemax(T)) == T(0)
         @test length(zero(T):one(T):typemax(T)) == typemin(T)
         @test length(typemin(T):one(T):typemax(T)) == T(0)
+        @test length(StepRange{T,BigInt}(zero(T), 1, typemax(T))) == typemin(T)
+        @test length(StepRange{T,BigInt}(typemin(T), 1, typemax(T))) == T(0)
         @test_throws OverflowError checked_length(zero(T):typemax(T))
         @test_throws OverflowError checked_length(typemin(T):typemax(T))
         @test_throws OverflowError checked_length(zero(T):one(T):typemax(T))
