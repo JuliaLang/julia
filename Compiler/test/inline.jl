@@ -2323,7 +2323,7 @@ function f59013_generator(x)
         end
     else
         path[] = :fallback
-        return Core.sizeof(x.paramters[1])
+        return Core.sizeof(x.parameters[1])
     end
 end
 f59013() = f59013_generator(Base.inferencebarrier(Int64))
