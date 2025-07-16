@@ -585,3 +585,48 @@ let once = OncePerTask{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("expected") once()
 end
+
+@testset "OncePerDepot" begin
+    # Test with String type (requires explicit String constructor)
+    let once = OncePerDepot{String}("test_string") do
+            return "depot-specific data"
+        end
+        @test typeof(once) <: OncePerDepot{String}
+        x = once()
+        @test x === once()
+        @test x == "depot-specific data"
+    end
+
+    # Test with Vector{UInt8} (works directly with write/read)
+    let once = OncePerDepot{Vector{UInt8}}("test_bytes") do
+            return [1, 2, 3, 4]
+        end
+        @test typeof(once) <: OncePerDepot{Vector{UInt8}}
+        x = once()
+        @test x == once()
+        @test x == [1, 2, 3, 4]
+    end
+
+    # Test error handling
+    let once = OncePerDepot{String}("test_error") do
+            error("expected error")
+        end
+        @test_throws ErrorException("expected error") once()
+        # OncePerDepot doesn't cache errors like OncePerProcess, so it will try again
+        @test_throws ErrorException("expected error") once()
+    end
+
+    # Cleanup test files
+    depot_path = first(filter(x -> isdir(x) && Sys.iswritable(x), DEPOT_PATH))
+    if depot_path !== nothing
+        tokens_dir = joinpath(depot_path, "tokens")
+        if isdir(tokens_dir)
+            for file in ["test_string", "test_bytes", "test_error"]
+                value_file = joinpath(tokens_dir, file * ".value")
+                lock_file = joinpath(tokens_dir, file)
+                isfile(value_file) && rm(value_file, force=true)
+                isfile(lock_file) && rm(lock_file, force=true)
+            end
+        end
+    end
+end

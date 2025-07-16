@@ -1000,10 +1000,8 @@ across processes.
 - `init::Function`: The function to call to initialize the value.
 - `token_name::AbstractString`: The name for the token file.
 
-!!! note "Representation limitations"
-    Values are stored using `repr()` and restored using `Meta.parse()`. This works well for
-    basic Julia types (numbers, strings, arrays, etc.) but may not work for complex objects
-    that don't have a parseable string representation.
+!!! note "Storage limitations"
+    Values are stored using `write()` and restored using `read()`.
 
 !!! compat "Julia 1.13"
     This type requires Julia 1.13 or later.
@@ -1011,14 +1009,14 @@ across processes.
 ## Example
 
 ```jldoctest
-julia> const depot_cache = Base.OncePerDepot{Vector{String}}("mycache") do
+julia> const depot_cache = Base.OncePerDepot{String}("mycache") do
            println("Initializing cache...")
-           return ["depot-specific", "data"]
+           return "depot-specific data"
        end;
 
-julia> depot_cache() |> typeof
+julia> depot_cache()
 Initializing cache...
-Vector{String} (alias for Array{String, 1})
+"depot-specific data"
 
 julia> depot_cache() === depot_cache()  # Same within depot
 true
@@ -1070,10 +1068,9 @@ function (once::OncePerDepot{T,F})() where {T,F}
     # Try to load existing value first
     if isfile(value_path)
         try
-            value_str = read(value_path, String)
-            return Core.eval(Main, Meta.parse(value_str))::T
+            return read(value_path, T)
         catch
-            # If reading/parsing fails, we'll reinitialize
+            # If reading fails, we'll reinitialize
         end
     end
 
@@ -1084,10 +1081,9 @@ function (once::OncePerDepot{T,F})() where {T,F}
         # Double-check if value exists after acquiring lock
         if isfile(value_path)
             try
-                value_str = read(value_path, String)
-                return Core.eval(Main, Meta.parse(value_str))::T
+                return read(value_path, T)
             catch
-                # If reading/parsing fails, continue with initialization
+                # If reading fails, continue with initialization
             end
         end
 
@@ -1096,7 +1092,7 @@ function (once::OncePerDepot{T,F})() where {T,F}
 
         # Store the result
         try
-            write(value_path, repr(res))
+            write(value_path, res)
         catch
             # Clean up on failure
             isfile(value_path) && rm(value_path, force=true)
