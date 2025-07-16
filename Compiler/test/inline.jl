@@ -2314,4 +2314,24 @@ let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
     @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
 end
 
+path = Ref{Symbol}(:unknown)
+function f59013_generator(x)
+    if @generated
+        if x isa DataType && x.name === Type.body.name
+            path[] = :generator
+            return Core.sizeof(x.parameters[1])
+        end
+    else
+        path[] = :fallback
+        return Core.sizeof(x.paramters[1])
+    end
+end
+f59013() = f59013_generator(Base.inferencebarrier(Int64))
+let src = code_typed1(f59013, ())
+    @test iscall((src, f59013_generator), src.code[end - 1])
+    @test path[] === :unknown
+    @test f59013() === 8
+    @test path[] === :generator
+end
+
 end # module inline_tests
