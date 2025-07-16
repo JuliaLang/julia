@@ -988,9 +988,9 @@ end
     OncePerDepot{T}(init::Function, token_name::AbstractString) -> OncePerDepot{T}
 
 Calling a `OncePerDepot` object returns a value of type `T` by running the function
-`initializer` exactly once per depot. All concurrent and future calls within the same
-depot will return exactly the same value. This uses a file-based locking mechanism
-with pidfiles to ensure safety across processes.
+`initializer` exactly once per depot. The value is written into a token file in the depot. All
+concurrent and future calls within the same depot will read this file to return the same
+value. This uses a file-based locking mechanism with pidfiles to ensure safety across processes.
 
 The depot is determined by the first entry in `DEPOT_PATH` that exists and is writable.
 Token files are stored in `depot/tokens/` and use `mkpidlock` to ensure atomic initialization
