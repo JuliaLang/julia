@@ -607,6 +607,30 @@ end
         @test x == [1, 2, 3, 4]
     end
 
+    # Test with Nothing (special case for orchestrating initialization)
+    let counter = Ref(0)
+        once = OncePerDepot{Nothing}("test_nothing") do
+            counter[] += 1
+            return nothing
+        end
+        @test typeof(once) <: OncePerDepot{Nothing}
+        @test once() === nothing
+        @test once() === nothing  # Should not run again
+        @test counter[] == 1  # Should have run only once
+    end
+
+    # Test with Nothing using inferred type constructor
+    let counter = Ref(0)
+        once = OncePerDepot("test_nothing_inferred") do
+            counter[] += 1
+            return nothing
+        end
+        @test typeof(once) <: OncePerDepot{Nothing}
+        @test once() === nothing
+        @test once() === nothing  # Should not run again
+        @test counter[] == 1  # Should have run only once
+    end
+
     # Test error handling
     let once = OncePerDepot{String}("test_error") do
             error("expected error")
@@ -621,7 +645,7 @@ end
     if depot_path !== nothing
         tokens_dir = joinpath(depot_path, "tokens")
         if isdir(tokens_dir)
-            for file in ["test_string", "test_bytes", "test_error"]
+            for file in ["test_string", "test_bytes", "test_nothing", "test_nothing_inferred", "test_error"]
                 value_file = joinpath(tokens_dir, file * ".value")
                 lock_file = joinpath(tokens_dir, file)
                 isfile(value_file) && rm(value_file, force=true)

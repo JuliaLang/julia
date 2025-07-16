@@ -1001,7 +1001,8 @@ across processes.
 - `token_name::AbstractString`: The name for the token file.
 
 !!! note "Storage limitations"
-    Values are stored using `write()` and restored using `read()`.
+    Values are stored using `write()` and restored using `read()`, so those methods must be implemented for the data type.
+    The `Nothing` type is handled specially - it just creates an empty file to track completion.
 
 !!! compat "Julia 1.13"
     This type requires Julia 1.13 or later.
@@ -1020,6 +1021,16 @@ Initializing cache...
 
 julia> depot_cache() === depot_cache()  # Same within depot
 true
+
+julia> const welcome_message = Base.OncePerDepot("welcome") do
+           println("Welcome to X!")
+           return nothing
+       end;
+
+julia> welcome_message()
+Welcome to X!
+
+julia> welcome_message()  # No output on second call
 ```
 """
 mutable struct OncePerDepot{T, F} <: Function
@@ -1068,7 +1079,11 @@ function (once::OncePerDepot{T,F})() where {T,F}
     # Try to load existing value first
     if isfile(value_path)
         try
-            return read(value_path, T)
+            if T === Nothing
+                return nothing
+            else
+                return read(value_path, T)
+            end
         catch
             # If reading fails, we'll reinitialize
         end
@@ -1081,7 +1096,11 @@ function (once::OncePerDepot{T,F})() where {T,F}
         # Double-check if value exists after acquiring lock
         if isfile(value_path)
             try
-                return read(value_path, T)
+                if T === Nothing
+                    return nothing
+                else
+                    return read(value_path, T)
+                end
             catch
                 # If reading fails, continue with initialization
             end
@@ -1092,7 +1111,12 @@ function (once::OncePerDepot{T,F})() where {T,F}
 
         # Store the result
         try
-            write(value_path, res)
+            if T === Nothing
+                # For Nothing, just create an empty file to indicate completion
+                write(value_path, UInt8[])
+            else
+                write(value_path, res)
+            end
         catch
             # Clean up on failure
             isfile(value_path) && rm(value_path, force=true)
