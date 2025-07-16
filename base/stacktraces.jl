@@ -375,4 +375,15 @@ function from(frame::StackFrame, m::Module)
     return parentmodule(frame) === m
 end
 
+end  # module StackTraces
+
+# Back to Base
+# Implement locking for Compiler.store_dispatch_backtrace
+const dispatch_backtrace = IdDict{Core.CodeInstance,Any}()
+const dispatch_backtrace_lock = ReentrantLock()
+
+function Compiler.store_dispatch_backtrace(ci::Core.CodeInstance)
+    lock(dispatch_backtrace_lock) do
+        dispatch_backtrace[ci] = backtrace()
+    end
 end

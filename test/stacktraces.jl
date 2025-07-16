@@ -262,3 +262,26 @@ end
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end
+
+@noinline callee(x::Int) = sin(x)
+caller(x) = invokelatest(callee, x)
+
+@test sin(0) == 0  # force compilation of sin(::Int)
+empty!(Base.dispatch_backtrace)
+Core.Compiler.collect_dispatch_backtrace[] = true
+caller(3)
+Core.Compiler.collect_dispatch_backtrace[] = false
+ln = @__LINE__() - 2
+fl = Symbol(@__FILE__())
+@test length(Base.dispatch_backtrace) == 2
+mcallee, mcaller = only(methods(callee)), only(methods(caller))
+@test any(Base.dispatch_backtrace) do (ci, trace)
+    ci.def.def === mcallee && any(stacktrace(trace)) do sf
+        sf.file == fl && sf.line == ln
+    end
+end
+@test any(Base.dispatch_backtrace) do (ci, trace)
+    ci.def.def === mcaller && any(stacktrace(trace)) do sf
+        sf.file == fl && sf.line == ln
+    end
+end
