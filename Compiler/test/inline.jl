@@ -2328,6 +2328,8 @@ function f59018_generator(x)
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))
 let src = code_typed1(f59018, ())
+    # We should hit a dynamic dispatch, because not enough information
+    # is available to expand the generator during compilation.
     @test iscall((src, f59018_generator), src.code[end - 1])
     @test path[] === :unknown
     @test f59018() === 8
