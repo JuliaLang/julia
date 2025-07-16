@@ -2334,4 +2334,21 @@ let src = code_typed1(f59013, ())
     @test path[] === :generator
 end
 
+# https://github.com/JuliaLang/julia/issues/58915
+f58915(nt) = @inline Base.setindex(nt, 2, :next)
+# This function should fully-inline, i.e. it should have only built-in / intrinsic calls
+# and no invokes or dynamic calls of user code
+let src = code_typed1(f58915, Tuple{@NamedTuple{next::UInt32,prev::UInt32}})
+    # Any calls should be built-in calls
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
+    # There should be no invoke at all
+    @test count(isinvoke(Returns(true)), src.code) == 0
+end
+
+# https://github.com/JuliaLang/julia/issues/58915#issuecomment-3061421895
+let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
+    @test count(isinvoke(:merge_fallback), src.code) == 0
+    @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
 end # module inline_tests
