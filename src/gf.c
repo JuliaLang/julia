@@ -2469,7 +2469,8 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
             s_dispatch = (JL_STREAM*) &f_dispatch;
         }
     }
-    if (!jl_has_free_typevars(mi->specTypes)) {
+    // NOTE: Sometimes the specType is just `Tuple`, which is not useful to print.
+    if (!jl_has_free_typevars(mi->specTypes) && (jl_datatype_t*)mi->specTypes != jl_tuple_type) {
         jl_printf(s_dispatch, "precompile(");
         jl_static_show(s_dispatch, mi->specTypes);
         jl_printf(s_dispatch, ")\n");
@@ -2477,6 +2478,19 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
             ios_flush(&f_dispatch);
     }
     JL_UNLOCK(&dispatch_statement_out_lock);
+}
+
+static void record_dispatch_statement_on_first_dispatch(jl_method_instance_t *mfunc) {
+    uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
+    if (force_trace_dispatch || jl_options.trace_dispatch != NULL) {
+        uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
+        uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
+        if (!was_dispatched) {
+            miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
+            jl_atomic_store_relaxed(&mfunc->flags, miflags);
+            record_dispatch_statement(mfunc);
+        }
+    }
 }
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
@@ -3162,6 +3176,11 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
             jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
         }
+        if (entry) {
+            // mfunc was found in slow path, so log --trace-dispatch
+            jl_method_instance_t *mfunc = entry->func.linfo;
+            record_dispatch_statement_on_first_dispatch(mfunc);
+        }
     }
 
     jl_method_instance_t *mfunc;
@@ -3188,23 +3207,15 @@ have_entry:
             jl_method_error(F, args, nargs, world);
             // unreachable
         }
-        // mfunc is about to be dispatched
-        uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
-        if (force_trace_dispatch || jl_options.trace_dispatch != NULL) {
-            uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
-            uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
-            if (!was_dispatched) {
-                miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
-                jl_atomic_store_relaxed(&mfunc->flags, miflags);
-                record_dispatch_statement(mfunc);
-            }
-        }
+        // mfunc was found in slow path, so log --trace-dispatch
+        record_dispatch_statement_on_first_dispatch(mfunc);
     }
 
 #ifdef JL_TRACE
     if (traceen)
         jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def.method->file), mfunc->def.method->line);
 #endif
+
     return mfunc;
 }
 
