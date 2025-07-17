@@ -705,7 +705,7 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
         line_length = (max_nested_cycles - nactive_cycles) + ndigits_max + 2
         nactive_cycles -= 1
         printstyled(io, " ", "│" ^ nactive_cycles, "╰", "─" ^ (line_length); color = :light_black)
-        printstyled(io, " repeated $repetitions more time", repetitions > 1 ? "s" : ""; color = :light_black, italic = true)
+        printstyled(io, " repeated $(repetitions + 1) times"; color = :light_black, italic = true)
 
         pop!(current_cycles)
         frame_counter += cycle_length * repetitions
