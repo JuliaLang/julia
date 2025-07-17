@@ -4506,14 +4506,15 @@ end
         end
 
         # Should not access arg-map for local variables
+        @gensym f
         @eval begin
-            function f end
-            function (f::typeof(f))()
-                f = 1
+            function $f end
+            function ($f::typeof($f))()
+                $f = 1
                 $(Expr(:thisfunction))
             end
         end
-        @test @eval(f() === f)
+        @test @eval($f() === $f)
     end
 
     @testset "Error upon misuse" begin
