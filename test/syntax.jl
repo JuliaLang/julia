@@ -4427,7 +4427,7 @@ end
     @testset "Keyword arguments" begin
         # @__FUNCTION__ with kwargs
         foo(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
-        @test_broken foo(n = 5) == 120
+        @test foo(n = 5) == 120
 
         # Expr(:thisfunction) with kwargs
         let
@@ -4482,7 +4482,7 @@ end
             return (; func=(@__FUNCTION__), x, args, y, kws)
         end
         c = CallableStruct4()
-        @test_broken c(1).func === c
+        @test c(1).func === c
         @test c(2, 3).args == (3,)
         @test c(2; y=4).y == 4
         @test c(2; y=4, a=5, b=6, c=7).kws[:c] == 7
