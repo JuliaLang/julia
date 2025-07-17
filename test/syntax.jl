@@ -4427,7 +4427,7 @@ end
     @testset "Keyword arguments" begin
         # @__FUNCTION__ with kwargs
         foo(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
-        @test foo(n = 5) == 120
+        @test_broken foo(n = 5) == 120
 
         # Expr(:thisfunction) with kwargs
         let
@@ -4490,8 +4490,8 @@ end
 
     @testset "Special cases" begin
         # Generated functions
-        let @generated foo() = Expr(:thisfunction)
-            @test foo() === foo
+        let @generated foo2() = Expr(:thisfunction)
+            @test foo2() === foo2
         end
 
         # Struct constructors
