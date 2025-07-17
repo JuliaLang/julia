@@ -4355,62 +4355,146 @@ let f = NoSpecClosure.K(1)
     @test typeof(f).parameters == Core.svec()
 end
 
-@testset "Expr(:thisfunction)" begin
-    # regular functions can use Expr(:thisfunction) to refer to the function itself
-    @eval regular_func() = $(Expr(:thisfunction))
-    @test regular_func() === regular_func
-
-    # This also works in callable structs, which refers to the instance
-    struct CallableStruct
-        value::Int
-    end
-    @eval (obj::CallableStruct)() = $(Expr(:thisfunction))
-    @eval (obj::CallableStruct)(x) = $(Expr(:thisfunction)).value + x
-
-    let cs = CallableStruct(42)
-        @test cs() === cs
-        @test cs(10) === 52
+@testset "@__FUNCTION__ and Expr(:thisfunction)" begin
+    @testset "Basic usage" begin
+        # @__FUNCTION__ in regular functions
+        test_function_basic() = @__FUNCTION__
+        @test test_function_basic() === test_function_basic
+        
+        # Expr(:thisfunction) in regular functions
+        @eval regular_func() = $(Expr(:thisfunction))
+        @test regular_func() === regular_func
     end
 
-    struct RecursiveCallableStruct; end
-    @eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
+    @testset "Recursion" begin
+        # Factorial with @__FUNCTION__
+        factorial_function(n) = n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1)
+        @test factorial_function(5) == 120
+        
+        # Fibonacci with Expr(:thisfunction)
+        struct RecursiveCallableStruct; end
+        @eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
+        @test RecursiveCallableStruct()(10) === 55
+        
+        # Anonymous function recursion
+        @test (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1))(5) == 120
+    end
 
-    @test RecursiveCallableStruct()(10) === 55
-
-    # In closures, var"#self#" should refer to the enclosing function,
-    # NOT the enclosing struct instance
-    struct CallableStruct2; end
-    @eval function (obj::CallableStruct2)()
-        function inner_func()
-            $(Expr(:thisfunction))
+    @testset "Closures and nested functions" begin
+        # Prevents boxed closures
+        function make_closure()
+            fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+            return fib
         end
-        inner_func
-    end
+        Test.@inferred make_closure()
+        closure = make_closure()
+        @test closure(5) == 8
+        Test.@inferred closure(5)
 
-    let cs = CallableStruct2()
-        @test cs()() === cs()
-        @test cs()() !== cs
-    end
-
-    # Keywords
-    let
-        @eval f2(; n=1) = n <= 1 ? n : n * $(Expr(:thisfunction))(; n=n-1)
-        result = f2(n=5)
-        @test result == 120
-    end
-
-    # Struct constructor with thisfunction
-    let
-        @eval struct Cols{T<:Tuple}
-            cols::T
-            operator
-            Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string($(Expr(:thisfunction))))
+        # Complex closure of closures
+        function f1()
+            function f2()
+                function f3()
+                    return @__FUNCTION__
+                end
+                return (@__FUNCTION__), f3()
+            end
+            return (@__FUNCTION__), f2()...
         end
-        result = Cols(1, 2, 3)
-        @test occursin("Cols", result)
+        Test.@inferred f1()
+        @test f1()[1] === f1
+        @test f1()[2] !== f1
+        @test f1()[3] !== f1
+        @test f1()[3]() === f1()[3]
+        @test f1()[2]()[2]() === f1()[3]
+
+        # In closures, var"#self#" should refer to the enclosing function,
+        # NOT the enclosing struct instance
+        struct CallableStruct2; end
+        @eval function (obj::CallableStruct2)()
+            function inner_func()
+                $(Expr(:thisfunction))
+            end
+            inner_func
+        end
+
+        let cs = CallableStruct2()
+            @test cs()() === cs()
+            @test cs()() !== cs
+        end
     end
 
-    let @generated foo() = Expr(:thisfunction)
-        @test foo() === foo
+    @testset "Do blocks" begin
+        function test_do_block()
+            result = map([1, 2, 3]) do x
+                return (@__FUNCTION__, x)
+            end
+            # All should refer to the same do-block function
+            @test all(r -> r[1] === result[1][1], result)
+            # Values should be different
+            @test [r[2] for r in result] == [1, 2, 3]
+            # It should be different than `test_do_block`
+            @test result[1][1] !== test_do_block
+        end
+        test_do_block()
+    end
+
+    @testset "Keyword arguments" begin
+        # @__FUNCTION__ with kwargs
+        foo(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
+        @test foo(n = 5) == 120
+        
+        # Expr(:thisfunction) with kwargs
+        let
+            @eval f2(; n=1) = n <= 1 ? n : n * $(Expr(:thisfunction))(; n=n-1)
+            result = f2(n=5)
+            @test result == 120
+        end
+    end
+
+    @testset "Callable structs" begin
+        # @__FUNCTION__ in callable structs
+        @gensym A
+        @eval module $A
+            struct CallableStruct{T}; val::T; end
+            (c::CallableStruct)() = @__FUNCTION__
+        end
+        @eval using .$A: CallableStruct
+        c = CallableStruct(5)
+        @test c() === c
+        
+        # Expr(:thisfunction) in callable structs
+        struct CallableStruct3
+            value::Int
+        end
+        @eval (obj::CallableStruct3)() = $(Expr(:thisfunction))
+        @eval (obj::CallableStruct3)(x) = $(Expr(:thisfunction)).value + x
+
+        let cs = CallableStruct3(42)
+            @test cs() === cs
+            @test cs(10) === 52
+        end
+    end
+
+    @testset "Special cases" begin
+        # Generated functions
+        let @generated foo() = Expr(:thisfunction)
+            @test foo() === foo
+        end
+        
+        # Struct constructor with thisfunction
+        let
+            @eval struct Cols{T<:Tuple}
+                cols::T
+                operator
+                Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string($(Expr(:thisfunction))))
+            end
+            result = Cols(1, 2, 3)
+            @test occursin("Cols", result)
+        end
+        
+        # Error upon misuse
+        @gensym B
+        @test_throws ErrorException @eval(module $B; @__FUNCTION__; end)
     end
 end
