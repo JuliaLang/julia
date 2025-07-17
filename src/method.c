@@ -609,6 +609,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->flags, 0);
+    jl_atomic_store_relaxed(&mi->dispatch_status, 0);
     return mi;
 }
 
@@ -1154,39 +1155,6 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     return gf;
 }
 
-static void foreach_top_nth_typename(void (*f)(jl_typename_t*, void*), jl_value_t *a JL_PROPAGATES_ROOT, int n, void *env)
-{
-    if (jl_is_datatype(a)) {
-        if (n == 0) {
-            jl_datatype_t *dt = ((jl_datatype_t*)a);
-            jl_typename_t *tn = NULL;
-            while (1) {
-                if (dt != jl_any_type && dt != jl_function_type)
-                    tn = dt->name;
-                if (dt->super == dt)
-                    break;
-                dt = dt->super;
-            }
-            if (tn)
-                f(tn, env);
-        }
-        else if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) >= n)
-                foreach_top_nth_typename(f, jl_tparam(a, n - 1), 0, env);
-        }
-    }
-    else if (jl_is_typevar(a)) {
-        foreach_top_nth_typename(f, ((jl_tvar_t*)a)->ub, n, env);
-    }
-    else if (jl_is_unionall(a)) {
-        foreach_top_nth_typename(f, ((jl_unionall_t*)a)->body, n, env);
-    }
-    else if (jl_is_uniontype(a)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)a;
-        foreach_top_nth_typename(f, u->a, n, env);
-        foreach_top_nth_typename(f, u->b, n, env);
-    }
-}
 
 // get the MethodTable for dispatch, or `nothing` if cannot be determined
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -1198,11 +1166,6 @@ JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGA
 JL_DLLEXPORT jl_methcache_t *jl_method_cache_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     return jl_method_table->cache;
-}
-
-void jl_foreach_top_typename_for(void (*f)(jl_typename_t*, void*), jl_value_t *argtypes JL_PROPAGATES_ROOT, void *env)
-{
-    foreach_top_nth_typename(f, argtypes, 1, env);
 }
 
 jl_methcache_t *jl_kwmethod_cache_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT

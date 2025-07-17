@@ -34,7 +34,7 @@ htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
 
 // During incremental compilation, the following gets set
-jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
+jl_module_t *jl_precompile_toplevel_module = NULL;   // the first toplevel module being defined
 
 jl_module_t *jl_add_standard_imports(jl_module_t *m)
 {
@@ -172,7 +172,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
-    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
     size_t last_age = ct->world_age;
 
     if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {
@@ -182,7 +181,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     if (is_parent__toplevel__) {
         jl_register_root_module(newm);
-        if (jl_options.incremental) {
+        if (jl_options.incremental && jl_precompile_toplevel_module == NULL) {
             jl_precompile_toplevel_module = newm;
         }
     }
@@ -240,8 +239,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
             jl_module_run_initializer(m);
         }
     }
-
-    jl_precompile_toplevel_module = old_toplevel_module;
 
     JL_GC_POP();
     return (jl_value_t*)newm;
@@ -760,7 +757,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
-            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI);
+            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ct->world_age = last_age;

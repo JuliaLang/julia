@@ -36,8 +36,8 @@ end
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
-        (Core.Method, [:primary_world, :dispatch_status]),
-        (Core.MethodInstance, [:cache, :flags]),
+        (Core.Method, [:primary_world, :did_scan_source, :dispatch_status]),
+        (Core.MethodInstance, [:cache, :flags, :dispatch_status]),
         (Core.MethodTable, [:defs]),
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
@@ -1206,8 +1206,8 @@ end
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
-@test invokelatest(getfield, Module(:anonymous, false, true), :Core) == Core
-@test_throws UndefVarError invokelatest(getfield, Module(:anonymous, false, false), :Core)
+@test invokelatest(getglobal, Module(:anonymous, false, true), :Core) == Core
+@test_throws UndefVarError invokelatest(getglobal, Module(:anonymous, false, false), :Core)
 
 # exception from __init__()
 let didthrow =
@@ -2279,6 +2279,31 @@ macro X6074()
 end
 x6074 = 6074
 @test @X6074() == 6074
+
+# issues #48910, 54417
+macro X43151_nested()
+    quote my_value = "from_nested_macro" end
+end
+macro X43151_parent()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested()
+        my_value
+    end
+end
+@test @X43151_parent() == "from_parent_macro"
+
+macro X43151_nested_escaping()
+    quote $(esc(:my_value)) = "from_nested_macro" end
+end
+macro X43151_parent_escaping()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested_escaping()
+        my_value
+    end
+end
+@test @X43151_parent_escaping() == "from_nested_macro"
 
 # issue #5536
 test5536(a::Union{Real, AbstractArray}...) = "Splatting"
@@ -4679,8 +4704,28 @@ end
 @test Macro_Yielding_Global_Assignment.x == 2
 
 # issue #15718
-@test :(f($NaN)) == :(f($NaN))
-@test isequal(:(f($NaN)), :(f($NaN)))
+function compare_test(x, y)
+    lx = Meta.lower(@__MODULE__, x)
+    ly = Meta.lower(@__MODULE__, y)
+    if isequal(x, y)
+        @test x == y
+        @test hash(x) == hash(y)
+        @test isequal(lx, ly)
+        @test lx == ly
+        @test hash(lx) == hash(ly)
+        true
+    else
+        @test x != y
+        @test !isequal(lx, ly)
+        @test lx != ly
+        false
+    end
+end
+@test compare_test(:(f($NaN)), :(f($NaN)))
+@test !compare_test(:(1 + (1 * 1)), :(1 + (1 * 1.0)))
+@test compare_test(:(1 + (1 * $NaN)), :(1 + (1 * $NaN)))
+@test compare_test(QuoteNode(NaN), QuoteNode(NaN))
+@test !compare_test(QuoteNode(1), QuoteNode(1.0))
 
 # PR #16011 Make sure dead code elimination doesn't delete push and pop
 # of metadata

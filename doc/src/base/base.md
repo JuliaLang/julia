@@ -3,7 +3,7 @@
 ## Introduction
 
 Julia Base contains a range of functions and macros appropriate for performing
-scientific and numerical computing, but is also as broad as those of many general purpose programming
+scientific and numerical computing, but is also as broad as those of many general-purpose programming
 languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
@@ -193,6 +193,7 @@ Base.typeintersect
 Base.promote_type
 Base.promote_rule
 Base.promote_typejoin
+Base.iskindtype
 Base.isdispatchtuple
 ```
 
@@ -251,6 +252,7 @@ Base.instances
 Core.Any
 Core.Union
 Union{}
+Core.TypeofBottom
 Core.UnionAll
 Core.Tuple
 Core.NTuple

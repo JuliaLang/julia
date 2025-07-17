@@ -44,7 +44,6 @@ typedef struct {
 } jl_alloc_num_t;
 
 typedef struct {
-    int always_full;
     int wait_for_debugger;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
@@ -365,15 +364,6 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_page_metadata_back(jl_gc_pagemeta_t **ppg) J
     return v;
 }
 
-#ifdef __clang_gcanalyzer__ /* clang may not have __builtin_ffs */
-unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
-#else
-STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
-{
-    return __builtin_ffs(bitvec) - 1;
-}
-#endif
-
 extern bigval_t *oldest_generation_of_bigvals;
 extern int64_t buffered_pages;
 extern int gc_first_tid;
@@ -656,14 +646,12 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
-#define gc_sweep_always_full jl_gc_debug_env.always_full
 int jl_gc_debug_check_other(void);
 int gc_debug_check_pool(void);
 void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
-#define gc_sweep_always_full 0
 static inline int jl_gc_debug_check_other(void)
 {
     return 0;

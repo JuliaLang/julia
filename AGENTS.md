@@ -38,10 +38,23 @@ The test system supports doing this automatically (see below).
 
 ### Doctests
 
-If you have changed doctests (i.e. any `jldoctest` code block), you should run the doctests before
-preparing a PR. See `doc/README.md` for how to do this. For instructions on writing doctests, see
-`doc/src/devdocs/contributing/jldoctests.md`. Note that the doctests may take up to 15 minutes.
-Do not terminate the doctests before completion. If you are ChatGPT, you may have to increase yield_timeout_ms.
+#### Writing doctests
+
+If you are asked to write new doctests, first review `doc/src/devdocs/contributing/jldoctests.md`
+for best practices.
+
+#### Verifying doctests
+If you have changed any `jldoctest` code blocks you should take
+the following steps to verify your work:
+- Review `doc/src/devdocs/contributing/jldoctests.md`. In particular, determine
+  if any of the changed doctests require filters, labels or setup code.
+- Run the doctests to verify that your change works:
+    - To run doctest with the pre-built juliaup: `make -C doc doctest=true  revise=true JULIA_EXECUTABLE=$HOME/.juliaup/bin/julia`
+    - To run doctest with in-trr julia (preferred): `make -C doc doctest=true revise=true`. Do not pass any other options.
+    - IMPORTANT: The doctests may take up to 15 minutes. Do NOT terminate the doctests before completion. Do NOT use a timeout for doctests.
+    - If you are ChatGPT, you may have to increase yield_timeout_ms.
+
+Follow these steps for EVERY change you make in a doctest.
 
 ### Test changes
 
@@ -50,6 +63,18 @@ corresponding test to ensure that the test is still passing with your changes.
 - If you are adding a new test, add it to an existing test file. Do not create a new test file unless explicitly instructed.
 - Write one comment at the top of the test to explain what is being tested.
   Otherwise keep comments minimal.
+- Use the environment variable `JULIA_TEST_FAILFAST=1` to make tests fail fast.
+
+### External dependencies
+
+When modifying external dependencies (patches in `deps/patches/` or version updates in `deps/`):
+
+1. Always test builds with `USE_BINARYBUILDER=0` to ensure source builds work correctly
+2. For patches to external libraries:
+   - Verify the patch applies cleanly by running the extraction and patch steps
+   - Test the full build of the dependency: `make -C deps USE_BINARYBUILDER=0 compile-<depname>`
+   - Prefer using the full upstream commit in `git am` format (e.g., `git format-patch`) which includes proper commit metadata
+3. When updating dependency versions, ensure all associated patches still apply
 
 ### Writing code
 After writing code, look up the docstring for each function you used. If there
@@ -68,6 +93,9 @@ of the purpose of the changes made. Do not specifically mention added tests, com
 documentation, etc., unless this is the main purpose of the change. Do not mention
 the test plan, unless it differs from what you were instructed to do in AGENTS.md.
 If your change fixes one or more issues, use the syntax "Fixes #" at the end of the commit message, but do not include it in the title.
+
+When referencing external GitHub PRs or issues, use proper GitHub interlinking format (e.g., `owner/repo#123` for PRs/issues).
+When fixing CI failures, include the link to the specific CI failure in the commit message.
 
 When creating pull requests, if the pull request consists of one commit only,
 use the body of the commit for the body of the pull request. If there are multiple

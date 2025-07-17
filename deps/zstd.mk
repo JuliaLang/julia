@@ -3,6 +3,8 @@ ifneq ($(USE_BINARYBUILDER_ZSTD), 1)
 ZSTD_GIT_URL := https://github.com/facebook/zstd.git
 ZSTD_TAR_URL = https://api.github.com/repos/facebook/zstd/tarball/$1
 $(eval $(call git-external,zstd,ZSTD,,,$(BUILDDIR)))
+# See note in llvm.mk for source tarballs with symlinks to non-existent targets
+$(BUILDDIR)/$(ZSTD_SRC_DIR)/source-extracted: export MSYS=winsymlinks:native
 
 ZSTD_BUILD_OPTS := MOREFLAGS="-DZSTD_MULTITHREAD $(fPIC)" bindir=$(build_private_libexecdir)
 

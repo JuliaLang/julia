@@ -909,31 +909,10 @@ function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
 end
 
 const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
-global Workqueues::Vector{StickyWorkqueue} = [StickyWorkqueue()]
-const Workqueues_lock = Threads.SpinLock()
+const Workqueues = OncePerThread{StickyWorkqueue}(StickyWorkqueue)
 const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprecate this variable
 
-function workqueue_for(tid::Int)
-    qs = Workqueues
-    if length(qs) >= tid && isassigned(qs, tid)
-        return @inbounds qs[tid]
-    end
-    # slow path to allocate it
-    @assert tid > 0
-    l = Workqueues_lock
-    @lock l begin
-        qs = Workqueues
-        if length(qs) < tid
-            nt = Threads.maxthreadid()
-            @assert tid <= nt
-            global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
-        end
-        if !isassigned(qs, tid)
-            @inbounds qs[tid] = StickyWorkqueue()
-        end
-        return @inbounds qs[tid]
-    end
-end
+workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")

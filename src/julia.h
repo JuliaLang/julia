@@ -323,7 +323,7 @@ typedef struct _jl_method_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
-    _Atomic(int32_t) dispatch_status; // bits defined in staticdata.jl
+    _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
     _Atomic(size_t) primary_world;
 
     // method's type signature. redundant with TypeMapEntry->specTypes
@@ -368,6 +368,7 @@ typedef struct _jl_method_t {
     uint8_t nospecializeinfer;
     // bit flags, 0x01 = scanned
     // 0x02 = added to module scanned list (either from scanning or inference edge)
+    // 0x04 = Source was invalidated since jl_require_world
     _Atomic(uint8_t) did_scan_source;
 
     // uint8 settings
@@ -407,6 +408,7 @@ struct _jl_method_instance_t {
     //   bit 2: The ->backedges field is currently being walked higher up the stack - entries may be deleted, but not moved
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
     _Atomic(uint8_t) flags;
+    _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
 };
 #define JL_MI_FLAGS_MASK_PRECOMPILED    0x01
 #define JL_MI_FLAGS_MASK_DISPATCHED     0x02
@@ -438,10 +440,11 @@ typedef struct _jl_code_instance_t {
     jl_value_t *rettype_const; // inferred constant return value, or null
 
     // Inferred result. When part of the runtime cache, either
-    // - A jl_code_info_t (may be compressed) containing the inferred IR
+    // - A jl_code_info_t (may be compressed as a String) containing the inferred IR
     // - jl_nothing, indicating that inference was completed, but the result was
     //               deleted to save space.
-    // - null, indicating that inference was not yet completed or did not succeed
+    // - UInt8, indicating that inference recorded the estimated inlining cost, but deleted the result to save space
+    // - NULL, indicating that inference was not yet completed or did not succeed
     _Atomic(jl_value_t *) inferred;
     _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
     _Atomic(jl_svec_t *) edges; // forward edge info
@@ -520,7 +523,6 @@ typedef struct {
     _Atomic(jl_value_t*) Typeofwrapper;  // cache for Type{wrapper}
     _Atomic(jl_svec_t*) cache;        // sorted array
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
-    jl_array_t *backedges; // uncovered (sig => caller::CodeInstance) pairs with this type as the function
     jl_array_t *partial;     // incomplete instantiations of this type
     intptr_t hash;
     _Atomic(int32_t) max_args;  // max # of non-vararg arguments in a signature with this type as the function
@@ -882,6 +884,7 @@ typedef struct _jl_methtable_t {
     jl_methcache_t *cache;
     jl_sym_t *name; // sometimes used for debug printing
     jl_module_t *module; // sometimes used for debug printing
+    jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
 typedef struct {
@@ -1139,6 +1142,7 @@ struct _jl_gcframe_t {
 
 #define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
 #define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)
+#define JL_GC_DECODE_NROOTS(n)     (n >> 2)
 
 #ifdef __clang_gcanalyzer__
 
@@ -2310,6 +2314,8 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_value_t *cl, size_t pc) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts);
 JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_value_t *cl, size_t nstmts);
+JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_is_operator(const char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
@@ -2578,7 +2584,7 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
 JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
 
-uint64_t parse_heap_size_hint(const char *optarg, const char *option_name);
+uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv

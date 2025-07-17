@@ -58,14 +58,16 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 In the following REPL session:
 
-```julia-repl
+```jldoctest
 julia> x = 1.0
+1.0
 ```
 
 is equivalent to:
 
-```julia-repl
+```jldoctest
 julia> global x = 1.0
+1.0
 ```
 
 so all the performance issues discussed previously apply.
@@ -113,6 +115,8 @@ problem with type-stability or creating many small temporary arrays.
 Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
+
+For more information about memory management and garbage collection in Julia, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
 (the remaining allocation reported below is due to running the `@time` macro in global scope)
@@ -1697,7 +1701,7 @@ in generated code by using Julia's [`code_native`](@ref) function.
 
 Note that `@fastmath` also assumes that `NaN`s will not occur during the computation, which can lead to surprising behavior:
 
-```julia-repl
+```jldoctest
 julia> f(x) = isnan(x);
 
 julia> f(NaN)
