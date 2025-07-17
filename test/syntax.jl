@@ -4504,6 +4504,14 @@ end
             result = Cols(1, 2, 3)
             @test occursin("Cols", result)
         end
+
+        # Should not access arg-map for local variables
+        function f end
+        @eval function (f::typeof(f))()
+            f = 1
+            $(Expr(:thisfunction))
+        end
+        @test f() === f
     end
 
     @testset "Error upon misuse" begin
