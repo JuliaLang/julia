@@ -3006,7 +3006,7 @@
 
 (define (check-no-thisfunction e)
   (if (has-thisfunction? e)
-      (error "\"thisfunction\" not allowed inside comprehension or generator")))
+      (error "\"@__FUNCTION__\" not allowed inside comprehension or generator")))
 
 (define (has-break-or-continue? e)
   (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
