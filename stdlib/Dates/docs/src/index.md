@@ -5,7 +5,7 @@ DocTestSetup = :(using Dates)
 ```
 
 The `Dates` module provides three types for representing dates and times:
-[`Date`](@ref), [`DateTime`](@ref), and [`Time`](@ref) representing
+[`Date`](@ref), [`DateTime`](@ref), and [`Time`](@ref) measured with
 day, millisecond and nanosecond precision, respectively;
 all are subtypes of the abstract [`TimeType`](@ref).
 The motivation for distinct types is simple: some operations are much simpler, both in terms of
@@ -29,8 +29,10 @@ The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is
 BC/BCE, etc.
 
 The [`Time`](@ref) is also an immutable [`Int64`](@ref) wrapper, also based on the UT second [^1],
-but constrained to represent the periodic (cyclic) time of the 24-hour day starting at midnight.
-Note that midnight is represented as 0 hour. 24 hour is out of range.
+and represents the time of day according to the conventional 24-hour clock, starting at midnight,
+and ending the instant one nanosecond prior to midnight. Time is periodic, and wraps around at
+midnight (see [TimeType-Period arithmetic](#TimeType-Period-Arithmetic)).
+
 
 [^1]:
     The notion of the UT second is actually quite fundamental. There are basically two different notions
@@ -45,7 +47,7 @@ Note that midnight is represented as 0 hour. 24 hour is out of range.
 
 ## Constructors
 
-[`Date`](@ref) and [`DateTime`](@ref) types can be constructed by integer or [`Period`](@ref)
+[`Date`](@ref), [`DateTime`](@ref) and [`Time`](@ref) types can be constructed by integer or [`Period`](@ref)
 types, by parsing, or through adjusters (more on those later):
 
 ```jldoctest
@@ -84,6 +86,16 @@ julia> Date(Dates.Year(2013),Dates.Month(7),Dates.Day(1))
 
 julia> Date(Dates.Month(7),Dates.Year(2013))
 2013-07-01
+
+julia> Time(12)
+12:00:00
+
+julia> Time(12, 30, 59, 1, 0, 2)
+12:30:59.001000002
+
+julia> Time(Hour(12), Minute(30), Second(59), Millisecond(1), Nanosecond(2))
+12:30:59.001000002
+
 ```
 
 [`Date`](@ref) or [`DateTime`](@ref) parsing is accomplished by the use of format strings. Format
@@ -463,6 +475,13 @@ julia> collect(dr)
  2014-05-29
  2014-06-29
  2014-07-29
+```
+
+Time is periodic, and wraps around at midnight:
+
+```jldoctest
+julia> Time(23) + Hour(1)
+00:00:00
 
 julia> r = range(Time(0), step = Hour(9), length = 5)
 Time(0):Hour(9):Time(12)
