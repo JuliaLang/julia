@@ -549,8 +549,8 @@
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
-                                   (if (and name (has-thisfunction? `(block ,@stmts)))
-                                       (cons `(meta thisfunction-original ,name) annotations)
+                                   (if (has-thisfunction? `(block ,@stmts))
+                                       (cons `(meta thisfunction-original ,(arg-name (car not-optional))) annotations)
                                        annotations)))
           rett)
 
@@ -5150,13 +5150,6 @@ f(x) = yt(x)
              (let ((first-arg (and (pair? (lam:args lam)) (car (lam:args lam)))))
                (if first-arg
                    (let* ((arg-name (arg-name first-arg))
-                          ;; Check for struct constructor by looking for |#ctor-self#| in args
-                          (ctor-self-arg (let ((args (lam:args lam)))
-                                          (and (pair? args)
-                                               (let loop ((rest args))
-                                                 (cond ((null? rest) #f)
-                                                       ((eq? (car rest) '|#ctor-self#|) '|#ctor-self#|)
-                                                       (else (loop (cdr rest))))))))
                           ;; Check for thisfunction-original metadata in keyword wrapper functions
                           (original-name (let ((body (lam:body lam)))
                                           (and (pair? body) (pair? (cdr body))
@@ -5169,14 +5162,10 @@ f(x) = yt(x)
                                                            (caddr stmt)
                                                            (loop (cdr stmts))))
                                                      #f)))))
-                          (final-name (or original-name ctor-self-arg arg-name)))
-                     (let ((e1 (cond (original-name `(globalref (thismodule) ,final-name))
-                                     ((and arg-map (symbol? final-name))
-                                      (get arg-map final-name final-name))
-                                     (else final-name))))
-                       (cond (tail  (emit-return tail e1))
-                             (value e1)
-                             (else (emit e1) #f))))
+                          (final-name (or original-name arg-name)))
+                     (cond (tail  (emit-return tail final-name))
+                           (value final-name)
+                           (else (emit final-name) #f)))
                    (error "thisfunction used in context with no arguments"))))
 
             (else
