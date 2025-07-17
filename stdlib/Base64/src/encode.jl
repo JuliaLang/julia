@@ -46,6 +46,7 @@ end
 
 Base.isreadable(::Base64EncodePipe) = false
 Base.iswritable(pipe::Base64EncodePipe) = iswritable(pipe.io)
+Base.isopen(pipe::Base64EncodePipe) = isopen(pipe.io)
 
 function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::Int
     buffer = pipe.buffer
