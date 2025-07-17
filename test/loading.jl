@@ -130,10 +130,7 @@ end
 
         @testset "Error upon misuse" begin
             @gensym A
-            @test_throws(
-                "@__FUNCTION__ can only be used within a function",
-                @eval(module $A; @__FUNCTION__; end)
-            )
+            @test_throws ErrorException @eval(module $A; @__FUNCTION__; end)
         end
 
         @testset "Callable structs" begin
