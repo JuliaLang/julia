@@ -215,38 +215,10 @@ end
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
 function setindex_shape_check(X::AbstractArray, I::Integer...)
-    li = ndims(X)
-    lj = length(I)
-    i = j = 1
-    while true
-        ii = length(axes(X,i))
-        jj = I[j]
-        if i == li || j == lj
-            while i < li
-                i += 1
-                ii *= length(axes(X,i))
-            end
-            while j < lj
-                j += 1
-                jj *= I[j]
-            end
-            if ii != jj
-                throw_setindex_mismatch(X, I)
-            end
-            return
-        end
-        if ii == jj
-            i += 1
-            j += 1
-        elseif ii == 1
-            i += 1
-        elseif jj == 1
-            j += 1
-        else
-            throw_setindex_mismatch(X, I)
-        end
+    for d in 1:max(length(I), ndims(X))
+        size(X, d) == get(I, d, 1) || throw_setindex_mismatch(X, I)
     end
-end
+ end
 
 setindex_shape_check(X::AbstractArray) =
     (length(X)==1 || throw_setindex_mismatch(X,()))
@@ -263,14 +235,14 @@ setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
     (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
+setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer...) =
+    (length(X) == prod(i) || throw_setindex_mismatch(X, i))
+
 function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
-    sx1 = length(axes(X,1))
-    if !(i == 1 || i == sx1 || sx1 == 1)
-        throw_setindex_mismatch(X, (i,j))
-    end
+    ((i, j) == size(X)) || throw_setindex_mismatch(X, (i,j))
 end
 
 setindex_shape_check(::Any...) =
