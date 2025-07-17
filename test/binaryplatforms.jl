@@ -46,7 +46,7 @@ P(args...; kwargs...) = Platform(args...; validate_strict=true, kwargs...)
     @test_throws ArgumentError P("armv6l", "linux"; call_abi="kekeke")
     @test_throws ArgumentError P("armv6l", "linux"; libgfortran_version="lel")
     @test_throws ArgumentError P("x86_64", "linux"; cxxstring_abi="lel")
-    @test_throws ArgumentError P("x86_64", "windows"; libstdcxx_version="lel")
+    @test_throws ArgumentError P("x86_64", "windows"; cxxlib_version="lel")
     @test_throws ArgumentError P("i686", "macos")
     @test_throws ArgumentError P("x86_64", "macos"; libc="glibc")
     @test_throws ArgumentError P("x86_64", "macos"; call_abi="eabihf")
@@ -183,7 +183,7 @@ end
     @test R("x86_64-linux-gnu-gcc4-cxx11") == P("x86_64", "linux"; libgfortran_version=v"3", cxxstring_abi="cxx11")
     @test R("x86_64-linux-gnu-cxx11") == P("x86_64", "linux"; cxxstring_abi="cxx11")
     @test R("x86_64-linux-gnu-libgfortran3-cxx03") == P("x86_64", "linux"; libgfortran_version=v"3", cxxstring_abi="cxx03")
-    @test R("x86_64-linux-gnu-libstdcxx26") ==  P("x86_64", "linux"; libstdcxx_version=v"3.4.26")
+    @test R("x86_64-linux-gnu-libstdcxx26") ==  P("x86_64", "linux"; cxxlib="libstdcxx", cxxlib_version=v"3.4.26")
 
     @test_throws ArgumentError R("totally FREEFORM text!!1!!!1!")
     @test_throws ArgumentError R("invalid-triplet-here")
@@ -210,10 +210,11 @@ end
     # Just do a quick combinatorial sweep for completeness' sake for platform matching
     linux = P("x86_64", "linux")
     for libgfortran_version in (nothing, v"3", v"5"),
-        libstdcxx_version in (nothing, v"3.4.18", v"3.4.26"),
+        cxxlib in ("libstdcxx",),
+        cxxlib_version in (nothing, v"3.4.18", v"3.4.26"),
         cxxstring_abi in (nothing, :cxx03, :cxx11)
 
-        p = P("x86_64", "linux"; libgfortran_version, libstdcxx_version, cxxstring_abi)
+        p = P("x86_64", "linux"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi)
         @test platforms_match(linux, p)
         @test platforms_match(p, linux)
 

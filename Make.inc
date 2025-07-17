@@ -941,6 +941,13 @@ BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 # don't recognize that, so canonicalize to mingw32
 BUILD_MACHINE := $(subst windows-gnu,mingw32,$(BUILD_MACHINE))
 
+# Detect a request for ucrt libc
+ifeq (,$(findstring MINGW,$(RAW_BUILD_OS)))
+ifeq (UCRT64,$(MSYSTEM))
+BUILD_MACHINE := $(subst mingw32,ucrt-mingw32,$(BUILD_MACHINE))
+endif
+endif
+
 ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 else

@@ -64,11 +64,22 @@ struct Platform <: AbstractPlatform
                 continue
             end
 
+            # For compatibility, libstdcxx_version counts as both cxxlib=libstdcxx and
+            # cxxlib_version, but don't override an explicit existing cxxlib tag (the
+            # verifier will check for inconsistencies).
+            if tag == "libstdcxx_version"
+                haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
+                tag = "cxxlib_version"
+            elseif tag == "cxxstring_abi"
+                # Implies cxxlib=libstdcxx++ for compatibility
+                haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
+            end
+
             # Normalize things that are known to be version numbers so that comparisons are easy.
             # Note that in our effort to be extremely compatible, we actually allow something that
             # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
             # set to `true`, it will cause an error later on.
-            if tag ∈ ("libgfortran_version", "libstdcxx_version", "os_version")
+            if tag ∈ ("libgfortran_version", "cxxlib_version", "os_version")
                 if isa(value, VersionNumber)
                     value = string(value)
                 elseif isa(value, String)
@@ -87,6 +98,10 @@ struct Platform <: AbstractPlatform
         if os == "linux" && !haskey(tags, "libc")
             # Default to `glibc` on Linux
             tags["libc"] = "glibc"
+        end
+        if os == "windows" && !haskey(tags, libc)
+            # Default to `msvcrt` on Windows
+            tags["libc"] = "msvcrt"
         end
         if os == "linux" && arch ∈ ("armv7l", "armv6l") && "call_abi" ∉ keys(tags)
             # default `call_abi` to `eabihf` on 32-bit ARM
@@ -217,6 +232,10 @@ function validate_tags(tags::Dict)
         if tags["libc"] ∉ ("glibc", "musl")
             throw_libc_mismatch()
         end
+    elseif tags["os"] == "windows"
+        if tags["libc"] ∉ ("msvcrt", "ucrt")
+            throw_libc_mismatch()
+        end
     else
         # Nothing else is allowed to have a `libc` entry
         if haskey(tags, "libc")
@@ -245,13 +264,13 @@ function validate_tags(tags::Dict)
     end
 
     # Validate `cxxstring_abi` is one of the two valid options:
-    if "cxxstring_abi" in keys(tags) && tags["cxxstring_abi"] ∉ ("cxx03", "cxx11")
+    if "cxxstring_abi" in keys(tags) && (tags["cxxstring_abi"] ∉ ("cxx03", "cxx11") || !haskey(tags, "cxxlib") || tags["cxxlib"] !== "libstdcxx")
         throw_invalid_key("cxxstring_abi")
     end
 
     # Validate `libstdcxx_version` is a parsable `VersionNumber`
-    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
-        throw_version_number("libstdcxx_version")
+    if "cxxlib_version" in keys(tags) && tryparse(VersionNumber, tags["cxxlib_version"]) === nothing
+        throw_version_number("cxxlib_version")
     end
 end
 
@@ -331,8 +350,8 @@ function HostPlatform(p::AbstractPlatform)
     if haskey(p, "os_version")
         set_compare_strategy!(p, "os_version", compare_version_cap)
     end
-    if haskey(p, "libstdcxx_version")
-        set_compare_strategy!(p, "libstdcxx_version", compare_version_cap)
+    if haskey(p, "cxxlib") && p["cxxlib"] == "libstdcxx" && haskey(p, "cxxlib_version")
+        set_compare_strategy!(p, "cxxlib_version", compare_version_cap)
     end
     return p
 end
@@ -535,6 +554,10 @@ function triplet(p::AbstractPlatform)
         if tag ∈ ("os", "arch", "libc", "call_abi", "libgfortran_version", "libstdcxx_version", "cxxstring_abi", "os_version")
             continue
         end
+        if tag == "cxxlib" && (cxxstring_abi(p) !== nothing || libstdcxx_version(p) !== nothing)
+            # Implied by above
+            continue
+        end
         str = string(str, "-", tag, "+", val)
     end
     return str
@@ -551,7 +574,7 @@ function os_str(p::AbstractPlatform)
             return "-apple-darwin"
         end
     elseif os(p) == "windows"
-        return "-w64-mingw32"
+        return "-w64"
     elseif os(p) == "freebsd"
         osvn = os_version(p)
         if osvn !== nothing
@@ -573,6 +596,10 @@ function libc_str(p::AbstractPlatform)
         return ""
     elseif lc === "glibc"
         return "-gnu"
+    elseif lc === "msvcrt"
+        return "-mingw32"
+    elseif lc === "ucrt"
+        return "-ucrt-mingw32"
     else
         return string("-", lc)
     end
@@ -643,11 +670,13 @@ const os_mapping = Dict(
     "macos" => "-apple-darwin[\\d\\.]*",
     "freebsd" => "-(.*-)?freebsd[\\d\\.]*",
     "openbsd" => "-(.*-)?openbsd[\\d\\.]*",
-    "windows" => "-w64-mingw32",
+    "windows" => "-w64",
     "linux" => "-(.*-)?linux",
 )
 const libc_mapping = Dict(
     "libc_nothing" => "",
+    "ucrt"  => "-ucrt-mingw32",
+    "msvcrt" => "-mingw32", # We default to msvcrt for plain -mingw32 on Windows
     "glibc" => "-gnu",
     "musl" => "-musl",
 )

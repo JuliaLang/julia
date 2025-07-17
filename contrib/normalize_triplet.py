@@ -21,13 +21,14 @@ platform_mapping = {
     'darwin': "-apple-darwin[\\d\\.]*",
     'freebsd': "-(.*-)?freebsd[\\d\\.]*",
     'openbsd': "-(.*-)?openbsd[\\d\\.]*",
-    'windows': "-w64-mingw32",
+    'windows': "-w64",
     'linux': "-(.*-)?linux",
 }
 libc_mapping = {
     'blank_libc': "",
     'gnu': "-gnu",
     'musl': "-musl",
+    'ucrt': "-ucrt-mingw32",
 }
 call_abi_mapping = {
     'blank_call_abi': "",
@@ -88,7 +89,10 @@ def r(x):
     x = x.replace("blank_call_abi", "")
     x = x.replace("blank_libgfortran", "")
     x = x.replace("blank_cxx_abi", "")
-    x = x.replace("blank_libc", "")
+    # We combine platform and libc below, since the windows mapping
+    # needs to know the platform for the correct default libc, so
+    # replace this one with `-` included.
+    x = x.replace("-blank_libc", "")
     return x
 
 def p(x):
@@ -96,6 +100,7 @@ def p(x):
     # capture group names, unfortunately:
     os_remapping = {
         'darwin': 'apple-darwin',
+        'windows-ucrt': 'w64-ucrt-mingw32',
         'windows': 'w64-mingw32',
         'freebsd': 'unknown-freebsd',
         'openbsd': 'unknown-openbsd',
@@ -141,7 +146,7 @@ if cxx_abi == "blank_cxx_abi":
             "": "",
         }[sys.argv[3]]
 
-print(arch+p(platform)+p(libc)+r(call_abi)+p(libgfortran_version)+p(cxx_abi))
+print(arch+p(platform+"-"+libc)+r(call_abi)+p(libgfortran_version)+p(cxx_abi))
 
 # Testing suite:
 # triplets="i686-w64-mingw32 x86_64-pc-linux-musl arm-linux-musleabihf x86_64-linux-gnu arm-linux-gnueabihf x86_64-apple-darwin14 x86_64-unknown-freebsd11.1"
