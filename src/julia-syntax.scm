@@ -5180,7 +5180,7 @@ f(x) = yt(x)
                        (cond (tail  (emit-return tail e1))
                              (value e1)
                              (else (emit e1) #f))))
-                   (error "thisfunction used in context with no arguments"))))
+                   (error "thisfunction can only occur inside a function"))))
 
             (else
              (error (string "invalid syntax " (deparse e)))))))
