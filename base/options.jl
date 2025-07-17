@@ -67,6 +67,9 @@ struct JLOptions
     task_metrics::Int8
     timeout_for_safepoint_straggler_s::Int16
     gc_sweep_always_full::Int8
+    target_sanitize_memory::Int8
+    target_sanitize_thread::Int8
+    target_sanitize_address::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

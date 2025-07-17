@@ -476,7 +476,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
             // emit specsig-to-(jl)invoke conversion
             proto.decl->setLinkage(GlobalVariable::InternalLinkage);
             //protodecl->setAlwaysInline();
-            jl_init_function(proto.decl, params.TargetTriple);
+            jl_init_function(proto.decl, params);
             jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
             size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
             bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
@@ -693,6 +693,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         compiler_start_time = jl_hrtime();
 
     jl_cgparams_t cgparams = jl_default_cgparams;
+    cgparams.sanitize_memory = jl_options.target_sanitize_memory;
+    cgparams.sanitize_thread = jl_options.target_sanitize_thread;
+    cgparams.sanitize_address = jl_options.target_sanitize_address;
     size_t compile_for[] = { jl_typeinf_world, world };
     int compiler_world = 1;
     if (trim || compile_for[0] == 0)
@@ -1565,7 +1568,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                 SourceTM.getCodeModel(),
                 SourceTM.getOptLevel()));
         fixupTM(*PMTM);
-        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
+        auto options = OptimizationOptions::defaults(true, true);
+        options.sanitize_memory = jl_options.target_sanitize_memory;
+        options.sanitize_thread = jl_options.target_sanitize_thread;
+        options.sanitize_address = jl_options.target_sanitize_address;
+        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
         optimizer.run(M);
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
@@ -2531,7 +2538,11 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 }
                 assert(!verifyLLVMIR(*m.getModuleUnlocked()));
                 if (optimize) {
-                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+                    auto opts = OptimizationOptions::defaults();
+                    opts.sanitize_memory = params.sanitize_memory;
+                    opts.sanitize_thread = params.sanitize_thread;
+                    opts.sanitize_address = params.sanitize_address;
+                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts};
                     //Safe b/c context lock is held by output
                     PM.run(*m.getModuleUnlocked());
                     assert(!verifyLLVMIR(*m.getModuleUnlocked()));

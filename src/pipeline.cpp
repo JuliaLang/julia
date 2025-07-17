@@ -96,7 +96,7 @@ using namespace llvm;
 namespace {
     //Shamelessly stolen from Clang's approach to sanitizers
     //TODO do we want to enable other sanitizers?
-    static void addSanitizerPasses(ModulePassManager &MPM, OptimizationLevel O) JL_NOTSAFEPOINT {
+    static void addSanitizerPasses(ModulePassManager &MPM, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
         // Coverage sanitizer
         // if (CodeGenOpts.hasSanitizeCoverage()) {
         //   auto SancovOpts = getSancovOptsFromCGOpts(CodeGenOpts);
@@ -105,67 +105,63 @@ namespace {
         //       CodeGenOpts.SanitizeCoverageIgnorelistFiles));
         // }
 
-    #ifdef _COMPILER_MSAN_ENABLED_
-        auto MSanPass = [&](/*SanitizerMask Mask, */bool CompileKernel) JL_NOTSAFEPOINT {
-        // if (LangOpts.Sanitize.has(Mask)) {
-            // int TrackOrigins = CodeGenOpts.SanitizeMemoryTrackOrigins;
-            // bool Recover = CodeGenOpts.SanitizeRecover.has(Mask);
+        if (options.sanitize_memory) {
+            auto MSanPass = [&](/*SanitizerMask Mask, */bool CompileKernel) JL_NOTSAFEPOINT {
+                // if (LangOpts.Sanitize.has(Mask)) {
+                // int TrackOrigins = CodeGenOpts.SanitizeMemoryTrackOrigins;
+                // bool Recover = CodeGenOpts.SanitizeRecover.has(Mask);
 
-            // MemorySanitizerOptions options(TrackOrigins, Recover, CompileKernel,{
-            //                             CodeGenOpts.SanitizeMemoryParamRetval);
-            MemorySanitizerOptions options;
-            MPM.addPass(ModuleMemorySanitizerPass(options));
-            FunctionPassManager FPM;
-            FPM.addPass(MemorySanitizerPass(options));
-            if (O != OptimizationLevel::O0) {
-            // MemorySanitizer inserts complex instrumentation that mostly
-            // follows the logic of the original code, but operates on
-            // "shadow" values. It can benefit from re-running some
-            // general purpose optimization passes.
-            FPM.addPass(EarlyCSEPass());
-            // TODO: Consider add more passes like in
-            // addGeneralOptsForMemorySanitizer. EarlyCSEPass makes visible
-            // difference on size. It's not clear if the rest is still
-            // useful. InstCombinePass breaks
-            // compiler-rt/test/msan/select_origin.cpp.
-            }
-            MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-        // }
-        };
-        MSanPass(/*SanitizerKind::Memory, */false);
-        // MSanPass(SanitizerKind::KernelMemory, true);
-    #endif
+                // MemorySanitizerOptions options(TrackOrigins, Recover, CompileKernel,{
+                //                             CodeGenOpts.SanitizeMemoryParamRetval);
+                MemorySanitizerOptions options;
+                MPM.addPass(MemorySanitizerPass(options));
+                FunctionPassManager FPM;
+                if (O != OptimizationLevel::O0) {
+                    // MemorySanitizer inserts complex instrumentation that mostly
+                    // follows the logic of the original code, but operates on
+                    // "shadow" values. It can benefit from re-running some
+                    // general purpose optimization passes.
+                    FPM.addPass(EarlyCSEPass());
+                    // TODO: Consider add more passes like in
+                    // addGeneralOptsForMemorySanitizer. EarlyCSEPass makes visible
+                    // difference on size. It's not clear if the rest is still
+                    // useful. InstCombinePass breaks
+                    // compiler-rt/test/msan/select_origin.cpp.
+                }
+                MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+                // }
+            };
+            MSanPass(/*SanitizerKind::Memory, */false);
+            // MSanPass(SanitizerKind::KernelMemory, true);
+        }
 
-    #ifdef _COMPILER_TSAN_ENABLED_
-        // if (LangOpts.Sanitize.has(SanitizerKind::Thread)) {
-        MPM.addPass(ModuleThreadSanitizerPass());
-        MPM.addPass(createModuleToFunctionPassAdaptor(ThreadSanitizerPass()));
-        // }
-    #endif
+        if (options.sanitize_thread) {
+            MPM.addPass(ModuleThreadSanitizerPass());
+            MPM.addPass(createModuleToFunctionPassAdaptor(ThreadSanitizerPass()));
+        }
 
-
-    #ifdef _COMPILER_ASAN_ENABLED_
-        auto ASanPass = [&](/*SanitizerMask Mask, */bool CompileKernel) JL_NOTSAFEPOINT {
-        //   if (LangOpts.Sanitize.has(Mask)) {
-            // bool UseGlobalGC = asanUseGlobalsGC(TargetTriple, CodeGenOpts);
-            // bool UseOdrIndicator = CodeGenOpts.SanitizeAddressUseOdrIndicator;
-            // llvm::AsanDtorKind DestructorKind =
-            //     CodeGenOpts.getSanitizeAddressDtor();
-            // AddressSanitizerOptions Opts;
-            // Opts.CompileKernel = CompileKernel;
-            // Opts.Recover = CodeGenOpts.SanitizeRecover.has(Mask);
-            // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
-            // Opts.UseAfterReturn = CodeGenOpts.getSanitizeAddressUseAfterReturn();
-            // MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
-            //Let's assume the defaults are actually fine for our purposes
-            // MPM.addPass(AddressSanitizerPass(
-            //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
-            MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions(), true, false));
-        //   }
-        };
-        ASanPass(/*SanitizerKind::Address, */false);
-        // ASanPass(SanitizerKind::KernelAddress, true);
-    #endif
+        if (options.sanitize_address) {
+            auto ASanPass = [&](/*SanitizerMask Mask, */bool CompileKernel) JL_NOTSAFEPOINT {
+                //   if (LangOpts.Sanitize.has(Mask)) {
+                // bool UseGlobalGC = asanUseGlobalsGC(TargetTriple, CodeGenOpts);
+                // bool UseOdrIndicator = CodeGenOpts.SanitizeAddressUseOdrIndicator;
+                // llvm::AsanDtorKind DestructorKind =
+                //     CodeGenOpts.getSanitizeAddressDtor();
+                // AddressSanitizerOptions Opts;
+                // Opts.CompileKernel = CompileKernel;
+                // Opts.Recover = CodeGenOpts.SanitizeRecover.has(Mask);
+                // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
+                // Opts.UseAfterReturn = CodeGenOpts.getSanitizeAddressUseAfterReturn();
+                // MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
+                //Let's assume the defaults are actually fine for our purposes
+                // MPM.addPass(AddressSanitizerPass(
+                //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
+                MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions(), true, false));
+                //   }
+            };
+            ASanPass(/*SanitizerKind::Address, */false);
+            // ASanPass(SanitizerKind::KernelAddress, true);
+        }
 
         // auto HWASanPass = [&](SanitizerMask Mask, bool CompileKernel) {
         //   if (LangOpts.Sanitize.has(Mask)) {
@@ -608,7 +604,7 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
         }
         invokeOptimizerLastCallbacks(MPM, PB, O);
         MPM.addPass(createModuleToFunctionPassAdaptor(AnnotationRemarksPass()));
-        addSanitizerPasses(MPM, O);
+        addSanitizerPasses(MPM, O, options);
         {
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(DemoteFloat16Pass()));
@@ -832,7 +828,10 @@ static std::optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJul
             OPTION(enable_vector_pipeline),
             OPTION(remove_ni),
             OPTION(cleanup),
-            OPTION(warn_missed_transformations)
+            OPTION(warn_missed_transformations),
+            OPTION(sanitize_memory),
+            OPTION(sanitize_thread),
+            OPTION(sanitize_address),
 #undef OPTION
         };
         while (!name.empty()) {
