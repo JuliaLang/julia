@@ -295,7 +295,7 @@ end
 
 # Check if method2 is in method1's interferences set
 # Returns true if method2 is found (meaning !morespecific(method1, method2))
-function method_in_interferences(method1::Method, method2::Method)
+function method_in_interferences(method2::Method, method1::Method)
     interferences = method1.interferences
     for k = 1:length(interferences)
         isassigned(interferences, k) || break
@@ -312,17 +312,17 @@ function method_morespecific_via_interferences(method1::Method, method2::Method)
     if method1 === method2
         return false
     end
-    ms = method_in_interferences_recursive(method2, method1, IdSet{Method}())
+    ms = method_in_interferences_recursive(method1, method2, IdSet{Method}())
     # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
     return ms
 end
 
-# Returns true if method2 is in method1's interferences (meaning !morespecific(method2, method1))
-function method_in_interferences_recursive(method2::Method, method1::Method, visited::IdSet{Method})
-    if method_in_interferences(method1, method2)
+# Returns true if method1 is in method2's interferences (meaning !morespecific(method2, method1))
+function method_in_interferences_recursive(method1::Method, method2::Method, visited::IdSet{Method})
+    if method_in_interferences(method2, method1)
         return false
     end
-    if method_in_interferences(method2, method1)
+    if method_in_interferences(method1, method2)
         return true
     end
 
@@ -333,10 +333,10 @@ function method_in_interferences_recursive(method2::Method, method1::Method, vis
     for k = 1:length(interferences)
         isassigned(interferences, k) || break
         method3 = interferences[k]::Method
-        if method_in_interferences(method3, method2)
+        if method_in_interferences(method2, method3)
             continue # only follow edges to morespecific methods in search of the morespecific target (skip ambiguities)
         end
-        if method_in_interferences_recursive(method3, method1, visited)
+        if method_in_interferences_recursive(method1, method3, visited)
             return true # found method1 in the interference graph
         end
     end

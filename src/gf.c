@@ -2636,7 +2636,7 @@ static int has_key(jl_genericmemory_t *keys, jl_value_t *key)
 }
 
 // Check if m2 is in m1's interferences set, which means !morespecific(m1, m2)
-static int method_in_interferences(jl_method_t *m1, jl_method_t *m2)
+static int method_in_interferences(jl_method_t *m2, jl_method_t *m1)
 {
     return has_key(jl_atomic_load_relaxed(&m1->interferences), (jl_value_t*)m2);
 }
@@ -2672,7 +2672,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
         int idx = find_method_in_matches(t, m2);
         if (idx < 0)
             continue;
-        if (method_in_interferences(m2, m))
+        if (method_in_interferences(m, m2))
             continue; // ambiguous
         assert(visited->items[idx] != (void*)0);
         if (visited->items[idx] != (void*)1)
@@ -2696,7 +2696,7 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
         int idx = find_method_in_matches(t, m2);
         if (idx < 0)
             continue;
-        if (!method_in_interferences(m2, m))
+        if (!method_in_interferences(m, m2))
             continue;
         *has_ambiguity = 1;
         if (!include_ambiguous && jl_subtype(ti, m2->sig))
@@ -2705,13 +2705,13 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
     return 0;
 }
 
-// Recursively check if target_method is in the interferences of (morespecific than) start_method
-static int method_in_interferences_recursive(jl_method_t *start_method, jl_method_t *target_method, arraylist_t *seen)
+// Recursively check if target_method is in the interferences of (morespecific than) start_method, but not the reverse
+static int method_in_interferences_recursive(jl_method_t *target_method, jl_method_t *start_method, arraylist_t *seen)
 {
     // Check direct interferences first
-    if (method_in_interferences(target_method, start_method))
-        return 0;
     if (method_in_interferences(start_method, target_method))
+        return 0;
+    if (method_in_interferences(target_method, start_method))
         return 1;
 
     // Check if we're already visiting this method (cycle prevention and memoization)
@@ -2727,9 +2727,9 @@ static int method_in_interferences_recursive(jl_method_t *start_method, jl_metho
         jl_method_t *interference_method = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
         if (interference_method == NULL)
             continue;
-        if (method_in_interferences(interference_method, start_method))
+        if (method_in_interferences(start_method, interference_method))
             continue; // only follow edges to morespecific methods in search of morespecific target (skip ambiguities)
-        if (method_in_interferences_recursive(interference_method, target_method, seen))
+        if (method_in_interferences_recursive(target_method, interference_method, seen))
             return 1;
     }
 
@@ -2742,7 +2742,7 @@ static int method_morespecific_via_interferences(jl_method_t *target_method, jl_
         return 0;
     arraylist_t seen;
     arraylist_new(&seen, 0);
-    int result = method_in_interferences_recursive(start_method, target_method, &seen);
+    int result = method_in_interferences_recursive(target_method, start_method, &seen);
     arraylist_free(&seen);
     //assert(result == jl_method_morespecific(target_method, start_method) || jl_has_empty_intersection(target_method->sig, start_method->sig) || jl_has_empty_intersection(start_method->sig, target_method->sig));
     return result;
@@ -2837,7 +2837,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             jl_gc_wb(m, m_interferences);
             for (j = 0; j < n; j++) {
                 jl_method_t *m2 = d[j];
-                if (m2 && method_in_interferences(m2, m)) {
+                if (m2 && method_in_interferences(m, m2)) {
                     jl_genericmemory_t *m2_interferences = jl_atomic_load_relaxed(&m2->interferences);
                     ssize_t idx;
                     m2_interferences = jl_idset_put_key(m2_interferences, (jl_value_t*)method, &idx);
@@ -4489,7 +4489,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 continue; // already handled
             if (child_cycle != 0 && child_cycle - 1 >= cycle)
                 continue; // already part of this cycle
-            if (method_in_interferences(m2, m))
+            if (method_in_interferences(m, m2))
                 continue;
             // m2 is morespecific, so attempt to visit it first
             child_cycle = sort_mlmatches(t, childidx, visited, stack, result, recursion_stack, lim, include_ambiguous, has_ambiguity, found_minmax);
@@ -4737,7 +4737,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                             matc->fully_covers = SENTINEL; // put a sentinel value here for sorting
                             continue;
                         }
-                        if (method_in_interferences(m, minmaxm)) // !morespecific(m, minmaxm)
+                        if (method_in_interferences(minmaxm, m)) // !morespecific(m, minmaxm)
                             has_ambiguity = 1;
                     }
                     all_subtypes = 0;
