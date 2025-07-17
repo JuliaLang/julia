@@ -63,6 +63,92 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --co
     @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
 
+@testset "Tests for @__FUNCTION__" begin
+    let
+        @testset "Basic usage" begin
+            test_function_basic() = @__FUNCTION__
+            @test test_function_basic() === test_function_basic
+        end
+
+        @testset "Factorial function" begin
+            factorial_function(n) = n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1)
+            @test factorial_function(5) == 120
+        end
+
+        @testset "Prevents boxed closures" begin
+            function make_closure()
+                fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+                return fib
+            end
+            Test.@inferred make_closure()
+            closure = make_closure()
+            @test closure(5) == 8
+            Test.@inferred closure(5)
+        end
+
+        @testset "Complex closure of closures" begin
+            function f1()
+                function f2()
+                    function f3()
+                        return @__FUNCTION__
+                    end
+                    return (@__FUNCTION__), f3()
+                end
+                return (@__FUNCTION__), f2()...
+            end
+            Test.@inferred f1()
+            @test f1()[1] === f1
+            @test f1()[2] !== f1
+            @test f1()[3] !== f1
+            @test f1()[3]() === f1()[3]
+            @test f1()[2]()[2]() === f1()[3]
+        end
+
+        @testset "Anonymous function" begin
+            @test (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1))(5) == 120
+        end
+
+        @testset "Do block" begin
+            function test_do_block()
+                result = map([1, 2, 3]) do x
+                    return (@__FUNCTION__, x)
+                end
+                # All should refer to the same do-block function
+                @test all(r -> r[1] === result[1][1], result)
+                # Values should be different
+                @test [r[2] for r in result] == [1, 2, 3]
+                # It should be different than `test_do_block`
+                @test result[1][1] !== test_do_block
+            end
+            test_do_block()
+        end
+
+        @testset "Compatibility with kwargs" begin
+            foo(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
+            @test foo(n = 5) == 120
+        end
+
+        @testset "Error upon misuse" begin
+            @gensym A
+            @test_throws(
+                "@__FUNCTION__ can only be used within a function",
+                @eval(module $A; @__FUNCTION__; end)
+            )
+        end
+
+        @testset "Callable structs" begin
+            @gensym A
+            @eval module $A
+                struct CallableStruct{T}; val::T; end
+                (c::CallableStruct)() = @__FUNCTION__
+            end
+            @eval using .$A: CallableStruct
+            c = CallableStruct(5)
+            @test c() === c
+        end
+    end
+end
+
 @test Base.in_sysimage(Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"))
 @test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
