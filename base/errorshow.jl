@@ -844,7 +844,7 @@ Stacktrace processing pipeline:
 2. IP traces converted to frames with `stacktrace`, which may or may not include C frames.
 3. Originator trims frames related to itself (e.g. REPL removes REPL-specific frames)
    - CapturedException only keeps a limit of 100 frames by processing before display
-4. `process_backtrace` filters a trace for  frames and summarizes repeated single frames:
+4. `process_backtrace` filters a trace for internal implementation or redundant frames and summarizes repeated single frames:
     - `kwcall` frames removed
     - `include`-related stack frames removed
     - Some frames that have the same location info are merged
