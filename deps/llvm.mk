@@ -312,8 +312,8 @@ endif
 	echo 1 > $@
 
 LLVM_INSTALL = \
-	cd $1 && mkdir -p $2$$(build_depsbindir) && \
-	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit $2$$(build_depsbindir)/ && \
+	cd $1 && mkdir -p $2$$(build_depsbindir)/lit && \
+	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/{*.py,*.toml,lit/} $2$$(build_depsbindir)/lit/ && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
 LLVM_INSTALL += && cp $2$$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_depsbindir)
