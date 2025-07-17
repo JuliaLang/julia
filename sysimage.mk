@@ -24,39 +24,54 @@ $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
 
 COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/Base_compiler.jl \
-		base/boot.jl \
-		base/docs/core.jl \
 		base/abstractarray.jl \
 		base/abstractdict.jl \
 		base/abstractset.jl \
-		base/iddict.jl \
-		base/idset.jl \
+		base/anyall.jl \
 		base/array.jl \
+		base/baseext.jl \
 		base/bitarray.jl \
 		base/bitset.jl \
 		base/bool.jl \
+		base/boot.jl \
+		base/c.jl \
+		base/checked.jl \
+		base/cmem.jl \
+		base/coreio.jl \
+		base/coreir.jl \
 		base/ctypes.jl \
+		base/docs/core.jl \
 		base/error.jl \
 		base/essentials.jl \
-		base/expr.jl \
 		base/exports.jl \
+		base/expr.jl \
+		base/float.jl \
+		base/gcutils.jl \
 		base/generator.jl \
-		base/int.jl \
+		base/genericmemory.jl \
+		base/iddict.jl \
+		base/idset.jl \
 		base/indices.jl \
-		base/iterators.jl \
+		base/int.jl \
 		base/invalidation.jl \
+		base/iterators.jl \
 		base/module.jl \
 		base/namedtuple.jl \
+		base/ntuple.jl \
 		base/number.jl \
 		base/operators.jl \
 		base/options.jl \
+		base/ordering.jl \
 		base/pair.jl \
 		base/pointer.jl \
 		base/promotion.jl \
+		base/public.jl \
 		base/range.jl \
-		base/runtime_internals.jl \
-		base/traits.jl \
 		base/refvalue.jl \
+		base/rounding.jl \
+		base/runtime_internals.jl \
+		base/strings/lazy.jl \
+		base/traits.jl \
 		base/tuple.jl)
 COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl -and -not -name verifytrim.jl -and -not -name show.jl)
 # sort these to remove duplicates
