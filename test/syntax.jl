@@ -4360,7 +4360,7 @@ end
         # @__FUNCTION__ in regular functions
         test_function_basic() = @__FUNCTION__
         @test test_function_basic() === test_function_basic
-        
+
         # Expr(:thisfunction) in regular functions
         @eval regular_func() = $(Expr(:thisfunction))
         @test regular_func() === regular_func
@@ -4370,12 +4370,12 @@ end
         # Factorial with @__FUNCTION__
         factorial_function(n) = n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1)
         @test factorial_function(5) == 120
-        
+
         # Fibonacci with Expr(:thisfunction)
         struct RecursiveCallableStruct; end
         @eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
         @test RecursiveCallableStruct()(10) === 55
-        
+
         # Anonymous function recursion
         @test (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1))(5) == 120
     end
@@ -4407,21 +4407,6 @@ end
         @test f1()[3] !== f1
         @test f1()[3]() === f1()[3]
         @test f1()[2]()[2]() === f1()[3]
-
-        # In closures, var"#self#" should refer to the enclosing function,
-        # NOT the enclosing struct instance
-        struct CallableStruct2; end
-        @eval function (obj::CallableStruct2)()
-            function inner_func()
-                $(Expr(:thisfunction))
-            end
-            inner_func
-        end
-
-        let cs = CallableStruct2()
-            @test cs()() === cs()
-            @test cs()() !== cs
-        end
     end
 
     @testset "Do blocks" begin
@@ -4443,7 +4428,7 @@ end
         # @__FUNCTION__ with kwargs
         foo(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
         @test foo(n = 5) == 120
-        
+
         # Expr(:thisfunction) with kwargs
         let
             @eval f2(; n=1) = n <= 1 ? n : n * $(Expr(:thisfunction))(; n=n-1)
@@ -4462,8 +4447,23 @@ end
         @eval using .$A: CallableStruct
         c = CallableStruct(5)
         @test c() === c
-        
-        # Expr(:thisfunction) in callable structs
+
+        # In closures, var"#self#" should refer to the enclosing function,
+        # NOT the enclosing struct instance
+        struct CallableStruct2; end
+        @eval function (obj::CallableStruct2)()
+            function inner_func()
+                $(Expr(:thisfunction))
+            end
+            inner_func
+        end
+
+        let cs = CallableStruct2()
+            @test cs()() === cs()
+            @test cs()() !== cs
+        end
+
+        # Accessing values via self-reference
         struct CallableStruct3
             value::Int
         end
@@ -4474,6 +4474,18 @@ end
             @test cs() === cs
             @test cs(10) === 52
         end
+
+        # Callable struct with args and kwargs
+        struct CallableStruct4
+        end
+        @eval function (obj::CallableStruct4)(x, args...; y=2, kws...)
+            return (; func=(@__FUNCTION__), x, args, y, kws)
+        end
+        c = CallableStruct4()
+        @test_broken c(1).func === c
+        @test c(2, 3).args == (3,)
+        @test c(2; y=4).y == 4
+        @test c(2; y=4, a=5, b=6, c=7).kws[:c] == 7
     end
 
     @testset "Special cases" begin
@@ -4481,8 +4493,8 @@ end
         let @generated foo() = Expr(:thisfunction)
             @test foo() === foo
         end
-        
-        # Struct constructor with thisfunction
+
+        # Struct constructors
         let
             @eval struct Cols{T<:Tuple}
                 cols::T
@@ -4492,9 +4504,15 @@ end
             result = Cols(1, 2, 3)
             @test occursin("Cols", result)
         end
-        
-        # Error upon misuse
+    end
+
+    @testset "Error upon misuse" begin
         @gensym B
         @test_throws ErrorException @eval(module $B; @__FUNCTION__; end)
+
+        @test_throws(
+            "\"@__FUNCTION__\" not allowed inside comprehension or generator",
+            @eval([(@__FUNCTION__) for _ in 1:10])
+        )
     end
 end
