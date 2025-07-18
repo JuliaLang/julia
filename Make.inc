@@ -431,9 +431,10 @@ export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
-BUILD_OS := $(shell uname)
+RAW_BUILD_OS = $(shell uname)
+BUILD_OS := $(RAW_BUILD_OS)
 
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+ifneq (,$(findstring CYGWIN,$(RAW_BUILD_OS)))
 XC_HOST ?= $(shell uname -m)-w64-mingw32
 endif
 
@@ -1579,7 +1580,9 @@ ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
-JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-reloc
+# N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
+# enforced visibility at this point.
+JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif

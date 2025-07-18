@@ -181,6 +181,7 @@ end
 Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
+functionloc(@nospecialize(argtypes::Union{Tuple, Type{<:Tuple}})) = functionloc(which(argtypes))
 
 function functionloc(@nospecialize(f))
     mt = methods(f)

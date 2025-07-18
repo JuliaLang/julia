@@ -318,7 +318,7 @@ end
 """
     open(fd::OS_HANDLE)::IO
 
-Take a raw file descriptor wrap it in a Julia-aware IO type,
+Take a raw file descriptor and wrap it in a Julia-aware IO type,
 and take ownership of the fd handle.
 Call `open(Libc.dup(fd))` to avoid the ownership capture
 of the original handle.

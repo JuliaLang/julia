@@ -182,7 +182,16 @@ JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #endif
 #endif
 
+#if defined(HAVE_SSP) && defined(_OS_DARWIN_)
+// On Darwin, this is provided by libSystem and imported
+extern JL_DLLIMPORT uintptr_t __stack_chk_guard;
+#elif defined(HAVE_SSP)
+// Added by compiler runtime in final link - not DLLIMPORT
+extern uintptr_t __stack_chk_guard;
+#else
+// The system doesn't have it - we define our own
 extern JL_DLLEXPORT uintptr_t __stack_chk_guard;
+#endif
 
 // If this is detected in a backtrace of segfault, it means the functions
 // that use this value must be reworked into their async form with cb arg
@@ -687,6 +696,8 @@ typedef union {
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
+#define METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC 0b1000  // indicates there exists some other method that is not more specific than this one
+#define METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC 0b10000  // precompiled version of METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);

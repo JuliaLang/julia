@@ -463,7 +463,7 @@ end
 
 * Case `n == 1`
 
-  If `i` is in bounds in `s` return the index of the start of the character whose
+  If `i` is in bounds in `str` return the index of the start of the character whose
   encoding starts before index `i`. In other words, if `i` is the start of a
   character, return the start of the previous character; if `i` is not the start
   of a character, rewind until the start of a character and return that index.
@@ -522,7 +522,7 @@ end
 
 * Case `n == 1`
 
-  If `i` is in bounds in `s` return the index of the start of the character whose
+  If `i` is in bounds in `str` return the index of the start of the character whose
   encoding starts after index `i`. In other words, if `i` is the start of a
   character, return the start of the next character; if `i` is not the start
   of a character, move forward until the start of a character and return that index.
@@ -539,7 +539,7 @@ end
 
 * Case `n == 0`
 
-  Return `i` only if `i` is a valid index in `s` or is equal to `0`.
+  Return `i` only if `i` is a valid index in `str` or is equal to `0`.
   Otherwise `StringIndexError` or `BoundsError` is thrown.
 
 # Examples
