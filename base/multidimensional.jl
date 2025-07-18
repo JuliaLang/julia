@@ -86,10 +86,7 @@ module IteratorsMD
     CartesianIndex{N}() where {N} = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
     CartesianIndex{N}(index::CartesianIndex{N}) where {N} = index
-    CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
-    flatten(::Tuple{}) = ()
-    flatten(I::Tuple{Any}) = Tuple(I[1])
-    @inline flatten(I::Tuple) = (Tuple(I[1])..., flatten(tail(I))...)
+    CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(Base.flatten(index))
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
     function show(io::IO, i::CartesianIndex)
         print(io, "CartesianIndex(")
@@ -816,6 +813,12 @@ index_shape() = ()
 @inline index_shape(::Real, rest...) = index_shape(rest...)
 @inline index_shape(A::AbstractArray, rest...) = (axes(A)..., index_shape(rest...)...)
 
+index_shape2() = ()
+
+# -1 used as signal for dropped dimension. 0 is actually a valid index length
+@inline index_shape2(::Real, rest...) = (-1, index_shape2(rest...)...)
+@inline index_shape2(A::AbstractArray, rest...) = (size(A), index_shape2(rest...)...)
+
 """
     LogicalIndex(mask)
 
@@ -1039,7 +1042,7 @@ function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
-        idxlens = @ncall $N index_lengths I
+        idxlens = @ncall $N index_shape2 I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
         X = eachindex(x′)
         Xy = _prechecked_iterate(X)
