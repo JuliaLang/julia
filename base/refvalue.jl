@@ -1,13 +1,20 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### Methods for a Ref object that can store a single value of any type
+"""
+    Base.RefValue{T}(x::T) <: Ref{T}
 
+`Base.RefValue{T}`` is a mutable container for a single value of type T,
+and is the return type of `Ref(x)`. See also [`Ref`](@ref).
+
+"""
 mutable struct RefValue{T} <: Ref{T}
     x::T
     RefValue{T}() where {T} = new()
     RefValue{T}(x) where {T} = new(x)
 end
 RefValue(x::T) where {T} = RefValue{T}(x)
+
 """
     isassigned(ref::RefValue)::Bool
 
