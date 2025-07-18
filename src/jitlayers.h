@@ -123,7 +123,7 @@ struct OptimizationOptions {
 #else
         bool sanitize_address=false
 #endif
-) {
+) JL_NOTSAFEPOINT {
         return {lower_intrinsics, dump_native, external_use, llvm_only,
                 always_inline, enable_early_simplifications,
                 enable_early_optimizations, enable_scalar_optimizations,
