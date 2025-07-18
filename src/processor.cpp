@@ -506,6 +506,20 @@ parse_cmdline(const char *option, F &&feature_cb)
     if (!option)
         abort();
 
+    // Preprocess the option string to expand "sysimage" keyword
+    std::string processed_option;
+    if (strncmp(option, "sysimage", 8) == 0 && (option[8] == '\0' || option[8] == ';')) {
+        // Replace "sysimage" with the actual sysimage CPU target
+        jl_value_t *target_str = jl_get_sysimage_cpu_target();
+        if (target_str != nullptr) {
+            processed_option = std::string(jl_string_data(target_str), jl_string_len(target_str));
+            if (option[8] == ';') {
+                processed_option += option + 8;  // append the rest after "sysimage"
+            }
+            option = processed_option.c_str();
+        }
+    }
+
     llvm::SmallVector<TargetData<n>, 0> res;
     TargetData<n> arg{};
     auto reset_arg = [&] {
@@ -633,6 +647,12 @@ static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *
 
     const jl_image_pointers_t *pointers = (const jl_image_pointers_t *)image.pointers;
     const void *ids = pointers->target_data;
+
+    // Set the sysimage CPU target from the stored string
+    if (pointers->cpu_target_string) {
+        jl_set_sysimage_cpu_target(pointers->cpu_target_string);
+    }
+
     jl_value_t* rejection_reason = nullptr;
     JL_GC_PUSH1(&rejection_reason);
     uint32_t target_idx = callback(ctx, ids, &rejection_reason);
@@ -1002,6 +1022,9 @@ static std::string jl_get_cpu_features_llvm(void)
 
 #endif
 
+// Global variable to store the CPU target string used for the sysimage
+static std::string sysimage_cpu_target;
+
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 {
     return jl_cstr_to_string(host_cpu_name().c_str());
@@ -1037,4 +1060,18 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
 extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **fnames, size_t *nf) {
     *fnames = feature_names;
     *nf = nfeature_names;
+}
+
+extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {
+    if (sysimage_cpu_target.empty()) {
+        return jl_cstr_to_string("native");
+    }
+    return jl_cstr_to_string(sysimage_cpu_target.c_str());
+}
+
+// Function to set the sysimage CPU target (called during initialization)
+void jl_set_sysimage_cpu_target(const char *cpu_target) {
+    if (cpu_target) {
+        sysimage_cpu_target = cpu_target;
+    }
 }

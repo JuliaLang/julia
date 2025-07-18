@@ -479,9 +479,15 @@ stored in memory.
 
 Valid values for [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) can be obtained by executing `julia -C help`.
 
+To get the CPU target string that was used to build the current system image,
+use [`Sys.sysimage_target()`](@ref). This can be useful for reproducing
+the same system image or understanding what CPU features were enabled during compilation.
+
 Setting [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) is important for heterogeneous compute systems where processors of
 distinct types or features may be present. This is commonly encountered in high performance
-computing (HPC) clusters since the component nodes may be using distinct processors.
+computing (HPC) clusters since the component nodes may be using distinct processors. In this case,
+you may want to use the `sysimage` CPU target to maintain the same configuration as the sysimage.
+See below for more details.
 
 The CPU target string is a list of strings separated by `;` each string starts with a CPU
 or architecture name and followed by an optional list of features separated by `,`.
@@ -490,13 +496,21 @@ which is at least the architecture the C/C++ runtime is compiled with. Each stri
 is interpreted by LLVM.
 
 A few special features are supported:
-1. `clone_all`
+
+1. `sysimage`
+
+     A special keyword that can be used as a CPU target name, which will be replaced
+     with the CPU target string that was used to build the current system image. This allows
+     you to specify CPU targets that build upon or extend the current sysimage's target, which
+     is particularly helpful for creating package images that are as flexible as the sysimage.
+
+2. `clone_all`
 
      This forces the target to have all functions in sysimg cloned.
      When used in negative form (i.e. `-clone_all`), this disables full clone that's
      enabled by default for certain targets.
 
-2. `base([0-9]*)`
+3. `base([0-9]*)`
 
      This specifies the (0-based) base target index. The base target is the target
      that the current target is based on, i.e. the functions that are not being cloned
@@ -504,11 +518,11 @@ A few special features are supported:
      fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
      The index can only be smaller than the current index.
 
-3. `opt_size`
+4. `opt_size`
 
      Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
 
-4. `min_size`
+5. `min_size`
 
      Optimize only for size. Clang's `-Oz`.
 
