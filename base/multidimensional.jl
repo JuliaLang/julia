@@ -813,11 +813,11 @@ index_shape() = ()
 @inline index_shape(::Real, rest...) = index_shape(rest...)
 @inline index_shape(A::AbstractArray, rest...) = (axes(A)..., index_shape(rest...)...)
 
-index_shape2() = ()
+index_shape_nested() = ()
 
 # -1 used as signal for dropped dimension. 0 is actually a valid index length
-@inline index_shape2(::Real, rest...) = (-1, index_shape2(rest...)...)
-@inline index_shape2(A::AbstractArray, rest...) = (size(A), index_shape2(rest...)...)
+@inline index_shape_nested(::Real, rest...) = (-1, index_shape_nested(rest...)...)
+@inline index_shape_nested(A::AbstractArray, rest...) = (size(A), index_shape_nested(rest...)...)
 
 """
     LogicalIndex(mask)
@@ -1042,7 +1042,7 @@ function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
-        idxlens = @ncall $N index_shape2 I
+        idxlens = @ncall $N index_shape_nested I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
         X = eachindex(x′)
         Xy = _prechecked_iterate(X)
