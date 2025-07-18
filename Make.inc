@@ -818,7 +818,7 @@ ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread
 SANITIZE_LDFLAGS += -fsanitize=thread
 ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-bootstrap_julia_flags += --target-sanitize-thread
+bootstrap_julia_flags += --target-sanitize=thread
 endif
 endif
 ifeq ($(SANITIZE_OPTS),)
