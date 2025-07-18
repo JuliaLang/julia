@@ -231,8 +231,8 @@ function _shapes_match(isfirstdim, sz, i::Integer, I::Integer...)
     if isnegative(i)
         return _shapes_match(isfirstdim, sz, I...)
     else
-        if isfirstdim && _trailing_one_or_dropped(sz...) && _nnprod(sz...) == i
-            return true
+        if isfirstdim && _trailing_one_or_dropped(I...)
+            return _nnprod(sz...) == i
         else
             return (first(sz) == i) && _shapes_match(false, tail(sz), I...)
         end
