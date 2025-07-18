@@ -735,8 +735,9 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
 end
 
 function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool, prefix = nothing)
+    println(io)
     prefix === nothing || print(io, prefix)
-    println(io, "\nStacktrace:")
+    println(io, "Stacktrace:")
 
     ndigits_max = ndigits(num_frames)
 
