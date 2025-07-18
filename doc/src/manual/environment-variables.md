@@ -480,7 +480,7 @@ stored in memory.
 Valid values for [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) can be obtained by executing `julia -C help`.
 
 To get the CPU target string that was used to build the current system image,
-use [`Sys.sysimage_cpu_target_str()`](@ref). This can be useful for reproducing
+use [`Sys.sysimage_target()`](@ref). This can be useful for reproducing
 the same system image or understanding what CPU features were enabled during compilation.
 
 Setting [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) is important for heterogeneous compute systems where processors of
@@ -501,7 +501,8 @@ A few special features are supported:
 
      A special keyword that can be used as a CPU target name, which will be replaced
      with the CPU target string that was used to build the current system image. This allows
-     you to specify CPU targets that build upon or extend the current sysimage's target.
+     you to specify CPU targets that build upon or extend the current sysimage's target, which
+     is particularly helpful for creating package images that are as flexible as the sysimage.
 
 2. `clone_all`
 

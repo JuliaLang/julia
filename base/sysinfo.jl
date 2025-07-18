@@ -16,7 +16,7 @@ export BINDIR,
        JIT,
        cpu_info,
        cpu_summary,
-       sysimage_cpu_target_str,
+       sysimage_target,
        uptime,
        loadavg,
        free_memory,
@@ -314,7 +314,7 @@ function cpu_info()
 end
 
 """
-    Sys.sysimage_cpu_target_str()
+    Sys.sysimage_target()
 
 Return the CPU target string that was used to build the current system image.
 
@@ -326,7 +326,7 @@ If the system image was built with the default settings this will return `"nativ
 
 See also [`JULIA_CPU_TARGET`](@ref).
 """
-function sysimage_cpu_target_str()
+function sysimage_target()
     return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
 end
 
