@@ -1526,8 +1526,8 @@ end
 @test Meta.lower(@__MODULE__, :(return 0 for i=1:2)) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
 @test Meta.lower(@__MODULE__, :([ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
 @test Meta.lower(@__MODULE__, :(Int[ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
-@test Meta.lower(@__MODULE__, :([ $(Expr(:thisfunction)) for i=1:2 ])) == Expr(:error, "\"thisfunction\" not allowed inside comprehension or generator")
-@test Meta.lower(@__MODULE__, :($(Expr(:thisfunction)) for i=1:2)) == Expr(:error, "\"thisfunction\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :([ $(Expr(:thisfunction)) for i=1:2 ])) == Expr(:error, "\"@__FUNCTION__\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :($(Expr(:thisfunction)) for i=1:2)) == Expr(:error, "\"@__FUNCTION__\" not allowed inside comprehension or generator")
 @test [ ()->return 42 for i = 1:1 ][1]() == 42
 @test Function[ identity() do x; return 2x; end for i = 1:1 ][1](21) == 42
 @test @eval let f=[ ()->$(Expr(:thisfunction)) for i = 1:1 ][1]; f() === f; end
