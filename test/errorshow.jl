@@ -808,12 +808,12 @@ backtrace()
 
         # Broken test: @test occursin("the above 2 lines are repeated 5000 more times", output[7])
         @test occursin("repeated ", output[7])
-        @test occursin(" more times", output[7])
+        @test occursin(" times", output[7])
 
         # Broken test: @test lstrip(output[8])[1:7] == "[10003]"
         @test_broken false
     else
-        @test occursin("repeated 5000 more times", output[7])
+        @test occursin("repeated 5001 times", output[7])
         @test lstrip(output[8])[1:7] == "[10003]"
     end
 end
@@ -1093,7 +1093,7 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
                 catch_backtrace()
             end
             bt_str = sprint(Base.show_backtrace, bt)
-            @test occursin(r"repeated \d+ more times", bt_str)
+            @test occursin(r"repeated \d+ times", bt_str)
         end
 
         let bt = try
@@ -1102,7 +1102,7 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
                 catch_backtrace()
             end
             bt_str = sprint(Base.show_backtrace, bt)
-            @test occursin(r"repeated \d+ more times", bt_str)
+            @test occursin(r"repeated \d+ times", bt_str)
         end
     end
 end
