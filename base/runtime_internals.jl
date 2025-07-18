@@ -179,12 +179,11 @@ ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m,
 Get the innermost enclosing function object.
 
 !!! note
+    `@__FUNCTION__` has the same scoping behavior as `return`: when used
+    inside a closure, it refers to the closure and not the outer function.
     Some macros, including [`@spawn`](@ref Threads.@spawn), [`@async`](@ref), etc.,
-    wrap their code in closures. When `@__FUNCTION__` is used within such code,
-    it will refer to the closure created by the macro rather than the enclosing
-    user-defined function. This follows the same scoping behavior as `return`:
-    just as `return` exits the closure and not the outer function, `@__FUNCTION__`
-    refers to the closure and not the outer function.
+    wrap their input in closures. When `@__FUNCTION__` is used within such code,
+    it will refer to the closure created by the macro rather than the enclosing function.
 
 # Examples
 
