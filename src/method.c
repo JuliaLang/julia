@@ -720,7 +720,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
     jl_code_instance_t *ci = NULL;
     JL_GC_PUSH5(&ex, &func, &uninferred, &ci, &kind);
     jl_task_t *ct = jl_current_task;
-    int last_lineno = jl_lineno;
+    int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     int last_in = ct->ptls->in_pure_callback;
     size_t last_age = ct->world_age;
 
@@ -818,12 +818,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         }
 
         ct->ptls->in_pure_callback = last_in;
-        jl_lineno = last_lineno;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         ct->world_age = last_age;
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
-        jl_lineno = last_lineno;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         jl_rethrow();
     }
     JL_GC_POP();
