@@ -413,9 +413,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_permalloc_pkgimg,
            opt_trim,
            opt_experimental_features,
-           opt_target_sanitize_memory,
-           opt_target_sanitize_thread,
-           opt_target_sanitize_address,
+           opt_target_sanitize,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -487,9 +485,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
         { "gc-sweep-always-full", no_argument, 0, opt_gc_sweep_always_full },
         { "trim",  optional_argument, 0, opt_trim },
-        { "target-sanitize=memory", optional_argument, 0, opt_target_sanitize_memory },
-        { "target-sanitize=thread", optional_argument, 0, opt_target_sanitize_thread },
-        { "target-sanitize=address", optional_argument, 0, opt_target_sanitize_address },
+        { "target-sanitize", required_argument, 0, opt_target_sanitize },
         { 0, 0, 0, 0 }
     };
 
@@ -1072,14 +1068,15 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
             break;
-        case opt_target_sanitize_memory:
-            jl_options.target_sanitize_memory = 1;
-            break;
-        case opt_target_sanitize_thread:
-            jl_options.target_sanitize_thread = 1;
-            break;
-        case opt_target_sanitize_address:
-            jl_options.target_sanitize_address = 1;
+        case opt_target_sanitize:
+            if (!strcmp(optarg, "memory"))
+                jl_options.target_sanitize_memory = 1;
+            else if (!strcmp(optarg, "thread"))
+                jl_options.target_sanitize_thread = 1;
+            else if (!strcmp(optarg, "address"))
+                jl_options.target_sanitize_address = 1;
+            else
+                jl_errorf("julia: invalid argument to --target-sanitize={memory|thread|address} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
