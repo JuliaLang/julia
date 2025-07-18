@@ -712,7 +712,7 @@ function _backtrace_find_and_remove_cycles(t)
     return displayed_stackframes, repeated_cycles, max_nested_cycles
 end
 
-function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max)
+function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix = nothing)
     while !isempty(current_cycles)
         start_line = current_cycles[end][1]
         cycle_length = current_cycles[end][2]
