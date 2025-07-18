@@ -983,3 +983,150 @@ end
 @inline function (once::OncePerTask{T,F})() where {T,F}
     get!(once.initializer, task_local_storage(), once)::T
 end
+
+"""
+    OncePerDepot{T}(init::Function, token_name::AbstractString) -> OncePerDepot{T}
+
+Calling a `OncePerDepot` object returns a value of type `T` by running the function
+`initializer` exactly once per depot. The value is written into a token file in the depot. All
+concurrent and future calls within the same depot will read this file to return the same
+value. This uses a file-based locking mechanism with pidfiles to ensure safety across processes.
+
+The depot is determined by the first entry in `DEPOT_PATH` that exists and is writable.
+Token files are stored in `depot/tokens/` and use `mkpidlock` to ensure atomic initialization
+across processes.
+
+# Arguments
+- `init::Function`: The function to call to initialize the value.
+- `token_name::AbstractString`: The name for the token file.
+
+!!! note "Storage limitations"
+    Values are stored using `write()` and restored using `read()`, so those methods must be implemented for the data type.
+    The `Nothing` type is handled specially - it just creates an empty file to track completion.
+
+!!! compat "Julia 1.13"
+    This type requires Julia 1.13 or later.
+
+## Example
+
+```jldoctest
+julia> const depot_cache = Base.OncePerDepot{String}("mycache") do
+           println("Initializing cache...")
+           return "depot-specific data"
+       end;
+
+julia> depot_cache()
+Initializing cache...
+"depot-specific data"
+
+julia> depot_cache() === depot_cache()  # Same within depot
+true
+
+julia> const welcome_message = Base.OncePerDepot("welcome") do
+           println("Welcome to X!")
+           return nothing
+       end;
+
+julia> welcome_message()
+Welcome to X!
+
+julia> welcome_message()  # No output on second call
+```
+"""
+mutable struct OncePerDepot{T, F} <: Function
+    const initializer::F
+    const token_name::String
+
+    OncePerDepot{T}(initializer::Type{U}, token_name::AbstractString) where {T, U} = new{T,Type{U}}(initializer, String(token_name))
+    OncePerDepot{T}(initializer::F, token_name::AbstractString) where {T, F} = new{T,F}(initializer, String(token_name))
+    OncePerDepot{T,F}(initializer::F, token_name::AbstractString) where {T, F} = new{T,F}(initializer, String(token_name))
+    OncePerDepot(initializer::Type{U}, token_name::AbstractString) where U = new{Base.promote_op(initializer), Type{U}}(initializer, String(token_name))
+    OncePerDepot(initializer, token_name::AbstractString) = new{Base.promote_op(initializer), typeof(initializer)}(initializer, String(token_name))
+end
+
+function (once::OncePerDepot{T,F})() where {T,F}
+    if !@isdefined(mkpidlock_hook)
+        error("mkpidlock not available, OncePerDepot is not safe across processes")
+    end
+    # Find the first writable depot
+    depot = nothing
+    for path in DEPOT_PATH
+        if isdir(path) && Sys.iswritable(path)
+            depot = path
+            break
+        end
+    end
+
+    if depot === nothing
+        error("No writable depot found in DEPOT_PATH")
+    end
+
+    # Create tokens directory if it doesn't exist
+    tokens_dir = joinpath(depot, "tokens")
+    if !isdir(tokens_dir)
+        try
+            mkpath(tokens_dir)
+        catch
+            if !isdir(tokens_dir)  # Race condition check
+                rethrow()
+            end
+        end
+    end
+
+    token_path = joinpath(tokens_dir, once.token_name)
+    value_path = token_path * ".value"
+
+    # Try to load existing value first
+    if isfile(value_path)
+        try
+            if T === Nothing
+                return nothing
+            else
+                return read(value_path, T)
+            end
+        catch
+            # If reading fails, we'll reinitialize
+        end
+    end
+
+    # Use mkpidlock to ensure atomic initialization across processes
+
+    # Internal function to handle initialization logic
+    function initialize_value()
+        # Double-check if value exists after acquiring lock
+        if isfile(value_path)
+            try
+                if T === Nothing
+                    return nothing
+                else
+                    return read(value_path, T)
+                end
+            catch
+                # If reading fails, continue with initialization
+            end
+        end
+
+        # Initialize the value
+        res = once.initializer()
+
+        # Store the result
+        try
+            if T === Nothing
+                # For Nothing, just create an empty file to indicate completion
+                write(value_path, UInt8[])
+            else
+                write(value_path, res)
+            end
+        catch
+            # Clean up on failure
+            isfile(value_path) && rm(value_path, force=true)
+            rethrow()
+        end
+
+        return res
+    end
+
+   result = @invokelatest mkpidlock_hook(initialize_value, token_path; wait=true, stale_age=300)  # 5 minute stale age
+
+    return result
+end
