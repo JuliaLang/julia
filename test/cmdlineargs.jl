@@ -1033,7 +1033,7 @@ end
     withenv("JULIA_CPU_TARGET" => "sysimage") do
         v = readchomp(`$julia_path -E "Sys.sysimage_target()"`)
         # Local builds will likely be "native" but CI shouldn't be.
-        invalid_results = Base.get_bool_env("CI", false) ? ("native", "sysimage") : ("sysimage",)
+        invalid_results = Base.get_bool_env("CI", false) ? ("", "native", "sysimage") : ("", "sysimage",)
         @test !in(v, invalid_results)
     end
 end
