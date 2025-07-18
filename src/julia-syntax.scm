@@ -5166,7 +5166,7 @@ f(x) = yt(x)
                      (cond (tail  (emit-return tail final-name))
                            (value final-name)
                            (else (emit final-name) #f)))
-                    (error "thisfunction can only occur inside a function"))))
+                    (error "\"@__FUNCTION__\" can only be used inside a function"))))
 
             (else
              (error (string "invalid syntax " (deparse e)))))))

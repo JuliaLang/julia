@@ -4519,7 +4519,10 @@ end
 
     @testset "Error upon misuse" begin
         @gensym B
-        @test_throws ErrorException @eval(module $B; @__FUNCTION__; end)
+        @test_throws(
+            "\"@__FUNCTION__\" can only be used inside a function",
+            @eval(module $B; @__FUNCTION__; end)
+        )
 
         @test_throws(
             "\"@__FUNCTION__\" not allowed inside comprehension or generator",
