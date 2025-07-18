@@ -722,6 +722,7 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
         frame_counter != end_line && break
 
         println(io)
+        prefix === nothing || print(io, prefix)
         line_length = (max_nested_cycles - nactive_cycles) + ndigits_max + 2
         nactive_cycles -= 1
         printstyled(io, " ", "│" ^ nactive_cycles, "╰", "─" ^ (line_length); color = :light_black)
@@ -733,7 +734,8 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
     return frame_counter, nactive_cycles
 end
 
-function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool)
+function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool, prefix = nothing)
+    prefix === nothing || print(io, prefix)
     println(io, "\nStacktrace:")
 
     ndigits_max = ndigits(num_frames)
@@ -760,9 +762,9 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
         end
         nactive_cycles = length(current_cycles)
 
-        print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
-        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max)
+        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
 
         if i < length(trace)
@@ -798,7 +800,7 @@ end
 parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor; prefix = nothing)
     file, line = string(frame.file), frame.line
 
     # Used by the REPL to make it possible to open
@@ -813,6 +815,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     digit_align_width = ndigits_max + 2 + max_nested_cycles - nactive_cycles
 
     # repeated section bracket line 1
+    prefix === nothing || print(io, prefix)
     print(io, " ")
     printstyled(io, "├" ^ (nactive_cycles - ncycle_starts); color = :light_black)
     printstyled(io, "┌" ^ ncycle_starts; color = :light_black)
@@ -826,6 +829,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     println(io)
 
     # repeated section bracket line 2
+    prefix === nothing || print(io, prefix)
     print(io, " ")
     printstyled(io, "│" ^ nactive_cycles; color = :light_black)
 
@@ -875,7 +879,7 @@ Stacktrace processing pipeline:
 
 =#
 
-function show_backtrace(io::IO, t::Vector)
+function show_backtrace(io::IO, t::Vector; prefix = nothing)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
@@ -916,7 +920,7 @@ function show_backtrace(io::IO, t::Vector)
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)
     try invokelatest(update_stackframes_callback[], filtered) catch end
 
-    show_processed_backtrace(IOContext(io, :backtrace => true), filtered, nframes, repeated_cycles, max_nested_cycles; print_linebreaks = stacktrace_linebreaks())
+    show_processed_backtrace(IOContext(io, :backtrace => true), filtered, nframes, repeated_cycles, max_nested_cycles; print_linebreaks = stacktrace_linebreaks(), prefix)
     nothing
 end
 
