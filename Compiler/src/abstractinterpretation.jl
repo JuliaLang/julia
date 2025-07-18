@@ -3485,7 +3485,57 @@ function refine_partial_type(@nospecialize t)
     return t
 end
 
+function abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::AbsIntState)
+    if isexpr(e, :call)
+        n = length(e.args)
+        argtypes = Vector{Any}(undef, n)
+        callresult = Future{CallMeta}()
+        i::Int = 1
+        nextstate::UInt8 = 0x0
+        local ai, res
+        function evalargs(interp, sv)
+            if nextstate === 0x1
+                @goto state1
+            elseif nextstate === 0x2
+                @goto state2
+            end
+            while i <= n
+                ai = abstract_eval_nonlinearized_foreigncall_name(interp, e.args[i], sstate, sv)
+                if !isready(ai)
+                    nextstate = 0x1
+                    return false
+                    @label state1
+                end
+                argtypes[i] = ai[].rt
+                i += 1
+            end
+            res = abstract_call(interp, ArgInfo(e.args, argtypes), sstate, sv)
+            if !isready(res)
+                nextstate = 0x2
+                return false
+                @label state2
+            end
+            callresult[] = res[]
+            return true
+        end
+        evalargs(interp, sv) || push!(sv.tasks, evalargs)
+        return callresult
+    else
+        return Future(abstract_eval_basic_statement(interp, e, sstate, sv))
+    end
+end
+
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
+    callee = e.args[1]
+    if isexpr(callee, :call) && length(callee.args) > 1 && callee.args[1] == GlobalRef(Core, :tuple)
+        # NOTE these expressions are not properly linearized
+        abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[2], sstate, sv)
+        if length(callee.args) > 2
+            abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[3], sstate, sv)
+        end
+    else
+        abstract_eval_value(interp, callee, sstate, sv)
+    end
     mi = frame_instance(sv)
     t = sp_type_rewrap(e.args[2], mi, true)
     for i = 3:length(e.args)

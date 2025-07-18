@@ -1979,3 +1979,11 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     # check for the gc_safe store
     @test occursin("store atomic i8 2", llvm)
 end
+
+module Test57749
+using Test, Zstd_jll
+const prefix = "Zstd version: "
+const sym = :ZSTD_versionString
+get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
+@test startswith(get_zstd_version(), "Zstd")
+end
