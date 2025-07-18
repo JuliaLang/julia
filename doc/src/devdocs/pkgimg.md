@@ -36,19 +36,7 @@ To that effect we link with `-undefined dynamic_lookup`.
 
 Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. This allows creating package caches that can run efficiently on different CPU architectures within the same environment.
 
-### Usage and constraints
-
-Package images can only target the same or more specific CPU features than their base system image. This constraint ensures compatibility and prevents runtime errors.
-
-To enable multi-versioning for package images, set the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable when building packages:
-
-```bash
-# Create multi-versioned package images for generic and optimized targets
-export JULIA_CPU_TARGET="generic;haswell"
-
-# For heterogeneous environments, use generic to ensure broad compatibility
-export JULIA_CPU_TARGET="generic"
-```
+See the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable for more information on how to set the CPU target for package images.
 
 ## Flags that impact package image creation and selection
 
