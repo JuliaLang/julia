@@ -210,13 +210,11 @@ function throw_setindex_mismatch(X, I)
     end
 end
 
-
-
 const IntegerOrTuple = Union{Integer, Tuple{Vararg{Integer}}}
 
 flatten(::Tuple{}) = ()
 flatten(I::Tuple{Any}) = Tuple(I[1])
-@inline flatten(I::Tuple) = (Tuple(I[1])..., flatten(tail(I))...)
+flatten(I::Tuple) = (@inline; (Tuple(I[1])..., flatten(tail(I))...))
 
 _nnprod() = 1
 _nnprod(i::Integer, rest::Integer...) =
