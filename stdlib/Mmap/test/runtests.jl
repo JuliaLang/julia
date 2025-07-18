@@ -44,7 +44,7 @@ s = open(file)
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
 close(s)
-@test_throws ErrorException mmap(file, Vector{Ref}) # must be bit-type
+@test_throws ArgumentError mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
 file = tempname() # new name to reduce chance of issues due slow windows fs
@@ -342,6 +342,19 @@ open(file, "r+") do s
 end
 GC.gc()
 rm(file)
+
+@testset "test for #58982 - mmap with primitive types" begin
+    file = tempname()
+    primitive type PrimType9Bytes 9*8 end
+    arr = Vector{PrimType9Bytes}(undef, 2)
+    write(file, arr)
+    m = mmap(file, Vector{PrimType9Bytes})
+    @test length(m) == 2
+    @test m[1] == arr[1]
+    @test m[2] == arr[2]
+    finalize(m); m = nothing; GC.gc()
+    rm(file)
+end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Mmap))
