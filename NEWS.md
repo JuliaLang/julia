@@ -57,7 +57,7 @@ Standard library changes
 #### Dates
 
 * The undocumented function `adjust` is no longer exported but is now documented
-* `unix2datetime`, `datetime2unix`, `julian2datetime`, and `datetime2julian` now accept a keyword argument `localtime=true` to use the local time zone instead of UTC ([#50296]).
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the local time zone instead of UTC ([#50296]).
 
 #### Statistics
 

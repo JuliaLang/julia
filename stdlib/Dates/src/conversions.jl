@@ -3,7 +3,7 @@
 # Conversion/Promotion
 
 """
-    Date(dt::DateTime) -> Date
+    Date(dt::DateTime)
 
 Convert a `DateTime` to a `Date`. The hour, minute, second, and millisecond parts of
 the `DateTime` are truncated, so only the year, month and day parts are used in
@@ -12,7 +12,7 @@ construction.
 Date(dt::TimeType) = convert(Date, dt)
 
 """
-    DateTime(dt::Date) -> DateTime
+    DateTime(dt::Date)
 
 Convert a `Date` to a `DateTime`. The hour, minute, second, and millisecond parts of
 the new `DateTime` are assumed to be zero.
@@ -20,7 +20,7 @@ the new `DateTime` are assumed to be zero.
 DateTime(dt::TimeType) = convert(DateTime, dt)
 
 """
-    Time(dt::DateTime) -> Time
+    Time(dt::DateTime)
 
 Convert a `DateTime` to a `Time`. The hour, minute, second, and millisecond parts of
 the `DateTime` are used to create the new `Time`. Microsecond and nanoseconds are zero by default.
@@ -58,15 +58,15 @@ function unix2datetime(x::Real; localtime::Bool=false)
 end
 
 """
-    datetime2unix(dt::DateTime) -> Float64
+    datetime2unix(dt::DateTime)::Float64
 
-Take the given `DateTime` (interpreted as UTC/GMT) and return the number of seconds
-since the unix epoch `1970-01-01T00:00:00` (UTC) as a [`Float64`](@ref).
+Take the given `DateTime` and return the number of seconds
+since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
 """
 datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
 
 """
-    now() -> DateTime
+    now()::DateTime
 
 Return a `DateTime` corresponding to the user's system time including the system timezone
 locale.
@@ -78,20 +78,20 @@ function now()
 end
 
 """
-    today() -> Date
+    today()::Date
 
 Return the date portion of `now()`.
 """
 today() = Date(now())
 
 """
-    now(::Type{UTC}) -> DateTime
+    now(::Type{UTC})::DateTime
 
 Return a `DateTime` corresponding to the user's system time as UTC/GMT.
 For other time zones, see the TimeZones.jl package.
 
 # Examples
-```julia
+```jldoctest; filter = r"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?" => "2023-01-04T10:52:24.864"
 julia> now(UTC)
 2023-01-04T10:52:24.864
 ```
@@ -99,7 +99,7 @@ julia> now(UTC)
 now(::Type{UTC}) = unix2datetime(time())
 
 """
-    rata2datetime(days) -> DateTime
+    rata2datetime(days)::DateTime
 
 Take the number of Rata Die days since epoch `0000-12-31T00:00:00` and return the
 corresponding `DateTime`.
@@ -107,7 +107,7 @@ corresponding `DateTime`.
 rata2datetime(days) = DateTime(yearmonthday(days)...)
 
 """
-    datetime2rata(dt::TimeType) -> Int64
+    datetime2rata(dt::TimeType)::Int64
 
 Return the number of Rata Die days since epoch from the given `Date` or `DateTime`.
 """
@@ -115,29 +115,22 @@ datetime2rata(dt::TimeType) = days(dt)
 
 # Julian conversions
 const JULIANEPOCH = value(DateTime(-4713, 11, 24, 12))
-localjulianepoch() = JULIANEPOCH + (localepoch() - UNIXEPOCH)
 
 """
-    julian2datetime(julian_days::Real; localtime::Bool=false) -> DateTime
+    julian2datetime(julian_days)::DateTime
 
-Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` (UTC) and return the
-corresponding `DateTime`. If `localtime` is `true`, then the output is in the local
-time zone, otherwise it is in UTC/GMT.
+Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` and return the
+corresponding `DateTime`.
 """
-function julian2datetime(f::Real; localtime::Bool=false)
-    rata = (localtime ? localjulianepoch() : JULIANEPOCH) + round(Int64, Int64(86400000) * f)
+function julian2datetime(f)
+    rata = JULIANEPOCH + round(Int64, Int64(86400000) * f)
     return DateTime(UTM(rata))
 end
 
 """
-    datetime2julian(dt::DateTime; localtime::Bool=false) -> Float64
+    datetime2julian(dt::DateTime)::Float64
 
 Take the given `DateTime` and return the number of Julian calendar days since the julian
-epoch `-4713-11-24T12:00:00` (UTC) as a [`Float64`](@ref).
-
-If `localtime` is `true`, then `dt` is interpreted as being in the local time zone,
-and is otherwise interpreted as being UTC/GMT.
+epoch `-4713-11-24T12:00:00` as a [`Float64`](@ref).
 """
-function datetime2julian(dt::DateTime; localtime::Bool=false)
-    return (value(dt) - (localtime ? localjulianepoch() : JULIANEPOCH)) / 86400000.0
-end
+datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH) / 86400000.0
