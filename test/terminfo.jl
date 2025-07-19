@@ -356,14 +356,34 @@ let
         0x73, 0x6d, 0x78, 0x78, 0x00, 0x78, 0x6d, 0x00]
 
     xterm_extensions =
-        [:kEND5, :Cs, :kDN5, :Cr, :kDC6, :kPRV6, :kDN7, :kb1, :kpZRO, :kNXT6,
-        :kLFT5, :kPRV3, :kRIT4, :kDC4, :kc2, :kp5, :kLFT6, :kIC6, :kEND6, :kIC4,
-        :kRIT7, :rmxx, :kpADD, :xm, :kNXT3, :XT, :kIC7, :kHOM4, :kDC7, :kPRV7,
-        :ka2, :kUP7, :kDN6, :kIC5, :kNXT4, :kUP5, :AX, :kpSUB, :kb3, :kDN4,
-        :kHOM5, :kHOM6, :kDN3, :kLFT4, :kRIT5, :kIC3, :kPRV4, :kUP, :kRIT6, :E3,
-        :kEND3, :kHOM7, :kDC3, :kLFT7, :kNXT5, :Se, :Ss, :kHOM3, :kRIT3, :kNXT7,
-        :smxx, :kEND4, :kDN, :kUP6, :XM, :kPRV5, :kUP4, :kpDOT, :kpMUL, :kEND7,
-        :Ms, :kpCMA, :kDC5, :kLFT3, :kpDIV, :kUP3]
+        [:AX, :E3, :XM, :XT, :enter_strikeout_mode, :exit_strikeout_mode, :ka2,
+         :kb1, :kb3, :kc2, :key_alt_control_delete_character,
+         :key_alt_control_down_cursor, :key_alt_control_end,
+         :key_alt_control_home, :key_alt_control_insert_character,
+         :key_alt_control_left_cursor, :key_alt_control_next,
+         :key_alt_control_previous, :key_alt_control_right_cursor,
+         :key_alt_control_up_cursor, :key_alt_delete_character,
+         :key_alt_down_cursor, :key_alt_end, :key_alt_home,
+         :key_alt_insert_character, :key_alt_left_cursor, :key_alt_next,
+         :key_alt_previous, :key_alt_right_cursor, :key_alt_up_cursor,
+         :key_control_delete_character, :key_control_down_cursor,
+         :key_control_end, :key_control_home, :key_control_insert_character,
+         :key_control_left_cursor, :key_control_next, :key_control_previous,
+         :key_control_right_cursor, :key_control_up_cursor,
+         :key_shift_alt_delete_character, :key_shift_alt_down_cursor,
+         :key_shift_alt_end, :key_shift_alt_home,
+         :key_shift_alt_insert_character, :key_shift_alt_left_cursor,
+         :key_shift_alt_next, :key_shift_alt_previous,
+         :key_shift_alt_right_cursor, :key_shift_alt_up_cursor,
+         :key_shift_control_delete_character, :key_shift_control_down_cursor,
+         :key_shift_control_end, :key_shift_control_home,
+         :key_shift_control_insert_character, :key_shift_control_left_cursor,
+         :key_shift_control_next, :key_shift_control_previous,
+         :key_shift_control_right_cursor, :key_shift_control_up_cursor,
+         :key_shift_down_cursor, :key_shift_up_cursor, :kp5, :kpADD, :kpCMA,
+         :kpDIV, :kpDOT, :kpMUL, :kpSUB, :kpZRO, :reset_cursor_color,
+         :reset_cursor_style, :set_cursor_color, :set_cursor_style,
+         :set_host_clipboard, :xm]
 
     xterm_capabilities = Dict{Symbol, Union{Bool, Int, String}}(
         :AX => true,
@@ -889,9 +909,9 @@ let
 @testset "terminfo" begin
     dumb = Base.TermInfo(read(IOBuffer(dumb_terminfo), Base.TermInfoRaw))
     @test dumb.names == ["dumb", "80-column dumb tty"]
-    @test length(dumb.flags) == 4
-    @test length(dumb.numbers) == 2
-    @test length(dumb.strings) == 8
+    @test length(dumb.flags) == 2
+    @test length(dumb.numbers) == 1
+    @test length(dumb.strings) == 4
     @test isnothing(dumb.extensions)
     for (key, value) in dumb_capabilities
         @test dumb[key] == value
@@ -899,9 +919,9 @@ let
 
     xterm = Base.TermInfo(read(IOBuffer(xterm_terminfo), Base.TermInfoRaw))
     @test xterm.names == ["xterm", "xterm terminal emulator (X Window System)"]
-    @test length(xterm.flags) == 78
-    @test length(xterm.numbers) == 29
-    @test length(xterm.strings) == 432
+    @test length(xterm.flags) == 40
+    @test length(xterm.numbers) == 15
+    @test length(xterm.strings) == 253
     @test sort(xterm.extensions |> collect) == sort(xterm_extensions)
     for (key, value) in xterm_capabilities
         @test xterm[key] == value

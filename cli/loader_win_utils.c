@@ -12,6 +12,10 @@ static FILE _stderr = { INVALID_HANDLE_VALUE };
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
 
+void JL_HIDDEN free(void* mem) {
+    HeapFree(GetProcessHeap(), 0, mem);
+}
+
 int JL_HIDDEN fwrite(const char *str, size_t nchars, FILE *out) {
     DWORD written;
     if (out->isconsole) {
@@ -42,10 +46,6 @@ void JL_HIDDEN *malloc(const size_t size) {
 
 void JL_HIDDEN *realloc(void * mem, const size_t size) {
     return HeapReAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, mem, size);
-}
-
-void JL_HIDDEN free(void* mem) {
-    HeapFree(GetProcessHeap(), 0, mem);
 }
 
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs) {

@@ -16,6 +16,7 @@ export BINDIR,
        JIT,
        cpu_info,
        cpu_summary,
+       sysimage_target,
        uptime,
        loadavg,
        free_memory,
@@ -34,9 +35,10 @@ export BINDIR,
        isjsvm,
        isexecutable,
        isreadable,
-       iswriteable,
+       iswritable,
        username,
-       which
+       which,
+       detectwsl
 
 import ..Base: show
 
@@ -56,6 +58,8 @@ global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSI
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
+# Similarly, this is the root of the julia repo directory that julia was built from
+const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 
@@ -101,7 +105,7 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 """
-    Sys.SC_CLK_TCK:
+    Sys.SC_CLK_TCK::Clong
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
@@ -147,7 +151,7 @@ function __init__()
     end
     global CPU_THREADS = if env_threads !== nothing
         env_threads = tryparse(Int, env_threads)
-        if !(env_threads isa Int && env_threads > 0)
+        if env_threads === nothing || env_threads <= 0
             env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
             Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
@@ -165,7 +169,7 @@ end
 # without pulling in anything unnecessary like `CPU_NAME`
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
@@ -310,6 +314,23 @@ function cpu_info()
 end
 
 """
+    Sys.sysimage_target()
+
+Return the CPU target string that was used to build the current system image.
+
+This function returns the original CPU target specification that was passed to Julia
+when the system image was compiled. This can be useful for reproducing the same
+system image or for understanding what CPU features were enabled during compilation.
+
+If the system image was built with the default settings this will return `"native"`.
+
+See also [`JULIA_CPU_TARGET`](@ref).
+"""
+function sysimage_target()
+    return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
+end
+
+"""
     Sys.uptime()
 
 Gets the current system uptime in seconds.
@@ -399,7 +420,7 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - man page of `getrusage`(2) on Linux and BSD.
     - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
@@ -530,6 +551,27 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 
+"""
+    Sys.detectwsl()
+
+Runtime predicate for testing if Julia is running inside
+Windows Subsystem for Linux (WSL).
+
+!!! note
+    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
+    cannot meaningfully be used in `@static if` constructs.
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
+"""
+function detectwsl()
+    # We use the same approach as canonical/snapd do to detect WSL
+    islinux() && (
+        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
+        || isdir("/run/WSL")
+    )
+end
+
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
@@ -553,85 +595,9 @@ windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
 
-"""
-    Sys.isexecutable(path::String)
-
-Return `true` if the given `path` has executable permissions.
-
-!!! note
-    This permission may change before the user executes `path`,
-    so it is recommended to execute the file and handle the error if that fails,
-    rather than calling `isexecutable` first.
-
-!!! note
-    Prior to Julia 1.6, this did not correctly interrogate filesystem
-    ACLs on Windows, therefore it would return `true` for any
-    file.  From Julia 1.6 on, it correctly determines whether the
-    file is marked as executable or not.
-
-See also [`ispath`](@ref), [`isreadable`](@ref), [`iswriteable`](@ref).
-"""
-function isexecutable(path::String)
-    # We use `access()` and `X_OK` to determine if a given path is
-    # executable by the current user.  `X_OK` comes from `unistd.h`.
-    X_OK = 0x01
-    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
-end
-isexecutable(path::AbstractString) = isexecutable(String(path))
-
-"""
-    Sys.isreadable(path::String)
-
-Return `true` if the access permissions for the given `path` permitted reading by the current user.
-
-!!! note
-    This permission may change before the user calls `open`,
-    so it is recommended to just call `open` alone and handle the error if that fails,
-    rather than calling `isreadable` first.
-
-!!! note
-    Currently this function does not correctly interrogate filesystem
-    ACLs on Windows, therefore it can return wrong results.
-
-!!! compat "Julia 1.11"
-    This function requires at least Julia 1.11.
-
-See also [`ispath`](@ref), [`isexecutable`](@ref), [`iswriteable`](@ref).
-"""
-function isreadable(path::String)
-    # We use `access()` and `R_OK` to determine if a given path is
-    # readable by the current user.  `R_OK` comes from `unistd.h`.
-    R_OK = 0x04
-    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
-end
-isreadable(path::AbstractString) = isreadable(String(path))
-
-"""
-    Sys.iswriteable(path::String)
-
-Return `true` if the access permissions for the given `path` permitted writing by the current user.
-
-!!! note
-    This permission may change before the user calls `open`,
-    so it is recommended to just call `open` alone and handle the error if that fails,
-    rather than calling `iswriteable` first.
-
-!!! note
-    Currently this function does not correctly interrogate filesystem
-    ACLs on Windows, therefore it can return wrong results.
-
-!!! compat "Julia 1.11"
-    This function requires at least Julia 1.11.
-
-See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
-"""
-function iswriteable(path::String)
-    # We use `access()` and `W_OK` to determine if a given path is
-    # writeable by the current user.  `W_OK` comes from `unistd.h`.
-    W_OK = 0x02
-    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
-end
-iswriteable(path::AbstractString) = iswriteable(String(path))
+const isexecutable = Base.isexecutable
+const isreadable   = Base.isreadable
+const iswritable   = Base.iswritable
 
 """
     Sys.which(program_name::String)
@@ -713,7 +679,7 @@ end
 which(program_name::AbstractString) = which(String(program_name))
 
 """
-    Sys.username() -> String
+    Sys.username()::String
 
 Return the username for the current user. If the username cannot be determined
 or is empty, this function throws an error.

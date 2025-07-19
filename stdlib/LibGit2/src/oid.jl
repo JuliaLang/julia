@@ -133,7 +133,7 @@ function GitHash(repo::GitRepo, ref_name::AbstractString)
     oid_ptr  = Ref(GitHash())
     @check ccall((:git_reference_name_to_id, libgit2), Cint,
                     (Ptr{GitHash}, Ptr{Cvoid}, Cstring),
-                     oid_ptr, repo.ptr, ref_name)
+                     oid_ptr, repo, ref_name)
     return oid_ptr[]
 end
 
@@ -144,7 +144,7 @@ Get the identifier (`GitHash`) of `obj`.
 """
 function GitHash(obj::GitObject)
     ensure_initialized()
-    GitHash(ccall((:git_object_id, libgit2), Ptr{UInt8}, (Ptr{Cvoid},), obj.ptr))
+    GitHash(ccall((:git_object_id, libgit2), Ptr{UInt8}, (Ptr{Cvoid},), obj))
 end
 
 ==(obj1::GitObject, obj2::GitObject) = GitHash(obj1) == GitHash(obj2)
@@ -160,14 +160,14 @@ function GitShortHash(obj::GitObject)
     ensure_initialized()
     buf_ref = Ref(Buffer())
     @check ccall((:git_object_short_id, libgit2), Cint,
-                 (Ptr{Buffer},Ptr{Cvoid}), buf_ref, obj.ptr)
+                 (Ptr{Buffer},Ptr{Cvoid}), buf_ref, obj)
     sid = GitShortHash(buf_ref[])
     free(buf_ref)
     return sid
 end
 
 """
-    raw(id::GitHash) -> Vector{UInt8}
+    raw(id::GitHash)::Vector{UInt8}
 
 Obtain the raw bytes of the [`GitHash`](@ref) as a vector of length $OID_RAWSZ.
 """
@@ -207,7 +207,7 @@ Base.cmp(id1::GitShortHash, id2::GitHash) = cmp(id1, GitShortHash(id2, OID_HEXSZ
 Base.isless(id1::AbstractGitHash, id2::AbstractGitHash)  = cmp(id1, id2) < 0
 
 """
-    iszero(id::GitHash) -> Bool
+    iszero(id::GitHash)::Bool
 
 Determine whether all hexadecimal digits of the given [`GitHash`](@ref) are zero.
 """

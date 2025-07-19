@@ -39,13 +39,11 @@ const SZ_UNBUFFERED_IO = 65536
 buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 
 """
-    isopen(object) -> Bool
+    isopen(object)::Bool
 
-Determine whether an object - such as a stream or timer
--- is not yet closed. Once an object is closed, it will never produce a new event.
-However, since a closed stream may still have data to read in its buffer,
-use [`eof`](@ref) to check for the ability to read data.
-Use the `FileWatching` package to be notified when a stream might be writable or readable.
+Determine whether an object, such as an IO or timer, is still open and hence active.
+
+See also: [`close`](@ref)
 
 # Examples
 ```jldoctest
@@ -63,9 +61,19 @@ false
 function isopen end
 
 """
-    close(stream)
+    close(io::IO)
 
-Close an I/O stream. Performs a [`flush`](@ref) first.
+Close `io`. Performs a [`flush`](@ref) first.
+
+Closing an IO signals that its underlying resources (OS handle, network
+connections, etc) should be destroyed.
+A closed IO is in an undefined state and should not be written to or read from.
+When attempting to do so, the IO may throw an exception, continue to behave
+normally, or read/write zero bytes, depending on the implementation.
+However, implementations should make sure that reading to or writing from a
+closed IO does not cause undefined behaviour.
+
+See also: [`isopen`](@ref)
 """
 function close end
 
@@ -97,9 +105,11 @@ julia> read(io, String)
 function closewrite end
 
 """
-    flush(stream)
+    flush(io::IO)
 
-Commit all currently buffered writes to the given stream.
+Commit all currently buffered writes to the given io.
+This has a default implementation `flush(::IO) = nothing`, so may be called
+in generic IO code.
 """
 function flush end
 
@@ -131,8 +141,10 @@ data has already been buffered. The result is a `Vector{UInt8}`.
 """
 function readavailable end
 
+function isexecutable end
+
 """
-    isreadable(io) -> Bool
+    isreadable(io)::Bool
 
 Return `false` if the specified IO object is not readable.
 
@@ -155,7 +167,7 @@ julia> rm("myfile.txt")
 isreadable(io::IO) = isopen(io)
 
 """
-    iswritable(io) -> Bool
+    iswritable(io)::Bool
 
 Return `false` if the specified IO object is not writable.
 
@@ -178,7 +190,7 @@ julia> rm("myfile.txt")
 iswritable(io::IO) = isopen(io)
 
 """
-    eof(stream) -> Bool
+    eof(stream)::Bool
 
 Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
 function will block to wait for more data if necessary, and then return `false`. Therefore
@@ -245,7 +257,7 @@ The endianness of the written value depends on the endianness of the host system
 Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
 [`ltoh`](@ref)) to get results that are consistent across platforms.
 
-You can write multiple values with the same `write` call. i.e. the following are equivalent:
+You can write multiple values with the same `write` call, i.e. the following are equivalent:
 
     write(io, x, y...)
     write(io, x) + write(io, y...)
@@ -275,13 +287,13 @@ julia> io = IOBuffer();
 julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 56
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization. It has many members."
 
 julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 44
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Sometimes those members write documentation."
 ```
 User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
@@ -349,7 +361,7 @@ peek(s) = peek(s, UInt8)::UInt8
 # Generic `open` methods
 
 """
-    open_flags(; keywords...) -> NamedTuple
+    open_flags(; keywords...)::NamedTuple
 
 Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
 a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
@@ -541,8 +553,8 @@ julia> rm("my_file.txt")
 ```
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
-readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...)))
+readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
 readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
@@ -564,10 +576,10 @@ Similar to [`readuntil`](@ref), which returns a `String`; in contrast,
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", 'L')))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", 'L'))
 "Julia"
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true)))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true))
 "JuliaLang is a GitHub organization."
 
 julia> rm("my_file.txt")
@@ -614,8 +626,7 @@ Logan
 """
 readline(filename::AbstractString; keep::Bool=false) =
     open(io -> readline(io; keep), filename)
-readline(s::IO=stdin; keep::Bool=false) =
-    String(_unsafe_take!(copyline(IOBuffer(sizehint=70), s; keep)))
+readline(s::IO=stdin; keep::Bool=false) = takestring!(copyline(IOBuffer(sizehint=16), s; keep))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -640,10 +651,10 @@ See also [`copyuntil`](@ref) for reading until more general delimiters.
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt")))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt"))
 "JuliaLang is a GitHub organization."
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt", keep=true)))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt", keep=true))
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
@@ -766,7 +777,7 @@ htol(x)
 
 
 """
-    isreadonly(io) -> Bool
+    isreadonly(io)::Bool
 
 Determine whether a stream is read-only.
 
@@ -802,7 +813,7 @@ unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p)
 function write(s::IO, x::Ref{T}) where {T}
     x isa Ptr && error("write cannot copy from a Ptr")
     if isbitstype(T)
-        unsafe_write(s, x, Core.sizeof(T))
+        Int(unsafe_write(s, x, Core.sizeof(T)))
     else
         write(s, x[])
     end
@@ -862,11 +873,10 @@ end
 
 function write(io::IO, c::Char)
     u = bswap(reinterpret(UInt32, c))
-    n = 1
+    n = 0
     while true
-        write(io, u % UInt8)
+        n += write(io, u % UInt8)
         (u >>= 8) == 0 && return n
-        n += 1
     end
 end
 # write(io, ::AbstractChar) is not defined: implementations
@@ -1109,7 +1119,7 @@ function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
 end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
-    out = (T === UInt8 ? resize!(StringVector(70), 0) : Vector{T}())
+    out = (T === UInt8 ? resize!(StringVector(16), 0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
 end
@@ -1289,7 +1299,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
         empty!(chunks) # will cause next iteration to terminate
         seekend(r.itr.stream) # reposition to end of stream for isdone
-        s = String(_unsafe_take!(buf))
+        s = unsafe_takestring!(buf)
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         if ichunk == jchunk # common case: current and previous newline in same chunk
@@ -1306,7 +1316,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             end
             write(buf, view(chunks[jchunk], 1:jnewline))
             buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
-            s = String(_unsafe_take!(buf))
+            s = unsafe_takestring!(buf)
 
             # overwrite obsolete chunks (ichunk+1:jchunk)
             i = jchunk
@@ -1424,7 +1434,7 @@ previously marked position. Throw an error if the stream is not marked.
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset(io::T) where T<:IO
-    ismarked(io) || throw(ArgumentError("$T not marked"))
+    ismarked(io) || throw(ArgumentError(LazyString(T, " not marked")))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail

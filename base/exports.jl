@@ -1,5 +1,44 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Re-exports from `Core`
+export Core,
+    # key types
+    Any, DataType, Vararg, NTuple,
+    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    AbstractArray, DenseArray, NamedTuple, Pair,
+    # special objects
+    Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Array, Memory, MemoryRef, AtomicMemory, AtomicMemoryRef, GenericMemory, GenericMemoryRef,
+    # numeric types
+    Number, Real, Integer, Bool, Ref, Ptr,
+    AbstractFloat, Float16, Float32, Float64,
+    Signed, Int, Int8, Int16, Int32, Int64, Int128,
+    Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
+    # string types
+    AbstractChar, Char, AbstractString, String, IO,
+    # errors
+    ErrorException, BoundsError, DivideError, DomainError, Exception,
+    InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
+    OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
+    # AST representation
+    Expr, QuoteNode, LineNumberNode, GlobalRef,
+    # object model functions
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
+    nfields, throw, tuple, ===, isdefined,
+    # access to globals
+    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
+    # ifelse, sizeof    # not exported, to avoid conflicting with Base
+    # type reflection
+    <:, typeof, isa, typeassert,
+    # method reflection
+    applicable, invoke,
+    # constants
+    nothing, Main,
+    # backwards compatibility
+    arrayref, arrayset, arraysize, const_arrayref
+
 export
 # Modules
     Meta,
@@ -58,6 +97,7 @@ export
     IOBuffer,
     IOStream,
     LinRange,
+    Lockable,
     Irrational,
     LazyString,
     Matrix,
@@ -69,6 +109,9 @@ export
     OrdinalRange,
     Pair,
     PartialQuickSort,
+    OncePerProcess,
+    OncePerTask,
+    OncePerThread,
     PermutedDimsArray,
     QuickSort,
     Rational,
@@ -295,7 +338,9 @@ export
     isinf,
     isinteger,
     isnan,
+    isnegative,
     isodd,
+    ispositive,
     ispow2,
     isqrt,
     isreal,
@@ -406,6 +451,7 @@ export
     indexin,
     argmax,
     argmin,
+    insertdims,
     invperm,
     invpermute!,
     isassigned,
@@ -460,7 +506,6 @@ export
     vcat,
     vec,
     view,
-    wrap,
     zeros,
 
 # search, find, match and related functions
@@ -550,6 +595,7 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
+    memoryref,
     merge!,
     mergewith!,
     merge,
@@ -594,6 +640,7 @@ export
     codepoint,
     codeunit,
     codeunits,
+    ctruncate,
     digits,
     digits!,
     eachsplit,
@@ -618,6 +665,7 @@ export
     join,
     lpad,
     lstrip,
+    ltruncate,
     ncodeunits,
     ndigits,
     nextind,
@@ -630,9 +678,11 @@ export
     rpad,
     rsplit,
     rstrip,
+    rtruncate,
     split,
     string,
     strip,
+    takestring!,
     textwidth,
     thisind,
     titlecase,
@@ -652,11 +702,6 @@ export
     showerror,
     sprint,
     summary,
-
-# ScopedValue
-    with,
-    @with,
-    ScopedValue,
 
 # logging
     @debug,
@@ -711,6 +756,8 @@ export
     yield,
     yieldto,
     wait,
+    waitany,
+    waitall,
     timedwait,
     asyncmap,
     asyncmap!,
@@ -719,6 +766,7 @@ export
 # channels
     take!,
     put!,
+    isfull,
     isready,
     fetch,
     bind,
@@ -762,6 +810,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldindex,
     fieldcount,
     fieldtypes,
     hasfield,
@@ -812,6 +861,7 @@ export
     @invoke,
     invokelatest,
     @invokelatest,
+    @world,
 
 # loading source files
     __precompile__,
@@ -935,6 +985,7 @@ export
     isblockdev,
     ischardev,
     isdir,
+    isexecutable,
     isfifo,
     isfile,
     islink,
@@ -1008,6 +1059,7 @@ export
     @__DIR__,
     @__LINE__,
     @__MODULE__,
+    @__FUNCTION__,
     @int128_str,
     @uint128_str,
     @big_str,
@@ -1078,103 +1130,3 @@ export
     @static,
 
     @main
-
-public
-# Modules
-    Checked,
-    Filesystem,
-    Order,
-    Sort,
-
-# Types
-    AbstractLock,
-    AsyncCondition,
-    CodeUnits,
-    Event,
-    Fix1,
-    Fix2,
-    Generator,
-    ImmutableDict,
-    OneTo,
-    LogRange,
-    AnnotatedString,
-    AnnotatedChar,
-    UUID,
-
-# Annotated strings
-    annotatedstring,
-    annotate!,
-    annotations,
-
-# Semaphores
-    Semaphore,
-    acquire,
-    release,
-
-# collections
-    IteratorEltype,
-    IteratorSize,
-    to_index,
-    vect,
-    isdone,
-    front,
-    rest,
-    split_rest,
-    tail,
-    checked_length,
-
-# Loading
-    DL_LOAD_PATH,
-    load_path,
-    active_project,
-
-# Reflection and introspection
-    isambiguous,
-    isexpr,
-    isidentifier,
-    issingletontype,
-    identify_package,
-    locate_package,
-    moduleroot,
-    jit_total_bytes,
-    summarysize,
-    isexported,
-    ispublic,
-    remove_linenums!,
-
-# Opperators
-    operator_associativity,
-    operator_precedence,
-    isbinaryoperator,
-    isoperator,
-    isunaryoperator,
-
-# C interface
-    cconvert,
-    unsafe_convert,
-
-# Error handling
-    exit_on_sigint,
-    windowserror,
-
-# Macros
-    @assume_effects,
-    @constprop,
-    @locals,
-    @propagate_inbounds,
-
-# IO
-    # types
-    BufferStream,
-    IOServer,
-    OS_HANDLE,
-    PipeEndpoint,
-    TTY,
-    # functions
-    reseteof,
-    link_pipe!,
-
-# misc
-    notnothing,
-    runtests,
-    text_colors

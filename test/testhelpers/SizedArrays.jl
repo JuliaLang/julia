@@ -14,7 +14,7 @@ import LinearAlgebra: mul!
 
 export SizedArray
 
-struct SOneTo{N} <: AbstractUnitRange{Int} end
+struct SOneTo{N} <: Base.AbstractOneTo{Int} end
 SOneTo(N) = SOneTo{N}()
 Base.length(::SOneTo{N}) where {N} = N
 Base.size(r::SOneTo) = (length(r),)
@@ -22,6 +22,9 @@ Base.axes(r::SOneTo) = (r,)
 Base.first(::SOneTo) = 1
 Base.last(r::SOneTo) = length(r)
 Base.show(io::IO, r::SOneTo) = print(io, "SOneTo(", length(r), ")")
+
+Broadcast.axistype(a::Base.OneTo, s::SOneTo) = s
+Broadcast.axistype(s::SOneTo, a::Base.OneTo) = s
 
 struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
@@ -33,19 +36,45 @@ struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
         SZ == size(data) || throw(ArgumentError("size mismatch!"))
         new{SZ,T,N,A}(A(data))
     end
+    function SizedArray{SZ,T,N}(data::A) where {SZ,T,N,A<:AbstractArray{T,N}}
+        SizedArray{SZ,T,N,A}(data)
+    end
+    function SizedArray{SZ,T}(data::A) where {SZ,T,N,A<:AbstractArray{T,N}}
+        SizedArray{SZ,T,N,A}(data)
+    end
 end
 SizedMatrix{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,2,A}
 SizedVector{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,1,A}
-Base.convert(::Type{SizedArray{SZ,T,N,A}}, data::AbstractArray) where {SZ,T,N,A} = SizedArray{SZ,T,N,A}(data)
+Base.convert(::Type{S}, data::AbstractArray) where {S<:SizedArray} = data isa S ? data : S(data)
 
 # Minimal AbstractArray interface
 Base.size(a::SizedArray) = size(typeof(a))
 Base.size(::Type{<:SizedArray{SZ}}) where {SZ} = SZ
 Base.axes(a::SizedArray) = map(SOneTo, size(a))
 Base.getindex(A::SizedArray, i...) = getindex(A.data, i...)
+Base.setindex!(A::SizedArray, v, i...) = setindex!(A.data, v, i...)
 Base.zero(::Type{T}) where T <: SizedArray = SizedArray{size(T)}(zeros(eltype(T), size(T)))
+function Base.one(::Type{SizedMatrix{SZ,T,A}}) where {SZ,T,A}
+    allequal(SZ) || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
+    D = diagm(fill(one(T), SZ[1]))
+    SizedArray{SZ}(convert(A, D))
+end
+Base.parent(S::SizedArray) = S.data
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)
 ==(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = S1.data == S2.data
+
+function Base.similar(::Type{A}, shape::Tuple{SOneTo, Vararg{SOneTo}}) where {A<:AbstractArray}
+    R = similar(A, length.(shape))
+    SizedArray{length.(shape)}(R)
+end
+function Base.similar(x::SizedArray, ::Type{T}, shape::Tuple{SOneTo, Vararg{SOneTo}}) where {T}
+    sz = map(length, shape)
+    SizedArray{sz}(similar(parent(x), T, sz))
+end
+function Base.reshape(x::AbstractArray, shape::Tuple{SOneTo, Vararg{SOneTo}})
+    sz = map(length, shape)
+    SizedArray{length.(sz)}(reshape(x, length.(sz)))
+end
 
 const SizedMatrixLike = Union{SizedMatrix, Transpose{<:Any, <:SizedMatrix}, Adjoint{<:Any, <:SizedMatrix}}
 
@@ -70,5 +99,8 @@ mul!(dest::AbstractMatrix, S1::SizedMatrix, S2::SizedMatrix, α::Number, β::Num
     mul!(dest, _data(S1), _data(S2), α, β)
 mul!(dest::AbstractVector, M::AbstractMatrix, v::SizedVector, α::Number, β::Number) =
     mul!(dest, M, _data(v), α, β)
+
+LinearAlgebra.zeroslike(::Type{S}, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) where {S<:SizedArray} =
+            zeros(eltype(S), ax)
 
 end

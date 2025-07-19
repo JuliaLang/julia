@@ -130,25 +130,33 @@ environment variable or if it must have a value, set it to the string `:`.
 
 ### [`JULIA_DEPOT_PATH`](@id JULIA_DEPOT_PATH)
 
-The [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is used to populate the global Julia
-[`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
-as Julia's code loading mechanisms, look for package registries, installed
-packages, named environments, repo clones, cached compiled package images,
-configuration files, and the default location of the REPL's history file.
+The [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is used to populate the
+global Julia [`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
+as Julia's code loading mechanisms, look for package registries, installed packages, named
+environments, repo clones, cached compiled package images, configuration files, and the default
+location of the REPL's history file.
 
 Unlike the shell `PATH` variable but similar to [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
-empty entries in [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) are expanded to the default
-value of `DEPOT_PATH`, excluding the user depot. This allows easy overriding of the user
-depot, while still retaining access to resources that are bundled with Julia, like cache
-files, artifacts, etc. For example, to switch the user depot to `/foo/bar` just do
+empty entries in [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) have special behavior:
+- At the end, it is expanded to the default value of `DEPOT_PATH`, *excluding* the user depot.
+- At the start, it is expanded to the default value of `DEPOT_PATH`, *including* the user depot.
+This allows easy overriding of the user depot, while still retaining access to resources that
+are bundled with Julia, like cache files, artifacts, etc. For example, to switch the user depot
+to `/foo/bar` use a trailing `:`
 ```sh
 export JULIA_DEPOT_PATH="/foo/bar:"
 ```
-All package operations, like cloning registrise or installing packages, will now write to
+All package operations, like cloning registries or installing packages, will now write to
 `/foo/bar`, but since the empty entry is expanded to the default system depot, any bundled
 resources will still be available. If you really only want to use the depot at `/foo/bar`,
 and not load any bundled resources, simply set the environment variable to `/foo/bar`
 without the trailing colon.
+
+To append a depot at the end of the full default list, including the default user depot, use a
+leading `:`
+```sh
+export JULIA_DEPOT_PATH=":/foo/bar"
+```
 
 There are two exceptions to the above rule. First, if [`JULIA_DEPOT_PATH`](@ref
 JULIA_DEPOT_PATH) is set to the empty string, it expands to an empty `DEPOT_PATH` array. In
@@ -234,7 +242,7 @@ Specifies the preferred registry flavor. Currently supported values are `conserv
 (the default), which will only publish resources that have been processed by the storage
 server (and thereby have a higher probability of being available from the PkgServers),
 whereas `eager` will publish registries whose resources have not necessarily been
-processed by the storage servers.  Users behind restrictive firewalls that do not allow
+processed by the storage servers. Users behind restrictive firewalls that do not allow
 downloading from arbitrary servers should not use the `eager` flavor.
 
 !!! compat "Julia 1.7"
@@ -266,6 +274,14 @@ versions of packages already installed as possible.
 
 !!! compat "Julia 1.9"
     This only affects Julia 1.9 and above.
+
+### [`JULIA_PKG_GC_AUTO`](@id JULIA_PKG_GC_AUTO)
+
+If set to `false`, automatic garbage collection of packages and artifacts will be disabled;
+see [`Pkg.gc`](https://pkgdocs.julialang.org/v1/api/#Pkg.gc) for more details.
+
+!!! compat "Julia 1.12"
+    This environment variable is only supported on Julia 1.12 and above.
 
 ## Network transport
 
@@ -320,16 +336,25 @@ a master process to establish a connection before dying.
 
 ### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
-An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia.  If `$JULIA_NUM_THREADS` is not positive or is not set, or
-if the number of CPU threads cannot be determined through system calls, then the
-number of threads is set to `1`.
+An unsigned 64-bit integer (`uint64_t`) or string that sets the maximum number
+of threads available to Julia. If `$JULIA_NUM_THREADS` is not set or is a
+non-positive integer, or if the number of CPU threads cannot be determined
+through system calls, then the number of threads is set to `1`.
 
 If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads.
+to the number of CPU threads. It can also be set to a comma-separated string to
+specify the size of the `:default` and `:interactive` [threadpools](@ref
+man-threadpools), respectively:
+```bash
+# 5 threads in the :default pool and 2 in the :interactive pool
+export JULIA_NUM_THREADS=5,2
+
+# `auto` threads in the :default pool and 1 in the :interactive pool
+export JULIA_NUM_THREADS=auto,1
+```
 
 !!! note
-    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
+    `JULIA_NUM_THREADS` must be defined before starting Julia; defining it in
     `startup.jl` is too late in the startup process.
 
 !!! compat "Julia 1.5"
@@ -338,6 +363,9 @@ to the number of CPU threads.
 
 !!! compat "Julia 1.7"
     The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.
+
+!!! compat "Julia 1.9"
+    The `x,y` format for threadpools requires Julia 1.9 or above.
 
 ### [`JULIA_THREAD_SLEEP_THRESHOLD`](@id JULIA_THREAD_SLEEP_THRESHOLD)
 
@@ -348,8 +376,7 @@ nanoseconds, the amount of time after which spinning threads should sleep.
 
 ### [`JULIA_NUM_GC_THREADS`](@id JULIA_NUM_GC_THREADS)
 
-Sets the number of threads used by Garbage Collection. If unspecified is set to
-half of the number of worker threads.
+Sets the number of threads used by Garbage Collection. If unspecified is set to the number of worker threads.
 
 !!! compat "Julia 1.10"
     The environment variable was added in 1.10
@@ -370,13 +397,33 @@ during image compilation. Defaults to 0.
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
-running on a dedicated machine: the master thread is on proc 0, and threads are
-affinitized. Otherwise, Julia lets the operating system handle thread policy.
+running on a dedicated machine: each thread in the default threadpool is
+affinitized.  [Interactive threads](@ref man-threadpools) remain under the
+control of the operating system scheduler.
+
+Otherwise, Julia lets the operating system handle thread policy.
+
+## Garbage Collection
+
+### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
+
+Environment variable equivalent to the `--heap-size-hint=<size>[<unit>]` command line option.
+
+Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of:
+
+    - B  (bytes)
+    - K  (kibibytes)
+    - M  (mebibytes)
+    - G  (gibibytes)
+    - T  (tebibytes)
+    - %  (percentage of physical memory)
+
+For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 
 ## REPL formatting
 
 Environment variables that determine how REPL output should be formatted at the
-terminal. Generally, these variables should be set to [ANSI terminal escape
+terminal. The `JULIA_*_COLOR` variables should be set to [ANSI terminal escape
 sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
 a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
@@ -406,6 +453,19 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
+### [`NO_COLOR`](@id NO_COLOR)
+
+When this variable is present and not an empty string (regardless of its value) then colored
+text will be disabled on the REPL. Can be overridden with the flag `--color=yes` or with the
+environment variable [`FORCE_COLOR`](@ref FORCE_COLOR). This environment variable is
+[commonly recognized by command-line applications](https://no-color.org/).
+
+### [`FORCE_COLOR`](@id FORCE_COLOR)
+
+When this variable is present and not an empty string (regardless of its value) then
+colored text will be enabled on the REPL. Can be overridden with the flag `--color=no`. This
+environment variable is [commonly recognized by command-line applications](https://force-color.org/).
+
 ## System and Package Image Building
 
 ### [`JULIA_CPU_TARGET`](@id JULIA_CPU_TARGET)
@@ -419,9 +479,15 @@ stored in memory.
 
 Valid values for [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) can be obtained by executing `julia -C help`.
 
+To get the CPU target string that was used to build the current system image,
+use [`Sys.sysimage_target()`](@ref). This can be useful for reproducing
+the same system image or understanding what CPU features were enabled during compilation.
+
 Setting [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) is important for heterogeneous compute systems where processors of
 distinct types or features may be present. This is commonly encountered in high performance
-computing (HPC) clusters since the component nodes may be using distinct processors.
+computing (HPC) clusters since the component nodes may be using distinct processors. In this case,
+you may want to use the `sysimage` CPU target to maintain the same configuration as the sysimage.
+See below for more details.
 
 The CPU target string is a list of strings separated by `;` each string starts with a CPU
 or architecture name and followed by an optional list of features separated by `,`.
@@ -430,13 +496,21 @@ which is at least the architecture the C/C++ runtime is compiled with. Each stri
 is interpreted by LLVM.
 
 A few special features are supported:
-1. `clone_all`
+
+1. `sysimage`
+
+     A special keyword that can be used as a CPU target name, which will be replaced
+     with the CPU target string that was used to build the current system image. This allows
+     you to specify CPU targets that build upon or extend the current sysimage's target, which
+     is particularly helpful for creating package images that are as flexible as the sysimage.
+
+2. `clone_all`
 
      This forces the target to have all functions in sysimg cloned.
      When used in negative form (i.e. `-clone_all`), this disables full clone that's
      enabled by default for certain targets.
 
-2. `base([0-9]*)`
+3. `base([0-9]*)`
 
      This specifies the (0-based) base target index. The base target is the target
      that the current target is based on, i.e. the functions that are not being cloned
@@ -444,11 +518,11 @@ A few special features are supported:
      fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
      The index can only be smaller than the current index.
 
-3. `opt_size`
+4. `opt_size`
 
      Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
 
-4. `min_size`
+5. `min_size`
 
      Optimize only for size. Clang's `-Oz`.
 
@@ -469,46 +543,6 @@ See [Triggered During Execution](@ref).
 Allows you to enable or disable zones for a specific Julia run.
 For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable
 the `INFERENCE` zones. See [Dynamically Enabling and Disabling Zones](@ref).
-
-### [`JULIA_GC_ALLOC_POOL`](@id JULIA_GC_ALLOC_POOL)
-### [`JULIA_GC_ALLOC_OTHER`](@id JULIA_GC_ALLOC_OTHER)
-### [`JULIA_GC_ALLOC_PRINT`](@id JULIA_GC_ALLOC_PRINT)
-
-If set, these environment variables take strings that optionally start with the
-character `'r'`, followed by a string interpolation of a colon-separated list of
-three signed 64-bit integers (`int64_t`). This triple of integers `a:b:c`
-represents the arithmetic sequence `a`, `a + b`, `a + 2*b`, ... `c`.
-
-*   If it's the `n`th time that `jl_gc_pool_alloc()` has been called, and `n`
-    belongs to the arithmetic sequence represented by `$JULIA_GC_ALLOC_POOL`,
-    then garbage collection is forced.
-*   If it's the `n`th time that `maybe_collect()` has been called, and `n` belongs
-    to the arithmetic sequence represented by `$JULIA_GC_ALLOC_OTHER`, then garbage
-    collection is forced.
-*   If it's the `n`th time that `jl_gc_collect()` has been called, and `n` belongs
-    to the arithmetic sequence represented by `$JULIA_GC_ALLOC_PRINT`, then counts
-    for the number of calls to `jl_gc_pool_alloc()` and `maybe_collect()` are
-    printed.
-
-If the value of the environment variable begins with the character `'r'`, then
-the interval between garbage collection events is randomized.
-
-!!! note
-
-    These environment variables only have an effect if Julia was compiled with
-    garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
-    in the build configuration).
-
-### [`JULIA_GC_NO_GENERATIONAL`](@id JULIA_GC_NO_GENERATIONAL)
-
-If set to anything besides `0`, then the Julia garbage collector never performs
-"quick sweeps" of memory.
-
-!!! note
-
-    This environment variable only has an effect if Julia was compiled with
-    garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
-    in the build configuration).
 
 ### [`JULIA_GC_WAIT_FOR_DEBUGGER`](@id JULIA_GC_WAIT_FOR_DEBUGGER)
 

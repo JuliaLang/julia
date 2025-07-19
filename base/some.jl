@@ -16,7 +16,7 @@ Some(::Type{T}) where {T} = Some{Type{T}}(T)
 
 promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
 
-nonnothingtype(::Type{T}) where {T} = typesplit(T, Nothing)
+nonnothingtype(@nospecialize(T::Type)) = typesplit(T, Nothing)
 promote_rule(T::Type{Nothing}, S::Type) = Union{S, Nothing}
 function promote_rule(T::Type{>:Nothing}, S::Type)
     R = nonnothingtype(T)
@@ -166,3 +166,8 @@ macro something(args...)
     end
     return expr
 end
+
+==(a::Some, b::Some) = a.value == b.value
+isequal(a::Some, b::Some)::Bool = isequal(a.value, b.value)
+const hash_some_seed = UInt == UInt64 ? 0xde5c997007a4ca3a : 0x78c29c09
+hash(s::Some, h::UInt) = hash(s.value, hash_some_seed + h)

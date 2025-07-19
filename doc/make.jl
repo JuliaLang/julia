@@ -1,11 +1,38 @@
+# Get the buildroot and stdlibdir from the make environment to make sure we're
+# generating docs for the current julia source tree, regardless of what julia
+# executable we're using. If these arguments are not passed, fall back to
+# assuming that we're running a just-built version of julia and generating docs
+# in tree.
+let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
+    if i === nothing
+        global const buildrootdoc = @__DIR__
+        global const buildroot = abspath(joinpath(buildrootdoc, ".."))
+    else
+        global const buildroot = first(match(r, ARGS[i]).captures)
+        global const buildrootdoc = joinpath(buildroot, "doc")
+    end
+end
+
+let r = r"stdlibdir=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
+    if i === nothing
+        global const STDLIB_DIR = Sys.STDLIB
+    else
+        global const STDLIB_DIR = first(match(r, ARGS[i]).captures)
+    end
+end
+
 # Install dependencies needed to build the documentation.
-Base.ACTIVE_PROJECT[] = nothing
-empty!(LOAD_PATH)
-push!(LOAD_PATH, @__DIR__, "@stdlib")
+documenter_project_dir = joinpath(@__DIR__, "..", "deps", "jlutilities", "documenter")
 empty!(DEPOT_PATH)
-pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
+push!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
+push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
+Pkg.activate(documenter_project_dir)
 Pkg.instantiate()
+
+if "deps" in ARGS
+    exit()
+end
 
 using Documenter
 import LibGit2
@@ -19,9 +46,8 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
 const STDLIB_DOCS = []
-const STDLIB_DIR = Sys.STDLIB
 const EXT_STDLIB_DOCS = ["Pkg"]
-cd(joinpath(@__DIR__, "src")) do
+cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
@@ -65,7 +91,8 @@ function parse_stdlib_version_file(path)
 end
 # This generates the value that will be passed to the `remotes` argument of makedocs(),
 # by looking through all *.version files in stdlib/.
-documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib"))
+documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib")),
+                                stdlib_build_dir = joinpath(buildrootdoc, "..", "stdlib")
     # Get a list of all *.version files in stdlib/..
     version_files = filter(readdir(stdlib_dir)) do fname
         isfile(joinpath(stdlib_dir, fname)) && endswith(fname, ".version")
@@ -92,7 +119,7 @@ documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "
             versionfile[sha_key]
         end
         # Construct the absolute (local) path to the stdlib package's root directory
-        package_root_dir = joinpath(stdlib_dir, "$(package)-$(package_sha)")
+        package_root_dir = joinpath(stdlib_build_dir, "$(package)-$(package_sha)")
         # Documenter needs package_root_dir to exist --- it's just a sanity check it does on the remotes= keyword.
         # In normal (local) builds, this will be the case, since the Makefiles will have unpacked the standard
         # libraries. However, on CI we do this thing where we actually build docs in a clean worktree, just
@@ -102,7 +129,14 @@ documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "
         isdir(package_root_dir) || mkpath(package_root_dir)
         package_root_dir => (remote, package_sha)
     end
-    Dict(remotes_list)
+    Dict(
+        # We also add the root of the repository to `remotes`, because we do not always build the docs in a
+        # checked out JuliaLang/julia repository. In particular, when building Julia from tarballs, there is no
+        # Git information available. And also the way the BuildKite CI is configured to check out the code means
+        # that in some circumstances the Git repository information is incorrect / no available via Git.
+        dirname(@__DIR__) => (Documenter.Remotes.GitHub("JuliaLang", "julia"), Base.GIT_VERSION_INFO.commit),
+        remotes_list...
+    )
 end
 
 # Check if we are building a PDF
@@ -115,7 +149,7 @@ function generate_markdown(basename)
     @assert length(splitted) == 2
     replaced_links = replace(splitted[1], r"\[\#([0-9]*?)\]" => s"[#\g<1>](https://github.com/JuliaLang/julia/issues/\g<1>)")
     write(
-        joinpath(@__DIR__, "src", "$basename.md"),
+        joinpath(buildrootdoc, "src", "$basename.md"),
         """
         ```@meta
         EditURL = "https://github.com/JuliaLang/julia/blob/master/$basename.md"
@@ -156,7 +190,9 @@ Manual = [
     "manual/environment-variables.md",
     "manual/embedding.md",
     "manual/code-loading.md",
+    "manual/profile.md",
     "manual/stacktraces.md",
+    "manual/memory-management.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
     "manual/style-guide.md",
@@ -164,6 +200,7 @@ Manual = [
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
     "manual/command-line-interface.md",
+    "manual/worldage.md",
 ]
 
 BaseDocs = [
@@ -190,12 +227,6 @@ BaseDocs = [
 ]
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
-
-Tutorials = [
-    "tutorials/creating-packages.md",
-    "tutorials/profile.md",
-    "tutorials/external.md",
-]
 
 DevDocs = [
     "Documentation of Julia's Internals" => [
@@ -226,6 +257,7 @@ DevDocs = [
         "devdocs/aot.md",
         "devdocs/gc-sa.md",
         "devdocs/gc.md",
+        "devdocs/gc-mmtk.md",
         "devdocs/jit.md",
         "devdocs/builtins.md",
         "devdocs/precompile_hang.md",
@@ -245,7 +277,18 @@ DevDocs = [
         "devdocs/build/windows.md",
         "devdocs/build/freebsd.md",
         "devdocs/build/arm.md",
+        "devdocs/build/riscv.md",
         "devdocs/build/distributing.md",
+    ],
+    "Contributor's Guide" => [
+        "devdocs/contributing/code-changes.md",
+        "devdocs/contributing/tests.md",
+        "devdocs/contributing/documentation.md",
+        "devdocs/contributing/jldoctests.md",
+        "devdocs/contributing/patch-releases.md",
+        "devdocs/contributing/formatting.md",
+        "devdocs/contributing/git-workflow.md",
+        "devdocs/contributing/aiagents.md"
     ]
 ]
 
@@ -255,7 +298,6 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     # Add "Release Notes" to devdocs
     "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
 ]
@@ -266,23 +308,17 @@ const PAGES = [
     "Manual" => Manual,
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     "Developer Documentation" => DevDocs,
 ]
 end
 
 const use_revise = "revise=true" in ARGS
 if use_revise
-    let revise_env = joinpath(@__DIR__, "deps", "revise")
-        Pkg.activate(revise_env)
-        Pkg.add("Revise"; preserve=Pkg.PRESERVE_NONE)
-        Base.ACTIVE_PROJECT[] = nothing
-        pushfirst!(LOAD_PATH, revise_env)
-    end
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
 end
 function maybe_revise(ex)
     use_revise || return ex
-    STDLIB_DIR = Sys.STDLIB
     STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
     return quote
         $ex
@@ -343,10 +379,6 @@ DocMeta.setdocmeta!(
     recursive=true, warn=false,
 )
 
-let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
-    global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)
-end
-
 const format = if render_pdf
     Documenter.LaTeX(
         platform = "texplatform=docker" in ARGS ? "docker" : "native"
@@ -365,11 +397,13 @@ else
         ansicolor = true,
         size_threshold = 800 * 2^10, # 800 KiB
         size_threshold_warn = 200 * 2^10, # the manual has quite a few large pages, so we warn at 200+ KiB only
+        inventory_version = VERSION,
     )
 end
 
-const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en")
+const output_path = joinpath(buildrootdoc, "_build", (render_pdf ? "pdf" : "html"), "en")
 makedocs(
+    source    = joinpath(buildrootdoc, "src"),
     build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
@@ -445,6 +479,7 @@ const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
 
 # Hack to make rc docs visible in the version selector
 struct Versions versions end
+Documenter.determine_deploy_subfolder(deploy_decision, ::Versions) = deploy_decision.subfolder
 function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     # Find all available docs
     available_folders = readdir(dir)
@@ -469,7 +504,7 @@ if "deploy" in ARGS
     deploydocs(
         repo = "github.com/JuliaLang/docs.julialang.org.git",
         deploy_config = BuildBotConfig(),
-        target = joinpath(buildroot, "doc", "_build", "html", "en"),
+        target = joinpath(buildrootdoc, "_build", "html", "en"),
         dirname = "en",
         devurl = devurl,
         versions = Versions(["v#.#", devurl => devurl]),

@@ -61,7 +61,7 @@ Channel(sz=0) = Channel{Any}(sz)
 """
     Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing)
 
-Create a new task from `func`, bind it to a new channel of type
+Create a new task from `func`, [`bind`](@ref) it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
 The channel is automatically closed when the task terminates.
 
@@ -130,8 +130,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
            for c in "hello world"
                put!(ch, c)
            end
-       end
-Channel{Char}(1) (2 items available)
+       end;
 
 julia> String(collect(chnl))
 "hello world"
@@ -212,11 +211,51 @@ function close(c::Channel, @nospecialize(excp::Exception))
     nothing
 end
 
-# Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
-# are forced to see `isready == true` if they see `isopen == false`. This means users must
-# call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
-# does this right for you).
-isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
+"""
+    isopen(c::Channel)
+Determines whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
+Notice that a `Channel`` can be closed and still have
+buffered elements which can be consumed with [`take!`](@ref).
+
+# Examples
+
+Buffered channel with task:
+```jldoctest
+julia> c = Channel(ch -> put!(ch, 1), 1);
+
+julia> isopen(c) # The channel is closed to new `put!`s
+false
+
+julia> isready(c) # The channel is closed but still contains elements
+true
+
+julia> take!(c)
+1
+
+julia> isready(c)
+false
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel{Int}();
+
+julia> isopen(c)
+true
+
+julia> close(c)
+
+julia> isopen(c)
+false
+```
+"""
+function isopen(c::Channel)
+    # Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
+    # are forced to see `isready == true` if they see `isopen == false`. This means users must
+    # call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
+    # does this right for you).
+    return ((@atomic :acquire c.state) === :open)
+end
 
 """
     empty!(c::Channel)
@@ -519,7 +558,7 @@ end
 Determines whether a [`Channel`](@ref) has a value stored in it.
 Returns immediately, does not block.
 
-For unbuffered channels returns `true` if there are tasks waiting on a [`put!`](@ref).
+For unbuffered channels, return `true` if there are tasks waiting on a [`put!`](@ref).
 
 # Examples
 
@@ -558,6 +597,47 @@ function n_avail(c::Channel)
     # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
     @atomic :monotonic c.n_avail_items
 end
+
+"""
+    isfull(c::Channel)
+
+Determines if a [`Channel`](@ref) is full, in the sense
+that calling `put!(c, some_value)` would have blocked.
+Returns immediately, does not block.
+
+Note that it may frequently be the case that `put!` will
+not block after this returns `true`. Users must take
+precautions not to accidentally create live-lock bugs
+in their code by calling this method, as these are
+generally harder to debug than deadlocks. It is also
+possible that `put!` will block after this call
+returns `false`, if there are multiple producer
+tasks calling `put!` in parallel.
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1); # capacity = 1
+
+julia> isfull(c)
+false
+
+julia> put!(c, 1);
+
+julia> isfull(c)
+true
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel(); # capacity = 0
+
+julia> isfull(c) # unbuffered channel is always full
+true
+```
+"""
+isfull(c::Channel) = n_avail(c) ≥ c.sz_max
 
 lock(c::Channel) = lock(c.cond_take)
 lock(f, c::Channel) = lock(f, c.cond_take)
@@ -635,6 +715,15 @@ function iterate(c::Channel, state=nothing)
             end
         end
     else
+        # If the channel was closed with an exception, it needs to be thrown
+        if (@atomic :acquire c.state) === :closed
+            e = c.excp
+            if isa(e, InvalidStateException) && e.state === :closed
+                nothing
+            else
+                throw(e)
+            end
+        end
         return nothing
     end
 end

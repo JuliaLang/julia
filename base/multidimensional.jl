@@ -4,10 +4,12 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
-                  convert, show, iterate, promote_rule, to_indices
+                  convert, show, iterate, promote_rule, to_indices, copy,
+                  isassigned, lastindex, firstindex
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
+    import Core: Tuple
     using .Base: to_index, fill_to_length, tail, safe_tail
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex,
         ReshapedArray, ReshapedArrayLF, OneTo, Fix1
@@ -89,7 +91,11 @@ module IteratorsMD
     flatten(I::Tuple{Any}) = Tuple(I[1])
     @inline flatten(I::Tuple) = (Tuple(I[1])..., flatten(tail(I))...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
-    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
+    function show(io::IO, i::CartesianIndex)
+        print(io, "CartesianIndex(")
+        join(io, i.I, ", ")
+        print(io, ")")
+    end
 
     # length
     length(::CartesianIndex{N}) where {N} = N
@@ -97,6 +103,8 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    firstindex(index::CartesianIndex) = firstindex(index.I)
+    lastindex(index::CartesianIndex) = lastindex(index.I)
     Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
@@ -115,6 +123,7 @@ module IteratorsMD
     oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(1), Val(N)))
 
     # arithmetic, min/max
+    @inline (+)(index::CartesianIndex) = index
     @inline (-)(index::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(-, index.I))
     @inline (+)(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
@@ -139,7 +148,7 @@ module IteratorsMD
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
     function Base.hash(ci::CartesianIndex, h::UInt)
-        h += cartindexhash_seed
+        h ⊻= cartindexhash_seed
         for i in ci.I
             h = hash(i, h)
         end
@@ -178,6 +187,24 @@ module IteratorsMD
     function show(io::IO, r::StepRangeLen{<:CartesianIndex})
         print(io, "StepRangeLen(", first(r), ", ",
                     step(r), ", ", length(r), ")")
+    end
+
+    Base.in(x::CartesianIndex, r::AbstractRange{<:CartesianIndex}) = false
+    function Base.in(x::CartesianIndex{N}, r::AbstractRange{CartesianIndex{N}}) where {N}
+        isempty(r) && return false
+        f, st, l = first(r), step(r), last(r)
+        # The n-th element of the range is a CartesianIndex
+        # whose elements are the n-th along each dimension
+        # Find the first dimension along which the index is changing,
+        # so that n may be uniquely determined
+        for i in 1:N
+            iszero(st[i]) && continue
+            n = findfirst(==(x[i]), f[i]:st[i]:l[i])
+            isnothing(n) && return false
+            return r[n] == x
+        end
+        # if the step is zero, the elements are identical, so compare with the first
+        return x == f
     end
 
     # Iteration
@@ -365,7 +392,7 @@ module IteratorsMD
     end
 
     # getindex for a 0D CartesianIndices is necessary for disambiguation
-    @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}
+    @inline function Base.getindex(iter::CartesianIndices{0,R}) where {R}
         CartesianIndex()
     end
     @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
@@ -407,7 +434,9 @@ module IteratorsMD
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
-        Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch_indices(IndexCartesian(), axes(A), axes.(B)...)
+        axsBs = map(axes, B)
+        all(==(axsA), axsBs) ||
+            Base.throw_eachindex_mismatch_indices("axes", axsA, axsBs...)
         CartesianIndices(axsA)
     end
 
@@ -443,12 +472,12 @@ module IteratorsMD
     end
     @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
-        I = state[1] + step(rng)
         if state[1] != last(rng)
+            I = state[1] + step(rng)
             return true, (I, tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(indices))
-        return valid, (first(rng), I...)
+        valid, Itail = __inc(tail(state), tail(indices))
+        return valid, (first(rng), Itail...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -475,6 +504,8 @@ module IteratorsMD
 
     @inline in(i::CartesianIndex, r::CartesianIndices) = false
     @inline in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N} = all(map(in, i.I, r.indices))
+
+    copy(iter::CartesianIndices) = iter
 
     simd_outer_range(iter::CartesianIndices{0}) = iter
     function simd_outer_range(iter::CartesianIndices)
@@ -589,7 +620,7 @@ module IteratorsMD
         else
             # Given the fact that StepRange 1:2:4 === 1:2:3, we lost the original size information
             # and thus cannot calculate the correct linear indices when the steps are not 1.
-            throw(ArgumentError("LinearIndices for $(typeof(inds)) with non-1 step size is not yet supported."))
+            throw(ArgumentError(LazyString("LinearIndices for ", typeof(inds), " with non-1 step size is not yet supported.")))
         end
     end
 
@@ -612,6 +643,8 @@ module IteratorsMD
     # array operations
     Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
         CartesianIndices(intersect.(a.indices, b.indices))
+    Base.issubset(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
+        isempty(a) || all(map(issubset, a.indices, b.indices))
 
     # Views of reshaped CartesianIndices are used for partitions — ensure these are fast
     const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,<:Tuple{AbstractUnitRange{Int}},false}
@@ -682,6 +715,40 @@ end  # IteratorsMD
 
 using .IteratorsMD
 
+# from genericmemory.jl:
+## generate vararg methods for atomic indexing
+for ex in (
+    :(getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)),
+    :(setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)),
+    :(setindexonce_atomic!(mem::GenericMemory, success_order::Symbol, fail_order::Symbol, val, i::Int)),
+    :(modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)),
+    :(swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)),
+    :(replaceindex_atomic!(mem::GenericMemory, success_order::Symbol, fail_order::Symbol, expected, desired, i::Int,)),
+)
+    fn = ex.args[1]
+    args = ex.args[2:end-1]
+
+    @eval begin
+        function $fn($(args...), i::Union{Integer,CartesianIndex}...)
+            return $fn($(args...), CartesianIndex(to_indices($(args[1]), i)))
+        end
+
+        function $fn($(args...), i::CartesianIndex)
+            return $fn($(args...), Tuple(i)...)
+        end
+
+        function $fn($(args...), i::Integer...)
+            idcs = to_indices($(args[1]), i)
+            S = IndexStyle($(args[1]))
+            if isa(S, IndexLinear)
+                return $fn($(args...), _to_linear_index($(args[1]), idcs...))
+            else
+                return $fn($(args...), _to_subscript_indices($(args[1]), idcs...))
+            end
+        end
+    end
+end
+
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
 @inline checkbounds(::Type{Bool}, A::AbstractArray, i::CartesianIndex) =
@@ -693,6 +760,8 @@ using .IteratorsMD
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
     checkbounds_indices(Bool, inds, I.I)
+@inline checkindex(::Type{Bool}, inds::Tuple, i::AbstractRange{<:CartesianIndex}) =
+    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
@@ -1044,25 +1113,34 @@ end
 
 ### from abstractarray.jl
 
-# In the common case where we have two views into the same parent, aliasing checks
-# are _much_ easier and more important to get right
-function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
-    if !_parentsmatch(A.parent, B.parent)
-        # We cannot do any better than the usual dataids check
-        return !_isdisjoint(dataids(A), dataids(B))
+function mightalias(A::SubArray, B::SubArray)
+    # There are three ways that SubArrays might _problematically_ alias one another:
+    #   1. The parents are the same we can conservatively check if the indices might overlap OR
+    #   2. The parents alias eachother in a more complicated manner (and we can't trace indices) OR
+    #   3. One's parent is used in the other's indices
+    # Note that it's ok for just the indices to alias each other as those should not be mutated,
+    # so we can always do better than the default !_isdisjoint(dataids(A), dataids(B))
+    if isbits(A.parent) || isbits(B.parent)
+        return false # Quick out for immutables
+    elseif _parentsmatch(A.parent, B.parent)
+        # Each SubArray unaliases its own parent from its own indices upon construction, so if
+        # the two parents are the same, then by construction one cannot alias the other's indices
+        # and therefore this is the only test we need to perform:
+        return _indicesmightoverlap(A.indices, B.indices)
+    else
+        A_parent_ids = dataids(A.parent)
+        B_parent_ids = dataids(B.parent)
+        return !_isdisjoint(A_parent_ids, B_parent_ids) ||
+            !_isdisjoint(A_parent_ids, _splatmap(dataids, B.indices)) ||
+            !_isdisjoint(B_parent_ids, _splatmap(dataids, A.indices))
     end
-    # Now we know that A.parent === B.parent. This means that the indices of A
-    # and B are the same length and indexing into the same dimensions. We can
-    # just walk through them and check for overlaps: O(ndims(A)). We must finally
-    # ensure that the indices don't alias with either parent
-    return _indicesmightoverlap(A.indices, B.indices) ||
-        !_isdisjoint(dataids(A.parent), _splatmap(dataids, B.indices)) ||
-        !_isdisjoint(dataids(B.parent), _splatmap(dataids, A.indices))
 end
+# Test if two arrays are backed by exactly the same memory in exactly the same order
 _parentsmatch(A::AbstractArray, B::AbstractArray) = A === B
-# Two reshape(::Array)s of the same size aren't `===` because they have different headers
-_parentsmatch(A::Array, B::Array) = pointer(A) == pointer(B) && size(A) == size(B)
+_parentsmatch(A::DenseArray, B::DenseArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && size(A) == size(B)
+_parentsmatch(A::StridedArray, B::StridedArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && strides(A) == strides(B)
 
+# Given two SubArrays with the same parent, check if the indices might overlap (returning true if unsure)
 _indicesmightoverlap(A::Tuple{}, B::Tuple{}) = true
 _indicesmightoverlap(A::Tuple{}, B::Tuple) = error("malformed subarray")
 _indicesmightoverlap(A::Tuple, B::Tuple{}) = error("malformed subarray")
@@ -1263,16 +1341,16 @@ See also: [`circshift`](@ref).
 # Examples
 ```julia-repl
 julia> src = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
-julia> dest = OffsetArray{Int}(undef, (0:3,2:5))
+julia> dest = OffsetArray{Int}(undef, (0:3,2:5));
 
 julia> circcopy!(dest, src)
-OffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:
+4×4 OffsetArray(::Matrix{Int64}, 0:3, 2:5) with eltype Int64 with indices 0:3×2:5:
  8  12  16  4
  5   9  13  1
  6  10  14  2
@@ -1610,12 +1688,6 @@ end
     end
 end
 
-# _unsetindex
-@propagate_inbounds function Base._unsetindex!(A::AbstractArray, i::CartesianIndex)
-    Base._unsetindex!(A, to_indices(A, (i,))...)
-    return A
-end
-
 ## permutedims
 
 ## Permute array dims ##
@@ -1629,12 +1701,11 @@ function permutedims(B::StridedArray, perm)
     permutedims!(P, B, perm)
 end
 
-function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N}
-    indsB = axes(B)
-    length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
+checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N} = checkdims_perm(axes(P), axes(B), perm)
+function checkdims_perm(indsP::NTuple{N, AbstractUnitRange}, indsB::NTuple{N, AbstractUnitRange}, perm) where {N}
+    length(perm) == N || throw(ArgumentError(LazyString("expected permutation of size ", N, ", but length(perm)=", length(perm))))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
-    indsP = axes(P)
-    for i = 1:length(perm)
+    for i in eachindex(perm)
         indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
     nothing
@@ -1643,7 +1714,7 @@ end
 for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
-            checkdims_perm(P, B, perm)
+            checkdims_perm(axes(P), axes(B), perm)
 
             #calculates all the strides
             native_strides = size_to_strides(1, size(B)...)
@@ -1946,3 +2017,105 @@ end
 
 getindex(b::Ref, ::CartesianIndex{0}) = getindex(b)
 setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)
+
+## hashing AbstractArray ## can't be put in abstractarray.jl due to bootstrapping problems with the use of @nexpr
+
+function _hash_fib(A, h::UInt)
+    # Goal: Hash approximately log(N) entries with a higher density of hashed elements
+    # weighted towards the end and special consideration for repeated values. Colliding
+    # hashes will often subsequently be compared by equality -- and equality between arrays
+    # works elementwise forwards and is short-circuiting. This means that a collision
+    # between arrays that differ by elements at the beginning is cheaper than one where the
+    # difference is towards the end. Furthermore, choosing `log(N)` arbitrary entries from a
+    # sparse array will likely only choose the same element repeatedly (zero in this case).
+
+    # To achieve this, we work backwards, starting by hashing the last element of the
+    # array. After hashing each element, we skip `fibskip` elements, where `fibskip`
+    # is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
+    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension
+    # and only end up hashing one slice of the array (as might happen with powers of
+    # two). Finally, we find the next distinct value from the one we just hashed.
+
+    # This is a little tricky since skipping an integer number of values inherently works
+    # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
+    ks = keys(A)
+    key_to_linear = LinearIndices(ks) # Index into this map to compute the linear index
+    linear_to_key = vec(ks)           # And vice-versa
+
+    # Start at the last index
+    keyidx = last(ks)
+    linidx = key_to_linear[keyidx]
+    fibskip = prevfibskip = oneunit(linidx)
+    first_linear = first(LinearIndices(linear_to_key))
+    @nexprs 4 i -> p_i = h
+
+    n = 0
+    while true
+        n += 1
+        # Hash the element
+        elt = A[keyidx]
+
+        stream_idx = mod1(n, 4)
+        @nexprs 4 i -> stream_idx == i && (p_i = hash_mix_linear(hash(keyidx, p_i), hash(elt, p_i)))
+
+        # Skip backwards a Fibonacci number of indices -- this is a linear index operation
+        linidx = key_to_linear[keyidx]
+        linidx < fibskip + first_linear && break
+        linidx -= fibskip
+        keyidx = linear_to_key[linidx]
+
+        # Only increase the Fibonacci skip once every N iterations. This was chosen
+        # to be big enough that all elements of small arrays get hashed while
+        # obscenely large arrays are still tractable. With a choice of N=4096, an
+        # entirely-distinct 8000-element array will have ~75% of its elements hashed,
+        # with every other element hashed in the first half of the array. At the same
+        # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
+        if rem(n, 4096) == 0
+            fibskip, prevfibskip = fibskip + prevfibskip, fibskip
+        end
+
+        # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
+        keyidx = findprev(!isequal(elt), A, keyidx)
+        keyidx === nothing && break
+    end
+
+    @nexprs 4 i -> h = hash_mix_linear(p_i, h)
+    return hash_uint(h)
+end
+
+function hash_shaped(A, h::UInt)
+    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
+    # Instead hash the tuple of firsts and lasts along each dimension
+    h = hash(map(first, axes(A)), h)
+    h = hash(map(last, axes(A)), h)
+    len = length(A)
+
+    if len < 8
+        # for the shortest arrays we chain directly
+        for elt in A
+            h = hash(elt, h)
+        end
+        return h
+    elseif len < 32768
+        # separate accumulator streams, unrolled
+        @nexprs 8 i -> p_i = h
+        n  = 1
+        limit = len - 7
+        while n <= limit
+            @nexprs 8 i -> p_i = hash(A[n + i - 1], p_i)
+            n += 8
+        end
+        while n <= len
+            p_1 = hash(A[n], p_1)
+            n += 1
+        end
+        # fold all streams back together
+        @nexprs 8 i -> h = hash_mix_linear(p_i, h)
+        return hash_uint(h)
+    else
+        return _hash_fib(A, h)
+    end
+end
+
+const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
+hash(A::AbstractArray, h::UInt) = hash_shaped(A, h ⊻ hash_abstractarray_seed)

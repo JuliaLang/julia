@@ -40,7 +40,7 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 
 """
-    unix2datetime(x::Real; localtime::Bool=false) -> DateTime
+    unix2datetime(x::Real; localtime::Bool=false)::DateTime
 
 Take the number of seconds since unix epoch `1970-01-01T00:00:00` (UTC) and convert to the
 corresponding `DateTime`. If `localtime` is `true`, then the output is in the local

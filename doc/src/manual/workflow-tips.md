@@ -114,5 +114,5 @@ the following modifications:
    ```
 
    You can iteratively modify the code in MyPkg in your editor and re-run the
-   tests with `include("runtests.jl")`.  You generally should not need to restart
+   tests with `include("runtests.jl")`. You generally should not need to restart
    your Julia session to see the changes take effect (subject to a few [limitations](https://timholy.github.io/Revise.jl/stable/limitations/)).

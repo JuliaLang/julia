@@ -11,7 +11,7 @@
 
 // This nesting is required to allow compilation on musl
 #define USE_DYN_GETAUXVAL
-#if defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_AARCH64_)
 #  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
 #elif defined(__GLIBC_PREREQ)
@@ -166,9 +166,11 @@ enum class CPU : uint32_t {
     apple_a14,
     apple_a15,
     apple_a16,
+    apple_a17,
     apple_m1,
     apple_m2,
     apple_m3,
+    apple_m4,
     apple_s4,
     apple_s5,
 
@@ -207,7 +209,7 @@ static constexpr auto feature_masks = get_feature_masks(
 #undef JL_FEATURE_DEF
     -1);
 static const auto real_feature_masks =
-    feature_masks & FeatureList<feature_sz>{{(uint32_t)-1, (uint32_t)-1, 0}};
+    feature_masks & FeatureList<feature_sz>{{UINT32_MAX, UINT32_MAX, 0}};
 
 namespace Feature {
 enum : uint32_t {
@@ -355,9 +357,11 @@ constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16
 constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
 constexpr auto apple_a15 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_a16 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_a17 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m1 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
 constexpr auto apple_m2 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m3 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_m4 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
 constexpr auto apple_s4 = apple_a12;
@@ -441,9 +445,11 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a14", CPU::apple_a14, CPU::apple_a13, 120000, Feature::apple_a14},
     {"apple-a15", CPU::apple_a15, CPU::apple_a14, 160000, Feature::apple_a15},
     {"apple-a16", CPU::apple_a16, CPU::apple_a14, 160000, Feature::apple_a16},
+    {"apple-a17", CPU::apple_a17, CPU::apple_a16, 190000, Feature::apple_a17},
     {"apple-m1", CPU::apple_m1, CPU::apple_a14, 130000, Feature::apple_m1},
     {"apple-m2", CPU::apple_m2, CPU::apple_m1, 160000, Feature::apple_m2},
     {"apple-m3", CPU::apple_m3, CPU::apple_m2, 180000, Feature::apple_m3},
+    {"apple-m4", CPU::apple_m4, CPU::apple_m3, 190000, Feature::apple_m4},
     {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
     {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
     {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
@@ -473,7 +479,7 @@ static constexpr auto feature_masks = get_feature_masks(
 #undef JL_FEATURE_DEF
     -1);
 static const auto real_feature_masks =
-    feature_masks & FeatureList<feature_sz>{{(uint32_t)-1, (uint32_t)-1, 0}};
+    feature_masks & FeatureList<feature_sz>{{UINT32_MAX, UINT32_MAX, 0}};
 
 namespace Feature {
 enum : uint32_t {
@@ -722,6 +728,8 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2);
     else if (cpu_name.find("M3") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m3, Feature::apple_m3);
+    else if (cpu_name.find("M4") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_m4, Feature::apple_m4);
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
@@ -737,7 +745,16 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(USE_DYN_GETAUXVAL)
+#if defined(_OS_FREEBSD_)
+static inline unsigned long jl_getauxval(unsigned long type)
+{
+    unsigned long val;
+    if (elf_aux_info((int)type, &val, sizeof(val)) != 0) {
+        return 0;
+    }
+    return val;
+}
+#elif defined(USE_DYN_GETAUXVAL)
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);
@@ -830,7 +847,7 @@ template<typename T, typename F>
 static inline bool try_read_procfs_line(llvm::StringRef line, const char *prefix, T &out,
                                         bool &flag, F &&reset)
 {
-    if (!line.startswith(prefix))
+    if (!line.starts_with(prefix))
         return false;
     if (flag)
         reset();
@@ -1033,7 +1050,10 @@ static CPU get_cpu_name(CPUID cpuid)
         default: return CPU::generic;
         }
     case 0x61: // 'a': Apple
-        // https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+        // Data here is partially based on these sources:
+        // https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/arm/cpuid.h
+        // https://asahilinux.org/docs/hw/soc/soc-codenames/#socs
+        // https://github.com/llvm/llvm-project/blob/main/llvm/lib/Target/AArch64/AArch64Processors.td
         switch (cpuid.part) {
         case 0x0: // Swift
             return CPU::apple_swift;
@@ -1058,31 +1078,57 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a12;
         case 0xF: // Tempest M9
             return CPU::apple_s4;
-        case 0x12: // Lightning
-        case 0x13: // Thunder
+        case 0x12: // H12 Cebu p-Core "Lightning"
+        case 0x13: // H12 Cebu e-Core "Thunder"
             return CPU::apple_a13;
-        case 0x20: // Icestorm
-        case 0x21: // Firestorm
+        case 0x20: // H13 Sicily e-Core "Icestorm"
+        case 0x21: // H13 Sicily p-Core "Firestorm"
             return CPU::apple_a14;
-        case 0x22: // Icestorm m1
-        case 0x23: // Firestorm m1
-        case 0x24:
-        case 0x25: // From https://github.com/AsahiLinux/m1n1/blob/3b9a71422e45209ef57c563e418f877bf54358be/src/chickens.c#L9
-        case 0x28:
-        case 0x29:
+        case 0x22: // H13G Tonga e-Core "Icestorm" used in Apple M1
+        case 0x23: // H13G Tonga p-Core "Firestorm" used in Apple M1
+        case 0x24: // H13J Jade Chop e-Core "Icestorm" used in Apple M1 Pro
+        case 0x25: // H13J Jade Chop p-Core "Firestorm" used in Apple M1 Pro
+        case 0x28: // H13J Jade Die e-Core "Icestorm" used in Apple M1 Max / Ultra
+        case 0x29: // H13J Jade Die p-Core "Firestorm" used in Apple M1 Max / Ultra
             return CPU::apple_m1;
-        case 0x30: // Blizzard m2
-        case 0x31: // Avalanche m2
-        case 0x32:
-        case 0x33:
-        case 0x34:
-        case 0x35:
-        case 0x38:
-        case 0x39:
+        case 0x30: // H14 Ellis e-Core "Blizzard" used in Apple A15
+        case 0x31: // H14 Ellis p-Core "Avalanche" used in Apple A15
+            return CPU::apple_a15;
+        case 0x32: // H14G Staten e-Core "Blizzard" used in Apple M2
+        case 0x33: // H14G Staten p-Core "Avalanche" used in Apple M2
+        case 0x34: // H14S Rhodes Chop e-Core "Blizzard" used in Apple M2 Pro
+        case 0x35: // H14S Rhodes Chop p-Core "Avalanche" used in Apple M2 Pro
+        case 0x38: // H14C Rhodes Die e-Core "Blizzard" used in Apple M2 Max / Ultra
+        case 0x39: // H14C Rhodes Die p-Core "Avalanche" used in Apple M2 Max / Ultra
             return CPU::apple_m2;
-        case 0x49: // Everest m3
-        case 0x48: // Sawtooth m3
+        case 0x40: // H15 Crete e-Core "Sawtooth" used in Apple A16
+        case 0x41: // H15 Crete p-Core "Everest" used in Apple A16
+            return CPU::apple_a16;
+        case 0x42: // H15 Ibiza e-Core "Sawtooth" used in Apple M3
+        case 0x43: // H15 Ibiza p-Core "Everest" used in Apple M3
+        case 0x44: // H15 Lobos e-Core "Sawtooth" used in Apple M3 Pro
+        case 0x45: // H15 Lobos p-Core "Everest" used in Apple M3 Pro
+        case 0x49: // H15 Palma e-Core "Sawtooth" used in Apple M3 Max
+        case 0x48: // H15 Palma p-Core "Everest" used in Apple M3 Max
             return CPU::apple_m3;
+        //case 0x46: // M11 e-Core "Sawtooth" used in Apple S9
+        //case 0x47:  does not exist
+            //return CPU::apple_s9;
+        case 0x50: // H15 Coll e-Core "Sawtooth" used in Apple A17 Pro
+        case 0x51: // H15 Coll p-Core "Everest" used in Apple A17 Pro
+            return CPU::apple_a17;
+        case 0x52: // H16G Donan e-Core used in Apple M4
+        case 0x53: // H16H Donan p-Core used in Apple M4
+        case 0x54: // H16S Brava S e-Core used in Apple M4 Pro
+        case 0x55: // H16S Brava S p-Core used in Apple M4 Pro
+        case 0x58: // H16C Brava C e-Core used in Apple M4 Max
+        case 0x59: // H16C Brava C p-Core used in Apple M4 Max
+            return CPU::apple_m4;
+        //case 0x60: // H17P Tahiti e-Core used in Apple A18 Pro
+        //case 0x61: // H17P Tahiti p-Core used in Apple A18 Pro
+        //case 0x6a: // H17A Tupai e-Core used in Apple A18
+        //case 0x6b: // H17A Tupai p-Core used in Apple A18
+            //return CPU::apple_a18;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
@@ -1510,7 +1556,7 @@ static inline void disable_depends(FeatureList<n> &features)
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
-static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(const char *cpu_target)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
 #ifdef _CPU_AARCH64_
@@ -1522,12 +1568,12 @@ static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(v
         }
 #endif
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
-        if (fbit == (uint32_t)-1)
+        if (fbit == UINT32_MAX)
             return false;
         set_bit(list, fbit, true);
         return true;
     };
-    auto &targets = ::get_cmdline_targets<feature_sz>(feature_cb);
+    auto &targets = ::get_cmdline_targets<feature_sz>(cpu_target, feature_cb);
     for (auto &t: targets) {
         if (auto nname = normalize_cpu_name(t.name)) {
             t.name = nname;
@@ -1590,10 +1636,11 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
 #endif
 }
 
-static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
+static uint32_t sysimg_init_cb(void *ctx, const void *id, jl_value_t **rejection_reason)
 {
     // First see what target is requested for the JIT.
-    auto &cmdline = get_cmdline_targets();
+    const char *cpu_target = (const char *)ctx;
+    auto &cmdline = get_cmdline_targets(cpu_target);
     TargetData<feature_sz> target = arg_target_data(cmdline[0], true);
     // Then find the best match in the sysimg
     auto sysimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -1603,7 +1650,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
         }
     }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
-    if (match.best_idx == -1)
+    if (match.best_idx == UINT32_MAX)
         return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
@@ -1617,7 +1664,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
     return match.best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason JL_REQUIRE_ROOTED_SLOT)
+static uint32_t pkgimg_init_cb(void *ctx, const void *id, jl_value_t **rejection_reason JL_REQUIRE_ROOTED_SLOT)
 {
     TargetData<feature_sz> target = jit_targets.front();
     auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -1630,9 +1677,9 @@ static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason JL_
     return match.best_idx;
 }
 
-static void ensure_jit_target(bool imaging)
+static void ensure_jit_target(const char *cpu_target, bool imaging)
 {
-    auto &cmdline = get_cmdline_targets();
+    auto &cmdline = get_cmdline_targets(cpu_target);
     check_cmdline(cmdline, imaging);
     if (!jit_targets.empty())
         return;
@@ -1843,36 +1890,36 @@ JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 #endif
 }
 
-jl_image_t jl_init_processor_sysimg(void *hdl)
+jl_image_t jl_init_processor_sysimg(jl_image_buf_t image, const char *cpu_target)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
-    return parse_sysimg(hdl, sysimg_init_cb);
+    return parse_sysimg(image, sysimg_init_cb, (void *)cpu_target);
 }
 
-jl_image_t jl_init_processor_pkgimg(void *hdl)
+jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
     if (jit_targets.size() > 1)
         jl_error("Expected only one JIT target");
-    return parse_sysimg(hdl, pkgimg_init_cb);
+    return parse_sysimg(image, pkgimg_init_cb, NULL);
 }
 
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
     jl_value_t *rejection_reason = NULL;
     JL_GC_PUSH1(&rejection_reason);
-    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(NULL, data, &rejection_reason);
     JL_GC_POP();
-    if (match_idx == (uint32_t)-1)
+    if (match_idx == UINT32_MAX)
         return rejection_reason;
     return jl_nothing;
 }
 
-std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags)
 {
-    ensure_jit_target(imaging);
+    ensure_jit_target(cpu_target, imaging);
     flags = jit_targets[0].en.flags;
     return get_llvm_target_vec(jit_targets[0]);
 }
@@ -1890,12 +1937,56 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
-llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
+#ifndef __clang_gcanalyzer__
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(const char *cpu_target)
 {
-    if (jit_targets.empty())
-        jl_error("JIT targets not initialized");
+
+    auto &cmdline = get_cmdline_targets(cpu_target);
+    check_cmdline(cmdline, true);
+    llvm::SmallVector<TargetData<feature_sz>, 0> image_targets;
+    for (auto &arg: cmdline) {
+        auto data = arg_target_data(arg, image_targets.empty());
+        image_targets.push_back(std::move(data));
+    }
+    auto ntargets = image_targets.size();
+    if (image_targets.empty())
+        jl_error("No targets specified");
     llvm::SmallVector<jl_target_spec_t, 0> res;
-    for (auto &target: jit_targets) {
+    // Now decide the clone condition.
+    for (size_t i = 1; i < ntargets; i++) {
+        auto &t = image_targets[i];
+        if (t.en.flags & JL_TARGET_CLONE_ALL)
+            continue;
+        auto &features0 = image_targets[t.base].en.features;
+        // Always clone when code checks CPU features
+        t.en.flags |= JL_TARGET_CLONE_CPU;
+        static constexpr uint32_t clone_fp16[] = {Feature::fp16fml,Feature::fullfp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
+                break;
+            }
+        }
+        // The most useful one in general...
+        t.en.flags |= JL_TARGET_CLONE_LOOP;
+#ifdef _CPU_ARM_
+        static constexpr uint32_t clone_math[] = {Feature::vfp3, Feature::vfp4, Feature::neon};
+        for (auto fe: clone_math) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_MATH;
+                break;
+            }
+        }
+        static constexpr uint32_t clone_simd[] = {Feature::neon};
+        for (auto fe: clone_simd) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_SIMD;
+                break;
+            }
+        }
+#endif
+    }
+    for (auto &target: image_targets) {
         auto features_en = target.en.features;
         auto features_dis = target.dis.features;
         for (auto &fename: feature_names) {
@@ -1915,6 +2006,8 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
     }
     return res;
 }
+
+#endif
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 {

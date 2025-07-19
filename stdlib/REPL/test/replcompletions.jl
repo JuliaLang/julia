@@ -12,144 +12,171 @@ using REPL
     end
 end
 
-let ex = quote
-    module CompletionFoo
-        using Random
-        import Test
+let ex =
+    quote
+        module CompletionFoo
+            using Random
+            import Test
+            # make everything public, so that nothing gets hidden unintentionally from completions
+            public Test_y, Text_x, type_test, unicode_αΒγ, CompletionFoo2, bar,
+            foo, @foobar, @barfoo, @error_expanding,
+            @error_lowering_conditional, @error_throwing, NonStruct, x,
+            CustomDict, NoLengthDict, test, test1, test2, test3, test4, test5,
+            test6, test7, test8, test9, test10, test11, a, test!12, kwtest,
+            kwtest2, kwtest3, kwtest4, kwtest5, named, fmsoebelkv, array,
+            varfloat, tuple, test_y_array, test_dict, test_customdict,
+            @teststr_str, @tϵsτstρ_str, @testcmd_cmd, @tϵsτcmδ_cmd,
+            var"complicated symbol with spaces", WeirdNames, @ignoremacro
 
-        mutable struct Test_y
-            yy
-        end
-        mutable struct Test_x
-            xx :: Test_y
-        end
-        type_test = Test_x(Test_y(1))
-        (::Test_y)() = "", ""
-        unicode_αβγ = Test_y(1)
-
-        Base.:(+)(x::Test_x, y::Test_y) = Test_x(Test_y(x.xx.yy + y.yy))
-        module CompletionFoo2
-
-        end
-        const bar = 1
-        foo() = bar
-        macro foobar()
-            :()
-        end
-        macro barfoo(ex)
-            ex
-        end
-        macro error_expanding()
-            error("cannot expand @error_expanding")
-            :()
-        end
-        macro error_lowering_conditional(a)
-            if isa(a, Number)
-                return a
+            mutable struct Test_y
+                yy
             end
-            throw(AssertionError("Not a Number"))
-            :()
-        end
-        macro error_throwing()
-            return quote
-                error("@error_throwing throws an error")
+            mutable struct Test_x
+                xx :: Test_y
             end
-        end
+            type_test = Test_x(Test_y(1))
+            (::Test_y)() = "", ""
+            unicode_αβγ = Test_y(1)
 
-        primitive type NonStruct 8 end
-        Base.propertynames(::NonStruct) = (:a, :b, :c)
-        x = reinterpret(NonStruct, 0x00)
+            Base.:(+)(x::Test_x, y::Test_y) = Test_x(Test_y(x.xx.yy + y.yy))
+            module CompletionFoo2
 
-        # Support non-Dict AbstractDicts, #19441
-        mutable struct CustomDict{K, V} <: AbstractDict{K, V}
-            mydict::Dict{K, V}
-        end
+            end
+            const bar = 1
+            foo() = bar
+            macro foobar()
+                :()
+            end
+            macro barfoo(ex)
+                ex
+            end
+            macro error_expanding()
+                error("cannot expand @error_expanding")
+                :()
+            end
+            macro error_lowering_conditional(a)
+                if isa(a, Number)
+                    return a
+                end
+                throw(AssertionError("Not a Number"))
+                :()
+            end
+            macro error_throwing()
+                return quote
+                    error("@error_throwing throws an error")
+                end
+            end
 
-        Base.keys(d::CustomDict) = collect(keys(d.mydict))
-        Base.length(d::CustomDict) = length(d.mydict)
+            primitive type NonStruct 8 end
+            Base.propertynames(::NonStruct) = (:a, :b, :c)
+            x = reinterpret(NonStruct, 0x00)
 
-        test(x::T, y::T) where {T<:Real} = pass
-        test(x::Real, y::Real) = pass
-        test(x::AbstractArray{T}, y) where {T<:Real} = pass
-        test(args...) = pass
+            # Support non-Dict AbstractDicts, #19441
+            mutable struct CustomDict{K, V} <: AbstractDict{K, V}
+                mydict::Dict{K, V}
+            end
 
-        test1(x::Type{Float64}) = pass
+            Base.keys(d::CustomDict) = collect(keys(d.mydict))
+            Base.length(d::CustomDict) = length(d.mydict)
 
-        test2(x::AbstractString) = pass
-        test2(x::Char) = pass
-        test2(x::Cmd) = pass
+            # Support AbstractDict with unknown length, #55931
+            struct NoLengthDict{K,V} <: AbstractDict{K,V}
+                dict::Dict{K,V}
+                NoLengthDict{K,V}() where {K,V} = new(Dict{K,V}())
+            end
+            Base.iterate(d::NoLengthDict, s...) = iterate(d.dict, s...)
+            Base.IteratorSize(::Type{<:NoLengthDict}) = Base.SizeUnknown()
+            Base.eltype(::Type{NoLengthDict{K,V}}) where {K,V} = Pair{K,V}
+            Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
 
-        test3(x::AbstractArray{Int}, y::Int) = pass
-        test3(x::AbstractArray{Float64}, y::Float64) = pass
+            test(x::T, y::T) where {T<:Real} = pass
+            test(x::Real, y::Real) = pass
+            test(x::AbstractArray{T}, y) where {T<:Real} = pass
+            test(args...) = pass
 
-        test4(x::AbstractString, y::AbstractString) = pass
-        test4(x::AbstractString, y::Regex) = pass
+            test1(x::Type{Float64}) = pass
 
-        test5(x::Array{Bool,1}) = pass
-        test5(x::BitArray{1}) = pass
-        test5(x::Float64) = pass
-        const a=x->x
-        test6()=[a, a]
-        test7() = rand(Bool) ? 1 : 1.0
-        test8() = Any[1][1]
-        test9(x::Char) = pass
-        test9(x::Char, i::Int) = pass
+            test2(x::AbstractString) = pass
+            test2(x::Char) = pass
+            test2(x::Cmd) = pass
 
-        test10(a, x::Int...) = pass
-        test10(a::Integer, b::Integer, c) = pass
-        test10(a, y::Bool...) = pass
-        test10(a, d::Integer, z::Signed...) = pass
-        test10(s::String...) = pass
+            test3(x::AbstractArray{Int}, y::Int) = pass
+            test3(x::AbstractArray{Float64}, y::Float64) = pass
 
-        test11(a::Integer, b, c) = pass
-        test11(u, v::Integer, w) = pass
-        test11(x::Int, y::Int, z) = pass
-        test11(_, _, s::String) = pass
+            test4(x::AbstractString, y::AbstractString) = pass
+            test4(x::AbstractString, y::Regex) = pass
 
-        test!12() = pass
+            test5(x::Array{Bool,1}) = pass
+            test5(x::BitArray{1}) = pass
+            test5(x::Float64) = pass
+            const a=x->x
+            test6()=[a, a]
+            test7() = rand(Bool) ? 1 : 1.0
+            test8() = Any[1][1]
+            test9(x::Char) = pass
+            test9(x::Char, i::Int) = pass
 
-        kwtest(; x=1, y=2, w...) = pass
-        kwtest2(a; x=1, y=2, w...) = pass
-        kwtest3(a::Number; length, len2, foobar, kwargs...) = pass
-        kwtest3(a::Real; another!kwarg, len2) = pass
-        kwtest3(a::Integer; namedarg, foobar, slurp...) = pass
-        kwtest4(a::AbstractString; _a1b, x23) = pass
-        kwtest4(a::String; _a1b, xαβγ) = pass
-        kwtest4(a::SubString; x23, _something) = pass
-        kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
-        kwtest5(a::Char, b; xyz) = pass
+            test10(a, x::Int...) = pass
+            test10(a::Integer, b::Integer, c) = pass
+            test10(a, y::Bool...) = pass
+            test10(a, d::Integer, z::Signed...) = pass
+            test10(s::String...) = pass
 
-        const named = (; len2=3)
+            test11(a::Integer, b, c) = pass
+            test11(u, v::Integer, w) = pass
+            test11(x::Int, y::Int, z) = pass
+            test11(_, _, s::String) = pass
 
-        array = [1, 1]
-        varfloat = 0.1
+            test!12() = pass
 
-        const tuple = (1, 2)
+            kwtest(; x=1, y=2, w...) = pass
+            kwtest2(a; x=1, y=2, w...) = pass
+            kwtest3(a::Number; length, len2, foobar, kwargs...) = pass
+            kwtest3(a::Real; another!kwarg, len2) = pass
+            kwtest3(a::Integer; namedarg, foobar, slurp...) = pass
+            kwtest4(a::AbstractString; _a1b, x23) = pass
+            kwtest4(a::String; _a1b, xαβγ) = pass
+            kwtest4(a::SubString; x23, _something) = pass
+            kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
+            kwtest5(a::Char, b; xyz) = pass
 
-        test_y_array=[(@__MODULE__).Test_y(rand()) for i in 1:10]
-        test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
-                         occursin=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
-                         "α"=>12, :α=>13)
-        test_customdict = CustomDict(test_dict)
+            const named = (; len2=3)
+            const fmsoebelkv = (; len2=3)
 
-        macro teststr_str(s) end
-        macro tϵsτstρ_str(s) end
-        macro testcmd_cmd(s) end
-        macro tϵsτcmδ_cmd(s) end
+            array = [1, 1]
+            varfloat = 0.1
 
-        var"complicated symbol with spaces" = 5
+            const tuple = (1, 2)
 
-        struct WeirdNames end
-        Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
+            test_y_array=[(@__MODULE__).Test_y(rand()) for i in 1:10]
+            test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
+                            occursin=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
+                            "α"=>12, :α=>13)
+            test_customdict = CustomDict(test_dict)
 
-        # https://github.com/JuliaLang/julia/issues/52551#issuecomment-1858543413
-        export exported_symbol
-        exported_symbol(::WeirdNames) = nothing
+            macro teststr_str(s) end
+            macro tϵsτstρ_str(s) end
+            macro testcmd_cmd(s) end
+            macro tϵsτcmδ_cmd(s) end
+
+            var"complicated symbol with spaces" = 5
+
+            struct WeirdNames end
+            Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
+
+            # https://github.com/JuliaLang/julia/issues/52551#issuecomment-1858543413
+            export exported_symbol
+            exported_symbol(::WeirdNames) = nothing
+
+            macro ignoremacro(e...)
+                nothing
+            end
 
         end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
         test_dict_ℂ = Dict(1=>2)
+        test_dict_no_length = CompletionFoo.NoLengthDict{Int,Int}()
     end
     ex.head = :toplevel
     Core.eval(Main, ex)
@@ -157,15 +184,24 @@ end
 
 function map_completion_text(completions)
     c, r, res = completions
-    return map(completion_text, c), r, res
+    return map(x -> named_completion(x).completion, c), r, res
+end
+
+function map_named_completion(completions)
+    c, r, res = completions
+    return map(named_completion, c), r, res
 end
 
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
-test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
-test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
-test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
+# | is reserved in test_complete_pos
+test_complete_pos(s) = map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1)))
+test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
+    map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
+test_complete_foo(s; shift::Bool=true) = test_complete_context(s, Main.CompletionFoo; shift)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
+
+test_bslashcomplete(s) =  map_named_completion(@inferred(bslash_completions(s, lastindex(s)))[2])
 
 test_methods_list(@nospecialize(f), tt) = map(x -> string(x.method), Base._methods_by_ftype(Base.signature_type(f, tt), 10, Base.get_world_counter()))
 
@@ -194,8 +230,6 @@ end
 let s = "using REP"
     c, r = test_complete_32377(s)
     @test count(isequal("REPL"), c) == 1
-    # issue #30234
-    @test !Base.isbindingresolved(M32377, :tanh)
     # check what happens if REPL is already imported
     M32377.eval(:(using REPL))
     c, r = test_complete_32377(s)
@@ -272,10 +306,11 @@ let s = "Main.CompletionFoo.bar.no_val_available"
     @test length(c)==0
 end
 
-#cannot do dot completion on infix operator
-let s = "+."
-    c, r = test_complete(s)
-    @test length(c)==0
+#cannot do dot completion on infix operator (get default completions)
+let s1 = "", s2 = "+."
+    c1, r1 = test_complete(s1)
+    c2, r2 = test_complete(s2)
+    @test length(c1)==length(c2)
 end
 
 # To complete on a variable of a type, the type T of the variable
@@ -327,10 +362,17 @@ end
 # inexistent completion inside a cmd
 @test_nocompletion("run(`lol")
 
+# issue 55856: copy(A').<TAB> errors in the REPL
+let
+    c, r = test_complete("copy(A').")
+    @test isempty(c)
+end
+
 # test latex symbol completions
 let s = "\\alpha"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "α"
+    @test c[1].completion == "α"
+    @test c[1].name == "α"
     @test r == 1:lastindex(s)
     @test length(c) == 1
 end
@@ -338,7 +380,8 @@ end
 # test latex symbol completions after unicode #9209
 let s = "α\\alpha"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "α"
+    @test c[1].completion == "α"
+    @test c[1].name == "α"
     @test r == 3:sizeof(s)
     @test length(c) == 1
 end
@@ -346,20 +389,25 @@ end
 # test emoji symbol completions
 let s = "\\:koala:"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "🐨"
+    @test c[1].completion == "🐨"
+    @test c[1].name == "🐨"
     @test r == 1:sizeof(s)
     @test length(c) == 1
 end
 
 let s = "\\:ko"
     c, r = test_bslashcomplete(s)
-    @test "\\:koala:" in c
+    ko = only(filter(c) do namedcompletion
+        namedcompletion.completion == "\\:koala:"
+    end)
+    @test ko.name == "🐨 \\:koala:"
 end
 
 # test emoji symbol completions after unicode #9209
 let s = "α\\:koala:"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "🐨"
+    @test c[1].name == "🐨"
+    @test c[1].completion == "🐨"
     @test r == 3:sizeof(s)
     @test length(c) == 1
 end
@@ -427,13 +475,13 @@ let
     c, r, res = test_complete(s)
     @test !res
     @test all(m -> string(m) in c, methods(isnothing))
-    @test s[r] == s[1:end-1]
+    @test s[r] == s[2:end-1]
 
     s = "!!isnothing("
     c, r, res = test_complete(s)
     @test !res
     @test all(m -> string(m) in c, methods(isnothing))
-    @test s[r] == s[1:end-1]
+    @test s[r] == s[3:end-1]
 end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
@@ -1021,8 +1069,41 @@ end
 let c, r, res
     c, r, res = test_scomplete("\$a")
     @test c == String[]
-    @test r === 0:-1
+    @test r === 1:0
     @test res === false
+end
+
+# A pair of utility function for the REPL completions test to test PATH_cache
+# dependent completions, which ordinarily happen asynchronously.
+# Only to be used from the test suite
+function test_only_arm_cache_refresh()
+    @lock REPL.REPLCompletions.PATH_cache_lock begin
+        @assert REPL.REPLCompletions.PATH_cache_condition === nothing
+
+        # Arm a condition we can wait on
+        REPL.REPLCompletions.PATH_cache_condition = Threads.Condition(REPL.REPLCompletions.PATH_cache_lock)
+
+        # Check if the previous update is still running - if so, wait for it to finish
+        while REPL.REPLCompletions.PATH_cache_task !== nothing
+            @assert !istaskdone(REPL.REPLCompletions.PATH_cache_task)
+            wait(REPL.REPLCompletions.PATH_cache_condition)
+        end
+
+        # force the next cache update to happen immediately
+        REPL.REPLCompletions.next_cache_update = 0
+    end
+    return REPL.REPLCompletions.PATH_cache_condition
+end
+
+function test_only_wait_cache_path_done()
+    @lock REPL.REPLCompletions.PATH_cache_lock begin
+        @assert REPL.REPLCompletions.PATH_cache_condition !== nothing
+
+        while REPL.REPLCompletions.next_cache_update == 0.
+            wait(REPL.REPLCompletions.PATH_cache_condition)
+        end
+        REPL.REPLCompletions.PATH_cache_condition = nothing
+    end
 end
 
 if Sys.isunix()
@@ -1033,38 +1114,38 @@ let s, c, r
     # Issue #8047
     s = "@show \"/dev/nul"
     c,r = test_complete(s)
-    @test "null\"" in c
-    @test r == 13:15
-    @test s[r] == "nul"
+    @test "/dev/null\"" in c
+    @test r == 8:15
+    @test s[r] == "/dev/nul"
 
     # Tests path in Julia code and not closing " if it's a directory
     # Issue #8047
     s = "@show \"/tm"
     c,r = test_complete(s)
-    @test "tmp/" in c
-    @test r == 9:10
-    @test s[r] == "tm"
+    @test "/tmp/" in c
+    @test r == 8:10
+    @test s[r] == "/tm"
 
     # Tests path in Julia code and not double-closing "
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
-    c = map(completion_text, c)
-    @test "null\"" in c
-    @test r == 13:15
-    @test s[r] == "nul"
+    c = map(named_completion, c)
+    @test "/dev/null" in [_c.completion for _c in c]
+    @test r == 8:15
+    @test s[r] == "/dev/nul"
 
     s = "/t"
     c,r = test_scomplete(s)
-    @test "tmp/" in c
-    @test r == 2:2
-    @test s[r] == "t"
+    @test "/tmp/" in c
+    @test r == 1:2
+    @test s[r] == "/t"
 
     s = "/tmp"
     c,r = test_scomplete(s)
-    @test "tmp/" in c
-    @test r == 2:4
-    @test s[r] == "tmp"
+    @test "/tmp/" in c
+    @test r == 1:4
+    @test s[r] == "/tmp"
 
     # This should match things that are inside the tmp directory
     s = tempdir()
@@ -1075,7 +1156,7 @@ let s, c, r
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
         @test !("$s/tmp/" in c)
-        @test r === (sizeof(s) + 1):sizeof(s)
+        @test r === 1:sizeof(s)
     end
 
     s = "cd \$(Iter"
@@ -1100,8 +1181,8 @@ let s, c, r
         touch(file)
         s = string(tempdir(), "/repl\\ ")
         c,r = test_scomplete(s)
-        @test ["'repl completions'"] == c
-        @test s[r] == "repl\\ "
+        @test [Base.shell_escape_posixly(joinpath(tempdir(),  "repl completions"))] == c
+        @test s[r] == string(tempdir(), "/repl\\ ")
         rm(file)
     end
 
@@ -1113,12 +1194,19 @@ let s, c, r
             mkdir(dir)
             s = "\"" * path * "/tmpfoob"
             c,r = test_complete(s)
-            @test "tmpfoobar/" in c
-            l = 3 + length(path)
-            @test r == l:l+6
-            @test s[r] == "tmpfoob"
+            @test string(dir, "/") in c
+            @test r == 2:sizeof(s)
+            @test s[r] == joinpath(path, "tmpfoob")
+
+            # Homedir expansion inside Cmd string (#57624)
+            s = "`ls " * path * "/tmpfoob"
+            c,r = test_complete(s)
+            @test string(dir, "/") in c
+            @test r == 5:sizeof(s)
+            @test s[r] == joinpath(path, "tmpfoob")
+
             s = "\"~"
-            @test "tmpfoobar/" in c
+            @test joinpath(path, "tmpfoobar/") in c
             c,r = test_complete(s)
             s = "\"~user"
             c, r = test_complete(s)
@@ -1149,12 +1237,9 @@ let s, c, r
                 # Files reachable by PATH are cached async when PATH is seen to have been changed by `complete_path`
                 # so changes are unlikely to appear in the first complete. For testing purposes we can wait for
                 # caching to finish
-                @lock REPL.REPLCompletions.PATH_cache_lock begin
-                    # force the next cache update to happen immediately
-                    REPL.REPLCompletions.next_cache_update = 0
-                end
+                test_only_arm_cache_refresh()
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                test_only_wait_cache_path_done()
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1183,12 +1268,9 @@ let s, c, r
 
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
-                @lock REPL.REPLCompletions.PATH_cache_lock begin
-                    # force the next cache update to happen immediately
-                    REPL.REPLCompletions.next_cache_update = 0
-                end
+                test_only_arm_cache_refresh()
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                test_only_wait_cache_path_done()
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
@@ -1217,7 +1299,7 @@ let current_dir, forbidden
                 e isa Base.IOError && occursin("ELOOP", e.msg)
             end
             c, r = test_complete("\"$(escape_string(path))/selfsym")
-            @test c == ["selfsymlink"]
+            @test c == [escape_string(joinpath(path, "selfsymlink")) * "\""]
         end
     end
 
@@ -1254,47 +1336,47 @@ mktempdir() do path
         s = Sys.iswindows() ? "cd $dir_space\\\\space" : "cd $dir_space/space"
         c, r = test_scomplete(s)
         @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
-        @test "'$space_folder'/'space .file'" in c
+        @test "'$space_folder/space .file'" in c
         # Also use shell escape rules within cmd backticks
         s = "`$s"
         c, r = test_scomplete(s)
         @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
-        @test "'$space_folder'/'space .file'" in c
+        @test "'$space_folder/space .file'" in c
 
         # escape string according to Julia escaping rules
         julia_esc(str) = REPL.REPLCompletions.do_string_escape(str)
 
         # For normal strings the string should be properly escaped according to
         # the usual rules for Julia strings.
-        s = "cd(\"" * julia_esc(joinpath(path, space_folder) * "/space")
+        s = "cd(\"" * julia_esc(joinpath(path, space_folder, "space"))
         c, r = test_complete(s)
-        @test s[r] == "space"
-        @test "space .file\"" in c
+        @test s[r] == julia_esc(joinpath(path, space_folder, "space"))
+        @test julia_esc(joinpath(path, space_folder, "space .file")) * "\"" in c
 
         # '$' is the only character which can appear in a windows filename and
         # which needs to be escaped in Julia strings (on unix we could do this
         # test with all sorts of special chars)
         touch(joinpath(space_folder, "needs_escape\$.file"))
-        escpath = julia_esc(joinpath(path, space_folder) * "/needs_escape\$")
+        escpath = julia_esc(joinpath(path, space_folder, "needs_escape\$"))
         s = "cd(\"$escpath"
         c, r = test_complete(s)
-        @test s[r] == "needs_escape\\\$"
-        @test "needs_escape\\\$.file\"" in c
+        @test s[r] == julia_esc(joinpath(path, space_folder, "needs_escape\$"))
+        @test julia_esc(joinpath(path, space_folder, "needs_escape\$.file")) * "\"" in c
 
         if !Sys.iswindows()
             touch(joinpath(space_folder, "needs_escape2\n\".file"))
             escpath = julia_esc(joinpath(path, space_folder, "needs_escape2\n\""))
             s = "cd(\"$escpath"
             c, r = test_complete(s)
-            @test s[r] == "needs_escape2\\n\\\""
-            @test "needs_escape2\\n\\\".file\"" in c
+            @test s[r] == joinpath(path, space_folder, "needs_escape2\\n\\\"")
+            @test joinpath(path, space_folder, "needs_escape2\\n\\\".file\"") in c
 
             touch(joinpath(space_folder, "needs_escape3\\.file"))
             escpath = julia_esc(joinpath(path, space_folder, "needs_escape3\\"))
             s = "cd(\"$escpath"
             c, r = test_complete(s)
-            @test s[r] == "needs_escape3\\\\"
-            @test "needs_escape3\\\\.file\"" in c
+            @test s[r] == joinpath(path, space_folder, "needs_escape3\\\\")
+            @test joinpath(path, space_folder, "needs_escape3\\\\.file\"") in c
         end
 
         # Test for issue #10324
@@ -1308,16 +1390,17 @@ mktempdir() do path
             test_dir = "test$(c)test"
             mkdir(joinpath(path, test_dir))
             try
-                if !(c in ['\'','$']) # As these characters hold special meaning
+                # TODO: test on Windows when backslash-paths fixed
+                if !Sys.iswindows() && !(c in ['\'','$']) # As these characters hold special meaning
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
                     c, r, res = test_scomplete(test_dir)
-                    @test c[1] == "'$test_dir/'"
+                    @test c[1] == "'$(joinpath(test_dir, ""))'"
                     @test res
                 end
                 escdir = julia_esc(test_dir)
                 c, r, res = test_complete("\""*escdir)
-                @test c[1] == escdir * "/"
+                @test c[1] == julia_esc(joinpath(test_dir, ""))
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
@@ -1328,15 +1411,40 @@ mktempdir() do path
 end
 
 # Test tilde path completion
-let (c, r, res) = test_complete("\"~/julia")
+let (c, r, res) = test_complete("\"~/ka8w5rsz")
     if !Sys.iswindows()
-        @test res && c == String[homedir() * "/julia"]
+        @test res && c == String[homedir() * "/ka8w5rsz\""]
     else
         @test !res
     end
 
     c, r, res = test_complete("\"foo~bar")
     @test !res
+end
+if !Sys.iswindows()
+    # create a dir and file temporarily in the home directory
+    path = mkpath(joinpath(homedir(), "Zx6Wa0GkC0"))
+    touch(joinpath(path, "my_file"))
+    try
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC")
+            @test res
+            @test c == String["~/Zx6Wa0GkC0/"]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0")
+            @test res
+            @test c == String[homedir() * "/Zx6Wa0GkC0"]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_")
+            @test res
+            @test c == String["~/Zx6Wa0GkC0/my_file\""]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_file")
+            @test res
+            @test c == String[homedir() * "/Zx6Wa0GkC0/my_file\""]
+        end
+    finally
+        rm(path, recursive=true)
+    end
 end
 
 # Test the completion returns nothing when the folder do not exist
@@ -1358,8 +1466,8 @@ if Sys.iswindows()
 
         s = "cd ../"
         c,r = test_scomplete(s)
-        @test r == lastindex(s)+1:lastindex(s)
-        @test "$temp_name/" in c
+        @test r == 4:6
+        @test "../$temp_name/" in c
 
         s = "ls $(file[1:2])"
         c,r = test_scomplete(s)
@@ -1369,12 +1477,12 @@ if Sys.iswindows()
         s = "cd(\"..\\\\"
         c,r = test_complete(s)
         @test r == lastindex(s)-3:lastindex(s)
-        @test "../$temp_name/" in c
+        @test "..\\\\$temp_name\\\\" in c
 
         s = "cd(\"../"
         c,r = test_complete(s)
-        @test r == lastindex(s)+1:lastindex(s)
-        @test "$temp_name/" in c
+        @test r == 5:7
+        @test "..\\\\$temp_name\\\\" in c
 
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
@@ -1429,10 +1537,10 @@ function test_dict_completion(dict_name)
     s = "$dict_name[ \"abcd"  # leading whitespace
     c, r = test_complete(s)
     @test c == Any["\"abcd\"]"]
-    s = "$dict_name[\"abcd]"  # trailing close bracket
+    s = "$dict_name[Bas]"  # trailing close bracket
     c, r = completions(s, lastindex(s) - 1)
-    c = map(completion_text, c)
-    @test c == Any["\"abcd\""]
+    c = map(x -> named_completion(x).completion, c)
+    @test c == Any["Base"]
     s = "$dict_name[:b"
     c, r = test_complete(s)
     @test c == Any[":bar", ":bar2"]
@@ -1484,8 +1592,16 @@ test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
 test_dict_completion("test_repl_comp_customdict")
 
-# Issue #23004: this should not throw:
-@test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
+@testset "dict_identifier_key" begin
+    # Issue #23004: this should not throw:
+    let s = "test_dict_ℂ[\\"
+        @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
+    end
+    # Issue #55931: neither should this:
+    let s = "test_dict_no_length["
+        @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
+    end
+end
 
 @testset "completion of string/cmd macros (#22577)" begin
     c, r, res = test_complete("ra")
@@ -1498,6 +1614,16 @@ test_dict_completion("test_repl_comp_customdict")
     @test "testcmd`" in c
     c, r, res = test_complete("CompletionFoo.tϵsτc")
     @test "tϵsτcmδ`" in c
+
+    # Issue #56071: don't complete string and command macros when the input matches the internal name like `r_` to `r"`
+    c, r, res = test_complete("CompletionFoo.teststr_")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.teststr_s")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.testcmd_")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.testcmd_c")
+    @test isempty(c)
 end
 
 @testset "Keyword-argument completion" begin
@@ -2129,7 +2255,7 @@ end
 end
 
 # issue #51194
-for (s, compl) in (("2*CompletionFoo.nam", "named"),
+for (s, compl) in (("2*CompletionFoo.fmsoe", "fmsoebelkv"),
                    (":a isa CompletionFoo.test!1", "test!12"),
                    ("-CompletionFoo.Test_y(3).", "yy"),
                    ("99 ⨷⁻ᵨ⁷ CompletionFoo.type_test.", "xx"),
@@ -2138,8 +2264,11 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
                    ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
                    ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
                    ("foo'CompletionFoo.test!1", "test!12"))
-    c, r = test_complete(s)
-    @test only(c) == compl
+    @testset let s=s, compl=compl
+        c, r = test_complete_noshift(s)
+        @test length(c) == 1
+        @test only(c) == compl
+    end
 end
 
 # allows symbol completion within incomplete :macrocall
@@ -2215,6 +2344,12 @@ let s = "using Base."
     @test res
     @test "BinaryPlatforms" in c
 end
+# JuliaLang/julia#53999
+let s = "using Base.Sort, Base.Th"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Threads" in c
+end
 # test cases with the `.` accessor
 module Issue52922
 module Inner1
@@ -2223,6 +2358,26 @@ end
 module Inner2 end
 end
 let s = "using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
+let s = " using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
+let s = "@time using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
+let s = " @time using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
+let s = "@time(using .Iss"
     c, r, res = test_complete_context(s)
     @test res
     @test "Issue52922" in c
@@ -2259,4 +2414,309 @@ let s = "Issue53126()."
     c, r, res = test_complete_context(s)
     @test res
     @test isempty(c)
+end
+
+# complete explicitly `using`ed names
+baremodule TestExplicitUsing
+using Base: @assume_effects
+end # baremodule TestExplicitUsing
+let s = "@assu"
+    c, r, res = test_complete_context(s, TestExplicitUsing)
+    @test res
+    @test "@assume_effects" in c
+end
+let s = "TestExplicitUsing.@assu"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "@assume_effects" in c
+end
+baremodule TestExplicitUsingNegative end
+let s = "@assu"
+    c, r, res = test_complete_context(s, TestExplicitUsingNegative)
+    @test res
+    @test "@assume_effects" ∉ c
+end
+let s = "TestExplicitUsingNegative.@assu"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "@assume_effects" ∉ c
+end
+# should complete implicitly `using`ed names
+module TestImplicitUsing end
+let s = "@asse"
+    c, r, res = test_complete_context(s, TestImplicitUsing)
+    @test res
+    @test "@assert" in c
+end
+let s = "TestImplicitUsing.@asse"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "@assert" in c
+end
+
+# JuliaLang/julia#23374: completion for `import Mod.name`
+module Issue23374
+global v23374 = nothing
+global w23374 = missing
+end
+let s = "import .Issue23374.v"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "v23374" in c
+end
+let s = "import Base.sin, .Issue23374.v"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "v23374" in c
+end
+let s = "using .Issue23374.v"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test isempty(c)
+end
+# JuliaLang/julia#23374: completion for `using Mod: name`
+let s = "using Base: @ass"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "@assume_effects" in c
+end
+let s = "using .Issue23374: v"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "v23374" in c
+end
+let s = "using .Issue23374: v23374, w"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "w23374" in c
+end
+# completes `using ` to `using [list of available modules]`
+let s = "using "
+    c, r, res = test_complete_context(s)
+    @test res
+    @test !isempty(c)
+end
+
+baremodule _TestInternalBindingOnly
+export binding1, binding2
+global binding1 = global binding2 = nothing
+end
+baremodule TestInternalBindingOnly
+using .._TestInternalBindingOnly
+global binding = nothing
+export binding
+end
+for s = ("TestInternalBindingOnly.bind", "using .TestInternalBindingOnly: bind")
+    # when module is explicitly accessed, completion should show internal names only
+    let (c, r, res) = test_complete_context(s; shift=false)
+        @test res
+        @test "binding" ∈ c
+        @test "binding1" ∉ c && "binding2" ∉ c
+    end
+    # unless completion is forced via shift key
+    let (c, r, res) = test_complete_context(s, TestInternalBindingOnly)
+        @test res
+        @test "binding" ∈ c
+        @test "binding1" ∈ c && "binding2" ∈ c
+    end
+end
+# without explicit module access, completion should show all available names
+let (c, r, res) = test_complete_context("bind", TestInternalBindingOnly; shift=false)
+    @test res
+    @test "binding" ∈ c
+    @test "binding1" ∈ c && "binding2" ∈ c
+end
+let (c, r, res) = test_complete_context("si", Main; shift=false)
+    @test res
+    @test "sin" ∈ c
+end
+
+let (c, r, res) = test_complete_context("const xxx = Base.si", Main)
+    @test res
+    @test "sin" ∈ c
+end
+
+let (c, r, res) = test_complete_context("global xxx::Number = Base.", Main)
+    @test res
+    @test "pi" ∈ c
+end
+
+# #55842
+let (c, r) = test_complete_pos("@tim| using Date")
+    @test "@time" in c
+    @test r == 1:4
+end
+
+# #56389
+let s = "begin\n  using Ran"
+    c, r = test_complete(s)
+    @test "Random" in c
+    @test r == 15:17
+    @test s[r] == "Ran"
+end
+let s = "using .CompletionFoo: bar, type_"
+    c, r = test_complete(s)
+    @test "type_test" in c
+    @test r == 28:32
+    @test s[r] == "type_"
+end
+
+# #55518
+let s = "CompletionFoo.@barfoo nothi"
+    c, r = test_complete(s)
+    @test "nothing" in c
+    @test r == 23:27
+end
+let s = "CompletionFoo.@barfoo kwtest"
+    c, r = test_complete(s)
+    @test isempty(c)
+end
+let s = "CompletionFoo.kwtest(x=type"
+    c, r = test_complete(s)
+    @test "typeof" in c
+    @test !("type_test" in c)
+    @test r == 24:27
+end
+let s = "CompletionFoo.bar; nothi"
+    c, r = test_complete(s)
+    @test "nothing" in c
+    @test r == 20:24
+end
+let s = "CompletionFoo.bar; @ti"
+    c, r = test_complete(s)
+    @test "@time" in c
+    @test r == 20:22
+end
+let s = "x = sin.([1]); y = ex"
+    c, r = test_complete(s)
+    @test "exp" in c
+    @test r == 20:21
+end
+
+# #57611
+let s = "x = Base.BinaryPlatforms.ar"
+    c, r = test_complete(s)
+    @test "arch" in c
+    @test r == 26:27
+end
+
+# #55520
+let s = "@ignoremacro A .= A setup=(A=ident"
+    c, r = test_complete(s)
+    @test "identity"in c
+    @test r == 30:34
+end
+
+# #57307
+let s = "unicode_αβγ.yy = named.len"
+    c, r = test_complete_foo(s)
+    @test "len2" in c
+    @test r == 27:29
+end
+
+# #55429
+let s = "@time @eval CompletionFoo.Compl"
+    c, r = test_complete(s)
+    @test "CompletionFoo2" in c
+    @test r == 27:31
+end
+
+# #55420
+let s = "CompletionFoo.test(iden"
+    c, r = test_complete(s)
+    @test "identity" in c
+    @test r == 20:23
+end
+
+# #57772
+let s = "sum(!ismis"
+    c, r = test_complete(s)
+    @test "ismissing" in c
+    @test r == 6:10
+end
+let s = "sum(!!ismis"
+    c, r = test_complete(s)
+    @test "ismissing" in c
+    @test r == 7:11
+end
+
+# Don't trigger complete_methods! when the cursor is on the function name.
+let s = "prin|(\"hello\")"
+    c, r = test_complete_pos(s)
+    @test "print" in c
+    @test r == 1:4
+end
+
+# Don't crash when tab-completing paths that cause ispath() to throw
+let s = "include(\"" * repeat("a", 5000) # ENAMETOOLONG
+    c, r = test_complete(s)
+    @test isempty(c)
+end
+
+# JuliaLang/julia#57780
+const issue57780 = ["a", "b", "c"]
+const issue57780_orig = copy(issue57780)
+test_complete_context("empty!(issue57780).", Main)
+@test issue57780 == issue57780_orig
+
+function g54131 end
+for i in 1:498
+    @eval g54131(::Val{$i}) = i
+end
+g54131(::Val{499}; kwarg=true) = 499*kwarg
+struct F54131; end
+Base.getproperty(::F54131, ::Symbol) = Any[cos, sin, g54131][rand(1:3)]
+f54131 = F54131()
+@testset "performance of kwarg completion with large method tables" begin
+    # The goal here is to simply ensure we aren't hitting catestrophically bad
+    # behaviors when shift isn't pressed. The difference between good and bad
+    # is on the order of tens of milliseconds vs tens of seconds; using 1 sec as
+    # a very rough canary that is hopefully robust even in the noisy CI coalmines
+    s = "g54131(kwa"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+
+    s = "f54131.x("
+    a, b, c = completions(s, lastindex(s), @__MODULE__, false)
+    @test only(a) isa REPLCompletions.TextCompletion
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+
+    s = "f54131.x(kwa"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, false)
+    @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+end
+
+# Completion inside string interpolation
+let s = "\"example: \$varflo"
+    c, r = test_complete_foo(s)
+    @test "varfloat" in c
+    @test r == 12:17
+end
+
+let s = "\"example: \$(3 + findfir"
+    c, r = test_complete(s)
+    @test "findfirst" in c
+    @test r == 17:23
+end
+
+let s = "\"example: \$(named.len"
+    c, r = test_complete_foo(s)
+    @test "len2" in c
+    @test r == 19:21
+end
+
+# #58296 - complete positional arguments before semicolon
+let s = "string(findfi|; base=16)"
+    c, r = test_complete_pos(s)
+    @test "findfirst" in c
+    @test r == 8:13
+end
+
+# Unknown functions should not cause completions to fail
+let s = "foo58296(findfi"
+    c, r = test_complete(s)
+    @test "findfirst" in c
+    @test r == 10:15
 end

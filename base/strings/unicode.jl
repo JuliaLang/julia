@@ -4,12 +4,14 @@
 module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
-             convert, isvalid, ismalformed, isoverlong, iterate
+             convert, isvalid, ismalformed, isoverlong, iterate,
+             AnnotatedString, AnnotatedChar, annotated_chartransform,
+             @assume_effects, annotations, is_overlong_enc
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
 """
-    isvalid(value) -> Bool
+    isvalid(value)::Bool
 
 Return `true` if the given value is valid for its type, which currently can be either
 `AbstractChar` or `String` or `SubString{String}`.
@@ -29,7 +31,7 @@ true
 isvalid(value)
 
 """
-    isvalid(T, value) -> Bool
+    isvalid(T, value)::Bool
 
 Return `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
@@ -155,15 +157,15 @@ function utf8proc_decompose(str, options, buffer, nwords, chartransform::typeof(
     ret < 0 && utf8proc_error(ret)
     return ret
 end
-function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) where T
-    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
+function utf8proc_decompose(str, options, buffer, nwords, chartransform::F) where F
+    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{F}),
                 str, sizeof(str), buffer, nwords, options,
-                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
+                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{F})), chartransform)
     ret < 0 && utf8proc_error(ret)
     return ret
 end
 
-function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform=identity)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
     nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
     buffer = Base.StringVector(nwords*4)
     nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
@@ -172,17 +174,24 @@ function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, ch
     return String(resize!(buffer, nbytes))
 end
 
-# from julia_charmap.h, used by julia_chartransform in the Unicode stdlib
+"""
+`Dict` of `original codepoint => replacement codepoint` normalizations
+to perform on Julia identifiers, to canonicalize characters that
+are both easily confused and easily inputted by accident.
+
+!!! warning
+    When this table is updated, also update the corresponding table in `src/flisp/julia_charmap.h`.
+"""
 const _julia_charmap = Dict{UInt32,UInt32}(
-    0x025B => 0x03B5,
-    0x00B5 => 0x03BC,
-    0x00B7 => 0x22C5,
-    0x0387 => 0x22C5,
-    0x2212 => 0x002D,
-    0x210F => 0x0127,
+    0x025B => 0x03B5, # latin small letter open e -> greek small letter epsilon
+    0x00B5 => 0x03BC, # micro sign -> greek small letter mu
+    0x00B7 => 0x22C5, # middot char -> dot operator (#25098)
+    0x0387 => 0x22C5, # Greek interpunct -> dot operator (#25098)
+    0x2212 => 0x002D, # minus -> hyphen-minus (#26193)
+    0x210F => 0x0127, # hbar -> small letter h with stroke (#48870)
 )
 
-utf8proc_map(s::AbstractString, flags::Integer, chartransform=identity) = utf8proc_map(String(s), flags, chartransform)
+utf8proc_map(s::AbstractString, flags::Integer, chartransform::F = identity) where F = utf8proc_map(String(s), flags, chartransform)
 
 # Documented in Unicode module
 function normalize(
@@ -253,8 +262,15 @@ julia> textwidth('⛵')
 2
 ```
 """
-function textwidth(c::AbstractChar)
-    ismalformed(c) && return 1
+textwidth(c::AbstractChar) = textwidth(Char(c)::Char)
+
+function textwidth(c::Char)
+    u = reinterpret(UInt32, c)
+    b = bswap(u) # from isascii(c)
+    b < 0x7f && return Int(b >= 0x20) # ASCII fast path
+    # We can't know a priori how terminals will render invalid UTF8 chars,
+    # so we conservatively decide a width of 1.
+    (ismalformed(c) || is_overlong_enc(u)) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
 
@@ -270,6 +286,8 @@ julia> textwidth("March")
 ```
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
+
+textwidth(s::AnnotatedString) = textwidth(s.string)
 
 """
     lowercase(c::AbstractChar)
@@ -290,6 +308,8 @@ julia> lowercase('Ö')
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
 
+lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), annotations(c))
+
 """
     uppercase(c::AbstractChar)
 
@@ -308,6 +328,8 @@ julia> uppercase('ê')
 """
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+
+uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), annotations(c))
 
 """
     titlecase(c::AbstractChar)
@@ -332,6 +354,8 @@ julia> uppercase('ǆ')
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
 
+titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
+
 ############################################################################
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
@@ -340,7 +364,7 @@ function category_code(c::AbstractChar)
 end
 
 function category_code(x::Integer)
-    x ≤ 0x10ffff ? ccall(:utf8proc_category, Cint, (UInt32,), x) : Cint(30)
+    x ≤ 0x10ffff ? (@assume_effects :foldable @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
 end
 
 # more human-readable representations of the category code
@@ -357,7 +381,7 @@ isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 ## libc character class predicates ##
 
 """
-    islowercase(c::AbstractChar) -> Bool
+    islowercase(c::AbstractChar)::Bool
 
 Tests whether a character is a lowercase letter (according to the Unicode
 standard's `Lowercase` derived property).
@@ -376,12 +400,13 @@ julia> islowercase('❤')
 false
 ```
 """
-islowercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_islower, Cint, (UInt32,), UInt32(c)))
+islowercase(c::AbstractChar) = ismalformed(c) ? false :
+    Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
 
 # true for Unicode upper and mixed case
 
 """
-    isuppercase(c::AbstractChar) -> Bool
+    isuppercase(c::AbstractChar)::Bool
 
 Tests whether a character is an uppercase letter (according to the Unicode
 standard's `Uppercase` derived property).
@@ -400,10 +425,11 @@ julia> isuppercase('❤')
 false
 ```
 """
-isuppercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isupper, Cint, (UInt32,), UInt32(c)))
+isuppercase(c::AbstractChar) = ismalformed(c) ? false :
+    Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
 
 """
-    iscased(c::AbstractChar) -> Bool
+    iscased(c::AbstractChar)::Bool
 
 Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
 
@@ -418,9 +444,9 @@ end
 
 
 """
-    isdigit(c::AbstractChar) -> Bool
+    isdigit(c::AbstractChar)::Bool
 
-Tests whether a character is a decimal digit (0-9).
+Tests whether a character is an ASCII decimal digit (`0`-`9`).
 
 See also: [`isletter`](@ref).
 
@@ -439,7 +465,7 @@ false
 isdigit(c::AbstractChar) = (c >= '0') & (c <= '9')
 
 """
-    isletter(c::AbstractChar) -> Bool
+    isletter(c::AbstractChar)::Bool
 
 Test whether a character is a letter.
 A character is classified as a letter if it belongs to the Unicode general
@@ -462,7 +488,7 @@ false
 isletter(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO
 
 """
-    isnumeric(c::AbstractChar) -> Bool
+    isnumeric(c::AbstractChar)::Bool
 
 Tests whether a character is numeric.
 A character is classified as numeric if it belongs to the Unicode general category Number,
@@ -491,7 +517,7 @@ isnumeric(c::AbstractChar) = UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PRO
 # following C++ only control characters from the Latin-1 subset return true
 
 """
-    iscntrl(c::AbstractChar) -> Bool
+    iscntrl(c::AbstractChar)::Bool
 
 Tests whether a character is a control character.
 Control characters are the non-printing characters of the Latin-1 subset of Unicode.
@@ -508,14 +534,20 @@ false
 iscntrl(c::AbstractChar) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
 
 """
-    ispunct(c::AbstractChar) -> Bool
+    ispunct(c::AbstractChar)::Bool
 
 Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
 character whose category code begins with 'P'.
 
+!!! note
+    This behavior is different from the `ispunct` function in C.
+
 # Examples
 ```jldoctest
 julia> ispunct('α')
+false
+
+julia> ispunct('=')
 false
 
 julia> ispunct('/')
@@ -530,7 +562,7 @@ ispunct(c::AbstractChar) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_
 # \u85 is the Unicode Next Line (NEL) character
 
 """
-    isspace(c::AbstractChar) -> Bool
+    isspace(c::AbstractChar)::Bool
 
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
@@ -556,7 +588,7 @@ true
     '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
 """
-    isprint(c::AbstractChar) -> Bool
+    isprint(c::AbstractChar)::Bool
 
 Tests whether a character is printable, including spaces, but not a control character.
 
@@ -574,7 +606,7 @@ isprint(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_
 # true in principal if a printer would use ink
 
 """
-    isxdigit(c::AbstractChar) -> Bool
+    isxdigit(c::AbstractChar)::Bool
 
 Test whether a character is a valid hexadecimal digit. Note that this does not
 include `x` (as in the standard `0x` prefix).
@@ -606,6 +638,7 @@ julia> uppercase("Julia")
 ```
 """
 uppercase(s::AbstractString) = map(uppercase, s)
+uppercase(s::AnnotatedString) = annotated_chartransform(uppercase, s)
 
 """
     lowercase(s::AbstractString)
@@ -621,9 +654,10 @@ julia> lowercase("STRINGS AND THINGS")
 ```
 """
 lowercase(s::AbstractString) = map(lowercase, s)
+lowercase(s::AnnotatedString) = annotated_chartransform(lowercase, s)
 
 """
-    titlecase(s::AbstractString; [wordsep::Function], strict::Bool=true) -> String
+    titlecase(s::AbstractString; [wordsep::Function], strict::Bool=true)::String
 
 Capitalize the first character of each word in `s`;
 if `strict` is true, every other character is
@@ -666,11 +700,28 @@ function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Boo
         end
         c0 = c
     end
-    return String(take!(b))
+    return takestring!(b)
+end
+
+# TODO: improve performance characteristics, room for a ~10x improvement.
+function titlecase(s::AnnotatedString; wordsep::Function = !isletter, strict::Bool=true)
+    initial_state = (; startword = true, state = Ref{Int32}(0),
+             c0 = eltype(s)(zero(UInt32)), wordsep, strict)
+    annotated_chartransform(s, initial_state) do c, state
+        if isgraphemebreak!(state.state, state.c0, c) && state.wordsep(c)
+            state = Base.setindex(state, true, :startword)
+            cnew = c
+        else
+            cnew = state.startword ? titlecase(c) : state.strict ? lowercase(c) : c
+            state = Base.setindex(state, false, :startword)
+        end
+        state = Base.setindex(state, c, :c0)
+        cnew, state
+    end
 end
 
 """
-    uppercasefirst(s::AbstractString) -> String
+    uppercasefirst(s::AbstractString)::String
 
 Return `s` with the first character converted to uppercase (technically "title
 case" for Unicode). See also [`titlecase`](@ref) to capitalize the first
@@ -691,6 +742,17 @@ function uppercasefirst(s::AbstractString)
     c′ = titlecase(c)
     c == c′ ? convert(String, s) :
     string(c′, SubString(s, nextind(s, 1)))
+end
+
+# TODO: improve performance characteristics, room for a ~5x improvement.
+function uppercasefirst(s::AnnotatedString)
+    annotated_chartransform(s, true) do c, state
+        if state
+            (titlecase(c), false)
+        else
+            (c, state)
+        end
+    end
 end
 
 """
@@ -715,6 +777,17 @@ function lowercasefirst(s::AbstractString)
     string(c′, SubString(s, nextind(s, 1)))
 end
 
+# TODO: improve performance characteristics, room for a ~5x improvement.
+function lowercasefirst(s::AnnotatedString)
+    annotated_chartransform(s, true) do c, state
+        if state
+            (lowercase(c), false)
+        else
+            (c, state)
+        end
+    end
+end
+
 ############################################################################
 # iterators for grapheme segmentation
 
@@ -725,7 +798,7 @@ isgraphemebreak(c1::AbstractChar, c2::AbstractChar) =
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
-function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
+@inline function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
     if ismalformed(c1) || ismalformed(c2)
         state[] = 0
         return true

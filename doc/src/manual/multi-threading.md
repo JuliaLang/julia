@@ -5,11 +5,13 @@ of Julia multi-threading features.
 
 ## Starting Julia with multiple threads
 
-By default, Julia starts up with a single thread of execution. This can be verified by using the
-command [`Threads.nthreads()`](@ref):
+By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
+This can be verified by using the command [`Threads.nthreads()`](@ref):
 
-```jldoctest
-julia> Threads.nthreads()
+```julia
+julia> Threads.nthreads(:default)
+1
+julia> Threads.nthreads(:interactive)
 1
 ```
 
@@ -22,6 +24,9 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 (`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
 (see [Command-line Options](@ref command-line-interface) for more details).
 
+See [threadpools](@ref man-threadpools) for how to control how many `:default` and `:interactive` threads are in
+each threadpool.
+
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
@@ -29,6 +34,11 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 !!! compat "Julia 1.7"
     Using `auto` as value of the environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) requires at least Julia 1.7.
     In older versions, this value is ignored.
+
+!!! compat "Julia 1.12"
+    Starting by default with 1 interactive thread, as well as the 1 worker thread, was made as such in Julia 1.12
+    If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
+
 Lets start Julia with 4 threads:
 
 ```bash
@@ -37,7 +47,7 @@ $ julia --threads 4
 
 Let's verify there are 4 threads at our disposal.
 
-```julia-repl
+```jldoctest; filter = r"[0-9]+"
 julia> Threads.nthreads()
 4
 ```
@@ -74,12 +84,14 @@ julia> Threads.threadid()
 
 ### Multiple GC Threads
 
-The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
-of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+The Garbage Collector (GC) can use multiple threads. The amount used by default matches the compute
+worker threads or can configured by either the `--gcthreads` command line argument or by using the
 [`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
     The `--gcthreads` command line argument requires at least Julia 1.10.
+
+For more details about garbage collection configuration and performance tuning, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 ## [Threadpools](@id man-threadpools)
 
@@ -96,10 +108,17 @@ using Base.Threads
 Interactive tasks should avoid performing high latency operations, and if they
 are long duration tasks, should yield frequently.
 
-Julia may be started with one or more threads reserved to run interactive tasks:
+By default Julia starts with one interactive thread reserved to run interactive tasks, but that number can
+be controlled with:
 
 ```bash
 $ julia --threads 3,1
+julia> Threads.nthreads(:interactive)
+1
+
+$ julia --threads 3,0
+julia> Threads.nthreads(:interactive)
+0
 ```
 
 The environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) can also be used similarly:
@@ -128,6 +147,8 @@ julia> nthreads(:interactive)
 julia> nthreads()
 3
 ```
+!!! note
+    Explicitly asking for 1 thread by doing `-t1` or `JULIA_NUM_THREADS=1` does not add an interactive thread.
 
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
@@ -192,7 +213,8 @@ julia> a
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
 
 ### Using `@threads` without data-races
-The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
+
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
 Lets say we want to make the function `sum_single` below multithreaded.
 ```julia-repl
@@ -227,11 +249,11 @@ julia> sum_multi_bad(1:1_000_000)
 Note that the result is not `500000500000` as it should be, and will most likely change each evaluation.
 
 To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
-Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into `nthreads()`
+Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into at most `nthreads()`
 chunks for parallel work. We then use `Threads.@spawn` to create tasks that individually sum each chunk. Finally, we sum the results from each task using `sum_single` again:
 ```julia-repl
 julia> function sum_multi_good(a)
-           chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
+           chunks = Iterators.partition(a, cld(length(a), Threads.nthreads()))
            tasks = map(chunks) do chunk
                Threads.@spawn sum_single(chunk)
            end
@@ -256,6 +278,9 @@ depending on the characteristics of the operations.
 
 Although Julia's threads can communicate through shared memory, it is notoriously difficult to write correct and data-race free multi-threaded code. Julia's
 [`Channel`](@ref)s are thread-safe and may be used to communicate safely. There are also sections below that explain how to use [locks](@ref man-using-locks) and [atomics](@ref man-atomic-operations) to avoid data-races.
+
+In certain cases, Julia is able to detect a detect safety violations, in particular in regards to deadlocks or other known-unsafe operations such as yielding
+to the currently running task. In these cases, a [`ConcurrencyViolationError`](@ref) is thrown.
 
 ### Data-race freedom
 

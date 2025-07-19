@@ -3,21 +3,17 @@
 A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to
 store a value (that you obtained after some math, for example) for later use. For example:
 
-```julia-repl
-# Assign the value 10 to the variable x
-julia> x = 10
+```jldoctest
+julia> x = 10   # Assign the value 10 to the variable x
 10
 
-# Doing math with x's value
-julia> x + 1
+julia> x + 1    # Doing math with x's value
 11
 
-# Reassign x's value
-julia> x = 1 + 1
+julia> x = 1 + 1   # Reassign x's value
 2
 
-# You can assign values of other types, like strings of text
-julia> x = "Hello World!"
+julia> x = "Hello World!"   # You can assign values of other types, like strings of text
 "Hello World!"
 ```
 
@@ -79,10 +75,12 @@ julia> Base.length
 length (generic function with 79 methods)
 ```
 
-However, if you try to redefine a built-in constant or function already in use, Julia will give
-you an error:
+However, if you try to redefine a built-in constant or function that you
+have explicitly imported, Julia will give you an error:
 
 ```jldoctest
+julia> using Base: pi, sqrt
+
 julia> pi
 π = 3.1415926535897...
 
@@ -95,6 +93,10 @@ julia> sqrt(100)
 julia> sqrt = 4
 ERROR: cannot assign a value to imported variable Base.sqrt from module Main
 ```
+
+!!! compat "Julia 1.12"
+  Note that in versions prior to Julia 1.12, these errors depended on *use* rather than definition of
+  the conflicting binding.
 
 ## [Allowed Variable Names](@id man-allowed-variable-names)
 
@@ -110,7 +112,7 @@ Operators like `+` are also valid identifiers, but are parsed specially. In some
 can be used just like variables; for example `(+)` refers to the addition function, and `(+) = f`
 will reassign it. Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
-to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
+to define `⊗` as an infix Kronecker product). Operators can also be suffixed with modifying marks,
 primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
 A space is required between an operator that ends with a subscript/superscript letter and a subsequent
 variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
@@ -119,7 +121,7 @@ it from `+ ᵃx` where `ᵃx` is the variable name.
 
 A particular class of variable names is one that contains only underscores. These identifiers are write-only. I.e. they can only be assigned values, which are immediately discarded, and their values cannot be used in any way.
 
-```julia-repl
+```jldoctest
 julia> x, ___ = size([2 2; 1 1])
 (2, 2)
 
@@ -132,12 +134,18 @@ ERROR: syntax: all-underscore identifiers are write-only and their values cannot
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):
 
-```julia-repl
+```jldoctest
 julia> else = false
-ERROR: syntax: unexpected "else"
+ERROR: ParseError:
+# Error @ none:1:1
+else = false
+└──┘ ── invalid identifier
 
 julia> try = "No"
-ERROR: syntax: unexpected "="
+ERROR: ParseError:
+# Error @ none:1:1
+try = "No"
+└────────┘ ── try without catch or finally
 ```
 
 Some Unicode characters are considered to be equivalent in identifiers.
@@ -156,7 +164,7 @@ The minus sign `−` (U+2212) is treated as equivalent to the hyphen-minus sign 
 
 An assignment `variable = value` "binds" the name `variable` to the `value` computed
 on the right-hand side, and the whole assignment is treated by Julia as an expression
-equal to the right-hand-side `value`.  This means that assignments can be *chained*
+equal to the right-hand-side `value`. This means that assignments can be *chained*
 (the same `value` assigned to multiple variables with `variable1 = variable2 = value`)
 or used in other expressions, and is also why their result is shown in the REPL as
 the value of the right-hand side.  (In general, the REPL displays the value of whatever
@@ -175,7 +183,7 @@ julia> b
 ```
 
 A common confusion is the distinction between *assignment* (giving a new "name" to a value)
-and *mutation* (changing a value).  If you run `a = 2` followed by `a = 3`, you have changed
+and *mutation* (changing a value). If you run `a = 2` followed by `a = 3`, you have changed
 the "name" `a` to refer to a new value `3` … you haven't changed the number `2`, so `2+2`
 will still give `4` and not `6`!   This distinction becomes more clear when dealing with
 *mutable* types like [arrays](@ref lib-arrays), whose contents *can* be changed:
@@ -213,11 +221,11 @@ julia> b   # b refers to the original array object, which has been mutated
   3
 ```
 That is, `a[i] = value` (an alias for [`setindex!`](@ref)) *mutates* an existing array object
-in memory, accessible via either `a` or `b`.  Subsequently setting `a = 3.14159`
+in memory, accessible via either `a` or `b`. Subsequently setting `a = 3.14159`
 does not change this array, it simply binds `a` to a different object; the array is still
 accessible via `b`. Another common syntax to mutate an existing object is
 `a.field = value` (an alias for [`setproperty!`](@ref)), which can be used to change
-a [`mutable struct`](@ref).  There is also mutation via dot assignment, for example
+a [`mutable struct`](@ref). There is also mutation via dot assignment, for example
 `b .= 5:7` (which mutates our array `b` in-place to contain `[5,6,7]`), as part of Julia's
 [vectorized "dot" syntax](@ref man-dot-operators).
 

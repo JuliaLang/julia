@@ -11,11 +11,12 @@ Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard
+    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard, @trace_compile, @trace_dispatch,
+    @activate
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
+using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
     signature_type, format_bytes
 using Base.Libc
 using Markdown
@@ -52,7 +53,7 @@ function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool =
             if !isdefined(m2, v) || !occursin(pattern, string(v))
                 continue
             end
-            value = getfield(m2, v)
+            value = getglobal(m2, v)
             isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
@@ -104,7 +105,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
-    official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
+    official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.isdebugbuild() || !isempty(Base.TAGGED_RELEASE_BANNER) || (Base.GIT_VERSION_INFO.tagged_commit && !official_release)
         println(io, "Build Info:")
         if Base.isdebugbuild()
@@ -119,7 +120,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
 
                     Note: This is an unofficial build, please report bugs to the project
                     responsible for this build and not to the Julia project unless you can
-                    reproduce the issue using official builds available at https://julialang.org/downloads
+                    reproduce the issue using official builds available at https://julialang.org
                 """
             )
         end
@@ -147,7 +148,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(chomp(String(take!(cpuio))), "\n"))
+        for (i, line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
             println(io, prefix, line)
         end
@@ -165,6 +166,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
@@ -198,7 +200,7 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function]; supertypes::Bool=false])
+    methodswith(typ[, module or function]; supertypes::Bool=false)
 
 Return an array of methods with an argument of type `typ`.
 
@@ -230,8 +232,8 @@ end
 function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
-        if isdefined(m, nm)
-            f = getfield(m, nm)
+        if isdefinedglobal(m, nm)
+            f = getglobal(m, nm)
             if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
@@ -262,8 +264,8 @@ function _subtypes_in!(mods::Array, x::Type)
         m = pop!(mods)
         xt = xt::DataType
         for s in names(m, all = true)
-            if isdefined(m, s) && !isdeprecated(m, s)
-                t = getfield(m, s)
+            if !isdeprecated(m, s) && isdefinedglobal(m, s)
+                t = getglobal(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)
                     if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
@@ -338,7 +340,7 @@ export peakflops
 function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
     # Base.depwarn("`peakflops` has moved to the LinearAlgebra module, " *
     #              "add `using LinearAlgebra` to your imports.", :peakflops)
-    let LinearAlgebra = Base.require(Base.PkgId(
+    let LinearAlgebra = Base.require_stdlib(Base.PkgId(
             Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
         return LinearAlgebra.peakflops(n, eltype=eltype, ntrials=ntrials, parallel=parallel)
     end
@@ -353,7 +355,7 @@ function report_bug(kind)
     if Base.locate_package(BugReportingId) === nothing
         @info "Package `BugReporting` not found - attempting temporary installation"
         # Create a temporary environment and add BugReporting
-        let Pkg = Base.require(Base.PkgId(
+        let Pkg = Base.require_stdlib(Base.PkgId(
             Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)
