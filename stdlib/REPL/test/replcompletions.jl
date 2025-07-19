@@ -2720,3 +2720,25 @@ let s = "foo58296(findfi"
     @test "findfirst" in c
     @test r == 10:15
 end
+
+# #58931 - only show local names when completing the empty string
+let s = ""
+    c, r = test_complete_foo(s)
+    @test "test" in c
+    @test !("rand" in c)
+end
+
+# #58309, #58832 - don't show every name when completing after a full keyword
+let s = "true"     # bool is a little different (Base.isidentifier special case)
+    c, r = test_complete(s)
+    @test "trues" in c
+    @test "true" in c
+    @test !("rand" in c)
+end
+
+let s = "for"
+    c, r = test_complete(s)
+    @test "for" in c
+    @test "foreach" in c
+    @test !("rand" in c)
+end
