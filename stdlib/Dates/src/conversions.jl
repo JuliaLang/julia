@@ -50,7 +50,7 @@ function unix2datetime(x::Real; localtime::Bool=false)
     # Rounding should match `now` below
     s = trunc(Int64, Int64(1000) * x)
     if localtime
-        DateTime(Libc.TmStruct(s))
+        return DateTime(Libc.TmStruct(s))
     else
         rata = UNIXEPOCH + s
         return DateTime(UTM(rata))
