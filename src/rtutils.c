@@ -1290,10 +1290,20 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             for (size_t j = 0; j < tlen; j++) {
                 if (layout->flags.arrayelem_isboxed) {
                     jl_value_t **ptr = ((jl_value_t**)m->ptr) + j;
+                    if (layout->flags.arrayelem_islocked) {
+                        // Skip the lock at the beginning for locked arrays
+                        size_t lock_size = sizeof(jl_mutex_t);
+                        ptr = (jl_value_t**)((char*)ptr + lock_size);
+                    }
                     n += jl_static_show_x(out, *ptr, depth, ctx);
                 }
                 else {
                     char *ptr = ((char*)m->ptr) + j * layout->size;
+                    if (layout->flags.arrayelem_islocked) {
+                        // Skip the lock at the beginning for locked arrays
+                        size_t lock_size = sizeof(jl_mutex_t);
+                        ptr += lock_size;
+                    }
                     n += jl_static_show_x_(out, (jl_value_t*)ptr,
                             (jl_datatype_t*)(typetagdata ? jl_nth_union_component(el_type, typetagdata[j]) : el_type),
                             depth, ctx);

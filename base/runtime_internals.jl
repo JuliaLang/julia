@@ -565,6 +565,10 @@ struct DataTypeLayout
     # fielddesc_type : 2;
     # arrayelem_isboxed : 1;
     # arrayelem_isunion : 1;
+    # arrayelem_isatomic : 1;
+    # arrayelem_islocked : 1;
+    # isbitsegal : 1;
+    # padding : 8;
 end
 
 """
