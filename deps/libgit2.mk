@@ -4,6 +4,7 @@ ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 LIBGIT2_GIT_URL := https://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
 $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
+$(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted: $(MSYS_NONEXISTENT_SYMLINK_TARGET_FIX)
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2
@@ -21,7 +22,7 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=OFF -DUSE_SSH=ON -DREGEX_BACKEND=pcre2 -DBUILD_CLI=OFF
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=OFF -DUSE_SSH=ON -DREGEX_BACKEND=pcre2 -DBUILD_CLI=OFF -DBUILD_TESTS=OFF
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)

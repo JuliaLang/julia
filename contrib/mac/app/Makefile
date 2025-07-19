@@ -47,7 +47,7 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	plutil -insert  CFBundleVersion            -string "$(JULIA_VERSION_OPT_COMMIT)" $@/Contents/Info.plist
 	plutil -insert  NSHumanReadableCopyright   -string "$(APP_COPYRIGHT)" $@/Contents/Info.plist
 	-mkdir -p $@/Contents/Resources/julia
-	make -C $(JULIAHOME) binary-dist
+	$(MAKE) -C $(JULIAHOME) binary-dist
 	$(TAR) -xzf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
 	find $@/Contents/Resources/julia -type f -exec chmod -w {} \;
 	# Even though the tarball may already be signed, we re-sign here to make it easier to add
