@@ -465,6 +465,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
+    f isa Core.Builtin && return # `methods` isn't very useful for a builtin
     funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
@@ -472,7 +473,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !has_free_typevars(at1)
+        if isType(at1) && !has_free_typevars(at1) && at1.parameters[1] isa Type
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -494,8 +495,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             end
             sig0 = sig0::DataType
             s1 = sig0.parameters[1]
-            if sig0 === Tuple || !isa(func, rewrap_unionall(s1, method.sig))
-                # function itself doesn't match or is a builtin
+            if !isa(func, rewrap_unionall(s1, method.sig))
+                # function itself doesn't match
                 continue
             else
                 print(iob, "  ")
@@ -640,6 +641,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             println(io) # extra newline for spacing to stacktrace
         end
     end
+    nothing
 end
 
 # In case the line numbers in the source code have changed since the code was compiled,
