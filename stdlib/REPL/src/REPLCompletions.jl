@@ -186,7 +186,7 @@ function complete_symbol!(suggestions::Vector{Completion},
                           complete_modules_only::Bool=false,
                           shift::Bool=false)
     local mod, t, val
-    complete_internal_only = false
+    complete_internal_only = isempty(name)
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -1095,17 +1095,18 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     # Symbol completion
     # TODO: Should completions replace the identifier at the cursor?
+    looks_like_ident = Base.isidentifier(@view string[intersect(char_range(cur), 1:pos)])
     if cur.parent !== nothing && kind(cur.parent) == K"var"
         # Replace the entire var"foo", but search using only "foo".
         r = intersect(char_range(cur.parent), 1:pos)
         r2 = char_range(children_nt(cur.parent)[1])
         s = string[intersect(r2, 1:pos)]
-    elseif kind(cur) in KSet"Identifier @"
-        r = intersect(char_range(cur), 1:pos)
-        s = string[r]
     elseif kind(cur) == K"MacroName"
         # Include the `@`
         r = intersect(prevind(string, cur.position):char_last(cur), 1:pos)
+        s = string[r]
+    elseif looks_like_ident || kind(cur) in KSet"Bool Identifier @"
+        r = intersect(char_range(cur), 1:pos)
         s = string[r]
     else
         r = nextind(string, pos):pos
@@ -1114,7 +1115,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     complete_modules_only = false
     prefix = node_prefix(cur, context_module)
-    comp_keywords = prefix === nothing
+    comp_keywords = prefix === nothing && !isempty(s)
 
     # Complete loadable module names:
     #   import Mod TAB
