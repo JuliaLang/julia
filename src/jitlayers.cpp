@@ -332,8 +332,6 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
 
   // lock for places where only single threaded behavior is implemented, so we need GC support
 static jl_mutex_t jitlock;
-  // locks for adding external code to the JIT atomically
-static std::mutex extern_c_lock;
   // locks and barriers for this state
 static std::mutex engine_lock;
 static std::condition_variable engine_wait;
@@ -361,7 +359,6 @@ static DenseMap<jl_code_instance_t*, SmallVector<jl_code_instance_t*,0>> incompl
 //   jitlock is outermost, can contain others and allows GC
 //   engine_lock is next
 //   ThreadSafeContext locks are next, they should not be nested (unless engine_lock is also held, but this may make TSAN sad anyways)
-//   extern_c_lock is next
 //   jl_ExecutionEngine internal locks are exclusive to this list, since OrcJIT promises to never hold a lock over a materialization unit:
 //        construct a query object from a query set and query handler
 //        lock the session
