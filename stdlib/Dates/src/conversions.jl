@@ -48,11 +48,12 @@ time zone, otherwise it is in UTC/GMT.
 """
 function unix2datetime(x::Real; localtime::Bool=false)
     # Rounding should match `now` below
-    s = trunc(Int64, Int64(1000) * x)
+    ms = trunc(Int64, Int64(1000) * x)
     if localtime
-        return DateTime(Libc.TmStruct(s))
+        s, ms = divrem(ms, 1000)
+        return DateTime(Libc.TmStruct(s)) + Millisecond(ms)
     else
-        rata = UNIXEPOCH + s
+        rata = UNIXEPOCH + ms
         return DateTime(UTM(rata))
     end
 end
