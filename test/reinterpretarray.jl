@@ -10,14 +10,18 @@ tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
 fcviews(a::AbstractArray) = view(a, ntuple(Returns(:),ndims(a)-1)..., axes(a)[end])
 fcviews(a::AbstractArray{<:Any, 0}) = view(a)
-offset(a::AbstractArray) = OffsetArray(a)
+offset_nominal(a::AbstractArray) = OffsetArray(a)
+offset_maybe(a::AbstractArray) = (eltype(a) <: Real) ? a : OffsetArray(a, (1-ndims(A)):2:(ndims(A)-1)...)
 tslow(t::Tuple) = map(tslow, t)
 wrapper(t::Tuple) = map(wrapper, t)
 fcviews(t::Tuple) = map(fcviews, t)
-offset(t::Tuple) = map(offset, t)
+offset_nominal(t::Tuple) = map(offset_nominal, t)
+offset_maybe(t::Tuple) = map(offset_maybe, t)
 
 test_many_wrappers(testf, A, wrappers) = foreach(w -> testf(w(A)), wrappers)
-test_many_wrappers(testf, A) = test_many_wrappers(testf, A, (identity, tslow, wrapper, fcviews, offset))
+test_many_wrappers(testf, A) = test_many_wrappers(
+    testf, A, (identity, tslow, wrapper, fcviews, offset_nominal, offset_maybe)
+)
 
 A = Int64[1, 2, 3, 4]
 Ars = Int64[1 3; 2 4]
