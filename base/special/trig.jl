@@ -742,7 +742,7 @@ end
 end
 
 @inline function sinpi_kernel(x::Float16)
-    _sinpi_kernel_polynomial_f16(x)
+    Float16(sinpi_kernel_wide(x))
 end
 @inline function sinpi_kernel_wide(x::Float16)
     x = Float32(x)
@@ -765,7 +765,7 @@ end
                           -1.3352624040152927, 0.23531426791507182, -0.02550710082498761))
 end
 @inline function cospi_kernel(x::Float16)
-    _cospi_kernel_polynomial_f16(x)
+    Float16(cospi_kernel_wide(x))
 end
 @inline function cospi_kernel_wide(x::Float16)
     x = Float32(x)
@@ -844,24 +844,6 @@ end
 
 Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input.
 
-* `Float16`:
-
-  ```sollya
-  handTuned = 1;
-  prec = 500!;
-  accurate = cos(pi * x);
-  kernelDomain = [-2^-3, 2^-2];
-  constrainedPart = 1;
-  machinePrecision = 11;
-  doubleWordPrecision = 2 * machinePrecision + handTuned;
-  freeMonomials = [|2, 4|];
-  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision|];
-  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain, constrainedPart);
-  supnormPrecision = 2^-10;
-  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
-  polynomial;
-  ```
-
 * `Float32`:
 
   ```sollya
@@ -900,23 +882,6 @@ Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input
 
 ## `sinpi`
 
-* `Float16`:
-
-  ```sollya
-  handTuned = 3;
-  prec = 500!;
-  accurate = sin(pi * x);
-  kernelDomain = [-2^-3, 2^-2];
-  machinePrecision = 11;
-  doubleWordPrecision = 2 * machinePrecision + handTuned;
-  freeMonomials = [|1, 3, 5|];
-  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision|];
-  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain);
-  supnormPrecision = 2^-10;
-  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
-  polynomial;
-  ```
-
 * `Float32`:
 
   ```sollya
@@ -952,20 +917,6 @@ Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input
   ```
 =#
 
-const _cospi_kernel_polynomial_f16 = CosPiEvaluationScheme(;
-    c₀ = Float16(1),
-    c₂ = (Float16(-4.934), Float16(0.001134)),
-    rest = (
-        Float16(3.941),
-    ),
-)
-const _sinpi_kernel_polynomial_f16 = SinPiEvaluationScheme(;
-    c₁ = (Float16(3.14), Float16(0.0009737)),
-    rest = (
-        Float16(-5.168),
-        Float16(2.52),
-    ),
-)
 const _cospi_kernel_polynomial_f32 = CosPiEvaluationScheme(;
     c₀ = Float32(1),
     c₂ = (-4.934802f0, -1.1607644f-7),
