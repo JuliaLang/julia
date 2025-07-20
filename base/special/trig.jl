@@ -837,7 +837,7 @@ function (sch::SinPiEvaluationScheme)(x::AbstractFloat)
     muladd(c₁, x, x * muladd(c₃, x², muladd(x² * x², r, c₁_lo)))
 end
 
-/*
+#=
 # Polynomial approximation for `cospi` and `sinpi` kernels
 
 ## `cospi`
@@ -950,7 +950,7 @@ Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input
   sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
   polynomial;
   ```
-*/
+=#
 
 const _cospi_kernel_polynomial_f16 = CosPiEvaluationScheme(;
     c₀ = Float16(1),
