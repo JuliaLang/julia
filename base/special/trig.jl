@@ -885,14 +885,14 @@ Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input
 * `Float32`:
 
   ```sollya
-  handTuned = 1;
+  handTuned = 5;
   prec = 500!;
   accurate = sin(pi * x);
   kernelDomain = [-2^-3, 2^-2];
   machinePrecision = 24;
   doubleWordPrecision = 2 * machinePrecision + handTuned;
-  freeMonomials = [|1, 3, 5, 7|];
-  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision|];
+  freeMonomials = [|1, 3, 5, 7, 9|];
+  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision|];
   polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain);
   supnormPrecision = 2^-10;
   sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
@@ -927,11 +927,12 @@ const _cospi_kernel_polynomial_f32 = CosPiEvaluationScheme(;
     ),
 )
 const _sinpi_kernel_polynomial_f32 = SinPiEvaluationScheme(;
-    c₁ = (3.1415927f0, -9.674135f-8),
+    c₁ = (3.1415927f0, -8.764345f-8),
     rest = (
-        -5.167708f0,
-        2.5497704f0,
-        -0.58910555f0,
+        -5.1677127f0,
+        2.5501568f0,
+        -0.5990627f0,
+        0.079937235f0,
     ),
 )
 const _cospi_kernel_polynomial_f64 = CosPiEvaluationScheme(;
