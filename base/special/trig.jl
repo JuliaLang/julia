@@ -1104,6 +1104,9 @@ Return a `T(NaN)` if `isnan(x)`.
 See also [`sinc`](@ref).
 """
 cosc(x::Number) = _cosc(float(x))
+function _cosc_generic(x)
+    ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+end
 function _cosc(x::Number)
     # naive cosc formula is susceptible to catastrophic
     # cancellation error near x=0, so we use the Taylor series
@@ -1124,17 +1127,17 @@ function _cosc(x::Number)
         end
         return π*s
     else
-        return isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+        return isinf_real(x) ? zero(x) : _cosc_generic(x)
     end
 end
 # hard-code Float64/Float32 Taylor series, with coefficients
 #  Float64.([(-1)^n*big(pi)^(2n)/((2n+1)*factorial(2n-1)) for n = 1:6])
 _cosc(x::Union{Float64,ComplexF64}) =
     fastabs(x) < 0.14 ? x*evalpoly(x^2, (-3.289868133696453, 3.2469697011334144, -1.1445109447325053, 0.2091827825412384, -0.023460810354558236, 0.001781145516372852)) :
-    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+    isinf_real(x) ? zero(x) : _cosc_generic(x)
 _cosc(x::Union{Float32,ComplexF32}) =
     fastabs(x) < 0.26f0 ? x*evalpoly(x^2, (-3.289868f0, 3.2469697f0, -1.144511f0, 0.20918278f0)) :
-    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+    isinf_real(x) ? zero(x) : _cosc_generic(x)
 _cosc(x::Float16) = Float16(_cosc(Float32(x)))
 _cosc(x::ComplexF16) = ComplexF16(_cosc(ComplexF32(x)))
 
