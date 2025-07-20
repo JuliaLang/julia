@@ -1042,8 +1042,8 @@ function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
-        idxlens = @ncall $N index_shape_nested I
-        @ncall $N setindex_shape_check x′ (d->idxlens[d])
+        idxsigs = @ncall $N index_shape_nested I
+        @ncall $N setindex_shape_check x′ (d->idxsigs[d])
         X = eachindex(x′)
         Xy = _prechecked_iterate(X)
         @inbounds @nloops $N i d->I_d begin
@@ -1564,7 +1564,8 @@ end
     N = length(I)
     quote
         idxlens = @ncall $N index_lengths I0 d->I[d]
-        @ncall $N setindex_shape_check X idxlens[1] d->idxlens[d+1]
+        idxsigs = @ncall $N index_shape_nested I0 d->I[d]
+        @ncall $N setindex_shape_check X idxsigs[1] d->idxsigs[d+1]
         isempty(X) && return B
         f0 = indexoffset(I0)+1
         l0 = idxlens[1]
