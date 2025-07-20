@@ -2498,4 +2498,10 @@ let m = only(methods(Base.var"@big_str"))
     @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
 end
 
+# Issue #58841 - make sure we don't accidentally throw away code for inference
+let io = IOBuffer()
+    run(pipeline(`$(Base.julia_cmd()) --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
+    @test isempty(String(take!(io)))
+end
+
 finish_precompile_test!()

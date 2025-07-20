@@ -128,7 +128,7 @@ _trimmedshape(i::AbstractArray{<:ScalarIndex}, rest...) = (length(i), _trimmedsh
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedshape(rest...)
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{N}}, rest...) where {N} = (length(i), ntuple(Returns(1), Val(N - 1))..., _trimmedshape(rest...)...)
 _trimmedshape() = ()
-# We can avoid the repeation from `AbstractArray{CartesianIndex{0}}`
+# We can avoid the repetition from `AbstractArray{CartesianIndex{0}}`
 _trimmedpind(i, rest...) = (map(Returns(:), axes(i))..., _trimmedpind(rest...)...)
 _trimmedpind(i::AbstractRange, rest...) = (i, _trimmedpind(rest...)...)
 _trimmedpind(i::Union{UnitRange,StepRange,OneTo}, rest...) = ((:), _trimmedpind(rest...)...)

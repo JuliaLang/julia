@@ -33,7 +33,9 @@ Core.memoryrefsetonce!
 
 ## Module bindings
 
+```@docs
 Core.get_binding_type
+```
 
 ## Other
 

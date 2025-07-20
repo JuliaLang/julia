@@ -19,7 +19,7 @@ checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
-	$(MAKE) -C $(dir $<) $(MAKE_COMMON) $(P7ZIP_BUILD_OPTS) 7za$(EXE)
+	$(MAKE) -C $(dir $<) $(MAKE_COMMON) $(P7ZIP_BUILD_OPTS) 7za
 	echo 1 > $@
 
 define P7ZIP_INSTALL

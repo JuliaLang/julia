@@ -1883,10 +1883,10 @@ end
 
 function set_prompt(repl::LineEditREPL, n::Ref{Int})
     julia_prompt = repl.interface.modes[1]
-    julia_prompt.prompt = function()
+    julia_prompt.prompt = REPL.contextual_prompt(repl, function()
         n[] = repl_eval_counter(julia_prompt.hist)+1
         string("In [", n[], "]: ")
-    end
+    end)
     nothing
 end
 

@@ -6,6 +6,7 @@
 #include <string>
 
 #include "llvm/IR/Mangler.h"
+#include <llvm/ADT/BitmaskEnum.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -50,6 +51,7 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "julia_assert.h"
 #include "processor.h"
+#include "llvm-julia-task-dispatcher.h"
 
 #if JL_LLVM_VERSION >= 180000
 # include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
@@ -723,17 +725,8 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             if (!decls.specFunctionObject.empty())
                 NewDefs.push_back(decls.specFunctionObject);
         }
-        // Split batches to avoid stack overflow in the JIT linker.
-        // FIXME: Patch ORCJITs InPlaceTaskDispatcher to not recurse on task dispatches but
-        // push the tasks to a queue to be drained later. This avoids the stackoverflow caused by recursion
-        // in the linker when compiling a large number of functions at once.
-        SmallVector<uint64_t, 0> Addrs;
-        for (size_t i = 0; i < NewDefs.size(); i += 1000) {
-            auto end = std::min(i + 1000, NewDefs.size());
-            SmallVector<StringRef> batch(NewDefs.begin() + i, NewDefs.begin() + end);
-            auto AddrsBatch = jl_ExecutionEngine->findSymbols(batch);
-            Addrs.append(AddrsBatch);
-        }
+        auto Addrs = jl_ExecutionEngine->findSymbols(NewDefs);
+
         size_t nextaddr = 0;
         for (auto &this_code : linkready) {
             auto it = invokenames.find(this_code);
@@ -1901,7 +1894,7 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
-    ES(cantFail(orc::SelfExecutorProcessControl::Create())),
+    ES(cantFail(orc::SelfExecutorProcessControl::Create(nullptr, std::make_unique<::JuliaTaskDispatcher>()))),
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ExternalJD(ES.createBareJITDylib("JuliaExternal")),
@@ -2159,7 +2152,7 @@ SmallVector<uint64_t> JuliaOJIT::findSymbols(ArrayRef<StringRef> Names)
         Unmangled[NonOwningSymbolStringPtr(Mangled)] = Unmangled.size();
         Exports.add(std::move(Mangled));
     }
-    SymbolMap Syms = cantFail(ES.lookup(orc::makeJITDylibSearchOrder(ArrayRef(&JD)), std::move(Exports)));
+    SymbolMap Syms = cantFail(::safelookup(ES, orc::makeJITDylibSearchOrder(ArrayRef(&JD)), std::move(Exports)));
     SmallVector<uint64_t> Addrs(Names.size());
     for (auto it : Syms) {
         Addrs[Unmangled.at(orc::NonOwningSymbolStringPtr(it.first))] = it.second.getAddress().getValue();
@@ -2171,7 +2164,7 @@ Expected<ExecutorSymbolDef> JuliaOJIT::findSymbol(StringRef Name, bool ExportedS
 {
     orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
     ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
-    auto Sym = ES.lookup(SearchOrder, Name);
+    auto Sym = ::safelookup(ES, SearchOrder, Name);
     return Sym;
 }
 
@@ -2184,7 +2177,7 @@ Expected<ExecutorSymbolDef> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool
 {
     orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
     ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
-    auto Sym = ES.lookup(SearchOrder, getMangledName(Name));
+    auto Sym = ::safelookup(ES, SearchOrder, getMangledName(Name));
     return Sym;
 }
 
