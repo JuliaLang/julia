@@ -736,7 +736,6 @@ function Base._backtrace_print_repetition_closings!(io::IO, i, current_cycles, f
 
         pop!(current_cycles)
 
-        
         if cycle_length > 1
             # adjust cycle_length in outer cycles to reflect displayed frames consumed by this inner cycle
             for j ∈ eachindex(current_cycles)
