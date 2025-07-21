@@ -1105,7 +1105,8 @@ See also [`sinc`](@ref).
 """
 cosc(x::Number) = _cosc(float(x))
 function _cosc_generic(x)
-    ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+    pi_x = pi * x
+    (pi_x*cospi(x)-sinpi(x))/(pi_x*x)
 end
 function _cosc(x::Number)
     # naive cosc formula is susceptible to catastrophic
