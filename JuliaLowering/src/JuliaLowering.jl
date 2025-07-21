@@ -37,4 +37,6 @@ function __init__()
     _register_kinds()
 end
 
+_include("precompile.jl")
+
 end
