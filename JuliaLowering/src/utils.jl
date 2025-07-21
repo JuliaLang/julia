@@ -39,29 +39,34 @@ function _show_provtree(io::IO, prov, indent)
     printstyled(io, "@ $fn:$line\n", color=:light_black)
 end
 
-function showprov(io::IO, exs::AbstractVector)
+function showprov(io::IO, exs::AbstractVector;
+                  note=nothing, include_location::Bool=true, highlight_kwargs...)
     for (i,ex) in enumerate(Iterators.reverse(exs))
         sr = sourceref(ex)
         if i > 1
             print(io, "\n\n")
         end
         k = kind(ex)
-        note = i > 1 && k == K"macrocall"  ? "in macro expansion" :
-               i > 1 && k == K"$"          ? "interpolated here"  :
-               "in source"
-        highlight(io, sr, note=note)
+        if isnothing(note) # use provided `note` otherwise
+            note = i > 1 && k == K"macrocall"  ? "in macro expansion" :
+                   i > 1 && k == K"$"          ? "interpolated here"  :
+                   "in source"
+        end
+        highlight(io, sr; note=note, highlight_kwargs...)
 
-        line, _ = source_location(sr)
-        locstr = "$(filename(sr)):$line"
-        JuliaSyntax._printstyled(io, "\n# @ $locstr", fgcolor=:light_black)
+        if include_location
+            line, _ = source_location(sr)
+            locstr = "$(filename(sr)):$line"
+            JuliaSyntax._printstyled(io, "\n# @ $locstr", fgcolor=:light_black)
+        end
     end
 end
 
-function showprov(io::IO, ex::SyntaxTree; tree=false)
+function showprov(io::IO, ex::SyntaxTree; tree::Bool=false, showprov_kwargs...)
     if tree
         _show_provtree(io, ex, "")
     else
-        showprov(io, flattened_provenance(ex))
+        showprov(io, flattened_provenance(ex); showprov_kwargs...)
     end
 end
 
@@ -165,4 +170,3 @@ function _print_ir(io::IO, ex, indent)
         end
     end
 end
-

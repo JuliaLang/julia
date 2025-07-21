@@ -13,7 +13,7 @@ This work is intended to
 * Bring precise code provenance to Julia's lowered form (and eventually
   downstream in type inference, stack traces, etc). This has many benefits
     - Talk to users precisely about their code via character-precise error and
-      diagnostic messages from lowering 
+      diagnostic messages from lowering
     - Greatly simplify the implementation of critical tools like Revise.jl
       which rely on analyzing how the user's source maps to the compiler's data
       structures
@@ -109,10 +109,10 @@ For example when parsing a source file we have
 ```julia
 julia> ex = parsestmt(SyntaxTree, "a + b", filename="foo.jl")
 SyntaxTree with attributes kind,value,name_val,syntax_flags,source
-[call-i]                                │ 
-  a                                     │ 
-  +                                     │ 
-  b                                     │ 
+[call-i]                                │
+  a                                     │
+  +                                     │
+  b                                     │
 
 julia> ex[3].source
 a + b
@@ -157,9 +157,9 @@ The tree which arises from macro expanding this is pretty simple:
 ```julia
 julia> expanded = JuliaLowering.macroexpand(Main, parsestmt(SyntaxTree, "M.@outer()"))
 SyntaxTree with attributes scope_layer,kind,value,var_id,name_val,syntax_flags,source
-[tuple-p]                               │ 
-  1                                     │ 
-  2                                     │ 
+[tuple-p]                               │
+  1                                     │
+  2                                     │
 ```
 
 but the provenance information recorded for the second element `2` of this
@@ -777,7 +777,7 @@ The final lowered IR is expressed as `CodeInfo` objects which are a sequence of
 * Restricted forms of `Expr` (with semantics different from surface syntax,
   even for the same `head`! for example the arguments to `Expr(:call)` in IR
   must be "simple" and aren't evaluated in order)
-* `Core.SlotNumber` 
+* `Core.SlotNumber`
 * Other special forms from `Core` like `Core.ReturnNode`, `Core.EnterNode`, etc.
 * `Core.SSAValue`, indexing any value generated from a statement in the `code`
   array.
@@ -857,7 +857,7 @@ Pros:
 - Replaces more Expr usage
 - Replaces a whole pile of C code with significantly less Julia code
 - Lowering output becomes more consistently imperative
-Cons: 
+Cons:
 - Lots more code to write
 - May need to invent intermediate data structures to replace `Expr`
 - Bootstrap?
@@ -895,4 +895,3 @@ Some differences which makes Racket's macro expander different from Julia:
   expand macros; the "pass system". Julia just executes all top level
   statements in order when precompiling a package.
 * As a lisp, Racket's surface syntax is dramatically simpler and more uniform
-
