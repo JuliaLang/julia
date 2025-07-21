@@ -688,7 +688,7 @@ function Base._backtrace_find_and_remove_cycles(t)
         for k ∈ reverse(eachindex(positions))[2:end] # More recent is more likely
             t_prev = positions[k]
             t_cycle_length = t_curr - t_prev
-            
+
             # walk trace at current and previous matching positions until matching stops
             t_curr_end = t_curr
             t_prev_end = t_prev
