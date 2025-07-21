@@ -658,114 +658,132 @@ const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function _backtrace_find_and_remove_cycles(t)
+function Base._backtrace_find_and_remove_cycles(t)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
     frame appears just before. =#
 
-    max_nested_cycles = 1
+    max_nested_cycles = 0
     displayed_stackframes = []
     repeated_cycles = Tuple{Int,Int,Int}[]
-    # First:  line to introuce the cycle bracket on
-    # Second: length of the cycle
-    # Third:  number of repetitions
+    # First:  index into `display_stackframes` to introuce the cycle bracket on
+    # Second: length of the cycle as a count in the trace
+    # Third:  number of cycle repetitions
+
+    t_curr = 1
     frame_counter = 1
-    accumulated_repetitions = 0
-    while frame_counter < length(t)
-        (last_frame, n) = t[frame_counter]
-        accumulated_repetitions += n - 1
-        frame_counter += 1 # Indicating the next frame
 
-        current_hash = hash(last_frame)
-        positions = get(recorded_positions, current_hash, Int[])
-        recorded_positions[current_hash] = push!(positions, frame_counter + accumulated_repetitions)
+    while t_curr ≤ length(t)
+        (last_frame, n) = t[t_curr]
+        current_hash = hash(t[t_curr])
+        positions = get(recorded_positions, current_hash,  Int[])
 
-        repetitions = 0
-        nnested_cycles = 1
-        for index_p in length(positions)-1:-1:1 # More recent is more likely
-            p = positions[index_p]
-            cycle_length = frame_counter + accumulated_repetitions - p
-            i = frame_counter
-            j = p
-            while i < length(t) && t[i] == t[j]
-                i += 1
-                j += 1
+        t_curr += 1
+        recorded_positions[current_hash] = push!(positions, t_curr)
+
+        # Check previous positions for cycles
+        ncycles = 0
+        nnested_cycles = n > 0
+        for k ∈ reverse(eachindex(positions))[2:end] # More recent is more likely
+            t_prev = positions[k]
+            t_cycle_length = t_curr - t_prev
+            
+            # walk trace at current and previous matching positions until matching stops
+            t_curr_end = t_curr
+            t_prev_end = t_prev
+            while t_curr_end < length(t) && t[t_curr_end] == t[t_prev_end]
+                t_curr_end += 1
+                t_prev_end += 1
             end
-            if j >= frame_counter-1
+
+            if t_prev_end ≥ t_curr - 1
                 #= At least one cycle repeated =#
-                repetitions = div(i - frame_counter + accumulated_repetitions + 1, cycle_length)
-                push!(repeated_cycles, (p - 1, cycle_length, repetitions))
-                frame_counter += cycle_length * repetitions - 1
+                ncycles = div(t_curr_end - t_prev + 1, t_cycle_length)
+                push!(repeated_cycles, (length(displayed_stackframes) - 1, t_cycle_length, ncycles))
+                t_curr += t_cycle_length * (ncycles - 1) - 1
                 nnested_cycles += 1
-                break
             end
         end
+
+        # ensure an outer cycle comes before a contained inner cycle
         sort!(repeated_cycles, by = x -> (x[1], -x[2]))
         max_nested_cycles = max(max_nested_cycles, nnested_cycles)
 
-        if repetitions==0
+        if ncycles == 0
             push!(displayed_stackframes, (last_frame, n))
         end
     end
-    push!(displayed_stackframes, t[end])
     return displayed_stackframes, repeated_cycles, max_nested_cycles
 end
 
-function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix = nothing)
+function Base._backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix = nothing)
     while !isempty(current_cycles)
         start_line = current_cycles[end][1]
         cycle_length = current_cycles[end][2]
         end_line = start_line + cycle_length - 1
         repetitions = current_cycles[end][3]
+        frame_counter_advance = current_cycles[end][4]
 
-        frame_counter != end_line && break
+        i != end_line && break
 
         println(io)
         prefix === nothing || print(io, prefix)
         line_length = (max_nested_cycles - nactive_cycles) + ndigits_max + 2
         nactive_cycles -= 1
-        printstyled(io, " ", "│" ^ nactive_cycles, "╰", "─" ^ (line_length); color = :light_black)
-        printstyled(io, " repeated $(repetitions + 1) times"; color = :light_black, italic = true)
+        Base.printstyled(io, " ", "│" ^ nactive_cycles, "╰", "─" ^ (line_length); color = :light_black)
+        Base.printstyled(io, " repeated $repetitions times"; color = :light_black, italic = true)
 
         pop!(current_cycles)
-        frame_counter += cycle_length * repetitions
+
+        
+        if cycle_length > 1
+            # adjust cycle_length in outer cycles to reflect displayed frames consumed by this inner cycle
+            for j ∈ eachindex(current_cycles)
+                current_cycles[j] = (current_cycles[j][1], current_cycles[j][2] - cycle_length * (repetitions - 1), current_cycles[j][3:4]...)
+            end
+        else
+            # adjust frame_counter_advance in outer cycles to reflect frames consumed by a single repeated frame
+            for j ∈ eachindex(current_cycles)
+                current_cycles[j] = (current_cycles[j][1:3]..., current_cycles[j][4] + (frame_counter_advance * (current_cycles[j][3] - 1)))
+            end
+        end
+
+        frame_counter += frame_counter_advance
     end
     return frame_counter, nactive_cycles
 end
 
-function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool, prefix = nothing)
+function Base.show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool, prefix = nothing)
     println(io)
     prefix === nothing || print(io, prefix)
     println(io, "Stacktrace:")
 
     ndigits_max = ndigits(num_frames)
 
-    if any(x -> last(x) > 1, trace)
-        max_nested_cycles += 1
-    end
-
     push!(repeated_cycles, (0,0,0)) # repeated_cycles is never empty
+
     frame_counter = 1
-    current_cycles = NTuple{3, Int}[]
+    current_cycles = NTuple{4, Int}[] # adding a value to track amount to advance frame_counter when cycle is closed
 
     for i in eachindex(trace)
         (frame, n) = trace[i]
 
         ncycle_starts = 0
-        while repeated_cycles[1][1] == frame_counter
-            push!(current_cycles, popfirst!(repeated_cycles))
+        while repeated_cycles[1][1] == i
+            cycle = popfirst!(repeated_cycles)
+            push!(current_cycles, (cycle..., cycle[2] * (cycle[3] - 1)))
             ncycle_starts += 1
         end
         if n > 1
-            push!(current_cycles, (frame_counter, 1, n - 1))
+            push!(current_cycles, (i, 1, n, n - 1))
             ncycle_starts += 1
         end
         nactive_cycles = length(current_cycles)
 
-        print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
+        Base.print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, Base.STACKTRACE_FIXEDCOLORS, Base.STACKTRACE_MODULECOLORS; prefix)
 
-        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
+        frame_counter, nactive_cycles = Base._backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
 
         if i < length(trace)
