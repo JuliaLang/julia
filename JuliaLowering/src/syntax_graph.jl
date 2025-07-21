@@ -6,7 +6,7 @@ one or several syntax trees.
 
 TODO: Global attributes!
 """
-struct SyntaxGraph{Attrs}
+mutable struct SyntaxGraph{Attrs}
     edge_ranges::Vector{UnitRange{Int}}
     edges::Vector{NodeId}
     attributes::Attrs
@@ -632,7 +632,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
-struct SyntaxList{GraphType, NodeIdVecType} <: AbstractVector{SyntaxTree}
+mutable struct SyntaxList{GraphType, NodeIdVecType} <: AbstractVector{SyntaxTree}
     graph::GraphType
     ids::NodeIdVecType
 end
