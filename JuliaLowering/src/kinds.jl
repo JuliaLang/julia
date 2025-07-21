@@ -19,6 +19,8 @@ function _register_kinds()
             "Value"
             # A (quoted) `Symbol`
             "Symbol"
+            # QuoteNode; not quasiquote
+            "inert"
             # Compiler metadata hints
             "meta"
             # TODO: Use `meta` for inbounds and loopinfo etc?
