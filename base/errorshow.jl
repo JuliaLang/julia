@@ -658,7 +658,7 @@ const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function Base._backtrace_find_and_remove_cycles(t)
+function _backtrace_find_and_remove_cycles(t)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -717,7 +717,7 @@ function Base._backtrace_find_and_remove_cycles(t)
     return displayed_stackframes, repeated_cycles, max_nested_cycles
 end
 
-function Base._backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix = nothing)
+function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix = nothing)
     while !isempty(current_cycles)
         start_line = current_cycles[end][1]
         cycle_length = current_cycles[end][2]
@@ -731,8 +731,8 @@ function Base._backtrace_print_repetition_closings!(io::IO, i, current_cycles, f
         prefix === nothing || print(io, prefix)
         line_length = (max_nested_cycles - nactive_cycles) + ndigits_max + 2
         nactive_cycles -= 1
-        Base.printstyled(io, " ", "│" ^ nactive_cycles, "╰", "─" ^ (line_length); color = :light_black)
-        Base.printstyled(io, " repeated $repetitions times"; color = :light_black, italic = true)
+        printstyled(io, " ", "│" ^ nactive_cycles, "╰", "─" ^ (line_length); color = :light_black)
+        printstyled(io, " repeated $repetitions times"; color = :light_black, italic = true)
 
         pop!(current_cycles)
 
@@ -753,7 +753,7 @@ function Base._backtrace_print_repetition_closings!(io::IO, i, current_cycles, f
     return frame_counter, nactive_cycles
 end
 
-function Base.show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool, prefix = nothing)
+function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool, prefix = nothing)
     println(io)
     prefix === nothing || print(io, prefix)
     println(io, "Stacktrace:")
@@ -780,9 +780,9 @@ function Base.show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, r
         end
         nactive_cycles = length(current_cycles)
 
-        Base.print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, Base.STACKTRACE_FIXEDCOLORS, Base.STACKTRACE_MODULECOLORS; prefix)
+        print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
-        frame_counter, nactive_cycles = Base._backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
+        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
 
         if i < length(trace)
