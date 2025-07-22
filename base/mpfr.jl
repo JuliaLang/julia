@@ -399,7 +399,7 @@ function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); preci
         end
     end
 end
-function _opposite_round(r::MPFR.MPFRRoundingMode)
+function _opposite_round(r::MPFRRoundingMode)
     r == MPFRRoundUp && return MPFRRoundDown
     r == MPFRRoundDown && return MPFRRoundUp
     return r
