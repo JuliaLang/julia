@@ -217,21 +217,21 @@ flatten(I::Tuple{Any}) = Tuple(I[1])
 flatten(I::Tuple) = (@inline; (Tuple(I[1])..., flatten(tail(I))...))
 
 _nnprod() = 1
-_nnprod(i::Integer, rest::Integer...) =
-    isnegative(i) ? _nnprod(rest...) : i * _nnprod(rest...)
+_nnprod(i::Integer, I::Integer...) =
+    (i == -1) ? _nnprod(I...) : i * _nnprod(I...)
 
-_trailing_one_or_dropped() = true
-_trailing_one_or_dropped(i::Integer, rest...)  =
-    isone(abs(i)) && _trailing_one_or_dropped(rest...)
+_trailing_dropped(I::Integer...) = true
+_trailing_dropped(i::Integer, I::Integer...)  = (i == -1) && _trailing_dropped(I...)
 
 _shapes_match(::Bool, ::Tuple{}) = true
-_shapes_match(::Bool, sz) = _trailing_one_or_dropped(sz...)
-_shapes_match(::Bool, ::Tuple{}, I::Integer...) = _trailing_one_or_dropped(I...)
+_shapes_match(isfirstdim::Bool, sz) = _shapes_match(isfirstdim, (), sz...)
+_shapes_match(isfirstdim::Bool, sz::Tuple{}, i::Integer, I::Integer...) =
+    isone(abs(i)) && _shapes_match(isfirstdim, sz, I...)
 function _shapes_match(isfirstdim, sz, i::Integer, I::Integer...)
-    if isnegative(i)
+    if i == -1
         return _shapes_match(isfirstdim, sz, I...)
     else
-        if isfirstdim && _trailing_one_or_dropped(I...)
+        if isfirstdim && _trailing_dropped(I...)
             return _nnprod(sz...) == i
         else
             return (first(sz) == i) && _shapes_match(false, tail(sz), I...)
@@ -239,23 +239,23 @@ function _shapes_match(isfirstdim, sz, i::Integer, I::Integer...)
     end
 end
 
-setindex_shape_check(X::AbstractArray, I::Integer...) =
-    _shapes_match(true, size(X), I...) || throw_setindex_mismatch(X, I)
-
 setindex_shape_check(X::AbstractArray) =
-    (length(X) == 1 || throw_setindex_mismatch(X,()))
+    (length(X) == 1 || throw_setindex_mismatch(X, ()))
 
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (length(X) == i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check(X::AbstractArray{<:Any,0}, i::Integer...) =
-    (length(X) == _nnprod(i...) || throw_setindex_mismatch(X, i))
+setindex_shape_check(X::AbstractArray{<:Any,0}, I::Integer...) =
+    (length(X) == _nnprod(I...) || throw_setindex_mismatch(X, I))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer...) =
-    (length(X) == _nnprod(i...) || throw_setindex_mismatch(X, i))
+setindex_shape_check(X::AbstractArray{<:Any,1}, I::Integer...) =
+    (length(X) == _nnprod(I...) || throw_setindex_mismatch(X, I))
 
-setindex_shape_check(X::AbstractArray, i::IntegerOrTuple...) =
-    setindex_shape_check(X, flatten(i)...)
+setindex_shape_check(X::AbstractArray, I::IntegerOrTuple...) =
+    setindex_shape_check(X, flatten(I)...)
+
+setindex_shape_check(X::AbstractArray, I::Integer...) =
+    _shapes_match(true, size(X), I...) || throw_setindex_mismatch(X, I)
 
 setindex_shape_check(::Any...) =
     throw(ArgumentError("indexed assignment with a single value to possibly many locations is not supported; perhaps use broadcasting `.=` instead?"))
