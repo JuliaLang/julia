@@ -932,7 +932,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
     else
         repeated_cycles = NTuple{3, Int}[]
-        max_nested_cycles = 0
+        max_nested_cycles = any(x -> last(x) > 1, filtered) ? 1 : 0
     end
 
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)
