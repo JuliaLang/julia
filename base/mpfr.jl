@@ -394,14 +394,14 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); 
 function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
     r_den = _opposite_round(r)
     setprecision(BigFloat, precision) do
-        Base.MPFR.setrounding_raw(BigFloat, r) do
+        setrounding_raw(BigFloat, r) do
             BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x), r_den)::BigFloat
         end
     end
 end
-function _opposite_round(r::Base.MPFR.MPFRRoundingMode)
-    r == MPFR.MPFRRoundUp && return MPFR.MPFRRoundDown
-    r == MPFR.MPFRRoundDown && return MPFR.MPFRRoundUp
+function _opposite_round(r::MPFR.MPFRRoundingMode)
+    r == MPFRRoundUp && return MPFRRoundDown
+    r == MPFRRoundDown && return MPFRRoundUp
     return r
 end
 
