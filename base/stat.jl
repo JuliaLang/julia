@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+~# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # filesystem operations
 
@@ -196,12 +196,31 @@ end
 
 stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
 function stat(path::AbstractString)
-    # @info "stat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
-    @stat_call jl_stat  Cstring path
+    @static if Sys.iswindows()
+        attrs = ccall(:GetFileAttributesW, stdcall, UInt32, (Ptr{UInt16},), Base.cwstring(path))
+        if attrs != typemax(UInt32) && (attrs & 0x400) != 0 # FILE_ATTRIBUTE_REPARSE_POINT
+            try
+                target = readlink(path)
+                target_path = isabspath(target) ? target : joinpath(dirname(path), target)
+                return stat(target_path)
+            catch
+            end
+        end
+    end
+    stat_buf = fill!(Memory{UInt8}(undef, Int(ccall(:jl_sizeof_stat, Int32, ()))), 0x00)
+    r = ccall(:jl_stat, Int32, (Cstring, Ptr{UInt8}), path, stat_buf)
+    return checkstat(StatStruct(path, stat_buf, r))
 end
 function lstat(path::AbstractString)
-    # @info "lstat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
-    @stat_call jl_lstat Cstring path
+    @static if Sys.iswindows()
+        attrs = ccall(:GetFileAttributesW, stdcall, UInt32, (Ptr{UInt16},), Base.cwstring(path))
+        if attrs != typemax(UInt32) && (attrs & 0x400) != 0 # FILE_ATTRIBUTE_REPARSE_POINT
+            return StatStruct(path, 0, 0, 0xa000, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        end
+    end
+    stat_buf = fill!(Memory{UInt8}(undef, Int(ccall(:jl_sizeof_stat, Int32, ()))), 0x00)
+    r = ccall(:jl_lstat, Int32, (Cstring, Ptr{UInt8}), path, stat_buf)
+    return checkstat(StatStruct(path, stat_buf, r))
 end
 if RawFD !== OS_HANDLE
     global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))

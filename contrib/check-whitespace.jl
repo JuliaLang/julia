@@ -42,7 +42,19 @@ function check_whitespace()
         file_err(msg) = push!(errors, (path, 0, msg))
         line_err(msg) = push!(errors, (path, lineno, msg))
 
-        isfile(path) || continue
+        try
+            # on windows, git-created symlinks may not be readable by isfile
+            # (https://github.com/JuliaLang/julia/issues/55332)
+            isfile(path) || continue
+        catch ex
+            # EACCES can happen on broken symlinks, and islink may also fail
+            # so we just ignore it and continue.
+            if ex isa IOError && ex.code == Base.UV_EACCES
+                continue
+            else
+                rethrow()
+            end
+        end
         for line in eachline(path, keep=true)
             lineno += 1
             contains(line, '\r')   && file_err("non-UNIX line endings")
