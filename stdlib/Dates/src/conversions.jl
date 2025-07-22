@@ -9,15 +9,15 @@ Convert a `DateTime` to a `Date`. The hour, minute, second, and millisecond part
 the `DateTime` are truncated, so only the year, month and day parts are used in
 construction.
 """
-Date(dt::TimeType) = convert(Date, dt)
+Date(dt::DateTime) = convert(Date, dt)
 
 """
-    DateTime(dt::Date)
+    DateTime(d::Date)
 
 Convert a `Date` to a `DateTime`. The hour, minute, second, and millisecond parts of
 the new `DateTime` are assumed to be zero.
 """
-DateTime(dt::TimeType) = convert(DateTime, dt)
+DateTime(d::Date) = convert(DateTime, d)
 
 """
     Time(dt::DateTime)
