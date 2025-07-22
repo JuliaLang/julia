@@ -58,7 +58,7 @@ end
     [option]
     """
     d = TOML.parse(s)
-    @test toml_str(d) == "user = \"me\"\n\n[julia]\n\n[option]\n"
+    @test toml_str(d; sorted=true) == "user = \"me\"\n\n[julia]\n\n[option]\n"
 end
 
 @testset "special characters" begin
@@ -83,16 +83,35 @@ loaders = ["gzip", { driver = "csv", args = {delim = "\t"}}]
 @testset "vec with dicts and non-dicts" begin
     # https://github.com/JuliaLang/julia/issues/45340
     d =  Dict("b" => Any[111, Dict("a" =>  222, "d" => 333)])
-    @test toml_str(d) == "b = [111, {a = 222, d = 333}]\n"
+    @test toml_str(d) == (sizeof(Int) == 8 ?
+        "b = [111, {a = 222, d = 333}]\n" :
+        "b = [111, {d = 333, a = 222}]\n")
+
 
     d =  Dict("b" => Any[Dict("a" =>  222, "d" => 333), 111])
-    @test toml_str(d) == "b = [{a = 222, d = 333}, 111]\n"
+    @test toml_str(d) == (sizeof(Int) == 8 ?
+        "b = [{a = 222, d = 333}, 111]\n" :
+        "b = [{d = 333, a = 222}, 111]\n")
 
     d =  Dict("b" => Any[Dict("a" =>  222, "d" => 333)])
-    @test toml_str(d) == """
-    [[b]]
-    a = 222
-    d = 333
+    @test toml_str(d) == (sizeof(Int) == 8 ?
+        """
+        [[b]]
+        a = 222
+        d = 333
+        """ :
+        """
+        [[b]]
+        d = 333
+        a = 222
+        """)
+
+    # https://github.com/JuliaLang/julia/pull/57584
+    d = Dict("b" => [MyStruct(1), MyStruct(2)])
+    @test toml_str(d) do x
+        x isa MyStruct && return Dict("a" => x.a)
+    end == """
+    b = [{a = 1}, {a = 2}]
     """
 end
 
@@ -195,6 +214,14 @@ LocalPkg = {path = "LocalPkg"}
 """
 @test toml_str(d; sorted=true, inline_tables) == s
 @test roundtrip(s)
+
+
+# https://github.com/JuliaLang/julia/pull/57584
+d = Dict("a" => 1, "b" => 2)
+inline_tables = IdSet{Dict}([d])
+s = "{a = 1, b = 2}"
+@test toml_str(d; sorted=true, inline_tables) == s
+
 
 # multiline strings (#55083)
 s = """

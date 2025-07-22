@@ -543,6 +543,14 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
+    world = Base._require_world_age[]
+    if world == typemax(UInt)
+        world = Base.get_world_counter()
+    end
+    return Base.invoke_in_world(world, __artifact_str, __module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, Val(LazyArtifacts))::String
+end
+
+function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
     pkg = Base.PkgId(__module__)
     if pkg.uuid !== nothing
         # Process overrides for this UUID, if we know what it is
@@ -562,10 +570,11 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
     if meta !== nothing && get(meta, "lazy", false)
         if LazyArtifacts isa Module && isdefined(LazyArtifacts, :ensure_artifact_installed)
-            if nameof(LazyArtifacts) in (:Pkg, :Artifacts)
+            if nameof(LazyArtifacts) in (:Pkg, :Artifacts, :PkgArtifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            return jointail(LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
+            path_base = (@invokelatest LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform))::String
+            return jointail(path_base, path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end
@@ -697,7 +706,7 @@ macro artifact_str(name, platform=nothing)
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
     # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
     LazyArtifacts = nothing
-    for module_name in (:LazyArtifacts, :Pkg, :Artifacts)
+    for module_name in (:LazyArtifacts, :Pkg, :Artifacts, :PkgArtifacts)
         if isdefined(__module__, module_name)
             LazyArtifacts = GlobalRef(__module__, module_name)
             break

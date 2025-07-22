@@ -61,7 +61,7 @@ Channel(sz=0) = Channel{Any}(sz)
 """
     Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing)
 
-Create a new task from `func`, bind it to a new channel of type
+Create a new task from `func`, [`bind`](@ref) it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
 The channel is automatically closed when the task terminates.
 
@@ -130,8 +130,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
            for c in "hello world"
                put!(ch, c)
            end
-       end
-Channel{Char}(1) (2 items available)
+       end;
 
 julia> String(collect(chnl))
 "hello world"
@@ -716,6 +715,15 @@ function iterate(c::Channel, state=nothing)
             end
         end
     else
+        # If the channel was closed with an exception, it needs to be thrown
+        if (@atomic :acquire c.state) === :closed
+            e = c.excp
+            if isa(e, InvalidStateException) && e.state === :closed
+                nothing
+            else
+                throw(e)
+            end
+        end
         return nothing
     end
 end

@@ -2,7 +2,7 @@
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal
+import .Intrinsics: cglobal
 
 """
     cglobal((symbol, library) [, type=Cvoid])
@@ -203,11 +203,11 @@ function exit_on_sigint(on::Bool)
     ccall(:jl_exit_on_sigint, Cvoid, (Cint,), on)
 end
 
-function _ccallable(rt::Type, sigt::Type)
-    ccall(:jl_extern_c, Cvoid, (Any, Any), rt, sigt)
+function _ccallable(name::Union{Nothing, String}, rt::Type, sigt::Type)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any), name, rt, sigt)
 end
 
-function expand_ccallable(rt, def)
+function expand_ccallable(name, rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
         if sig.head === :(::)
@@ -235,7 +235,7 @@ function expand_ccallable(rt, def)
             end
             return quote
                 @__doc__ $(esc(def))
-                _ccallable($(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
+                _ccallable($name, $(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
             end
         end
     end
@@ -243,16 +243,22 @@ function expand_ccallable(rt, def)
 end
 
 """
-    @ccallable(def)
+    @ccallable ["name"] function f(...)::RetType ... end
 
 Make the annotated function be callable from C using its name. This can, for example,
-be used to expose functionality as a C-API when creating a custom Julia sysimage.
+be used to expose functionality as a C API when creating a custom Julia sysimage.
+
+If the first argument is a string, it is used as the external name of the function.
 """
 macro ccallable(def)
-    expand_ccallable(nothing, def)
+    expand_ccallable(nothing, nothing, def)
 end
 macro ccallable(rt, def)
-    expand_ccallable(rt, def)
+    if rt isa String
+        expand_ccallable(rt, nothing, def)
+    else
+        expand_ccallable(nothing, rt, def)
+    end
 end
 
 # @ccall implementation
@@ -268,7 +274,31 @@ The above input outputs this:
 
     (:printf, :Cvoid, [:Cstring, :Cuint], ["%d", :value])
 """
-function ccall_macro_parse(expr::Expr)
+function ccall_macro_parse(exprs)
+    gc_safe = false
+    expr = nothing
+    if exprs isa Expr
+        expr = exprs
+    elseif length(exprs) == 1
+        expr = exprs[1]
+    elseif length(exprs) == 2
+        gc_expr = exprs[1]
+        expr = exprs[2]
+        if gc_expr.head == :(=) && gc_expr.args[1] == :gc_safe
+            if gc_expr.args[2] == true
+                gc_safe = true
+            elseif gc_expr.args[2] == false
+                gc_safe = false
+            else
+                throw(ArgumentError("gc_safe must be true or false"))
+            end
+        else
+            throw(ArgumentError("@ccall option must be `gc_safe=true` or `gc_safe=false`"))
+        end
+    else
+        throw(ArgumentError("@ccall needs a function signature with a return type"))
+    end
+
     # setup and check for errors
     if !isexpr(expr, :(::))
         throw(ArgumentError("@ccall needs a function signature with a return type"))
@@ -328,12 +358,11 @@ function ccall_macro_parse(expr::Expr)
             pusharg!(a)
         end
     end
-
-    return func, rettype, types, args, nreq
+    return func, rettype, types, args, gc_safe, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, nreq)
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq)
     statements = []
 
     # if interpolation was used, ensure the value is a function pointer at runtime.
@@ -351,9 +380,15 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
     else
         func = esc(func)
     end
+    cconv = nothing
+    if convention isa Tuple
+        cconv = Expr(:cconv, (convention..., gc_safe), nreq)
+    else
+        cconv = Expr(:cconv, (convention, UInt16(0), gc_safe), nreq)
+    end
 
     return Expr(:block, statements...,
-                Expr(:call, :ccall, func, Expr(:cconv, convention, nreq), esc(rettype),
+                Expr(:call, :ccall, func, cconv, esc(rettype),
                      Expr(:tuple, map(esc, types)...), map(esc, args)...))
 end
 
@@ -404,9 +439,16 @@ Example using an external library:
 
 The string literal could also be used directly before the function
 name, if desired `"libglib-2.0".g_uri_escape_string(...`
+
+It's possible to declare the ccall as `gc_safe` by using the `gc_safe = true` option:
+    @ccall gc_safe=true strlen(s::Cstring)::Csize_t
+This allows the garbage collector to run concurrently with the ccall, which can be useful whenever
+the `ccall` may block outside of julia.
+WARNING: This option should be used with caution, as it can lead to undefined behavior if the ccall
+calls back into the julia runtime. (`@cfunction`/`@ccallables` are safe however)
 """
-macro ccall(expr)
-    return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
+macro ccall(exprs...)
+    return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
 end
 
 macro ccall_effects(effects::UInt16, expr)

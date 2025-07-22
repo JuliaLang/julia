@@ -24,6 +24,9 @@ struct GC_Num
     mark_time       ::Int64
     stack_pool_sweep_time ::Int64
     total_sweep_time  ::Int64
+    total_sweep_page_walk_time              ::Int64
+    total_sweep_madvise_time                ::Int64
+    total_sweep_free_mallocd_memory_time    ::Int64
     total_mark_time   ::Int64
     total_stack_pool_sweep_time::Int64
     last_full_sweep ::Int64
@@ -106,9 +109,12 @@ function gc_page_utilization_data()
     return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
 end
 
+# Full sweep reasons are currently only available for the stock GC
+@static if Base.USING_STOCK_GC
 # must be kept in sync with `src/gc-stock.h``
 const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
                             :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+end
 
 """
     Base.full_sweep_reasons()
@@ -124,11 +130,15 @@ The reasons are:
 Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
 """
 function full_sweep_reasons()
-    reason = cglobal(:jl_full_sweep_reasons, UInt64)
-    reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
     d = Dict{Symbol, Int64}()
-    for (i, r) in enumerate(FULL_SWEEP_REASONS)
-        d[r] = reasons_as_array[i]
+    # populate the dictionary according to the reasons above for the stock GC
+    # otherwise return an empty dictionary for now
+    @static if Base.USING_STOCK_GC
+        reason = cglobal(:jl_full_sweep_reasons, UInt64)
+        reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
+        for (i, r) in enumerate(FULL_SWEEP_REASONS)
+            d[r] = reasons_as_array[i]
+        end
     end
     return d
 end
@@ -462,6 +472,35 @@ function gc_bytes()
     b[]
 end
 
+function allocated(f, args::Vararg{Any,N}) where {N}
+    b0 = Ref{Int64}(0)
+    b1 = Ref{Int64}(0)
+    Base.gc_bytes(b0)
+    f(args...)
+    Base.gc_bytes(b1)
+    return b1[] - b0[]
+end
+only(methods(allocated)).called = 0xff
+
+function allocations(f, args::Vararg{Any,N}) where {N}
+    stats = Base.gc_num()
+    f(args...)
+    diff = Base.GC_Diff(Base.gc_num(), stats)
+    return Base.gc_alloc_count(diff)
+end
+only(methods(allocations)).called = 0xff
+
+function is_simply_call(@nospecialize ex)
+    Meta.isexpr(ex, :call) || return false
+    for a in ex.args
+        a isa QuoteNode && continue
+        a isa Symbol && continue
+        isa_ast_node(a) || continue
+        return false
+    end
+    return true
+end
+
 """
     @allocated
 
@@ -477,15 +516,11 @@ julia> @allocated rand(10^6)
 ```
 """
 macro allocated(ex)
-    quote
-        Experimental.@force_compile
-        local b0 = Ref{Int64}(0)
-        local b1 = Ref{Int64}(0)
-        gc_bytes(b0)
-        $(esc(ex))
-        gc_bytes(b1)
-        b1[] - b0[]
+    if !is_simply_call(ex)
+        ex = :((() -> $ex)())
     end
+    pushfirst!(ex.args, GlobalRef(Base, :allocated))
+    return esc(ex)
 end
 
 """
@@ -506,14 +541,13 @@ julia> @allocations rand(10^6)
     This macro was added in Julia 1.9.
 """
 macro allocations(ex)
-    quote
-        Experimental.@force_compile
-        local stats = Base.gc_num()
-        $(esc(ex))
-        local diff = Base.GC_Diff(Base.gc_num(), stats)
-        Base.gc_alloc_count(diff)
+    if !is_simply_call(ex)
+        ex = :((() -> $ex)())
     end
+    pushfirst!(ex.args, GlobalRef(Base, :allocations))
+    return esc(ex)
 end
+
 
 """
     @lock_conflicts
@@ -633,33 +667,36 @@ end
 # here so it's possible to time/trace all imports, including InteractiveUtils and its deps
 macro time_imports(ex)
     quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
+        Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
-        end
+        )
     end
 end
 
 macro trace_compile(ex)
     quote
-        try
-            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
-            $(esc(ex))
-        finally
+        ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
-        end
+        )
     end
 end
 
 macro trace_dispatch(ex)
     quote
-        try
-            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
-            $(esc(ex))
-        finally
+        ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
-        end
+        )
     end
 end

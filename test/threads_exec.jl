@@ -28,14 +28,90 @@ end
 # (expected test duration is about 18-180 seconds)
 Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
+module ConcurrencyUtilities
+    function new_task_nonsticky(f)
+        t = Task(f)
+        t.sticky = false
+        t
+    end
+
+    """
+        run_concurrently(worker, n)::Nothing
+
+    Run `n` tasks of `worker` concurrently. Return when all workers are done.
+    """
+    function run_concurrently(worker, n)
+        tasks = map(new_task_nonsticky ∘ Returns(worker), Base.OneTo(n))
+        foreach(schedule, tasks)
+        foreach(fetch, tasks)
+    end
+
+    """
+        run_concurrently_in_new_task(worker, n)::Task
+
+    Return a task that:
+    * is not started yet
+    * when started, runs `n` tasks of `worker` concurrently
+    * returns when all workers are done
+    """
+    function run_concurrently_in_new_task(worker, n)
+        function f(t)
+            run_concurrently(t...)
+        end
+        new_task_nonsticky(f ∘ Returns((worker, n)))
+    end
+end
+
+module AbstractIrrationalExamples
+    for n ∈ 0:9
+        name_aa = Symbol(:aa, n)
+        name_ab = Symbol(:ab, n)
+        name_ba = Symbol(:ba, n)
+        name_bb = Symbol(:bb, n)
+        @eval begin
+            Base.@irrational $name_aa exp(BigFloat(2)^$n)
+            Base.@irrational $name_ab exp(BigFloat(2)^-$n)
+            Base.@irrational $name_ba exp(-(BigFloat(2)^$n))
+            Base.@irrational $name_bb exp(-(BigFloat(2)^-$n))
+        end
+    end
+    const examples = (
+        aa0, aa1, aa2, aa3, aa4, aa5, aa6, aa7, aa8, aa9,
+        ab0, ab1, ab2, ab3, ab4, ab5, ab6, ab7, ab8, ab9,
+        ba0, ba1, ba2, ba3, ba4, ba5, ba6, ba7, ba8, ba9,
+        bb0, bb1, bb2, bb3, bb4, bb5, bb6, bb7, bb8, bb9,
+    )
+end
+
 @testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
 
 @test Threads.threadid() == 1
-@test 1 <= threadpoolsize() <= Threads.maxthreadid()
+@test threadpool() in (:interactive, :default) # thread 1 could be in the interactive pool
+@test 1 <= threadpoolsize(:default) <= Threads.maxthreadid()
 
 # basic lock check
-if threadpoolsize() > 1
+if threadpoolsize(:default) > 1
     let lk = SpinLock()
+        c1 = Base.Event()
+        c2 = Base.Event()
+        @test trylock(lk)
+        @test !trylock(lk)
+        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
+        t2 = Threads.@spawn (notify(c2); trylock(lk))
+        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
+        wait(c1)
+        wait(c2)
+        @test !fetch(t2)
+        @test istaskdone(t2)
+        @test !istaskdone(t1)
+        unlock(lk)
+        @test fetch(t1)
+        @test istaskdone(t1)
+    end
+end
+
+if threadpoolsize() > 1
+    let lk = Base.Threads.PaddedSpinLock()
         c1 = Base.Event()
         c2 = Base.Event()
         @test trylock(lk)
@@ -56,7 +132,18 @@ end
 
 # threading constructs
 
-let a = zeros(Int, 2 * threadpoolsize())
+@testset "@threads and @spawn threadpools" begin
+    @threads for i in 1:1
+        @test threadpool() == :default
+    end
+    @test fetch(Threads.@spawn threadpool()) == :default
+    @test fetch(Threads.@spawn :default threadpool()) == :default
+    if threadpoolsize(:interactive) > 0
+        @test fetch(Threads.@spawn :interactive threadpool()) == :interactive
+    end
+end
+
+let a = zeros(Int, 2 * threadpoolsize(:default))
     @threads for i = 1:length(a)
         @sync begin
             @async begin
@@ -76,7 +163,7 @@ end
 
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
-    counter = Threads.Atomic{Int}(min(threadpoolsize(), length(r)))
+    counter = Threads.Atomic{Int}(min(threadpoolsize(:default), length(r)))
     @threads for i in r
         # synchronize the start given that each partition is started sequentially,
         # meaning that without the wait, if the loop is too fast the iteration can happen in order
@@ -267,29 +354,12 @@ using Base.Threads
 end
 end
 
-# Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{ComplexF64}
-
-if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
-   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-
-    @test_throws TypeError Atomic{Int128}()
-    @test_throws TypeError Atomic{UInt128}()
-end
-
-if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-    @test_throws TypeError Atomic{Float16}()
-    @test_throws TypeError Atomic{Float32}()
-    @test_throws TypeError Atomic{Float64}()
-end
-
 function test_atomic_bools()
     x = Atomic{Bool}(false)
-    # Arithmetic functions are not defined.
-    @test_throws MethodError atomic_add!(x, true)
-    @test_throws MethodError atomic_sub!(x, true)
-    # All the rest are:
+    # Arithmetic functions such as true+true returns Int
+    @test_throws TypeError atomic_add!(x, true)
+    @test_throws TypeError atomic_sub!(x, true)
+    # All the rest are supported:
     for v in [true, false]
         @test x[] == atomic_xchg!(x, v)
         @test v == atomic_cas!(x, v, !v)
@@ -395,10 +465,9 @@ end
 test_fence()
 
 # Test load / store with various types
-let atomictypes = intersect((Int8, Int16, Int32, Int64, Int128,
-                             UInt8, UInt16, UInt32, UInt64, UInt128,
-                             Float16, Float32, Float64),
-                            Base.Threads.atomictypes)
+let atomictypes = (Int8, Int16, Int32, Int64, Int128,
+                   UInt8, UInt16, UInt32, UInt64, UInt128,
+                   Float16, Float32, Float64)
     for T in atomictypes
         var = Atomic{T}()
         var[] = 42
@@ -426,10 +495,10 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
         end
     end
 end
-for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
+for T in (Int32, Int64, Float32, Float64)
     var = Atomic{T}()
     nloops = 1000
-    di = threadpoolsize()
+    di = threadpoolsize(:default)
     @threads for i in 1:di
         test_atomic_cas!(var, i:di:nloops)
     end
@@ -440,7 +509,7 @@ function test_atomic_xchg!(var::Atomic{T}, i::Int, accum::Atomic{Int}) where T
     old = atomic_xchg!(var, T(i))
     atomic_add!(accum, Int(old))
 end
-for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
+for T in (Int32, Int64, Float32, Float64)
     accum = Atomic{Int}()
     var = Atomic{T}()
     nloops = 1000
@@ -455,7 +524,7 @@ function test_atomic_float(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{
     atomic_max!(varmax, T(i))
     atomic_min!(varmin, T(i))
 end
-for T in intersect((Int32, Int64, Float16, Float32, Float64), Base.Threads.atomictypes)
+for T in (Int32, Int64, Float16, Float32, Float64)
     varadd = Atomic{T}()
     varmax = Atomic{T}()
     varmin = Atomic{T}()
@@ -519,13 +588,13 @@ function test_thread_cfunction()
     @test cfs[1] == cf1
     @test cfs[2] == cf(fs[2])
     @test length(unique(cfs)) == 1000
-    ok = zeros(Int, threadpoolsize())
+    ok = zeros(Int, threadpoolsize(:default))
     @threads :static for i in 1:10000
         i = mod1(i, 1000)
         fi = fs[i]
         cfi = cf(fi)
         GC.@preserve cfi begin
-            ok[threadid()] += (cfi === cfs[i])
+            ok[threadid() - threadpoolsize(:interactive)] += (cfi === cfs[i])
         end
     end
     @test sum(ok) == 10000
@@ -533,20 +602,6 @@ end
 if cfunction_closure
     test_thread_cfunction()
 end
-
-function test_thread_range()
-    a = zeros(Int, threadpoolsize())
-    @threads for i in 1:threadid()
-        a[i] = 1
-    end
-    for i in 1:threadid()
-        @test a[i] == 1
-    end
-    for i in (threadid() + 1):threadpoolsize()
-        @test a[i] == 0
-    end
-end
-test_thread_range()
 
 # Thread safety of `jl_load_and_lookup`.
 function test_load_and_lookup_18020(n)
@@ -582,17 +637,17 @@ test_nested_loops()
 
 function test_thread_too_few_iters()
     x = Atomic()
-    a = zeros(Int, threadpoolsize()+2)
-    threaded_loop(a, 1:threadpoolsize()-1, x)
-    found = zeros(Bool, threadpoolsize()+2)
-    for i=1:threadpoolsize()-1
+    a = zeros(Int, threadpoolsize(:default)+2)
+    threaded_loop(a, 1:threadpoolsize(:default)-1, x)
+    found = zeros(Bool, threadpoolsize(:default)+2)
+    for i=1:threadpoolsize(:default)-1
         found[a[i]] = true
     end
-    @test x[] == threadpoolsize()-1
+    @test x[] == threadpoolsize(:default)-1
     # Next test checks that all loop iterations ran,
     # and were unique (via pigeon-hole principle).
-    @test !(false in found[1:threadpoolsize()-1])
-    @test !(true in found[threadpoolsize():end])
+    @test !(false in found[1:threadpoolsize(:default)-1])
+    @test !(true in found[threadpoolsize(:default):end])
 end
 test_thread_too_few_iters()
 
@@ -734,10 +789,10 @@ function _atthreads_with_error(a, err)
     end
     a
 end
-@test_throws CompositeException _atthreads_with_error(zeros(threadpoolsize()), true)
-let a = zeros(threadpoolsize())
+@test_throws CompositeException _atthreads_with_error(zeros(threadpoolsize(:default)), true)
+let a = zeros(threadpoolsize(:default))
     _atthreads_with_error(a, false)
-    @test a == [1:threadpoolsize();]
+    @test a == [threadpoolsize(:interactive) .+ (1:threadpoolsize(:default));]
 end
 
 # static schedule
@@ -748,11 +803,11 @@ function _atthreads_static_schedule(n)
     end
     return ids
 end
-@test _atthreads_static_schedule(threadpoolsize()) == 1:threadpoolsize()
-@test _atthreads_static_schedule(1) == [1;]
+@test _atthreads_static_schedule(threadpoolsize(:default)) == threadpoolsize(:interactive) .+ (1:threadpoolsize(:default))
+@test _atthreads_static_schedule(1) == [threadpoolsize(:interactive) + 1;]
 @test_throws(
     "`@threads :static` cannot be used concurrently or nested",
-    @threads(for i = 1:1; _atthreads_static_schedule(threadpoolsize()); end),
+    @threads(for i = 1:1; _atthreads_static_schedule(threadpoolsize(:default)); end),
 )
 
 # dynamic schedule
@@ -765,35 +820,35 @@ function _atthreads_dynamic_schedule(n)
     end
     return inc[], flags
 end
-@test _atthreads_dynamic_schedule(threadpoolsize()) == (threadpoolsize(), ones(threadpoolsize()))
+@test _atthreads_dynamic_schedule(threadpoolsize(:default)) == (threadpoolsize(:default), ones(threadpoolsize(:default)))
 @test _atthreads_dynamic_schedule(1) == (1, ones(1))
 @test _atthreads_dynamic_schedule(10) == (10, ones(10))
-@test _atthreads_dynamic_schedule(threadpoolsize() * 2) == (threadpoolsize() * 2, ones(threadpoolsize() * 2))
+@test _atthreads_dynamic_schedule(threadpoolsize(:default) * 2) == (threadpoolsize(:default) * 2, ones(threadpoolsize(:default) * 2))
 
 # nested dynamic schedule
 function _atthreads_dynamic_dynamic_schedule()
     inc = Threads.Atomic{Int}(0)
-    Threads.@threads :dynamic for _ = 1:threadpoolsize()
-        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+    Threads.@threads :dynamic for _ = 1:threadpoolsize(:default)
+        Threads.@threads :dynamic for _ = 1:threadpoolsize(:default)
             Threads.atomic_add!(inc, 1)
         end
     end
     return inc[]
 end
-@test _atthreads_dynamic_dynamic_schedule() == threadpoolsize() * threadpoolsize()
+@test _atthreads_dynamic_dynamic_schedule() == threadpoolsize(:default) * threadpoolsize(:default)
 
 function _atthreads_static_dynamic_schedule()
-    ids = zeros(Int, threadpoolsize())
+    ids = zeros(Int, threadpoolsize(:default))
     inc = Threads.Atomic{Int}(0)
-    Threads.@threads :static for i = 1:threadpoolsize()
+    Threads.@threads :static for i = 1:threadpoolsize(:default)
         ids[i] = Threads.threadid()
-        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize(:default)
             Threads.atomic_add!(inc, 1)
         end
     end
     return ids, inc[]
 end
-@test _atthreads_static_dynamic_schedule() == (1:threadpoolsize(), threadpoolsize() * threadpoolsize())
+@test _atthreads_static_dynamic_schedule() == (threadpoolsize(:interactive) .+ (1:threadpoolsize(:default)), threadpoolsize(:default) * threadpoolsize(:default))
 
 # errors inside @threads :dynamic
 function _atthreads_dynamic_with_error(a)
@@ -802,7 +857,7 @@ function _atthreads_dynamic_with_error(a)
     end
     a
 end
-@test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(threadpoolsize()))
+@test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(threadpoolsize(:default)))
 
 ####
 # :greedy
@@ -817,57 +872,57 @@ function _atthreads_greedy_schedule(n)
     end
     return inc[], flags
 end
-@test _atthreads_greedy_schedule(threadpoolsize()) == (threadpoolsize(), ones(threadpoolsize()))
+@test _atthreads_greedy_schedule(threadpoolsize(:default)) == (threadpoolsize(:default), ones(threadpoolsize(:default)))
 @test _atthreads_greedy_schedule(1) == (1, ones(1))
 @test _atthreads_greedy_schedule(10) == (10, ones(10))
-@test _atthreads_greedy_schedule(threadpoolsize() * 2) == (threadpoolsize() * 2, ones(threadpoolsize() * 2))
+@test _atthreads_greedy_schedule(threadpoolsize(:default) * 2) == (threadpoolsize(:default) * 2, ones(threadpoolsize(:default) * 2))
 
 # nested greedy schedule
 function _atthreads_greedy_greedy_schedule()
     inc = Threads.Atomic{Int}(0)
-    Threads.@threads :greedy for _ = 1:threadpoolsize()
-        Threads.@threads :greedy for _ = 1:threadpoolsize()
+    Threads.@threads :greedy for _ = 1:threadpoolsize(:default)
+        Threads.@threads :greedy for _ = 1:threadpoolsize(:default)
             Threads.atomic_add!(inc, 1)
         end
     end
     return inc[]
 end
-@test _atthreads_greedy_greedy_schedule() == threadpoolsize() * threadpoolsize()
+@test _atthreads_greedy_greedy_schedule() == threadpoolsize(:default) * threadpoolsize(:default)
 
 function _atthreads_greedy_dynamic_schedule()
     inc = Threads.Atomic{Int}(0)
-    Threads.@threads :greedy for _ = 1:threadpoolsize()
-        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+    Threads.@threads :greedy for _ = 1:threadpoolsize(:default)
+        Threads.@threads :dynamic for _ = 1:threadpoolsize(:default)
             Threads.atomic_add!(inc, 1)
         end
     end
     return inc[]
 end
-@test _atthreads_greedy_dynamic_schedule() == threadpoolsize() * threadpoolsize()
+@test _atthreads_greedy_dynamic_schedule() == threadpoolsize(:default) * threadpoolsize(:default)
 
-function _atthreads_dymamic_greedy_schedule()
+function _atthreads_dynamic_greedy_schedule()
     inc = Threads.Atomic{Int}(0)
-    Threads.@threads :dynamic for _ = 1:threadpoolsize()
-        Threads.@threads :greedy for _ = 1:threadpoolsize()
+    Threads.@threads :dynamic for _ = 1:threadpoolsize(:default)
+        Threads.@threads :greedy for _ = 1:threadpoolsize(:default)
             Threads.atomic_add!(inc, 1)
         end
     end
     return inc[]
 end
-@test _atthreads_dymamic_greedy_schedule() == threadpoolsize() * threadpoolsize()
+@test _atthreads_dynamic_greedy_schedule() == threadpoolsize(:default) * threadpoolsize(:default)
 
 function _atthreads_static_greedy_schedule()
-    ids = zeros(Int, threadpoolsize())
+    ids = zeros(Int, threadpoolsize(:default))
     inc = Threads.Atomic{Int}(0)
-    Threads.@threads :static for i = 1:threadpoolsize()
+    Threads.@threads :static for i = 1:threadpoolsize(:default)
         ids[i] = Threads.threadid()
-        Threads.@threads :greedy for _ = 1:threadpoolsize()
+        Threads.@threads :greedy for _ = 1:threadpoolsize(:default)
             Threads.atomic_add!(inc, 1)
         end
     end
     return ids, inc[]
 end
-@test _atthreads_static_greedy_schedule() == (1:threadpoolsize(), threadpoolsize() * threadpoolsize())
+@test _atthreads_static_greedy_schedule() == (threadpoolsize(:interactive) .+ (1:threadpoolsize(:default)), threadpoolsize(:default) * threadpoolsize(:default))
 
 # errors inside @threads :greedy
 function _atthreads_greedy_with_error(a)
@@ -876,7 +931,7 @@ function _atthreads_greedy_with_error(a)
     end
     a
 end
-@test_throws "user error in the loop body" _atthreads_greedy_with_error(zeros(threadpoolsize()))
+@test_throws "user error in the loop body" _atthreads_greedy_with_error(zeros(threadpoolsize(:default)))
 
 ####
 # multi-argument loop
@@ -1109,7 +1164,7 @@ function check_sync_end_race()
                 nnotscheduled += y === :notscheduled
             end
             # Useful for tuning the test:
-            @debug "`check_sync_end_race` done" threadpoolsize() ncompleted nnotscheduled nerror
+            @debug "`check_sync_end_race` done" threadpoolsize(:default) ncompleted nnotscheduled nerror
         finally
             done[] = true
         end
@@ -1123,7 +1178,7 @@ end
 
 # issue #41546, thread-safe package loading
 @testset "package loading" begin
-    ntasks = max(threadpoolsize(), 4)
+    ntasks = max(threadpoolsize(:default), 4)
     ch = Channel{Bool}(ntasks)
     barrier = Base.Event()
     old_act_proj = Base.ACTIVE_PROJECT[]
@@ -1349,6 +1404,43 @@ end
     end
 end
 
+@testset "race on `BigFloat` precision when constructing `Rational` from `AbstractIrrational`" begin
+    function test_racy_rational_from_irrational(::Type{Rational{I}}, c::AbstractIrrational) where {I}
+        function construct()
+            Rational{I}(c)
+        end
+        function is_racy_rational_from_irrational()
+            worker_count = 10 * Threads.nthreads()
+            task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
+            schedule(task)
+            ok = true
+            while !istaskdone(task)
+                for _ ∈ 1:1000000
+                    ok &= precision(BigFloat) === prec
+                end
+                GC.safepoint()
+                yield()
+            end
+            fetch(task)
+            ok
+        end
+        prec = precision(BigFloat)
+        task = ConcurrencyUtilities.new_task_nonsticky(is_racy_rational_from_irrational)
+        schedule(task)
+        ok = fetch(task)::Bool
+        setprecision(BigFloat, prec)
+        ok
+    end
+    @testset "c: $c" for c ∈ AbstractIrrationalExamples.examples
+        Q = Rational{Int128}
+        # metatest: `test_racy_rational_from_irrational` needs the constructor
+        # to not be constant folded away, otherwise it's not testing anything.
+        @test !Core.Compiler.is_foldable(Base.infer_effects(Q, Tuple{typeof(c)}))
+        # test for race
+        @test test_racy_rational_from_irrational(Q, c)
+    end
+end
+
 @testset "task time counters" begin
     @testset "enabled" begin
         try
@@ -1503,7 +1595,7 @@ end
         @sync begin
             for i in 1:n_tasks
                 start_time_i = time_ns()
-                task_i = Threads.@spawn peakflops()
+                task_i = Threads.@spawn peakflops(1024)
                 Threads.@spawn begin
                     wait(task_i)
                     end_time_i = time_ns()
@@ -1533,6 +1625,33 @@ end
         @test summed_wall_time > summed_cpu_time
     finally
         Base.Experimental.task_metrics(false)
+    end
+end
+
+@testset "--timeout-for-safepoint-straggler command-line flag" begin
+    program = "
+        function main()
+            t = Threads.@spawn begin
+                ccall(:uv_sleep, Cvoid, (Cuint,), 20_000)
+            end
+            # Force a GC
+            ccall(:uv_sleep, Cvoid, (Cuint,), 1_000)
+            GC.gc()
+            wait(t)
+        end
+        main()
+    "
+    for timeout in ("1", "4", "16")
+        tmp_output_filename = tempname()
+        tmp_output_file = open(tmp_output_filename, "w")
+        if isnothing(tmp_output_file)
+            error("Failed to open file $tmp_output_filename")
+        end
+        run(pipeline(`$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=$(timeout) -e $program`, stderr=tmp_output_file))
+        # Check whether we printed the straggler's backtrace
+        @test !isempty(read(tmp_output_filename, String))
+        close(tmp_output_file)
+        rm(tmp_output_filename)
     end
 end
 

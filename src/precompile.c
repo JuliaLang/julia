@@ -36,27 +36,30 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         //   char*: src text
         // At the end we write int32(0) as a terminal sentinel.
         size_t len = jl_array_nrows(udeps);
-        static jl_value_t *replace_depot_func = NULL;
-        if (!replace_depot_func)
-            replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
-        static jl_value_t *normalize_depots_func = NULL;
-        if (!normalize_depots_func)
-            normalize_depots_func = jl_get_global(jl_base_module, jl_symbol("normalize_depots_for_relocation"));
         ios_t srctext;
-        jl_value_t *deptuple = NULL, *depots = NULL;
-        JL_GC_PUSH3(&deptuple, &udeps, &depots);
+        jl_value_t *replace_depot_func = NULL;
+        jl_value_t *normalize_depots_func = NULL;
+        jl_value_t *deptuple = NULL;
+        jl_value_t *depots = NULL;
         jl_task_t *ct = jl_current_task;
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        JL_GC_PUSH4(&deptuple, &depots, &replace_depot_func, &normalize_depots_func);
+        replace_depot_func = jl_eval_global_var(jl_base_module, jl_symbol("replace_depot_path"), jl_current_task->world_age);
+        normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"), jl_current_task->world_age);
         depots = jl_apply(&normalize_depots_func, 1);
-        ct->world_age = last_age;
+        jl_datatype_t *deptuple_p[5] = {jl_module_type, jl_string_type, jl_uint64_type, jl_uint32_type, jl_float64_type};
+        jl_value_t *jl_deptuple_type = jl_apply_tuple_type_v((jl_value_t**)deptuple_p, 5);
+        JL_GC_PROMISE_ROOTED(jl_deptuple_type);
+#define jl_is_deptuple(v) (jl_typeis((v), jl_deptuple_type))
         for (size_t i = 0; i < len; i++) {
             deptuple = jl_array_ptr_ref(udeps, i);
-            jl_value_t *depmod = jl_fieldref(deptuple, 0);  // module
+            jl_value_t *depmod = jl_fieldref_noalloc(deptuple, 0);  // module
             // Dependencies declared with `include_dependency` are excluded
             // because these may not be Julia code (and could be huge)
+            JL_TYPECHK(write_srctext, deptuple, deptuple);
             if (depmod != (jl_value_t*)jl_main_module) {
-                jl_value_t *abspath = jl_fieldref(deptuple, 1);  // file abspath
+                jl_value_t *abspath = jl_fieldref_noalloc(deptuple, 1);  // file abspath
                 const char *abspathstr = jl_string_data(abspath);
                 if (!abspathstr[0])
                     continue;
@@ -67,17 +70,11 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                     continue;
                 }
 
-                jl_value_t **replace_depot_args;
-                JL_GC_PUSHARGS(replace_depot_args, 3);
+                jl_value_t *replace_depot_args[3];
                 replace_depot_args[0] = replace_depot_func;
                 replace_depot_args[1] = abspath;
                 replace_depot_args[2] = depots;
-                jl_task_t *ct = jl_current_task;
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                 jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 3);
-                ct->world_age = last_age;
-                JL_GC_POP();
 
                 size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);
@@ -91,6 +88,8 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                 ios_seek_end(f);
             }
         }
+        ct->world_age = last_age;
+#undef jl_is_deptuple
         JL_GC_POP();
     }
     write_int32(f, 0); // mark the end of the source text
@@ -140,7 +139,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         }
     }
 
-    assert(jl_precompile_toplevel_module == NULL);
     void *native_code = NULL;
 
     bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;

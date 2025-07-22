@@ -159,17 +159,21 @@ static int compile_all_collect_(jl_methtable_t *mt, void *env)
     return 1;
 }
 
-static void jl_compile_all_defs(jl_array_t *mis, int all)
+static void jl_compile_all_defs(jl_array_t *mis, int all, jl_array_t *mod_array)
 {
     jl_array_t *allmeths = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&allmeths);
 
-    jl_foreach_reachable_mtable(compile_all_collect_, allmeths);
+    jl_foreach_reachable_mtable(compile_all_collect_, mod_array, allmeths);
 
     size_t world =  jl_atomic_load_acquire(&jl_world_counter);
     size_t i, l = jl_array_nrows(allmeths);
     for (i = 0; i < l; i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
+        int is_macro_method = jl_symbol_name(m->name)[0] == '@';
+        if (is_macro_method && !all)
+            continue; // Avoid inference / pre-compilation for macros
+
         if (jl_is_datatype(m->sig) && jl_isa_compileable_sig((jl_tupletype_t*)m->sig, jl_emptysvec, m)) {
             // method has a single compilable specialization, e.g. its definition
             // signature is concrete. in this case we can just hint it.
@@ -203,8 +207,8 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
         else if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             if (inferred &&
-                inferred != jl_nothing &&
-                (jl_options.compile_enabled != JL_OPTIONS_COMPILE_ALL && jl_ir_inlining_cost(inferred) == UINT16_MAX)) {
+                (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL || inferred == jl_nothing ||
+                 ((jl_is_string(inferred) || jl_is_code_info(inferred) || jl_is_uint8(inferred)) && jl_ir_inlining_cost(inferred) == UINT16_MAX))) {
                 do_compile = 1;
             }
             else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {
@@ -220,38 +224,53 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
     return 1;
 }
 
-static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
+struct precompile_enq_all_specializations_env {
+    jl_array_t *worklist;
+    jl_array_t *m;
+};
+
+static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *env)
 {
     jl_method_t *m = def->func.method;
-    if (m->external_mt)
-        return 1;
+    assert(!m->external_mt);
+    struct precompile_enq_all_specializations_env *closure = (struct precompile_enq_all_specializations_env*)env;
+    if (closure->worklist) {
+        size_t i, l = jl_array_nrows(closure->worklist);
+        for (i = 0; i < l; i++) {
+            if (m->module == (jl_module_t*)jl_array_ptr_ref(closure->worklist, i))
+                break;
+        }
+        if (i == l)
+            return 1;
+    }
     if ((m->name == jl_symbol("__init__") || m->ccallable) && jl_is_dispatch_tupletype(m->sig)) {
         // ensure `__init__()` and @ccallables get strongly-hinted, specialized, and compiled
         jl_method_instance_t *mi = jl_specializations_get_linfo(m, m->sig, jl_emptysvec);
-        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
+        jl_array_ptr_1d_push(closure->m, (jl_value_t*)mi);
     }
     else {
         jl_value_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
         if (!jl_is_svec(specializations)) {
-            precompile_enq_specialization_((jl_method_instance_t*)specializations, closure);
+            precompile_enq_specialization_((jl_method_instance_t*)specializations, closure->m);
         }
         else {
             size_t i, l = jl_svec_len(specializations);
             for (i = 0; i < l; i++) {
                 jl_value_t *mi = jl_svecref(specializations, i);
                 if (mi != jl_nothing)
-                    precompile_enq_specialization_((jl_method_instance_t*)mi, closure);
+                    precompile_enq_specialization_((jl_method_instance_t*)mi, closure->m);
             }
         }
     }
     if (m->ccallable)
-        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)m->ccallable);
+        jl_array_ptr_1d_push(closure->m, (jl_value_t*)m->ccallable);
     return 1;
 }
 
-static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
+static int precompile_enq_all_specializations_(jl_array_t *worklist, jl_array_t *env)
 {
-    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), precompile_enq_all_specializations__, env);
+    struct precompile_enq_all_specializations_env closure = {worklist, env};
+    return jl_typemap_visitor(jl_atomic_load_relaxed(&jl_method_table->defs), precompile_enq_all_specializations__, &closure);
 }
 
 static void *jl_precompile_(jl_array_t *m, int external_linkage)
@@ -271,24 +290,22 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
         }
         else {
             assert(jl_is_simplevector(item));
-            assert(jl_svec_len(item) == 2);
+            assert(jl_svec_len(item) == 2 || jl_svec_len(item) == 3);
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage,
-                                         jl_atomic_load_acquire(&jl_world_counter),
-                                         NULL);
+    void *native_code = jl_create_native(m2, NULL, 0, external_linkage, jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();
     return native_code;
 }
 
-static void *jl_precompile(int all)
+static void *jl_precompile(int all, jl_array_t *mod_array)
 {
     // array of MethodInstances and ccallable aliases to include in the output
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
-    jl_compile_all_defs(m, all);
-    jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
+    jl_compile_all_defs(m, all, mod_array);
+    precompile_enq_all_specializations_(NULL, m);
     void *native_code = jl_precompile_(m, 0);
     JL_GC_POP();
     return native_code;
@@ -309,13 +326,8 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     if (!suppress_precompile) {
-        size_t i, n = jl_array_nrows(worklist);
-        for (i = 0; i < n; i++) {
-            jl_module_t *mod = (jl_module_t*)jl_array_ptr_ref(worklist, i);
-            assert(jl_is_module(mod));
-            foreach_mtable_in_module(mod, precompile_enq_all_specializations_, m);
-        }
-        n = jl_array_nrows(extext_methods);
+        precompile_enq_all_specializations_(worklist, m);
+        size_t i, n = jl_array_nrows(extext_methods);
         for (i = 0; i < n; i++) {
             jl_method_t *method = (jl_method_t*)jl_array_ptr_ref(extext_methods, i);
             assert(jl_is_method(method));
@@ -336,7 +348,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
             n = jl_array_nrows(new_ext_cis);
             for (i = 0; i < n; i++) {
                 jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
-                precompile_enq_specialization_(ci->def, m);
+                precompile_enq_specialization_(jl_get_ci_mi(ci), m);
             }
         }
     }
@@ -348,21 +360,15 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
 static int enq_ccallable_entrypoints_(jl_typemap_entry_t *def, void *closure)
 {
     jl_method_t *m = def->func.method;
-    if (m->external_mt)
-        return 1;
+    assert(!m->external_mt);
     if (m->ccallable)
         jl_add_entrypoint((jl_tupletype_t*)jl_svecref(m->ccallable, 1));
     return 1;
 }
 
-static int enq_ccallable_entrypoints(jl_methtable_t *mt, void *env)
-{
-    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), enq_ccallable_entrypoints_, env);
-}
-
 JL_DLLEXPORT void jl_add_ccallable_entrypoints(void)
 {
-    jl_foreach_reachable_mtable(enq_ccallable_entrypoints, NULL);
+    jl_typemap_visitor(jl_atomic_load_relaxed(&jl_method_table->defs), enq_ccallable_entrypoints_, NULL);
 }
 
 static void *jl_precompile_trimmed(size_t world)
@@ -372,8 +378,7 @@ static void *jl_precompile_trimmed(size_t world)
     jl_value_t *ccallable = NULL;
     JL_GC_PUSH2(&m, &ccallable);
     jl_method_instance_t *mi;
-    while (1)
-    {
+    while (1) {
         mi = (jl_method_instance_t*)arraylist_pop(jl_entrypoint_mis);
         if (mi == NULL)
             break;
@@ -385,42 +390,55 @@ static void *jl_precompile_trimmed(size_t world)
             jl_array_ptr_1d_push(m, ccallable);
     }
 
-    jl_cgparams_t params = jl_default_cgparams;
-    params.trim = jl_options.trim;
-    void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
-                                         world, NULL);
+    void *native_code = NULL;
+    JL_TRY {
+        native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);
+    } JL_CATCH {
+        jl_value_t *exc = jl_current_exception(jl_current_task);
+        if (!jl_isa(exc, (jl_value_t*)jl_trimfailure_type))
+            jl_rethrow(); // unexpected exception, expose the stacktrace
+
+        // The verification check failed. The error message should already have
+        // been printed, so give up here and exit (w/o a stack trace).
+        exit(1);
+    }
     JL_GC_POP();
     return native_code;
 }
 
-static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
+static void jl_rebuild_methtables(arraylist_t *MIs, htable_t *mtables) JL_GC_DISABLED
 {
-    size_t i;
-    for (i = 0; i < MIs->len; i++) {
+    // Rebuild MethodTable to contain only those methods for which we compiled code.
+    // This can have significant soundness problems if there previously existed
+    // any ambiguous methods, but it would probably be pretty hard to do this
+    // fully correctly (with the necessary inserted guard entries).
+    htable_t ms;
+    htable_new(&ms, 0);
+    for (size_t i = 0; i < MIs->len; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)MIs->items[i];
         jl_method_t *m = mi->def.method;
+        // Check if the method is already in the new table, if not then insert it there
+        void **inserted = ptrhash_bp(&ms, m);
+        if (*inserted != HT_NOTFOUND)
+            continue;
+        *inserted = (void*)m;
         jl_methtable_t *old_mt = jl_method_get_table(m);
         if ((jl_value_t *)old_mt == jl_nothing)
             continue;
-        jl_sym_t *name = old_mt->name;
         if (!ptrhash_has(mtables, old_mt))
-            ptrhash_put(mtables, old_mt, jl_new_method_table(name, m->module));
+            ptrhash_put(mtables, old_mt, jl_new_method_table(old_mt->name, old_mt->module));
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
-        size_t world =  jl_atomic_load_acquire(&jl_world_counter);
-        jl_value_t * lookup = jl_methtable_lookup(mt, m->sig, world);
-        // Check if the method is already in the new table, if not then insert it there
-        if (lookup == jl_nothing || (jl_method_t*)lookup != m) {
-            //TODO: should this be a function like unsafe_insert_method?
-            size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
-            size_t max_world = jl_atomic_load_relaxed(&m->deleted_world);
-            jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-            jl_atomic_store_relaxed(&m->deleted_world, 1);
-            jl_typemap_entry_t *newentry = jl_method_table_add(mt, m, NULL);
-            jl_atomic_store_relaxed(&m->primary_world, min_world);
-            jl_atomic_store_relaxed(&m->deleted_world, max_world);
-            jl_atomic_store_relaxed(&newentry->min_world, min_world);
-            jl_atomic_store_relaxed(&newentry->max_world, max_world);
-        }
+        //TODO: should this be a function like unsafe_insert_method, since all that is wanted is the jl_typemap_insert on a copy of the existing entry
+        size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
+        size_t max_world = ~(size_t)0;
+        int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
+        jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
+        jl_atomic_store_relaxed(&m->dispatch_status, 0);
+        jl_typemap_entry_t *newentry = jl_method_table_add(mt, m, NULL);
+        jl_atomic_store_relaxed(&m->primary_world, min_world);
+        jl_atomic_store_relaxed(&m->dispatch_status, dispatch_status);
+        jl_atomic_store_relaxed(&newentry->min_world, min_world);
+        jl_atomic_store_relaxed(&newentry->max_world, max_world); // short-circuit jl_method_table_insert
     }
-
+    htable_free(&ms);
 }

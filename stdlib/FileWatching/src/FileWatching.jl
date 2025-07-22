@@ -488,11 +488,10 @@ end
 
 function getproperty(fdw::FDWatcher, s::Symbol)
     # support deprecated field names
-    s === :readable && return fdw.mask.readable
-    s === :writable && return fdw.mask.writable
+    s === :readable && return getfield(fdw, :mask).readable
+    s === :writable && return getfield(fdw, :mask).writable
     return getfield(fdw, s)
 end
-
 
 close(t::_FDWatcher, mask::FDEvent) = close(t, mask.readable, mask.writable)
 function close(t::_FDWatcher, readable::Bool, writable::Bool)
@@ -517,17 +516,19 @@ end
 
 function uvfinalize(uv::Union{FileMonitor, FolderMonitor})
     iolock_begin()
-    if uv.handle != C_NULL
-        disassociate_julia_struct(uv) # close (and free) without notify
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+    handle = @atomicswap :monotonic uv.handle = C_NULL
+    if handle != C_NULL
+        disassociate_julia_struct(handle) # close (and free) without notify
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), handle)
     end
     iolock_end()
 end
 
 function close(t::Union{FileMonitor, FolderMonitor})
     iolock_begin()
-    if t.handle != C_NULL
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+    handle = t.handle
+    if handle != C_NULL
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), handle)
     end
     iolock_end()
 end

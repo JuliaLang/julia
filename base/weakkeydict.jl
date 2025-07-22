@@ -2,6 +2,12 @@
 
 # weak key dictionaries
 
+mutable struct WeakKeyDictFinalizer{T}
+    const d::T
+end
+(d::WeakKeyDictFinalizer)(k) = d.d.dirty = true
+
+
 """
     WeakKeyDict([itr])
 
@@ -16,15 +22,15 @@ object was unreferenced anywhere before insertion.
 See also [`WeakRef`](@ref).
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
-    ht::Dict{WeakRef,V}
-    lock::ReentrantLock
-    finalizer::Function
+    const ht::Dict{WeakRef,V}
+    const lock::ReentrantLock
     dirty::Bool
+    finalizer::WeakKeyDictFinalizer
 
     # Constructors mirror Dict's
-    function WeakKeyDict{K,V}() where V where K
-        t = new(Dict{WeakRef,V}(), ReentrantLock(), identity, 0)
-        t.finalizer = k -> t.dirty = true
+    function WeakKeyDict{K,V}() where {K, V}
+        t = new{K,V}(Dict{WeakRef,V}(), ReentrantLock(), false)
+        t.finalizer = WeakKeyDictFinalizer(t)
         return t
     end
 end

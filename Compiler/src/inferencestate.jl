@@ -188,7 +188,7 @@ mutable struct LazyGenericDomtree{IsPostDom}
 end
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = IsPostDom ?
+    return @zone "CC: DOMTREE_2" x.domtree = IsPostDom ?
         construct_postdomtree(x.ir) :
         construct_domtree(x.ir)
 end
@@ -292,7 +292,7 @@ mutable struct InferenceState
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
     callstack #::Vector{AbsIntState}
-    parentid::Int # index into callstack of the parent frame that originally added this frame (call frame_parent to extract the current parent of the SCC)
+    parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
     frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
     cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
 
@@ -302,6 +302,10 @@ mutable struct InferenceState
     bestguess #::Type
     exc_bestguess
     ipo_effects::Effects
+    time_start::UInt64
+    time_caches::Float64
+    time_paused::UInt64
+    time_self_ns::UInt64
 
     #= flags =#
     # Whether to restrict inference of abstract call sites to avoid excessive work
@@ -392,6 +396,7 @@ mutable struct InferenceState
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
+            _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
 
@@ -570,21 +575,23 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
 end
 
 # check if coverage mode is enabled
-function should_insert_coverage(mod::Module, debuginfo::DebugInfo)
-    coverage_enabled(mod) && return true
-    JLOptions().code_coverage == 3 || return false
+should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mod, debuginfo, true)
+
+function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
+    instrumentation_enabled(mod, only_if_affects_optimizer) && return true
+    JLOptions().code_coverage == 3 || JLOptions().malloc_log == 3 || return false
     # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
-    return _should_insert_coverage(debuginfo)
+    return _should_instrument(debuginfo)
 end
 
-_should_insert_coverage(mod::Symbol) = is_file_tracked(mod)
-_should_insert_coverage(mod::Method) = _should_insert_coverage(mod.file)
-_should_insert_coverage(mod::MethodInstance) = _should_insert_coverage(mod.def)
-_should_insert_coverage(mod::Module) = false
-function _should_insert_coverage(info::DebugInfo)
+_should_instrument(loc::Symbol) = is_file_tracked(loc)
+_should_instrument(loc::Method) = _should_instrument(loc.file)
+_should_instrument(loc::MethodInstance) = _should_instrument(loc.def)
+_should_instrument(loc::Module) = false
+function _should_instrument(info::DebugInfo)
     linetable = info.linetable
-    linetable === nothing || (_should_insert_coverage(linetable) && return true)
-    _should_insert_coverage(info.def) && return true
+    linetable === nothing || (_should_instrument(linetable) && return true)
+    _should_instrument(info.def) && return true
     return false
 end
 
@@ -815,6 +822,8 @@ mutable struct IRInterpretationState
     const mi::MethodInstance
     world::WorldWithRange
     curridx::Int
+    time_caches::Float64
+    time_paused::UInt64
     const argtypes_refined::Vector{Bool}
     const sptypes::Vector{VarState}
     const tpdum::TwoPhaseDefUseMap
@@ -849,7 +858,8 @@ mutable struct IRInterpretationState
         tasks = WorkThunk[]
         edges = Any[]
         callstack = AbsIntState[]
-        return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds), curridx, argtypes_refined, ir.sptypes, tpdum,
+        return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds),
+                curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
                 ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0)
     end
 end
@@ -908,14 +918,17 @@ function frame_module(sv::AbsIntState)
     return def.module
 end
 
-function frame_parent(sv::InferenceState)
+frame_parent(sv::AbsIntState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+
+function cycle_parent(sv::InferenceState)
     sv.parentid == 0 && return nothing
     callstack = sv.callstack::Vector{AbsIntState}
     sv = callstack[sv.cycleid]::InferenceState
     sv.parentid == 0 && return nothing
     return callstack[sv.parentid]
 end
-frame_parent(sv::IRInterpretationState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+cycle_parent(sv::IRInterpretationState) = frame_parent(sv)
+
 
 # add the orphan child to the parent and the parent to the child
 function assign_parentchild!(child::InferenceState, parent::AbsIntState)
@@ -986,12 +999,12 @@ ascending the tree from the given `AbsIntState`).
 Note that cycles may be visited in any order.
 """
 struct AbsIntStackUnwind
-    sv::AbsIntState
+    callstack::Vector{AbsIntState}
+    AbsIntStackUnwind(sv::AbsIntState) = new(sv.callstack::Vector{AbsIntState})
 end
-iterate(unw::AbsIntStackUnwind) = (unw.sv, length(unw.sv.callstack::Vector{AbsIntState}))
-function iterate(unw::AbsIntStackUnwind, frame::Int)
+function iterate(unw::AbsIntStackUnwind, frame::Int=length(unw.callstack))
     frame == 0 && return nothing
-    return ((unw.sv.callstack::Vector{AbsIntState})[frame], frame - 1)
+    return (unw.callstack[frame], frame - 1)
 end
 
 struct AbsIntCycle

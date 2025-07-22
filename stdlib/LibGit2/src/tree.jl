@@ -66,7 +66,7 @@ function filename(te::GitTreeEntry)
 end
 
 """
-    filemode(te::GitTreeEntry) -> Cint
+    filemode(te::GitTreeEntry)::Cint
 
 Return the UNIX filemode of the object on disk to which `te` refers as an integer.
 """
@@ -172,7 +172,7 @@ function _getindex(tree::GitTree, target::AbstractString)
 end
 
 """
-    getindex(tree::GitTree, target::AbstractString) -> GitObject
+    getindex(tree::GitTree, target::AbstractString)::GitObject
 
 Look up `target` path in the `tree`, returning a [`GitObject`](@ref) (a [`GitBlob`](@ref) in
 the case of a file, or another [`GitTree`](@ref) if looking up a directory).

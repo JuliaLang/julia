@@ -36,9 +36,9 @@
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
 # ifdef JL_LIBRARY_EXPORTS
-#  define JL_DLLEXPORT __declspec(dllexport)
+#  define JL_DLLEXPORT __declspec(dllexport) __attribute__ ((visibility("default")))
 # endif
-#  define JL_DLLIMPORT __declspec(dllimport)
+#  define JL_DLLIMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
 #define JL_HIDDEN
 #else
 # define JL_DLLIMPORT __attribute__ ((visibility("default")))

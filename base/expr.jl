@@ -60,7 +60,8 @@ function copy(x::PhiCNode)
     return PhiCNode(new_values)
 end
 
-# copy parts of an AST that the compiler mutates
+# copy parts of an IR that the compiler mutates
+# (this is not a general-purpose copy for an Expr AST)
 function copy_exprs(@nospecialize(x))
     if isa(x, Expr)
         return copy(x)
@@ -91,10 +92,86 @@ function copy(c::CodeInfo)
     return cnew
 end
 
+function isequal_exprarg(@nospecialize(x), @nospecialize(y))
+    x isa typeof(y) || return false
+    x === y && return true
+    # c.f. list of types in copy_expr also
+    if x isa Expr
+        x == (y::Expr) && return true
+    elseif x isa QuoteNode
+        x == (y::QuoteNode) && return true
+    elseif x isa PhiNode
+        x == (y::PhiNode) && return true
+    elseif x isa PhiCNode
+        x == (y::PhiCNode) && return true
+    elseif x isa CodeInfo
+        x == (y::CodeInfo) && return true
+    end
+    return false
+end
 
-==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
-==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
-==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = stmt1.edges == stmt2.edges && stmt1.values == stmt2.values
+
+function isequal_exprargs(x::Array{Any,1}, y::Array{Any,1})
+    l = length(x)
+    l == length(y) || return false
+    for i = 1:l
+        if !isassigned(x, i)
+            # phi and phic values are permitted to be undef
+            isassigned(y, i) && return false
+        else
+            isassigned(y, i) || return false
+            isequal_exprarg(x[i], y[i]) || return false
+        end
+    end
+    return true
+end
+
+# define == such that == inputs to parsing (including line numbers) yield == outputs from lowering (including all metadata)
+# (aside from cases where parsing just returns a number, which are ambiguous here)
+==(x::Expr, y::Expr) = x.head === y.head && isequal_exprargs(x.args, y.args)
+
+==(x::QuoteNode, y::QuoteNode) = isequal_exprarg(x.value, y.value)
+
+==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = isequal(stmt1.edges, stmt2.edges) && isequal_exprargs(stmt1.values, stmt2.values)
+
+==(stmt1::Core.PhiCNode, stmt2::Core.PhiCNode) = isequal_exprargs(stmt1.values, stmt2.values)
+
+function ==(stmt1::CodeInfo, stmt2::CodeInfo)
+    for i in 1:nfields(stmt1)
+        if !isdefined(stmt1, i)
+            isdefined(stmt2, i) && return false
+        else
+            isdefined(stmt2, i) || return false
+            f1 = getfield(stmt1, i)
+            f2 = getfield(stmt2, i)
+            f1 isa typeof(f2) || return false
+            if f1 isa Vector{Any}
+                # code or types vectors
+                isequal_exprargs(f1, f2::Vector{Any}) || return false
+            elseif f1 isa DebugInfo
+                f1 == f2::DebugInfo || return false
+            elseif f1 isa Vector
+                # misc data
+                l = length(f1)
+                l == length(f2::Vector) || return false
+                for i = 1:l
+                    f1[i] === f2[i] || return false
+                end
+            else
+                # misc fields
+                f1 === f2 || return false
+            end
+        end
+    end
+    return true
+end
+
+function ==(x::DebugInfo, y::DebugInfo)
+    for i in 1:nfields(x)
+        getfield(x, i) == getfield(y, i) || return false
+    end
+    return true
+end
 
 """
     macroexpand(m::Module, x; recursive=true)
@@ -103,7 +180,7 @@ Take the expression `x` and return an equivalent expression with all macros remo
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
 This is demonstrated in the example below:
-```julia-repl
+```jldoctest; filter = r"#= .*:6 =#"
 julia> module M
            macro m1()
                42
@@ -118,7 +195,7 @@ julia> macroexpand(M, :(@m2()), recursive=true)
 42
 
 julia> macroexpand(M, :(@m2()), recursive=false)
-:(#= REPL[16]:6 =# M.@m1)
+:(#= REPL[1]:6 =# @m1)
 ```
 """
 function macroexpand(m::Module, @nospecialize(x); recursive=true)
@@ -144,7 +221,7 @@ There are differences between `@macroexpand` and [`macroexpand`](@ref).
   expands with respect to the module in which it is called.
 
 This is best seen in the following example:
-```julia-repl
+```jldoctest
 julia> module M
            macro m()
                1
@@ -152,7 +229,7 @@ julia> module M
            function f()
                (@macroexpand(@m),
                 macroexpand(M, :(@m)),
-                macroexpand(Main, :(@m))
+                macroexpand(parentmodule(M), :(@m))
                )
            end
        end
@@ -254,6 +331,14 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     let
         @inline explicit_noinline(args...) # will be inlined
     end
+    ```
+
+!!! note
+    The callsite annotation applies to all calls in the block, including function arguments
+    that are themselves calls:
+    ```julia
+    # The compiler will not inline `getproperty`, `g` or `f`
+    @noinline f(x.inner, g(y))
     ```
 
 !!! note
@@ -401,13 +486,14 @@ macro constprop(setting)
 end
 
 function constprop_setting(@nospecialize setting)
+    s = setting
     isa(setting, QuoteNode) && (setting = setting.value)
     if setting === :aggressive
         return :aggressive_constprop
     elseif setting === :none
         return :no_constprop
     end
-    throw(ArgumentError(LazyString("@constprop "), setting, "not supported"))
+    throw(ArgumentError(LazyString("`Base.@constprop ", s, "` not supported")))
 end
 
 """
@@ -531,16 +617,20 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     contents) are not egal.
 
 !!! note
-    The `:consistent`-cy assertion is made world-age wise. More formally, write
-    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
+    The `:consistent`-cy assertion is made with respect to a particular world range `R`.
+    More formally, write ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
     ```math
-    ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
+    ∀ i ∈ R, j ∈ R, x, y: x ≡ y → fᵢ(x) ≡ fⱼ(y)
     ```
-    However, for two world ages ``i``, ``j`` s.t. ``i ≠ j``, we may have ``fᵢ(x) ≢ fⱼ(y)``.
+
+    For `@assume_effects`, the range `R` is `m.primary_world:m.deleted_world` of
+    the annotated or containing method.
+
+    For ordinary code instances, `R` is `ci.min_world:ci.max_world`.
 
     A further implication is that `:consistent` functions may not make their
     return value dependent on the state of the heap or any other global state
-    that is not constant for a given world age.
+    that is not constant over the given world age range.
 
 !!! note
     The `:consistent`-cy includes all legal rewrites performed by the optimizer.
@@ -925,7 +1015,7 @@ This can be used to limit the number of compiler-generated specializations durin
 
 # Examples
 
-```julia
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -934,7 +1024,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Any
+1 ─ %1 =    invoke g(A::AbstractArray)::Any
 └──      return %1
 ) => Any
 ```
@@ -1343,6 +1433,10 @@ function make_atomic(order, ex)
                 op = :+
             elseif ex.head === :(-=)
                 op = :-
+            elseif ex.head === :(|=)
+                op = :|
+            elseif ex.head === :(&=)
+                op = :&
             elseif @isdefined string
                 shead = string(ex.head)
                 if endswith(shead, '=')
@@ -1645,11 +1739,87 @@ end
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
 is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
-function is_self_quoting(@nospecialize(x))
-    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
-        isa(x,Char) || x === nothing || isa(x,Function)
+"""
+    isa_ast_node(x)
+
+Return false if `x` is not interpreted specially by any of inference, lowering,
+or codegen as either an AST or IR special form.
+"""
+function isa_ast_node(@nospecialize x)
+    # c.f. Core.IR module, augmented with AST types
+    return x isa NewvarNode ||
+           x isa CodeInfo ||
+           x isa LineNumberNode ||
+           x isa GotoNode ||
+           x isa GotoIfNot ||
+           x isa EnterNode ||
+           x isa ReturnNode ||
+           x isa SSAValue ||
+           x isa SlotNumber ||
+           x isa Argument ||
+           x isa QuoteNode ||
+           x isa GlobalRef ||
+           x isa Symbol ||
+           x isa PiNode ||
+           x isa PhiNode ||
+           x isa PhiCNode ||
+           x isa UpsilonNode ||
+           x isa Expr
 end
 
-function quoted(@nospecialize(x))
-    return is_self_quoting(x) ? x : QuoteNode(x)
+is_self_quoting(@nospecialize(x)) = !isa_ast_node(x)
+
+"""
+    quoted(x)
+
+Return `x` made safe for inserting as a constant into IR. Note that this does
+not make it safe for inserting into an AST, since eval will sometimes copy some
+types of AST object inside, and even may sometimes evaluate and interpolate any
+`\$` inside, depending on the context.
+"""
+quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
+
+# Implementation of generated functions
+function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
+    ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
+               ex, defmod, "none", 0, typemax(Csize_t), 0)[1]
+    if !isa(ci, CodeInfo)
+        if isa(ci, Expr) && ci.head === :error
+            msg = ci.args[1]
+            error(msg isa String ? strcat("syntax: ", msg) : msg)
+        end
+        error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
+    end
+    ci.isva = isva
+    code = ci.code
+    bindings = IdSet{Core.Binding}()
+    for i = 1:length(code)
+        stmt = code[i]
+        if isa(stmt, GlobalRef)
+            push!(bindings, convert(Core.Binding, stmt))
+        end
+    end
+    if !isempty(bindings)
+        ci.edges = Core.svec(bindings...)
+    end
+    return ci
+end
+
+# invoke and wrap the results of @generated expression
+function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
+    # args is (spvals..., argtypes...)
+    body = g.gen(args...)
+    file = source.file
+    file isa Symbol || (file = :none)
+    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
+               Expr(:var"scope-block",
+                    Expr(:block,
+                         LineNumberNode(Int(source.line), source.file),
+                         Expr(:meta, :push_loc, file, :var"@generated body"),
+                         Expr(:return, body),
+                         Expr(:meta, :pop_loc))))
+    spnames = g.spnames
+    return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
+        source.module,
+        source.isva)
 end

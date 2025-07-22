@@ -216,7 +216,7 @@ static void annotate_module_clones(Module &M) {
     if (auto maybe_specs = get_target_specs(M)) {
         specs = std::move(*maybe_specs);
     } else {
-        auto full_specs = jl_get_llvm_clone_targets();
+        auto full_specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
         specs.reserve(full_specs.size());
         for (auto &spec: full_specs) {
             specs.push_back(TargetSpec::fromSpec(spec));
@@ -767,7 +767,11 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
 }
 
 template<typename Stack>
+#if JL_LLVM_VERSION >= 200000
+static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, InsertPosition& insert_before)
+#else
 static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, Instruction *insert_before)
+#endif
 {
     SmallVector<Constant*, 8> args;
     uint32_t nlevel = stack.size();
@@ -828,9 +832,17 @@ static void replaceUsesWithLoad(Function &F, Type *T_size, I2GV should_replace, 
             GlobalVariable *slot = should_replace(*use_i);
             if (!slot)
                 continue;
+#if JL_LLVM_VERSION >= 200000
+            InsertPosition insert_before = use_i->getIterator();
+#else
             Instruction *insert_before = use_i;
+#endif
             if (auto phi = dyn_cast<PHINode>(use_i))
+#if JL_LLVM_VERSION >= 200000
+                insert_before = phi->getIncomingBlock(*info.use)->getTerminator()->getIterator();
+#else
                 insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
+#endif
             Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
             ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
@@ -884,11 +896,11 @@ static void emit_table(Module &M, Type *T_size, ArrayRef<Constant*> vars, String
     uint32_t nvars = vars.size();
     SmallVector<Constant*,0> castvars(nvars);
     for (size_t i = 0; i < nvars; i++)
-        castvars[i] = ConstantExpr::getBitCast(vars[i], T_size->getPointerTo());
+        castvars[i] = ConstantExpr::getBitCast(vars[i], PointerType::getUnqual(T_size->getContext()));
     auto gv = new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, ConstantInt::get(T_size, nvars), name + "_count" + suffix);
     gv->setVisibility(GlobalValue::HiddenVisibility);
     gv->setDSOLocal(true);
-    ArrayType *vars_type = ArrayType::get(T_size->getPointerTo(), nvars);
+    ArrayType *vars_type = ArrayType::get(PointerType::getUnqual(T_size->getContext()), nvars);
     gv = new GlobalVariable(M, vars_type, false,
                             GlobalVariable::ExternalLinkage,
                             ConstantArray::get(vars_type, castvars),
@@ -962,7 +974,7 @@ void CloneCtx::emit_metadata()
     {
         SmallVector<uint32_t, 0> idxs;
         SmallVector<Constant*, 0> fptrs;
-        Type *Tfptr = T_size->getPointerTo();
+        Type *Tfptr = PointerType::getUnqual(T_size->getContext());
         for (uint32_t i = 0; i < ntargets; i++) {
             auto tgt = linearized[i];
             auto &spec = specs[i];

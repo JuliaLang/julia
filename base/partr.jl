@@ -107,7 +107,6 @@ function multiq_sift_down(heap::taskheap, idx::Int32)
     end
 end
 
-
 function multiq_size(tpid::Int8)
     nt = UInt32(Threads._nthreads_in_pool(tpid))
     tp = tpid + 1
@@ -137,7 +136,6 @@ function multiq_size(tpid::Int8)
 
     return heap_p
 end
-
 
 function multiq_insert(task::Task, priority::UInt16)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), task)
@@ -171,10 +169,8 @@ function multiq_insert(task::Task, priority::UInt16)
     return true
 end
 
-
 function multiq_deletemin()
-    local rn1, rn2
-    local prio1, prio2
+    local rn1::UInt32
 
     tid = Threads.threadid()
     tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
@@ -207,6 +203,8 @@ function multiq_deletemin()
             unlock(tpheaps[rn1].lock)
         end
     end
+
+    @assert @isdefined(rn1) "Assertion to tell the compiler about the definedness of this variable"
 
     heap = tpheaps[rn1]
     task = heap.tasks[1]

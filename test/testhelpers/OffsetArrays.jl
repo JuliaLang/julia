@@ -5,7 +5,7 @@
 # This test file is designed to exercise support for generic indexing,
 # even though offset arrays aren't implemented in Base.
 
-# OffsetArrays v1.11.2
+# OffsetArrays v1.15.0
 # No compat patch and docstrings
 module OffsetArrays
 
@@ -73,10 +73,15 @@ end
 IdOffsetRange(r::IdOffsetRange) = r
 
 # Constructor to make `show` round-trippable
+# try to preserve typeof(values) if the indices are known to be 1-based
+_subtractindexoffset(values, indices::Union{Base.OneTo, IdentityUnitRange{<:Base.OneTo}}, offset) = values
+_subtractindexoffset(values, indices, offset) = _subtractoffset(values, offset)
 function IdOffsetRange(; values::AbstractUnitRange{<:Integer}, indices::AbstractUnitRange{<:Integer})
     length(values) == length(indices) || throw(ArgumentError("values and indices must have the same length"))
+    values_nooffset = no_offset_view(values)
     offset = first(indices) - 1
-    return IdOffsetRange(values .- offset, offset)
+    values_minus_offset = _subtractindexoffset(values_nooffset, indices, offset)
+    return IdOffsetRange(values_minus_offset, offset)
 end
 
 # Conversions to an AbstractUnitRange{Int} (and to an OrdinalRange{Int,Int} on Julia v"1.6") are necessary
@@ -110,12 +115,19 @@ offset_coerce(::Type{I}, r::AbstractUnitRange) where I<:AbstractUnitRange =
 @inline Base.unsafe_indices(r::IdOffsetRange) = (Base.axes1(r),)
 @inline Base.length(r::IdOffsetRange) = length(r.parent)
 @inline Base.isempty(r::IdOffsetRange) = isempty(r.parent)
+#= We specialize on reduced_indices to work around cases where the parent axis type doesn't
+support reduced_index, but the axes do support reduced_indices
+The difference is that reduced_index expects the axis type to remain unchanged,
+which may not always be possible, eg. for statically sized axes
+See https://github.com/JuliaArrays/OffsetArrays.jl/issues/204
+=#
+function Base.reduced_indices(inds::Tuple{IdOffsetRange, Vararg{IdOffsetRange}}, d::Int)
+    parents_reduced = Base.reduced_indices(map(parent, inds), d)
+    ntuple(i -> IdOffsetRange(parents_reduced[i], inds[i].offset), Val(length(inds)))
+end
 Base.reduced_index(i::IdOffsetRange) = typeof(i)(first(i):first(i))
 # Workaround for #92 on Julia < 1.4
 Base.reduced_index(i::IdentityUnitRange{<:IdOffsetRange}) = typeof(i)(first(i):first(i))
-for f in [:firstindex, :lastindex]
-    @eval @inline Base.$f(r::IdOffsetRange) = $f(r.parent) + r.offset
-end
 for f in [:first, :last]
     # coerce the type to deal with values that get promoted on addition (eg. Bool)
     @eval @inline Base.$f(r::IdOffsetRange) = eltype(r)($f(r.parent) + r.offset)
@@ -142,7 +154,7 @@ end
 @inline function Base.getindex(r::IdOffsetRange, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(r, i)
-    @inbounds eltype(r)(r.parent[oftype(r.offset, i) - r.offset] + r.offset)
+    @inbounds eltype(r)(r.parent[i - r.offset] + r.offset)
 end
 
 # Logical indexing following https://github.com/JuliaLang/julia/pull/31829
@@ -186,18 +198,20 @@ for R in [:IIUR, :IdOffsetRange]
 end
 
 # offset-preserve broadcasting
-Broadcast.broadcasted(::Base.Broadcast.DefaultArrayStyle{1}, ::typeof(-), r::IdOffsetRange{T}, x::Integer) where T =
-    IdOffsetRange{T}(r.parent .- x, r.offset)
-Broadcast.broadcasted(::Base.Broadcast.DefaultArrayStyle{1}, ::typeof(+), r::IdOffsetRange{T}, x::Integer) where T =
-    IdOffsetRange{T}(r.parent .+ x, r.offset)
-Broadcast.broadcasted(::Base.Broadcast.DefaultArrayStyle{1}, ::typeof(+), x::Integer, r::IdOffsetRange{T}) where T =
-    IdOffsetRange{T}(x .+ r.parent, r.offset)
+Broadcast.broadcasted(::Base.Broadcast.DefaultArrayStyle{1}, ::typeof(-), r::IdOffsetRange, x::Integer) =
+    IdOffsetRange(r.parent .- x, r.offset)
+Broadcast.broadcasted(::Base.Broadcast.DefaultArrayStyle{1}, ::typeof(+), r::IdOffsetRange, x::Integer) =
+    IdOffsetRange(r.parent .+ x, r.offset)
+Broadcast.broadcasted(::Base.Broadcast.DefaultArrayStyle{1}, ::typeof(+), x::Integer, r::IdOffsetRange) =
+    IdOffsetRange(x .+ r.parent, r.offset)
+Broadcast.broadcasted(::Base.Broadcast.DefaultArrayStyle{1}, ::typeof(big), r::IdOffsetRange) =
+    IdOffsetRange(big.(r.parent), r.offset)
 
 Base.show(io::IO, r::IdOffsetRange) = print(io, IdOffsetRange, "(values=",first(r), ':', last(r),", indices=",first(eachindex(r)),':',last(eachindex(r)), ")")
 
 # Optimizations
 @inline Base.checkindex(::Type{Bool}, inds::IdOffsetRange, i::Real) = Base.checkindex(Bool, inds.parent, i - inds.offset)
-Base._firstslice(r::IdOffsetRange) = IdOffsetRange(Base._firstslice(r.parent), r.offset)
+Base._firstslice(i::IdOffsetRange) = IdOffsetRange(Base._firstslice(i.parent), i.offset)
 
 ########################################################################################################
 # origin.jl
@@ -309,12 +323,12 @@ _popreshape(A::AbstractArray, ax, inds) = A
 
 # Technically we know the length of CartesianIndices but we need to convert it first, so here we
 # don't put it in OffsetAxisKnownLength.
-const OffsetAxisKnownLength = Union{Integer,AbstractUnitRange}
-const OffsetAxis = Union{OffsetAxisKnownLength,Colon}
-const ArrayInitializer = Union{UndefInitializer,Missing,Nothing}
+const OffsetAxisKnownLength = Union{Integer, AbstractUnitRange}
+const OffsetAxis = Union{OffsetAxisKnownLength, Colon}
+const ArrayInitializer = Union{UndefInitializer, Missing, Nothing}
 
 ## OffsetArray
-struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
+struct OffsetArray{T,N,AA<:AbstractArray{T,N}} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
     @inline function OffsetArray{T, N, AA}(parent::AA, offsets::NTuple{N, Int}; checkoverflow = true) where {T, N, AA<:AbstractArray{T,N}}
@@ -482,6 +496,10 @@ Base.parent(A::OffsetArray) = A.parent
 # Base.Broadcast.BroadcastStyle(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA = Base.Broadcast.BroadcastStyle(AA)
 
 @inline Base.size(A::OffsetArray) = size(parent(A))
+# specializing length isn't necessary, as length(A) = prod(size(A)),
+# but specializing length enables constant-propagation for statically sized arrays
+# see https://github.com/JuliaArrays/OffsetArrays.jl/pull/304
+@inline Base.length(A::OffsetArray) = length(parent(A))
 
 @inline Base.axes(A::OffsetArray) = map(IdOffsetRange, axes(parent(A)), A.offsets)
 @inline Base.axes(A::OffsetArray, d) = d <= ndims(A) ? IdOffsetRange(axes(parent(A), d), A.offsets[d]) : IdOffsetRange(axes(parent(A), d))
@@ -528,7 +546,9 @@ _similar_axes_or_length(A, T, ax::I, ::I) where {I} = similar(A, T, map(_indexle
 _similar_axes_or_length(AT, ax::I, ::I) where {I} = similar(AT, map(_indexlength, ax))
 
 # reshape accepts a single colon
-Base.reshape(A::AbstractArray, inds::OffsetAxis...) = reshape(A, inds)
+# this method is limited to AbstractUnitRange{<:Integer} to avoid method overwritten errors if Base defines the same,
+# see https://github.com/JuliaLang/julia/pull/56850
+Base.reshape(A::AbstractArray, inds::Union{Integer, Colon, AbstractUnitRange{<:Integer}}...) = reshape(A, inds)
 function Base.reshape(A::AbstractArray, inds::Tuple{Vararg{OffsetAxis}})
     AR = reshape(no_offset_view(A), map(_indexlength, inds))
     O = OffsetArray(AR, map(_offset, axes(AR), inds))
@@ -553,21 +573,9 @@ _reshape2(A, inds) = reshape(A, inds)
 _reshape2(A::OffsetArray, inds) = reshape(parent(A), inds)
 _reshape_nov(A, inds) = _reshape(no_offset_view(A), inds)
 
-Base.reshape(A::OffsetArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) =
-    OffsetArray(_reshape(parent(A), inds), map(_toaxis, inds))
 # And for non-offset axes, we can just return a reshape of the parent directly
-Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{Integer,Base.OneTo}}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Tuple{Integer,Vararg{Integer}}) = _reshape_nov(A, inds)
-Base.reshape(A::OffsetArray, inds::Tuple{Union{Colon, Integer}, Vararg{Union{Colon, Integer}}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
-Base.reshape(A::OffsetVector, ::Colon) = A
-Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
-Base.reshape(A::OffsetArray, inds::Union{Int,Colon}...) = reshape(A, inds)
-Base.reshape(A::OffsetArray, inds::Tuple{Vararg{Union{Int,Colon}}}) = _reshape_nov(A, inds)
-# The following two additional methods for Colon are added to resolve method ambiguities to
-# Base: https://github.com/JuliaLang/julia/pull/45387#issuecomment-1132859663
-Base.reshape(A::OffsetArray, inds::Colon) = _reshape_nov(A, inds)
-Base.reshape(A::OffsetArray, inds::Tuple{Colon}) = _reshape_nov(A, inds)
 
 # permutedims in Base does not preserve axes, and can not be fixed in a non-breaking way
 # This is a stopgap solution
@@ -583,7 +591,7 @@ Base.fill!(A::OffsetArray, x) = parent_call(Ap -> fill!(Ap, x), A)
 #   Δi = i - first(r)
 #   i′ = first(r.parent) + Δi
 # and one obtains the result below.
-parentindex(r::IdOffsetRange, i) = oftype(r.offset, i) - r.offset
+parentindex(r::IdOffsetRange, i) = i - r.offset
 
 @propagate_inbounds Base.getindex(A::OffsetArray{<:Any,0})  = A.parent[]
 
@@ -632,7 +640,7 @@ Base.copy(A::OffsetArray) = parent_call(copy, A)
 
 Base.strides(A::OffsetArray) = strides(parent(A))
 Base.elsize(::Type{OffsetArray{T,N,A}}) where {T,N,A} = Base.elsize(A)
-Base.cconvert(::Type{Ptr{T}}, A::OffsetArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
+Base.cconvert(P::Type{Ptr{T}}, A::OffsetArray{T}) where {T} = Base.cconvert(P, parent(A))
 
 # For fast broadcasting: ref https://discourse.julialang.org/t/why-is-there-a-performance-hit-on-broadcasting-with-offsetarrays/32194
 Base.dataids(A::OffsetArray) = Base.dataids(parent(A))
@@ -732,15 +740,6 @@ if eltype(IIUR) === Int
     Base.map(::Type{T}, r::IdentityUnitRange) where {T<:Real} = _indexedby(map(T, UnitRange(r)), axes(r))
 end
 
-# mapreduce is faster with an IdOffsetRange than with an OffsetUnitRange
-# We therefore convert OffsetUnitRanges to IdOffsetRanges with the same values and axes
-function Base.mapreduce(f, op, A1::OffsetUnitRange{<:Integer}, As::OffsetUnitRange{<:Integer}...; kw...)
-    As = (A1, As...)
-    ofs = map(A -> first(axes(A,1)) - 1, As)
-    AIds = map((A, of) -> IdOffsetRange(_subtractoffset(parent(A), of), of), As, ofs)
-    mapreduce(f, op, AIds...; kw...)
-end
-
 # Optimize certain reductions that treat an OffsetVector as a list
 for f in [:minimum, :maximum, :extrema, :sum]
     @eval Base.$f(r::OffsetRange) = $f(parent(r))
@@ -762,7 +761,8 @@ Base.append!(A::OffsetVector, items) = (append!(A.parent, items); A)
 Base.empty!(A::OffsetVector) = (empty!(A.parent); A)
 
 # These functions keep the summary compact
-function Base.inds2string(inds::Tuple{Vararg{Union{IdOffsetRange, IdentityUnitRange{<:IdOffsetRange}}}})
+const OffsetIndices = Union{IdOffsetRange, IdentityUnitRange{<:IdOffsetRange}}
+function Base.inds2string(inds::Tuple{OffsetIndices, Vararg{OffsetIndices}})
     Base.inds2string(map(UnitRange, inds))
 end
 Base.showindices(io::IO, ind1::IdOffsetRange, inds::IdOffsetRange...) = Base.showindices(io, map(UnitRange, (ind1, inds...))...)
@@ -786,7 +786,33 @@ function Base.replace_in_print_matrix(A::OffsetArray{<:Any,1}, i::Integer, j::In
     Base.replace_in_print_matrix(parent(A), ip, j, s)
 end
 
+# Actual unsafe_wrap implementation
+@inline function _unsafe_wrap(pointer::Ptr{T}, inds::NTuple{N, OffsetAxisKnownLength}; own = false, kw...) where {T,N}
+    _checkindices(N, inds, "indices")
+    AA = Base.unsafe_wrap(Array, pointer, map(_indexlength, inds); own=own)
+    OffsetArray{T, N, typeof(AA)}(AA, map(_indexoffset, inds); kw...)
+end
+const OffsetArrayUnion{T,N} = Union{Type{OffsetArray}, Type{OffsetArray{T}}, Type{OffsetArray{T,N}}, Type{OffsetArray{T1, N} where T1}} where {T,N}
+
+@inline function Base.unsafe_wrap(::OffsetArrayUnion{T,N}, pointer::Ptr{T}, inds::NTuple{N, OffsetAxisKnownLength}; kw...) where {T,N}
+    _unsafe_wrap(pointer, inds; kw...)
+end
+# Avoid ambiguity
+@inline function Base.unsafe_wrap(::OffsetArrayUnion{T,N}, pointer::Ptr{T}, inds::NTuple{N, <:Integer}; kw...) where {T,N}
+    _unsafe_wrap(pointer, inds; kw...)
+end
+@inline function Base.unsafe_wrap(::OffsetArrayUnion{T,N}, pointer::Ptr{T}, inds::Vararg{OffsetAxisKnownLength,N}; kw...) where {T,N}
+    _unsafe_wrap(pointer, inds; kw...)
+end
+# Avoid ambiguity
+@inline function Base.unsafe_wrap(::OffsetArrayUnion{T,N}, pointer::Ptr{T}, inds::Vararg{Integer,N}; kw...) where {T,N}
+    _unsafe_wrap(pointer, inds; kw...)
+end
+
 no_offset_view(A::OffsetArray) = no_offset_view(parent(A))
+no_offset_view(a::Base.Slice{<:Base.OneTo}) = a
+no_offset_view(a::Base.Slice) = Base.Slice(UnitRange(a))
+no_offset_view(S::SubArray) = view(parent(S), map(no_offset_view, parentindices(S))...)
 no_offset_view(a::Array) = a
 no_offset_view(i::Number) = i
 no_offset_view(A::AbstractArray) = _no_offset_view(axes(A), A)
@@ -802,9 +828,12 @@ _no_offset_view(::Any, A::AbstractUnitRange) = UnitRange(A)
 # These two helpers are deliberately not exported; their meaning can be very different in
 # other scenarios and will be very likely to cause name conflicts if exported.
 #####
+
+_halfroundInt(v, r::RoundingMode) = div(v, 2, r)
+
 function center(A::AbstractArray, r::RoundingMode=RoundDown)
     map(axes(A)) do inds
-        round(Int, (length(inds)-1)/2, r) + first(inds)
+        _halfroundInt(length(inds)-1, r) + first(inds)
     end
 end
 

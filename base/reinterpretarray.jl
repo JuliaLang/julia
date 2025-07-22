@@ -271,7 +271,8 @@ SCartesianIndices2{K}(indices2::AbstractUnitRange{Int}) where {K} = (@assert K::
 eachindex(::IndexSCartesian2{K}, A::ReshapedReinterpretArray) where {K} = SCartesianIndices2{K}(eachindex(IndexLinear(), parent(A)))
 @inline function eachindex(style::IndexSCartesian2{K}, A::AbstractArray, B::AbstractArray...) where {K}
     iter = eachindex(style, A)
-    _all_match_first(C->eachindex(style, C), iter, B...) || throw_eachindex_mismatch_indices(IndexSCartesian2{K}(), axes(A), axes.(B)...)
+    itersBs = map(C->eachindex(style, C), B)
+    all(==(iter), itersBs) || throw_eachindex_mismatch_indices("axes", axes(A), map(axes, B)...)
     return iter
 end
 
@@ -313,13 +314,13 @@ end
 _maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
 
 # fallbacks
-function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
+function _getindex(::IndexSCartesian2, A::AbstractArray, I::Vararg{Int, N}) where {N}
     @_propagate_inbounds_meta
-    getindex(A, I...)
+    _getindex(IndexCartesian(), A, I...)
 end
-function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
+function _setindex!(::IndexSCartesian2, A::AbstractArray, v, I::Vararg{Int, N}) where {N}
     @_propagate_inbounds_meta
-    setindex!(A, v, I...)
+    _setindex!(IndexCartesian(), A, v, I...)
 end
 # fallbacks for array types that use "pass-through" indexing (e.g., `IndexStyle(A) = IndexStyle(parent(A))`)
 # but which don't handle SCartesianIndex2
@@ -390,7 +391,7 @@ check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
 check_ptr_indexable(a::Memory, sz) = true
 check_ptr_indexable(a::AbstractArray, sz) = false
 
-@propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
+@propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
@@ -411,7 +412,7 @@ end
     # Convert to full indices here, to avoid needing multiple conversions in
     # the loop in _getindex_ra
     inds = _to_subscript_indices(a, i)
-    isempty(inds) ? _getindex_ra(a, 1, ()) : _getindex_ra(a, inds[1], tail(inds))
+    isempty(inds) ? _getindex_ra(a, firstindex(a), ()) : _getindex_ra(a, inds[1], tail(inds))
 end
 
 @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
@@ -534,13 +535,13 @@ end
 
 @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
     if isprimitivetype(S) && isprimitivetype(T)
-        a.parent[] = reinterpret(S, v)
+        a.parent[] = reinterpret(S, convert(T, v)::T)
         return a
     end
     setindex!(a, v, firstindex(a))
 end
 
-@propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
+@propagate_inbounds setindex!(a::ReshapedReinterpretArray{T,0}, v) where {T} = setindex!(a, v, firstindex(a))
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
@@ -555,7 +556,7 @@ end
         return _setindex_ra!(a, v, i, ())
     end
     inds = _to_subscript_indices(a, i)
-    _setindex_ra!(a, v, inds[1], tail(inds))
+    isempty(inds) ? _setindex_ra!(a, v, firstindex(a), ()) : _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}
@@ -871,25 +872,34 @@ end
         return out[]
     else
         # mismatched padding
-        GC.@preserve in out begin
-            ptr_in = unsafe_convert(Ptr{In}, in)
-            ptr_out = unsafe_convert(Ptr{Out}, out)
+        return _reinterpret_padding(Out, x)
+    end
+end
 
-            if fieldcount(In) > 0 && ispacked(Out)
-                _copytopacked!(ptr_out, ptr_in)
-            elseif fieldcount(Out) > 0 && ispacked(In)
-                _copyfrompacked!(ptr_out, ptr_in)
-            else
-                packed = Ref{NTuple{inpackedsize, UInt8}}()
-                GC.@preserve packed begin
-                    ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
-                    _copytopacked!(ptr_packed, ptr_in)
-                    _copyfrompacked!(ptr_out, ptr_packed)
-                end
+# If the code reaches this part, it needs to handle padding and is unlikely
+# to compile to a noop. Therefore, we don't forcibly inline it.
+function _reinterpret_padding(::Type{Out}, x::In) where {Out, In}
+    inpackedsize = packedsize(In)
+    in = Ref{In}(x)
+    out = Ref{Out}()
+    GC.@preserve in out begin
+        ptr_in = unsafe_convert(Ptr{In}, in)
+        ptr_out = unsafe_convert(Ptr{Out}, out)
+
+        if fieldcount(In) > 0 && ispacked(Out)
+            _copytopacked!(ptr_out, ptr_in)
+        elseif fieldcount(Out) > 0 && ispacked(In)
+            _copyfrompacked!(ptr_out, ptr_in)
+        else
+            packed = Ref{NTuple{inpackedsize, UInt8}}()
+            GC.@preserve packed begin
+                ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
+                _copytopacked!(ptr_packed, ptr_in)
+                _copyfrompacked!(ptr_out, ptr_packed)
             end
         end
-        return out[]
     end
+    return out[]
 end
 
 

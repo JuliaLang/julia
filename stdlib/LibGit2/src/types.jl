@@ -237,6 +237,9 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
     @static if LibGit2.VERSION >= v"0.99.0"
         resolve_url::Ptr{Cvoid}        = C_NULL
     end
+    @static if LibGit2.VERSION >= v"1.9.0"
+        update_refs::Ptr{Cvoid}        = C_NULL
+    end
 end
 @assert Base.allocatedinline(RemoteCallbacks)
 
@@ -924,7 +927,9 @@ struct ConfigEntry
     end
     include_depth::Cuint
     level::GIT_CONFIG
-    free::Ptr{Cvoid}
+    @static if LibGit2.VERSION < v"1.9.0"
+        free::Ptr{Cvoid}
+    end
     @static if LibGit2.VERSION < v"1.8.0"
         # In 1.8.0, the unused payload value has been removed
         payload::Ptr{Cvoid}
@@ -937,7 +942,18 @@ function Base.show(io::IO, ce::ConfigEntry)
 end
 
 """
-    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+    LibGit2.ConfigBackendEntry
+
+Matches the [`git_config_backend_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_backend_entry) struct.
+"""
+struct ConfigBackendEntry
+    entry::ConfigEntry
+    free::Ptr{Cvoid}
+end
+@assert Base.allocatedinline(ConfigBackendEntry)
+
+"""
+    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry)::Tuple{String,String,String,String}
 
 Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
 
@@ -1138,15 +1154,20 @@ The fields represent:
     * `final_commit_id`: the [`GitHash`](@ref) of the commit where this section was last changed.
     * `final_start_line_number`: the *one based* line number in the file where the
        hunk starts, in the *final* version of the file.
-    * `final_signature`: the signature of the person who last modified this hunk. You will
+    * `final_signature`: the signature of the author of `final_commit_id`. You will
+       need to pass this to `Signature` to access its fields.
+    * `final_committer`: the signature of the committer of `final_commit_id`. You will
        need to pass this to `Signature` to access its fields.
     * `orig_commit_id`: the [`GitHash`](@ref) of the commit where this hunk was first found.
     * `orig_path`: the path to the file where the hunk originated. This may be different
        than the current/final path, for instance if the file has been moved.
     * `orig_start_line_number`: the *one based* line number in the file where the
        hunk starts, in the *original* version of the file at `orig_path`.
-    * `orig_signature`: the signature of the person who introduced this hunk. You will
+    * `orig_signature`: the signature of the author who introduced this hunk. You will
        need to pass this to `Signature` to access its fields.
+    * `orig_committer`: the signature of the committer who introduced this hunk. You will
+       need to pass this to `Signature` to access its fields.
+    * `summary`: a string summary.
     * `boundary`: `'1'` if the original commit is a "boundary" commit (for instance, if it's
        equal to an oldest commit set in `options`).
 """
@@ -1156,12 +1177,21 @@ The fields represent:
     final_commit_id::GitHash              = GitHash()
     final_start_line_number::Csize_t      = Csize_t(0)
     final_signature::Ptr{SignatureStruct} = Ptr{SignatureStruct}(C_NULL)
+    @static if LibGit2.VERSION >= v"1.9.0"
+        final_committer::Ptr{SignatureStruct} = Ptr{SignatureStruct}(C_NULL)
+    end
 
     orig_commit_id::GitHash               = GitHash()
     orig_path::Cstring                    = Cstring(C_NULL)
     orig_start_line_number::Csize_t       = Csize_t(0)
     orig_signature::Ptr{SignatureStruct}  = Ptr{SignatureStruct}(C_NULL)
+    @static if LibGit2.VERSION >= v"1.9.0"
+        orig_committer::Ptr{SignatureStruct}  = Ptr{SignatureStruct}(C_NULL)
+    end
 
+    @static if LibGit2.VERSION >= v"1.9.0"
+        summary::Cstring                      = Cstring(C_NULL)
+    end
     boundary::Char                        = '\0'
 end
 @assert Base.allocatedinline(BlameHunk)
@@ -1242,7 +1272,7 @@ end
 abstract type AbstractCredential end
 
 """
-    isfilled(cred::AbstractCredential) -> Bool
+    isfilled(cred::AbstractCredential)::Bool
 
 Verifies that a credential is ready for use in authentication.
 """
@@ -1414,7 +1444,7 @@ function Base.shred!(p::CredentialPayload)
 end
 
 """
-    reset!(payload, [config]) -> CredentialPayload
+    reset!(payload, [config])::CredentialPayload
 
 Reset the `payload` state back to the initial values so that it can be used again within
 the credential callback. If a `config` is provided the configuration will also be updated.
@@ -1436,7 +1466,7 @@ function reset!(p::CredentialPayload, config::GitConfig=p.config)
 end
 
 """
-    approve(payload::CredentialPayload; shred::Bool=true) -> Nothing
+    approve(payload::CredentialPayload; shred::Bool=true) -> nothing
 
 Store the `payload` credential for re-use in a future authentication. Should only be called
 when authentication was successful.
@@ -1467,7 +1497,7 @@ function approve(p::CredentialPayload; shred::Bool=true)
 end
 
 """
-    reject(payload::CredentialPayload; shred::Bool=true) -> Nothing
+    reject(payload::CredentialPayload; shred::Bool=true) -> nothing
 
 Discard the `payload` credential from begin re-used in future authentication. Should only be
 called when authentication was unsuccessful.

@@ -59,7 +59,7 @@ julia> 1234
 The default type for an integer literal depends on whether the target system has a 32-bit architecture
 or a 64-bit architecture:
 
-```julia-repl
+```julia-repl ; nodoctest = "Results depend on system word size"
 # 32-bit system:
 julia> typeof(1)
 Int32
@@ -72,7 +72,7 @@ Int64
 The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
 or 64-bit:
 
-```julia-repl
+```julia-repl ; nodoctest = "Results depend on system word size"
 # 32-bit system:
 julia> Sys.WORD_SIZE
 32
@@ -85,7 +85,7 @@ julia> Sys.WORD_SIZE
 Julia also defines the types `Int` and `UInt`, which are aliases for the system's signed and unsigned
 native integer types respectively:
 
-```julia-repl
+```julia-repl ; nodoctest = "Results depend on system word size"
 # 32-bit system:
 julia> Int
 Int32
@@ -334,8 +334,8 @@ julia> typeof(x)
 Float64
 ```
 
-Half-precision floating-point numbers are also supported ([`Float16`](@ref)), but they are
-implemented in software and use [`Float32`](@ref) for calculations.
+Half-precision floating-point numbers are also supported ([`Float16`](@ref)) on all platforms, with native instructions used on hardware which supports this number format. Otherwise, operations are implemented in software, and use [`Float32`](@ref) for intermediate calculations.
+As an internal implementation detail, this is achieved under the hood by using LLVM's [`half`](https://llvm.org/docs/LangRef.html#half-precision-floating-point-intrinsics) type, which behaves similarly to what the GCC [`-fexcess-precision=16`](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-fexcess-precision) flag does for C/C++ code.
 
 ```jldoctest
 julia> sizeof(Float16(4.))
@@ -600,7 +600,7 @@ julia> parse(BigFloat, "1.23456789012345678901")
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
 julia> BigFloat(2.0^66) / 3
-2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19
+2.459565876494606882133333333333333333333333333333333333333333333333333333333344e19
 
 julia> factorial(BigInt(40))
 815915283247897734345611269596115894272000000000

@@ -37,7 +37,7 @@ function cleanup(r::GitRepo)
 end
 
 """
-    LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo
+    LibGit2.init(path::AbstractString, bare::Bool=false)::GitRepo
 
 Open a new git repository at `path`. If `bare` is `false`,
 the working tree will be created in `path/.git`. If `bare`
@@ -52,7 +52,7 @@ function init(path::AbstractString, bare::Bool=false)
 end
 
 """
-    LibGit2.head_oid(repo::GitRepo) -> GitHash
+    LibGit2.head_oid(repo::GitRepo)::GitHash
 
 Lookup the object id of the current HEAD of git
 repository `repo`.
@@ -85,7 +85,7 @@ function headname(repo::GitRepo)
 end
 
 """
-    isbare(repo::GitRepo) -> Bool
+    isbare(repo::GitRepo)::Bool
 
 Determine if `repo` is bare. Suppose the top level directory of `repo` is `DIR`.
 A non-bare repository is one in which the git directory (see [`gitdir`](@ref)) is
@@ -101,7 +101,7 @@ function isbare(repo::GitRepo)
 end
 
 """
-    isattached(repo::GitRepo) -> Bool
+    isattached(repo::GitRepo)::Bool
 
 Determine if `repo` is detached - that is, whether its HEAD points to a commit
 (detached) or whether HEAD points to a branch tip (attached).
@@ -330,7 +330,7 @@ function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptio
 end
 
 """
-    LibGit2.format(result::GitDescribeResult; kwarg...) -> String
+    LibGit2.format(result::GitDescribeResult; kwarg...)::String
 
 Produce a formatted string based on a `GitDescribeResult`.
 Formatting options are controlled by the keyword argument:
@@ -474,7 +474,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString,
 end
 
 """
-    fetchheads(repo::GitRepo) -> Vector{FetchHead}
+    fetchheads(repo::GitRepo)::Vector{FetchHead}
 
 Return the list of all the fetch heads for `repo`, each represented as a [`FetchHead`](@ref),
 including their names, URLs, and merge statuses.

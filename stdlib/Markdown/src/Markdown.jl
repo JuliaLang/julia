@@ -35,6 +35,8 @@ include("render/terminal/render.jl")
 
 export @md_str, @doc_str
 
+public MD, parse
+
 const MARKDOWN_FACES = [
     :markdown_header => Face(weight=:bold),
     :markdown_h1 => Face(height=1.25, inherit=:markdown_header),
@@ -57,7 +59,16 @@ const MARKDOWN_FACES = [
 __init__() = foreach(addface!, MARKDOWN_FACES)
 
 parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
+
+"""
+    Markdown.parse(markdown::AbstractString)::MD
+
+Parse `markdown` as Julia-flavored Markdown text and return the corresponding `MD` object.
+
+See also [`@md_str`](@ref).
+"""
 parse(markdown::AbstractString; flavor = julia) = parse(String(markdown), flavor = flavor)
+
 parse_file(file::AbstractString; flavor = julia) = parse(read(file, String), flavor = flavor)
 
 function mdexpr(s, flavor = :julia)
@@ -73,6 +84,8 @@ end
     @md_str -> MD
 
 Parse the given string as Markdown text and return a corresponding [`MD`](@ref) object.
+
+See also [`Markdown.parse`](@ref Markdown.parse(::AbstractString)).
 
 # Examples
 ```jldoctest
@@ -125,12 +138,16 @@ catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
     # workload to reduce latency
-    md"""
+    show(devnull, MIME("text/plain"), md"""
     # H1
     ## H2
     ### H3
+    #### H4
+    ##### H5
+    ###### H6
     **bold text**
     *italicized text*
+    ***bold and italicized text***
     > blockquote
     1. First item
     2. Second item
@@ -138,10 +155,18 @@ if Base.generating_output()
     - First item
     - Second item
     - Third item
+        - Indented item
     `code`
     Horizontal Rule
     ---
-    """
+    **[Duck Duck Go](https://duckduckgo.com)**
+    <https://www.markdownguide.org>
+    <fake@example.com>
+    ![The San Juan Mountains are beautiful!](/assets/images/san-juan-mountains.jpg "San Juan Mountains")
+
+    H~2~O
+    X^2^
+    """)
 end
 
 end

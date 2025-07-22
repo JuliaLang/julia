@@ -5,7 +5,6 @@
   . non-moving, precise mark and sweep collector
   . pool-allocates small objects, keeps big objects on a simple list
 */
-
 #ifndef JL_GC_H
 #define JL_GC_H
 
@@ -20,6 +19,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "threading.h"
+#include "gc-common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,7 +44,6 @@ typedef struct {
 } jl_alloc_num_t;
 
 typedef struct {
-    int always_full;
     int wait_for_debugger;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
@@ -84,27 +83,6 @@ typedef struct _jl_gc_chunk_t {
 // layout for big (>2k) objects
 
 extern uintptr_t gc_bigval_sentinel_tag;
-
-JL_EXTENSION typedef struct _bigval_t {
-    struct _bigval_t *next;
-    struct _bigval_t *prev;
-    size_t sz;
-#ifdef _P64 // Add padding so that the value is 64-byte aligned
-    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
-    void *_padding[8 - 4];
-#else
-    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
-    void *_padding[16 - 4];
-#endif
-    //struct jl_taggedvalue_t <>;
-    union {
-        uintptr_t header;
-        struct {
-            uintptr_t gc:2;
-        } bits;
-    };
-    // must be 64-byte aligned here, in 32 & 64 bit modes
-} bigval_t;
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
@@ -386,15 +364,6 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_page_metadata_back(jl_gc_pagemeta_t **ppg) J
     return v;
 }
 
-#ifdef __clang_gcanalyzer__ /* clang may not have __builtin_ffs */
-unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
-#else
-STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
-{
-    return __builtin_ffs(bitvec) - 1;
-}
-#endif
-
 extern bigval_t *oldest_generation_of_bigvals;
 extern int64_t buffered_pages;
 extern int gc_first_tid;
@@ -519,9 +488,6 @@ extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
 extern _Atomic(int) gc_n_threads_sweeping_pools;
-extern _Atomic(int) gc_n_threads_sweeping_stacks;
-extern _Atomic(int) gc_ptls_sweep_idx;
-extern _Atomic(int) gc_stack_free_idx;
 extern _Atomic(int) n_threads_running;
 extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
@@ -680,14 +646,12 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
-#define gc_sweep_always_full jl_gc_debug_env.always_full
 int jl_gc_debug_check_other(void);
 int gc_debug_check_pool(void);
 void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
-#define gc_sweep_always_full 0
 static inline int jl_gc_debug_check_other(void)
 {
     return 0;

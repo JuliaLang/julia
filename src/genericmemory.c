@@ -56,7 +56,7 @@ jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t is
 {
     if (nel == 0) // zero-sized allocation optimization
         return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
-    size_t nbytes;
+    size_t nbytes = 0; // initialized to workaround clang sa bug on v20: https://github.com/llvm/llvm-project/issues/136292
     int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
@@ -152,7 +152,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
-    size_t nbytes;
+    size_t nbytes = 0; // initialized to workaround clang sa bug on v20: https://github.com/llvm/llvm-project/issues/136292
     int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
@@ -197,7 +197,6 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     }
     int how = jl_genericmemory_how(m);
     size_t mlength = m->length;
-    m->length = 0;
     if (how != 0) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
         jl_genericmemory_data_owner_field(m) = NULL;
@@ -235,36 +234,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         _Atomic(void*) * dest_p = (_Atomic(void*)*)destdata;
         _Atomic(void*) * src_p = (_Atomic(void*)*)srcdata;
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
-            jl_value_t *src_owner = jl_genericmemory_owner(src);
-            ssize_t done = 0;
-            if (jl_astaggedvalue(src_owner)->bits.gc != GC_OLD_MARKED) {
-                if (dest_p < src_p || dest_p > src_p + n) {
-                    for (; done < n; done++) { // copy forwards
-                        void *val = jl_atomic_load_relaxed(src_p + done);
-                        jl_atomic_store_release(dest_p + done, val);
-                        // `val` is young or old-unmarked
-                        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
-                            jl_gc_queue_root(owner);
-                            break;
-                        }
-                    }
-                    src_p += done;
-                    dest_p += done;
-                } else {
-                    for (; done < n; done++) { // copy backwards
-                        void *val = jl_atomic_load_relaxed(src_p + n - done - 1);
-                        jl_atomic_store_release(dest_p + n - done - 1, val);
-                        // `val` is young or old-unmarked
-                        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
-                            jl_gc_queue_root(owner);
-                            break;
-                        }
-                    }
-                }
-                n -= done;
-            }
-        }
+        jl_gc_wb_genericmemory_copy_boxed(owner, dest_p, src, src_p, &n);
         return memmove_refs(dest_p, src_p, n);
     }
     size_t elsz = layout->size;
@@ -280,17 +250,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
     if (layout->first_ptr != -1) {
         memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
-            jl_value_t *src_owner = jl_genericmemory_owner(src);
-            if (jl_astaggedvalue(src_owner)->bits.gc != GC_OLD_MARKED) {
-                dt = (jl_datatype_t*)jl_tparam1(dt);
-                for (size_t done = 0; done < n; done++) { // copy forwards
-                    char* s = (char*)src_p+done*elsz;
-                    if (*((jl_value_t**)s+layout->first_ptr) != NULL)
-                        jl_gc_queue_multiroot(owner, s, dt);
-                }
-            }
-        }
+        jl_gc_wb_genericmemory_copy_ptr(owner, src, src_p, n, dt);
     }
     else {
         memmove(destdata, srcdata, n * elsz);
@@ -322,6 +282,9 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
     else if (layout->first_ptr != -1) {
+        if (data == NULL) {
+            assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
+        }
         memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
     }
     else if (data != NULL) {

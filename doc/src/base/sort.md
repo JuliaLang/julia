@@ -39,9 +39,9 @@ julia> a
 Instead of directly sorting an array, you can compute a permutation of the array's
 indices that puts the array into sorted order:
 
-```julia-repl
-julia> v = randn(5)
-5-element Array{Float64,1}:
+```jldoctest sort_example
+julia> v = [0.297288, 0.382396, -0.597634, -0.0104452, -0.839027]
+5-element Vector{Float64}:
   0.297288
   0.382396
  -0.597634
@@ -49,7 +49,7 @@ julia> v = randn(5)
  -0.839027
 
 julia> p = sortperm(v)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  5
  3
  4
@@ -57,7 +57,7 @@ julia> p = sortperm(v)
  2
 
 julia> v[p]
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.839027
  -0.597634
  -0.0104452
@@ -67,9 +67,9 @@ julia> v[p]
 
 Arrays can be sorted according to an arbitrary transformation of their values:
 
-```julia-repl
+```jldoctest sort_example
 julia> sort(v, by=abs)
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.0104452
   0.297288
   0.382396
@@ -79,9 +79,9 @@ julia> sort(v, by=abs)
 
 Or in reverse order by a transformation:
 
-```julia-repl
+```jldoctest sort_example
 julia> sort(v, by=abs, rev=true)
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.839027
  -0.597634
   0.382396
@@ -91,9 +91,9 @@ julia> sort(v, by=abs, rev=true)
 
 If needed, the sorting algorithm can be chosen:
 
-```julia-repl
+```jldoctest sort_example
 julia> sort(v, alg=InsertionSort)
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.839027
  -0.597634
  -0.0104452

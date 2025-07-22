@@ -312,7 +312,14 @@
     end
 
     @testset "uripath" begin
-        host = if Sys.iswindows() "" else gethostname() end
+        host = if Sys.iswindows()
+            ""
+        elseif Sys.detectwsl()
+            distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
+            "wsl%24/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
+        else
+            gethostname()
+        end
         sysdrive, uridrive = if Sys.iswindows() "C:\\", "C:/" else "/", "" end
         @test Base.Filesystem.uripath("$(sysdrive)some$(sep)file.txt") == "file://$host/$(uridrive)some/file.txt"
         @test Base.Filesystem.uripath("$(sysdrive)another$(sep)$(sep)folder$(sep)file.md") == "file://$host/$(uridrive)another/folder/file.md"
