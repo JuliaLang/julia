@@ -3232,7 +3232,7 @@ end
         for islinear in (false, true)
             I = islinear ? i : (i, j, k)
 
-            # don't test scalar setindex
+            # don't test scalar setindex here
             all(x -> x isa Int, I) && continue
 
             X = ones((length(i) for i in I if i != 1)...)

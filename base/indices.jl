@@ -212,10 +212,6 @@ end
 
 const IntegerOrTuple = Union{Integer, Tuple{Vararg{Integer}}}
 
-flatten(::Tuple{}) = ()
-flatten(I::Tuple{Any}) = Tuple(I[1])
-flatten(I::Tuple) = (@inline; (Tuple(I[1])..., flatten(tail(I))...))
-
 _nnprod() = 1
 _nnprod(i::Integer, I::Integer...) =
     (i == -1) ? _nnprod(I...) : i * _nnprod(I...)
