@@ -10,7 +10,7 @@ module IteratorsMD
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
     import Core: Tuple
-    using .Base: to_index, fill_to_length, tail, safe_tail
+    using .Base: to_index, fill_to_length, tail, safe_tail, flatten
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex,
         ReshapedArray, ReshapedArrayLF, OneTo, Fix1
     using .Base.Iterators: Reverse, PartitionIterator
@@ -86,7 +86,7 @@ module IteratorsMD
     CartesianIndex{N}() where {N} = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
     CartesianIndex{N}(index::CartesianIndex{N}) where {N} = index
-    CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(Base.flatten(index))
+    CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
     function show(io::IO, i::CartesianIndex)
         print(io, "CartesianIndex(")

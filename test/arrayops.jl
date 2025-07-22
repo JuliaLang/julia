@@ -3219,6 +3219,45 @@ end
     @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
+@testset "setindex! at mismatched shapes" begin
+    idx_options = (
+        1,
+        1:1,
+        2:2,
+        1:0,
+        1:3
+    )
+    A = zeros(3, 3, 3)
+    for (i, j, k) in Iterators.product(Iterators.repeated(idx_options, 3)...)
+        for islinear in (false, true)
+            I = islinear ? i : (i, j, k)
+
+            # don't test scalar setindex
+            all(x -> x isa Int, I) && continue
+
+            X = ones((length(i) for i in I if i != 1)...)
+            X_trail = reshape(X, size(X)..., 1)
+            X_prepend = reshape(X, 1, size(X)...)
+            vX = vec(X)
+            cX = reshape(vX, length(vX), 1)
+
+            for _X in (X, X_trail, X_prepend, vX, cX)
+                AI = A[I...]
+
+                if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
+                    all(d -> axes(_X, d) == axes(AI, d), 1:max(ndims(_X), ndims(AI)))
+                    @test any(isone, setindex!(A, _X, I...))
+                    @test any(isone, setindex!(A, _X, I..., 1))
+                else
+                    @test_throws DimensionMismatch setindex!(A, _X, I...)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., 1)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., :)
+                end
+            end
+        end
+    end
+end
+
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
 
