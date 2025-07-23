@@ -1150,10 +1150,7 @@ _default_type(T::Type{Complex}) = Complex{Int}
 
 function eps(z::Complex{T}) where {T<:AbstractFloat}
     x, y = eps(real(z)), eps(imag(z))
-    # inline version of hypot(x,y) since it's not defined until later
-    if x < y
-       x, y = y, x
-    end
-    r = y/x
-    x * sqrt(one(T) + r * r)
+    hypot(x, y)
 end
+
+eps(::Type{Complex{T}}) where {T<:AbstractFloat} = sqrt(2*one(T))*eps(T)
