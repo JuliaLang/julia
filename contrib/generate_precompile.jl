@@ -347,8 +347,9 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             Base.Precompilation.precompilepkgs(;fancyprint=true);
             $precompile_script
             """
+        cpu_target = unsafe_string(Base.JLOptions().cpu_target)
         p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
-                --cpu-target=native --startup-file=no --color=yes --project=$(pkgpath)`, procenv),
+                --cpu-target=$cpu_target --startup-file=no --color=yes --project=$(pkgpath)`, procenv),
                  stdin=IOBuffer(s), stderr=debug_output, stdout=debug_output))
         n_step1 = 0
         for f in (tmp_prec, tmp_proc)
