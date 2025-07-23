@@ -70,4 +70,6 @@ if [ ! -d "$BUILD" ]; then
 fi
 
 cd "$BUILD"  # so that we can pass `-C src` to `make`
+# Reporting tsan warnings will interfere with bootstrapping.
+export TSAN_OPTIONS="report_bugs=0 exitcode=0"
 make -j "$JOBS" "$@"
