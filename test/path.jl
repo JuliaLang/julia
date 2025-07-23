@@ -182,8 +182,8 @@
             @test splitdrive(S("C:\\foo\\bar")) ==
                 ("C:","\\foo\\bar")
             # only single characters followed by a colon are drives
-            @test splitdrive(S("test:me")) ==
-                ("", "test:me")
+            @test splitdrive(S("foo:bar")) ==
+                ("", "foo:bar")
         end
 
         @test splitext(S("")) == ("", "")
