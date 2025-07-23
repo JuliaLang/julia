@@ -1477,10 +1477,14 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // u
     } else {
         jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
     }
-    if (jl_bkind_is_some_guard(jl_binding_kind(bpart)))
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_some_guard(kind))
         return 0;
-    if (jl_bkind_is_defined_constant(jl_binding_kind(bpart))) {
-        // N.B.: No backdated check for isdefined
+    if (jl_bkind_is_defined_constant(kind)) {
+        if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST)) {
+            return !(jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR);
+        }
+        // N.B.: No backdated admonition for isdefined
         return 1;
     }
     return jl_atomic_load(&b->value) != NULL;
@@ -1593,7 +1597,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
     jl_checked_assignment(bp, m, var, val);
 }
 
-JL_DLLEXPORT void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
+void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
 {
     // this function is only valid during initialization, so there is no risk of data races her are not too important to use
     int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
