@@ -152,7 +152,7 @@ static void _jl_exception_clear(jl_task_t *ct) JL_NOTSAFEPOINT
  */
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
-    jl_value_t *r;
+    jl_value_t *r = NULL;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         const char filename[] = "none";
@@ -165,7 +165,6 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        r = NULL;
     }
     return r;
 }
@@ -289,7 +288,7 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
  */
 JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
-    jl_value_t *v;
+    jl_value_t *v = NULL;
     jl_task_t *ct = jl_current_task;
     nargs++; // add f to args
     JL_TRY {
@@ -307,7 +306,6 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t n
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        v = NULL;
     }
     return v;
 }
@@ -322,7 +320,7 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t n
  */
 JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
 {
-    jl_value_t *v;
+    jl_value_t *v = NULL;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         JL_GC_PUSH1(&f);
@@ -335,7 +333,6 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        v = NULL;
     }
     return v;
 }
@@ -351,7 +348,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
  */
 JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
 {
-    jl_value_t *v;
+    jl_value_t *v = NULL;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
@@ -367,7 +364,6 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        v = NULL;
     }
     return v;
 }
@@ -384,7 +380,7 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
  */
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
 {
-    jl_value_t *v;
+    jl_value_t *v = NULL;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
@@ -401,7 +397,6 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        v = NULL;
     }
     return v;
 }
@@ -420,7 +415,7 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
 JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c)
 {
-    jl_value_t *v;
+    jl_value_t *v = NULL;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
@@ -438,7 +433,6 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        v = NULL;
     }
     return v;
 }
@@ -459,7 +453,7 @@ JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c,
                                   jl_value_t *d)
 {
-    jl_value_t *v;
+    jl_value_t *v = NULL;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
@@ -478,7 +472,6 @@ JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        v = NULL;
     }
     return v;
 }
@@ -492,7 +485,7 @@ JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
  */
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
 {
-    jl_value_t *v;
+    jl_value_t *v = NULL;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t *s = (jl_value_t*)jl_symbol(fld);
@@ -502,7 +495,6 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception(ct);
-        v = NULL;
     }
     return v;
 }
