@@ -6,6 +6,7 @@ New language features
 
   - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
   - New `nth` function to access the `n`-th element of a generic iterable. ([#56580])
+  - New `@__FUNCTION__` macro to refer to the innermost enclosing function. ([#58940])
   - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
     is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
     ([JuliaLang/JuliaSyntax.jl#525], [#57143])
@@ -26,6 +27,7 @@ Command-line option changes
 ---------------------------
 
 * The option `--sysimage-native-code=no` has been deprecated.
+* The `JULIA_CPU_TARGET` environment variable now supports a `sysimage` keyword to match (or extend) the CPU target used to build the current system image ([#58970]).
 
 Multi-threading changes
 -----------------------
@@ -47,6 +49,7 @@ New library functions
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 * `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
+* `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
 
 New library features
 --------------------

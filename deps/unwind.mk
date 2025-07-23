@@ -20,7 +20,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) -xfz $<
+	cd $(dir $<) && $(TAR) -xzf $<
 	touch -c $(SRCCACHE)/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 

@@ -1597,7 +1597,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
     jl_checked_assignment(bp, m, var, val);
 }
 
-JL_DLLEXPORT void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
+void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
 {
     // this function is only valid during initialization, so there is no risk of data races her are not too important to use
     int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
