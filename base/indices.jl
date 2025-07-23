@@ -203,7 +203,7 @@ end
 
 @noinline function throw_setindex_mismatch(X, I)
     pI = filter(!isnegative, I)
-    if length(I) == 1
+    if length(pI) == 1
         throw(DimensionMismatch("tried to assign $(length(X)) elements to $(pI[1]) destinations"))
     else
         throw(DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(pI)) destination"))
