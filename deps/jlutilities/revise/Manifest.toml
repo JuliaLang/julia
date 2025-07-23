@@ -120,7 +120,7 @@ version = "1.3.1"
 
 [[deps.Revise]]
 deps = ["CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "REPL", "Requires", "UUIDs", "Unicode"]
-git-tree-sha1 = "1d03585ab1bb9a6604094d0e521034df95f92cf2"
+git-tree-sha1 = "82dc140c7f52e4daeeec3675a411d48167a85a87"
 repo-rev = "master"
 repo-url = "https://github.com/timholy/Revise.jl.git"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
