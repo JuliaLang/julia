@@ -54,6 +54,7 @@ public
     active_project,
 
 # Reflection and introspection
+    get_extension,
     isambiguous,
     isexpr,
     isidentifier,
@@ -66,6 +67,11 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+
+# AST handling
+    IR,
+    isa_ast_node,
+    quoted,
 
 # Operators
     operator_associativity,
@@ -110,6 +116,7 @@ public
     reseteof,
     link_pipe!,
     dup,
+    showarg,
 
 # filesystem operations
     rename,
@@ -118,4 +125,5 @@ public
     notnothing,
     runtests,
     text_colors,
-    depwarn
+    depwarn,
+    donotdelete

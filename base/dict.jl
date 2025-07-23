@@ -190,7 +190,8 @@ end
     return h
 end
 
-function sizehint!(d::Dict{T}, newsz; shrink::Bool=true) where T
+function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
+    newsz = Int(newsz)::Int
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)

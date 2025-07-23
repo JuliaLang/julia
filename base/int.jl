@@ -139,6 +139,8 @@ iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
+isnegative(x::Unsigned) = false
+
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
 
@@ -250,7 +252,7 @@ end
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
 division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
-The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
+The result will have the same sign as `y` if `isfinite(y)`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
 
 !!! note
@@ -720,7 +722,7 @@ macro big_str(s::String)
             is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        s = String(take!(bf))
+        s = unsafe_takestring!(bf)
     end
     n = tryparse(BigInt, s)
     n === nothing || return n
@@ -842,7 +844,7 @@ widen(::Type{UInt64}) = UInt128
 # |x|<=2^(k-1), |y|<=2^k-1   =>   |x*y|<=2^(2k-1)-1
 widemul(x::Signed,y::Unsigned) = widen(x) * signed(widen(y))
 widemul(x::Unsigned,y::Signed) = signed(widen(x)) * widen(y)
-# multplication by Bool doesn't require widening
+# multiplication by Bool doesn't require widening
 widemul(x::Bool,y::Bool) = x * y
 widemul(x::Bool,y::Number) = x * y
 widemul(x::Number,y::Bool) = x * y

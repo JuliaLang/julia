@@ -95,7 +95,7 @@ function show_task_exception(io::IO, t::Task; indent = true)
     else
         show_exception_stack(IOContext(b, io), stack)
     end
-    str = String(take!(b))
+    str = takestring!(b)
     if indent
         str = replace(str, "\n" => "\n    ")
     end
@@ -909,31 +909,10 @@ function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
 end
 
 const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
-global Workqueues::Vector{StickyWorkqueue} = [StickyWorkqueue()]
-const Workqueues_lock = Threads.SpinLock()
+const Workqueues = OncePerThread{StickyWorkqueue}(StickyWorkqueue)
 const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprecate this variable
 
-function workqueue_for(tid::Int)
-    qs = Workqueues
-    if length(qs) >= tid && isassigned(qs, tid)
-        return @inbounds qs[tid]
-    end
-    # slow path to allocate it
-    @assert tid > 0
-    l = Workqueues_lock
-    @lock l begin
-        qs = Workqueues
-        if length(qs) < tid
-            nt = Threads.maxthreadid()
-            @assert tid <= nt
-            global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
-        end
-        if !isassigned(qs, tid)
-            @inbounds qs[tid] = StickyWorkqueue()
-        end
-        return @inbounds qs[tid]
-    end
-end
+workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
@@ -1201,30 +1180,19 @@ function wait()
     process_events()
 
     # get the next task to run
-    result = nothing
-    have_result = false
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
-    if !(task isa Task)
+    if task === nothing
         # No tasks to run; switch to the scheduler task to run the
         # thread sleep logic.
         sched_task = get_sched_task()
         if ct !== sched_task
-            result = yieldto(sched_task)
-            have_result = true
-        else
-            task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any),
-                         trypoptask, W, checktaskempty)
+            return yieldto(sched_task)
         end
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end
-    # We may have already switched tasks (via the scheduler task), so
-    # only switch if we haven't.
-    if !have_result
-        @assert task isa Task
-        set_next_task(task)
-        result = try_yieldto(ensure_rescheduled)
-    end
-    return result
+    set_next_task(task)
+    return try_yieldto(ensure_rescheduled)
 end
 
 if Sys.iswindows()
