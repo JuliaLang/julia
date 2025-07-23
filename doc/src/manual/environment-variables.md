@@ -495,6 +495,10 @@ A `generic` or empty CPU name means the basic required feature set of the target
 which is at least the architecture the C/C++ runtime is compiled with. Each string
 is interpreted by LLVM.
 
+!!! note
+    Package images can only target the same or more specific CPU features than
+    their base system image.
+
 A few special features are supported:
 
 1. `sysimage`
