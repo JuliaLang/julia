@@ -737,7 +737,6 @@ yields a `SparseMatStyle`, and anything of higher dimensionality falls back to t
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
 
-<<<<<<< HEAD
 ## [Instance Properties](@id man-instance-properties)
 
 | Methods to implement              | Default definition           | Brief description                                                                     |
