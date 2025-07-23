@@ -17,9 +17,6 @@ endif
 
 ifeq ($(OS),WINNT)
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
-ifeq ($(BUILD_OS),WINNT)
-LIBSSH2_OPTS += -G"MSYS Makefiles"
-endif
 else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
 LIBSSH2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix)
@@ -38,7 +35,7 @@ LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
+	$(CMAKE) $(CMAKE_GENERATOR_COMMAND) $(dir $<) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
