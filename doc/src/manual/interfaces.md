@@ -888,34 +888,46 @@ Interval{Float64}(1.0, 2.0)
 
 ## [IO Stream](@id man-interface-iostream)
 
-| Required methods                          | Brief description                                                                               |
-|:----------------------------------------- |:----------------------------------------------------------------------------------------------- |
-| `unsafe_read(io, ::Ptr{UInt8}, ::UInt)`   | Copy bytes from the `IO` to a pointer. |
-| `unsafe_write(io, ::Ptr{UInt8}, ::UInt)`  | Copy bytes from a pointer to the `IO`. |
-| `eof(io)`                                 | Whether the IO stream is at the end.   |
+| Required methods                          | Brief description                             |
+|:----------------------------------------- |:----------------------------------------------|
+| `read(io, ::Type{UInt8})`                 | Read a byte from the stream.                  |
+| `write(io, ::UInt8)`                      | Write a byte to the stream.                   |
+| `eof(io)`                                 | Whether the IO stream is at the end.          |
 
-| Optional methods                          | Brief description                                                                               |
-|:----------------------------------------- |:----------------------------------------------------------------------------------------------- |
-| `read(io, ::Type{UInt8})`                 | Read a byte from the stream.               |
-| `write(io, ::UInt8)`                      | Write a byte to the stream.                |
-| `close(io)`                               | Close the stream.                          |
-| `seek(io, ::Integer)`                     | Seek to a specific position.               |
-| `position(io)`                            | Return the current position of the stream. |
-| `seekstart(io)`                           | Seek to beginning of stream.               |
-| `seekend(io)`                             | Seek to the end of the stream.             |
+| Optional methods              | Brief description                                         |
+|:------------------------------|:----------------------------------------------------------|
+| `unsafe_read(io, ::Ptr{UInt8}, ::UInt)`   | Copy bytes from the `IO` to a pointer.        |
+| `unsafe_write(io, ::Ptr{UInt8}, ::UInt)`  | Copy bytes from a pointer to the `IO`.        |
+| `close(io)`                   | Close the stream.                                         |
+| `skip(io, offset)`            | Seek by the given offset (signed).                        |
+| `seek(io, ::Integer)`         | Seek to a specific position.                              |
+| `position(io)`                | Return the current position of the stream.                |
+| `seekstart(io)`               | Seek to beginning of stream.                              |
+| `seekend(io)`                 | Seek to the end of the stream.                            |
+| `isopen(io)`                  | Whether the IO stream is usable.                          |
+| `isreadable(io)`              | Whether the IO stream supports reading.                   |
+| `iswritable(io)`              | Whether the IO stream supports writing.                   |
+| `shutdown(io)`                | Close the stream for writing.                             |
+| `flush(io)`                   | Hint to write out any buffers to consumers.               |
+| `reseteof(io)`                | Reset the EOF flag on the read side.                      |
+| `mark(io)`                    | Add a mark at the current position of stream.             |
+| `unmark(io)`                  | Remove the current mark.                                  |
+| `reset(io)`                   | Reset stream to the current mark.                         |
+| `ismarked(io)`                | Return true if stream s is marked.                        |
+| `lock(io)`/`unlock(io)`       | Set an advisory lock on IO for print.                     |
 
 
-To implement an `IO` object it is required to define the low-level methods `unsafe_read`
-and `unsafe_write` which enable copying of data between the `IO` and a location given by a
-pointer.  Additionally, `eof` is required and should return `true` if reading from the
-`IO` is valid, else `false`.
+To implement an `IO` object it is required to define the low-level methods for
+byte `read` and `write` which enable reading and writing from the `IO`.
+Additionally, `eof` is required and should return `true` if a `read` from the
+`IO` will return at least one byte, else `false` if it will not return any more bytes.
 
-An `IO` that only defines `unsafe_read`, `unsafe_write` and `eof` can have most `isbits`
-types written or read to or from it, but the `read(io, ::Type{UInt8})` and `write(io,
-::UInt8)` methods must be defined to enable reading and writing individual bytes.
+For high-performance, most `IO` objects need to implement `unsafe_read` and
+`unsafe_write` also. These methods take a pointer and a number of bytes, and
+will use an unsafe copy to move data from the input to the output.
 
-Methods which affect the mutable state of the `IO` stream such as `close` and `seek` are
-optional.
+Methods which affect or query the mutable state of the `IO` stream such as
+`close` and `seek` are optional.
 
 ### Example
 The below example implements an `IO` "recorder" which writes all data read from it to
