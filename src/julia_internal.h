@@ -99,12 +99,6 @@ static inline void msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFE
 static inline void msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT {}
 static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT {}
 #endif
-#ifdef _COMPILER_TSAN_ENABLED_
-JL_DLLIMPORT void *__tsan_create_fiber(unsigned flags);
-JL_DLLIMPORT void *__tsan_get_current_fiber(void);
-JL_DLLIMPORT void __tsan_destroy_fiber(void *fiber);
-JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
-#endif
 
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
