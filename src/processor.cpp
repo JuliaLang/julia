@@ -992,19 +992,6 @@ static std::string jl_get_cpu_features_llvm(void)
             attr.append(ele.getKey().str());
         }
     }
-    // Explicitly disabled features need to be added at the end so that
-    // they are not re-enabled by other features that implies them by default.
-    for (auto &ele: HostFeatures) {
-        if (!ele.getValue()) {
-            if (!attr.empty()) {
-                attr.append(",-");
-            }
-            else {
-                attr.append("-");
-            }
-            attr.append(ele.getKey().str());
-        }
-    }
     return attr;
 }
 
