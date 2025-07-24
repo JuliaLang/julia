@@ -343,18 +343,18 @@ end
 GC.gc()
 rm(file)
 
-@testset "test for #58982 - mmap with primitive types" begin
-    file = tempname()
-    primitive type PrimType9Bytes 9*8 end
-    arr = Vector{PrimType9Bytes}(undef, 2)
-    write(file, arr)
-    m = mmap(file, Vector{PrimType9Bytes})
-    @test length(m) == 2
-    @test m[1] == arr[1]
-    @test m[2] == arr[2]
-    finalize(m); m = nothing; GC.gc()
-    rm(file)
-end
+# test for #58982 - mmap with primitive types
+file = tempname()
+primitive type PrimType9Bytes 9*8 end
+arr = Vector{PrimType9Bytes}(undef, 2)
+write(file, arr)
+m = mmap(file, Vector{PrimType9Bytes})
+@test length(m) == 2
+@test m[1] == arr[1]
+@test m[2] == arr[2]
+finalize(m); m = nothing; GC.gc()
+rm(file)
+
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Mmap))

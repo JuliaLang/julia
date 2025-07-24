@@ -75,7 +75,6 @@ endif
 CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
 endif
 
-# For now this is LLVM specific, but I expect it won't be in the future
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
@@ -84,13 +83,26 @@ else
 $(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
 endif
 
-# Detect MSYS2 with cygwin CMake rather than MinGW cmake - the former fails to
-# properly drive MinGW tools
 ifneq (,$(findstring MINGW,$(RAW_BUILD_OS)))
 ifneq (,$(shell ldd $(shell which cmake) | grep msys-2.0.dll))
+# Detect MSYS2 with cygwin CMake rather than MinGW cmake - the former fails to
+# properly drive MinGW tools
 override CMAKE := echo "ERROR: CMake is Cygwin CMake, not MinGW CMake. Build will fail. Use 'pacman -S mingw-w64-{i686,x86_64}-cmake'."; exit 1; $(CMAKE)
 endif
+# In our setup, CMAKE_INSTALL_PREFIX is a relative path inside usr-staging.
+# We do not want this converted to a windows path, because our make system
+# assumes it to be relative to msys `/`.
+override CMAKE := MSYS2_ARG_CONV_EXCL="-DCMAKE_INSTALL_PREFIX" $(CMAKE)
 endif
+
+# Some dependencies' tarballs contains symlinks to non-existent targets. This breaks the
+# the default msys strategy `deepcopy` symlink strategy. To workaround this,
+# switch to `native` which tries native windows symlinks (possible if the
+# machine is in developer mode) - or if not, falls back to cygwin-style
+# symlinks. We don't particularly care either way - we just need to symlinks
+# to succeed. We could guard this by a uname check, but it's harmless elsewhere,
+# so let's not incur the additional overhead.
+MSYS_NONEXISTENT_SYMLINK_TARGET_FIX := export MSYS=winsymlinks:native
 
 # If the top-level Makefile is called with environment variables,
 # they will override the values passed above to ./configure
@@ -168,7 +180,7 @@ upper = $(shell echo $1 | tr a-z A-Z)
 # this rule ensures that make install is more nearly atomic
 # so it's harder to get half-installed (or half-reinstalled) dependencies
 # # and enables sharing deps compiles, uninstall, and fast reinstall
-MAKE_INSTALL = +$$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
+MAKE_INSTALL = MSYS2_ARG_CONV_EXCL="prefix=" $$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
 
 define SHLIBFILE_INSTALL
 	mkdir -p $2/$$(build_shlibdir)

@@ -59,7 +59,7 @@ $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-configured: $(SRCCACHE)/openssl-$(OPENS
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
         CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLAGS)" \
-	$(dir $<)/Configure shared --prefix=$(abspath $(build_prefix)) $(OPENSSL_TARGET)
+	$(dir $<)/Configure shared --prefix=$(abspath $(build_prefix)) --libdir=$(abspath $(build_libdir)) $(OPENSSL_TARGET)
 	echo 1 > $@
 
 $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-compiled: $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-configured
@@ -72,9 +72,14 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+# Override bindir and only install runtime libraries, otherwise they'll go into build_depsbindir.
+OPENSSL_INSTALL = \
+	mkdir -p $2$$(build_shlibdir) && \
+	$$(MAKE) -C $1 install_runtime_libs $$(MAKE_COMMON) bindir=$$(build_shlibdir) $3 DESTDIR="$2"
+
 $(eval $(call staged-install, \
 	openssl,openssl-$(OPENSSL_VER), \
-	MAKE_INSTALL,,, \
+	OPENSSL_INSTALL,,, \
 	$$(WIN_MAKE_HARD_LINK) $(build_bindir)/libcrypto-*.dll $(build_bindir)/libcrypto.dll && \
 	$$(WIN_MAKE_HARD_LINK) $(build_bindir)/libssl-*.dll $(build_bindir)/libssl.dll && \
 	$$(INSTALL_NAME_CMD)libcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libcrypto.$$(SHLIB_EXT) && \
