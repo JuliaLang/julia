@@ -14,7 +14,7 @@ $(eval $(call git-external,llvm,LLVM,CMakeLists.txt,,$(SRCCACHE)))
 # symlinks. We don't particularly care either way - we just need to symlinks
 # to succeed. We could guard this by a uname check, but it's harmless elsewhere,
 # so let's not incur the additional overhead.
-$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: export MSYS=winsymlinks:native
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: $(MSYS_NONEXISTENT_SYMLINK_TARGET_FIX)
 
 LLVM_BUILDDIR := $(BUILDDIR)/$(LLVM_SRC_DIR)
 LLVM_BUILDDIR_withtype := $(LLVM_BUILDDIR)/build_$(LLVM_BUILDTYPE)
@@ -313,7 +313,9 @@ endif
 
 LLVM_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir)/lit && \
-	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/{*.py,*.toml,lit/} $2$$(build_depsbindir)/lit/ && \
+	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.py $2$$(build_depsbindir)/lit/ && \
+	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.toml $2$$(build_depsbindir)/lit/ && \
+	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/lit $2$$(build_depsbindir)/lit/ && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
 LLVM_INSTALL += && cp $2$$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_depsbindir)
