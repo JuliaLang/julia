@@ -702,7 +702,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             s->locals[n - 1] = NULL;
         }
         else if (toplevel && jl_is_linenode(stmt)) {
-            jl_lineno = jl_linenode_line(stmt);
+            jl_atomic_store_relaxed(&jl_lineno, jl_linenode_line(stmt));
         }
         else {
             eval_stmt_value(stmt, s);
