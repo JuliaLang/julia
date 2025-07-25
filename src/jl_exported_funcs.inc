@@ -190,6 +190,7 @@
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_get_sysimage_cpu_target) \
     XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \

@@ -162,7 +162,7 @@ constructors to explicitly link a set of channels with a set of producer/consume
 
 ### More on Channels
 
-A channel can be visualized as a pipe, i.e., it has a write end and a read end :
+A channel can be visualized as a pipe, i.e., it has a write end and a read end:
 
   * Multiple writers in different tasks can write to the same channel concurrently via [`put!`](@ref)
     calls.
