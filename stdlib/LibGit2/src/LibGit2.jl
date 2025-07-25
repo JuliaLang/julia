@@ -1024,8 +1024,17 @@ end
 @noinline function initialize()
     @check ccall((:git_libgit2_init, libgit2), Cint, ())
 
-    cert_loc = NetworkOptions.ca_roots()
-    cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
+    # Get the SSL backend to determine how to handle certificates
+    backend_ptr = @ccall libgit2.git_libgit2_feature_backend(
+        Consts.FEATURE_HTTPS::Cuint)::Cstring
+    if backend_ptr != C_NULL
+        ssl_backend = unsafe_string(backend_ptr)
+        # Only OpenSSL and mbedTLS support custom certificate locations
+        if ssl_backend in ("openssl", "openssl-dynamic", "mbedtls")
+            cert_locs = NetworkOptions.ca_root_locations()
+            cert_locs !== nothing && set_ssl_cert_locations(cert_locs, ssl_backend)
+        end
+    end
 
     atexit() do
         # refcount zero, no objects to be finalized
@@ -1035,13 +1044,35 @@ end
     end
 end
 
-function set_ssl_cert_locations(cert_loc)
+
+function set_ssl_cert_locations(cert_locs::Tuple{Vector{String}, Vector{String}}, ssl_backend::String)
+    files, dirs = cert_locs
     cert_file = cert_dir = Cstring(C_NULL)
-    if isdir(cert_loc) # directories
-        cert_dir = cert_loc
-    else # files, /dev/null, non-existent paths, etc.
-        cert_file = cert_loc
+
+    # Use the first file if available
+    if !isempty(files)
+        cert_file = files[1]
+        if length(files) > 1
+            @warn "Multiple certificate files specified, using only the first: $(files[1])"
+        end
     end
+
+    # Handle directories based on SSL backend
+    if !isempty(dirs)
+        cert_dir = if length(dirs) == 1
+            dirs[1]
+        elseif ssl_backend in ("openssl", "openssl-dynamic")
+            # OpenSSL supports multiple directories with delimiter
+            delimiter = Sys.iswindows() ? ';' : ':'
+            join(dirs, delimiter)
+        else
+            # mbedTLS only supports a single directory
+            @warn "Multiple certificate directories specified but $(ssl_backend) only supports one, using: $(dirs[1])"
+            dirs[1]
+        end
+    end
+
+    # Set the locations
     ret = @ccall libgit2.git_libgit2_opts(
         Consts.SET_SSL_CERT_LOCATIONS::Cint;
         cert_file::Cstring,
