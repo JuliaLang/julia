@@ -42,7 +42,7 @@ function _isself(ft::DataType)
     name = ftname.singletonname
     ftname.name === name && return false
     mod = parentmodule(ft)
-    return invokelatest(isdefinedglobal, mod, name) && ft === typeof(invokelatest(getglobal, mod, name))
+    return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)

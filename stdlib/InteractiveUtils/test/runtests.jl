@@ -329,6 +329,18 @@ catch err13464
     @test startswith(err13464.msg, "expression is not a function call")
 end
 
+@testset "Single-argument forms" begin
+    a = which(+, (Int, Int))
+    b = which((typeof(+), Int, Int))
+    c = which(Tuple{typeof(+), Int, Int})
+    @test a == b == c
+
+    a = functionloc(+, (Int, Int))
+    b = functionloc((typeof(+), Int, Int))
+    c = functionloc(Tuple{typeof(+), Int, Int})
+    @test a == b == c
+end
+
 # PR 57909
 @testset "Support for type annotations as arguments" begin
     @test (@which (::Vector{Int})[::Int]).name === :getindex
@@ -592,7 +604,9 @@ end # module ReflectionTest
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
 @test !isempty(sprint(code_llvm, f18883, Tuple{}))
+@test !isempty(sprint(code_llvm, (typeof(f18883),)))
 @test !isempty(sprint(code_native, f18883, Tuple{}))
+@test !isempty(sprint(code_native, (typeof(f18883),)))
 
 ix86 = r"i[356]86"
 
@@ -863,6 +877,27 @@ let # `default_tt` should work with any function with one method
     @test (code_native(devnull, function (a::Int)
         sin(a)
     end); true)
+end
+
+let # specifying calls as argtypes (incl. arg0) should be supported
+    @test (code_warntype(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_warntype(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
+    @test (code_llvm(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_llvm(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
+    @test (code_native(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_native(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
 end
 
 @testset "code_llvm on opaque_closure" begin

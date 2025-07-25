@@ -2096,6 +2096,7 @@ end
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, ref, idx, boundscheck)
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
+    hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
     return ref
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
@@ -2107,7 +2108,7 @@ end
 add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
 
 @nospecs function memoryref_builtin_common_errorcheck(mem, order, boundscheck)
-    hasintersect(widenconst(mem), GenericMemoryRef) || return false
+    hasintersect(widenconst(mem), Union{GenericMemory, GenericMemoryRef}) || return false
     hasintersect(widenconst(order), Symbol) || return false
     hasintersect(widenconst(unwrapva(boundscheck)), Bool) || return false
     return true
@@ -2203,7 +2204,7 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
         idx = widenconst(argtypes[2])
         idx ⊑ Int || return false
         boundscheck ⊑ Bool || return false
-        memtype ⊑ GenericMemoryRef || return false
+        memtype ⊑ Union{GenericMemory, GenericMemoryRef} || return false
         # If we have @inbounds (last argument is false), we're allowed to assume
         # we don't throw bounds errors.
         if isa(boundscheck, Const)

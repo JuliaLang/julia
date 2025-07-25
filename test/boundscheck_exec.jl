@@ -353,4 +353,20 @@ if bc_opt == bc_default
     @test (@allocated no_alias_prove(5)) == 0
 end
 
+@testset "automatic boundscheck elision for iteration on some important types" begin
+    if bc_opt != bc_on
+        @test !contains(sprint(code_llvm, iterate, (Memory{UInt8}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (Vector{UInt8}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (Matrix{UInt8}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (Array{UInt8,3}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 1, Vector{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}}, true}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 2, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, true}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 2, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, UnitRange{Int64}}, true}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (Base.CodeUnits{UInt8,String}, Int)), "unreachable")
+    end
+end
+
 end

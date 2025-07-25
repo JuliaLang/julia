@@ -148,7 +148,7 @@ Base.@uint128_str
 
 ## [BigFloats and BigInts](@id BigFloats-and-BigInts)
 
-The [`BigFloat`](@ref) and [`BigInt`](@ref) types implements
+The [`BigFloat`](@ref) and [`BigInt`](@ref) types implement
 arbitrary-precision floating point and integer arithmetic, respectively. For
 [`BigFloat`](@ref) the [GNU MPFR library](https://www.mpfr.org/) is used,
 and for [`BigInt`](@ref) the [GNU Multiple Precision Arithmetic Library (GMP)]

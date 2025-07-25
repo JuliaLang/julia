@@ -22,7 +22,7 @@ end
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
     params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-    d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
     sprint(print, d)
 end
 
@@ -1068,4 +1068,10 @@ let io = IOBuffer()
     code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
     str = String(take!(io))
     @test !occursin("jtbaa_unionselbyte", str)
+end
+
+let io = IOBuffer()
+    code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
+    str = String(take!(io))
+    @test occursin("julia.write_barrier", str)
 end

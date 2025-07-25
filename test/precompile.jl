@@ -1083,9 +1083,8 @@ precompile_test_harness("code caching") do dir
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
         mi = m.specializations::Core.MethodInstance
-        @test isdefined(mi, :cache)     # it was precompiled by StaleB
-        @test_broken !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
-        @test_broken MA.fib() === 2.0
+        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
         @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
@@ -2497,6 +2496,12 @@ end
 # Verify that inference / caching was not performed for any macros in the sysimage
 let m = only(methods(Base.var"@big_str"))
     @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+end
+
+# Issue #58841 - make sure we don't accidentally throw away code for inference
+let io = IOBuffer()
+    run(pipeline(`$(Base.julia_cmd()) --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
+    @test isempty(String(take!(io)))
 end
 
 finish_precompile_test!()

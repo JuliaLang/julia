@@ -748,9 +748,16 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
-_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+function _collect_indices(::Tuple{}, A)
+    dest = Array{eltype(A),0}(undef)
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
+function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
+    dest = Array{eltype(A)}(undef, length.(indsA))
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
@@ -901,10 +908,6 @@ function grow_to!(dest, itr, st)
     end
     return dest
 end
-
-## Iteration ##
-
-iterate(A::Array, i=1) = (@inline; _iterate_array(A, i))
 
 ## Indexing: getindex ##
 
