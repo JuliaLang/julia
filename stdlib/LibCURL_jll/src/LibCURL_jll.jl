@@ -5,8 +5,8 @@
 baremodule LibCURL_jll
 using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll
 Base.Experimental.@compiler_options compile=min optimize=0 infer=false
-if !(Sys.iswindows() || Sys.isapple())
-    # On Windows and macOS we use system SSL/crypto libraries
+if !Sys.iswindows()
+    # On Windows we use system SSL/crypto libraries
     using OpenSSL_jll
 end
 
