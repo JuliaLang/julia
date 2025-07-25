@@ -35,7 +35,7 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
     at top-level and inserts an implicit `@Core.latestworld` to make any include'd
     definitions visible to subsequent code. Note however that this recognition
     is *syntactic*. I.e. assigning `const myinclude = include` may require
-    and explicit `@Core.latestworld` call after `myinclude`.
+    an explicit `@Core.latestworld` call after `myinclude`.
 
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
