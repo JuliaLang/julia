@@ -201,6 +201,7 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
 
 define swiftcc ptr addrspace(10) @insert_element(ptr swiftself %0) {
 ; CHECK-LABEL: @insert_element
+  %v2 = call ptr @julia.get_pgcstack()
   %2 = alloca [10 x i64], i32 1, align 8
 ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 10)
 ; CHECK: [[gc_slot_addr_:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
