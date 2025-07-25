@@ -36,7 +36,7 @@ import Base.MPFR
     @test typeof(BigFloat(1//1)) == BigFloat
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
     rat = 1 // (big(2)^300 + 1)
-    @test BigFloat(rat, MPFRRoundDown) < rat < BigFloat(rat, MPFRRoundUp)
+    @test BigFloat(rat, RoundDown) < rat < BigFloat(rat, RoundUp)
     @test BigFloat(-rat, RoundUp) < -rat < BigFloat(-rat, RoundDown)
 
     # BigFloat constructor respects global precision when not specified
