@@ -1028,6 +1028,14 @@ end
         @test v[2] == ""
         @test contains(v[3], "More than one command line CPU targets specified")
     end
+
+    # Testing this more precisely would be very platform and build system dependent and brittle.
+    withenv("JULIA_CPU_TARGET" => "sysimage") do
+        v = readchomp(`$julia_path -E "Sys.sysimage_target()"`)
+        # Local builds will likely be "native" but CI shouldn't be.
+        invalid_results = Base.get_bool_env("CI", false) ? ("", "native", "sysimage") : ("", "sysimage",)
+        @test !in(v, invalid_results)
+    end
 end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)

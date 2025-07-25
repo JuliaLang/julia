@@ -625,13 +625,19 @@ end
 """
     rest(iter, state)
 
-An iterator that yields the same elements as `iter`, but starting at the given `state`.
+An iterator that yields the same elements as `iter`, but starting at the given `state`, which
+must be a state obtainable via a sequence of one or more calls to `iterate(iter[, state])`
 
 See also: [`Iterators.drop`](@ref), [`Iterators.peel`](@ref), [`Base.rest`](@ref).
 
 # Examples
 ```jldoctest
-julia> collect(Iterators.rest([1,2,3,4], 2))
+julia> iter = [1,2,3,4];
+
+julia> val, state = iterate(iter)
+(1, 2)
+
+julia> collect(Iterators.rest(iter, state))
 3-element Vector{Int64}:
  2
  3
@@ -1239,20 +1245,48 @@ flatten_length(f, T) = throw(ArgumentError(
 length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
 length(f::Flatten{Tuple{}}) = 0
 
-@propagate_inbounds function iterate(f::Flatten, state=())
-    if state !== ()
-        y = iterate(tail(state)...)
-        y !== nothing && return (y[1], (state[1], state[2], y[2]))
+@propagate_inbounds function iterate(fl::Flatten)
+    it_result = iterate(fl.it)
+    it_result === nothing && return nothing
+
+    inner_iterator, next_outer_state = it_result
+    inner_it_result = iterate(inner_iterator)
+
+    while inner_it_result === nothing
+        it_result = iterate(fl.it, next_outer_state)
+        it_result === nothing && return nothing
+
+        inner_iterator, next_outer_state = it_result
+        inner_it_result = iterate(inner_iterator)
     end
-    x = (state === () ? iterate(f.it) : iterate(f.it, state[1]))
-    x === nothing && return nothing
-    y = iterate(x[1])
-    while y === nothing
-         x = iterate(f.it, x[2])
-         x === nothing && return nothing
-         y = iterate(x[1])
+
+    item, next_inner_state = inner_it_result
+    return item, (next_outer_state, inner_iterator, next_inner_state)
+end
+
+@propagate_inbounds function iterate(fl::Flatten, state)
+    next_outer_state, inner_iterator, next_inner_state = state
+
+    # try to advance the inner iterator
+    inner_it_result = iterate(inner_iterator, next_inner_state)
+    if inner_it_result !== nothing
+        item, next_inner_state = inner_it_result
+        return item, (next_outer_state, inner_iterator, next_inner_state)
     end
-    return y[1], (x[2], x[1], y[2])
+
+    # advance the outer iterator
+    while true
+        outer_it_result = iterate(fl.it, next_outer_state)
+        outer_it_result === nothing && return nothing
+
+        inner_iterator, next_outer_state = outer_it_result
+        inner_it_result = iterate(inner_iterator)
+
+        if inner_it_result !== nothing
+            item, next_inner_state = inner_it_result
+            return item, (next_outer_state, inner_iterator, next_inner_state)
+        end
+    end
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))

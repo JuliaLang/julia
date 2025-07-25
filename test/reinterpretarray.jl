@@ -69,6 +69,44 @@ test_many_wrappers(B) do _B
     @test reinterpret(reshape, Int64, _B) == [5 7 9; 6 8 10]
 end
 
+@testset "setindex! converts before reinterpreting" begin
+    for dims in ((), 1)
+        z = reinterpret(UInt64, fill(1.0, dims))
+        @test z[] == z[1] == 0x3ff0000000000000
+        z[] = Int32(1)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000001
+        z[1] = Int32(2)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000002
+        z[1] = 3//1
+        @test z[] == z[1] == 0x0000000000000003
+        @test_throws InexactError z[] = 3//2
+        @test_throws InexactError z[] = 1.5
+        @test_throws InexactError z[1] = 3//2
+        @test_throws InexactError z[1] = 1.5
+
+        z = reinterpret(UInt64, fill(Int32(16)//Int32(1), dims))
+        @test z[] == z[1] == 0x0000000100000010
+        z[] = Int32(1)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000001
+        z[1] = Int32(2)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000002
+        z[1] = 3//1
+        @test z[] == z[1] == 0x0000000000000003
+        @test_throws InexactError z[] = 3//2
+        @test_throws InexactError z[] = 1.5
+        @test_throws InexactError z[1] = 3//2
+        @test_throws InexactError z[1] = 1.5
+
+        z = reinterpret(Missing, fill(nothing, dims))
+        @test z[] === missing
+        @test z[1] === missing
+        @test_throws "cannot convert" z[] = nothing
+        @test_throws "cannot convert" z[1] = nothing
+        @test z[] === missing
+        @test z[1] === missing
+    end
+end
+
 # setindex
 test_many_wrappers((A, Ars, B)) do (A, Ars, B)
     _A, Ar, _B = deepcopy(A), deepcopy(Ars), deepcopy(B)
@@ -120,6 +158,16 @@ test_many_wrappers(A3) do A3_
     A3r[CartesianIndex(1,2)] = 300+400im
     @test A3[1,1,2] == 300
     @test A3[2,1,2] == 400
+end
+
+test_many_wrappers(C) do Cr
+    r = reinterpret(reshape, Tuple{Int, Int}, Cr)
+    r[] = (2,2)
+    @test r[] === (2,2)
+    r[1] = (3,3)
+    @test r[1] === (3,3)
+    r[1,1] = (4,4)
+    @test r[1,1] === (4,4)
 end
 
 # same-size reinterpret where one of the types is non-primitive
@@ -325,6 +373,23 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
         @test r[goodinds...] == -5
     end
 end
+
+let a = rand(ComplexF32, 5)
+    r = reinterpret(reshape, Float32, a)
+    ref = Array(r)
+
+    @test r[1, :, 1]        == ref[1, :]
+    @test r[1, :, 1, 1, 1]  == ref[1, :]
+    @test r[1, :, UInt8(1)] == ref[1, :]
+
+    r[2, :, 1] .= 0f0
+    ref[2,  :] .= 0f0
+    @test r[2, :, 1] == ref[2, :]
+
+    @test r[4] == ref[4]
+    @test_throws BoundsError r[1, :, 2]
+end
+
 let ar = [(1,2), (3,4)]
     arr = reinterpret(reshape, Int, ar)
     @test @inferred(IndexStyle(arr)) == Base.IndexSCartesian2{2}()
@@ -611,4 +676,10 @@ let R = reinterpret(reshape, Float32, ComplexF32[1.0f0+2.0f0*im, 4.0f0+3.0f0*im]
     @test !isassigned(R, 1, 1, 2)
     @test !isassigned(R, 5)
     @test Array(R)::Matrix{Float32} == [1.0f0 4.0f0; 2.0f0 3.0f0]
+end
+
+@testset "issue #54623" begin
+    x = 0xabcdef01234567
+    @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
+    @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
 end
