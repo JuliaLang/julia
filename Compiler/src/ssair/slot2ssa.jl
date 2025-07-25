@@ -638,10 +638,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         end
         phiblocks = iterated_dominance_frontier(cfg, live, domtree)
         for block in phiblocks
+            varstate = sv.bb_vartables[block]
+            varstate === nothing && continue
             push!(phi_slots[block], idx)
             node = PhiNode()
-            varstate = sv.bb_vartables[block]
-            @assert varstate !== nothing
             vt = varstate[idx]
             ssaval = NewSSAValue(insert_node!(ir,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, vt.typ)).id - length(ir.stmts))
