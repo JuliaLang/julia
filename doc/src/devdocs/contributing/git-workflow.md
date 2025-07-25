@@ -1,6 +1,6 @@
 # Git workflow recommendations
 
-### Git Recommendations For Pull Requests
+## Git Recommendations For Pull Requests
 
  - Avoid working from the `master` branch of your fork. Create a new branch as it will make it easier to update your pull request if Julia's `master` changes.
  - Try to [squash](https://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code, so your pull request is easier to review. A reasonable number of separate well-factored commits is fine, especially for larger changes.
@@ -14,6 +14,6 @@
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
 
-#### Git Recommendations For Pull Request Reviewers
+### Git Recommendations For Pull Request Reviewers
 
 - When merging, we generally like `squash+merge`. Unless it is the rare case of a PR with carefully staged individual commits that you want in the history separately, in which case `merge` is acceptable, but usually prefer `squash+merge`.

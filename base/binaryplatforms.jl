@@ -822,8 +822,9 @@ function parse_dl_name_version(path::String, os::String=_this_os_name())
     local dlregex
     # Keep this up to date with _this_os_name
     if os == "windows"
-        # On Windows, libraries look like `libnettle-6.dll`
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
+        # On Windows, libraries look like `libnettle-6.dll`.
+        # Stay case-insensitive, the suffix might be `.DLL`.
+        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"isa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa

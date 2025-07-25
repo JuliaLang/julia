@@ -1597,9 +1597,12 @@ let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fal
     @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
-    @test memoryref_tfunc(Memory{Int}, Int) == Union{}
-    @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
-    @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
+    @test memoryref_tfunc(Memory{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Symbol) == Union{}
+    @test memoryref_tfunc(Memory{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
+    @test memoryref_tfunc(Any, Any, Any) == GenericMemoryRef
+    @test memoryref_tfunc(Any, Any) == GenericMemoryRef
     @test memoryref_tfunc(Any) == GenericMemoryRef
     @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, Bool) === Int
     @test memoryrefget_tfunc(MemoryRef{Int}, Any, Any) === Int
@@ -2313,12 +2316,6 @@ let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance)
     @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 end
 
-@testset "issue #56913: `BoundsError` in type inference" begin
-    R = UnitRange{Int}
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
-end
-
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
 maybeget_mustalias_tmerge(x) = x
 @test Base.return_types((Union{Nothing,AliasableField{Any}},); interp=MustAliasInterpreter()) do x
@@ -2592,6 +2589,19 @@ end |> only === Compiler.InterMustAlias
     end
     return 0
 end == Integer
+
+# `isdefined` accuracy for `MustAlias`
+@test Base.infer_return_type((Any,); interp=MustAliasInterpreter()) do x
+    xx = Ref{Any}(x)
+    xxx = Some{Any}(xx)
+    Val(isdefined(xxx.value, :x))
+end == Val{true}
+
+@testset "issue #56913: `BoundsError` in type inference" begin
+    R = UnitRange{Int}
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
+end
 
 function f25579(g)
     h = g[]

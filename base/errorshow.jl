@@ -327,13 +327,33 @@ function showerror(io::IO, ex::MethodError)
     if ft <: AbstractArray
         print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
-    # Check for local functions that shadow methods in Base
-    let name = ft.name.singletonname
-        if f_is_function && isdefined(Base, name)
-            basef = getfield(Base, name)
-            if basef !== f && hasmethod(basef, arg_types)
-                print(io, "\nYou may have intended to import ")
-                show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+    # Check for functions with the same name in other modules
+    if f_is_function && ex.world != typemax(UInt)
+        let name = ft.name.singletonname
+            modules_to_check = Set{Module}()
+            push!(modules_to_check, Base)
+            for T in san_arg_types_param
+                modulesof!(modules_to_check, T)
+            end
+
+            # Check all modules (sorted for consistency)
+            sorted_modules = sort!(collect(modules_to_check), by=nameof)
+            for mod in sorted_modules
+                if isdefinedglobal(mod, name)
+                    candidate = getglobal(mod, name)
+                    if candidate !== f && hasmethod(candidate, arg_types; world=ex.world)
+                        if mod === Base
+                            print(io, "\nYou may have intended to import ")
+                            show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+                        else
+                            print(io, "\nThe definition in ")
+                            show_unquoted(io, mod)
+                            print(io, " may have intended to extend ")
+                            f_module = parentmodule(ft)
+                            show_unquoted(io, Expr(:., f_module, QuoteNode(name)))
+                        end
+                    end
+                end
             end
         end
     end
@@ -445,6 +465,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
+    f isa Core.Builtin && return # `methods` isn't very useful for a builtin
     funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
@@ -452,7 +473,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !has_free_typevars(at1)
+        if isType(at1) && !has_free_typevars(at1) && at1.parameters[1] isa Type
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -474,8 +495,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             end
             sig0 = sig0::DataType
             s1 = sig0.parameters[1]
-            if sig0 === Tuple || !isa(func, rewrap_unionall(s1, method.sig))
-                # function itself doesn't match or is a builtin
+            if !isa(func, rewrap_unionall(s1, method.sig))
+                # function itself doesn't match
                 continue
             else
                 print(iob, "  ")
@@ -620,6 +641,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             println(io) # extra newline for spacing to stacktrace
         end
     end
+    nothing
 end
 
 # In case the line numbers in the source code have changed since the code was compiled,

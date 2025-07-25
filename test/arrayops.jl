@@ -2402,7 +2402,7 @@ end
     M = [1 2 3; 4 5 6; 7 8 9]
     @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
-    @test_throws DimensionMismatch eachslice(M, dims = 4)
+    @test eachslice(M, dims = 4) == [[1 2 3; 4 5 6; 7 8 9;;;]]
 
     SR = @inferred eachrow(M)
     @test SR[2] isa eltype(SR)
@@ -2467,6 +2467,32 @@ end
         @test_throws BoundsError A[2,3] = [4,5]
         @test_throws BoundsError A[2,3] .= [4,5]
     end
+
+    @testset "trailing dimensions" begin
+        v = collect(1:3)
+
+        S2  = eachslice(v; dims = 2, drop=true)
+        @test S2 isa AbstractSlices{<:AbstractVector, 1}
+        @test size(S2) == (1,)
+        @test S2[1] == v
+
+        S2K = eachslice(v; dims = 2, drop=false)
+        @test S2K isa AbstractSlices{<:AbstractVector, 2}
+        @test size(S2K) == (1,1)
+        @test S2K[1,1] == v
+
+        M = reshape(1:6, 2, 3)
+
+        S13 = eachslice(M; dims = (1,3))
+        @test size(S13) == (2,1)
+        @test S13[2,1] == M[2,:,1]
+
+        S13K = eachslice(M; dims = (1,3), drop=false)
+        @test size(S13K) == (2,1,1)
+        @test S13K[1,1,1] == M[1,:]
+        @test S13K[2,1,1] == M[2,:]
+    end
+
 end
 
 ###

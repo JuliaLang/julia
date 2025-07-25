@@ -12,7 +12,7 @@ the same, so they get overwritten. The `IdDict` hashes by object-id, and thus
 preserves the 3 different keys.
 
 # Examples
-```julia-repl
+```jldoctest; filter = r"  \\S+ +=> \\S+" => "  KEY => VALUE"
 julia> Dict(true => "yes", 1 => "no", 1.0 => "maybe")
 Dict{Real, String} with 1 entry:
   1.0 => "maybe"

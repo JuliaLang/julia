@@ -45,7 +45,7 @@ end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 # faster-but-weaker than hash_mix intended for small keys
-hash_mix_linear(x::UInt64, h::UInt) = 3h - x
+hash_mix_linear(x::Union{UInt64, UInt32}, h::UInt) = 3h - x
 function hash_finalizer(x::UInt64)
     x ⊻= (x >> 32)
     x *= 0x63652a4cd374b267
@@ -232,11 +232,32 @@ end
 
 ## symbol & expression hashing ##
 if UInt === UInt64
+    # conservatively hash using == equality of all of the data, even though == often uses === internally
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h ⊻ 0x83c7900696d26dc6))
     hash(x::QuoteNode, h::UInt) = hash(x.value, h ⊻ 0x2c97bf8b3de87020)
+    hash(x::PhiNode, h::UInt) = hash(x.edges, hash(x.values, h ⊻ 0x2c97bf8b3de87020))
+    hash(x::PhiCNode, h::UInt) = hash(x.values, h ⊻ 0x2c97bf8b3de87020)
 else
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h ⊻ 0x469d72af))
     hash(x::QuoteNode, h::UInt) = hash(x.value, h ⊻ 0x469d72af)
+    hash(x::PhiNode, h::UInt) = hash(x.edges, hash(x.values, h ⊻ 0x469d72af))
+    hash(x::PhiCNode, h::UInt) = hash(x.values, h ⊻ 0x469d72af)
+end
+
+function hash(x::CodeInfo, h::UInt)
+    h ⊻= UInt === UInt64 ? 0x2c97bf8b3de87020 : 0x469d72af
+    for i in 1:nfields(x)
+        h = hash(isdefined(x, i) ? getfield(x, i) : missing, h)
+    end
+    return h
+end
+
+function hash(x::DebugInfo, h::UInt)
+    h ⊻= UInt === UInt64 ? 0x2c97bf8b3de87020 : 0x469d72af
+    for i in 1:nfields(x)
+        h = hash(getfield(x, i), h)
+    end
+    return h
 end
 
 hash(x::Symbol) = objectid(x)
