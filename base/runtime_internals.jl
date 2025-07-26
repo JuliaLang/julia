@@ -565,6 +565,10 @@ struct DataTypeLayout
     # fielddesc_type : 2;
     # arrayelem_isboxed : 1;
     # arrayelem_isunion : 1;
+    # arrayelem_isatomic : 1;
+    # arrayelem_islocked : 1;
+    # isbitsegal : 1;
+    # padding : 8;
 end
 
 """
@@ -637,7 +641,7 @@ function datatype_isbitsegal(dt::DataType)
     @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags & (1<<5)) != 0
+    return (flags & (1<<7)) != 0
 end
 
 """
