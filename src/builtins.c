@@ -2324,7 +2324,7 @@ have_type:
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
-static int equiv_type(jl_value_t *ta, jl_value_t *tb)
+int equiv_type(jl_value_t *ta, jl_value_t *tb)
 {
     jl_datatype_t *dta = (jl_datatype_t*)jl_unwrap_unionall(ta);
     if (!jl_is_datatype(dta))
