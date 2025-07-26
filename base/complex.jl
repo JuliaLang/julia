@@ -1148,9 +1148,6 @@ _default_type(T::Type{Complex}) = Complex{Int}
 
 ## Machine epsilon for complex ##
 
-function eps(z::Complex{T}) where {T<:AbstractFloat}
-    x, y = eps(real(z)), eps(imag(z))
-    hypot(x, y)
-end
+eps(z::Complex{<:AbstractFloat}) = hypot(eps(real(z)), eps(imag(z)))
 
 eps(::Type{Complex{T}}) where {T<:AbstractFloat} = sqrt(2*one(T))*eps(T)
