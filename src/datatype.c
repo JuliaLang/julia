@@ -942,30 +942,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     if (!abstract && t->types != NULL)
         jl_compute_field_offsets(t);
 
-
-    // Before returning, look through the module's bindings, and check if there
-    // is already an existing struct definition that is `equiv_type`.
-    jl_datatype_t *existing;
-    // First, get the existing binding:
-    jl_binding_t *b = jl_get_binding(module, name);
-    jl_binding_partition_t *partition = b->partitions;
-    while (partition != NULL) {
-        // If the partition is a datatype, check if it is equivalent to the one we just
-        // created. If it is, we can return the existing one instead.
-        existing = (jl_datatype_t*)partition->restriction;
-        jl_static_show(JL_STDOUT, (jl_value_t*)existing); jl_safe_printf("\n");
-        if (existing != NULL && jl_is_datatype(existing) &&
-                equiv_type((jl_value_t*)existing, (jl_value_t*)t)) {
-            // If the existing datatype is equivalent, we can return it instead of the new one.
-            jl_safe_printf("Found existing equivalent type for %s in module %s\n",
-                           jl_symbol_name(name), jl_symbol_name(module->name));
-            JL_GC_POP();
-            return existing;
-        }
-        // If not, continue searching through the bindings.
-        partition = partition->next;
-    }
-
     JL_GC_POP();
     return t;
 }
