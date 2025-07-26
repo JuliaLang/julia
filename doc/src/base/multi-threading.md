@@ -63,7 +63,9 @@ Base.@threadcall
 These building blocks are used to create the regular synchronization objects.
 
 ```@docs
+Base.Threads.AbstractSpinLock
 Base.Threads.SpinLock
+Base.Threads.PaddedSpinLock
 ```
 
 ## Task metrics (Experimental)

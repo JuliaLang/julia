@@ -31,7 +31,7 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
         return jl_type_extract_name(jl_unwrap_vararg(t1), invariant);
     }
     else if (jl_is_typevar(t1)) {
-        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, invariant);
+        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type || t1 == (jl_value_t*)jl_typeofbottom_type->super) {
         return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience
@@ -286,20 +286,20 @@ static _Atomic(jl_value_t*) *mtcache_hash_lookup_bp(jl_genericmemory_t *cache JL
     return pml;
 }
 
-static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *cache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
+static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
 {
     int inserted = 0;
-    jl_genericmemory_t *a = jl_atomic_load_relaxed(cache);
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (a == (jl_genericmemory_t*)jl_an_empty_memory_any) {
         a = jl_alloc_memory_any(16);
-        jl_atomic_store_release(cache, a);
+        jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb(parent, a);
     }
     a = jl_eqtable_put(a, key, val, &inserted);
     assert(inserted);
-    if (a != jl_atomic_load_relaxed(cache)) {
-        jl_atomic_store_release(cache, a);
+    if (a != jl_atomic_load_relaxed(pcache)) {
+        jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb(parent, a);
     }
@@ -1293,9 +1293,10 @@ static void jl_typemap_memory_insert_(
 static jl_value_t *jl_method_convert_list_to_cache(
         jl_typemap_t *map, jl_typemap_entry_t *ml, int8_t tparam, int8_t offs, int8_t doublesplit)
 {
-    jl_value_t *cache = doublesplit ? jl_an_empty_memory_any : (jl_value_t*)jl_new_typemap_level();
+    _Atomic(jl_genericmemory_t*) dblcache = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_typemap_level_t *cache = doublesplit ? NULL : jl_new_typemap_level();
     jl_typemap_entry_t *next = NULL;
-    JL_GC_PUSH3(&cache, &next, &ml);
+    JL_GC_PUSH4(&cache, &dblcache, &next, &ml);
     while (ml != (void*)jl_nothing) {
         next = jl_atomic_load_relaxed(&ml->next);
         jl_atomic_store_relaxed(&ml->next, (jl_typemap_entry_t*)jl_nothing);
@@ -1316,14 +1317,14 @@ static jl_value_t *jl_method_convert_list_to_cache(
                 assert(jl_is_type_type(key));
                 key = jl_tparam0(key);
             }
-            jl_typemap_memory_insert_(map, (_Atomic(jl_genericmemory_t*)*)&cache, key, ml, NULL, 0, offs, NULL);
+            jl_typemap_memory_insert_(map, &dblcache, key, ml, NULL, 0, offs, NULL);
         }
         else
-            jl_typemap_level_insert_(map, (jl_typemap_level_t*)cache, ml, offs);
+            jl_typemap_level_insert_(map, cache, ml, offs);
         ml = next;
     }
     JL_GC_POP();
-    return cache;
+    return doublesplit ? (jl_value_t*)jl_atomic_load_relaxed(&dblcache) : (jl_value_t*)cache;
 }
 
 static void jl_typemap_list_insert_(

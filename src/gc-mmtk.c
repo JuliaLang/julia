@@ -78,7 +78,7 @@ void jl_gc_init(void) {
     if (jl_options.heap_size_hint == 0) {
         char *cp = getenv(HEAP_SIZE_HINT);
         if (cp)
-            hint = parse_heap_size_hint(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
+            hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"", 1);
     }
 #ifdef _P64
     if (hint == 0) {

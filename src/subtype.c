@@ -65,9 +65,9 @@ typedef struct {
 // Most of the complexity is due to the "diagonal rule", requiring us to
 // identify which type vars range over only concrete types.
 typedef struct jl_varbinding_t {
-    jl_tvar_t *var;
-    jl_value_t *lb;
-    jl_value_t *ub;
+    jl_tvar_t *var; // store NULL to "delete" this from env (temporarily)
+    jl_value_t *JL_NONNULL lb;
+    jl_value_t *JL_NONNULL ub;
     int8_t right;       // whether this variable came from the right side of `A <: B`
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
@@ -274,7 +274,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         }
         else {
             roots = se->roots;
-            nroots = se->gcframe.nroots >> 2;
+            nroots = JL_GC_DECODE_NROOTS(se->gcframe.nroots);
         }
     }
     jl_varbinding_t *v = e->vars;
@@ -356,7 +356,7 @@ static void free_stenv(jl_stenv_t *e) JL_NOTSAFEPOINT
 
 static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPOINT
 {
-    jl_value_t **roots = NULL;
+    jl_value_t *JL_NONNULL *roots = NULL;
     int nroots = 0;
     if (root) {
         if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
@@ -367,7 +367,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         }
         else {
             roots = se->roots;
-            nroots = se->gcframe.nroots >> 2;
+            nroots = JL_GC_DECODE_NROOTS(se->gcframe.nroots);
         }
     }
     jl_varbinding_t *v = e->vars;
@@ -1182,12 +1182,14 @@ constrain_length:
     if (bxp1) {
         if (bxp1->intvalued == 0)
             bxp1->intvalued = 1;
+        assert(bxp1->lb); // make static analyzer happy
         if (jl_is_long(bxp1->lb))
             xp1 = bxp1->lb;
     }
     if (byp1) {
         if (byp1->intvalued == 0)
             byp1->intvalued = 1;
+        assert(byp1->lb); // make static analyzer happy
         if (jl_is_long(byp1->lb))
             yp1 = byp1->lb;
     }
@@ -4293,7 +4295,7 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
     else {
         saved = se->roots;
         merged = me->roots;
-        nroots = se->gcframe.nroots >> 2;
+        nroots = JL_GC_DECODE_NROOTS(se->gcframe.nroots);
     }
     assert(nroots == current_env_length(e) * 3);
     assert(nroots % 3 == 0);

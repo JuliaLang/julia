@@ -129,7 +129,7 @@ Uses the operating system's underlying getaddrinfo implementation, which may do
 a DNS lookup.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"(ip\\"::1\\"|ERROR: DNSError:.*|Stacktrace:(\\n \\[0-9]+\\].*)*)"
 julia> getaddrinfo("localhost", IPv6)
 ip"::1"
 

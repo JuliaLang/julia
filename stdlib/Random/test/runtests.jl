@@ -554,6 +554,14 @@ end
     @test randcycle!(mta, A) == randcycle!(mtb, B)
     @test randcycle!(A) === A
 
+    @testset "non-`Array` `randperm!` and `randcycle!`" begin
+        x, y = Memory{Int}(undef, 10), Memory{Int}(undef, 10)
+        @test randperm!(mta, x) == randperm!(mtb, y)
+        @test randperm!(x) === x
+        @test randcycle!(mta, x) == randcycle!(mtb, y)
+        @test randcycle!(x) === x
+    end
+
     let p = randcycle(UInt16(10))
         @test typeof(p) ≡ Vector{UInt16}
         @test sort!(p) == 1:10

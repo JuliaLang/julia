@@ -3,11 +3,16 @@
 
 ;; pass 1: syntax desugaring
 
-;; allow (:: T) => (:: #gensym T) in formal argument lists
+;; unnamed or all-underscore arguments may still be read from internally, so
+;; convert (:: T) => (:: #gensym T) and _ => #gensym in formal argument lists
 (define (fill-missing-argname a unused)
-  (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
-      `(|::| ,(if unused UNUSED (gensy)) ,(cadr a))
-      a))
+  (define (replace-if-underscore u)
+    (if (underscore-symbol? u) (if unused UNUSED (gensy)) u))
+  (if (and (pair? a) (eq? (car a) '|::|))
+      (cond ((null? (cddr a))  `(|::| ,(if unused UNUSED (gensy)) ,(cadr a)))
+            ((null? (cdddr a)) `(|::| ,(replace-if-underscore (cadr a)) ,(caddr a)))
+            (else a))
+      (replace-if-underscore a)))
 (define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
       (error "invalid \"...\" on non-final argument"))
@@ -165,10 +170,7 @@
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
-  (let ((argl (map (lambda (x)
-                     (let ((n (arg-name x)))
-                       (if (underscore-symbol? n) UNUSED n)))
-                   argl))
+  (let ((argl (map arg-name argl))
         (body (blockify body)))
     `(lambda ,argl ()
              (scope-block
@@ -374,7 +376,7 @@
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
-          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
+          (anames (llist-vars argl))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
           (ename (if (nodot-sym-ref? name) name
                     (if (overlay? name) (cadr name) `(null)))))
@@ -543,14 +545,13 @@
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
           mangled sparams
-          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
-            ;; strip type off function self argument if not needed for a static param.
-            ;; then it is ok for cl-convert to move this definition above the original def.
-            ,@not-optional ,@vararg)
+          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw ,@not-optional ,@vararg)
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
-                                   annotations))
+                                   (if (has-thisfunction? `(block ,@stmts))
+                                       (cons `(meta thisfunction-original ,(arg-name (car not-optional))) annotations)
+                                       annotations)))
           rett)
 
         ;; call with no keyword args
@@ -2912,6 +2913,7 @@
    'generator
    (lambda (e)
      (check-no-return e)
+     (check-no-thisfunction e)
      (expand-generator e #f '()))
 
    'flatten
@@ -2996,6 +2998,13 @@
   (if (has-return? e)
       (error "\"return\" not allowed inside comprehension or generator")))
 
+(define (has-thisfunction? e)
+  (expr-contains-p thisfunction? e (lambda (x) (not (function-def? x)))))
+
+(define (check-no-thisfunction e)
+  (if (has-thisfunction? e)
+      (error "\"@__FUNCTION__\" not allowed inside comprehension or generator")))
+
 (define (has-break-or-continue? e)
   (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
                    e
@@ -3004,6 +3013,7 @@
 
 (define (lower-comprehension ty expr itrs)
   (check-no-return expr)
+  (check-no-thisfunction expr)
   (if (has-break-or-continue? expr)
       (error "break or continue outside loop"))
   (let ((result    (make-ssavalue))
@@ -3435,7 +3445,7 @@
               vi)
     tab))
 
-;; env:      list of vinfo (includes any closure #self#; should not include globals)
+;; env:      list of vinfo (should not include globals)
 ;; captvars: list of vinfo
 ;; sp:       list of symbol
 ;; new-sp:   list of symbol (static params declared here)
@@ -3492,10 +3502,15 @@
 (define (analyze-vars e env captvars sp tab)
   (if (or (atom? e) (quoted? e))
       (begin
-        (if (symbol? e)
-            (let ((vi (get tab e #f)))
-              (if vi
-                  (vinfo:set-read! vi #t))))
+        (cond
+         ((symbol? e)
+          (let ((vi (get tab e #f)))
+            (if vi
+                (vinfo:set-read! vi #t))))
+         ((nospecialize-meta? e)
+          (let ((vi (get tab (caddr e) #f)))
+            (if vi
+                (vinfo:set-nospecialize! vi #t)))))
         e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
@@ -3513,6 +3528,11 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
+           ;; calls f(x...) go through `_apply_iterate`
+           (if (and (length> e 3) (equal? (cadr e) '(core _apply_iterate)))
+               (let ((vi2 (get tab (cadddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
            ;; calls to functions with keyword args have head of `kwcall` first
            (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
                (let ((vi2 (get tab (cadddr e) #f)))
@@ -3588,21 +3608,6 @@ f(x) = yt(x)
                 (const (globalref (thismodule) ,name) ,s)
                 (call (core _typebody!) (false) ,s (call (core svec) ,@types))
                 (return (null)))))))))
-
-(define (type-for-closure name fields super)
-  (let ((s (make-ssavalue)))
-    `((thunk ,(linearize `(lambda ()
-       (() () 0 ())
-       (block (global ,name)
-              (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
-                          (call (core svec) ,@(map quotify fields))
-                          (call (core svec))
-                          (false) ,(length fields)))
-              (call (core _setsuper!) ,s ,super)
-              (const (globalref (thismodule) ,name) ,s)
-              (call (core _typebody!) (false) ,s
-                    (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
-              (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places
 ;; need to fix that in order to handle #265 fully (and use the definitions)
@@ -3861,7 +3866,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref global-if-global assign-const-if-global isglobal thismodule
+         global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
@@ -4017,6 +4022,10 @@ f(x) = yt(x)
       (let ((cv (assq v (cadr (lam:vinfo lam)))))
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
+(define (is-var-nospecialize? v lam)
+  (let ((vi (assq v (car (lam:vinfo lam)))))
+    (and vi (vinfo:nospecialize vi))))
+
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
@@ -4095,7 +4104,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core global globalref thismodule lineinfo line break inert module toplevel null true false meta) e)
+          ((quote top core global globalref thismodule thisfunction lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4308,16 +4317,14 @@ f(x) = yt(x)
                         (closure-param-syms (map (lambda (s) (make-ssavalue)) closure-param-names))
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
-                                                   (if (is-var-boxed? v lam)
-                                                       '(core Box)
-                                                       (make-ssavalue)))
+                                                   (cond ((is-var-boxed? v lam) '(core Box))
+                                                         ((is-var-nospecialize? v lam) (vinfo:type (assq v (car (lam:vinfo lam)))))
+                                                         (else (make-ssavalue))))
                                                  capt-vars))
                                 (para (append closure-param-syms
                                               (filter ssavalue? fieldtypes)))
                                 (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
-                           (if (null? para)
-                               (type-for-closure type-name capt-vars '(core Function))
-                               (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
+                           (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function))))
                         (mk-method ;; expression to make the method
                          (if short '()
                              (let* ((iskw ;; TODO jb/functions need more robust version of this
@@ -4347,7 +4354,7 @@ f(x) = yt(x)
                                 (P (append
                                     closure-param-names
                                     (filter identity (map (lambda (v ve)
-                                                            (if (is-var-boxed? v lam)
+                                                            (if (or (is-var-boxed? v lam) (is-var-nospecialize? v lam))
                                                                 #f
                                                                 `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
@@ -5022,7 +5029,7 @@ f(x) = yt(x)
              (if value (error "misplaced \"global\" declaration"))
              (if (or (length= e 2) (atom? (caddr e))) (emit e)
               (let ((rr (make-ssavalue)))
-                (emit `(= ,rr ,(caddr e)))
+                (emit `(= ,rr ,(compile (caddr e) break-labels #t #f)))
                 (emit `(globaldecl ,(cadr e) ,rr))))
              (if (null? (cadr lam))
                (emit `(latestworld))))
@@ -5137,6 +5144,30 @@ f(x) = yt(x)
 
             ((error)
              (error (cadr e)))
+
+            ;; thisfunction replaced with first argument name
+            ((thisfunction)
+             (let ((first-arg (and (pair? (lam:args lam)) (car (lam:args lam)))))
+               (if first-arg
+                   (let* ((arg-name (arg-name first-arg))
+                          ;; Check for thisfunction-original metadata in keyword wrapper functions
+                          (original-name (let ((body (lam:body lam)))
+                                          (and (pair? body) (pair? (cdr body))
+                                               (let loop ((stmts (cdr body)))
+                                                 (if (pair? stmts)
+                                                     (let ((stmt (car stmts)))
+                                                       (if (and (pair? stmt) (eq? (car stmt) 'meta)
+                                                                (pair? (cdr stmt)) (eq? (cadr stmt) 'thisfunction-original)
+                                                                (pair? (cddr stmt)))
+                                                           (caddr stmt)
+                                                           (loop (cdr stmts))))
+                                                     #f)))))
+                          (final-name (or original-name arg-name)))
+                     (cond (tail  (emit-return tail final-name))
+                           (value final-name)
+                           (else (emit final-name) #f)))
+                    (error "\"@__FUNCTION__\" can only be used inside a function"))))
+
             (else
              (error (string "invalid syntax " (deparse e)))))))
     ;; introduce new slots for assigned arguments

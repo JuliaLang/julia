@@ -132,7 +132,7 @@ function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = not
     if i ≢ nothing
         print(msg, ", mismatch at dim ", i)
     end
-    throw(DimensionMismatch(String(take!(msg))))
+    throw(DimensionMismatch(takestring!(msg)))
 end
 
 function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
