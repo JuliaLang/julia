@@ -327,21 +327,21 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
+mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) where {F,F2} =
     _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kw...) =
+mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kw...) where {F,F2} =
     reduce(op, map(f, A, B...); kw...)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
+_mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, ::Colon) where {F,F2} =
     mapfoldl_impl(f, op, nt, A)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
+_mapreduce_dim(f::F, op::F2, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) where {F,F2} =
     _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
+_mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, dims) where {F,F2} =
     mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
+_mapreduce_dim(f::F, op::F2, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) where {F,F2} =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """

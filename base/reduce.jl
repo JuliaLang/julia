@@ -366,15 +366,15 @@ The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
 of `T`. See [`Base.reduce_empty`](@ref) for more information.
 """
-mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
-mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
-mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
+mapreduce_empty(::typeof(identity), op::F, T) where {F} = reduce_empty(op, T)
+mapreduce_empty(::typeof(abs), op::F, T)      where {F} = abs(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs2), op::F, T)     where {F} = abs2(reduce_empty(op, T))
 
 mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 # For backward compatibility:
-mapreduce_empty_iter(f, op, itr, ItrEltype) =
+mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F,F2} =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
@@ -420,9 +420,9 @@ single element `x`. This value may also be used to initialise the recursion, so 
 
 The default is `reduce_first(op, f(x))`.
 """
-mapreduce_first(f, op, x) = reduce_first(op, f(x))
+mapreduce_first(f::F, op::F2, x) where {F,F2} = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted) where {F,F2} = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
@@ -449,7 +449,7 @@ end
 
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
+_mapreduce(f::F, op::F2, ::IndexCartesian, A::AbstractArrayOrBroadcasted) where {F,F2} = mapfoldl(f, op, A)
 
 """
     reduce(op, itr; [init])
