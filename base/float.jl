@@ -1065,10 +1065,12 @@ julia> 1.0 + eps()/2
 1.0
 ```
 
-For complex inputs `T`, `eps(T)` is defined as the distance bound to the nearest
-floating-point complex value, i.e. for ``z=a+ib`` and the closest floating-point
-complex value ``z̃=ã+ib̃=fl(a)+ifl(b)`` where ``fl(x)`` is the closest
-floating-point value to a real ``x``, ``eps(z)`` satisfies ``|z - z̃| ≤ eps(z)/2``.
+More generally, for any floating-point numeric type, `eps` corresponds to an
+upper bound on the distance to the nearest floating-point complex value: if ``\text{fl}(x)`` is the closest
+floating-point value to a number ``x`` (e.g. an arbitrary real number), then ``\text{fl}(x)``
+satisfies ``|x - \text{fl}(x)| ≤ \text{eps}(x)/2``, not including overflow cases.
+This allows the definition of `eps` to be extended to complex numbers,
+for which ``\text{fl}(a + ib) = \text{fl}(a) + i \text{fl}(b)``.
 """
 eps(::Type{<:AbstractFloat})
 
