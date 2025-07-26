@@ -934,8 +934,8 @@ end
 
 @testset "eps" begin
     @test eps(1.0+1.0im) === 3.1401849173675503e-16
-    @test eps(Complex128) === eps(1.0+1.0im)
-    @test eps(Complex64) === 1.6858739f-7
+    @test eps(Complex{Float64}) === eps(1.0+1.0im)
+    @test eps(Complex{Float32}) === 1.6858739f-7
     @test eps(Float32(1.0)+Float32(1.0)im) === eps(Complex{Float32})
 end
 
