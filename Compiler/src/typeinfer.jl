@@ -1557,8 +1557,14 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     return ci
 end
 
+const collect_dispatch_backtrace = fill(false)
+function store_dispatch_backtrace end
+
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     ci = typeinf_ext(interp, mi, source_mode)
+    if isa(ci, CodeInstance) && collect_dispatch_backtrace[]
+        Core.invokelatest(store_dispatch_backtrace, ci)
+    end
     ci = add_codeinsts_to_jit!(interp, ci, source_mode)
     return ci
 end

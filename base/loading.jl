@@ -4246,3 +4246,4 @@ precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{St
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String)) || @assert false
 precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false
 precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false
+precompile(Compiler.store_dispatch_backtrace, (Core.CodeInstance,))
