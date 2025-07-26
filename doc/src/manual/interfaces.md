@@ -884,3 +884,79 @@ Interval{Float64}(2.0, 3.0)
 julia> trunc(x)
 Interval{Float64}(1.0, 2.0)
 ```
+
+## [IO Stream](@id man-interface-iostream)
+
+| Required methods                          | Brief description                             |
+|:----------------------------------------- |:----------------------------------------------|
+| `read(io, ::Type{UInt8})`                 | Read a byte from the stream.                  |
+| `write(io, ::UInt8)`                      | Write a byte to the stream.                   |
+| `eof(io)`                                 | Whether the IO stream is at the end.          |
+
+| Optional methods              | Brief description                                         |
+|:------------------------------|:----------------------------------------------------------|
+| `unsafe_read(io, ::Ptr{UInt8}, ::UInt)`   | Copy bytes from the `IO` to a pointer.        |
+| `unsafe_write(io, ::Ptr{UInt8}, ::UInt)`  | Copy bytes from a pointer to the `IO`.        |
+| `close(io)`                   | Close the stream.                                         |
+| `skip(io, offset)`            | Seek by the given offset (signed).                        |
+| `seek(io, ::Integer)`         | Seek to a specific position.                              |
+| `position(io)`                | Return the current position of the stream.                |
+| `seekstart(io)`               | Seek to beginning of stream.                              |
+| `seekend(io)`                 | Seek to the end of the stream.                            |
+| `isopen(io)`                  | Whether the IO stream is usable.                          |
+| `isreadable(io)`              | Whether the IO stream supports reading.                   |
+| `iswritable(io)`              | Whether the IO stream supports writing.                   |
+| `shutdown(io)`                | Close the stream for writing.                             |
+| `flush(io)`                   | Hint to write out any buffers to consumers.               |
+| `reseteof(io)`                | Reset the EOF flag on the read side.                      |
+| `mark(io)`                    | Add a mark at the current position of stream.             |
+| `unmark(io)`                  | Remove the current mark.                                  |
+| `reset(io)`                   | Reset stream to the current mark.                         |
+| `ismarked(io)`                | Return true if stream s is marked.                        |
+| `lock(io)`/`unlock(io)`       | Set an advisory lock on IO for print.                     |
+
+
+To implement an `IO` object it is required to define the low-level methods for
+byte `read` and `write` which enable reading and writing from the `IO`.
+Additionally, `eof` is required and should return `true` if a `read` from the
+`IO` will return at least one byte, else `false` if it will not return any more bytes.
+
+For high-performance, most `IO` objects need to implement `unsafe_read` and
+`unsafe_write` also. These methods take a pointer and a number of bytes, and
+will use an unsafe copy to move data from the input to the output.
+
+Methods which affect or query the mutable state of the `IO` stream such as
+`close` and `seek` are optional.
+
+### Example
+The below example implements an `IO` "recorder" which writes all data read from it to
+an extra buffer.  It defines `read` and `write` methods for `UInt8`, so it supports
+reading and writing of any object which can be written or read from an `IOBuffer`.
+```julia
+struct IORecorder{ℐ<:IO} <: IO
+    io::ℐ
+    r::IOBuffer
+end
+
+IORecorder(io::IO) = IORecorder{typeof(io)}(io, IOBuffer())
+
+function Base.read(io::IORecorder, ::Type{UInt8})
+    x = read(io.io, UInt8)
+    write(io.r, x)
+    x
+end
+function Base.unsafe_read(io::IORecorder, p::Ptr{UInt8}, n::UInt)
+    for i ∈ 1:n
+        x = read(io, UInt8)
+        unsafe_store!(p, x, i)
+    end
+    nothing
+end
+
+Base.write(io::IORecorder, x::UInt8) = write(io.io, x)
+Base.unsafe_write(io::IORecorder, p::Ptr{UInt8}, n::UInt) = unsafe_write(io.io, p, n)
+
+Base.eof(io::IORecorder) = eof(io.io)
+
+Base.close(io::IORecorder) = (close(io.io); close(io.r); io)
+```
