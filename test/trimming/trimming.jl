@@ -6,8 +6,8 @@ bindir = dirname(ARGS[1])
 let exe_suffix = splitext(Base.julia_exename())[2]
 
     hello_exe = joinpath(bindir, "hello" * exe_suffix)
-    @test readchomp(`$hello_exe arg1 arg2`) == "Hello, world!\n$hello_exe\narg1\narg2"
-    @test filesize(hello_exe) < 2_000_000
+    @test readchomp(`$hello_exe arg1 arg2`) == "Hello, world!\n$hello_exe\narg1\narg2\n$(4.0+pi)"
+    @test filesize(hello_exe) < 2_500_000
 
     basic_jll_exe = joinpath(bindir, "basic_jll" * exe_suffix)
     lines = split(readchomp(`$basic_jll_exe`), "\n")
