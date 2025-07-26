@@ -422,9 +422,7 @@ end
 #     return fails / (fails + success)
 # end
 
-@testset "Regression" begin
-    @test "-0.00010014" == Ryu.writeshortest(Float16(-0.00010014)) #longest Float16
-end
+@test "-0.00010014" == Ryu.writeshortest(Float16(-0.00010014)) #longest Float16
 end # Float16
 
 @testset "writeshortest(::AbstractVector, pos, ...)" begin
