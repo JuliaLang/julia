@@ -4,7 +4,7 @@
 
 baremodule LibCURL_jll
 using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll
-if !(Sys.iswindows() || Sys.isapple())
+if !Sys.iswindows()
     using OpenSSL_jll
 end
 if Sys.iswindows() && Sys.WORD_SIZE == 32
@@ -37,10 +37,8 @@ const libcurl = LazyLibrary(
         else
             LazyLibrary[libz, libnghttp2, libssh2]
         end
-    elseif Sys.islinux() || Sys.isfreebsd()
+    else
         LazyLibrary[libz, libnghttp2, libssh2, libssl, libcrypto]
-    elseif Sys.isapple()
-        LazyLibrary[libz, libnghttp2, libssh2]
     end
 )
 

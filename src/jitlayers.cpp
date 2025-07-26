@@ -1385,11 +1385,13 @@ namespace {
 #endif
         if (TheTriple.isAArch64())
             codemodel = CodeModel::Small;
+#if JL_LLVM_VERSION < 200000
         else if (TheTriple.isRISCV()) {
-            // RISC-V will support large code model in LLVM 21
+            // RISC-V only supports large code model from LLVM 20
             // https://github.com/llvm/llvm-project/pull/70308
             codemodel = CodeModel::Medium;
         }
+#endif
         // Generate simpler code for JIT
         Reloc::Model relocmodel = Reloc::Static;
         if (TheTriple.isRISCV()) {

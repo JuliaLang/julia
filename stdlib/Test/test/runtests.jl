@@ -390,7 +390,7 @@ let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
-        error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"), nothing)
+        error_mock = Test.Error(:test, 1, 2, nothing, LineNumberNode(0, "An Error Mock"), nothing)
         @test Test.record(ts, error_mock; print_result=false) isa Test.Error
         fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
         @test Test.record(ts, fail_mock; print_result=false) isa Test.Fail
