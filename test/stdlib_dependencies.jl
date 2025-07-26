@@ -178,6 +178,7 @@ try
             "bcrypt",
             "winhttp",
             "secur32",
+            "iphlpapi",
         ]
         return any(syslib -> lowercase(lib) == syslib, system_libs)
     end
