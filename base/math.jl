@@ -245,11 +245,8 @@ function _180_over_pi(z::Union{Float16, Float32})
     end
     r
 end
-function _pi_over_180(z::Union{Float16})
-    if z isa Float16
-        r = Float16(0.01746)
-    end
-    r
+function _pi_over_180(::Float16)
+    Float16(0.01746)
 end
 
 """
