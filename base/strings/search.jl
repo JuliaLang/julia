@@ -585,7 +585,7 @@ findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
         overlap::Bool = false,
     )
     findall(
-        pattern::Vector{UInt8}
+        pattern::Vector{UInt8},
         A::Vector{UInt8};
         overlap::Bool = false,
     )

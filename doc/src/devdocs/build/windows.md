@@ -141,19 +141,19 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
     4. Then install tools required to build julia:
 
        ```
-       pacman -S cmake diffutils git m4 make patch tar p7zip curl python
+       pacman -S diffutils git m4 make patch tar p7zip curl python
        ```
 
        For 64 bit Julia, install the x86_64 version:
 
        ```
-       pacman -S mingw-w64-x86_64-gcc
+       pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-clang
        ```
 
        For 32 bit Julia, install the i686 version:
 
        ```
-       pacman -S mingw-w64-i686-gcc
+       pacman -S mingw-w64-i686-gcc mingw-w64-i686-cmake mingw-w64-i686-clang
        ```
 
     5. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
@@ -171,7 +171,15 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
        cd julia
        ```
 
-    3. Start the build
+    3. If you want to use clang (currently required if building LLVM from source), put the following in your Make.user
+      ```
+      CC=/mingw64/bin/clang
+      CXX=/mingw64/bin/clang++
+      ```
+!!! warning "UCRT Unsupported"
+   Do not try to use any other clang that MSYS2 may install (which may not have the correct default target) or the "Clang" environment(which defaults to the currently unsupported ucrt).
+
+    4. Start the build
 
        ```
        make -j$(nproc)

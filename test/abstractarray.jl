@@ -831,6 +831,9 @@ function test_cat(::Type{TestAbstractArray})
     r = rand(Float32, 56, 56, 64, 1);
     f(r) = cat(r, r, dims=(3,))
     @inferred f(r);
+
+    #58866 - ensure proper dimension calculation for 0-dimension elements
+    @test [zeros(1, 0) zeros(1,0); zeros(0,0) zeros(0, 0)] == Matrix{Float64}(undef, 1, 0)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -1743,6 +1746,9 @@ using Base: typed_hvncat
     @test ["A";;"B";;"C";;"D"] == ["A" "B" "C" "D"]
     @test ["A";"B";;"C";"D"] == ["A" "C"; "B" "D"]
     @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
+
+    #58866 - ensure proper dimension calculation for 0-dimension elements
+    @test [zeros(1, 0) zeros(1,0);;; zeros(0,0) zeros(0, 0)] == Array{Float64, 3}(undef, 1, 0, 0)
 end
 
 @testset "stack" begin
@@ -2284,6 +2290,20 @@ end
         @test size(b) == (1, 2, 2)
 
         @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
+    end
+end
+
+@testset "effect inference for `iterate` for `Array` and for `Memory`" begin
+    for El ∈ (Float32, Real, Any)
+        for Arr ∈ (Memory{El}, Array{El, 0}, Vector{El}, Matrix{El}, Array{El, 3})
+            effects = Base.infer_effects(iterate, Tuple{Arr, Int})
+            @test Base.Compiler.is_effect_free(effects)
+            @test Base.Compiler.is_terminates(effects)
+            @test Base.Compiler.is_notaskstate(effects)
+            @test Base.Compiler.is_noub(effects)
+            @test Base.Compiler.is_nonoverlayed(effects)
+            @test Base.Compiler.is_nortcall(effects)
+        end
     end
 end
 

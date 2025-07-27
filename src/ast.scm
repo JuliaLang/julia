@@ -466,6 +466,7 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
+(define (thisfunction? e) (and (pair? e) (eq? (car e) 'thisfunction)))
 
 (define (tuple-call? e)
   (and (length> e 1)

@@ -2,10 +2,10 @@
 STD_LIB_PATH := $(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^programs: =' | sed -e "s/^programs: =//")
 STD_LIB_PATH += $(PATHSEP)$(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
 ifeq ($(BUILD_OS),WINNT)  # the mingw compiler lies about it search directory paths
-STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
+STD_LIB_PATH += $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
 
-# Given a colon-separated list of paths in $(2), find the location of the library given in $(1)
+# Given a $(PATHSEP)-separated list of paths in $(2), find the location of the library given in $(1)
 define pathsearch
 $(firstword $(wildcard $(addsuffix /$(1),$(subst $(PATHSEP), ,$(2)))))
 endef
@@ -54,6 +54,13 @@ $$(build_shlibdir)/$(1): | $$(build_shlibdir)
 	[ -n "$$$${SRC_LIB}" ] && cp "$$$${SRC_LIB}" '$$(build_shlibdir)'
 endef
 
+define copy_csl_static_lib
+install-csl: | $$(build_private_libdir) $$(build_private_libdir)/$(1)
+$$(build_private_libdir)/$(1): | $$(build_private_libdir)
+	-@SRC_LIB='$$(call pathsearch,$(1),$$(STD_LIB_PATH))'; \
+	[ -n "$$$${SRC_LIB}" ] && cp "$$$${SRC_LIB}" '$$(build_private_libdir)'
+endef
+
 # libgfortran has multiple names; we're just going to copy any version we can find
 # Since we're only looking in the location given by `$(FC)` this should only succeed for one.
 $(eval $(call copy_csl,$(call versioned_libname,libgfortran,3)))
@@ -63,11 +70,20 @@ $(eval $(call copy_csl,$(call versioned_libname,libgfortran,5)))
 # These are all libraries that we should always have
 $(eval $(call copy_csl,$(call versioned_libname,libquadmath,0)))
 $(eval $(call copy_csl,$(call versioned_libname,libstdc++,6)))
-$(eval $(call copy_csl,$(call versioned_libname,libssp,0)))
 $(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
 $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
+# Configurable either a static or dynamic library depending on the system
+$(eval $(call copy_csl,$(call versioned_libname,libssp,0)))
+$(eval $(call copy_csl_static_lib,libssp.a))
+
 ifeq ($(OS),WINNT)
+# On windows we need the static gcc runtime libraries for linking pkgimages
+$(eval $(call copy_csl_static_lib,libgcc.a))
+$(eval $(call copy_csl_static_lib,libgcc_s.a))
+$(eval $(call copy_csl_static_lib,libmsvcrt.a))
+$(eval $(call copy_csl_static_lib,libmingwex.a))
+$(eval $(call copy_csl_static_lib,libkernel32.a))
 # Windows has special gcc_s names
 ifeq ($(ARCH),i686)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_sjlj,1)))

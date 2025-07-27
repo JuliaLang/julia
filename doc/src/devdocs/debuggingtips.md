@@ -200,7 +200,7 @@ Expr(:return, Expr(:call, :box, :Float32, Expr(:call, :fptrunc, :Float32, :x)::A
 ```
 
 Finally, and perhaps most usefully, we can force the function to be recompiled in order to step
-through the codegen process. To do this, clear the cached `functionObject` from the `jl_lamdbda_info_t*`:
+through the codegen process. To do this, clear the cached `functionObject` from the `jl_lambda_info_t*`:
 
 ```
 (gdb) p f->linfo->functionObject

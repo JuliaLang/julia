@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryrefnew, memoryrefget, memoryrefset!
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefnew, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
@@ -377,13 +377,27 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
+# These special checkbounds methods are defined early for bootstrapping
+function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
+    @inline
+    ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
+end
+function checkbounds(A::Union{Array, GenericMemory}, i::Int)
+    @inline
+    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+end
+
 default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemory{:atomic}) = :monotonic
 default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
-getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
+function getindex(A::GenericMemory, i::Int)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && checkbounds(A, i)
+    memoryrefget(memoryrefnew(A, i, false), default_access_order(A), false)
+end
+
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
@@ -421,7 +435,7 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) type, then it will return the
+If `T` is an [`AbstractFloat`](@ref) type, then it will return the
 closest value to `x` representable by `T`. Inf is treated as one
 ulp greater than `floatmax(T)` for purposes of determining nearest.
 
@@ -717,7 +731,7 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+cconvert(::Type{T}, x) where {T} = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
@@ -949,17 +963,17 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(memoryrefnew(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
@@ -1211,8 +1225,9 @@ Stateful iterators that want to opt into this feature should define an `isdone`
 method that returns true/false depending on whether the iterator is done or
 not. Stateless iterators need not implement this function.
 
-If the result is `missing`, callers may go ahead and compute
-`iterate(x, state) === nothing` to compute a definite answer.
+If the result is `missing`, then `isdone` cannot determine whether the iterator
+state is terminal, and callers must compute `iterate(itr, state) === nothing`
+to obtain a definitive answer.
 
 See also [`iterate`](@ref), [`isempty`](@ref)
 """

@@ -543,6 +543,14 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
+    world = Base._require_world_age[]
+    if world == typemax(UInt)
+        world = Base.get_world_counter()
+    end
+    return Base.invoke_in_world(world, __artifact_str, __module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, Val(LazyArtifacts))::String
+end
+
+function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
     pkg = Base.PkgId(__module__)
     if pkg.uuid !== nothing
         # Process overrides for this UUID, if we know what it is
@@ -565,7 +573,8 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
             if nameof(LazyArtifacts) in (:Pkg, :Artifacts, :PkgArtifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            return jointail(LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
+            path_base = (@invokelatest LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform))::String
+            return jointail(path_base, path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end

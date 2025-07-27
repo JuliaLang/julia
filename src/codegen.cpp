@@ -239,13 +239,13 @@ extern void __stack_chk_fail();
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
 extern void ___chkstk_ms(void);
 #else
 extern void __chkstk(void);
 #endif
 #else
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
 #undef _alloca
 extern void _alloca(void);
 #else
@@ -641,7 +641,7 @@ static AttributeList get_attrs_box_float(LLVMContext &C, unsigned nbytes)
     auto FnAttrs = AttrBuilder(C);
     FnAttrs.addAttribute(Attribute::WillReturn);
     FnAttrs.addAttribute(Attribute::NoUnwind);
-    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly() | MemoryEffects::readOnly());
     auto RetAttrs = AttrBuilder(C);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addDereferenceableAttr(nbytes);
@@ -657,7 +657,7 @@ static AttributeList get_attrs_box_sext(LLVMContext &C, unsigned nbytes)
     auto FnAttrs = AttrBuilder(C);
     FnAttrs.addAttribute(Attribute::WillReturn);
     FnAttrs.addAttribute(Attribute::NoUnwind);
-    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly() | MemoryEffects::readOnly());
     auto RetAttrs = AttrBuilder(C);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addAttribute(Attribute::getWithDereferenceableBytes(C, nbytes));
@@ -674,7 +674,7 @@ static AttributeList get_attrs_box_zext(LLVMContext &C, unsigned nbytes)
     auto FnAttrs = AttrBuilder(C);
     FnAttrs.addAttribute(Attribute::WillReturn);
     FnAttrs.addAttribute(Attribute::NoUnwind);
-    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+    FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly() | MemoryEffects::readOnly());
     auto RetAttrs = AttrBuilder(C);
     RetAttrs.addAttribute(Attribute::NonNull);
     RetAttrs.addDereferenceableAttr(nbytes);
@@ -1125,7 +1125,7 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
         auto FnAttrs = AttrBuilder(C);
         FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
-        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly());
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         auto RetAttrs = AttrBuilder(C);
@@ -1149,7 +1149,7 @@ static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<Type
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
-        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly());
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         auto RetAttrs = AttrBuilder(C);
@@ -1394,7 +1394,7 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
         [](LLVMContext &C) {
             AttrBuilder FnAttrs(C);
             AttrBuilder RetAttrs(C);
-            FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef) | MemoryEffects::argMemOnly(ModRefInfo::Ref));
+            FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly() | MemoryEffects::readOnly());
             FnAttrs.addAttribute(Attribute::WillReturn);
             RetAttrs.addAlignmentAttr(Align(16));
             RetAttrs.addAttribute(Attribute::NonNull);
@@ -1438,7 +1438,7 @@ static const auto jldnd_func = new JuliaFunction<>{
     },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly() | MemoryEffects::readOnly());
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         return AttributeList::get(C,
@@ -3862,8 +3862,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
     bool isboxed = layout->flags.arrayelem_isboxed;
     bool isunion = layout->flags.arrayelem_isunion;
-    bool isatomic = kind == (jl_value_t*)jl_atomic_sym;
-    bool needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
+    bool isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
+    bool needlock = layout->flags.arrayelem_islocked;
     size_t elsz = layout->size;
     size_t al = layout->alignment;
     if (al > JL_HEAP_ALIGNMENT)
@@ -4138,14 +4138,23 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     else if (f == BUILTIN(memoryrefnew) && (nargs == 2 || nargs == 3)) {
         const jl_cgval_t &ref = argv[1];
-        jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
-        if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
-            mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
-            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
+        jl_datatype_t *mty_dt = (jl_datatype_t*)jl_unwrap_unionall(ref.typ);
+        if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type((jl_value_t*)mty_dt)) {
+            mty_dt = (jl_datatype_t*)jl_field_type_concrete(mty_dt, 1);
+            const jl_datatype_layout_t *layout = mty_dt->layout;
             jl_value_t *boundscheck = nargs == 3 ? argv[3].constant : nullptr;
             if (nargs == 3)
                 emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "memoryrefnew");
             *ret = emit_memoryref(ctx, ref, argv[2], boundscheck, layout);
+            return true;
+        }
+        if (jl_is_genericmemory_type(mty_dt) && jl_is_concrete_type((jl_value_t*)mty_dt)) {
+            const jl_datatype_layout_t *layout = mty_dt->layout;
+            jl_value_t *boundscheck = nargs == 3 ? argv[3].constant : nullptr;
+            if (nargs == 3)
+                emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "memoryrefnew");
+            jl_value_t *typ = jl_apply_type((jl_value_t*)jl_genericmemoryref_type, jl_svec_data(mty_dt->parameters), jl_svec_len(mty_dt->parameters));
+            *ret = emit_memoryref_direct(ctx, ref, argv[2], typ, boundscheck, layout);
             return true;
         }
     }
@@ -4222,7 +4231,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             size_t al = layout->alignment;
             if (al > JL_HEAP_ALIGNMENT)
                 al = JL_HEAP_ALIGNMENT;
-            bool needlock = isatomic && !isboxed && elsz > MAX_ATOMIC_SIZE;
+            bool needlock = layout->flags.arrayelem_islocked;
             AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                     ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                     : get_llvm_atomic_order(order);
@@ -4308,7 +4317,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 *ret = jl_cgval_t(); // unreachable
                 return true;
             }
-            bool isatomic = kind == (jl_value_t*)jl_atomic_sym;
+            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
+            bool isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
             if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
                 emit_atomic_error(ctx, "memoryref_isassigned: non-atomic memory cannot be accessed atomically");
                 *ret = jl_cgval_t(); // unreachable
@@ -4324,13 +4334,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             jl_value_t *boundscheck = argv[3].constant;
             emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, fname);
-            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
             Value *mem = emit_memoryref_mem(ctx, ref, layout);
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *oob = bounds_check_enabled(ctx, boundscheck) ? ctx.builder.CreateIsNull(mlen) : nullptr;
             bool isboxed = layout->flags.arrayelem_isboxed;
             if (isboxed || layout->first_ptr >= 0) {
-                bool needlock = isatomic && !isboxed && layout->size > MAX_ATOMIC_SIZE;
+                bool needlock = layout->flags.arrayelem_islocked;
                 AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                         ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                         : get_llvm_atomic_order(order);
@@ -4350,13 +4359,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     ctx.builder.SetInsertPoint(passBB);
                 }
                 Value *elem = emit_memoryref_ptr(ctx, ref, layout);
-                if (needlock) {
+                if (!isboxed)
+                    elem = emit_ptrgep(ctx, elem, layout->first_ptr * sizeof(void*));
+                else if (needlock)
                     // n.b. no actual lock acquire needed, as the check itself only needs to load a single pointer and check for null
                     // elem += sizeof(lock);
                     elem = emit_ptrgep(ctx, elem, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
-                }
-                if (!isboxed)
-                    elem = emit_ptrgep(ctx, elem, layout->first_ptr * sizeof(void*));
                 // emit this using the same type as BUILTIN(memoryrefget)
                 // so that LLVM may be able to load-load forward them and fold the result
                 auto tbaa = isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf;
@@ -5054,7 +5062,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             break;
         case jl_returninfo_t::SRet:
             assert(result);
-            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_gcframe, load_gc_roots(ctx, return_roots, returninfo.return_roots));
+            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_gcframe, load_gc_roots(ctx, return_roots, returninfo.return_roots, ctx.tbaa().tbaa_gcframe));
             break;
         case jl_returninfo_t::Union: {
             Value *box = ctx.builder.CreateExtractValue(call, 0);
@@ -5603,7 +5611,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 T_prjlvalue = AT->getElementType();
             }
             assert(T_prjlvalue == ctx.types().T_prjlvalue);
-            v.inline_roots = load_gc_roots(ctx, varslot, nroots, vi.isVolatile);
+            v.inline_roots = load_gc_roots(ctx, varslot, nroots, ctx.tbaa().tbaa_gcframe, vi.isVolatile);
         }
         if (vi.usedUndef) {
             assert(vi.defFlag);
@@ -6356,8 +6364,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     }
     else if (head == jl_cfunction_sym) {
         assert(nargs == 5);
-        jl_cgval_t fexpr_rt = emit_expr(ctx, args[1]);
-        return emit_cfunction(ctx, args[0], fexpr_rt, args[2], (jl_svec_t*)args[3]);
+        jl_cgval_t fexpr_val = emit_expr(ctx, args[1]);
+        return emit_cfunction(ctx, args[0], fexpr_val, args[2], (jl_svec_t*)args[3]);
     }
     else if (head == jl_assign_sym) {
         assert(nargs == 2);
@@ -6779,9 +6787,12 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
     rhs.promotion_point = nullptr;
     rhs.promotion_ssa = -1;
     if (gcstack_arg) {
-        w->setCallingConv(CallingConv::Swift);
         AttrBuilder param(ctx.builder.getContext());
-        param.addAttribute(Attribute::SwiftSelf);
+        if (ctx.emission_context.use_swiftcc) {
+            w->setCallingConv(CallingConv::Swift);
+            param.addAttribute(Attribute::SwiftSelf);
+        }
+        param.addAttribute("gcstack");
         param.addAttribute(Attribute::NonNull);
         Argument *gcstackarg = &*AI++;
         gcstackarg->addAttrs(param);
@@ -6927,7 +6938,7 @@ static void emit_specsig_to_specsig(
                 auto tracked = CountTrackedPointers(et);
                 SmallVector<Value*,0> roots;
                 if (tracked.count && !tracked.all) {
-                    roots = load_gc_roots(ctx, &*AI, tracked.count);
+                    roots = load_gc_roots(ctx, &*AI, tracked.count, ctx.tbaa().tbaa_const);
                     ++AI;
                 }
                 myargs[i] = mark_julia_slot(arg_v, jt, NULL, ctx.tbaa().tbaa_const, roots);
@@ -7576,7 +7587,7 @@ static const char *derive_sigt_name(jl_value_t *jargty)
 // Get the LLVM Function* for the C-callable entry point for a certain function
 // and argument types.
 // here argt does not include the leading function type argument
-static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, const jl_cgval_t &fexpr_rt, jl_value_t *declrt, jl_svec_t *argt)
+static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, const jl_cgval_t &fexpr_val, jl_value_t *declrt, jl_svec_t *argt)
 {
     jl_unionall_t *unionall_env = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
         ? (jl_unionall_t*)ctx.linfo->def.method->sig
@@ -7634,8 +7645,8 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     // compute+verify the dispatch signature, and see if it depends on the environment sparams
     bool approx = false;
     sigt = (jl_value_t*)jl_alloc_svec(nargt + 1);
-    jl_svecset(sigt, 0, fexpr_rt.typ);
-    if (!fexpr_rt.constant && (!jl_is_concrete_type(fexpr_rt.typ) || jl_is_kind(fexpr_rt.typ)))
+    jl_svecset(sigt, 0, fexpr_val.typ);
+    if (!fexpr_val.constant && (!jl_is_concrete_type(fexpr_val.typ) || jl_is_kind(fexpr_val.typ)))
         approx = true;
     for (size_t i = 0; i < nargt; i++) {
         jl_value_t *jargty = jl_svecref(argt, i);
@@ -7664,7 +7675,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         unionall_env = NULL;
     }
 
-    bool nest = (!fexpr_rt.constant || unionall_env);
+    bool nest = (!fexpr_val.constant || unionall_env);
     if (ctx.emission_context.TargetTriple.isAArch64() || ctx.emission_context.TargetTriple.isARM() || ctx.emission_context.TargetTriple.isPPC64()) {
         if (nest) {
             emit_error(ctx, "cfunction: closures are not supported on this platform");
@@ -7672,17 +7683,17 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             return jl_cgval_t();
         }
     }
-    const char *name = derive_sigt_name(fexpr_rt.typ);
+    const char *name = derive_sigt_name(fexpr_val.typ);
     Value *F = gen_cfun_wrapper(
             jl_Module, ctx.emission_context,
-            sig, fexpr_rt.constant, name,
+            sig, fexpr_val.constant, name,
             declrt, sigt,
             unionall_env, sparam_vals, &closure_types);
     bool outboxed;
     if (nest) {
         // F is actually an init_trampoline function that returns the real address
         // Now fill in the nest parameters
-        Value *fobj = boxed(ctx, fexpr_rt);
+        Value *fobj = boxed(ctx, fexpr_val);
         jl_svec_t *fill = jl_emptysvec;
         if (closure_types) {
             assert(ctx.spvals_ptr);
@@ -7722,7 +7733,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.decorateInst(ctx.builder.CreateStore(F, derived_strct));
             ai.decorateInst(ctx.builder.CreateStore(
-                ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, fexpr_rt.constant), ctx.types().T_size),
+                ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, fexpr_val.constant), ctx.types().T_size),
                 ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, derived_strct, 1)));
             ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(ctx.types().T_size),
                     ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, derived_strct, 2)));
@@ -7957,6 +7968,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         AttrBuilder param(M->getContext());
         if (params.use_swiftcc)
             param.addAttribute(Attribute::SwiftSelf);
+        param.addAttribute("gcstack");
         param.addAttribute(Attribute::NonNull);
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(PointerType::get(M->getContext(), 0));
@@ -8511,7 +8523,7 @@ static jl_llvm_functions_t
             ctx.spvals_ptr = &*AI++;
         }
     }
-    // step 6. set up GC frame and special arguments
+    // step 6a. set up special arguments and attributes
     Function::arg_iterator AI = f->arg_begin();
     SmallVector<AttributeSet, 0> attrs(f->arg_size()); // function declaration attributes
 
@@ -8558,7 +8570,11 @@ static jl_llvm_functions_t
         attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param);
     }
 
+    // step 6b. Setup the GC frame and entry safepoint before any loads
     allocate_gc_frame(ctx, b0);
+    if (params.safepoint_on_entry && JL_FEAT_TEST(ctx, safepoint_on_entry))
+        emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
+
     Value *last_age = NULL;
     Value *world_age_field = NULL;
     if (ctx.is_opaque_closure) {
@@ -8716,7 +8732,14 @@ static jl_llvm_functions_t
             SmallVector<Value*,0> roots;
             auto tracked = CountTrackedPointers(llvmArgType);
             if (tracked.count && !tracked.all) {
-                roots = load_gc_roots(ctx, &*AI, tracked.count);
+                Argument *RootArg = &*AI;
+                roots = load_gc_roots(ctx, RootArg, tracked.count, ctx.tbaa().tbaa_const);
+                AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
+                param.addAttribute(Attribute::NonNull);
+                param.addAttribute(Attribute::NoUndef);
+                param.addDereferenceableAttr(tracked.count * sizeof(void*));
+                param.addAlignmentAttr(alignof(void*));
+                attrs[RootArg->getArgNo()] = AttributeSet::get(Arg->getContext(), param);
                 ++AI;
             }
             theArg = mark_julia_slot(Arg, argType, NULL, ctx.tbaa().tbaa_const, roots); // this argument is by-pointer
@@ -9026,11 +9049,7 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
-    // step 11a. Emit the entry safepoint
-    if (params.safepoint_on_entry && JL_FEAT_TEST(ctx, safepoint_on_entry))
-        emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
-
-    // step 11b. Do codegen in control flow order
+    // step 11. Do codegen in control flow order
     SmallVector<int, 0> workstack;
     DenseMap<size_t, BasicBlock*> BB;
     DenseMap<size_t, BasicBlock*> come_from_bb;
@@ -10034,13 +10053,13 @@ static void init_jit_functions(void)
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
     add_named_global("__julia_personality", &__julia_personality);
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
     add_named_global("___chkstk_ms", &___chkstk_ms);
 #else
     add_named_global("__chkstk", &__chkstk);
 #endif
 #else
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
     add_named_global("_alloca", &_alloca);
 #else
     add_named_global("_chkstk", &_chkstk);

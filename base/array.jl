@@ -748,9 +748,16 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
-_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+function _collect_indices(::Tuple{}, A)
+    dest = Array{eltype(A),0}(undef)
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
+function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
+    dest = Array{eltype(A)}(undef, length.(indsA))
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
@@ -902,10 +909,6 @@ function grow_to!(dest, itr, st)
     return dest
 end
 
-## Iteration ##
-
-iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
-
 ## Indexing: getindex ##
 
 """
@@ -993,7 +996,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end

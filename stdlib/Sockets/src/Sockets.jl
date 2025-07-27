@@ -220,7 +220,7 @@ end
 # Disables dual stack mode.
 const UV_TCP_IPV6ONLY = 1
 
-# Disables dual stack mode. Only available when using ipv6 binf
+# Disables dual stack mode. Only available when using ipv6 bind
 const UV_UDP_IPV6ONLY = 1
 
 # Indicates message was truncated because read buffer was too small. The
@@ -780,7 +780,7 @@ end
 """
     leave_multicast_group(sock::UDPSocket, group_addr, interface_addr = nothing)
 
-Remove a socket from  a particular multicast group defined by `group_addr`.
+Remove a socket from a particular multicast group defined by `group_addr`.
 If `interface_addr` is given, specifies a particular interface for multi-homed
 systems.  Use `join_multicast_group()` to enable reception of a group.
 """

@@ -8,7 +8,7 @@ end
 SlotInfo() = SlotInfo(Int[], Int[], false)
 
 function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
-    # NewVarNodes count as defs for the purpose
+    # NewvarNodes count as defs for the purpose
     # of liveness analysis (i.e. they kill use chains)
     if isa(stmt, NewvarNode)
         result[slot_id(stmt.slot)].any_newvar = true

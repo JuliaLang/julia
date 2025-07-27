@@ -557,7 +557,13 @@ struct FooBackdated
 
     FooBackdated() = new(FooBackdated[])
 end
-@test Base.invoke_in_world(before_backdate_age, isdefined, @__MODULE__, :FooBackdated)
+# For depwarn == 1, this throws a warning on access, for depwarn == 2, it throws an error.
+# `isdefinedglobal` changes with that, but doesn't error.
+if Base.JLOptions().depwarn <= 1
+    @test Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
+else
+    @test !Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
+end
 
 # Test that ambiguous binding intersect the using'd binding's world ranges
 module AmbigWorldTest

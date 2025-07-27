@@ -15,7 +15,7 @@ function, and primitive function, before turning into the desired result (hopefu
         short.
       * AST
 
-        Abstract Syntax Tree The AST is the digital representation of the code structure. In this form
+        Abstract Syntax Tree. The AST is the digital representation of the code structure. In this form
         the code has been tokenized for meaning so that it is more suitable for manipulation and execution.
 
 

@@ -391,6 +391,12 @@ julia> twothreearr()
  3
 ```
 
+### Is a function that ends with `!` allowed to allocate?
+
+Yes! A function name ending with `!` indicates that the function mutates at
+least one of its arguments (typically the first argument). However, it may
+still allocate a scratch space to expedite computation or produce that result.
+
 ## Types, type declarations, and constructors
 
 ### [What does "type-stable" mean?](@id man-type-stability)

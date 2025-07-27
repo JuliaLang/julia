@@ -34,7 +34,7 @@ The basic syntax is simple: any string appearing just before an object
 the documented object. Here is a basic example:
 
 ```julia
-"Tell whether there are too foo items in the array."
+"Tell whether there are too many foo items in the array."
 foo(xs::Array) = ...
 ```
 !!! note "Reminder"

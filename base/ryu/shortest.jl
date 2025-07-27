@@ -196,6 +196,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
         e10 = 0
 
         if maxsignif !== nothing && b > maxsignif
+            roundup = false
             b_allzero = true
             # reduce to max significant digits
             while true

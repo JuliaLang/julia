@@ -240,6 +240,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
+    # Test to make sure that command line --help and --help-hidden do not return a description which is more than 100 characters wide
+    @test isempty(filter(x->length(x) > 100, readlines(`$exename -h`)))
+    @test isempty(filter(x->length(x) > 100, readlines(`$exename --help-hidden`)))
+
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
         let expanded = abspath(expanduser("~/foo/Project.toml"))
@@ -1023,6 +1027,14 @@ end
         @test v[1] == false
         @test v[2] == ""
         @test contains(v[3], "More than one command line CPU targets specified")
+    end
+
+    # Testing this more precisely would be very platform and build system dependent and brittle.
+    withenv("JULIA_CPU_TARGET" => "sysimage") do
+        v = readchomp(`$julia_path -E "Sys.sysimage_target()"`)
+        # Local builds will likely be "native" but CI shouldn't be.
+        invalid_results = Base.get_bool_env("CI", false) ? ("", "native", "sysimage") : ("", "sysimage",)
+        @test !in(v, invalid_results)
     end
 end
 

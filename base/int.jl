@@ -844,7 +844,7 @@ widen(::Type{UInt64}) = UInt128
 # |x|<=2^(k-1), |y|<=2^k-1   =>   |x*y|<=2^(2k-1)-1
 widemul(x::Signed,y::Unsigned) = widen(x) * signed(widen(y))
 widemul(x::Unsigned,y::Signed) = signed(widen(x)) * widen(y)
-# multplication by Bool doesn't require widening
+# multiplication by Bool doesn't require widening
 widemul(x::Bool,y::Bool) = x * y
 widemul(x::Bool,y::Number) = x * y
 widemul(x::Number,y::Bool) = x * y

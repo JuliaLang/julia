@@ -179,8 +179,14 @@ end
 @test hash([1,2]) == hash(view([1,2,3,4],1:2))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
-    @test (hash(a)==hash(b)) == (a==b)
+    @test hash(a) == hash(b)
+    @test a != b
 end
+let a = QuoteNode(:(1 + 2)), b = QuoteNode(:(1 + 2))
+    @test hash(a) == hash(b)
+    @test a == b
+end
+
 
 let a = Expr(:block, Core.SlotNumber(1)),
     b = Expr(:block, Core.SlotNumber(1)),

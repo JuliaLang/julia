@@ -323,7 +323,8 @@ typedef struct _jl_method_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
-    _Atomic(int32_t) dispatch_status; // bits defined in staticdata.jl
+    _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
+    _Atomic(jl_genericmemory_t*) interferences; // set of intersecting methods not more specific
     _Atomic(size_t) primary_world;
 
     // method's type signature. redundant with TypeMapEntry->specTypes
@@ -368,6 +369,7 @@ typedef struct _jl_method_t {
     uint8_t nospecializeinfer;
     // bit flags, 0x01 = scanned
     // 0x02 = added to module scanned list (either from scanning or inference edge)
+    // 0x04 = Source was invalidated since jl_require_world
     _Atomic(uint8_t) did_scan_source;
 
     // uint8 settings
@@ -407,6 +409,7 @@ struct _jl_method_instance_t {
     //   bit 2: The ->backedges field is currently being walked higher up the stack - entries may be deleted, but not moved
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
     _Atomic(uint8_t) flags;
+    _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
 };
 #define JL_MI_FLAGS_MASK_PRECOMPILED    0x01
 #define JL_MI_FLAGS_MASK_DISPATCHED     0x02
@@ -572,10 +575,12 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
+        uint16_t arrayelem_isatomic : 1;
+        uint16_t arrayelem_islocked : 1;
         // If set, this type's egality can be determined entirely by comparing
         // the non-padding bits of this datatype.
         uint16_t isbitsegal : 1;
-        uint16_t padding : 10;
+        uint16_t padding : 8;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -1665,6 +1670,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_addrspacecore(v) jl_typetagis(v,jl_addrspacecore_type)
 #define jl_is_abioverride(v) jl_typetagis(v,jl_abioverride_type)
 #define jl_genericmemory_isbitsunion(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isunion)
+#define jl_genericmemory_isatomic(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isatomic)
+#define jl_genericmemory_islocked(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_islocked)
 #define jl_is_array_any(v)    jl_typetagis(v,jl_array_any_type)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);

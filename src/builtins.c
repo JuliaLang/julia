@@ -1765,30 +1765,45 @@ JL_CALLABLE(jl_f_memoryrefnew)
         return (jl_value_t*)jl_new_memoryref(typ, m, m->ptr);
     }
     else {
-        JL_TYPECHK(memoryrefnew, genericmemoryref, args[0]);
         JL_TYPECHK(memoryrefnew, long, args[1]);
         if (nargs == 3)
             JL_TYPECHK(memoryrefnew, bool, args[2]);
+        size_t i = (size_t) jl_unbox_long(args[1]) - 1;
+        char *data;
+        if (jl_is_genericmemory(args[0])) {
+            jl_genericmemory_t *m = (jl_genericmemory_t*)args[0];
+            jl_value_t *typ = jl_apply_type((jl_value_t*)jl_genericmemoryref_type, jl_svec_data(((jl_datatype_t*)jl_typetagof(m))->parameters), 3);
+            JL_GC_PROMISE_ROOTED(typ); // it is a concrete type
+            if (i >= m->length)
+                jl_bounds_error((jl_value_t*)m, args[1]);
+            const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m))->layout;
+            if (layout->flags.arrayelem_isunion || layout->size == 0)
+                return (jl_value_t*)jl_new_memoryref(typ, m, (char*)i);
+            else if (layout->flags.arrayelem_isboxed)
+                return (jl_value_t*)jl_new_memoryref(typ, m, (char*)m->ptr + sizeof(jl_value_t*)*i);
+            return (jl_value_t*)jl_new_memoryref(typ, m, (char*)m->ptr + layout->size*i);
+        }
+        JL_TYPECHK(memoryrefnew, genericmemoryref, args[0]);
         jl_genericmemoryref_t *m = (jl_genericmemoryref_t*)args[0];
-        size_t i = jl_unbox_long(args[1]) - 1;
-        const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m->mem))->layout;
-        char *data = (char*)m->ptr_or_offset;
+        jl_genericmemory_t *mem = m->mem;
+        data = (char*)m->ptr_or_offset;
+        const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(mem))->layout;
         if (layout->flags.arrayelem_isboxed) {
-            if (((data - (char*)m->mem->ptr) / sizeof(jl_value_t*)) + i >= m->mem->length)
+            if (((data - (char*)mem->ptr) / sizeof(jl_value_t*)) + i >= mem->length)
                 jl_bounds_error((jl_value_t*)m, args[1]);
             data += sizeof(jl_value_t*) * i;
         }
         else if (layout->flags.arrayelem_isunion || layout->size == 0) {
-            if ((size_t)data + i >= m->mem->length)
+            if ((size_t)data + i >= mem->length)
                 jl_bounds_error((jl_value_t*)m, args[1]);
             data += i;
         }
         else {
-            if (((data - (char*)m->mem->ptr) / layout->size) + i >= m->mem->length)
+            if (((data - (char*)mem->ptr) / layout->size) + i >= mem->length)
                 jl_bounds_error((jl_value_t*)m, args[1]);
             data += layout->size * i;
         }
-        return (jl_value_t*)jl_new_memoryref((jl_value_t*)jl_typetagof(m), m->mem, data);
+        return (jl_value_t*)jl_new_memoryref((jl_value_t*)jl_typetagof(m), mem, data);
     }
 }
 

@@ -403,7 +403,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         }
         JL_UNLOCK(&cfun_lock);
         // next, try to figure out what the target should look like (outside of the lock since this is very slow)
-        codeinst = mi ? jl_type_infer(mi, world, SOURCE_MODE_ABI) : nullptr;
+        codeinst = mi ? jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim) : nullptr;
         // relock for the remainder of the function
         JL_LOCK(&cfun_lock);
     } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed

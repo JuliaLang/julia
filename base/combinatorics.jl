@@ -184,13 +184,12 @@ end
 """
     permute!(v, p)
 
-Permute vector `v` in-place, according to permutation `p`. No checking is done
-to verify that `p` is a permutation.
+Permute vector `v` according to permutation `p`, storing the result back into `v`.
+No checking is done to verify that `p` is a permutation.
 
 To return a new permutation, use `v[p]`. This is generally faster than `permute!(v, p)`;
 it is even faster to write into a pre-allocated output array with `u .= @view v[p]`.
-(Even though `permute!` overwrites `v` in-place, it internally requires some allocation
-to keep track of which elements have been moved.)
+(Even though `permute!` overwrites `v` in-place, it internally requires some allocation.)
 
 $(_DOCS_ALIASING_WARNING)
 

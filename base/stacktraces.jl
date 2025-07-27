@@ -24,7 +24,7 @@ Stack information representing execution context, with the following fields:
 
 - `linfo::Union{Method, Core.MethodInstance, Core.CodeInstance, Core.CodeInfo, Nothing}`
 
-  The Method, MethodInstance, CodeInstance, or CodeInfo containing the execution context (if it could be found), \
+  The Method, MethodInstance, CodeInstance, or CodeInfo containing the execution context (if it could be found),
      or nothing (for example, if the inlining was a result of macro expansion).
 
 - `file::Symbol`
@@ -290,7 +290,7 @@ end
 
 # Can be extended by compiler packages to customize backtrace display of custom code instance frames
 function show_custom_spec_sig(io::IO, @nospecialize(owner), linfo::CodeInstance, frame::StackFrame)
-    mi = get_ci_mi(linfo)
+    mi = Base.get_ci_mi(linfo)
     return show_spec_sig(io, mi.def, mi.specTypes)
 end
 

@@ -85,6 +85,10 @@ may result in pernicious and hard-to-find deadlocks. BE VERY CAREFUL!
 >
 >   * Libdl.LazyLibrary lock
 
+The following is a level 7 lock, which can only be acquired when not holding any other locks:
+
+>   * world_counter_lock
+
 
 The following is the root lock, meaning no other lock shall be held when trying to acquire it:
 

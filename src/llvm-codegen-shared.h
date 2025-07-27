@@ -197,6 +197,7 @@ static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &
     llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield);
     LoadInst *ptls_load = builder.CreateAlignedLoad(
             T_ptr, psafepoint, Align(sizeof(void *)), "safepoint");
+    ptls_load->setOrdering(AtomicOrdering::Monotonic);
     tbaa_decorate(tbaa, ptls_load);
     return ptls_load;
 }

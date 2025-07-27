@@ -1597,9 +1597,12 @@ let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fal
     @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
-    @test memoryref_tfunc(Memory{Int}, Int) == Union{}
-    @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
-    @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
+    @test memoryref_tfunc(Memory{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Symbol) == Union{}
+    @test memoryref_tfunc(Memory{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
+    @test memoryref_tfunc(Any, Any, Any) == GenericMemoryRef
+    @test memoryref_tfunc(Any, Any) == GenericMemoryRef
     @test memoryref_tfunc(Any) == GenericMemoryRef
     @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, Bool) === Int
     @test memoryrefget_tfunc(MemoryRef{Int}, Any, Any) === Int
@@ -3546,8 +3549,14 @@ f31974(n::Int) = f31974(1:n)
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
 
-f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
-@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+# Issue #33472
+struct WrapperWithUnionall33472{T<:Real}
+    x::T
+end
+
+f_overly_abstract33472() = WrapperWithUnionall33472(Base.inferencebarrier(1)::Number)
+# Check that this doesn't infer as `WrapperWithUnionall33472{T<:Number}`.
+@test Base.return_types(f_overly_abstract33472, Tuple{}) == [WrapperWithUnionall33472]
 
 # Issue 26724
 const IntRange = AbstractUnitRange{<:Integer}

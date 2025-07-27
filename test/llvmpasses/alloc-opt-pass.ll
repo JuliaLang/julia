@@ -197,10 +197,10 @@ union_move9:                                      ; No predecessors!
 @1 = private unnamed_addr constant i64 0, align 8
 
 ; CHECK-LABEL: @cmpxchg
-; CHECK: alloca 
+; CHECK: alloca
 ; CHECK: alloca
 ; CHECK:  %20 = cmpxchg ptr %2,
-define swiftcc i64 @"cmpxchg"(ptr nonnull swiftself %0) #0 {
+define swiftcc i64 @"cmpxchg"(ptr nonnull swiftself "gcstack" %0) #0 {
   %2 = alloca i64, align 16
   %3 = call ptr @julia.get_pgcstack()
   %4 = getelementptr inbounds i8, ptr %3, i32 -152
@@ -229,7 +229,7 @@ define swiftcc i64 @"cmpxchg"(ptr nonnull swiftself %0) #0 {
 
 19:                                               ; preds = %19, %1
   %20 = phi i64 [ %17, %1 ], [ %23, %19 ]
-  %21 = call swiftcc i64 @"jlsys_+_47"(ptr nonnull swiftself %3, i64 signext %20, i64 signext 1)
+  %21 = call swiftcc i64 @"jlsys_+_47"(ptr nonnull swiftself "gcstack" %3, i64 signext %20, i64 signext 1)
   %22 = cmpxchg ptr addrspace(11) %16, i64 %20, i64 %21 seq_cst monotonic, align 8, !tbaa !25, !alias.scope !23, !noalias !24
   %23 = extractvalue { i64, i1 } %22, 0
   %24 = extractvalue { i64, i1 } %22, 1
@@ -241,7 +241,7 @@ define swiftcc i64 @"cmpxchg"(ptr nonnull swiftself %0) #0 {
 ; CHECK: alloca
 ; CHECK: alloca
 ; CHECK: atomicrmw xchg ptr %2,
-define swiftcc i64 @"atomicrmw"(ptr nonnull swiftself %0) #0 {
+define swiftcc i64 @"atomicrmw"(ptr nonnull swiftself "gcstack" %0) #0 {
   %2 = alloca i64, align 16
   %3 = call ptr @julia.get_pgcstack()
   %4 = getelementptr inbounds i8, ptr %3, i32 -152
@@ -263,7 +263,7 @@ define swiftcc i64 @"atomicrmw"(ptr nonnull swiftself %0) #0 {
   call void @llvm.memcpy.p11.p0.i64(ptr addrspace(11) align 8 %15, ptr align 8 @1, i64 8, i1 false), !tbaa !20, !alias.scope !23, !noalias !24
   %16 = addrspacecast ptr addrspace(10) %14 to ptr addrspace(11)
   %17 = load atomic i64, ptr addrspace(11) %16 monotonic, align 8, !tbaa !25, !alias.scope !23, !noalias !24
-  %18 = call swiftcc i64 @"jlsys_+_47"(ptr nonnull swiftself %3, i64 signext %17, i64 signext 1)
+  %18 = call swiftcc i64 @"jlsys_+_47"(ptr nonnull swiftself "gcstack" %3, i64 signext %17, i64 signext 1)
   %19 = atomicrmw xchg ptr addrspace(11) %16, i64 %18 seq_cst, align 8, !tbaa !25, !alias.scope !23, !noalias !24                                    ; preds = %19
   ret i64 %19
 }

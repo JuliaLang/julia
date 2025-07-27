@@ -196,7 +196,7 @@ If `rng` is not specified, it defaults to seeding the state of the
 shared task-local generator.
 
 # Examples
-```julia-repl
+```jldoctest; filter = r"(true|false)"
 julia> Random.seed!(1234);
 
 julia> x1 = rand(2)

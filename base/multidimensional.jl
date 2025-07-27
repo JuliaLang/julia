@@ -2017,3 +2017,105 @@ end
 
 getindex(b::Ref, ::CartesianIndex{0}) = getindex(b)
 setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)
+
+## hashing AbstractArray ## can't be put in abstractarray.jl due to bootstrapping problems with the use of @nexpr
+
+function _hash_fib(A, h::UInt)
+    # Goal: Hash approximately log(N) entries with a higher density of hashed elements
+    # weighted towards the end and special consideration for repeated values. Colliding
+    # hashes will often subsequently be compared by equality -- and equality between arrays
+    # works elementwise forwards and is short-circuiting. This means that a collision
+    # between arrays that differ by elements at the beginning is cheaper than one where the
+    # difference is towards the end. Furthermore, choosing `log(N)` arbitrary entries from a
+    # sparse array will likely only choose the same element repeatedly (zero in this case).
+
+    # To achieve this, we work backwards, starting by hashing the last element of the
+    # array. After hashing each element, we skip `fibskip` elements, where `fibskip`
+    # is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
+    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension
+    # and only end up hashing one slice of the array (as might happen with powers of
+    # two). Finally, we find the next distinct value from the one we just hashed.
+
+    # This is a little tricky since skipping an integer number of values inherently works
+    # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
+    ks = keys(A)
+    key_to_linear = LinearIndices(ks) # Index into this map to compute the linear index
+    linear_to_key = vec(ks)           # And vice-versa
+
+    # Start at the last index
+    keyidx = last(ks)
+    linidx = key_to_linear[keyidx]
+    fibskip = prevfibskip = oneunit(linidx)
+    first_linear = first(LinearIndices(linear_to_key))
+    @nexprs 4 i -> p_i = h
+
+    n = 0
+    while true
+        n += 1
+        # Hash the element
+        elt = A[keyidx]
+
+        stream_idx = mod1(n, 4)
+        @nexprs 4 i -> stream_idx == i && (p_i = hash_mix_linear(hash(keyidx, p_i), hash(elt, p_i)))
+
+        # Skip backwards a Fibonacci number of indices -- this is a linear index operation
+        linidx = key_to_linear[keyidx]
+        linidx < fibskip + first_linear && break
+        linidx -= fibskip
+        keyidx = linear_to_key[linidx]
+
+        # Only increase the Fibonacci skip once every N iterations. This was chosen
+        # to be big enough that all elements of small arrays get hashed while
+        # obscenely large arrays are still tractable. With a choice of N=4096, an
+        # entirely-distinct 8000-element array will have ~75% of its elements hashed,
+        # with every other element hashed in the first half of the array. At the same
+        # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
+        if rem(n, 4096) == 0
+            fibskip, prevfibskip = fibskip + prevfibskip, fibskip
+        end
+
+        # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
+        keyidx = findprev(!isequal(elt), A, keyidx)
+        keyidx === nothing && break
+    end
+
+    @nexprs 4 i -> h = hash_mix_linear(p_i, h)
+    return hash_uint(h)
+end
+
+function hash_shaped(A, h::UInt)
+    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
+    # Instead hash the tuple of firsts and lasts along each dimension
+    h = hash(map(first, axes(A)), h)
+    h = hash(map(last, axes(A)), h)
+    len = length(A)
+
+    if len < 8
+        # for the shortest arrays we chain directly
+        for elt in A
+            h = hash(elt, h)
+        end
+        return h
+    elseif len < 32768
+        # separate accumulator streams, unrolled
+        @nexprs 8 i -> p_i = h
+        n  = 1
+        limit = len - 7
+        while n <= limit
+            @nexprs 8 i -> p_i = hash(A[n + i - 1], p_i)
+            n += 8
+        end
+        while n <= len
+            p_1 = hash(A[n], p_1)
+            n += 1
+        end
+        # fold all streams back together
+        @nexprs 8 i -> h = hash_mix_linear(p_i, h)
+        return hash_uint(h)
+    else
+        return _hash_fib(A, h)
+    end
+end
+
+const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
+hash(A::AbstractArray, h::UInt) = hash_shaped(A, h ⊻ hash_abstractarray_seed)

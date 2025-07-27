@@ -2420,8 +2420,8 @@ end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
     for s in names(m, all = true)
-        if isdefined(m, s) && !Base.isdeprecated(m, s)
-            t = getfield(m, s)
+        if isdefinedglobal(m, s) && !Base.isdeprecated(m, s)
+            t = getglobal(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
             elseif isa(t, Module) && t !== m && nameof(t) === s && parentmodule(t) === m
