@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base: delete
+
 @test_throws TypeError NamedTuple{1,Tuple{}}
 @test_throws TypeError NamedTuple{(),1}
 @test_throws TypeError NamedTuple{(:a,1),Tuple{Int}}
@@ -281,6 +283,11 @@ function abstr_nt_22194_3()
 end
 abstr_nt_22194_3()
 @test Base.return_types(abstr_nt_22194_3, ()) == Any[Any]
+
+@test delete((a=1,), :a) == NamedTuple()
+@test delete((a=1, b=2), :a) == (b=2,)
+@test delete((a=1, b=2, c=3), :b) == (a=1, c=3)
+@test delete((a=1, b=2, c=3), :z) == (a=1, b=2, c=3)
 
 @test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)

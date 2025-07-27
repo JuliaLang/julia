@@ -15,7 +15,7 @@ function, and primitive function, before turning into the desired result (hopefu
         short.
       * AST
 
-        Abstract Syntax Tree The AST is the digital representation of the code structure. In this form
+        Abstract Syntax Tree. The AST is the digital representation of the code structure. In this form
         the code has been tokenized for meaning so that it is more suitable for manipulation and execution.
 
 
@@ -89,7 +89,7 @@ the expression. Macro expansion involves a handoff from [`eval()`](@ref) (in Jul
 function `jl_macroexpand()` (written in `flisp`) to the Julia macro itself (written in - what
 else - Julia) via `fl_invoke_julia_macro()`, and back.
 
-Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@ref)/`jl_expand()`,
+Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@ref)/`Core._lower()`,
 although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`jl_macroexpand()`.
 
 ## [Type Inference](@id dev-type-inference)

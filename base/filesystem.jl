@@ -137,11 +137,11 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import .Base:
-    IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
-    bytesavailable, position, read, read!, readavailable, seek, seekend, show,
-    skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
+    IOError, _UVError, _sizeof_uv_fs, check_open, close, closewrite, eof, eventloop, fd, isopen,
+    bytesavailable, position, read, read!, readbytes!, readavailable, seek, seekend, show,
+    skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error, _uv_error,
     setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
-    isexecutable, isreadable, iswritable, MutableDenseArrayType
+    isexecutable, isreadable, iswritable, MutableDenseArrayType, truncate, unsafe_takestring!
 
 import .Base.RefValue
 
@@ -159,7 +159,7 @@ uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 include("path.jl")
 include("stat.jl")
 include("file.jl")
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
+include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
 

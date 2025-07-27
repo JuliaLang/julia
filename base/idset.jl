@@ -4,7 +4,7 @@
     IdSet{T}([itr])
     IdSet()
 
-IdSet{T}() constructs a set (see [`Set`](@ref)) using
+`IdSet{T}()` constructs a set (see [`Set`](@ref)) using
 `===` as equality with values of type `T`.
 
 In the example below, the values are all `isequal` so they get overwritten in the ordinary `Set`.
@@ -92,8 +92,17 @@ function sizehint!(s::IdSet, newsz)
     nothing
 end
 
+function _zero!(a::Memory{<:BitInteger})
+    t = @_gc_preserve_begin a
+    p = unsafe_convert(Ptr{Cvoid}, a)
+    T = eltype(a)
+    memset(p, 0x0, (sizeof(T) * length(a)) % UInt)
+    @_gc_preserve_end t
+    return a
+end
+
 function empty!(s::IdSet)
-    fill!(s.idxs, 0x00)
+    _zero!(s.idxs)
     list = s.list
     for i = 1:s.max
         _unsetindex!(list, i)

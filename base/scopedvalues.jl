@@ -85,6 +85,8 @@ struct Scope
     values::ScopeStorage
 end
 
+Scope(scope::Scope) = scope
+
 function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
     val = convert(T, value)
     if parent === nothing

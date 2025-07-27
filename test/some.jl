@@ -44,8 +44,8 @@
 
 ##  == and isequal nothing
 
-@test Some(1) != nothing
-@test Some(nothing) != nothing
+@test Some(1) !== nothing
+@test Some(nothing) !== nothing
 @test !isequal(Some(1), nothing)
 @test !isequal(Some(nothing), nothing)
 

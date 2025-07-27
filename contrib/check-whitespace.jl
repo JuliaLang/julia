@@ -18,6 +18,8 @@ const patterns = split("""
     *Makefile
 """)
 
+const is_gha = something(tryparse(Bool, get(ENV, "GITHUB_ACTIONS", "false")), false)
+
 # Note: `git ls-files` gives `/` as a path separator on Windows,
 #   so we just use `/` for all platforms.
 allow_tabs(path) =
@@ -63,8 +65,14 @@ function check_whitespace()
         for (path, lineno, msg) in sort!(collect(errors))
             if lineno == 0
                 println(stderr, "$path -- $msg")
+                if is_gha
+                    println(stdout, "::warning title=Whitespace check,file=", path, "::", msg)
+                end
             else
                 println(stderr, "$path:$lineno -- $msg")
+                if is_gha
+                    println(stdout, "::warning title=Whitespace check,file=", path, ",line=", lineno, "::", msg)
+                end
             end
         end
         exit(1)

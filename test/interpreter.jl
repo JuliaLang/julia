@@ -31,5 +31,10 @@ let p = Pipe(),
     close(p)
 end
 
+# Test generated function behavior in interpreter
+@test success(pipeline(`$(Base.julia_cmd()) --compile=min -E 'include("staged.jl")'`; stderr))
+
 # Test contextual execution mechanism in interpreter (#54360)
-@test success(pipeline(`$(Base.julia_cmd()) --compile=min -E 'include("compiler/contextual.jl")'`; stderr))
+let compiler_contextual_test = escape_string(joinpath(@__DIR__,"../Compiler/test/contextual.jl"))
+    @test success(pipeline(`$(Base.julia_cmd()) --compile=min -E "include(\"$compiler_contextual_test\")"`; stderr))
+end
