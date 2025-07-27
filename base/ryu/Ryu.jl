@@ -23,7 +23,7 @@ neededdigits(::Type{Float16}) = 9 + 5 + 9
 Number of digits necessary to represent type `T` in shortest precision.
 """
 neededfloatdigits(::Type{Float64}) = 24
-neededfloatdigits(::Type{Float32}) = 15
+neededfloatdigits(::Type{Float32}) = 17
 neededfloatdigits(::Type{Float16}) = 20
 
 """
