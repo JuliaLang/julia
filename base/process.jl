@@ -110,7 +110,7 @@ end
                 error("invalid spawn handle $h from $io")
             end
             for io in stdio]
-        syncd = Task[io.t for io in stdio if io isa SyncCloseFD]
+        syncd = Task[(io::SyncCloseFD).t for io in stdio if io isa SyncCloseFD]
         handle = Libc.malloc(_sizeof_uv_process)
         disassociate_julia_struct(handle)
         (; exec, flags, env, dir) = cmd
