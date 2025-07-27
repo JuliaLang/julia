@@ -27,6 +27,37 @@ if Base.JLOptions().trim != 0
     include(joinpath(@__DIR__, "juliac-trim-base.jl"))
 end
 
+const C_friendly_types = Union{    # a few of these are redundant to make it easier to maintain
+    Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64, Bool,
+    Cvoid, Cint, Cshort, Clong, Cuint, Cushort, Culong, Cssize_t, Csize_t,
+    Cchar, Cwchar_t, Cstring, Cwstring,
+    RawFD,
+}
+
+function is_c_friendly(@nospecialize(T::DataType))
+    T <: Ptr && return is_c_friendly(T.parameters[1])
+    return T <: C_friendly_types
+end
+
+function recursively_add_types!(types::Base.IdSet{DataType}, @nospecialize(T::DataType))
+    if !is_c_friendly(T)
+        T.name.module === Core && error("invalid type for juliac: ", T) # exclude internals (they may change)
+        push!(types, T)
+    end
+    for list in (T.parameters, fieldtypes(T))
+        for S in list
+            recursively_add_types!(types, S)
+        end
+    end
+end
+
+function mangle_name(@nospecialize(T::DataType))
+    is_c_friendly(T) && return string(T)
+    pname = isempty(T.parameters) ? String(nameof(T)) :
+                                    join(pushfirst!(map(mangle_name, T.parameters), String(nameof(T)), "_"))
+    return "_" * pname * "_"
+end
+
 # Load user code
 
 import Base.Experimental.entrypoint
@@ -72,6 +103,38 @@ let mod = Base.include(Main, ARGS[1])
     entrypoint(Base.checktaskempty, ())
     if ARGS[3] == "true"
         ccall(:jl_add_ccallable_entrypoints, Cvoid, ())
+    end
+
+    # Export info about entrypoints and structs needed to create header files
+    if length(ARGS) >= 4
+        logfile = ARGS[4]
+        open(logfile, "w") do io
+            types = Base.IdSet{DataType}()
+            Base.visit(Core.GlobalMethods) do method
+                if isdefined(method, :ccallable)
+                    rt, sig = method.ccallable
+                    name = length(method.ccallable) > 2 ? Symbol(method.ccallable[3]) : method.name
+                    Base.show_tuple_as_call(io, name, sig)
+                    println(io, "::", rt)
+                    for T in sig.parameters[2:end]
+                        recursively_add_types!(types, T)
+                    end
+                end
+            end
+            println(io)
+            for T in types
+                println(io, mangle_name(T))
+                dtfd = Base.DataTypeFieldDesc(T)
+                local fd
+                for i = 1:Base.datatype_nfields(T)
+                    fd = dtfd[i]
+                    fn = fieldname(T, i)
+                    ft = fieldtype(T, i)
+                    println(io, "  ", fn, "::", mangle_name(ft), "[", fd.offset, "]")
+                end
+                println(io, fd.offset + fd.size, " bytes")
+            end
+        end
     end
 end
 

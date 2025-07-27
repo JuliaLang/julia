@@ -15,4 +15,21 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test lines[2] == lines[3]
     @test Base.VersionNumber(lines[2]) ≥ v"1.5.7"
     @test filesize(basic_jll_exe) < filesize(unsafe_string(Base.JLOptions().image_file))/10
+
+    str = read(joinpath(bindir, "bindinginfo_simplelib.log"), String)
+    @test occursin("copyto_and_sum(::CVectorPair{Float32})::Float32", str)
+    @test occursin(
+        """
+        _CVector_Float32_
+          length::Int32[0]
+          data::Ptr{Float32}[8]
+        16 bytes""", str
+    )
+    @test occursin(
+        """
+        _CVectorPair_Float32_
+          from::_CVector_Float32_[0]
+          to::_CVector_Float32_[16]
+        32 bytes""", str
+    )
 end
