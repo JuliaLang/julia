@@ -24,16 +24,5 @@ function @main(args::Vector{String})::Cint
     cfunc = @cfunction(print_string, Cvoid, (Ptr{Cvoid},))
     fptr = dlsym(Zstd_jll.libzstd_handle, :ZSTD_versionString)
     ccall(cfunc, Cvoid, (Ptr{Cvoid},), fptr)
-
-    # map/mapreduce should work but relies on inlining and other optimizations
-    arr = rand(10)
-    sorted_arr = sort(arr)
-    tot = sum(sorted_arr)
-    tot = prod(sorted_arr)
-    a = any(x -> x > 0, sorted_arr)
-    b = all(x -> x >= 0, sorted_arr)
-    c = map(x -> x^2, sorted_arr)
-    # d = mapreduce(x -> x^2, +, sorted_arr) this doesn't work because of mapreduce_empty_iter having F specialized
-    # e = reduce(xor, rand(Int, 10))
     return 0
 end
