@@ -30,7 +30,7 @@ function @main(args::Vector{String})::Cint
     a = any(x -> x > 0, sorted_arr)
     b = all(x -> x >= 0, sorted_arr)
     c = map(x -> x^2, sorted_arr)
-    # d = mapreduce(x -> x^2, +, sorted_arr) this doesn't work because of mapreduce_empty_iter having F specialized
+    d = mapreduce(x -> x^2, +, sorted_arr)
     # e = reduce(xor, rand(Int, 10))
     return 0
 end
