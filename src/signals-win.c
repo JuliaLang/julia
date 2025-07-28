@@ -530,26 +530,35 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     uv_mutex_unlock(&bt_data_prof_lock);
 }
 
+int jl_install_default_signal_handler(int sig)
+{
+    switch (sig) {
+    case SIGFPE:
+    case SIGILL:
+    case SIGINT:
+    case SIGSEGV:
+    case SIGTERM:
+    case SIGABRT:
+        sa_handler = crt_sig_handler;
+        break;
+    default:
+        return 0; // No default signal handler installed
+    }
+
+    if (signal(sig, (void (__cdecl *)(int))sa_handler) == SIG_ERR) {
+        jl_errorf("fatal error: Couldn't set %s", sigabbrev_np(sig));
+    }
+    return 1; // A default signal handler was installed
+}
+
 void jl_install_default_signal_handlers(void)
 {
-    if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGFPE");
-    }
-    if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGILL");
-    }
-    if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGINT");
-    }
-    if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGSEGV");
-    }
-    if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTERM");
-    }
-    if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGABRT");
-    }
+    jl_install_default_signal_handler(SIGFPE);
+    jl_install_default_signal_handler(SIGILL);
+    jl_install_default_signal_handler(SIGINT);
+    jl_install_default_signal_handler(SIGSEGV);
+    jl_install_default_signal_handler(SIGTERM);
+    jl_install_default_signal_handler(SIGABRT);
     SetUnhandledExceptionFilter(jl_exception_handler);
 }
 
