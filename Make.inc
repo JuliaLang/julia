@@ -1766,13 +1766,10 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
-# Cross-bootstrapping
-bootstrap_private_libdir := $(if $(CROSS_BOOTSTRAP_JULIA),$(CROSS_BOOTSTRAP_JULIA)/lib/julia,$(build_private_libdir))
-
 ifneq ($(CROSS_BOOTSTRAP_JULIA),)
-JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)/bin/julia-debug$(EXE)
-JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)/bin/julia$(EXE)
-JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE := $(CROSS_BOOTSTRAP_JULIA)
 else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
