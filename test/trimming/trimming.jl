@@ -17,19 +17,27 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test filesize(basic_jll_exe) < filesize(unsafe_string(Base.JLOptions().image_file))/10
 
     str = read(joinpath(bindir, "bindinginfo_simplelib.log"), String)
-    @test occursin("copyto_and_sum(::CVectorPair{Float32})::Float32", str)
+    @test occursin("copyto_and_sum(fromto::CVectorPair{Float32})::Float32", str)
     @test occursin(
         """
-        _CVector_Float32_
+        CVector{Float32}
           length::Int32[0]
           data::Ptr{Float32}[8]
         16 bytes""", str
     )
     @test occursin(
         """
-        _CVectorPair_Float32_
-          from::_CVector_Float32_[0]
-          to::_CVector_Float32_[16]
+        CVectorPair{Float32}
+          from::CVector{Float32}[0]
+          to::CVector{Float32}[16]
         32 bytes""", str
     )
+    # ensure that there is a blank line between methods and types
+    lines = split(str, '\n'; keepempty=true)
+    nblanks = 0
+    for line in lines
+        nblanks += isempty(line)
+        occursin("length", line) && break
+    end
+    @test nblanks == 1
 end
