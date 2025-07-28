@@ -1220,7 +1220,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     //    jl_value_t **ttypes = { jl_builtin_type, jl_tparam0(jl_anytuple_type) };
     //    jl_value_t *invalidt = jl_apply_tuple_type_v(ttypes, 2); // Tuple{Union{Builtin,OpaqueClosure}, Vararg}
     //    if (!jl_has_empty_intersection(argtype, invalidt))
-    //        jl_error("cannot add methods to a builtin function");
+    //        jl_error("cannot add methods to builtin function");
     //}
 
     assert(jl_is_linenode(functionloc));
@@ -1299,7 +1299,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     }
     ft = jl_rewrap_unionall(ft, argtype);
     if (!external_mt && !jl_has_empty_intersection(ft, (jl_value_t*)jl_builtin_type)) // disallow adding methods to Any, Function, Builtin, and subtypes, or Unions of those
-        jl_error("cannot add methods to a builtin function");
+        jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));
 
     m = jl_new_method_uninit(module);
     m->external_mt = (jl_value_t*)external_mt;
