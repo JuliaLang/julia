@@ -160,6 +160,9 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
                         0, // gc_sweep_always_full
+                        0, // target_sanitize_memory
+                        0, // target_sanitize_thread
+                        0, // target_sanitize_address
     };
     jl_options_initialized = 1;
 }
