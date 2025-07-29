@@ -1201,3 +1201,8 @@ end
 @testset "Iterators docstrings" begin
     @test isempty(Docs.undocumented_names(Iterators))
 end
+
+# Filtered list comprehension (`Filter` construct) type inference
+@test Base.infer_return_type((Vector{Any},)) do xs
+    [x for x in xs if x isa Int]
+end == Vector{Int}
