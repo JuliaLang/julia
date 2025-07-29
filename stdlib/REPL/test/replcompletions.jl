@@ -139,6 +139,7 @@ let ex =
             kwtest4(a::SubString; x23, _something) = pass
             kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
             kwtest5(a::Char, b; xyz) = pass
+            kwtest6(f::Function, arg1; somekwarg) = pass
 
             const named = (; len2=3)
             const fmsoebelkv = (; len2=3)
@@ -198,6 +199,8 @@ test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastinde
 test_complete_pos(s) = map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1)))
 test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
     map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
+test_complete_context_pos(s, m=@__MODULE__; shift::Bool=true) =
+    map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1, m, shift)))
 test_complete_foo(s; shift::Bool=true) = test_complete_context(s, Main.CompletionFoo; shift)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -2719,4 +2722,33 @@ let s = "foo58296(findfi"
     c, r = test_complete(s)
     @test "findfirst" in c
     @test r == 10:15
+end
+
+# #58931 - only show local names when completing the empty string
+let s = ""
+    c, r = test_complete_foo(s)
+    @test "test" in c
+    @test !("rand" in c)
+end
+
+# #58309, #58832 - don't show every name when completing after a full keyword
+let s = "true"     # bool is a little different (Base.isidentifier special case)
+    c, r = test_complete(s)
+    @test "trues" in c
+    @test "true" in c
+    @test !("rand" in c)
+end
+
+let s = "for"
+    c, r = test_complete(s)
+    @test "for" in c
+    @test "foreach" in c
+    @test !("rand" in c)
+end
+
+# #58833 - Autocompletion of keyword arguments with do-blocks is broken
+let s = "kwtest6(123; som|) do x; x + 3 end"
+    c, r = test_complete_context_pos(s, Main.CompletionFoo)
+    @test "somekwarg=" in c
+    @test r == 14:16
 end

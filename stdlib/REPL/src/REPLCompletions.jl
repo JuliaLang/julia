@@ -186,7 +186,7 @@ function complete_symbol!(suggestions::Vector{Completion},
                           complete_modules_only::Bool=false,
                           shift::Bool=false)
     local mod, t, val
-    complete_internal_only = false
+    complete_internal_only = isempty(name)
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -692,6 +692,15 @@ code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
 MAX_METHOD_COMPLETIONS::Int = 40
 function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     isempty(ex_org.args) && return 2, nothing, [], Set{Symbol}()
+    # Desugar do block call into call with lambda
+    if ex_org.head === :do && length(ex_org.args) >= 2
+        ex_call = ex_org.args[1]
+        ex_args = [x for x in ex_call.args if !(x isa Expr && x.head === :parameters)]
+        ex_params = findfirst(x -> x isa Expr && x.head === :parameters, ex_call.args)
+        new_args = [ex_args[1], ex_org.args[end], ex_args[2:end]...]
+        ex_params !== nothing && push!(new_args, ex_call.args[ex_params])
+        ex_org = Expr(:call, new_args...)
+    end
     funct = repl_eval_ex(ex_org.args[1], context_module)
     funct === nothing && return 2, nothing, [], Set{Symbol}()
     funct = CC.widenconst(funct)
@@ -1095,17 +1104,18 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     # Symbol completion
     # TODO: Should completions replace the identifier at the cursor?
+    looks_like_ident = Base.isidentifier(@view string[intersect(char_range(cur), 1:pos)])
     if cur.parent !== nothing && kind(cur.parent) == K"var"
         # Replace the entire var"foo", but search using only "foo".
         r = intersect(char_range(cur.parent), 1:pos)
         r2 = char_range(children_nt(cur.parent)[1])
         s = string[intersect(r2, 1:pos)]
-    elseif kind(cur) in KSet"Identifier @"
-        r = intersect(char_range(cur), 1:pos)
-        s = string[r]
     elseif kind(cur) == K"MacroName"
         # Include the `@`
         r = intersect(prevind(string, cur.position):char_last(cur), 1:pos)
+        s = string[r]
+    elseif looks_like_ident || kind(cur) in KSet"Bool Identifier @"
+        r = intersect(char_range(cur), 1:pos)
         s = string[r]
     else
         r = nextind(string, pos):pos
@@ -1114,7 +1124,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     complete_modules_only = false
     prefix = node_prefix(cur, context_module)
-    comp_keywords = prefix === nothing
+    comp_keywords = prefix === nothing && !isempty(s)
 
     # Complete loadable module names:
     #   import Mod TAB
