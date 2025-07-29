@@ -415,7 +415,7 @@ cd(@__DIR__) do
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
             fake.time_end = fake.time_start + duration
-            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(Any[(resp, [])]), LineNumberNode(1), nothing))
+            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
@@ -424,7 +424,7 @@ cd(@__DIR__) do
     for test in all_tests
         (test in completed_tests) && continue
         fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(Any[("skipped", [])]), LineNumberNode(1), nothing))
+        Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = [])]), LineNumberNode(1), nothing))
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()
