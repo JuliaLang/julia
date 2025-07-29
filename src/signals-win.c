@@ -30,16 +30,16 @@ void __cdecl fpreset (void);
 static char *strsignal(int sig)
 {
     switch (sig) {
-    case SIGINT:         return "SIGINT"; break;
-    case SIGILL:         return "SIGILL"; break;
-    case SIGABRT_COMPAT: return "SIGABRT_COMPAT"; break;
-    case SIGFPE:         return "SIGFPE"; break;
-    case SIGSEGV:        return "SIGSEGV"; break;
-    case SIGTERM:        return "SIGTERM"; break;
-    case SIGBREAK:       return "SIGBREAK"; break;
-    case SIGABRT:        return "SIGABRT"; break;
+    case SIGABRT:        return "SIGABRT";
+    case SIGABRT_COMPAT: return "SIGABRT_COMPAT";
+    case SIGBREAK:       return "SIGBREAK";
+    case SIGFPE:         return "SIGFPE";
+    case SIGILL:         return "SIGILL";
+    case SIGINT:         return "SIGINT";
+    case SIGSEGV:        return "SIGSEGV";
+    case SIGTERM:        return "SIGTERM";
+    default:             return "?";
     }
-    return "?";
 }
 
 static void jl_try_throw_sigint(void)
