@@ -54,6 +54,7 @@ if Sys.isunix()
 
 const PROT_READ     = Cint(1)
 const PROT_WRITE    = Cint(2)
+const PROT_EXEC     = Cint(4)
 const MAP_SHARED    = Cint(1)
 const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
@@ -62,16 +63,18 @@ const F_GETFL       = Cint(3)
 gethandle(io::IO) = RawFD(fd(io))
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::RawFD, shared::Bool)
+function settings(s::RawFD, shared::Bool, exec::Bool=false)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
         prot = PROT_READ | PROT_WRITE
+        exec && (prot |= PROT_EXEC)
     else
         mode = ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
         prot = (mode == 0) ? PROT_READ : ((mode == 1) ? PROT_WRITE : (PROT_READ | PROT_WRITE))
+        exec && (prot |= PROT_EXEC)
         if prot & PROT_READ == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
@@ -127,7 +130,7 @@ end # os-test
 # core implementation of mmap
 
 """
-    mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true, exec::Bool=false)
     mmap(type::Type{Array{T,N}}, dims)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
@@ -156,6 +159,8 @@ privileges are required to grow the file.
 
 The `shared` keyword argument specifies whether the resulting `Array` and changes made to it
 will be visible to other processes mapping the same file.
+
+The `exec` keyword argument specifies whether the underlying mmap data will be executale.
 
 For example, the following code
 
@@ -188,7 +193,8 @@ like HDF5 (which can be used with memory-mapping).
 function mmap(io::IO,
               ::Type{Array{T,N}}=Vector{UInt8},
               dims::NTuple{N,Integer}=(div(filesize(io)-position(io),Base.aligned_sizeof(T)),),
-              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
+              exec::Bool=false) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
@@ -217,7 +223,7 @@ function mmap(io::IO,
     end
     # platform-specific mmapping
     @static if Sys.isunix()
-        prot, flags, iswrite = settings(file_desc, shared)
+        prot, flags, iswrite = settings(file_desc, shared, exec)
         if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
             if iswrite
                 if grow
@@ -234,6 +240,7 @@ function mmap(io::IO,
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
+        # TODO settings() here only takes one arg, what to do with PROT_EXEC?
         name, readonly, create = settings(io)
         if requestedSizeLarger
             if readonly
@@ -268,18 +275,18 @@ end
 mmap(file::AbstractString,
      ::Type{T}=Vector{UInt8},
      dims::NTuple{N,Integer}=(div(filesize(file),Base.aligned_sizeof(eltype(T))),),
-     offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array,N} =
-    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Array{eltype(T),N}
+     offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true, exec::Bool=false) where {T<:Array,N} =
+    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared, exec=exec), file, isfile(file) ? "r" : "w+")::Array{eltype(T),N}
 
 # using a length argument instead of dims
-mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    mmap(io, T, (len,), offset; grow=grow, shared=shared)
-mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
+mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true, exec::Bool=false) where {T<:Array} =
+    mmap(io, T, (len,), offset; grow=grow, shared=shared, exec=exec)
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true, exec::Bool=false) where {T<:Array} =
+    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared, exec=exec), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
 
 # constructors for non-file-backed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:Array,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:Array} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true, exec::Bool=false) where {T<:Array,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared, exec=exec)
+mmap(::Type{T}, i::Integer...; shared::Bool=true, exec::Bool=false) where {T<:Array} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared, exec=exec)
 
 """
     mmap(io, BitArray, [dims, offset])
@@ -319,10 +326,10 @@ julia> rm("mmap.bin")
 This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
 function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
-              offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
+              offset::Int64=position(io); grow::Bool=true, shared::Bool=true, exec::Bool=false) where N
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
-    chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
+    chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared, exec=exec)
     if !isreadonly(io)
         chunks[end] &= Base._msk_end(n)
     else
@@ -339,18 +346,18 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
     return B
 end
 
-mmap(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0);grow::Bool=true, shared::Bool=true) where {T<:BitArray,N} =
-    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitArray{N}
+mmap(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0);grow::Bool=true, shared::Bool=true, exec::Bool=false) where {T<:BitArray,N} =
+    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared, exec=exec), file, isfile(file) ? "r" : "w+")::BitArray{N}
 
 # using a length argument instead of dims
-mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
-    mmap(io, T, (len,), offset; grow=grow, shared=shared)
-mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
-    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitVector
+mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true, exec::Bool=false) where {T<:BitArray} =
+    mmap(io, T, (len,), offset; grow=grow, shared=shared, exec=exec)
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true, exec::Bool=false) where {T<:BitArray} =
+    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared, exec=exec), file, isfile(file) ? "r" : "w+")::BitVector
 
 # constructors for non-file-backed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true, exec::Bool=false) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared, exec=exec)
+mmap(::Type{T}, i::Integer...; shared::Bool=true, exec::Bool=false) where {T<:BitArray} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared, exec=exec)
 
 # msync flags for unix
 const MS_ASYNC = 1
