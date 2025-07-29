@@ -23,3 +23,134 @@ end
     end
     @test signal_name(32) === nothing
 end
+
+@testset "register/deregister handler" begin
+    num_calls = Threads.Atomic{Int}(0)
+    last_signal = Threads.Atomic{Cint}(0)
+
+    # The handler we provide may, although unlikely, be triggered by external factors. We
+    # need to be careful as to which signal we utilize for our tests.
+    Signals.register_handler(SIGURG) do signal
+        num_calls[] += 1
+        last_signal[] = signal
+        return false
+    end
+
+    try
+        @test num_calls[] == 0
+        kill(SIGURG)
+
+        # Signal handler may not be called immediately
+        @test timedwait(() -> num_calls[] > 0, 5) === :ok
+        @test num_calls[] >= 1
+        @test last_signal[] == SIGURG
+
+        Signals.deregister_handler(SIGURG)
+        last_num_calls = num_calls[]
+
+        # Executes default signal handler. We need to choose our signal carefully to ensure this
+        # doesn't cause Julia to abend.
+        kill(SIGURG)
+
+        # Deregistration is immediate but we should wait a little in case the signal handler is
+        # not deregistered and the handler has not yet been called.
+        @test timedwait(() -> num_calls[] > last_num_calls, 5) === :timed_out
+        @test num_calls[] == last_num_calls
+    finally
+        Signals.deregister_handler(SIGURG)
+    end
+end
+
+# The C-function used as the signal handler must return `Cvoid`
+@testset "ignore handler return" begin
+    num_calls = Threads.Atomic{Int}(0)
+    Signals.register_handler(SIGURG) do signal
+        num_calls[] += 1
+        # return 1
+        return false
+    end
+
+    try
+        # A failure here will look like:
+        # `WARNING: cfunction: return type of _root_signal_handler does not match`
+        kill(SIGURG)
+        @test timedwait(() -> num_calls[] > 0, 5) === :ok
+    finally
+        Signals.deregister_handler(SIGURG)
+    end
+end
+
+@testset "register multiple signal handlers on one signal" begin
+    num_calls1 = Threads.Atomic{Int}(0)
+    num_calls2 = Threads.Atomic{Int}(0)
+
+    try
+        # Define a signal handler
+        Signals.register_handler(SIGURG) do signal
+            num_calls1[] += 1
+            return false
+        end
+
+        # Overwrite the signal handler
+        Signals.register_handler(SIGURG) do signal
+            num_calls2[] += 1
+            return false
+        end
+
+        kill(SIGURG)
+        @test timedwait(() -> num_calls1[] + num_calls2[] > 0, 5) === :ok
+        @test num_calls1[] == 0
+        @test num_calls2[] >= 1
+    finally
+        Signals.deregister_handler(SIGURG)
+    end
+end
+
+@testset "external signal" begin
+    num_calls = Threads.Atomic{Int}(0)
+
+    Signals.register_handler(SIGURG) do signal
+        num_calls[] += 1
+        return false
+    end
+
+    try
+        # Receive a signal from another process
+        run(`kill -SIGURG $(getpid())`)
+
+        @test timedwait(() -> num_calls[] > 0, 5) === :ok
+        @test num_calls[] >= 1
+    finally
+        Signals.deregister_handler(SIGURG)
+    end
+end
+
+@testset "exit within signal handler" begin
+    # Rudimentary IPC without using signals to ensure that the signal handler has been
+    # installed. Could also use shared memory for this.
+    ready_file = tempname()
+
+    code = quote
+        using Base.Signals
+        Signals._initialize_signal_router()
+        Signals.register_handler(SIGTERM) do signal
+            exit(2)
+        end
+
+        touch($ready_file)
+        sleep(30)
+        exit(1)  # Should only get here if the signal handler is never executed
+    end
+
+    cmd = `$(Base.julia_cmd()) -e $code`
+    buffer = IOBuffer()
+    p = run(pipeline(cmd; stdout=buffer, stderr=buffer); wait=false)
+    @test timedwait(() -> process_running(p) && isfile(ready_file), 5) === :ok
+    isfile(ready_file) && rm(ready_file)
+
+    kill(getpid(p), SIGTERM)
+
+    @test timedwait(() -> process_exited(p), 5) === :ok
+    @test p.exitcode == 2
+    @test String(take!(buffer)) == ""
+end

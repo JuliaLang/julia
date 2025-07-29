@@ -714,6 +714,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_init_uv();
     init_stdio();
     restore_fp_env();
+    init_signal_router();
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         restore_signals();
 

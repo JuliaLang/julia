@@ -44,6 +44,21 @@
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
 
+// The set of unblocked signals utilized by user-defined signal handlers.
+static sigset_t signal_router_sset;  // protected by `jl_signal_router_sset_lock`
+pthread_mutex_t signal_router_sset_lock;
+
+JL_DLLIMPORT _Atomic(uv_async_t *) jl_signal_router_condition JL_GLOBALLY_ROOTED;
+static void notify_signal_router(int sig);
+
+// POSIX standard signals are not queued when a single is pending. As our user signal
+// handler must wait for the libuv event loop we'll record the signals delivered to handler
+// from the kernel to ensure user callbacks have the chance to process all received signals.
+#define SIGNAL_QUEUE_SIZE 16
+static _Atomic(int) signal_queue[SIGNAL_QUEUE_SIZE];
+static _Atomic(size_t) signal_queue_head = 0;
+static _Atomic(size_t) signal_queue_tail = 0;
+
 #include "julia_assert.h"
 
 #if defined(_OS_DARWIN_) || defined(_OS_FREEBSD_)
@@ -926,10 +941,11 @@ static void do_profile(void *ctx)
 }
 #endif
 
+// Handle signals in a separate `signals_thread` to avoid interrupting other threads
 static void *signal_listener(void *arg)
 {
     sigset_t sset;
-    int sig, critical, profile;
+    int sig, critical, profile, ismember;
     jl_sigsetset(&sset);
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
     siginfo_t info;
@@ -983,6 +999,15 @@ static void *signal_listener(void *arg)
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+
+        pthread_mutex_lock(&signal_router_sset_lock);
+        ismember = sigismember(&signal_router_sset, sig);
+        pthread_mutex_unlock(&signal_router_sset_lock);
+        if (ismember == 1) {
+            notify_signal_router(sig);
+            continue;
+        }
+
         profile = 0;
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
@@ -1282,4 +1307,90 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
 JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
+}
+
+void init_signal_router(void)
+{
+    sigemptyset(&signal_router_sset);
+    if (pthread_mutex_init(&signal_router_sset_lock, NULL) != 0)
+        jl_error("phread_mutex_init failed for: signal_router_sset_lock");
+}
+
+void enqueue_user_signal(int sig) {
+    size_t head = jl_atomic_load_relaxed(&signal_queue_head);
+    size_t tail = jl_atomic_load_acquire(&signal_queue_tail);
+
+    size_t next_head = (head + 1) % SIGNAL_QUEUE_SIZE;
+    if (next_head == tail)
+        return; // queue full
+
+    jl_atomic_store_release(&signal_queue[head], sig);
+    jl_atomic_store_release(&signal_queue_head, next_head);
+}
+
+int dequeue_user_signal(void) {
+    size_t head = jl_atomic_load_acquire(&signal_queue_head);
+    size_t tail = jl_atomic_load_relaxed(&signal_queue_tail);
+
+    size_t next_tail = (tail + 1) % SIGNAL_QUEUE_SIZE;
+    if (tail == head)
+        return -1; // queue empty
+
+    int sig = jl_atomic_load_acquire(&signal_queue[tail]);
+    jl_atomic_store_release(&signal_queue_tail, next_tail);
+    return sig;
+}
+
+static void notify_signal_router(int sig)
+{
+    enqueue_user_signal(sig);
+    uv_async_t *handle = jl_atomic_load_relaxed(&jl_signal_router_condition);
+    if (handle)
+        uv_async_send(handle);
+}
+
+JL_DLLEXPORT int jl_consume_user_signal(void) {
+    return dequeue_user_signal();
+}
+
+JL_DLLEXPORT void jl_register_user_signal(int sig)
+{
+    pthread_mutex_lock(&signal_router_sset_lock);
+    int err = sigaddset(&signal_router_sset, sig);
+    pthread_mutex_unlock(&signal_router_sset_lock);
+    if (err < 0)
+        jl_errorf("fatal error: sigaddset: %s", strerror(errno));
+
+    // Overwrite the existing signal handler, if any. We avoid overwriting the handling of
+    // signals within the `sigwait_sigs` set as those cannot easily be restored. Instead,
+    // we have hooks in `signal_listener`.
+    sigset_t sset;
+    jl_sigsetset(&sset);
+    int ismember = sigismember(&sset, sig);
+    if (ismember == 0) {  // Signal is not in the `sigwait_sigs` set
+        jl_safe_printf("jl_register_signal: sigaction\n");
+        struct sigaction act;
+        memset(&act, 0, sizeof(struct sigaction));
+        sigemptyset(&act.sa_mask);
+        act.sa_handler = notify_signal_router;
+        if (sigaction(sig, &act, NULL) < 0)
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+    else if (ismember < 0)
+        jl_errorf("fatal error: sigismember: %s", strerror(errno));
+}
+
+JL_DLLEXPORT void jl_deregister_user_signal(int sig)
+{
+    pthread_mutex_lock(&signal_router_sset_lock);
+    int err = sigdelset(&signal_router_sset, sig);
+    pthread_mutex_unlock(&signal_router_sset_lock);
+    if (err < 0)
+        jl_errorf("fatal error: sigdelset: %s", strerror(errno));
+
+    // Restore the default Julia signal handler, if one was set for this signal. Will not
+    // interfere with the `sigwait_sigs` set used by `signal_listener` since we do not
+    // define default signal handlers for those signals.
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_default_signal_handler(sig);
 }
