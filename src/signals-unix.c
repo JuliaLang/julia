@@ -47,13 +47,19 @@ static const size_t sig_stack_size = 8 * 1024 * 1024;
 #include "julia_assert.h"
 
 #if defined(_OS_DARWIN_) || defined(_OS_FREEBSD_)
-JL_DLLEXPORT const char *sigabbrev_np(int sig) {
+JL_DLLEXPORT const char *jl_sigabbrev(int sig)
+{
     // The POSIX implementation limits results to the list of standard signals
     if (sig < NSIG && sig > 0 && sig < 32)
         // Lowercase abbreviations which deviates from the POSIX `sigabbrev_np`
         return sys_signame[sig];
     else
         return NULL;
+}
+#else
+JL_DLLEXPORT const char *jl_sigabbrev(int sig)
+{
+    return sigabbrev_np(sig);
 }
 #endif
 

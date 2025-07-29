@@ -29,7 +29,7 @@ void __cdecl fpreset (void);
 
 // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
 // https://learn.microsoft.com/en-us/windows/console/ctrl-c-and-ctrl-break-signals
-JL_DLLEXPORT static char *sigabbrev_np(int sig)
+JL_DLLEXPORT static char *jl_sigabbrev(int sig)
 {
     switch (sig) {
     case SIGABRT:        return "ABRT";

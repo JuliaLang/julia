@@ -10,7 +10,7 @@ signals on this architecture. If the signal number is invalid `nothing` will be 
 instead.
 """
 function signal_abbrev(signum::Integer)
-    abbrev = ccall(:sigabbrev_np, Cstring, (Cint,), signum)
+    abbrev = ccall(:jl_sigabbrev, Cstring, (Cint,), signum)
     abbrev != C_NULL || return nothing
     return @static Sys.isbsd() ? uppercase(unsafe_string(abbrev)) : unsafe_string(abbrev)
 end
