@@ -27,6 +27,23 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
+// https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
+// https://learn.microsoft.com/en-us/windows/console/ctrl-c-and-ctrl-break-signals
+JL_DLLEXPORT static char *sigabbrev_np(int sig)
+{
+    switch (sig) {
+    case SIGABRT:        return "ABRT";
+    case SIGABRT_COMPAT: return "ABRT_COMPAT";
+    case SIGBREAK:       return "BREAK";
+    case SIGFPE:         return "FPE";
+    case SIGILL:         return "ILL";
+    case SIGINT:         return "INT";
+    case SIGSEGV:        return "SEGV";
+    case SIGTERM:        return "TERM";
+    default:             return NULL;
+    }
+}
+
 static char *strsignal(int sig)
 {
     switch (sig) {
