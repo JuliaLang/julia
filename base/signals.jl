@@ -28,4 +28,18 @@ function signal_name(signum::Integer)
     return string("SIG", abbrev)
 end
 
+# Generate the `SIG*` constants for standard POSIX signals. We need to generate these
+# constants as the associated signal numbers are architecture specific.
+for signum in 1:31
+    signame = signal_name(signum)
+
+    if !isnothing(signame)
+        sigsym = Symbol(signame)
+        @eval begin
+            const $sigsym = $signum
+            export $sigsym
+        end
+    end
+end
+
 end
