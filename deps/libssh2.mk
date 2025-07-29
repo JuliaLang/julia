@@ -5,7 +5,7 @@ LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
 $(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 
 ifeq ($(USE_SYSTEM_OPENSSL), 0)
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | install-openssl
 endif
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
