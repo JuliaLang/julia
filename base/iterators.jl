@@ -536,10 +536,11 @@ function iterate(f::Filter, state...)
     while y !== nothing
         v, s = y
         if f.flt(v)
-            # Incorporate type information that may be improved by user-provided `f.flt`:
-            # This forces the return value of `iterate(::Filter, state...)` to always be `Tuple{Any,Any}`,
-            # but since that return value is only used by `iterate(::Filter, state...)`, this should be fine.
-            return (v, s)
+            if y isa Tuple{Any,Any}
+                return (v, s) # incorporate type information that may be improved by user-provided `f.flt`
+            else
+                return y
+            end
         end
         y = iterate(f.itr, s)
     end
