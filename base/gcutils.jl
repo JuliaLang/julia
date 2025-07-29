@@ -186,8 +186,8 @@ end
 """
     GC.@preserve x1 x2 ... xn expr
 
-Mark the objects `x1, x2, ...` as being *in use* during the evaluation of the
-expression `expr`. This is only required in unsafe code where `expr`
+Mark the objects `x1, x2, ...` as being *in use* during the evaluation of all
+calls lexically in the expression `expr`. This is only required in unsafe code where `expr`
 *implicitly uses* memory or other resources owned by one of the `x`s.
 
 *Implicit use* of `x` covers any indirect use of resources logically owned by
@@ -236,7 +236,12 @@ macro preserve(args...)
     for x in syms
         isa(x, Symbol) || error("Preserved variable must be a symbol")
     end
-    esc(Expr(:gc_preserve, args[end], syms...))
+    sym = length(syms) == 1 ? only(syms) : Expr(:tuple, syms...)
+    g = gensym()
+    esc(quote
+        $g = $sym
+        $(Expr(:gc_preserve, args[end], g))
+    end)
 end
 
 """

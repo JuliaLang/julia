@@ -502,4 +502,15 @@ function add_edges_impl(edges::Vector{Any}, info::GlobalAccessInfo)
     push!(edges, info.b)
 end
 
+"""
+    info::GCPreserveCallInfo <: CallInfo
+
+Wraps another CallInfo, indicating that this call came from a looked-through GCPreserveDuring.
+"""
+struct GCPreserveDuringCallInfo <: CallInfo
+    info::CallInfo
+end
+add_edges_impl(edges::Vector{Any}, info::GCPreserveDuringCallInfo) =
+    add_edges_impl(edges, info.info)
+
 @specialize
