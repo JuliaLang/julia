@@ -34,13 +34,13 @@ const C_friendly_types = Base.IdSet{Any}([    # a few of these are redundant to 
     RawFD,
 ])
 
-function is_c_friendly(@nospecialize(T::DataType))
-    T <: Ptr && return is_c_friendly(T.parameters[1])
-    return T in C_friendly_types
-end
-
 function recursively_add_types!(types::Base.IdSet{DataType}, @nospecialize(T::DataType))
-    if !is_c_friendly(T)
+    if T ∉ C_friendly_types
+        if T <: Ptr
+            return recursively_add_types!(types, T.parameters[1])
+        elseif T <: Array
+            return recursively_add_types!(types, T.parameters[1])
+        end
         T.name.module === Core && error("invalid type for juliac: ", T) # exclude internals (they may change)
         push!(types, T)
     end
@@ -49,6 +49,7 @@ function recursively_add_types!(types::Base.IdSet{DataType}, @nospecialize(T::Da
             recursively_add_types!(types, S)
         end
     end
+    return types
 end
 
 # Load user code
