@@ -42,4 +42,7 @@ for signum in 1:31
     end
 end
 
+Base.kill(pid::Integer, signum::Integer) = ccall(:kill, Cvoid, (Cint, Cint), pid, signum)
+Base.kill(signum::Integer) = kill(getpid(), signum)
+
 end
