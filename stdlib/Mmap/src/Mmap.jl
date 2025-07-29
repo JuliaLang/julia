@@ -223,6 +223,12 @@ function _mmap(io::IO,
         throw(ArgumentError("$io must be writeable to mmap with exec = true"))
     end
 
+    @static if Sys.isapple()
+        # on MacOS each thread has its own access permissions, so we can't share when exec=true
+        # https://developer.apple.com/documentation/apple-silicon/porting-just-in-time-compilers-to-apple-silicon#Disable-Write-Protections-Before-You-Generate-Instructions
+        exec && (shared = false)
+    end
+
     len = Base.aligned_sizeof(T)
     for l in dims
         len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
