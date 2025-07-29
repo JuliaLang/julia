@@ -8,11 +8,11 @@ LIBUNWIND_CPPFLAGS := -I$(build_includedir)
 LIBUNWIND_LDFLAGS := -L$(build_shlibdir)
 
 ifeq ($(USE_SYSTEM_ZLIB),0)
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | install-zlib
 endif
 
 ifeq ($(USE_SYSTEM_LLVM),0)
-$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: | $(build_prefix)/manifest/llvm
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: | install-llvm
 endif
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)

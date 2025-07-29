@@ -68,7 +68,7 @@ LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
-$(BOLT_BUILDDIR)/build-configured: | $(build_prefix)/manifest/zlib
+$(BOLT_BUILDDIR)/build-configured: | install-zlib
 endif
 
 $(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted

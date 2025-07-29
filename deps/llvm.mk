@@ -256,11 +256,11 @@ $(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
 endif
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
-$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
+$(LLVM_BUILDDIR_withtype)/build-configured: | install-zlib
 endif
 
 ifeq ($(USE_SYSTEM_ZSTD), 0)
-$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zstd
+$(LLVM_BUILDDIR_withtype)/build-configured: | install-zstd
 endif
 
 

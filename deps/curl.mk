@@ -2,19 +2,19 @@
 include $(SRCDIR)/curl.version
 
 ifeq ($(USE_SYSTEM_OPENSSL), 0)
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/openssl
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | install-openssl
 endif
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/libssh2
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | install-libssh2
 endif
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zlib
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | install-zlib
 endif
 
 ifeq ($(USE_SYSTEM_NGHTTP2), 0)
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp2
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | install-nghttp2
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)

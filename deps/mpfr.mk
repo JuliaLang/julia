@@ -2,7 +2,7 @@
 include $(SRCDIR)/mpfr.version
 
 ifeq ($(USE_SYSTEM_GMP), 0)
-$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: | $(build_prefix)/manifest/gmp
+$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: | install-gmp
 endif
 
 ifneq ($(USE_BINARYBUILDER_MPFR),1)

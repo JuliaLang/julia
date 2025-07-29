@@ -7,19 +7,19 @@ $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
 $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted: export MSYS=$(MSYS_NONEXISTENT_SYMLINK_TARGET_FIX)
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | install-libssh2
 endif
 
 ifeq ($(USE_SYSTEM_OPENSSL), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | install-openssl
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/pcre
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | install-pcre
 endif
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/zlib
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | install-zlib
 endif
 
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=OFF -DUSE_SSH=ON -DREGEX_BACKEND=pcre2 -DBUILD_CLI=OFF -DBUILD_TESTS=OFF
