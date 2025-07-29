@@ -310,8 +310,8 @@ A full debug build of Julia can be built with `make debug`.  This builds a debug
 version of `libjulia` and uses it to bootstrap the compiler, before creating a
 system image with debug symbols enabled.  This can take more than 15 minutes.
 
-An alternative that may result in some difference but is sufficient for most
-debugging purposes is to use a release build of Julia for cross-bootstrapping:
+Although it may result in some differences, a debug build can be built much
+quicker by bootstrapping from a release build:
 
 ```sh
 $ make julia-src-release julia-sysbase-release
