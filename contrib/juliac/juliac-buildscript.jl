@@ -27,16 +27,16 @@ if Base.JLOptions().trim != 0
     include(joinpath(@__DIR__, "juliac-trim-base.jl"))
 end
 
-const C_friendly_types = Union{    # a few of these are redundant to make it easier to maintain
+const C_friendly_types = Base.IdSet{Any}([    # a few of these are redundant to make it easier to maintain
     Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64, Bool,
     Cvoid, Cint, Cshort, Clong, Cuint, Cushort, Culong, Cssize_t, Csize_t,
     Cchar, Cwchar_t, Cstring, Cwstring,
     RawFD,
-}
+])
 
 function is_c_friendly(@nospecialize(T::DataType))
     T <: Ptr && return is_c_friendly(T.parameters[1])
-    return T <: C_friendly_types
+    return T in C_friendly_types
 end
 
 function recursively_add_types!(types::Base.IdSet{DataType}, @nospecialize(T::DataType))
