@@ -79,7 +79,7 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
-                                   int binding_effects, int eager_resolve)
+                                   int binding_effects)
 {
     if (jl_is_symbol(expr)) {
         jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
@@ -104,10 +104,10 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     }
     // These exprs are not fully linearized
     if (e->head == jl_assign_sym) {
-        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
+        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects));
         return expr;
     } else if (e->head == jl_new_opaque_closure_sym) {
-        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
+        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_edge, binding_effects));
         return expr;
     }
     size_t nargs = jl_array_nrows(e->args);
@@ -175,6 +175,54 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     if (e->head == jl_foreigncall_sym) {
         JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
+        jl_value_t *fptr = jl_exprarg(e, 0);
+        // Handle dot expressions in tuple arguments for ccall by converting to GlobalRef eagerly
+        if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == jl_symbol("tuple")) {
+            jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
+            size_t nargs_tuple = jl_expr_nargs(tuple_expr);
+            if (nargs_tuple == 0)
+                jl_error("ccall function name cannot be empty tuple");
+            if (nargs_tuple > 2)
+                jl_error("ccall function name tuple can have at most 2 elements");
+            // Validate tuple elements are not more complicated than inference/codegen can safely handle
+            for (size_t i = 0; i < nargs_tuple; i++) {
+                jl_value_t *arg = jl_exprarg(tuple_expr, i);
+                // Handle dot expressions by converting to a GlobalRef
+                if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_dot_sym) {
+                    jl_expr_t *dot_expr = (jl_expr_t*)arg;
+                    if (jl_expr_nargs(dot_expr) != 2)
+                        jl_error("ccall function name: invalid dot expression");
+                    jl_value_t *mod_expr = jl_exprarg(dot_expr, 0);
+                    jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
+                    if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
+                        jl_type_error("ccall name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
+                    JL_TRY {
+                        // Evaluate the module expression
+                        jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
+                        JL_TYPECHK(ccall name dot expression, module, mod_val);
+                        JL_GC_PROMISE_ROOTED(mod_val);
+                        // Create GlobalRef from evaluated module and quoted symbol
+                        jl_sym_t *sym = (jl_sym_t*)jl_quotenode_value(sym_expr);
+                        jl_value_t *globalref = jl_module_globalref((jl_module_t*)mod_val, sym);
+                        jl_exprargset(tuple_expr, i, globalref);
+                    }
+                    JL_CATCH {
+                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                            jl_error("could not evaluate ccall function/library name (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
+                }
+                else if (jl_is_quotenode(arg)) {
+                    jl_value_t *quoted_val = jl_quotenode_value(arg);
+                    if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val))
+                        jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, quoted_val);
+                }
+                else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
+                    jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, arg);
+                }
+            }
+        }
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {
@@ -251,7 +299,7 @@ JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_modu
     size_t i, l = jl_array_nrows(stmts);
     for (i = 0; i < l; i++) {
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_edge, binding_effects, 0));
+        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_edge, binding_effects));
     }
 }
 
@@ -952,7 +1000,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = resolve_definition_effects(st, m->module, sparam_vars, (jl_value_t*)m, 1, 0);
+            st = resolve_definition_effects(st, m->module, sparam_vars, (jl_value_t*)m, 1);
         }
         jl_array_ptr_set(copy, i, st);
     }
