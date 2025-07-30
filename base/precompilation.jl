@@ -483,7 +483,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         fancyprint::Bool = can_fancyprint(io) && !timing,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true)
-    @debug "precompilepkgs called with: pkgs=$(pkgs), internal_call=$(internal_call), strict=$(strict), warn_loaded=$(warn_loaded), timing=$(timing), _from_loading=$( _from_loading), configs=$(configs), io=$(io), fancyprint=$(fancyprint), manifest=$(manifest), ignore_loaded=$(ignore_loaded)"
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing _from_loading configs fancyprint manifest ignore_loaded
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
@@ -651,7 +651,7 @@ function _precompilepkgs(pkgs::Vector{String},
 
     serial_deps = Base.PkgId[] # packages that are being precompiled in serial
 
-    if _from_loading && !isempty(requested_pkgs)
+    if _from_loading
         # if called from loading precompilation it may be a package from another environment stack
         # where we don't have access to the dep graph, so just add as a single package and do serial
         # precompilation of its deps within the job.
