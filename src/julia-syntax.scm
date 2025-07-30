@@ -1087,6 +1087,15 @@
                        (values name params super)) ex)
       (error "invalid type signature")))
 
+;; normalize ccall first argument to tuple form with basic error checking
+(define (normalize-ccall-name raw-name)
+  (cond
+   ;; Already a tuple - keep as-is, validation will happen in C
+   ((tuple-syntax? raw-name)
+    raw-name)
+   ;; Otherwise it is an atom or pointer expression, which will be validated later in C
+   (else (expand-forms raw-name))))
+
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
 (define (lower-ccall name RT atypes args cconv nreq)
@@ -1106,7 +1115,7 @@
       (if (null? A)
           `(block
             ,.(reverse! stmts)
-            (foreigncall ,(expand-forms name) ,(expand-forms RT) (call (core svec) ,@(reverse! T))
+            (foreigncall ,(normalize-ccall-name name) ,(expand-forms RT) (call (core svec) ,@(reverse! T))
                          ;; 0 or number of arguments before ... in definition
                          ,(or nreq
                               (if isseq (- (length atypes) 1) 0))
@@ -1150,7 +1159,7 @@
         (error (string "invalid argument destructuring syntax \"" (deparse a) "\""))
         a))
   (define (transform-arg a)
-    (cond ((and (pair? a) (eq? (car a) 'tuple))
+    (cond ((tuple-syntax? a)
            (let ((a2 (gensy)))
              (cons a2 `(local (= ,(check-lhs a) ,a2)))))
           ((or (and (decl? a) (length= a 3)) (kwarg? a))
@@ -1321,8 +1330,7 @@
                                           (= ,vname ,tmp)
                                           ,blk)))))))
                ;; (a, b, c, ...) = rhs
-               ((and (pair? (cadar binds))
-                     (eq? (caadar binds) 'tuple))
+               ((tuple-syntax? (cadar binds))
                 (let ((vars (lhs-vars (cadar binds))))
                   (loop (cdr binds)
                         (let ((tmp (make-ssavalue)))
@@ -1861,7 +1869,7 @@
                      (cons temp (append (cdr e) (list `(= ,temp ,newlhs))))
                      e))
          (newlhs (or temp newlhs)))
-    (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+    (if (tuple-syntax? lhs)
         (let loop ((a (cdr newlhs))
                    (b (cdr lhs)))
           (if (pair? a)
@@ -2491,7 +2499,7 @@
           ((null? r)          #f)
           ((vararg? (car r))  (null? (cdr r)))
           (else               (sides-match? (cdr l) (cdr r)))))
-  (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple) (not (any assignment? (cdr x)))
+  (if (and (tuple-syntax? x) (pair? lhss) (not (any assignment? (cdr x)))
            (not (has-parameters? (cdr x)))
            (sides-match? lhss (cdr x)))
       ;; (a, b, ...) = (x, y, ...)
@@ -2720,13 +2728,12 @@
                          (argtypes (cadr after-cconv))
                          (args (cddr after-cconv)))
                         (begin
-                          (if (not (and (pair? argtypes)
-                                        (eq? (car argtypes) 'tuple)))
-                              (if (and (pair? RT)
-                                       (eq? (car RT) 'tuple))
+                          (if (not (tuple-syntax? argtypes))
+                              (if (tuple-syntax? RT)
                                   (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
-                          (lower-ccall name RT (cdr argtypes) args
+                          (lower-ccall name
+                                       RT (cdr argtypes) args
                                        (if have-cconv
                                            (if have-cconv-expr
                                                (cadr cconv)
@@ -2770,6 +2777,20 @@
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
+
+   'foreigncall
+   (lambda (e)
+     (if (not (length> e 5)) (error "too few arguments to foreigncall"))
+     (let* ((name (car (list-tail e 1)))
+            (RT (car (list-tail e 2)))
+            (atypes (car (list-tail e 3)))
+            (nreq (car (list-tail e 4)))
+            (cconv (car (list-tail e 5)))
+            (args-and-roots (list-tail e 6)))
+       (begin
+         ;; Return expanded foreigncall
+         `(foreigncall ,(normalize-ccall-name name) ,(expand-forms RT) ,(expand-forms atypes)
+                       ,nreq ,cconv ,@(map expand-forms args-and-roots)))))
 
    'do
    (lambda (e)
@@ -4500,6 +4521,9 @@ f(x) = yt(x)
       (else #f))
     #t))
 
+(define (tuple-syntax? fptr)
+  (and (pair? fptr) (eq? (car fptr) 'tuple)))
+
 ;; this pass behaves like an interpreter on the given code.
 ;; to perform stateful operations, it calls `emit` to record that something
 ;; needs to be done. in value position, it returns an expression computing
@@ -4772,10 +4796,10 @@ f(x) = yt(x)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
-                            ;;       the 1st should be compiled if an atom.
-                            (append (if (atom-or-not-tuple-call? (cadr e))
-                                        (compile-args (list (cadr e)) break-labels)
-                                        (list (cadr e)))
+                            ;;       the 1st should be compiled unless it is a syntactic tuple from earlier
+                            (append (if (tuple-syntax? (cadr e))
+                                        (list (cadr e))
+                                        (compile-args (list (cadr e)) break-labels))
                                     (list-head (cddr e) 4)
                                     (compile-args (list-tail e 6) break-labels)))
                            ;; NOTE: arguments of cfunction must be left in place
@@ -5427,8 +5451,8 @@ f(x) = yt(x)
              (let ((e (cons (car e)
                             (map renumber-stuff (cdr e)))))
                (if (and (eq? (car e) 'foreigncall)
-                        (tuple-call? (cadr e))
-                        (expr-contains-p (lambda (x) (or (ssavalue? x) (slot? x))) (cadr e)))
+                        (tuple-syntax? (cadr e))
+                        (expr-contains-p (lambda (x) (or (ssavalue? x) (slot? x))) (cadr e))) ;; TODO: use allow-list here
                    (error "ccall function name and library expression cannot reference local variables"))
                e))))
     (let ((body (renumber-stuff (lam:body lam)))

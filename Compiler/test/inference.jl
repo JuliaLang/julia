@@ -5219,11 +5219,11 @@ end
 @testset "#45956: non-linearized cglobal needs special treatment for stmt effects" begin
     function foo()
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end
     @test only(code_typed() do
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end)[2] === Nothing
 end
 
