@@ -340,8 +340,8 @@ function maybe_spawn_cache_PATH()
         PATH_cache_task_local isa Task && !istaskdone(PATH_cache_task_local) && return
         time() < next_cache_update && return
         PATH_cache_task = Threads.@spawn begin
-            @lock PATH_cache_lock begin
             REPLCompletions.cache_PATH()
+            @lock PATH_cache_lock begin
                 next_cache_update = time() + 10 # earliest next update can run is 10s after
                 PATH_cache_task = nothing # release memory when done
             end
