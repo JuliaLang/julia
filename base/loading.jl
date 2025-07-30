@@ -2576,6 +2576,8 @@ function set_pkgorigin_version_path(pkg::PkgId, path::String)
     nothing
 end
 
+# Unused
+const PKG_PRECOMPILE_HOOK = Ref{Function}()
 disable_parallel_precompile::Bool = false
 
 # Returns `nothing` or the new(ish) module
