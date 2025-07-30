@@ -135,8 +135,8 @@ function catch_backtrace()
     return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
-struct ExceptionStack <: AbstractArray{Any,1}
-    stack::Array{Any,1}
+struct ExceptionStack <: AbstractArray{NamedTuple{(:exception, :backtrace)},1}
+    stack::Array{NamedTuple{(:exception, :backtrace)},1}
 end
 
 """
@@ -159,7 +159,7 @@ uncaught exceptions.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
-    formatted = Any[]
+    formatted = NamedTuple{(:exception, :backtrace)}[]
     stride = backtrace ? 3 : 1
     for i = reverse(1:stride:length(raw))
         exc = raw[i]

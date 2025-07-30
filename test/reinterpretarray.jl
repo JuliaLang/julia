@@ -10,12 +10,18 @@ tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
 fcviews(a::AbstractArray) = view(a, ntuple(Returns(:),ndims(a)-1)..., axes(a)[end])
 fcviews(a::AbstractArray{<:Any, 0}) = view(a)
+offset_nominal(a::AbstractArray) = OffsetArray(a)
+offset_maybe(a::AbstractArray) = (eltype(a) <: Real) ? a : OffsetArray(a, (1-ndims(A)):2:(ndims(A)-1)...)
 tslow(t::Tuple) = map(tslow, t)
 wrapper(t::Tuple) = map(wrapper, t)
 fcviews(t::Tuple) = map(fcviews, t)
+offset_nominal(t::Tuple) = map(offset_nominal, t)
+offset_maybe(t::Tuple) = map(offset_maybe, t)
 
 test_many_wrappers(testf, A, wrappers) = foreach(w -> testf(w(A)), wrappers)
-test_many_wrappers(testf, A) = test_many_wrappers(testf, A, (identity, tslow, wrapper, fcviews))
+test_many_wrappers(testf, A) = test_many_wrappers(
+    testf, A, (identity, tslow, wrapper, fcviews, offset_nominal, offset_maybe)
+)
 
 A = Int64[1, 2, 3, 4]
 Ars = Int64[1 3; 2 4]
@@ -35,10 +41,6 @@ test_many_wrappers(B, (identity, tslow)) do _B
     @test @inferred(ndims(reinterpret(reshape, Int128, _B))) == 1
     @test @inferred(axes(reinterpret(reshape, Int128, _B))) === (Base.OneTo(3),)
     @test @inferred(size(reinterpret(reshape, Int128, _B))) == (3,)
-end
-
-test_many_wrappers(C) do Cr
-    @test reinterpret(reshape, Tuple{Int8, Int}, Cr) == fill((1,1))
 end
 
 @test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(Vector{Int64}, A)
@@ -160,8 +162,10 @@ test_many_wrappers(A3) do A3_
     @test A3[2,1,2] == 400
 end
 
-test_many_wrappers(C) do Cr
+test_many_wrappers(C) do Cr_
+    Cr = deepcopy(Cr_)
     r = reinterpret(reshape, Tuple{Int, Int}, Cr)
+    @test r == fill((1,1))
     r[] = (2,2)
     @test r[] === (2,2)
     r[1] = (3,3)
@@ -377,6 +381,8 @@ end
 let a = rand(ComplexF32, 5)
     r = reinterpret(reshape, Float32, a)
     ref = Array(r)
+
+    @test all(r .== OffsetArray(r)[:, :, :])
 
     @test r[1, :, 1]        == ref[1, :]
     @test r[1, :, 1, 1, 1]  == ref[1, :]
