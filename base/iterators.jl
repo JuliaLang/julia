@@ -534,10 +534,15 @@ filter(flt, itr) = Filter(flt, itr)
 function iterate(f::Filter, state...)
     y = iterate(f.itr, state...)
     while y !== nothing
-        if f.flt(y[1])
-            return y
+        v, s = y
+        if f.flt(v)
+            if y isa Tuple{Any,Any}
+                return (v, s) # incorporate type information that may be improved by user-provided `f.flt`
+            else
+                return y
+            end
         end
-        y = iterate(f.itr, y[2])
+        y = iterate(f.itr, s)
     end
     nothing
 end
