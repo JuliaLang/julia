@@ -38,8 +38,6 @@ function recursively_add_types!(types::Base.IdSet{DataType}, @nospecialize(T::Da
     if T ∉ C_friendly_types
         if T <: Ptr
             return recursively_add_types!(types, T.parameters[1])
-        elseif T <: Array
-            return recursively_add_types!(types, T.parameters[1])
         end
         T.name.module === Core && error("invalid type for juliac: ", T) # exclude internals (they may change)
         push!(types, T)
