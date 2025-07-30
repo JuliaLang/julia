@@ -2243,7 +2243,7 @@ function detect_ambiguities(mods::Module...;
             end
         end
     end
-    examine(Core.GlobalMethods)
+    examine(Core.methodtable)
     return collect(ambs)
 end
 
@@ -2291,7 +2291,7 @@ function detect_unbound_args(mods...;
             push!(ambs, m)
         end
     end
-    examine(Core.GlobalMethods)
+    examine(Core.methodtable)
     return collect(ambs)
 end
 
