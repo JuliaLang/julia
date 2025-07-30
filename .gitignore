@@ -15,6 +15,7 @@
 /test/results_*.json
 /test/results_*.dat
 /test/deps
+/test/trimming/Manifest.toml
 
 *.expmap
 *.exe
