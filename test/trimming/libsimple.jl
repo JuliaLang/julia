@@ -22,14 +22,11 @@ Base.@ccallable "copyto_and_sum" function badname(fromto::CVectorPair{Float32}):
     return sum(to)
 end
 
-# Base.@ccallable function countsame(list::Ptr{MyTwoVec}, n::Int32)::Int32
-Base.@ccallable function countsame(list::Vector{MyTwoVec})::Int32
+Base.@ccallable function countsame(list::Ptr{MyTwoVec}, n::Int32)::Int32
+    list = unsafe_wrap(Array, list, n)
     count = 0
-    # list = unsafe_wrap(Array, list, n)
     for v in list
-        if v.x == v.y
-            count += 1
-        end
+        count += v.x == v.y
     end
     return count
 end

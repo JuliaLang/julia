@@ -22,7 +22,7 @@ struct _CVectorPair_Float32_ {
 };
 typedef struct _CVectorPair_Float32_ CVectorPair_Float32;
 
-float copyto_and_sum(CVectorPair_Float32 *fromto);
+float copyto_and_sum(CVectorPair_Float32 fromto);
 int32_t countsame(MyTwoVec *list, int32_t length);
 
 #endif // SIMPLELIB_H

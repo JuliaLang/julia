@@ -9,10 +9,10 @@ int main() {
     vecPair.to.length = 3;
     vecPair.to.data = (float[]){4.0f, 5.0f, 6.0f};
 
-    float sum = copyto_and_sum(&vecPair);
+    float sum = copyto_and_sum(vecPair);
     printf("Sum of copied values: %f\n", sum);
 
-    MyTwoVec list[] = {{1, 2}, {1, 2}, {3, 4}};
+    MyTwoVec list[] = {{1, 2}, {5, 5}, {3, 4}};
     int32_t count = countsame(list, 3);
     printf("Count of same vectors: %d\n", count);
 
