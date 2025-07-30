@@ -1,28 +1,22 @@
-#ifndef SIMPLELIB_H
-#define SIMPLELIB_H
-
-#include <stdint.h>
+#ifndef JULIALIB_LIBSIMPLE_H
+#define JULIALIB_LIBSIMPLE_H
 #include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
 
-struct _MyTwoVec_ {
+typedef struct {
+    int32_t length;
+    float * data;
+} CVector_float_;
+typedef struct {
+    CVector_float_ from;
+    CVector_float_ to;
+} CVectorPair_float_;
+typedef struct {
     int32_t x;
     int32_t y;
-};
-typedef struct _MyTwoVec_ MyTwoVec;
+} MyTwoVec;
 
-struct _CVector_Float32_ {
-    int32_t length;
-    float *data;
-};
-typedef struct _CVector_Float32_ CVector_Float32;
-
-struct _CVectorPair_Float32_ {
-    CVector_Float32 from;
-    CVector_Float32 to;
-};
-typedef struct _CVectorPair_Float32_ CVectorPair_Float32;
-
-float copyto_and_sum(CVectorPair_Float32 fromto);
-int32_t countsame(MyTwoVec *list, int32_t length);
-
-#endif // SIMPLELIB_H
+int32_t countsame(MyTwoVec * list, int32_t n);
+float copyto_and_sum(CVectorPair_float_ fromto);
+#endif // JULIALIB_LIBSIMPLE_H
