@@ -167,18 +167,15 @@ end
 #   and slightly modified with an early termination option once the computation reaches its minimum
 function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
     # Initialize root state
-    root_result = VerifyMethodResultState()
     push!(workspace.initial_states, VerifyMethodInitialState(codeinst))
     push!(workspace.work_states, VerifyMethodWorkState(codeinst))
-    push!(workspace.result_states, root_result)
+    push!(workspace.result_states, VerifyMethodResultState())
 
-    current_depth = 1  # Stack depth (1-indexed)
-
-    while current_depth > 0
+    current_depth = 1 # == length(workspace._states) == end
+    while true
         # Get current state indices
         initial = workspace.initial_states[current_depth]
         work = workspace.work_states[current_depth]
-        result = workspace.result_states[current_depth]
 
         if work.stage == :init_and_process_callees
             # Initialize state and handle early returns
@@ -299,12 +296,6 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             workspace.work_states[current_depth] = VerifyMethodWorkState(depth, work.cause, 1, :recursive_phase)
 
         elseif work.stage == :recursive_phase
-            # Handle CodeInstance edges (recursive calls)
-            if result.result_maxworld == 0 && _jl_debug_method_invalidation[] === nothing
-                workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, work.recursive_index, :cleanup)
-                continue
-            end
-
             # Find next CodeInstance edge that needs processing
             recursive_index = work.recursive_index
             found_child = false
@@ -333,6 +324,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             # our cycle with what we found.
             # Or if we found a failed edge, also mark all of the other parts of the
             # cycle as also having a failed edge.
+            result = workspace.result_states[current_depth]
             if result.result_maxworld == 0 || result.child_cycle == work.depth
                 while length(workspace.stack) ≥ work.depth
                     child = pop!(workspace.stack)
@@ -358,53 +350,45 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
         elseif work.stage == :return_to_parent
             # Pass results to parent and process them
-            if current_depth > 1
-                parent_initial = workspace.initial_states[current_depth - 1]
-                parent_work = workspace.work_states[current_depth - 1]
-                parent_result = workspace.result_states[current_depth - 1]
-                callee = initial.codeinst
-                child_cycle, min_valid2, max_valid2 = result.child_cycle, result.result_minworld, result.result_maxworld
-
-                parent_cycle = parent_result.child_cycle
-                parent_minworld = parent_result.result_minworld
-                parent_maxworld = parent_result.result_maxworld
-                parent_cause = parent_work.cause
-                parent_stage = parent_work.stage
-
-                if parent_minworld < min_valid2
-                    parent_minworld = min_valid2
-                end
-                if parent_minworld > max_valid2
-                    max_valid2 = 0
-                end
-                if parent_maxworld > max_valid2
-                    parent_cause = callee
-                    parent_maxworld = max_valid2
-                end
-                if max_valid2 == 0
-                    # found what we were looking for, so terminate early
-                    # The parent should break out of its loop in :recursive_phase
-                    parent_stage = :cleanup
-                elseif child_cycle ≠ 0 && child_cycle < parent_cycle
-                    # record the cycle will resolve at depth "cycle"
-                    parent_cycle = child_cycle
-                end
-
-                # Update both parent work state and result state
-                workspace.work_states[current_depth - 1] = VerifyMethodWorkState(parent_work.depth, parent_cause, parent_work.recursive_index, parent_stage)
-                workspace.result_states[current_depth - 1] = VerifyMethodResultState(parent_cycle, parent_minworld, parent_maxworld)
-            end
-
-            # Pop current state
             pop!(workspace.initial_states)
             pop!(workspace.work_states)
-            pop!(workspace.result_states)
+            result = pop!(workspace.result_states)
             current_depth -= 1
+            if current_depth == 0 # Return results from the root call
+                return (result.child_cycle, result.result_minworld, result.result_maxworld)
+            end
+            # Propagate results to parent
+            parent_work = workspace.work_states[current_depth]
+            parent_result = workspace.result_states[current_depth]
+            callee = initial.codeinst
+            child_cycle, min_valid2, max_valid2 = result.child_cycle, result.result_minworld, result.result_maxworld
+            parent_cycle = parent_result.child_cycle
+            parent_minworld = parent_result.result_minworld
+            parent_maxworld = parent_result.result_maxworld
+            parent_cause = parent_work.cause
+            parent_stage = parent_work.stage
+            if parent_minworld < min_valid2
+                parent_minworld = min_valid2
+            end
+            if parent_minworld > max_valid2
+                max_valid2 = 0
+            end
+            if parent_maxworld > max_valid2
+                parent_cause = callee
+                parent_maxworld = max_valid2
+            end
+            if max_valid2 == 0
+                # found what we were looking for, so terminate early
+                # The parent should break out of its loop in :recursive_phase
+                parent_stage = :cleanup
+            elseif child_cycle ≠ 0 && child_cycle < parent_cycle
+                # record the cycle will resolve at depth "cycle"
+                parent_cycle = child_cycle
+            end
+            workspace.work_states[current_depth] = VerifyMethodWorkState(parent_work.depth, parent_cause, parent_work.recursive_index, parent_stage)
+            workspace.result_states[current_depth] = VerifyMethodResultState(parent_cycle, parent_minworld, parent_maxworld)
         end
     end
-
-    # Return results from the root call
-    return (root_result.child_cycle, root_result.result_minworld, root_result.result_maxworld)
 end
 
 function get_method_from_edge(@nospecialize t)

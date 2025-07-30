@@ -196,6 +196,12 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
 }
 
 // Stack frame for iterative has_backedge_to_worklist implementation
+enum backedge_state {
+    STATE_VISITING,                 // Initial visit, setup phase
+    STATE_PROCESSING_EDGES,         // Processing backedges loop
+    STATE_FINISHING                 // Cleanup and result propagation
+};
+
 typedef struct {
     jl_method_instance_t *mi;           // Current method instance
     size_t edge_index;                  // Current position in backedges array
@@ -205,11 +211,7 @@ typedef struct {
     int cycle;                          // Cycle depth tracking
     int found;                          // Result found flag
     int child_result;                   // Result from child recursive call
-    enum {
-        STATE_VISITING,                 // Initial visit, setup phase
-        STATE_PROCESSING_EDGES,         // Processing backedges loop
-        STATE_FINISHING                 // Cleanup and result propagation
-    } state;
+    enum backedge_state state;
 } backedge_stack_frame_t;
 
 // When we infer external method instances, ensure they link back to the

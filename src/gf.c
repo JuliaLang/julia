@@ -4468,6 +4468,13 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 // Outputs:
 //  * `*has_ambiguity`: whether there are any ambiguities that mean the sort order is not exact
 // Stack frame for iterative sort_mlmatches implementation
+enum sort_state {
+    STATE_VISITING,            // Initial visit and setup
+    STATE_PROCESSING_INTERFERENCES, // Processing interference loop
+    STATE_CHECK_COVERS,        // Check coverage conditions
+    STATE_FINALIZE_SCC         // SCC processing and cleanup
+};
+
 typedef struct {
     size_t idx;                    // Current method match index
     size_t interference_index;     // Current position in interferences loop
@@ -4480,12 +4487,7 @@ typedef struct {
     int subt;                      // Subtype flag
     jl_genericmemory_t *interferences; // Method interferences
     int child_result;              // Result from child recursive call
-    enum {
-        STATE_VISITING,            // Initial visit and setup
-        STATE_PROCESSING_INTERFERENCES, // Processing interference loop
-        STATE_CHECK_COVERS,        // Check coverage conditions
-        STATE_FINALIZE_SCC         // SCC processing and cleanup
-    } state;
+    enum sort_state state;
 } sort_stack_frame_t;
 
 // Returns:
