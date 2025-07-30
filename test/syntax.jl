@@ -4305,6 +4305,24 @@ end
 @test letf_57470(3) == 5
 @test letT_57470 === Int64
 
+# Closure conversion should happen on const assignment rhs
+module M59128
+using Test
+const        x0::Int = (()->1)()
+global       x1::Int = (()->1)()
+global const x2::Int = (()->1)()
+const global x3::Int = (()->1)()
+@test x0 === x1 === x2 === x3 === 1
+let g = 1
+    global       x4::Vector{T} where {T<:Number} = let; (()->[g])(); end
+    const global x5::Vector{T} where {T<:Number} = let; (()->[g])(); end
+    global const x6::Vector{T} where {T<:Number} = let; (()->[g])(); end
+end
+@test x4 == x5 == x6 == [1]
+const letT_57470{T} = (()->Int64)()
+@test letT_57470 == Int64
+end
+
 end # M57470_sub
 
 # lowering globaldecl with complex type

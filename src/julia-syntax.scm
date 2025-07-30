@@ -1645,9 +1645,9 @@
                (expand-forms
                 ;; TODO: This behaviour (`const _:T = ...` does not call convert,
                 ;; but still evaluates RHS) should be documented.
-                `(const ,(car e) ,(if (underscore-symbol? (car e))
-                                rhs
-                                (convert-for-type-decl rhs T #t #f))))
+                `(const (= ,(car e) ,(if (underscore-symbol? (car e))
+                                         rhs
+                                         (convert-for-type-decl rhs T #t #f)))))
                (expand-forms
                 `(block ,@(cdr e)
                         ;; TODO: When x is a complex expression, this acts as a
