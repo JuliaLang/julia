@@ -1666,51 +1666,69 @@ struct CacheFlags
     check_bounds::Int
     inline::Bool
     opt_level::Int
+    sanitize_memory::Bool
+    sanitize_thread::Bool
+    sanitize_address::Bool
 end
-function CacheFlags(f::UInt8)
+function CacheFlags(f::UInt64)
     use_pkgimages = Bool(f & 1)
     debug_level = Int((f >> 1) & 3)
     check_bounds = Int((f >> 3) & 3)
     inline = Bool((f >> 5) & 1)
     opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
-    CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level)
+    sanitize_memory = Bool((f >> 8) & 1)
+    sanitize_thread = Bool((f >> 9) & 1)
+    sanitize_address = Bool((f >> 10) & 1)
+    CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level, sanitize_memory, sanitize_thread, sanitize_address)
 end
-CacheFlags(f::Int) = CacheFlags(UInt8(f))
-function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt8, ()));
+CacheFlags(f::Int) = CacheFlags(UInt64(f))
+function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt64, ()));
             use_pkgimages::Union{Nothing,Bool}=nothing,
             debug_level::Union{Nothing,Int}=nothing,
             check_bounds::Union{Nothing,Int}=nothing,
             inline::Union{Nothing,Bool}=nothing,
-            opt_level::Union{Nothing,Int}=nothing
+            opt_level::Union{Nothing,Int}=nothing,
+            sanitize_memory::Union{Nothing,Bool}=nothing,
+            sanitize_thread::Union{Nothing,Bool}=nothing,
+            sanitize_address::Union{Nothing,Bool}=nothing,
         )
     return CacheFlags(
         use_pkgimages === nothing ? cf.use_pkgimages : use_pkgimages,
         debug_level === nothing ? cf.debug_level : debug_level,
         check_bounds === nothing ? cf.check_bounds : check_bounds,
         inline === nothing ? cf.inline : inline,
-        opt_level === nothing ? cf.opt_level : opt_level
+        opt_level === nothing ? cf.opt_level : opt_level,
+        sanitize_memory === nothing ? cf.sanitize_memory : sanitize_memory,
+        sanitize_thread === nothing ? cf.sanitize_thread : sanitize_thread,
+        sanitize_address === nothing ? cf.sanitize_address : sanitize_address,
     )
 end
 # reflecting jloptions.c defaults
-const DefaultCacheFlags = CacheFlags(use_pkgimages=true, debug_level=isdebugbuild() ? 2 : 1, check_bounds=0, inline=true, opt_level=2)
+const DefaultCacheFlags = CacheFlags(use_pkgimages=true, debug_level=isdebugbuild() ? 2 : 1, check_bounds=0, inline=true, opt_level=2, sanitize_memory=false, sanitize_thread=false, sanitize_address=false)
 
-function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
-    f = UInt8(0)
+function _cacheflag_to_uint16(cf::CacheFlags)::UInt64
+    f = UInt64(0)
     f |= cf.use_pkgimages << 0
     f |= cf.debug_level << 1
     f |= cf.check_bounds << 3
     f |= cf.inline << 5
     f |= cf.opt_level << 6
+    f |= cf.sanitize_memory << 8
+    f |= cf.sanitize_thread << 9
+    f |= cf.sanitize_address << 10
     return f
 end
 
 function translate_cache_flags(cacheflags::CacheFlags, defaultflags::CacheFlags)
     opts = String[]
-    cacheflags.use_pkgimages    != defaultflags.use_pkgimages   && push!(opts, cacheflags.use_pkgimages ? "--pkgimages=yes" : "--pkgimages=no")
-    cacheflags.debug_level      != defaultflags.debug_level     && push!(opts, "-g$(cacheflags.debug_level)")
-    cacheflags.check_bounds     != defaultflags.check_bounds    && push!(opts, ("--check-bounds=auto", "--check-bounds=yes", "--check-bounds=no")[cacheflags.check_bounds + 1])
-    cacheflags.inline           != defaultflags.inline          && push!(opts, cacheflags.inline ? "--inline=yes" : "--inline=no")
-    cacheflags.opt_level        != defaultflags.opt_level       && push!(opts, "-O$(cacheflags.opt_level)")
+    cacheflags.use_pkgimages    != defaultflags.use_pkgimages    && push!(opts, cacheflags.use_pkgimages ? "--pkgimages=yes" : "--pkgimages=no")
+    cacheflags.debug_level      != defaultflags.debug_level      && push!(opts, "-g$(cacheflags.debug_level)")
+    cacheflags.check_bounds     != defaultflags.check_bounds     && push!(opts, ("--check-bounds=auto", "--check-bounds=yes", "--check-bounds=no")[cacheflags.check_bounds + 1])
+    cacheflags.inline           != defaultflags.inline           && push!(opts, cacheflags.inline ? "--inline=yes" : "--inline=no")
+    cacheflags.opt_level        != defaultflags.opt_level        && push!(opts, "-O$(cacheflags.opt_level)")
+    cacheflags.sanitize_memory  != defaultflags.sanitize_memory  && push!(opts, "--target-sanitize=memory")
+    cacheflags.sanitize_thread  != defaultflags.sanitize_thread  && push!(opts, "--target-sanitize=thread")
+    cacheflags.sanitize_address != defaultflags.sanitize_address && push!(opts, "--target-sanitize=address")
     return opts
 end
 
@@ -1726,6 +1744,12 @@ function show(io::IO, cf::CacheFlags)
     print(io, cf.inline)
     print(io, ", opt_level=")
     print(io, cf.opt_level)
+    print(io, ", sanitize_memory=")
+    print(io, cf.sanitize_memory)
+    print(io, ", sanitize_thread=")
+    print(io, cf.sanitize_thread)
+    print(io, ", sanitize_address=")
+    print(io, cf.sanitize_address)
     print(io, ")")
 end
 
@@ -3133,7 +3157,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=Cac
         crc = _crc32c(project)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
-        crc = _crc32c(_cacheflag_to_uint8(flags), crc)
+        crc = _crc32c(_cacheflag_to_uint16(flags), crc)
 
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         if cpu_target === nothing
@@ -3402,7 +3426,7 @@ function read_module_list(f::IO, has_buildid_hi::Bool)
 end
 
 function _parse_cache_header(f::IO, cachefile::AbstractString)
-    flags = read(f, UInt8)
+    flags = read(f, UInt64)
     modules = read_module_list(f, false)
     totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
     # read the list of requirements
@@ -3964,10 +3988,10 @@ end
         if isempty(modules)
             return true # ignore empty file
         end
-        if @ccall(jl_match_cache_flags(_cacheflag_to_uint8(requested_flags)::UInt8, actual_flags::UInt8)::UInt8) == 0
+        if @ccall(jl_match_cache_flags(_cacheflag_to_uint16(requested_flags)::UInt64, actual_flags::UInt64)::UInt8) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              requested flags: $(requested_flags) [$(_cacheflag_to_uint8(requested_flags))]
+              requested flags: $(requested_flags) [$(_cacheflag_to_uint16(requested_flags))]
               cache file:      $(CacheFlags(actual_flags)) [$actual_flags]
             """
             record_reason(reasons, "mismatched flags")

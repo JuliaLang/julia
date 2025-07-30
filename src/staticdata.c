@@ -3464,7 +3464,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
 {
     *checksumpos = write_header(f, 0);
-    write_uint8(f, jl_cache_flags());
+    write_uint64(f, jl_cache_flags());
     // write description of contents (name, uuid, buildid)
     write_worklist_for_header(f, worklist);
     // Determine unique (module, abspath, fsize, hash, mtime) dependencies for the files defining modules in the worklist
@@ -3527,7 +3527,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
         if (emit_split) {
             checksumpos_ff = write_header(ff, 1);
-            write_uint8(ff, jl_cache_flags());
+            write_uint64(ff, jl_cache_flags());
             write_mod_list(ff, mod_array);
         }
         else {
@@ -4366,7 +4366,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
-    uint8_t flags = read_uint8(f);
+    uint64_t flags = read_uint64(f);
     if (pkgimage && !jl_match_cache_flags_current(flags)) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }

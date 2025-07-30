@@ -1309,7 +1309,7 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
-    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3, sanitize_memory=false, sanitize_thread=false, sanitize_address=false)"
 end
 
 empty!(Base.DEPOT_PATH)
