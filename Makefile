@@ -136,6 +136,15 @@ else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
 
+fix-whitespace:
+ifneq ($(NO_GIT), 1)
+	@# Append the directory containing the julia we just built to the end of `PATH`,
+	@# to give us the best chance of being able to run this check.
+	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --fix
+else
+	$(warn "Skipping whitespace fix because git is unavailable")
+endif
+
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers
 	@#Check documentation
@@ -686,7 +695,7 @@ distcleanall: cleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
 
 .FORCE:
-.PHONY: .FORCE default debug release check-whitespace release-candidate \
+.PHONY: .FORCE default debug release check-whitespace fix-whitespace release-candidate \
 	julia-debug julia-release julia-stdlib julia-deps julia-deps-libs \
 	julia-cli-release julia-cli-debug julia-src-release julia-src-debug \
 	julia-symlink julia-base julia-sysimg julia-sysimg-ji julia-sysimg-release julia-sysimg-debug \

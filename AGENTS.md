@@ -19,7 +19,7 @@ will not be reflected, unless you use `Revise`.
 
 ## For all changes
 
-1. Run `make check-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
+1. Run `make fix-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
 
 ## Building Julia
 
