@@ -334,23 +334,19 @@ PATH_cache_task::Union{Task,Nothing} = nothing
 PATH_cache_condition::Union{Threads.Condition, Nothing} = nothing # used for sync in tests
 next_cache_update::Float64 = 0.0
 function maybe_spawn_cache_PATH()
-    global PATH_cache_task, PATH_cache_condition, next_cache_update
-    # Extract to local variables to enable flow-sensitive type inference for these global variables
-    PATH_cache_task_local = PATH_cache_task
-    PATH_cache_condition_local = PATH_cache_condition
+    global PATH_cache_task, next_cache_update
     @lock PATH_cache_lock begin
-        PATH_cache_task_local isa Task && !istaskdone(PATH_cache_task_local) && return
+        PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
         time() < next_cache_update && return
         PATH_cache_task = Threads.@spawn begin
             REPLCompletions.cache_PATH()
             @lock PATH_cache_lock begin
                 next_cache_update = time() + 10 # earliest next update can run is 10s after
                 PATH_cache_task = nothing # release memory when done
-                PATH_cache_condition_local !== nothing && notify(PATH_cache_condition_local)
+                PATH_cache_condition !== nothing && notify(PATH_cache_condition)
             end
         end
-        PATH_cache_task_local = PATH_cache_task
-        Base.errormonitor(PATH_cache_task_local)
+        Base.errormonitor(PATH_cache_task)
     end
 end
 
