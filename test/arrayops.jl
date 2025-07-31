@@ -3247,7 +3247,7 @@ end
             AI = A[I...]
 
             if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
-                all(d -> axes(_X, d) == axes(AI, d), 1:max(ndims(_X), ndims(AI)))
+                all(d -> size(_X, d) == size(AI, d), 1:max(ndims(_X), ndims(AI)))
                 @test any(isone, setindex!(A, _X, I...))
                 @test any(isone, setindex!(A, _X, I..., 1))
             else
