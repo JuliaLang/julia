@@ -78,7 +78,7 @@ pop!(s::IdSet, @nospecialize(x)) = _pop!(s, x) == -1 ? throw(KeyError(x)) : x
 pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = _pop!(s, x) == -1 ? default : x
 delete!(s::IdSet, @nospecialize(x)) = (_pop!(s, x); s)
 
-function sizehint!(s::IdSet, newsz)
+function sizehint!(s::IdSet, newsz::Integer)
     # TODO: grow/compact list and perform rehash, if profitable?
     # TODO: shrink?
     # s.list = resize(s.list, newsz)
