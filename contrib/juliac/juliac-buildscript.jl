@@ -35,13 +35,13 @@ const C_friendly_types = Base.IdSet{Any}([    # a few of these are redundant to 
 ])
 
 function recursively_add_types!(types::Base.IdSet{DataType}, @nospecialize(T::DataType))
-    if T ∉ C_friendly_types
-        if T <: Ptr
-            return recursively_add_types!(types, T.parameters[1])
-        end
-        T.name.module === Core && error("invalid type for juliac: ", T) # exclude internals (they may change)
-        push!(types, T)
+    while T <: Ptr
+        T = T.parameters[1] # unwrap Ptr{...}
     end
+    if T.name.module === Core && T ∉ C_friendly_types
+        error("invalid type for juliac: ", T) # exclude internals (they may change)
+    end
+    push!(types, T)
     for list in (T.parameters, fieldtypes(T))
         for S in list
             recursively_add_types!(types, S)
