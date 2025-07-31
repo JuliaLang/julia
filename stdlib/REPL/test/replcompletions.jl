@@ -1095,7 +1095,7 @@ function test_only_arm_cache_refresh()
         # force the next cache update to happen immediately
         REPL.REPLCompletions.next_cache_update = 0
     end
-    return REPL.REPLCompletions.PATH_cache_condition
+    return nothing
 end
 
 function test_only_wait_cache_path_done()
