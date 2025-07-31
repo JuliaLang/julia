@@ -99,10 +99,9 @@ function generalize_file_paths(path::AbstractString)
             string(bindir_dir, pathsep) => ""
         )
         @static if Sys.iswindows()
-            return replace(path, "\\" => "/")
-        else
-            return path
+            path = replace(path, "\\" => "/")
         end
+        return replace(path, "share/julia/" => "")
     end
 end
 
