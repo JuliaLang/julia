@@ -499,12 +499,12 @@ begin
     local second = @capture_stdout @time @eval calldouble2(1.0)
 
     # these functions were not recompiled
-    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", first))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
 
-    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", second))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
