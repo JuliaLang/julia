@@ -280,7 +280,7 @@ end
     )
     # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
     buflen = UInt64(n)
-    seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
+    seed ⊻= hash_mix(seed ⊻ secret[1], secret[2])
 
     a = zero(UInt64)
     b = zero(UInt64)
