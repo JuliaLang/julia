@@ -22,6 +22,7 @@ LIBSSH2_OPTS += -G"MSYS Makefiles"
 endif
 else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
+LIBSSH2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix)
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
