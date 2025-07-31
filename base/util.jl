@@ -245,13 +245,13 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
-    if opts.target_sanitize_memory
+    if opts.target_sanitize_memory == 1
         push!(addflags, "--target-sanitize=memory")
     end
-    if opts.target_sanitize_thread
+    if opts.target_sanitize_thread == 1
         push!(addflags, "--target-sanitize=thread")
     end
-    if opts.target_sanitize_address
+    if opts.target_sanitize_address == 1
         push!(addflags, "--target-sanitize=address")
     end
     return `$julia -C $cpu_target -J$image_file $addflags`
