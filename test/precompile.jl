@@ -590,7 +590,10 @@ precompile_test_harness(false) do dir
             error("the \"break me\" test failed")
         catch exc
             isa(exc, ErrorException) || rethrow()
-            occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
+            # The LoadError shouldn't be surfaced but is printed to stderr, hence the `@test_warn` capture tests
+            occursin("LoadError: break me", exc.msg) && rethrow()
+            # The actual error that is thrown
+            occursin("Failed to precompile FooBar2", exc.msg) || rethrow()
         end
 
     # Test that trying to eval into closed modules during precompilation is an error
