@@ -61,9 +61,9 @@ function _initialize_signal_router()
     errormonitor(signal_router_task)
 
     # Allow C code to notify the `AsyncCondition`.
-    jl_signal_router_condition_ptr = cglobal(:jl_signal_router_condition, Ptr{Cvoid})
-    atomic_pointerset(jl_signal_router_condition_ptr, condition.handle, :release)
-
+    # jl_signal_router_condition_ptr = cglobal(:jl_signal_router_condition, Ptr{Cvoid})
+    # atomic_pointerset(jl_signal_router_condition_ptr, condition.handle, :release)
+    ccall(:jl_set_signal_router_condition, Cvoid, (Ptr{Cvoid},), condition.handle)
     return signal_router_task
 end
 

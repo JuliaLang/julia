@@ -1349,6 +1349,11 @@ static void notify_signal_router(int sig)
         uv_async_send(handle);
 }
 
+JL_DLLEXPORT void jl_set_signal_router_condition(void *condition)
+{
+    jl_atomic_store_release(&jl_signal_router_condition, condition);
+}
+
 JL_DLLEXPORT int jl_consume_user_signal(void) {
     return dequeue_user_signal();
 }
