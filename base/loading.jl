@@ -1660,7 +1660,7 @@ end
 
 
 struct CacheFlags
-    # OOICCDDP - see jl_cache_flags
+    # OOICCDDP ?????ATM - see jl_cache_flags
     use_pkgimages::Bool
     debug_level::Int
     check_bounds::Int
@@ -1706,7 +1706,7 @@ end
 # reflecting jloptions.c defaults
 const DefaultCacheFlags = CacheFlags(use_pkgimages=true, debug_level=isdebugbuild() ? 2 : 1, check_bounds=0, inline=true, opt_level=2, sanitize_memory=false, sanitize_thread=false, sanitize_address=false)
 
-function _cacheflag_to_uint16(cf::CacheFlags)::UInt64
+function _cacheflag_to_uint64(cf::CacheFlags)::UInt64
     f = UInt64(0)
     f |= cf.use_pkgimages << 0
     f |= cf.debug_level << 1
@@ -3157,7 +3157,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=Cac
         crc = _crc32c(project)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
-        crc = _crc32c(_cacheflag_to_uint16(flags), crc)
+        crc = _crc32c(_cacheflag_to_uint64(flags), crc)
 
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         if cpu_target === nothing
@@ -3988,10 +3988,10 @@ end
         if isempty(modules)
             return true # ignore empty file
         end
-        if @ccall(jl_match_cache_flags(_cacheflag_to_uint16(requested_flags)::UInt64, actual_flags::UInt64)::UInt8) == 0
+        if @ccall(jl_match_cache_flags(_cacheflag_to_uint64(requested_flags)::UInt64, actual_flags::UInt64)::UInt8) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              requested flags: $(requested_flags) [$(_cacheflag_to_uint16(requested_flags))]
+              requested flags: $(requested_flags) [$(_cacheflag_to_uint64(requested_flags))]
               cache file:      $(CacheFlags(actual_flags)) [$actual_flags]
             """
             record_reason(reasons, "mismatched flags")
