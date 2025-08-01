@@ -198,7 +198,7 @@ z26506 = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z26506) # Places an entry for f26506(::String) in MethodTable cache
 w26506 = Base.get_world_counter()
-cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.GlobalMethods.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
+cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.methodtable.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
 @test cache26506.max_world === typemax(UInt)
 w26506 = Base.get_world_counter()
 f26506(x::String) = 3
