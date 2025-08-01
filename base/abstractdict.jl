@@ -535,7 +535,7 @@ function ==(l::AbstractDict, r::AbstractDict)
 end
 
 # Fallback implementation
-sizehint!(d::AbstractDict, n) = d
+sizehint!(d::AbstractDict, ::Integer) = d
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)
