@@ -304,6 +304,20 @@ LLVM_ASSERTIONS=1
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
 
+## Building a debug build of Julia
+
+A full debug build of Julia can be built with `make debug`.  This builds a debug
+version of `libjulia` and uses it to bootstrap the compiler, before creating a
+system image with debug symbols enabled.  This can take more than 15 minutes.
+
+Although it may result in some differences, a debug build can be built much
+quicker by bootstrapping from a release build:
+
+```sh
+$ make julia-src-release julia-sysbase-release
+$ make julia-sysimg-debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase.so
+```
+
 ## Building 32-bit Julia on a 64-bit machine
 
 Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine. Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
