@@ -317,6 +317,11 @@ typedef struct _jl_code_info_t {
 
 // This type describes a single method definition, and stores data
 // shared by the specializations of a function.
+//
+// Reading or writing requires `writelock` or exclusive ownership:
+//   roots, root_blocks, nroots_sysimg, ccallable
+// No lock is required to read these fields, set once on construction:
+//   all other fields
 typedef struct _jl_method_t {
     JL_DATA_TYPE
     jl_sym_t *name;  // for error reporting
@@ -382,13 +387,19 @@ typedef struct _jl_method_t {
     _jl_purity_overrides_t purity;
 
 // hidden fields:
-    // lock for modifications to the method
     jl_mutex_t writelock;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
 // can can be used as a unique dictionary key representation of a call to a particular Method
 // with a particular set of argument types
+//
+// Reading or writing requires `def.method->writelock` or exclusive ownership:
+//   backedges
+// Reading or writing requires the associated jl_methcache_t's `writelock`:
+//   cache_with_orig
+// No lock is required to read these fields, set once on construction:
+//   def, specTypes, sparam_vals
 struct _jl_method_instance_t {
     JL_DATA_TYPE
     union {
@@ -425,6 +436,11 @@ typedef struct _jl_opaque_closure_t {
 } jl_opaque_closure_t;
 
 // This type represents an executable operation
+//
+// No lock is required to read these fields, which are set while we have
+// exclusive ownership of the CodeInstance:
+//   def, owner, rettype, exctype, rettype_const, analysis_results,
+//   time_infer_total, time_infer_self
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
     jl_value_t *def; // MethodInstance or ABIOverride
@@ -795,6 +811,15 @@ typedef struct {
     uint64_t lo;
 } jl_uuid_t;
 
+// Reading or writing requires `lock`:
+//   scanned_methods, usings
+// Reading or writing requires `Base.require_lock`:
+//   uuid
+// Reading or writing requires `world_counter_lock`:
+//   usings_backedges (TODO)
+// No lock is required to read these fields, set once on construction:
+//   name, parent, file, line, build_id, uuid, nospecialize, optlevel, compile,
+//   infer, iistopmod, max_methods
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
