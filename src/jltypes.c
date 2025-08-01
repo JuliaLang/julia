@@ -2956,7 +2956,7 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(simplevector);
     jl_methcache_type = jl_new_uninitialized_datatype();
     jl_methtable_type = jl_new_uninitialized_datatype();
-    jl_method_table = jl_new_method_table(jl_symbol("GlobalMethods"), core);
+    jl_method_table = jl_new_method_table(jl_symbol("methodtable"), core);
 
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type, 0);
     jl_set_typetagof(jl_emptysvec, jl_simplevector_tag, GC_OLD_MARKED);
