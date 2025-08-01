@@ -3214,7 +3214,7 @@ function abstract_eval_copyast(interp::AbstractInterpreter, e::Expr, sstate::Sta
     return RTEffects(rt, Any, effects)
 end
 
-function abstract_eval_isdefined_expr(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
+function abstract_eval_isdefined_expr(::AbstractInterpreter, e::Expr, sstate::StatementState,
                                       sv::AbsIntState)
     sym = e.args[1]
     if isa(sym, SlotNumber) && sstate.vtypes !== nothing
