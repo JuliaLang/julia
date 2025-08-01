@@ -19,13 +19,18 @@ will not be reflected, unless you use `Revise`.
 
 ## For all changes
 
-1. Run `make check-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
+1. Run `make fix-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
 
 ## Building Julia
 
 If you made changes to the runtime (any files in `src/`), you will need to rebuild
 julia. Run `make -j` to rebuild julia. This process may take up to 10 minutes
 depending on your changes.
+
+After `make` run these static analysis checks:
+  - `make -C src clang-sa-<filename>` (replace `<filename>` with the basename of the file you modified)
+  - `make -C src clang-sagc-<filename>` which may require adding JL_GC_PUSH arguments, or JL_GC_PROMISE_ROOTED statements., or require fixing locks. Remember arguments are assumed rooted, so check the callers to make sure that is handled. If the value is being temporarily moved around in a struct or arraylist, `JL_GC_PROMISE_ROOTED(struct->field)` may be needed as a statement (it return void) immediately after reloading the struct before any use of struct. Put the promise as early in the code as is legal.
+  - `make -C src clang-tidy-<filename>`
 
 ## Using Revise
 

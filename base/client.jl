@@ -71,7 +71,7 @@ function repl_cmd(cmd, out)
         catch
             # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
             lasterr = current_exceptions()
-            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
             invokelatest(display_error, lasterr)
         end
     end
@@ -99,7 +99,7 @@ function scrub_repl_backtrace(bt)
     return bt
 end
 scrub_repl_backtrace(stack::ExceptionStack) =
-    ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
+    ExceptionStack(NamedTuple[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
     length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
