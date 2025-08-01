@@ -1372,7 +1372,6 @@ JL_DLLEXPORT void jl_register_user_signal(int sig)
     jl_sigsetset(&sset);
     int ismember = sigismember(&sset, sig);
     if (ismember == 0) {  // Signal is not in the `sigwait_sigs` set
-        jl_safe_printf("jl_register_signal: sigaction\n");
         struct sigaction act;
         memset(&act, 0, sizeof(struct sigaction));
         sigemptyset(&act.sa_mask);
