@@ -24,7 +24,8 @@ function repl_workload()
     function check_errors(out)
         str = String(out)
         if occursin("ERROR:", str) && !any(occursin(e, str) for e in allowed_errors)
-            @error "Unexpected error (Review REPL precompilation with debug_output on):\n$str"
+            @error "Unexpected error (Review REPL precompilation with debug_output on):\n$str" exception=(
+                Base.PrecompilableError(), Base.backtrace())
             exit(1)
         end
     end
@@ -40,6 +41,7 @@ function repl_workload()
 
     # This is notified as soon as the first prompt appears
     repl_init_event = Base.Event()
+    repl_init_done_event = Base.Event()
 
     atreplinit() do repl
         # Main is closed so we can't evaluate in it, but atreplinit runs at
@@ -48,6 +50,7 @@ function repl_workload()
         t = @async begin
             wait(repl_init_event)
             REPL.activate(REPL.Precompile; interactive_utils=false)
+            notify(repl_init_done_event)
         end
         Base.errormonitor(t)
     end
@@ -80,6 +83,9 @@ function repl_workload()
     """
 
     JULIA_PROMPT = "julia> "
+    # The help text for `reinterpret` has example `julia>` prompts in it,
+    # so use the longer prompt to avoid desychronization.
+    ACTIVATED_JULIA_PROMPT = "(REPL.Precompile) julia> "
     PKG_PROMPT = "pkg> "
     SHELL_PROMPT = "shell> "
     HELP_PROMPT = "help?> "
@@ -142,18 +148,24 @@ function repl_workload()
             end
             schedule(repltask)
             # wait for the definitive prompt before start writing to the TTY
-            check_errors(readuntil(output_copy, JULIA_PROMPT))
+            check_errors(readuntil(output_copy, JULIA_PROMPT, keep=true))
+
+            # Switch to the activated prompt
+            notify(repl_init_event)
+            wait(repl_init_done_event)
+            write(ptm, "\n")
+            # The prompt prints twice - once for the restatement of the input, once
+            # to indicate ready for the new prompt.
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+
             write(debug_output, "\n#### REPL STARTED ####\n")
-            sleep(0.01)
-            check_errors(readavailable(output_copy))
             # Input our script
             precompile_lines = split(repl_script::String, '\n'; keepempty=false)
             curr = 0
             for l in precompile_lines
                 sleep(0.01) # try to let a bit of output accumulate before reading again
                 curr += 1
-                # consume any other output
-                bytesavailable(output_copy) > 0 && check_errors(readavailable(output_copy))
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
                 # If the line ends with a CTRL_C, don't write an extra newline, which would
@@ -166,13 +178,12 @@ function repl_workload()
                 strbuf = ""
                 while !eof(output_copy)
                     strbuf *= String(readavailable(output_copy))
-                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(ACTIVATED_JULIA_PROMPT, strbuf) && break
                     occursin(PKG_PROMPT, strbuf) && break
                     occursin(SHELL_PROMPT, strbuf) && break
                     occursin(HELP_PROMPT, strbuf) && break
                     sleep(0.01) # try to let a bit of output accumulate before reading again
                 end
-                notify(repl_init_event)
                 check_errors(strbuf)
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
