@@ -82,13 +82,12 @@ end
 function emit_field_info!(ctx::TypeEmitter, @nospecialize(dt::DataType), field::Int; indent::Int = 0)
     desc = Base.DataTypeFieldDesc(dt)[field]
     type_id = ctx.type_ids[fieldtype(dt, field)]
-    let indented_println(args...) = println(ctx.io, " " ^ indent, args...)
-        indented_println("{")
-        indented_println("  \"name\": ", field_name_json(dt, field), ",")
-        indented_println("  \"offset\": ", desc.offset, ",")
-        indented_println("  \"type\": ", type_id)
-        print(ctx.io, " " ^ indent, "}")
-    end
+    print(ctx.io, " " ^ indent)
+    print(ctx.io, "{")
+    print(ctx.io, " \"name\": ", field_name_json(dt, field), ",")
+    print(ctx.io, " \"type\": ", type_id, ",")
+    print(ctx.io, " \"offset\": ", desc.offset)
+    print(ctx.io, " }")
 end
 
 function emit_struct_info!(ctx::TypeEmitter, @nospecialize(dt::DataType); indent::Int = 0)
@@ -157,15 +156,14 @@ function emit_method_info!(ctx::TypeEmitter, method::Core.Method; indent::Int = 
         indented_println("  \"name\": ", escape_string_json(name), ",")
         indented_println("  \"arguments\": [")
         for i in 2:length(sig.parameters)
-            indented_println("    {")
-            indented_println("      \"name\": ", escape_string_json(argnames[i]), ",")
-            indented_println("      \"type\": ", ctx.type_ids[sig.parameters[i]])
-            indented_println("    }", i == length(sig.parameters) ? "" : ",")
+            print(ctx.io, " " ^ (indent + 4))
+            print(ctx.io, "{")
+            print(ctx.io, " \"name\": ", escape_string_json(argnames[i]), ",")
+            print(ctx.io, " \"type\": ", ctx.type_ids[sig.parameters[i]])
+            println(ctx.io, i == length(sig.parameters) ? " }" : " },")
         end
         indented_println("  ],")
-        indented_println("  \"returns\": {")
-        indented_println("    \"type\": ", ctx.type_ids[rt])
-        indented_println("  }")
+        indented_println("  \"returns\": { \"type\": ", ctx.type_ids[rt], " }")
         print(ctx.io, " " ^ indent, "}")
     end
 end
