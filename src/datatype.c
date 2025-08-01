@@ -836,8 +836,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     return;
 }
 
-int equiv_type(jl_value_t *ta, jl_value_t *tb);
-
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
         jl_module_t *module,
