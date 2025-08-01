@@ -1355,6 +1355,10 @@ JL_DLLEXPORT int jl_consume_user_signal(void) {
 
 JL_DLLEXPORT void jl_register_user_signal(int sig)
 {
+    uv_async_t *handle = jl_atomic_load_relaxed(&jl_signal_router_condition);
+    if (!handle)
+        jl_errorf("fatal error: jl_signal_router_contion unset");
+
     pthread_mutex_lock(&signal_router_sset_lock);
     int err = sigaddset(&signal_router_sset, sig);
     pthread_mutex_unlock(&signal_router_sset_lock);
