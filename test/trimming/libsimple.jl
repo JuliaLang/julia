@@ -16,6 +16,20 @@ struct MyTwoVec
     y::Int32
 end
 
+struct CTree{T}
+    # test that recursive datatypes work as expected
+    children::CVector{CTree{T}}
+end
+
+Base.@ccallable "tree_size" function size(tree::CTree{Float64})::Int64
+    children = unsafe_wrap(Array, tree.children.data, tree.children.length)
+    # Return the size of this sub-tree
+    return sum(Int64[
+        size(child)
+        for child in children
+    ]; init=1)
+end
+
 Base.@ccallable "copyto_and_sum" function badname(fromto::CVectorPair{Float32})::Float32
     from, to = unsafe_wrap(Array, fromto.from.data, fromto.from.length), unsafe_wrap(Array, fromto.to.data, fromto.to.length)
     copyto!(to, from)
