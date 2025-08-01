@@ -1351,7 +1351,7 @@ function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     end
 
     # return the testset so it is returned from the @testset macro
-    ts
+    return ts
 end
 
 # Recursive function that finds the column that the result counts
@@ -1375,15 +1375,15 @@ get_alignment(ts, depth::Int) = 0
 # Recursive function that fetches backtraces for any and all errors
 # or failures the testset and its children encountered
 function filter_errors(ts::DefaultTestSet)
-    efs = []
+    efs = Any[]
     for t in ts.results
         if isa(t, DefaultTestSet)
             append!(efs, filter_errors(t))
         elseif isa(t, Union{Fail, Error})
-            append!(efs, [t])
+            push!(efs, t)
         end
     end
-    efs
+    return efs
 end
 
 """
