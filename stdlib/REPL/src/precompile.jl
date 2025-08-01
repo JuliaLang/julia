@@ -148,13 +148,16 @@ function repl_workload()
             end
             schedule(repltask)
             # wait for the definitive prompt before start writing to the TTY
-            check_errors(readuntil(output_copy, JULIA_PROMPT))
+            check_errors(readuntil(output_copy, JULIA_PROMPT, keep=true))
 
             # Switch to the activated prompt
             notify(repl_init_event)
             wait(repl_init_done_event)
             write(ptm, "\n")
-            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT))
+            # The prompt prints twice - once for the restatement of the input, once
+            # to indicate ready for the new prompt.
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
 
             write(debug_output, "\n#### REPL STARTED ####\n")
             # Input our script
