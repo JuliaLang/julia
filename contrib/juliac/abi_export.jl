@@ -116,7 +116,9 @@ function emit_primitive_type!(ctx::TypeEmitter, @nospecialize(dt::DataType); ind
         indented_println("  \"id\": ", type_id, ",")
         indented_println("  \"kind\": \"primitive\",")
         indented_println("  \"name\": ", type_name_json(dt), ",")
-        indented_println("  \"size\": ", Core.sizeof(dt), ",")
+        indented_println("  \"signed\": ", (dt <: Signed), ",")
+        indented_println("  \"bits\": ", 8 * Base.packedsize(dt), ",") # size for reinterpret / in-register
+        indented_println("  \"size\": ", Base.aligned_sizeof(dt), ",") # size with padding / in-memory
         indented_println("  \"alignment\": ", Base.datatype_alignment(dt))
         print(ctx.io, " " ^ indent, "}")
     end
