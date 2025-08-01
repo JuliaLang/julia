@@ -1979,3 +1979,13 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     # check for the gc_safe store
     @test occursin("store atomic i8 2", llvm)
 end
+
+@testset "jl_dlfind and dlsym" begin
+    # We shouldn't be able to call libc functions through libccalltest
+    @test_throws ErrorException ccall((:sqrt, libccalltest), Cdouble, (Cdouble,), 2.0)
+    # jl_dlfind shouldn't force dlsym for malloc to go through libjulia
+    let malloc_hdl = ccall(:jl_dlfind, Ptr{Nothing}, (Cstring,), "malloc")
+        @test malloc_hdl != ccall(:jl_dlfind, Ptr{Nothing}, (Cstring,), "jl_gc_safepoint")
+        @test malloc_hdl != ccall(:jl_dlfind, Ptr{Nothing}, (Cstring,), "jl_array_ptr")
+    end
+end

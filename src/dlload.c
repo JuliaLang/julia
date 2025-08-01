@@ -434,12 +434,17 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
     }
 #endif
 
+    int rtld_first_handle = 0;
+#ifdef _OS_DARWIN_
+    rtld_first_handle = (uintptr_t)handle & 1;
+#endif
+
 #ifndef _OS_WINDOWS_
     /*
      * Unlike GetProcAddress, dlsym will search the dependencies of the given
      * library, so we must check where the symbol came from.
      */
-    if (symbol_found && no_deps) {
+    if (symbol_found && no_deps && handle != jl_RTLD_DEFAULT_handle && !rtld_first_handle) {
         void *symbol_handle = jl_find_dynamic_library_by_addr(*value, 0);
         symbol_found = handle == symbol_handle;
     }
