@@ -471,6 +471,16 @@ function collect_all_deps(direct_deps, dep, alldeps=Set{Base.PkgId}())
 end
 
 
+function num_precompile_tasks()
+    # Windows sometimes hits a ReadOnlyMemoryError, so we halve the default number of tasks. Issue #2323
+    # TODO: Investigate why this happens in windows and restore the full task limit
+    default_num_tasks = Sys.iswindows() ? div(Sys.CPU_THREADS::Int, 2) + 1 : Sys.CPU_THREADS::Int + 1
+    default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
+
+    num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
+    return num_tasks
+end
+
 function precompilepkgs(pkgs::Vector{String}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -507,12 +517,7 @@ function _precompilepkgs(pkgs::Vector{String},
 
     env = ExplicitEnv()
 
-    # Windows sometimes hits a ReadOnlyMemoryError, so we halve the default number of tasks. Issue #2323
-    # TODO: Investigate why this happens in windows and restore the full task limit
-    default_num_tasks = Sys.iswindows() ? div(Sys.CPU_THREADS::Int, 2) + 1 : Sys.CPU_THREADS::Int + 1
-    default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
-
-    num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
+    num_tasks = num_parallel_tasks()
     parallel_limiter = Base.Semaphore(num_tasks)
 
     # suppress passive loading printing in julia test suite. `JULIA_TESTS` is set in Base.runtests
