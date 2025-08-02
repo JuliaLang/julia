@@ -3488,6 +3488,13 @@ end
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
     mi = frame_instance(sv)
     t = sp_type_rewrap(e.args[2], mi, true)
+    let fptr = e.args[1]
+        if !isexpr(fptr, :tuple)
+            if !hasintersect(widenconst(abstract_eval_value(interp, fptr, sstate, sv)), Ptr)
+                return RTEffects(Bottom, Any, EFFECTS_THROWS)
+            end
+        end
+    end
     for i = 3:length(e.args)
         if abstract_eval_value(interp, e.args[i], sstate, sv) === Bottom
             return RTEffects(Bottom, Any, EFFECTS_THROWS)
