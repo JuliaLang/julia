@@ -1,0 +1,6 @@
+## jll artifact
+LIBPICOSAT_JLL_NAME := libpicosat
+
+## source build
+LIBPICOSAT_VER := 965
+LIBPICOSAT_URL := https://fmv.jku.at/picosat/picosat-$(LIBPICOSAT_VER).tar.gz
