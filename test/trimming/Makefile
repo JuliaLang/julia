@@ -33,7 +33,7 @@ JULIAC_BUILDSCRIPT := $(shell $(JULIA) -e 'print(joinpath(Sys.BINDIR, Base.DATAR
 
 #=============================================================================
 
-release: $(BIN)/hello$(EXE) $(BIN)/basic_jll$(EXE)
+release: $(BIN)/hello$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
 
 $(BIN)/hello-o.a: $(SRCDIR)/hello.jl $(JULIAC_BUILDSCRIPT)
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
@@ -42,17 +42,23 @@ $(BIN)/basic_jll-o.a: $(SRCDIR)/basic_jll.jl $(JULIAC_BUILDSCRIPT)
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) -e "using Pkg; Pkg.instantiate()"
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
 
+$(BIN)/libsimple-o.a: $(SRCDIR)/libsimple.jl $(JULIAC_BUILDSCRIPT)
+	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-lib true $(BIN)/bindinginfo_libsimple.log
+
 $(BIN)/hello$(EXE): $(BIN)/hello-o.a
 	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 $(BIN)/basic_jll$(EXE): $(BIN)/basic_jll-o.a
 	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
-check: $(BIN)/hello$(EXE) $(BIN)/basic_jll$(EXE)
+$(BIN)/capplication$(EXE): $(BIN)/capplication.c $(BIN)/libsimple.h $(BIN)/libsimple-o.a
+	$(CC) -I$(BIN) -I$(SRCDIR) -I$(JULIA_LIBDIR) -o $@ $< -Wl,--whole-archive libsimple-o.a -Wl,--no-whole-archive $(LDFLAGS_ADD) $(LDFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
+
+check: $(BIN)/hello$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
 	$(JULIA) --depwarn=error $(SRCDIR)/trimming.jl $<
 
 clean:
-	-rm -f $(BIN)/hello$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/basic_jll-o.a
+	-rm -f $(BIN)/hello$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.log
 
 .PHONY: release clean check
 
