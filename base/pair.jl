@@ -68,4 +68,4 @@ function convert(::Type{Pair{A,B}}, x::Pair) where {A,B}
 end
 
 promote_rule(::Type{Pair{A1,B1}}, ::Type{Pair{A2,B2}}) where {A1,B1,A2,B2} =
-    Pair{promote_type(A1, A2), promote_type(B1, B2)}
+    Pair{typejoin(A1, A2), typejoin(B1, B2)}
