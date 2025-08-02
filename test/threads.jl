@@ -115,18 +115,9 @@ function run_with_affinity(cpus)
     return readchomp(setcpuaffinity(`$(Base.julia_cmd()) $script`, cpus))
 end
 
-# issue #34415 - make sure external affinity settings work
-if Sys.islinux()
-    const SYS_rrcall_check_presence = 1008
-    global running_under_rr() = 0 == ccall(:syscall, Int,
-        (Int, Int, Int, Int, Int, Int, Int),
-        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
-else
-    global running_under_rr() = false
-end
 # Note also that libuv does not support affinity in macOS and it is known to
 # hang in FreeBSD. So, it's tested only in Linux and Windows:
-const AFFINITY_SUPPORTED = (Sys.islinux() || Sys.iswindows()) && !running_under_rr()
+const AFFINITY_SUPPORTED = (Sys.islinux() || Sys.iswindows())
 
 if AFFINITY_SUPPORTED
     allowed_cpus = findall(uv_thread_getaffinity())
