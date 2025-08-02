@@ -60,8 +60,8 @@ function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = tr
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
     val = Ref(Ptr{Cvoid}(0))
     symbol_found = ccall(:jl_dlsym, Cint,
-        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint),
-        hnd, s, val, Int64(throw_error)
+        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint, Cint),
+        hnd, s, val, Int64(throw_error), Int64(0)
     )
     if symbol_found == 0
         return nothing
