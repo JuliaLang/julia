@@ -445,50 +445,34 @@ end
 # Helper function to concatenate two UInt64 values with a byte shift
 # Returns the result of shifting 'low' right by 'shift_bytes' bytes and
 # filling the high bits with the low bits of 'high'
-@inline function concat_shift(low::UInt64, high::UInt64, shift_bytes::Int)
-    shift_bits = shift_bytes * 8
-    return (low >> shift_bits) | (high << (64 - shift_bits))
+@inline function concat_shift(low::UInt64, high::UInt64, shift_bytes::UInt8)
+    shift_bits = (shift_bytes * 0x8) & 0x3f
+    return (low >> shift_bits) | (high << (0x40 - shift_bits))
 end
 
-@eval @inline function read_uint64_from_uint8_iter(iter, state)
+@inline function read_uint64_from_uint8_iter(iter, state)
     value = zero(UInt64)
-    bytes_read = 0
-    shift = 0
-
-    for _ in 1:8
+    @nexprs 8 i -> begin
         next_result = iterate(iter, state)
-        next_result === nothing && break
+        next_result === nothing && return value, state, UInt8(i - 1)
         byte, state = next_result
-        value |= UInt64(byte) << shift
-        shift += 8
-        bytes_read += 1
-        $(Expr(:loopinfo, (Symbol("llvm.loop.disable_nonforced"))))
-        $(Expr(:loopinfo, (Symbol("llvm.loop.vectorize.enable"), false)))
+        value |= UInt64(byte) << ((i - 1) * 8)
     end
-
-    return value, state, bytes_read
+    return value, state, 0x8
 end
 
-@eval @inline function read_uint64_from_uint8_iter(iter)
+@inline function read_uint64_from_uint8_iter(iter)
     next_result = iterate(iter)
     next_result === nothing && return nothing
-
     byte, state = next_result
     value = UInt64(byte)
-    bytes_read = 1
-
-    # Loop for remaining bytes
-    for i in 2:8
+    @nexprs 7 i -> begin
         next_result = iterate(iter, state)
-        next_result === nothing && break
+        next_result === nothing && return value, state, UInt8(i)
         byte, state = next_result
-        value |= UInt64(byte::UInt8) << ((i-1) * 8)
-        bytes_read += 1
-        $(Expr(:loopinfo, (Symbol("llvm.loop.disable_nonforced"))))
-        $(Expr(:loopinfo, (Symbol("llvm.loop.vectorize.enable"), false)))
+        value |= UInt64(byte::UInt8) << (i * 8)
     end
-
-    return value, state, bytes_read
+    return value, state, 0x8
 end
 
 @assume_effects :terminates_globally function hash_bytes(
@@ -510,12 +494,12 @@ end
     l3 = zero(UInt64)
     l4 = zero(UInt64)
     l5 = zero(UInt64)
-    b0 = 0
-    b1 = 0
-    b2 = 0
-    b3 = 0
-    b4 = 0
-    b5 = 0
+    b0 = 0x0
+    b1 = 0x0
+    b2 = 0x0
+    b3 = 0x0
+    b4 = 0x0
+    b5 = 0x0
     t0 = zero(UInt64)
     t1 = zero(UInt64)
 
@@ -526,18 +510,18 @@ end
         # Repeat hashing chunks until a short read
         while true
             l1, state, b1 = read_uint64_from_uint8_iter(iter, state)
-            if b1 == 8
+            if b1 == 0x8
                 l2, state, b2 = read_uint64_from_uint8_iter(iter, state)
-                if b2 == 8
+                if b2 == 0x8
                     l3, state, b3 = read_uint64_from_uint8_iter(iter, state)
-                    if b3 == 8
+                    if b3 == 0x8
                         l4, state, b4 = read_uint64_from_uint8_iter(iter, state)
-                        if b4 == 8
+                        if b4 == 0x8
                             l5, state, b5 = read_uint64_from_uint8_iter(iter, state)
-                            if b5 == 8
+                            if b5 == 0x8
                                 # Read start of next chunk
                                 read = read_uint64_from_uint8_iter(iter, state)
-                                if read[3] == 0
+                                if read[3] == 0x0
                                     # Read exactly 48 bytes
                                     t0 = l4
                                     t1 = l5
@@ -554,7 +538,7 @@ end
                                     b3 = 0
                                     b4 = 0
                                     b5 = 0
-                                    if b0 != 8
+                                    if b0 < 8
                                         t0 = concat_shift(l4, l5, b0)
                                         t1 = concat_shift(l5, l0, b0)
                                         break
@@ -598,26 +582,26 @@ end
     end
     buflen += bytes_chunk
     if buflen ≤ 16
-        if buflen ≥ 4
-            seed ⊻= buflen
-            if buflen ≥ 8
+        if bytes_chunk ≥ 0x4
+            seed ⊻= bytes_chunk
+            if bytes_chunk ≥ 0x8
                 a = l0
                 b = t1
             else
                 a = UInt64(l0 % UInt32)
-                b = UInt64((l0 >>> (8 * (bytes_chunk - 4))) % UInt32)
+                b = UInt64((l0 >>> ((0x8 * (bytes_chunk - 0x4)) % 0x3f)) % UInt32)
             end
-        elseif buflen > 0
+        elseif bytes_chunk > 0x0
             b0 = l0 % UInt8
-            b1 = (l0 >>> (8 * div(buflen, 2))) % UInt8
-            b2 = (l0 >>> (8 * (buflen - 1))) % UInt8
+            b1 = (l0 >>> ((0x8 * div(bytes_chunk, 0x2)) % 0x3f)) % UInt8
+            b2 = (l0 >>> ((0x8 * (bytes_chunk - 0x1)) % 0x3f)) % UInt8
             a = (UInt64(b0) << 45) | UInt64(b2)
             b = UInt64(b1)
         end
     else
-        if bytes_chunk > 16
+        if bytes_chunk > 0x10
             seed = hash_mix(l0 ⊻ secret[3], l1 ⊻ seed)
-            if bytes_chunk > 32
+            if bytes_chunk > 0x20
                 seed = hash_mix(l2 ⊻ secret[3], l3 ⊻ seed)
             end
         end
