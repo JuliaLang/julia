@@ -2,6 +2,8 @@
 
 module Precompile
 
+@show ENV
+
 import ..REPL
 
 # Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
