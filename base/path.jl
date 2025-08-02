@@ -40,7 +40,7 @@ elseif Sys.iswindows()
         # Not a slash in either direction.
         N = raw"[^\\/]"
         # Drive letter, e.g. `C:`
-        drive = "$(N)+:"
+        drive = "$(N):"
         # UNC path, e.g. `\\server\share`
         unc = "$(S)$(S)$(N)+$(S)$(N)+"
         # Long drive letter, e.g. `\\?\C:`
@@ -357,7 +357,7 @@ the join of the preceding paths, then prior components are dropped.
 Note on Windows since there is a current directory for each drive, `joinpath("c:", "foo")`
 represents a path relative to the current directory on drive "c:" so this is equal to "c:foo",
 not "c:\\foo". Furthermore, `joinpath` treats this as a non-absolute path and ignores the drive
-letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
+letter casing, hence `joinpath("C:\\\\A","c:b") = "C:\\\\A\\\\b"`.
 
 # Examples
 ```jldoctest
