@@ -450,6 +450,7 @@
     XX(jl_threadpoolid) \
     XX(jl_get_ptls_rng) \
     XX(jl_set_ptls_rng) \
+    XX(jl_sigabbrev) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
