@@ -35,6 +35,11 @@ using Dates
     @test string(Dates.unix2datetime(915148801.25)) == string("1999-01-01T00:00:01.250")
 end
 
+@testset "conversions with localtime=true" begin
+    unix2localdatetime(x::Real) = DateTime(Libc.TmStruct(floor(x))) + Millisecond(round(Int, (x - floor(x)) * 1000))
+    @test unix2datetime(1095379198.75, localtime=true) == unix2localdatetime(1095379198.75)
+end
+
 @testset "conversion to/from Rata Die" begin
     @test Date(Dates.rata2datetime(734869)) == Dates.Date(2013, 1, 1)
     @test Dates.datetime2rata(Dates.rata2datetime(734869)) == 734869
