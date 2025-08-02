@@ -81,6 +81,13 @@ When modifying external dependencies (patches in `deps/patches/` or version upda
    - Prefer using the full upstream commit in `git am` format (e.g., `git format-patch`) which includes proper commit metadata
 3. When updating dependency versions, ensure all associated patches still apply
 
+### External JLLs
+
+To update a JLL to the latest version:
+- Update the version number in the appropriate jll folder
+- If the dependencies in the upstream jll changed, update the Project.toml
+- Run `make -f contrib/refresh_checksums.mk <jll>` to update the checksums. This may take a few minutes.
+
 ### Writing code
 After writing code, look up the docstring for each function you used. If there
 are recommendations or additional considerations that apply to these functions,

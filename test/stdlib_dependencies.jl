@@ -234,6 +234,14 @@ try
                         end
                     end
 
+                    if prop_name == :libspqr
+                        # Allow libstdc++ to not be linked - spqr only uses std::complex,
+                        # which may be header-only, so doesn't get linked on as-needed distributions.
+                        # However, in general, we can't assume that, so we need to take the dependency
+                        # and just allow this here.
+                        extraneous_deps = setdiff(extraneous_deps, ["libstdc++"])
+                    end
+
                     # We expect there to be no missing or extraneous deps
                     deps_mismatch = !isempty(missing_deps) || !isempty(extraneous_deps)
 
