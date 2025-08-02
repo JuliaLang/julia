@@ -603,17 +603,23 @@ overwritten with the value of `X`, [`convert`](@ref)ing to the
 [`eltype`](@ref) of `A` if necessary.
 
 
-If any index `I_k` is itself an array, then the right hand side `X` must also be an
-array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
-the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
-`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. The
-element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
-across the selected locations:
+If any index `I_k` is itself an array, then they select multiple locations to be assigned.
+The right hand side `X` must also be an
+array with the same number of elements as the indices select and a compatible shape.
+Each value in `X` is assigned into the corresponding location in `A[I_1, I_2, ..., I_n]`,
+following the rules of [linear indexing and omitted/extra indices](@ref man-number-of-indices).
+That is, `X` must be the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or
+either may be a vector. In the simple case where all the supplied indices are vectors and
+the shapes match, each value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
+`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. If either
+side is a vector, then the elements are assigned with column-major [linear indexing](@ref man-linear-indexing).
 
-
-```
-A[I_1, I_2, ..., I_n] .= X
-```
+The element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
+across multiple selected locations with `A[I_1, I_2, ..., I_n] .= X`. In the common case where the
+concatenated axes of the indices matches the axes of `X`, this behaves like the nonscalar
+indexed assignment described above (that is, `=` without the broadcasting `.`). Unlike indexed
+assignment, however, any mismatched axes will be broadcast (in accordance with broadcast's rules)
+and linear indexing is not supported.
 
 Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
@@ -838,7 +844,7 @@ julia> x[vec(mask)] == x[mask] # we can also index with a single Boolean vector
 true
 ```
 
-### Number of indices
+### [Number of indices](@id man-number-of-indices)
 
 #### Cartesian indexing
 
@@ -847,7 +853,7 @@ index selects the position(s) in its particular dimension. For example, in the t
 array `A = rand(4, 3, 2)`, `A[2, 3, 1]` will select the number in the second row of the third
 column in the first "page" of the array. This is often referred to as _cartesian indexing_.
 
-#### Linear indexing
+#### [Linear indexing](@id man-linear-indexing)
 
 When exactly one index `i` is provided, that index no longer represents a location in a
 particular dimension of the array. Instead, it selects the `i`th element using the
