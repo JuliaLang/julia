@@ -1785,8 +1785,12 @@ typed_vcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_vcat(T, A)
 
 reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_vcat(mapreduce(eltype, promote_type, A), A)
+reduce(::typeof(vcat), A::Tuple{AbstractVecOrMat, Vararg{AbstractVecOrMat}}) =
+    _typed_vcat(mapreduce(eltype, promote_type, A), A)
 
 reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
+    _typed_hcat(mapreduce(eltype, promote_type, A), A)
+reduce(::typeof(hcat), A::Tuple{AbstractVecOrMat, AbstractVecOrMat, Vararg{AbstractVecOrMat}}) =
     _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
 ## cat: general case
@@ -1907,7 +1911,9 @@ Concatenate arrays or numbers vertically. Equivalent to [`cat`](@ref)`(A...; dim
 and to the syntax `[a; b; c]`.
 
 To concatenate a large vector of arrays, `reduce(vcat, A)` calls an efficient method
-when `A isa AbstractVector{<:AbstractVecOrMat}`, rather than working pairwise.
+when `A isa AbstractVector{<:AbstractVecOrMat}`, or a tuple of `AbstractVecOrMat`.
+On all other types, `reduce(vcat, A)` works one at a time, creating `length(A)-1` arrays, and discarding all but the last.
+This less efficient behaviour is also triggered by keywords like `reduce(vcat, A; init=Int[])`.
 
 See also [`hcat`](@ref), [`Iterators.flatten`](@ref), [`stack`](@ref).
 
@@ -1967,7 +1973,7 @@ Concatenate arrays or numbers horizontally. Equivalent to [`cat`](@ref)`(A...; d
 and to the syntax `[a b c]` or `[a;; b;; c]`.
 
 For a large vector of arrays, `reduce(hcat, A)` calls an efficient method
-when `A isa AbstractVector{<:AbstractVecOrMat}`.
+when `A isa AbstractVector{<:AbstractVecOrMat}`, and when `A` is a tuple of `AbstractVecOrMat`.
 For a vector of vectors, this can also be written [`stack`](@ref)`(A)`.
 
 See also [`vcat`](@ref), [`hvcat`](@ref).
