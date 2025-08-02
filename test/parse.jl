@@ -265,6 +265,18 @@ end
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
+# parse can't parse our own Float32 output format #5690
+@testset "floating point parsing" begin
+    for T in (Float64, Float32)
+        for str in [
+            "12.3", "1.23e1", "1.23f1", "1.23e+1", "1.23f+1", "123f-1", "123.e-1"
+        ]
+            @test parse(T, str) === T(12.3)
+            @test parse(T, string(parse(T, str))) === T(12.3)
+        end
+    end
+end
+
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
     for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
