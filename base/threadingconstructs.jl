@@ -220,6 +220,73 @@ function _threadsfor(iter, lbody, schedule)
     end
 end
 
+function _threadsfor_comprehension(gen::Expr, schedule)
+    @assert gen.head === :generator
+
+    body = gen.args[1]
+    iter_or_filter = gen.args[2]
+
+    # Handle filtered vs non-filtered comprehensions
+    if isa(iter_or_filter, Expr) && iter_or_filter.head === :filter
+        condition = iter_or_filter.args[1]
+        iterator = iter_or_filter.args[2]
+        return _threadsfor_filtered_comprehension(body, iterator, condition, schedule)
+    else
+        iterator = iter_or_filter
+        # Use filtered comprehension with `true` condition for non-filtered case
+        return _threadsfor_filtered_comprehension(body, iterator, true, schedule)
+    end
+end
+
+function _threadsfor_filtered_comprehension(body, iterator, condition, schedule)
+    lidx = iterator.args[1]         # index variable
+    range = iterator.args[2]        # range/iterable
+    esc_range = esc(range)
+    esc_body = esc(body)
+    esc_condition = esc(condition)
+
+    if schedule === :greedy
+        quote
+            local ch = Channel{eltype($esc_range)}(0,spawn=true) do ch
+                for item in $esc_range
+                    put!(ch, item)
+                end
+            end
+            local thread_result_storage = Vector{Vector{Any}}(undef, threadpoolsize())
+            function threadsfor_fun(tid)
+                local_results = Any[]
+                for item in ch
+                    local $(esc(lidx)) = item
+                    if $esc_condition
+                        push!(local_results, $esc_body)
+                    end
+                end
+                thread_result_storage[tid] = local_results
+            end
+            threading_run(threadsfor_fun, false)
+            # Collect results after threading_run
+            assigned_results = [thread_result_storage[i] for i in 1:threadpoolsize() if isassigned(thread_result_storage, i)]
+            vcat(assigned_results...)
+        end
+    else
+        func = default_filtered_comprehension_func(esc_range, lidx, esc_body, esc_condition)
+        quote
+            local threadsfor_fun
+            local result
+            $func
+            if $(schedule === :dynamic || schedule === :default)
+                threading_run(threadsfor_fun, false)
+            elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
+                error("`@threads :static` cannot be used concurrently or nested")
+            else # :static
+                threading_run(threadsfor_fun, true)
+            end
+            # Process result after threading_run
+            vcat(result...)
+        end
+    end
+end
+
 function greedy_func(itr, lidx, lbody)
     quote
         let c = Channel{eltype($itr)}(0,spawn=true) do ch
@@ -237,39 +304,47 @@ function greedy_func(itr, lidx, lbody)
     end
 end
 
+# Helper function to generate work distribution code
+function _work_distribution_code()
+    quote
+        r = range # Load into local variable
+        lenr = length(r)
+        # divide loop iterations among threads
+        if onethread
+            tid = 1
+            len, rem = lenr, 0
+        else
+            len, rem = divrem(lenr, threadpoolsize())
+        end
+        # not enough iterations for all the threads?
+        if len == 0
+            if tid > rem
+                return
+            end
+            len, rem = 1, 0
+        end
+        # compute this thread's iterations
+        f = firstindex(r) + ((tid-1) * len)
+        l = f + len - 1
+        # distribute remaining iterations evenly
+        if rem > 0
+            if tid <= rem
+                f = f + (tid-1)
+                l = l + tid
+            else
+                f = f + rem
+                l = l + rem
+            end
+        end
+    end
+end
+
 function default_func(itr, lidx, lbody)
+    work_dist = _work_distribution_code()
     quote
         let range = $itr
         function threadsfor_fun(tid = 1; onethread = false)
-            r = range # Load into local variable
-            lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
-            else
-                len, rem = divrem(lenr, threadpoolsize())
-            end
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
-            end
-            # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
+            $work_dist
             # run this thread's iterations
             for i = f:l
                 local $(esc(lidx)) = @inbounds r[i]
@@ -280,12 +355,45 @@ function default_func(itr, lidx, lbody)
     end
 end
 
+function default_filtered_comprehension_func(itr, lidx, body, condition)
+    work_dist = _work_distribution_code()
+    quote
+        let range = $itr
+        local thread_results = Vector{Vector{Any}}(undef, threadpoolsize())
+        # Initialize all result vectors to empty
+        for i in 1:threadpoolsize()
+            thread_results[i] = Any[]
+        end
+
+        function threadsfor_fun(tid = 1; onethread = false)
+            $work_dist
+            # run this thread's iterations with filtering
+            local_results = Any[]
+            for i = f:l
+                local $(esc(lidx)) = @inbounds r[i]
+                if $condition
+                    push!(local_results, $body)
+                end
+            end
+            thread_results[tid] = local_results
+        end
+
+        result = thread_results # This will be populated by threading_run
+        end
+    end
+end
+
 """
     Threads.@threads [schedule] for ... end
+    Threads.@threads [schedule] [expr for ... end]
 
-A macro to execute a `for` loop in parallel. The iteration space is distributed to
+A macro to execute a `for` loop or array comprehension in parallel. The iteration space is distributed to
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
+
+For `for` loops, the macro executes the loop body in parallel but does not return a value.
+For array comprehensions, the macro executes the comprehension in parallel and returns
+the collected results as an array.
 
 See also: [`@spawn`](@ref Threads.@spawn) and
 `pmap` in [`Distributed`](@ref man-distributed).
@@ -371,6 +479,8 @@ thread other than 1.
 
 ## Examples
 
+### For loops
+
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.
 
@@ -400,6 +510,38 @@ julia> @time begin
 
 The `:dynamic` example takes 2 seconds since one of the non-occupied threads is able
 to run two of the 1-second iterations to complete the for loop.
+
+### Array comprehensions
+
+The `@threads` macro also supports array comprehensions, which return the collected results:
+
+```julia-repl
+julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension
+5-element Vector{Int64}:
+   1
+   4
+   9
+  16
+  25
+
+julia> Threads.@threads [i^2 for i in 1:5 if iseven(i)] # Filtered comprehension
+2-element Vector{Int64}:
+   4
+  16
+```
+
+When the iterator doesn't have a known length, such as a channel, the `:greedy` scheduling
+option can be used, but note that the order of the results is not guaranteed.
+```julia-repl
+julia> c = Channel(5, spawn=true) do ch
+           foreach(i -> put!(ch, i), 1:5)
+       end;
+
+julia> Threads.@threads :greedy [i^2 for i in c if iseven(i)]
+2-element Vector{Any}:
+ 16
+  4
+```
 """
 macro threads(args...)
     na = length(args)
@@ -420,13 +562,18 @@ macro threads(args...)
     else
         throw(ArgumentError("wrong number of arguments in @threads"))
     end
-    if !(isa(ex, Expr) && ex.head === :for)
-        throw(ArgumentError("@threads requires a `for` loop expression"))
+    if isa(ex, Expr) && ex.head === :comprehension
+        # Handle array comprehensions
+        return _threadsfor_comprehension(ex.args[1], sched)
+    elseif isa(ex, Expr) && ex.head === :for
+        # Handle for loops
+        if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
+            throw(ArgumentError("nested outer loops are not currently supported by @threads"))
+        end
+        return _threadsfor(ex.args[1], ex.args[2], sched)
+    else
+        throw(ArgumentError("@threads requires a `for` loop or comprehension expression"))
     end
-    if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
-        throw(ArgumentError("nested outer loops are not currently supported by @threads"))
-    end
-    return _threadsfor(ex.args[1], ex.args[2], sched)
 end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
