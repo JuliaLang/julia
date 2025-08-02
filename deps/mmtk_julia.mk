@@ -48,13 +48,10 @@ compile-mmtk_julia: $(BUILDROOT)/usr/lib/libmmtk_julia.so
 
 version-check-mmtk_julia: $(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so
 
-# NB: This will NOT run `cargo build` if there are changes in the Rust source files
-# inside the binding repo. However the target below should remake the symlink if there
-# are changes in the libmmtk_julia.so from the custom MMTK_JULIA_DIR folder
-$(BUILDROOT)/usr/lib/libmmtk_julia.so: $(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so
+$(BUILDROOT)/usr/lib/libmmtk_julia.so: make-binding
 	@ln -sf $(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so $@
 
-$(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so:
+make-binding:
 	@$(PROJECT_DIRS) $(MMTK_VARS) $(MAKE) -C $(MMTK_JULIA_DIR) $(MMTK_BUILD)
 
 MMTK_JULIA_VER := mmtk_julia_custom
