@@ -1518,7 +1518,7 @@ Further, note the `Statistics` extension `SparseArraysExt` has been activated be
 tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
 
 This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
-Also the `Pkg` utility `why` can be used to report why a an indirect dependency exists.
+Also the `Pkg` utility `why` can be used to report why an indirect dependency exists.
 
 ```
 (CustomPackage) pkg> why FFMPEG_jll
