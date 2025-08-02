@@ -21,15 +21,15 @@ function rewrap_where(ex::Expr, where_params::Union{Nothing, Vector{Any}})
     Expr(:where, ex, esc.(where_params)...)
 end
 
-function get_typeof(@nospecialize ex)
+function get_typeof(@nospecialize ex; typeof = :(Core.Typeof))
     isexpr(ex, :(::), 1) && return esc(ex.args[1])
     isexpr(ex, :(::), 2) && return esc(ex.args[2])
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
         isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, esc(splatted.args[1]))
-        return :(Any[Core.Typeof(x) for x in $(esc(splatted))]...)
+        return :(Any[$typeof(x) for x in $(esc(splatted))]...)
     end
-    return :(Core.Typeof($(esc(ex))))
+    return :($typeof($(esc(ex))))
 end
 
 function is_broadcasting_call(ex)
@@ -149,12 +149,12 @@ function generate_merged_namedtuple_type(kwargs::Vector{Any})
             end
             push!(nts, Expr(:call, typeof_nt, esc(ex.args[1])))
         elseif isexpr(ex, :kw, 2)
-            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex.args[2]))
+            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex.args[2]; typeof = :(Core.typeof)))
         elseif isexpr(ex, :(::), 2)
-            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex))
+            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex; typeof = :(Core.typeof)))
         else
             ex::Symbol
-            push!(ntargs, ex => get_typeof(ex))
+            push!(ntargs, ex => get_typeof(ex; typeof = :(Core.typeof)))
         end
     end
     !isempty(ntargs) && push!(nts, generate_namedtuple_type(ntargs))
