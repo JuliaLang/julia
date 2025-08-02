@@ -5,6 +5,7 @@ const HASH_SECRET = tuple(
     0x2d358dccaa6c78a5,
     0x8bb84b93962eacc9,
     0x4b33a62ed433d4a3,
+    0xaaaaaaaaaaaaaaaa,
 )
 
 """
@@ -73,74 +74,76 @@ hash_integer(x::Integer, h::UInt) = _hash_integer(x, UInt64(h)) % UInt
 function _hash_integer(
         x::Integer,
         seed::UInt64 = HASH_SEED,
-        secret::NTuple{3, UInt64} = HASH_SECRET
+        secret::NTuple{4, UInt64} = HASH_SECRET
     )
     seed ⊻= (x < 0)
-    u = abs(x)
+    u0 = abs(x) # n.b.: this hashes typemin(IntN) correctly even if abs fails
+    u = u0
 
     # always left-pad to full byte
     buflen = UInt(max(cld(top_set_bit(u), 8), 1))
-    seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
+    seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
 
     a = zero(UInt64)
     b = zero(UInt64)
+    i = buflen
 
     if buflen ≤ 16
         if buflen ≥ 4
-            a = (UInt64(u % UInt32) << 32) |
-                UInt64((u >>> ((buflen - 4) * 8)) % UInt32)
-
-            delta = (buflen & 24) >>> (buflen >>> 3)
-
-            b = (UInt64((u >>> (8 * delta)) % UInt32) << 32) |
-                UInt64((u >>> (8 * (buflen - 4 - delta))) % UInt32)
+            seed ⊻= buflen
+            if buflen ≥ 8
+                a = UInt64(u % UInt64)
+                b = UInt64((u >>> (8 * (buflen - 8))) % UInt64)
+            else
+                a = UInt64(u % UInt32)
+                b = UInt64((u >>> (8 * (buflen - 4))) % UInt32)
+            end
         else # buflen > 0
             b0 = u % UInt8
             b1 = (u >>> (8 * div(buflen, 2))) % UInt8
             b2 = (u >>> (8 * (buflen - 1))) % UInt8
-            a = (UInt64(b0) << 56) |
-                (UInt64(b1) << 32) |
-                UInt64(b2)
+            a = (UInt64(b0) << 45) | UInt64(b2)
+            b = UInt64(b1)
         end
     else
-        a = (u >>> 8(buflen - 16)) % UInt
-        b = (u >>> 8(buflen - 8)) % UInt
-
-        i = buflen
         if i > 48
             see1 = seed
             see2 = seed
-            while i ≥ 48
-                l0 = u % UInt; u >>>= 64
-                l1 = u % UInt; u >>>= 64
-                l2 = u % UInt; u >>>= 64
-                l3 = u % UInt; u >>>= 64
-                l4 = u % UInt; u >>>= 64
-                l5 = u % UInt; u >>>= 64
+            while i > 48
+                l0 = u % UInt64; u >>>= 64
+                l1 = u % UInt64; u >>>= 64
+                l2 = u % UInt64; u >>>= 64
+                l3 = u % UInt64; u >>>= 64
+                l4 = u % UInt64; u >>>= 64
+                l5 = u % UInt64; u >>>= 64
 
                 seed = hash_mix(l0 ⊻ secret[1], l1 ⊻ seed)
                 see1 = hash_mix(l2 ⊻ secret[2], l3 ⊻ see1)
                 see2 = hash_mix(l4 ⊻ secret[3], l5 ⊻ see2)
                 i -= 48
             end
-            seed = seed ⊻ see1 ⊻ see2
+            seed ⊻= see1
+            seed ⊻= see2
         end
         if i > 16
-            l0 = u % UInt; u >>>= 64
-            l1 = u % UInt; u >>>= 64
-            seed = hash_mix(l0 ⊻ secret[3], l1 ⊻ seed ⊻ secret[2])
+            l0 = u % UInt64; u >>>= 64
+            l1 = u % UInt64; u >>>= 64
+            seed = hash_mix(l0 ⊻ secret[3], l1 ⊻ seed)
             if i > 32
-                l2 = u % UInt; u >>>= 64
-                l3 = u % UInt; u >>>= 64
+                l2 = u % UInt64; u >>>= 64
+                l3 = u % UInt64; u >>>= 64
                 seed = hash_mix(l2 ⊻ secret[3], l3 ⊻ seed)
             end
         end
+
+        a = (u0 >>> 8(buflen - 16)) % UInt64 ⊻ i
+        b = (u0 >>> 8(buflen - 8)) % UInt64
     end
 
     a = a ⊻ secret[2]
     b = b ⊻ seed
     b, a = mul_parts(a, b)
-    return hash_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
+    return hash_mix(a ⊻ secret[4], b ⊻ secret[2] ⊻ i)
 end
 
 
@@ -266,43 +269,40 @@ hash(x::Symbol) = objectid(x)
 load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
     unsafe_load(convert(Ptr{T}, ptr + i - 1))
 
-function read_small(ptr::Ptr{UInt8}, n::Int)
-    return (UInt64(unsafe_load(ptr)) << 56) |
-        (UInt64(unsafe_load(ptr, div(n, 2) + 1)) << 32) |
-        UInt64(unsafe_load(ptr, n))
-end
-
 @assume_effects :terminates_globally function hash_bytes(
         ptr::Ptr{UInt8},
         n::Int,
         seed::UInt64,
-        secret::NTuple{3, UInt64}
+        secret::NTuple{4, UInt64}
     )
     # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
     buflen = UInt64(n)
-    seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
+    seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
 
     a = zero(UInt64)
     b = zero(UInt64)
+    i = buflen
 
     if buflen ≤ 16
         if buflen ≥ 4
-            a = (UInt64(load_le(UInt32, ptr, 1)) << 32) |
-                UInt64(load_le(UInt32, ptr, n - 3))
-
-            delta = (buflen & 24) >>> (buflen >>> 3)
-            b = (UInt64(load_le(UInt32, ptr, delta + 1)) << 32) |
-                UInt64(load_le(UInt32, ptr, n - 3 - delta))
+            seed ⊻= buflen
+            if buflen ≥ 8
+                a = load_le(UInt64, ptr, 1)
+                b = load_le(UInt64, ptr, n - 7)
+            else
+                a = UInt64(load_le(UInt32, ptr, 1))
+                b = UInt64(load_le(UInt32, ptr, n - 3))
+            end
         elseif buflen > 0
-            a = read_small(ptr, n)
+            a = (UInt64(unsafe_load(ptr)) << 45) | UInt64(unsafe_load(ptr, n))
+            b = UInt64(unsafe_load(ptr, div(n, 2) + 1))
         end
     else
         pos = 1
-        i = buflen
         if i > 48
             see1 = seed
             see2 = seed
-            while i ≥ 48
+            while i > 48
                 seed = hash_mix(
                     load_le(UInt64, ptr, pos) ⊻ secret[1],
                     load_le(UInt64, ptr, pos + 8) ⊻ seed
@@ -318,12 +318,13 @@ end
                 pos += 48
                 i -= 48
             end
-            seed = seed ⊻ see1 ⊻ see2
+            seed ⊻= see1
+            seed ⊻= see2
         end
         if i > 16
             seed = hash_mix(
                 load_le(UInt64, ptr, pos) ⊻ secret[3],
-                load_le(UInt64, ptr, pos + 8) ⊻ seed ⊻ secret[2]
+                load_le(UInt64, ptr, pos + 8) ⊻ seed
             )
             if i > 32
                 seed = hash_mix(
@@ -333,14 +334,14 @@ end
             end
         end
 
-        a = load_le(UInt64, ptr, n - 15)
+        a = load_le(UInt64, ptr, n - 15) ⊻ i
         b = load_le(UInt64, ptr, n - 7)
     end
 
     a = a ⊻ secret[2]
     b = b ⊻ seed
     b, a = mul_parts(a, b)
-    return hash_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
+    return hash_mix(a ⊻ secret[4], b ⊻ secret[2] ⊻ i)
 end
 
 @assume_effects :total hash(data::String, h::UInt) =
