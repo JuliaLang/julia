@@ -448,13 +448,23 @@ end
 end
 
 @testset "deg2rad/rad2deg" begin
-    @testset "$T" for T in (Int, Float64, BigFloat)
+    @testset "$T" for T in (Int, Float16, Float32, Float64, BigFloat)
         @test deg2rad(T(180)) ≈ 1pi
         @test deg2rad.(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
         @test rad2deg.([pi/T(4), pi/T(3)]) ≈ [45, 60]
         @test rad2deg(T(1)*pi) ≈ 180
         @test rad2deg(T(1)) ≈ rad2deg(true)
         @test deg2rad(T(1)) ≈ deg2rad(true)
+    end
+    @testset "accuracy" begin
+        @testset "$T" for T in (Float16, Float32, Float64)
+            @test rad2deg(T(1)) === setprecision(BigFloat, 500) do
+                T(180 / BigFloat(pi))
+            end
+            @test deg2rad(T(1)) === setprecision(BigFloat, 500) do
+                T(BigFloat(pi) / 180)
+            end
+        end
     end
     @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im

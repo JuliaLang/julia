@@ -686,13 +686,15 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_warn r"LoadError: break me\nStacktrace:\n[ ]*\[1\] [\e01m\[]*error" try
-            Base.require(Main, :FooBar2)
-            error("the \"break me\" test failed")
-        catch exc
-            isa(exc, ErrorException) || rethrow()
-            occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
-        end
+    try
+        Base.require(Main, :FooBar2)
+        error("the \"break me\" test failed")
+    catch exc
+        isa(exc, Base.Precompilation.PkgPrecompileError) || rethrow()
+        occursin("Failed to precompile FooBar2", exc.msg) || rethrow()
+        # The LoadError is printed to stderr in the precompilepkgs worker and captured in the PkgPrecompileError msg
+        occursin("LoadError: break me", exc.msg) || rethrow()
+    end
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -704,11 +706,12 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
-                Base.require(Main, :FooBar3)
-            catch exc
-                isa(exc, ErrorException) || rethrow()
-            end
+        try
+            Base.require(Main, :FooBar3)
+        catch exc
+            isa(exc, Base.Precompilation.PkgPrecompileError) || rethrow()
+            occursin("Evaluation into the closed module `Base` breaks incremental compilation", exc.msg) || rethrow()
+        end
     end
 
     # Test transitive dependency for #21266
@@ -1884,8 +1887,8 @@ end
 
 @testset "Precompile external abstract interpreter" begin
     dir = @__DIR__
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint1.jl`; dir); stdout, stderr))
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint2.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr))
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -2420,7 +2423,7 @@ precompile_test_harness("llvmcall validation") do load_path
         using LLVMCall
         LLVMCall.do_llvmcall2()
     """
-    @test readchomp(`$(Base.julia_cmd()) --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
     # Now the regular way
     @eval using LLVMCall
     invokelatest() do
@@ -2500,7 +2503,7 @@ end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference
 let io = IOBuffer()
-    run(pipeline(`$(Base.julia_cmd()) --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
+    run(pipeline(`$(Base.julia_cmd()) --startup-file=no --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
     @test isempty(String(take!(io)))
 end
 

@@ -8,6 +8,61 @@ const _jl_debug_method_invalidation = Ref{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
     _jl_debug_method_invalidation[] = onoff ? Any[] : nothing
 
+# Immutable structs for different categories of state data
+struct VerifyMethodInitialState
+    codeinst::CodeInstance
+    mi::MethodInstance
+    def::Method
+    callees::Core.SimpleVector
+end
+
+struct VerifyMethodWorkState
+    depth::Int
+    cause::CodeInstance
+    recursive_index::Int
+    stage::Symbol
+end
+
+struct VerifyMethodResultState
+    child_cycle::Int
+    result_minworld::UInt
+    result_maxworld::UInt
+end
+
+# Container for all the work arrays
+struct VerifyMethodWorkspace
+    # Arrays of different state categories
+    initial_states::Vector{VerifyMethodInitialState}
+    work_states::Vector{VerifyMethodWorkState}
+    result_states::Vector{VerifyMethodResultState}
+
+    # Tarjan's algorithm working data
+    stack::Vector{CodeInstance}
+    visiting::IdDict{CodeInstance,Int}
+
+    function VerifyMethodWorkspace()
+        new(VerifyMethodInitialState[], VerifyMethodWorkState[], VerifyMethodResultState[],
+            CodeInstance[], IdDict{CodeInstance,Int}())
+    end
+end
+
+# Helper functions to create default states
+function VerifyMethodInitialState(codeinst::CodeInstance)
+    mi = get_ci_mi(codeinst)
+    def = mi.def::Method
+    callees = codeinst.edges
+    VerifyMethodInitialState(codeinst, mi, def, callees)
+end
+
+function VerifyMethodWorkState(dummy_cause::CodeInstance)
+    VerifyMethodWorkState(0, dummy_cause, 1, :init_and_process_callees)
+end
+
+function VerifyMethodResultState()
+    VerifyMethodResultState(0, 0, 0)
+end
+
+
 # Restore backedges to external targets
 # `edges` = [caller1, ...], the list of worklist-owned code instances internally
 # `ext_ci_list` = [caller1, ...], the list of worklist-owned code instances externally
@@ -16,19 +71,18 @@ function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
     Base.scan_new_methods!(extext_methods, internal_methods, backedges_only)
-    stack = CodeInstance[]
-    visiting = IdDict{CodeInstance,Int}()
-    _insert_backedges(edges, stack, visiting)
+    workspace = VerifyMethodWorkspace()
+    _insert_backedges(edges, workspace)
     if ext_ci_list !== nothing
-        _insert_backedges(ext_ci_list, stack, visiting, #=external=#true)
+        _insert_backedges(ext_ci_list, workspace, #=external=#true)
     end
 end
 
-function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, external::Bool=false)
+function _insert_backedges(edges::Vector{Any}, workspace::VerifyMethodWorkspace, external::Bool=false)
     for i = 1:length(edges)
         codeinst = edges[i]::CodeInstance
         validation_world = get_world_counter()
-        verify_method_graph(codeinst, stack, visiting, validation_world)
+        verify_method_graph(codeinst, validation_world, workspace)
         # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
         # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
         # validity.
@@ -52,11 +106,13 @@ function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visi
     end
 end
 
-function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, validation_world::UInt)
-    @assert isempty(stack); @assert isempty(visiting);
-    child_cycle, minworld, maxworld = verify_method(codeinst, stack, visiting, validation_world)
+function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
+    @assert isempty(workspace.stack); @assert isempty(workspace.visiting);
+    @assert isempty(workspace.initial_states); @assert isempty(workspace.work_states); @assert isempty(workspace.result_states)
+    child_cycle, minworld, maxworld = verify_method(codeinst, validation_world, workspace)
     @assert child_cycle == 0
-    @assert isempty(stack); @assert isempty(visiting);
+    @assert isempty(workspace.stack); @assert isempty(workspace.visiting);
+    @assert isempty(workspace.initial_states); @assert isempty(workspace.work_states); @assert isempty(workspace.result_states)
     nothing
 end
 
@@ -109,175 +165,230 @@ end
 # - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 #   and slightly modified with an early termination option once the computation reaches its minimum
-function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, validation_world::UInt)
-    world = codeinst.min_world
-    let max_valid2 = codeinst.max_world
-        if max_valid2 ≠ WORLD_AGE_REVALIDATION_SENTINEL
-            return 0, world, max_valid2
-        end
-    end
-    mi = get_ci_mi(codeinst)
-    def = mi.def::Method
-    if needs_instrumentation(codeinst, mi, def, validation_world)
-        return 0, world, UInt(0)
-    end
+function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
+    # Initialize root state
+    push!(workspace.initial_states, VerifyMethodInitialState(codeinst))
+    push!(workspace.work_states, VerifyMethodWorkState(codeinst))
+    push!(workspace.result_states, VerifyMethodResultState())
 
-    # Implicitly referenced bindings in the current module do not get explicit edges.
-    # If they were invalidated, they'll have the flag set in did_scan_source. If they weren't, they imply a minworld
-    # of `get_require_world`. In principle, this is only required for methods that do reference
-    # an implicit globalref. However, we already don't perform this validation for methods that
-    # don't have any (implicit or explicit) edges at all. The remaining corner case (some explicit,
-    # but no implicit edges) is rare and there would be little benefit to lower the minworld for it
-    # in any case, so we just always use `get_require_world` here.
-    local minworld::UInt, maxworld::UInt = Base.get_require_world(), validation_world
-    if haskey(visiting, codeinst)
-        return visiting[codeinst], minworld, maxworld
-    end
-    push!(stack, codeinst)
-    depth = length(stack)
-    visiting[codeinst] = depth
-    # TODO JL_TIMING(VERIFY_IMAGE, VERIFY_Methods)
-    callees = codeinst.edges
-    # Check for invalidation of the implicit edges from GlobalRef in the Method source
-    if (def.did_scan_source & 0x1) == 0x0
-        backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-        Base.scan_new_method!(def, backedges_only)
-    end
-    if (def.did_scan_source & 0x4) != 0x0
-        maxworld = 0
-        invalidations = _jl_debug_method_invalidation[]
-        if invalidations !== nothing
-            push!(invalidations, def, "method_globalref", codeinst, nothing)
-        end
-    end
-    # verify current edges
-    if isempty(callees)
-        # quick return: no edges to verify (though we probably shouldn't have gotten here from WORLD_AGE_REVALIDATION_SENTINEL)
-    elseif maxworld == Base.get_require_world()
-        # if no new worlds were allocated since serializing the base module, then no new validation is worth doing right now either
-    else
-        matches = []
-        j = 1
-        while j ≤ length(callees)
-            local min_valid2::UInt, max_valid2::UInt
-            edge = callees[j]
-            @assert !(edge isa Method) # `Method`-edge isn't allowed for the optimized one-edge format
-            if edge isa CodeInstance
-                edge = get_ci_mi(edge)
-            end
-            if edge isa MethodInstance
-                sig = edge.specTypes
-                min_valid2, max_valid2 = verify_call(sig, callees, j, 1, world, true, matches)
-                j += 1
-            elseif edge isa Int
-                sig = callees[j+1]
-                # Handle negative counts (fully_covers=false)
-                nmatches = abs(edge)
-                fully_covers = edge > 0
-                min_valid2, max_valid2 = verify_call(sig, callees, j+2, nmatches, world, fully_covers, matches)
-                j += 2 + nmatches
-                edge = sig
-            elseif edge isa Core.Binding
-                j += 1
-                min_valid2 = minworld
-                max_valid2 = maxworld
-                if !Base.binding_was_invalidated(edge)
-                    if isdefined(edge, :partitions)
-                        min_valid2 = edge.partitions.min_world
-                        max_valid2 = edge.partitions.max_world
-                    end
-                else
-                    # Binding was previously invalidated
-                    min_valid2 = 1
-                    max_valid2 = 0
-                end
-            else
-                callee = callees[j+1]
-                if callee isa Core.MethodTable # skip the legacy edge (missing backedge)
-                    j += 2
+    current_depth = 1 # == length(workspace._states) == end
+    while true
+        # Get current state indices
+        initial = workspace.initial_states[current_depth]
+        work = workspace.work_states[current_depth]
+
+        if work.stage == :init_and_process_callees
+            # Initialize state and handle early returns
+            world = initial.codeinst.min_world
+            let max_valid2 = initial.codeinst.max_world
+                if max_valid2 ≠ WORLD_AGE_REVALIDATION_SENTINEL
+                    workspace.result_states[current_depth] = VerifyMethodResultState(0, world, max_valid2)
+                    workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, work.recursive_index, :return_to_parent)
                     continue
                 end
-                if callee isa CodeInstance
-                    callee = get_ci_mi(callee)
-                end
-                if callee isa MethodInstance
-                    meth = callee.def::Method
-                else
-                    meth = callee::Method
-                end
-                min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
-                j += 2
             end
-            if minworld < min_valid2
-                minworld = min_valid2
-            end
-            if maxworld > max_valid2
-                maxworld = max_valid2
-            end
-            invalidations = _jl_debug_method_invalidation[]
-            if max_valid2 ≠ typemax(UInt) && invalidations !== nothing
-                push!(invalidations, edge, "insert_backedges_callee", codeinst, copy(matches))
-            end
-            if max_valid2 == 0 && invalidations === nothing
-                break
-            end
-        end
-    end
-    # verify recursive edges (if valid, or debugging)
-    cycle = depth
-    cause = codeinst
-    if maxworld ≠ 0 || _jl_debug_method_invalidation[] !== nothing
-        for j = 1:length(callees)
-            edge = callees[j]
-            if !(edge isa CodeInstance)
+
+            if needs_instrumentation(initial.codeinst, initial.mi, initial.def, validation_world)
+                workspace.result_states[current_depth] = VerifyMethodResultState(0, world, UInt(0))
+                workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, work.recursive_index, :return_to_parent)
                 continue
             end
-            callee = edge
-            local min_valid2::UInt, max_valid2::UInt
-            child_cycle, min_valid2, max_valid2 = verify_method(callee, stack, visiting, validation_world)
-            if minworld < min_valid2
-                minworld = min_valid2
+
+            minworld, maxworld = Base.get_require_world(), validation_world
+
+            if haskey(workspace.visiting, initial.codeinst)
+                workspace.result_states[current_depth] = VerifyMethodResultState(workspace.visiting[initial.codeinst], minworld, maxworld)
+                workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, work.recursive_index, :return_to_parent)
+                continue
             end
-            if minworld > max_valid2
+
+            push!(workspace.stack, initial.codeinst)
+            depth = length(workspace.stack)
+            workspace.visiting[initial.codeinst] = depth
+
+            # Check for invalidation of GlobalRef edges
+            if (initial.def.did_scan_source & 0x1) == 0x0
+                backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
+                Base.scan_new_method!(initial.def, backedges_only)
+            end
+            if (initial.def.did_scan_source & 0x4) != 0x0
+                maxworld = 0
+                invalidations = _jl_debug_method_invalidation[]
+                if invalidations !== nothing
+                    push!(invalidations, initial.def, "method_globalref", initial.codeinst, nothing)
+                end
+            end
+
+            # Process all non-CodeInstance edges
+            if !isempty(initial.callees) && maxworld != Base.get_require_world()
+                matches = []
+                j = 1
+                while j <= length(initial.callees)
+                    local min_valid2::UInt, max_valid2::UInt
+                    edge = initial.callees[j]
+                    @assert !(edge isa Method)
+
+                    if edge isa CodeInstance
+                        # Convert CodeInstance to MethodInstance for validation (like original)
+                        edge = get_ci_mi(edge)
+                    end
+
+                    if edge isa MethodInstance
+                        sig = edge.specTypes
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches)
+                        j += 1
+                    elseif edge isa Int
+                        sig = initial.callees[j+1]
+                        nmatches = abs(edge)
+                        fully_covers = edge > 0
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)
+                        j += 2 + nmatches
+                        edge = sig
+                    elseif edge isa Core.Binding
+                        j += 1
+                        min_valid2 = minworld
+                        max_valid2 = maxworld
+                        if !Base.binding_was_invalidated(edge)
+                            if isdefined(edge, :partitions)
+                                min_valid2 = edge.partitions.min_world
+                                max_valid2 = edge.partitions.max_world
+                            end
+                        else
+                            min_valid2 = 1
+                            max_valid2 = 0
+                        end
+                    else
+                        callee = initial.callees[j+1]
+                        if callee isa Core.MethodTable
+                            j += 2
+                            continue
+                        end
+                        if callee isa CodeInstance
+                            callee = get_ci_mi(callee)
+                        end
+                        if callee isa MethodInstance
+                            meth = callee.def::Method
+                        else
+                            meth = callee::Method
+                        end
+                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
+                        j += 2
+                    end
+
+                    if minworld < min_valid2
+                        minworld = min_valid2
+                    end
+                    if maxworld > max_valid2
+                        maxworld = max_valid2
+                    end
+                    invalidations = _jl_debug_method_invalidation[]
+                    if max_valid2 ≠ typemax(UInt) && invalidations !== nothing
+                        push!(invalidations, edge, "insert_backedges_callee", initial.codeinst, copy(matches))
+                    end
+                    if max_valid2 == 0 && invalidations === nothing
+                        break
+                    end
+                end
+            end
+
+            # Store computed minworld/maxworld in result state and transition to recursive phase
+            workspace.result_states[current_depth] = VerifyMethodResultState(depth, minworld, maxworld)
+            workspace.work_states[current_depth] = VerifyMethodWorkState(depth, work.cause, 1, :recursive_phase)
+
+        elseif work.stage == :recursive_phase
+            # Find next CodeInstance edge that needs processing
+            recursive_index = work.recursive_index
+            found_child = false
+            while recursive_index ≤ length(initial.callees)
+                edge = initial.callees[recursive_index]
+                recursive_index += 1
+
+                if edge isa CodeInstance
+                    # Create child state and add to stack
+                    workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, recursive_index, :recursive_phase)
+                    push!(workspace.initial_states, VerifyMethodInitialState(edge))
+                    push!(workspace.work_states, VerifyMethodWorkState(edge))
+                    push!(workspace.result_states, VerifyMethodResultState())
+                    current_depth += 1
+                    found_child = true
+                    break
+                end
+            end
+
+            if !found_child
+                workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, recursive_index, :cleanup)
+            end
+
+        elseif work.stage == :cleanup
+            # If we are the top of the current cycle, now mark all other parts of
+            # our cycle with what we found.
+            # Or if we found a failed edge, also mark all of the other parts of the
+            # cycle as also having a failed edge.
+            result = workspace.result_states[current_depth]
+            if result.result_maxworld == 0 || result.child_cycle == work.depth
+                while length(workspace.stack) ≥ work.depth
+                    child = pop!(workspace.stack)
+                    if result.result_maxworld ≠ 0
+                        @atomic :monotonic child.min_world = result.result_minworld
+                    end
+                    @atomic :monotonic child.max_world = result.result_maxworld
+                    if result.result_maxworld == validation_world && validation_world == get_world_counter()
+                        Compiler.store_backedges(child, child.edges)
+                    end
+                    @assert workspace.visiting[child] == length(workspace.stack) + 1
+                    delete!(workspace.visiting, child)
+                    invalidations = _jl_debug_method_invalidation[]
+                    if invalidations !== nothing && result.result_maxworld < validation_world
+                        push!(invalidations, child, "verify_methods", work.cause)
+                    end
+                end
+
+                workspace.result_states[current_depth] = VerifyMethodResultState(0, result.result_minworld, result.result_maxworld)
+            end
+
+            workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, work.recursive_index, :return_to_parent)
+
+        elseif work.stage == :return_to_parent
+            # Pass results to parent and process them
+            pop!(workspace.initial_states)
+            pop!(workspace.work_states)
+            result = pop!(workspace.result_states)
+            current_depth -= 1
+            if current_depth == 0 # Return results from the root call
+                return (result.child_cycle, result.result_minworld, result.result_maxworld)
+            end
+            # Propagate results to parent
+            parent_work = workspace.work_states[current_depth]
+            parent_result = workspace.result_states[current_depth]
+            callee = initial.codeinst
+            child_cycle, min_valid2, max_valid2 = result.child_cycle, result.result_minworld, result.result_maxworld
+            parent_cycle = parent_result.child_cycle
+            parent_minworld = parent_result.result_minworld
+            parent_maxworld = parent_result.result_maxworld
+            parent_cause = parent_work.cause
+            parent_stage = parent_work.stage
+            if parent_minworld < min_valid2
+                parent_minworld = min_valid2
+            end
+            if parent_minworld > max_valid2
                 max_valid2 = 0
             end
-            if maxworld > max_valid2
-                cause = callee
-                maxworld = max_valid2
+            if parent_maxworld > max_valid2
+                parent_cause = callee
+                parent_maxworld = max_valid2
             end
             if max_valid2 == 0
                 # found what we were looking for, so terminate early
-                break
-            elseif child_cycle ≠ 0 && child_cycle < cycle
+                # The parent should break out of its loop in :recursive_phase
+                parent_stage = :cleanup
+            elseif child_cycle ≠ 0 && child_cycle < parent_cycle
                 # record the cycle will resolve at depth "cycle"
-                cycle = child_cycle
+                parent_cycle = child_cycle
             end
+            workspace.work_states[current_depth] = VerifyMethodWorkState(parent_work.depth, parent_cause, parent_work.recursive_index, parent_stage)
+            workspace.result_states[current_depth] = VerifyMethodResultState(parent_cycle, parent_minworld, parent_maxworld)
         end
     end
-    if maxworld ≠ 0 && cycle ≠ depth
-        return cycle, minworld, maxworld
-    end
-    # If we are the top of the current cycle, now mark all other parts of
-    # our cycle with what we found.
-    # Or if we found a failed edge, also mark all of the other parts of the
-    # cycle as also having a failed edge.
-    while length(stack) ≥ depth
-        child = pop!(stack)
-        if maxworld ≠ 0
-            @atomic :monotonic child.min_world = minworld
-        end
-        @atomic :monotonic child.max_world = maxworld
-        if maxworld == validation_world && validation_world == get_world_counter()
-            Compiler.store_backedges(child, child.edges)
-        end
-        @assert visiting[child] == length(stack) + 1
-        delete!(visiting, child)
-        invalidations = _jl_debug_method_invalidation[]
-        if invalidations !== nothing && maxworld < validation_world
-            push!(invalidations, child, "verify_methods", cause)
-        end
-    end
-    return 0, minworld, maxworld
 end
 
 function get_method_from_edge(@nospecialize t)

@@ -11,6 +11,8 @@ sysimg-ji: $(build_private_libdir)/sysbase.ji
 sysimg-bc: $(build_private_libdir)/sys-bc.a
 sysimg-release: $(build_private_libdir)/sys.$(SHLIB_EXT)
 sysimg-debug: $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+sysbase-release: $(build_private_libdir)/sysbase.$(SHLIB_EXT)
+sysbase-debug: $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
@@ -124,7 +126,8 @@ $$(build_private_libdir)/sysbase$1-o.a $$(build_private_libdir)/sysbase$1-bc.a :
 		false; \
 	fi )
 	@mv $$@.tmp $$@
-$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $$(build_private_libdir)/sysbase$1.$$(SHLIB_EXT) $$(JULIAHOME)/contrib/generate_precompile.jl
+build_sysbase_$1 := $$(or $$(CROSS_BOOTSTRAP_SYSBASE),$$(build_private_libdir)/sysbase$1.$$(SHLIB_EXT))
+$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $$(build_sysbase_$1) $$(JULIAHOME)/contrib/generate_precompile.jl
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$$(call cygpath_w,$(build_bindir)) \
 		 WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
@@ -133,6 +136,7 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 		 JULIA_DEPOT_PATH=':' \
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+			$(bootstrap_julia_flags) \
 			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE); then \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \

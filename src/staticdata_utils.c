@@ -195,68 +195,240 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
     return result;
 }
 
+// Stack frame for iterative has_backedge_to_worklist implementation
+enum backedge_state {
+    STATE_VISITING,                 // Initial visit, setup phase
+    STATE_PROCESSING_EDGES,         // Processing backedges loop
+    STATE_FINISHING                 // Cleanup and result propagation
+};
+
+typedef struct {
+    jl_method_instance_t *mi;           // Current method instance
+    size_t edge_index;                  // Current position in backedges array
+    size_t backedges_len;               // Total backedges count
+    jl_array_t *backedges;              // Backedges array
+    int depth;                          // Stack depth when this frame was created
+    int cycle;                          // Cycle depth tracking
+    int found;                          // Result found flag
+    int child_result;                   // Result from child recursive call
+    enum backedge_state state;
+} backedge_stack_frame_t;
+
 // When we infer external method instances, ensure they link back to the
 // package. Otherwise they might be, e.g., for external macros.
 // Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack, jl_query_cache *query_cache)
 {
-    jl_module_t *mod = mi->def.module;
-    if (jl_is_method(mod))
-        mod = ((jl_method_t*)mod)->module;
-    assert(jl_is_module(mod));
-    uint8_t is_precompiled = jl_atomic_load_relaxed(&mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
-    if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes, query_cache)) {
-        return 1;
-    }
-    if (!mi->backedges) {
-        return 0;
-    }
-    void **bp = ptrhash_bp(visited, mi);
-    // HT_NOTFOUND: not yet analyzed
-    // HT_NOTFOUND + 1: no link back
-    // HT_NOTFOUND + 2: does link back
-    // HT_NOTFOUND + 3: does link back, and included in new_ext_cis already
-    // HT_NOTFOUND + 4 + depth: in-progress
-    int found = (char*)*bp - (char*)HT_NOTFOUND;
-    if (found)
-        return found - 1;
-    arraylist_push(stack, (void*)mi);
-    int depth = stack->len;
-    *bp = (void*)((char*)HT_NOTFOUND + 4 + depth); // preliminarily mark as in-progress
-    jl_array_t *backedges = jl_mi_get_backedges(mi);
-    size_t i = 0, n = jl_array_nrows(backedges);
-    int cycle = depth;
-    while (i < n) {
-        jl_code_instance_t *be;
-        i = get_next_edge(backedges, i, NULL, &be);
-        if (!be)
+    // Use arraylist_t for explicit stack of processing frames
+    arraylist_t frame_stack;
+    arraylist_new(&frame_stack, 0);
+
+    // Push initial frame
+    backedge_stack_frame_t initial_frame = {
+        .mi = mi,
+        .edge_index = 0,
+        .backedges_len = 0,
+        .backedges = NULL,
+        .depth = 0,
+        .cycle = 0,
+        .found = 0,
+        .child_result = 0,
+        .state = STATE_VISITING
+    };
+    arraylist_push(&frame_stack, memcpy(malloc(sizeof(backedge_stack_frame_t)), &initial_frame, sizeof(backedge_stack_frame_t)));
+
+    int final_result = 0;
+    while (1) {
+        backedge_stack_frame_t *current = (backedge_stack_frame_t*)frame_stack.items[frame_stack.len - 1];
+        JL_GC_PROMISE_ROOTED(current->mi);
+        JL_GC_PROMISE_ROOTED(current->backedges);
+
+        switch (current->state) {
+            case STATE_VISITING: {
+                jl_module_t *mod = current->mi->def.module;
+                if (jl_is_method(mod))
+                    mod = ((jl_method_t*)mod)->module;
+                assert(jl_is_module(mod));
+                uint8_t is_precompiled = jl_atomic_load_relaxed(&current->mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
+
+                if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(current->mi->specTypes, query_cache)) {
+                    if (frame_stack.len > 1) {
+                        final_result = 1;
+                        goto propagate_to_parent;
+                    }
+                    current->found = 1;
+                    // Continue to setup below, then go to finishing
+                }
+                else if (!current->mi->backedges) {
+                    if (frame_stack.len > 1) {
+                        final_result = 0;
+                        goto propagate_to_parent;
+                    }
+                    current->found = 0;
+                    // Setup minimal state for cleanup, skip backedges processing
+                    arraylist_push(stack, (void*)current->mi);
+                    current->depth = stack->len;
+                    void **bp = ptrhash_bp(visited, current->mi);
+                    *bp = (void*)((char*)HT_NOTFOUND + 4 + current->depth);
+                    current->cycle = current->depth;
+                    current->state = STATE_FINISHING;
+                    break;
+                }
+
+                void **bp = ptrhash_bp(visited, current->mi);
+                // HT_NOTFOUND: not yet analyzed
+                // HT_NOTFOUND + 1: no link back
+                // HT_NOTFOUND + 2: does link back
+                // HT_NOTFOUND + 3: does link back, and included in new_ext_cis already
+                // HT_NOTFOUND + 4 + depth: in-progress
+                int found = (char*)*bp - (char*)HT_NOTFOUND;
+                if (found) {
+                    if (frame_stack.len > 1) {
+                        final_result = found - 1;
+                        goto propagate_to_parent;
+                    }
+                    current->found = found - 1;
+                }
+
+                // Setup for processing
+                arraylist_push(stack, (void*)current->mi);
+                current->depth = stack->len;
+                *bp = (void*)((char*)HT_NOTFOUND + 4 + current->depth); // preliminarily mark as in-progress
+                current->backedges = jl_mi_get_backedges(current->mi);
+                current->backedges_len = current->backedges ? jl_array_nrows(current->backedges) : 0;
+                current->cycle = current->depth;
+                current->edge_index = 0;
+                // Don't reset current->found if it was already set by early termination logic above
+                if (current->found == 0) {
+                    current->state = STATE_PROCESSING_EDGES;
+                }
+                else {
+                    // Early termination case - skip processing and go straight to finishing
+                    current->state = STATE_FINISHING;
+                }
+                break;
+            }
+
+            case STATE_PROCESSING_EDGES: {
+                // If we have a child result to process, handle it first
+                if (current->child_result != 0) {
+                    if (current->child_result == 1 || current->child_result == 2) {
+                        // found what we were looking for, so terminate early
+                        current->found = 1;
+                        current->state = STATE_FINISHING;
+                        break;
+                    }
+                    else if (current->child_result >= 3 && current->child_result - 3 < current->cycle) {
+                        // record the cycle will resolve at depth "cycle"
+                        current->cycle = current->child_result - 3;
+                        assert(current->cycle);
+                    }
+                    current->child_result = 0; // Clear after processing
+                }
+
+                // Process backedges iteratively
+                while (current->edge_index < current->backedges_len && current->backedges) {
+                    jl_code_instance_t *be;
+                    current->edge_index = get_next_edge(current->backedges, current->edge_index, NULL, &be);
+                    if (!be)
+                        continue;
+                    JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
+
+                    jl_method_instance_t *child_mi = jl_get_ci_mi(be);
+
+                    // Check if we need to recurse (push new frame) or handle result
+                    jl_module_t *child_mod = child_mi->def.module;
+                    if (jl_is_method(child_mod))
+                        child_mod = ((jl_method_t*)child_mod)->module;
+                    assert(jl_is_module(child_mod));
+                    uint8_t child_is_precompiled = jl_atomic_load_relaxed(&child_mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
+
+                    // Early termination check for child
+                    if (child_is_precompiled || !jl_object_in_image((jl_value_t*)child_mod) || type_in_worklist(child_mi->specTypes, query_cache)) {
+                        // found what we were looking for, so terminate early
+                        current->found = 1;
+                        break;
+                    }
+
+                    if (!child_mi->backedges) {
+                        // This child returns 0, continue with next edge
+                        continue;
+                    }
+
+                    void **child_bp = ptrhash_bp(visited, child_mi);
+                    int child_found = (char*)*child_bp - (char*)HT_NOTFOUND;
+                    if (child_found) {
+                        int child_result = child_found - 1;
+                        if (child_result == 1 || child_result == 2) {
+                            // found what we were looking for, so terminate early
+                            current->found = 1;
+                            break;
+                        }
+                        else if (child_result >= 3 && child_result - 3 < current->cycle) {
+                            // record the cycle will resolve at depth "cycle"
+                            current->cycle = child_result - 3;
+                            assert(current->cycle);
+                        }
+                    }
+                    else {
+                        // Need to process child - push new frame and pause current processing
+                        backedge_stack_frame_t child_frame = {
+                            .mi = child_mi,
+                            .edge_index = 0,
+                            .backedges_len = 0,
+                            .backedges = NULL,
+                            .depth = 0,
+                            .cycle = 0,
+                            .found = 0,
+                            .child_result = 0,
+                            .state = STATE_VISITING
+                        };
+                        arraylist_push(&frame_stack, memcpy(malloc(sizeof(backedge_stack_frame_t)), &child_frame, sizeof(backedge_stack_frame_t)));
+                        goto continue_main_loop; // Resume processing after child completes
+                    }
+                }
+
+                current->state = STATE_FINISHING;
+                break;
+            }
+
+            case STATE_FINISHING: {
+                if (!current->found && current->cycle != current->depth) {
+                    final_result = current->cycle + 3;
+                    goto propagate_to_parent;
+                }
+
+                // If we are the top of the current cycle, now mark all other parts of
+                // our cycle with what we found.
+                // Or if we found a backedge, also mark all of the other parts of the
+                // cycle as also having an backedge.
+                while (stack->len >= current->depth) {
+                    void *mi_ptr = arraylist_pop(stack);
+                    void **bp = ptrhash_bp(visited, mi_ptr);
+                    assert((char*)*bp - (char*)HT_NOTFOUND == 5 + stack->len);
+                    *bp = (void*)((char*)HT_NOTFOUND + 1 + current->found);
+                }
+
+                final_result = current->found;
+                goto propagate_to_parent;
+            }
+        }
+
+        continue_main_loop:
             continue;
-        JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
-        int child_found = has_backedge_to_worklist(jl_get_ci_mi(be), visited, stack, query_cache);
-        if (child_found == 1 || child_found == 2) {
-            // found what we were looking for, so terminate early
-            found = 1;
-            break;
-        }
-        else if (child_found >= 3 && child_found - 3 < cycle) {
-            // record the cycle will resolve at depth "cycle"
-            cycle = child_found - 3;
-            assert(cycle);
-        }
+
+        propagate_to_parent:
+            // Propagate result to parent
+            free(arraylist_pop(&frame_stack));
+            if (frame_stack.len == 0)
+                break;
+            backedge_stack_frame_t *parent = (backedge_stack_frame_t*)frame_stack.items[frame_stack.len - 1];
+            parent->child_result = final_result;
     }
-    if (!found && cycle != depth)
-        return cycle + 3;
-    // If we are the top of the current cycle, now mark all other parts of
-    // our cycle with what we found.
-    // Or if we found a backedge, also mark all of the other parts of the
-    // cycle as also having an backedge.
-    while (stack->len >= depth) {
-        void *mi = arraylist_pop(stack);
-        bp = ptrhash_bp(visited, mi);
-        assert((char*)*bp - (char*)HT_NOTFOUND == 5 + stack->len);
-        *bp = (void*)((char*)HT_NOTFOUND + 1 + found);
-    }
-    return found;
+    // Cleanup remaining frames
+    assert(frame_stack.len == 0);
+    arraylist_free(&frame_stack);
+    return final_result;
 }
 
 // Given the list of CodeInstances that were inferred during the build, select
