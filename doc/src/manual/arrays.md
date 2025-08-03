@@ -598,16 +598,18 @@ where each `I_k` may be a scalar integer, an array of integers, or any other
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
-If all indices `I_k` are integers, then the value in location `I_1, I_2, ..., I_n` of `A` is
-overwritten with the value of `X`, [`convert`](@ref)ing to the
-[`eltype`](@ref) of `A` if necessary.
+Just as [indexing](@ref man-array-indexing) `A[I_1, I_2, ..., I_n]` returns either a single
+element (if all indices are scalar) or an array (if any index is nonscalar), the indexed
+assignment of `A[I_1, I_2, ..., I_n] = X` assigns either a single value to a single location
+or an array of value(s) to an array of location(s) within the array `A`.
 
+If all indices `I_k` are scalar, then the value in location `I_1, I_2, ..., I_n` of `A` is assigned
+to the value of `X`, [`convert`](@ref)ing to the [`eltype`](@ref) of `A` if necessary. Otherwise
+if any index is nonscalar, the right hand side `X` must be an array with the same number of
+elements as the number of locations selected by the indices and it must have a compatible shape.
+Each value in `X` is assigned into the corresponding location in `A[I_1, I_2, ..., I_n]`, following
+the rules of [linear indexing and omitted/extra indices](@ref man-number-of-indices).
 
-If any index `I_k` is itself an array, then they select multiple locations to be assigned.
-The right hand side `X` must also be an
-array with the same number of elements as the indices select and a compatible shape.
-Each value in `X` is assigned into the corresponding location in `A[I_1, I_2, ..., I_n]`,
-following the rules of [linear indexing and omitted/extra indices](@ref man-number-of-indices).
 That is, `X` must be the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or
 either may be a vector. In the simple case where all the supplied indices are vectors and
 the shapes match, each value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
