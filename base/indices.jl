@@ -202,6 +202,7 @@ function promote_shape(a::Indices, b::Indices)
 end
 
 function throw_setindex_mismatch(X, I)
+    @noinline
     pI = filter(!isnegative, I)
     if length(pI) == 1
         throw(DimensionMismatch("tried to assign $(length(X)) elements to $(pI[1]) destinations"))
