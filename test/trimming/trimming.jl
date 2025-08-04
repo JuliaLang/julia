@@ -1,4 +1,9 @@
+import Pkg
+
+Pkg.add(["JSON"])
+
 using Test
+using JSON
 
 @test length(ARGS) == 1
 bindir = dirname(ARGS[1])
@@ -24,28 +29,31 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test lines[2] == "Count of same vectors: 1"
 
     # Test that the logging of entrypoints and types works correctly
-    str = read(joinpath(bindir, "bindinginfo_libsimple.log"), String)
-    @test occursin("copyto_and_sum(fromto::CVectorPair{Float32})::Float32", str)
-    @test occursin(
-        """
-        CVector{Float32}
-          length::Int32[0]
-          data::Ptr{Float32}[8]
-        16 bytes""", str
-    )
-    @test occursin(
-        """
-        CVectorPair{Float32}
-          from::CVector{Float32}[0]
-          to::CVector{Float32}[16]
-        32 bytes""", str
-    )
-    # ensure that there is a blank line between methods and types
-    lines = split(str, '\n'; keepempty=true)
-    nblanks = 0
-    for line in lines
-        nblanks += isempty(line)
-        occursin("length", line) && break
-    end
-    @test nblanks == 1
+    str = read(joinpath(bindir, "bindinginfo_libsimple.json"), String)
+
+    # The log should parse as valid JSON
+    abi = JSON.Parser.parse(str)
+
+    # `copyto_and_sum` should have been exported
+    @test any(Bool[func["symbol"] == "copyto_and_sum" for func in abi["functions"]])
+
+    # `CVector{Float32}` should have been exported with the correct info
+    @test any(Bool[type["name"] == "CVector{Float32}" for type in abi["types"]])
+    CVector_Float32 = abi["types"][findfirst(type["name"] == "CVector{Float32}" for type in abi["types"])]
+    @test length(CVector_Float32["fields"]) == 2
+    @test CVector_Float32["fields"][1]["offset"] == 0
+    @test CVector_Float32["fields"][2]["offset"] == 8
+    @test abi["types"][CVector_Float32["fields"][1]["type"]]["name"] == "Int32"
+    @test abi["types"][CVector_Float32["fields"][2]["type"]]["name"] == "Ptr{Float32}"
+    @test CVector_Float32["size"] == 16
+
+    # `CVectorPair{Float32}` should have been exported with the correct info
+    @test any(Bool[type["name"] == "CVectorPair{Float32}" for type in abi["types"]])
+    CVectorPair_Float32 = abi["types"][findfirst(type["name"] == "CVectorPair{Float32}" for type in abi["types"])]
+    @test length(CVectorPair_Float32["fields"]) == 2
+    @test CVectorPair_Float32["fields"][1]["offset"] == 0
+    @test CVectorPair_Float32["fields"][2]["offset"] == 16
+    @test abi["types"][CVectorPair_Float32["fields"][1]["type"]]["name"] == "CVector{Float32}"
+    @test abi["types"][CVectorPair_Float32["fields"][2]["type"]]["name"] == "CVector{Float32}"
+    @test CVectorPair_Float32["size"] == 32
 end
