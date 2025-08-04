@@ -56,6 +56,11 @@
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 
+// Include necessary headers for semaphores
+#if defined(_OS_LINUX_)
+#include <semaphore.h>
+#include <fcntl.h>
+#endif
 
 using namespace llvm;
 
@@ -1644,6 +1649,47 @@ void jl_dump_native_impl(void *native_code,
 
         has_veccall = !!dataM.getModuleFlag("julia.mv.veccall");
     });
+
+#if defined(_OS_LINUX_)
+    // This flag tracks if the lock was actually acquired to avoid freeing the semaphore
+    // if it was never opened.
+    bool lock_acquired = false;
+
+    auto cleanup = [&](sem_t* s) {
+        if (s != SEM_FAILED) {
+            if (lock_acquired) {
+                // Only post if the lock was successfully acquired.
+                sem_post(s);
+            }
+            sem_close(s);
+        }
+    };
+
+    sem_t *par_precomp_sem = SEM_FAILED;
+    const char *sem_name = getenv("JL_AOT_PRECOMPILE_SEMAPHORE");
+    if (sem_name != NULL) {
+        // The count for the semaphore will be initialized by the parent process that spawns compilation sub-processes.
+        // This is to ensure that only already created semaphores are used and that we don't end up in a situation
+        // where every spawned compilation subprocess creates its own semaphore. Cleanup is handled by the parent process.
+        par_precomp_sem = sem_open(sem_name, 0);
+        std::unique_ptr<sem_t, decltype(cleanup)> sem_guard(par_precomp_sem, cleanup);
+        if (par_precomp_sem == SEM_FAILED) {
+            jl_errorf("Failed to open parallel precompilation semaphore '%s': %s", sem_name, strerror(errno));
+        } else {
+            // Wait for the semaphore, retrying if interrupted by a signal (EINTR).
+            int ret;
+            do {
+                ret = sem_wait(par_precomp_sem);
+            } while (ret == -1 && errno == EINTR);
+
+            if (ret == 0) {
+                lock_acquired = true;
+            } else {
+                jl_errorf("Failed to wait on semaphore '%s': %s", sem_name, strerror(errno));
+            }
+        }
+    }
+#endif
 
     {
         // Don't use withModuleDo here since we delete the TSM midway through
