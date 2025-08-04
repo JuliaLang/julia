@@ -202,7 +202,7 @@ function write_abi_metadata(io::IO)
 
     # discover all exported methods + any types they reference
     exported = Core.Method[]
-    Base.visit(Core.GlobalMethods) do method
+    Base.visit(Core.methodtable) do method
         if isdefined(method, :ccallable)
             push!(exported, method)
             (rt, sig) = method.ccallable
