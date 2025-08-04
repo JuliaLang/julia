@@ -23,6 +23,16 @@ let
 end
 """) == 42
 
+# Assignment in value but not tail position
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = begin
+        y = 42
+    end
+    x
+end
+""") == 42
+
 @test JuliaLowering.include_string(test_mod, """
 let
     x = []

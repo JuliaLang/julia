@@ -24,6 +24,21 @@ end
 6   (return %₂)
 
 ########################################
+# Assignment in value but not tail position
+let
+    x = begin
+        y = 42
+    end
+    x
+end
+#---------------------
+1   42
+2   (= slot₂/y %₁)
+3   (= slot₁/x %₁)
+4   slot₁/x
+5   (return %₄)
+
+########################################
 # short form function def, not chain of assignments
 begin
     local a
@@ -31,20 +46,22 @@ begin
 end
 #---------------------
 1   (method TestMod.b)
-2   TestMod.b
-3   (call core.Typeof %₂)
-4   (call core.svec %₃)
-5   (call core.svec)
-6   SourceLocation::3:9
-7   (call core.svec %₄ %₅ %₆)
-8   --- method core.nothing %₇
+2   latestworld
+3   TestMod.b
+4   (call core.Typeof %₃)
+5   (call core.svec %₄)
+6   (call core.svec)
+7   SourceLocation::3:9
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/c(!read)]
     1   TestMod.d
     2   (= slot₂/c %₁)
     3   (return %₁)
-9   TestMod.b
-10  (= slot₁/a %₉)
-11  (return %₉)
+10  latestworld
+11  TestMod.b
+12  (= slot₁/a %₁₁)
+13  (return %₁₁)
 
 ########################################
 # a.b = ... => setproperty! assignment
@@ -117,17 +134,17 @@ end
 # UnionAll expansion at global scope results in const decl
 X{T} = Y{T,T}
 #---------------------
-1   (const TestMod.X)
-2   (call core.TypeVar :T)
-3   (= slot₁/T %₂)
-4   slot₁/T
-5   TestMod.Y
+1   (call core.TypeVar :T)
+2   (= slot₁/T %₁)
+3   slot₁/T
+4   TestMod.Y
+5   slot₁/T
 6   slot₁/T
-7   slot₁/T
-8   (call core.apply_type %₅ %₆ %₇)
-9   (call core.UnionAll %₄ %₈)
-10  (= TestMod.X %₉)
-11  (return %₉)
+7   (call core.apply_type %₄ %₅ %₆)
+8   (call core.UnionAll %₃ %₇)
+9   (constdecl TestMod.X %₈)
+10  latestworld
+11  (return %₈)
 
 ########################################
 # UnionAll expansion in local scope

@@ -390,3 +390,12 @@ LoweringError:
 x...
 └──┘ ── `...` expression outside call
 
+########################################
+# `include` should increment world age
+include("hi.jl")
+#---------------------
+1   TestMod.include
+2   (call %₁ "hi.jl")
+3   latestworld
+4   (return %₂)
+

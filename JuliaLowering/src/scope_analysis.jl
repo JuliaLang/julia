@@ -44,7 +44,11 @@ function _find_scope_vars!(ctx, assignments, locals, destructured_args, globals,
         end
     elseif k == K"global"
         _insert_if_not_present!(globals, NameKey(ex[1]), ex)
-    elseif k == K"="
+    elseif k == K"assign_or_constdecl_if_global"
+        # like v = val, except that if `v` turns out global(either implicitly or
+        # by explicit `global`), it gains an implicit `const`
+        _insert_if_not_present!(assignments, NameKey(ex[1]), ex)
+    elseif k == K"=" || k == K"constdecl"
         v = decl_var(ex[1])
         if !(kind(v) in KSet"BindingId globalref Placeholder")
             _insert_if_not_present!(assignments, NameKey(v), v)
@@ -561,13 +565,12 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             end
         end
         resolved
-    elseif k == K"const_if_global"
+    elseif k == K"assign_or_constdecl_if_global"
         id = _resolve_scopes(ctx, ex[1])
-        if lookup_binding(ctx, id).kind == :global
-            @ast ctx ex [K"const" id]
-        else
-            makeleaf(ctx, ex, K"TOMBSTONE")
-        end
+        bk = lookup_binding(ctx, id).kind
+        @assert numchildren(ex) === 2
+        assignment_kind = bk == :global ? K"constdecl" : K"="
+        @ast ctx ex _resolve_scopes(ctx, [assignment_kind ex[1] ex[2]])
     else
         mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
     end
@@ -677,7 +680,7 @@ function analyze_variables!(ctx, ex)
         if kind(ex[1]) != K"BindingId" || lookup_binding(ctx, ex[1]).kind !== :local
             analyze_variables!(ctx, ex[1])
         end
-    elseif k == K"const"
+    elseif k == K"constdecl"
         id = ex[1]
         if lookup_binding(ctx, id).kind == :local
             throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
