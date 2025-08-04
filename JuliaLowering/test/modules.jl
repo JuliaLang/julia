@@ -13,7 +13,8 @@ end
 @test A.g() == "hi"
 @test A.include isa Function
 @test A.Base === Base
-@test A.eval(:(x = -1)) == -1 && A.x == -1
+@test A.eval(:(x = -1)) == -1
+@test A.x == -1
 
 B = JuliaLowering.include_string(test_mod, """
 baremodule B

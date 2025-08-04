@@ -130,7 +130,7 @@ function eval_closure_type(mod, closure_type_name, field_names, field_is_box)
                             length(field_names))
     Core._setsuper!(type, Core.Function)
     Base.eval(mod, :(const $closure_type_name = $type))
-    Core._typebody!(type, Core.svec(field_types...))
+    Core._typebody!(false, type, Core.svec(field_types...))
     type
 end
 
@@ -209,9 +209,8 @@ function module_import(into_mod::Module, is_using::Bool,
 end
 
 function module_public(mod::Module, is_exported::Bool, identifiers...)
-    for ident in identifiers
-        @ccall jl_module_public(mod::Module, Symbol(ident)::Symbol, is_exported::Cint)::Cvoid
-    end
+    # symbol jl_module_public is no longer exported as of #57765
+    eval(mod, Expr((is_exported ? :export : :public), map(Symbol, identifiers)...))
 end
 
 #--------------------------------------------------
@@ -282,7 +281,7 @@ end
 # expression into a CodeInfo.
 #
 # `args` passed into stub by the Julia runtime are (parent_func, static_params..., arg_types...)
-function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
+function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
     # Some of the lowering pipeline from lower() and the pass-specific setup is
     # re-implemented here because generated functions are very much (but not
     # entirely) like macro expansion.
@@ -334,7 +333,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospec
     ctx2, ex2 = expand_forms_2(  ctx1, ex1)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 source [K"lambda"(is_toplevel_thunk=false)
+    ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false)
         [K"block"
             (string(n)::K"Identifier" for n in g.argnames)...
         ]
@@ -371,18 +370,7 @@ end
 #
 # (This should do what fl_defined_julia_global does for flisp lowering)
 function is_defined_and_owned_global(mod, name)
-    b = _get_module_binding(mod, name)
-    !isnothing(b) && isdefined(b, :owner) && b.owner === b
-end
-
-# Return true if `name` is defined in `mod`, the sense that accessing it is nothrow.
-# Has no side effects, unlike isdefined()
-#
-# (This should do what fl_nothrow_julia_global does for flisp lowering)
-function is_defined_nothrow_global(mod, name)
-    b = _get_module_binding(mod, name)
-    !isnothing(b) && isdefined(b, :owner) || return false
-    isdefined(b.owner, :value)
+    Base.binding_kind(mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
 # "Reserve" a binding: create the binding if it doesn't exist but do not assign

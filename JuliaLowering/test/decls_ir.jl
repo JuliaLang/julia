@@ -21,63 +21,109 @@ local x::T = 1
 # const
 const xx = 10
 #---------------------
-1   (const TestMod.xx)
-2   (= TestMod.xx 10)
-3   (return 10)
+1   10
+2   (constdecl TestMod.xx %₁)
+3   latestworld
+4   (return %₁)
 
 ########################################
 # Typed const
 const xx::T = 10
 #---------------------
 1   TestMod.T
-2   (call core.set_binding_type! TestMod :xx %₁)
-3   (const TestMod.xx)
-4   (call core.get_binding_type TestMod :xx)
-5   (= slot₁/tmp 10)
-6   slot₁/tmp
-7   (call core.isa %₆ %₄)
-8   (gotoifnot %₇ label₁₀)
-9   (goto label₁₂)
+2   (= slot₁/tmp 10)
+3   slot₁/tmp
+4   (call core.isa %₃ %₁)
+5   (gotoifnot %₄ label₇)
+6   (goto label₁₀)
+7   slot₁/tmp
+8   (call top.convert %₁ %₇)
+9   (= slot₁/tmp (call core.typeassert %₈ %₁))
 10  slot₁/tmp
-11  (= slot₁/tmp (call top.convert %₄ %₁₀))
+11  (constdecl TestMod.xx %₁₀)
+12  latestworld
+13  (return %₁₀)
+
+########################################
+# Error: Const tuple
+const xxx,xxxx,xxxxx = 10,20,30
+#---------------------
+LoweringError:
+const xxx,xxxx,xxxxx = 10,20,30
+#    └─────────────┘ ── Lowering TODO: `const` tuple assignment desugaring
+
+########################################
+# Const in chain: only first is const
+const c0 = v0 = v1 = 123
+#---------------------
+1   123
+2   (constdecl TestMod.c0 %₁)
+3   latestworld
+4   (globaldecl TestMod.v0)
+5   latestworld
+6   (call core.get_binding_type TestMod :v0)
+7   (= slot₁/tmp %₁)
+8   slot₁/tmp
+9   (call core.isa %₈ %₆)
+10  (gotoifnot %₉ label₁₂)
+11  (goto label₁₄)
 12  slot₁/tmp
-13  (= TestMod.xx %₁₂)
-14  (return 10)
+13  (= slot₁/tmp (call top.convert %₆ %₁₂))
+14  slot₁/tmp
+15  (call core.setglobal! TestMod :v0 %₁₄)
+16  (globaldecl TestMod.v1)
+17  latestworld
+18  (call core.get_binding_type TestMod :v1)
+19  (= slot₂/tmp %₁)
+20  slot₂/tmp
+21  (call core.isa %₂₀ %₁₈)
+22  (gotoifnot %₂₁ label₂₄)
+23  (goto label₂₆)
+24  slot₂/tmp
+25  (= slot₂/tmp (call top.convert %₁₈ %₂₄))
+26  slot₂/tmp
+27  (call core.setglobal! TestMod :v1 %₂₆)
+28  (return %₁)
 
 ########################################
 # Global assignment
 xx = 10
 #---------------------
-1   (call core.get_binding_type TestMod :xx)
-2   (= slot₁/tmp 10)
-3   slot₁/tmp
-4   (call core.isa %₃ %₁)
-5   (gotoifnot %₄ label₇)
-6   (goto label₉)
-7   slot₁/tmp
-8   (= slot₁/tmp (call top.convert %₁ %₇))
+1   (globaldecl TestMod.xx)
+2   latestworld
+3   (call core.get_binding_type TestMod :xx)
+4   (= slot₁/tmp 10)
+5   slot₁/tmp
+6   (call core.isa %₅ %₃)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₁)
 9   slot₁/tmp
-10  (= TestMod.xx %₉)
-11  (return 10)
+10  (= slot₁/tmp (call top.convert %₃ %₉))
+11  slot₁/tmp
+12  (call core.setglobal! TestMod :xx %₁₁)
+13  (return 10)
 
 ########################################
 # Typed global assignment
 global xx::T = 10
 #---------------------
-1   TestMod.T
-2   (call core.set_binding_type! TestMod :xx %₁)
+1   (globaldecl TestMod.xx TestMod.T)
+2   latestworld
 3   (global TestMod.xx)
-4   (call core.get_binding_type TestMod :xx)
-5   (= slot₁/tmp 10)
-6   slot₁/tmp
-7   (call core.isa %₆ %₄)
-8   (gotoifnot %₇ label₁₀)
-9   (goto label₁₂)
-10  slot₁/tmp
-11  (= slot₁/tmp (call top.convert %₄ %₁₀))
-12  slot₁/tmp
-13  (= TestMod.xx %₁₂)
-14  (return 10)
+4   latestworld
+5   (globaldecl TestMod.xx)
+6   latestworld
+7   (call core.get_binding_type TestMod :xx)
+8   (= slot₁/tmp 10)
+9   slot₁/tmp
+10  (call core.isa %₉ %₇)
+11  (gotoifnot %₁₀ label₁₃)
+12  (goto label₁₅)
+13  slot₁/tmp
+14  (= slot₁/tmp (call top.convert %₇ %₁₃))
+15  slot₁/tmp
+16  (call core.setglobal! TestMod :xx %₁₅)
+17  (return 10)
 
 ########################################
 # Error: x declared twice
@@ -99,7 +145,7 @@ const local x = 1
 #---------------------
 LoweringError:
 const local x = 1
-#           ╙ ── unsupported `const` declaration on local variable
+└───────────────┘ ── unsupported `const local` declaration
 
 ########################################
 # Error: Const not supported on locals
@@ -110,7 +156,7 @@ end
 LoweringError:
 let
     const x = 1
-#         ╙ ── unsupported `const` declaration on local variable
+#        └────┘ ── unsupported `const` declaration on local variable
 end
 
 ########################################
@@ -122,13 +168,14 @@ function f(x)
 end
 #---------------------
 1   (method TestMod.f)
-2   TestMod.f
-3   (call core.Typeof %₂)
-4   (call core.svec %₃ core.Any)
-5   (call core.svec)
-6   SourceLocation::1:10
-7   (call core.svec %₄ %₅ %₆)
-8   --- method core.nothing %₇
+2   latestworld
+3   TestMod.f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read)]
     1   1
     2   TestMod.Int
@@ -156,8 +203,9 @@ end
     24  (= slot₂/x %₂₃)
     25  slot₂/x
     26  (return %₂₅)
-9   TestMod.f
-10  (return %₉)
+10  latestworld
+11  TestMod.f
+12  (return %₁₁)
 
 ########################################
 # Error: global type decls only allowed at top level

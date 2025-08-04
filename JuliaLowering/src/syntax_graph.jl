@@ -431,6 +431,7 @@ function _value_string(ex)
           k == K"Symbol"      ? ":$(ex.name_val)" :
           k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
           k == K"slot"        ? "slot" :
+          k == K"latestworld" ? "latestworld" :
           k == K"static_parameter" ? "static_parameter" :
           k == K"symbolic_label" ? "label:$(ex.name_val)" :
           k == K"symbolic_goto" ? "goto:$(ex.name_val)" :

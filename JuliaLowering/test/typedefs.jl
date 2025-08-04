@@ -251,12 +251,13 @@ end
 """)
 @test fieldtypes(test_mod.M36104.T36104) == (Vector{test_mod.M36104.T36104},)
 @test_throws ErrorException("expected") JuliaLowering.include_string(test_mod, """struct X36104; x::error("expected"); end""")
-@test isdefined(test_mod, :X36104)
+@test !isdefined(test_mod, :X36104)
 JuliaLowering.include_string(test_mod, "struct X36104; x::Int; end")
 @test fieldtypes(test_mod.X36104) == (Int,)
 JuliaLowering.include_string(test_mod, "primitive type P36104 8 end")
-@test_throws ErrorException("invalid redefinition of constant TestMod.P36104") #=
-    =# JuliaLowering.include_string(test_mod, "primitive type P36104 16 end")
+JuliaLowering.include_string(test_mod, "const orig_P36104 = P36104")
+JuliaLowering.include_string(test_mod, "primitive type P36104 16 end")
+@test test_mod.P36104 !== test_mod.orig_P36104
 
 # Struct with outer constructor where one typevar is constrained by the other
 # See https://github.com/JuliaLang/julia/issues/27269)

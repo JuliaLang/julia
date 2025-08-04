@@ -73,19 +73,21 @@ end
 1   (call core.svec)
 2   (call core.svec)
 3   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂)
-4   TestMod.#f##0
-5   (new %₄)
-6   (= slot₁/f %₅)
-7   TestMod.#f##0
-8   (call core.svec %₇)
-9   (call core.svec)
-10  SourceLocation::1:5
-11  (call core.svec %₈ %₉ %₁₀)
-12  --- method core.nothing %₁₁
+4   latestworld
+5   TestMod.#f##0
+6   (new %₅)
+7   (= slot₁/f %₆)
+8   TestMod.#f##0
+9   (call core.svec %₈)
+10  (call core.svec)
+11  SourceLocation::1:5
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  --- method core.nothing %₁₂
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
-13  (return core.nothing)
+14  latestworld
+15  (return core.nothing)
 
 ########################################
 # Error: Invalid `let` var with K"::"
@@ -142,18 +144,20 @@ end
 3   slot₁/y
 4   (call core.setfield! %₃ :contents %₂)
 5   (method TestMod.f)
-6   TestMod.f
-7   (call core.Typeof %₆)
-8   (call core.svec %₇ core.Any)
-9   (call core.svec)
-10  SourceLocation::3:14
-11  (call core.svec %₈ %₉ %₁₀)
-12  --- method core.nothing %₁₁
+6   latestworld
+7   TestMod.f
+8   (call core.Typeof %₇)
+9   (call core.svec %₈ core.Any)
+10  (call core.svec)
+11  SourceLocation::3:14
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  --- method core.nothing %₁₂
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
-13  TestMod.f
-14  (return %₁₃)
+14  latestworld
+15  TestMod.f
+16  (return %₁₅)
 
 ########################################
 # @islocal with global
@@ -163,7 +167,8 @@ begin
 end
 #---------------------
 1   (global TestMod.x)
-2   (return false)
+2   latestworld
+3   (return false)
 
 ########################################
 # @locals with local and global
@@ -175,13 +180,14 @@ end
 #---------------------
 1   (newvar slot₁/y)
 2   (global TestMod.x)
-3   (call core.apply_type top.Dict core.Symbol core.Any)
-4   (call %₃)
-5   (isdefined slot₁/y)
-6   (gotoifnot %₅ label₉)
-7   slot₁/y
-8   (call top.setindex! %₄ %₇ :y)
-9   (return %₄)
+3   latestworld
+4   (call core.apply_type top.Dict core.Symbol core.Any)
+5   (call %₄)
+6   (isdefined slot₁/y)
+7   (gotoifnot %₆ label₁₀)
+8   slot₁/y
+9   (call top.setindex! %₅ %₈ :y)
+10  (return %₅)
 
 ########################################
 # @locals with function args (TODO: static parameters)
@@ -190,21 +196,23 @@ function f(z)
 end
 #---------------------
 1   (method TestMod.f)
-2   TestMod.f
-3   (call core.Typeof %₂)
-4   (call core.svec %₃ core.Any)
-5   (call core.svec)
-6   SourceLocation::1:10
-7   (call core.svec %₄ %₅ %₆)
-8   --- method core.nothing %₇
+2   latestworld
+3   TestMod.f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (gotoifnot true label₅)
     4   (call top.setindex! %₂ slot₂/z :z)
     5   (return %₂)
-9   TestMod.f
-10  (return %₉)
+10  latestworld
+11  TestMod.f
+12  (return %₁₁)
 
 ########################################
 # Error: Duplicate function argument names
@@ -267,7 +275,7 @@ LoweringError:
 let
     local x
     global x
-#   └──────┘ ── Variable `x` declared both local and global
+#          ╙ ── Variable `x` declared both local and global
 end
 
 ########################################
@@ -279,7 +287,7 @@ end
 LoweringError:
 function f(x)
     local x
-#   └─────┘ ── local variable name `x` conflicts with an argument
+#         ╙ ── local variable name `x` conflicts with an argument
 end
 
 ########################################
@@ -291,7 +299,7 @@ end
 LoweringError:
 function f(x)
     global x
-#   └──────┘ ── global variable name `x` conflicts with an argument
+#          ╙ ── global variable name `x` conflicts with an argument
 end
 
 ########################################
@@ -304,7 +312,7 @@ end
 LoweringError:
 function f((x,))
     global x
-#   └──────┘ ── Variable `x` declared both local and global
+#          ╙ ── Variable `x` declared both local and global
 end
 
 ########################################
@@ -316,7 +324,7 @@ end
 LoweringError:
 function f(::T) where T
     local T
-#   └─────┘ ── local variable name `T` conflicts with a static parameter
+#         ╙ ── local variable name `T` conflicts with a static parameter
 end
 
 ########################################
@@ -328,7 +336,7 @@ end
 LoweringError:
 function f(::T) where T
     global T
-#   └──────┘ ── global variable name `T` conflicts with a static parameter
+#          ╙ ── global variable name `T` conflicts with a static parameter
 end
 
 ########################################
@@ -343,7 +351,7 @@ LoweringError:
 function f(::T) where T
     let
         local T
-#       └─────┘ ── local variable name `T` conflicts with a static parameter
+#             ╙ ── local variable name `T` conflicts with a static parameter
     end
 end
 
@@ -359,7 +367,7 @@ LoweringError:
 function f(::T) where T
     let
         global T
-#       └──────┘ ── global variable name `T` conflicts with a static parameter
+#              ╙ ── global variable name `T` conflicts with a static parameter
     end
 end
 
@@ -418,6 +426,6 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (isdefined TestMod.y)
+3   (call core.isdefinedglobal TestMod :y false)
 4   (return %₃)
 

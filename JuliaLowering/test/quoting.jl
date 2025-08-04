@@ -47,6 +47,22 @@ end
         end
     end
     # @ string:5"""
+@test sprint(io->showprov(io, ex[1][3]; note="foo")) == raw"""
+    begin
+        x = 10
+        y = :(g(z))
+    #         └──┘ ── foo
+        quote
+            f($(x+1), $y)
+    # @ string:3
+
+        y = :(g(z))
+        quote
+            f($(x+1), $y)
+    #                 └┘ ── foo
+        end
+    end
+    # @ string:5"""
 
 
 # Test expression flags are preserved during interpolation

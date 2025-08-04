@@ -3,24 +3,17 @@
 
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k == K"inert" || k == K"top" || k == K"core"
+    if is_simple_atom(ctx, ex) || k in KSet"inert top core quote"
         true
     elseif k == K"BindingId"
         binfo = lookup_binding(ctx, ex)
         bk = binfo.kind
-        # TODO: Can we allow bk == :local || bk == :argument || bk == :static_parameter ???
-        # Why does flisp seem to allow (slot) and (static_parameter), but these
-        # aren't yet converted to by existing lowering??
-        if bk == :global
-            # Globals are nothrow when they are defined - we assume a previously
-            # defined global can never be set to undefined. (TODO: This could be
-            # broken when precompiling a module `B` in the presence of a badly
-            # behaved module `A`, which inconsistently defines globals during
-            # `A.__init__()`??)
-            is_defined_nothrow_global(binfo.mod, Symbol(binfo.name))
-        else
-            false
-        end
+        bk === :slot
+        # TODO: We should theoretically be able to allow `bk ===
+        # :static_parameter` for slightly more compact IR, but it's uncertain
+        # what the compiler is built to tolerate.  Notably, flisp allows
+        # static_parameter, but doesn't produce this form until a later pass, so
+        # it doesn't end up in the IR.
     else
         false
     end
@@ -69,7 +62,7 @@ end
 Context for creating linear IR.
 
 One of these is created per lambda expression to flatten the body down to
-a sequence of statements (linear IR).
+a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
 struct LinearIRContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
@@ -334,18 +327,35 @@ function emit_break(ctx, ex)
     emit_jump(ctx, ex, target)
 end
 
-function emit_assignment(ctx, srcref, lhs, rhs)
+# `op` may be either K"=" (where global assignments are converted to setglobal!)
+# or K"constdecl".  flisp: emit-assignment-or-setglobal
+function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
+    binfo = lookup_binding(ctx, lhs.var_id)
+    if binfo.kind == :global && op == K"="
+        emit(ctx, @ast ctx srcref [
+            K"call"
+            "setglobal!"::K"core"
+            binfo.mod::K"Value"
+            binfo.name::K"Symbol"
+            rhs
+        ])
+    else
+        emit(ctx, srcref, op, lhs, rhs)
+    end
+end
+
+function emit_assignment(ctx, srcref, lhs, rhs, op=K"=")
     if !isnothing(rhs)
         if is_valid_ir_rvalue(ctx, lhs, rhs)
-            emit(ctx, srcref, K"=", lhs, rhs)
+            emit_simple_assignment(ctx, srcref, lhs, rhs, op)
         else
             r = emit_assign_tmp(ctx, rhs)
-            emit(ctx, srcref, K"=", lhs, r)
+            emit_simple_assignment(ctx, srcref, lhs, r, op)
         end
     else
         # in unreachable code (such as after return); still emit the assignment
         # so that the structure of those uses is preserved
-        emit(ctx, @ast ctx srcref [K"=" lhs "nothing"::K"core"])
+        emit_simple_assignment(ctx, srcref, lhs, @ast ctx srcref "nothing"::K"core", op)
         nothing
     end
 end
@@ -368,6 +378,11 @@ function emit_label(ctx, srcref)
     l = make_label(ctx, srcref)
     emit(ctx, l)
     l
+end
+
+function emit_latestworld(ctx, srcref)
+    (isempty(ctx.code) || kind(last(ctx.code)) != K"latestworld") &&
+        emit(ctx, makeleaf(ctx, srcref, K"latestworld"))
 end
 
 function compile_condition_term(ctx, ex)
@@ -640,25 +655,27 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, callex)
             nothing
         end
-    elseif k == K"="
+    elseif k == K"=" || k == K"constdecl"
         lhs = ex[1]
-        if kind(lhs) == K"Placeholder"
+        res = if kind(lhs) == K"Placeholder"
             compile(ctx, ex[2], needs_value, in_tail_pos)
         else
             rhs = compile(ctx, ex[2], true, false)
             # TODO look up arg-map for renaming if lhs was reassigned
             if needs_value && !isnothing(rhs)
                 r = emit_assign_tmp(ctx, rhs)
-                emit(ctx, ex, K"=", lhs, r)
+                emit_simple_assignment(ctx, ex, lhs, r, k)
                 if in_tail_pos
                     emit_return(ctx, ex, r)
                 else
                     r
                 end
             else
-                emit_assignment(ctx, ex, lhs, rhs)
+                emit_assignment(ctx, ex, lhs, rhs, k)
             end
         end
+        k == K"constdecl" && emit_latestworld(ctx, ex)
+        res
     elseif k == K"block" || k == K"scope_block"
         nc = numchildren(ex)
         if nc == 0
@@ -767,7 +784,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         # TODO
         # throw(LoweringError(ex,
         #     "Global method definition needs to be placed at the top level, or use `eval`"))
-        if numchildren(ex) == 1
+        res = if numchildren(ex) == 1
             if in_tail_pos
                 emit_return(ctx, ex)
             elseif needs_value
@@ -792,6 +809,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             @assert !needs_value && !in_tail_pos
             nothing
         end
+        emit_latestworld(ctx, ex)
+        res
     elseif k == K"opaque_closure_method"
         @ast ctx ex [K"opaque_closure_method"
             ex[1]
@@ -811,11 +830,18 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"gc_preserve_begin"
         makenode(ctx, ex, k, compile_args(ctx, children(ex)))
-    elseif k == K"gc_preserve_end" || k == K"global" || k == K"const"
+    elseif k == K"gc_preserve_end"
         if needs_value
             throw(LoweringError(ex, "misplaced kind $k in value position"))
         end
         emit(ctx, ex)
+        nothing
+    elseif k == K"global"
+        if needs_value
+            throw(LoweringError(ex, "misplaced global declaration in value position"))
+        end
+        emit(ctx, ex)
+        ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
         nothing
     elseif k == K"meta"
         emit(ctx, ex)
@@ -862,6 +888,21 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             # TODO: also exclude deleted vars
             emit(ctx, ex)
         end
+    elseif k == K"globaldecl"
+        if needs_value
+            throw(LoweringError(ex, "misplaced global declaration"))
+        end
+        if numchildren(ex) == 1 || is_identifier_like(ex[2])
+            emit(ctx, ex)
+        else
+            rr = emit_assign_tmp(ctx, ex[2])
+            emit(ctx, @ast ctx ex [K"globaldecl" ex[1] rr])
+        end
+        ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
+    elseif k == K"latestworld"
+        emit_latestworld(ctx, ex)
+    elseif k == K"latestworld_if_toplevel"
+        ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end
