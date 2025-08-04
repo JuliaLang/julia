@@ -4,19 +4,28 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct {
+struct CTree_Float64;
+typedef struct CVector_CTree_Float64 {
     int32_t length;
-    float * data;
-} CVector_float_;
-typedef struct {
-    CVector_float_ from;
-    CVector_float_ to;
-} CVectorPair_float_;
-typedef struct {
+    struct CTree_Float64* data;
+} CVector_CTree_Float64;
+typedef struct CTree_Float64 {
+    CVector_CTree_Float64 children;
+} CTree_Float64;
+typedef struct MyTwoVec {
     int32_t x;
     int32_t y;
 } MyTwoVec;
+typedef struct CVector_Float32 {
+    int32_t length;
+    float* data;
+} CVector_Float32;
+typedef struct CVectorPair_Float32 {
+    CVector_Float32 from;
+    CVector_Float32 to;
+} CVectorPair_Float32;
 
-int32_t countsame(MyTwoVec * list, int32_t n);
-float copyto_and_sum(CVectorPair_float_ fromto);
+float copyto_and_sum(CVectorPair_Float32 fromto);
+int64_t tree_size(CTree_Float64 tree);
+int32_t countsame(MyTwoVec* list, int32_t n);
 #endif // JULIALIB_LIBSIMPLE_H

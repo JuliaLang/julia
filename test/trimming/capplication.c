@@ -3,7 +3,7 @@
 
 int main() {
     // Example usage of the functions defined in libsimple.h
-    CVectorPair_float_ vecPair;
+    CVectorPair_Float32 vecPair;
     vecPair.from.length = 3;
     vecPair.from.data = (float[]){1.0f, 2.0f, 3.0f};
     vecPair.to.length = 3;
