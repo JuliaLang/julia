@@ -3,6 +3,9 @@
 include("testhelpers/EvenIntegers.jl")
 using .EvenIntegers
 
+include("testhelpers/ULPError.jl")
+using .ULPError
+
 using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
@@ -684,6 +687,14 @@ end
     setprecision(256) do
         @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
         @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
+
+    @testset "accuracy of `cosc` around the origin" begin
+        for t in (Float32, Float64)
+            for x in range(start = t(-1), stop = t(1), length = 5000)
+                @test ulp_error(cosc, x) < 4
+            end
+        end
     end
 end
 
