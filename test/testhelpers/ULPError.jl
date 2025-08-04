@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module ULPError
     export ulp_error, ulp_error_maximum
     @noinline function throw_invalid()
