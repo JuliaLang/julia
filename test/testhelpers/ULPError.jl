@@ -6,15 +6,17 @@ module ULPError
         throw(ArgumentError("invalid"))
     end
     function ulp_error(accurate::AbstractFloat, approximate::AbstractFloat)
-        if isnan(accurate)
-            @noinline throw_invalid()
-        end
-        if isnan(approximate)
-            @noinline throw_invalid()
-        end
         # the ULP error is usually not required to great accuracy, so `Float32` should be precise enough
         zero_return = Float32(0)
         inf_return = Float32(Inf)
+        let accur_is_nan = isnan(accurate), approx_is_nan = isnan(approximate)
+            if accur_is_nan || approx_is_nan
+                if accur_is_nan === approx_is_nan
+                    return zero_return
+                end
+                return inf_return
+            end
+        end
         if isinf(accurate) || iszero(accurate)  # handle floating-point edge cases
             if isinf(accurate)
                 if isinf(approximate) && (signbit(accurate) == signbit(approximate))
