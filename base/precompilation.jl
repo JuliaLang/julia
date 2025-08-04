@@ -26,9 +26,24 @@ struct ExplicitEnv
     #local_prefs::Union{Nothing, Dict{String, Any}}
 end
 
-function ExplicitEnv(envpath::String=Base.active_project())
+ExplicitEnv() = ExplicitEnv(Base.active_project())
+function ExplicitEnv(::Nothing, envpath::String="")
+    ExplicitEnv(envpath,
+        Dict{String, UUID}(),     # project_deps
+        Dict{String, UUID}(),     # project_weakdeps
+        Dict{String, UUID}(),     # project_extras
+        Dict{String, Vector{UUID}}(), # project_extensions
+        Dict{UUID, Vector{UUID}}(),   # deps
+        Dict{UUID, Vector{UUID}}(),   # weakdeps
+        Dict{UUID, Dict{String, Vector{UUID}}}(), # extensions
+        Dict{UUID, String}(),     # names
+        Dict{UUID, Union{SHA1, String, Nothing, Missing}}())
+end
+function ExplicitEnv(envpath::String)
+    # Handle missing project file by creating an empty environment
     if !isfile(envpath)
-        error("expected a project file at $(repr(envpath))")
+        envpath = abspath(envpath)
+        return ExplicitEnv(nothing, envpath)
     end
     envpath = abspath(envpath)
     project_d = parsed_toml(envpath)
@@ -468,6 +483,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         fancyprint::Bool = can_fancyprint(io) && !timing,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true)
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing _from_loading configs fancyprint manifest ignore_loaded
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
@@ -518,9 +534,12 @@ function _precompilepkgs(pkgs::Vector{String},
     # inverse map of `parent_to_ext` above (ext → parent)
     ext_to_parent = Dict{Base.PkgId, Base.PkgId}()
 
-    function describe_pkg(pkg::PkgId, is_project_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
+    function describe_pkg(pkg::PkgId, is_project_dep::Bool, is_serial_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
         name = full_name(ext_to_parent, pkg)
         name = is_project_dep ? name : color_string(name, :light_black)
+        if is_serial_dep
+            name *= color_string(" (serial)", :light_black)
+        end
         if nconfigs > 1 && !isempty(flags)
             config_str = join(flags, " ")
             name *= color_string(" `$config_str`", :light_black)
@@ -630,14 +649,27 @@ function _precompilepkgs(pkgs::Vector{String},
     end
     @debug "precompile: extensions collected"
 
+    serial_deps = Base.PkgId[] # packages that are being precompiled in serial
+
+    if _from_loading
+        # if called from loading precompilation it may be a package from another environment stack
+        # where we don't have access to the dep graph, so just add as a single package and do serial
+        # precompilation of its deps within the job.
+        for pkg in requested_pkgs # In case loading asks for multiple packages
+            pkgid = Base.identify_package(pkg)
+            pkgid === nothing && continue
+            if !haskey(direct_deps, pkgid)
+                @debug "precompile: package `$(pkgid)` is outside of the environment, so adding as single package serial job"
+                direct_deps[pkgid] = Base.PkgId[] # no deps, do them in serial in the job
+                push!(project_deps, pkgid) # add to project_deps so it doesn't show up in gray
+                push!(serial_deps, pkgid)
+            end
+        end
+    end
+
     # return early if no deps
     if isempty(direct_deps)
         if isempty(pkgs)
-            return
-        elseif _from_loading
-            # if called from loading precompilation it may be a package from another environment stack so
-            # don't error and allow serial precompilation to try
-            # TODO: actually handle packages from other envs in the stack
             return
         else
             error("No direct dependencies outside of the sysimage found matching $(pkgs)")
@@ -846,7 +878,7 @@ function _precompilepkgs(pkgs::Vector{String},
                             dep, config = pkg_config
                             loaded = warn_loaded && haskey(Base.loaded_modules, dep)
                             flags, cacheflags = config
-                            name = describe_pkg(dep, dep in project_deps, flags, cacheflags)
+                            name = describe_pkg(dep, dep in project_deps, dep in serial_deps, flags, cacheflags)
                             line = if pkg_config in precomperr_deps
                                 string(color_string("  ? ", Base.warn_color()), name)
                             elseif haskey(failed_deps, pkg_config)
@@ -929,12 +961,13 @@ function _precompilepkgs(pkgs::Vector{String},
                     if !circular && is_stale
                         Base.acquire(parallel_limiter)
                         is_project_dep = pkg in project_deps
+                        is_serial_dep = pkg in serial_deps
 
                         # std monitoring
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
                         t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
 
-                        name = describe_pkg(pkg, is_project_dep, flags, cacheflags)
+                        name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                         @lock print_lock begin
                             if !fancyprint && isempty(pkg_queue)
                                 printpkgstyle(io, :Precompiling, something(target[], "packages..."))

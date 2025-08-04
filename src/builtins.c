@@ -2545,7 +2545,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
-    add_builtin("GlobalMethods", (jl_value_t*)jl_method_table);
+    add_builtin("methodtable", (jl_value_t*)jl_method_table);
     add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);

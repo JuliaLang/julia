@@ -4467,113 +4467,253 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 //  * `*found_minmax`: whether there is a minmax method already found, so future fully_covers matches should be ignored
 // Outputs:
 //  * `*has_ambiguity`: whether there are any ambiguities that mean the sort order is not exact
+// Stack frame for iterative sort_mlmatches implementation
+enum sort_state {
+    STATE_VISITING,            // Initial visit and setup
+    STATE_PROCESSING_INTERFERENCES, // Processing interference loop
+    STATE_CHECK_COVERS,        // Check coverage conditions
+    STATE_FINALIZE_SCC         // SCC processing and cleanup
+};
+
+typedef struct {
+    size_t idx;                    // Current method match index
+    size_t interference_index;     // Current position in interferences loop
+    size_t interference_count;     // Total interferences count
+    size_t depth;                  // Stack depth when frame created
+    size_t cycle;                  // Cycle depth tracking
+    jl_method_match_t *matc;       // Current method match
+    jl_method_t *m;                // Current method
+    jl_value_t *ti;                // Type intersection
+    int subt;                      // Subtype flag
+    jl_genericmemory_t *interferences; // Method interferences
+    int child_result;              // Result from child recursive call
+    enum sort_state state;
+} sort_stack_frame_t;
+
 // Returns:
 //  * -1: too many matches for lim, other outputs are undefined
 //  *  0: the child(ren) have been added to the output
 //  * 1+: the children are part of this SCC (up to this depth)
-// TODO: convert this function into an iterative call, rather than recursive
 static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, arraylist_t *recursion_stack, int lim, int include_ambiguous, int *has_ambiguity, int *found_minmax)
 {
-    size_t cycle = (size_t)visited->items[idx];
-    if (cycle != 0)
-        return cycle - 1; // depth remaining
-    arraylist_push(stack, (void*)idx);
-    size_t depth = stack->len;
-    { // scope block
-        visited->items[idx] = (void*)(1 + depth);
-        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
-        jl_method_t *m = matc->method;
-        jl_value_t *ti = (jl_value_t*)matc->spec_types;
-        int subt = matc->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m->sig)
-        jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
-        cycle = depth;
-        // Iterate over the interferences set to get the morespecific methods
-        for (size_t i = 0; i < interferences->length; i++) {
-            jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
-            if (m2 == NULL)
-                continue;
-            int childidx = find_method_in_matches(t, m2);
-            if (childidx < 0 || (size_t)childidx == idx)
-                continue;
-            int child_cycle = (size_t)visited->items[childidx];
-            if (child_cycle == 1)
-                continue; // already handled
-            if (child_cycle != 0 && child_cycle - 1 >= cycle)
-                continue; // already part of this cycle
-            if (method_in_interferences(m, m2))
-                continue;
-            // m2 is morespecific, so attempt to visit it first
-            child_cycle = sort_mlmatches(t, childidx, visited, stack, result, recursion_stack, lim, include_ambiguous, has_ambiguity, found_minmax);
-            if (child_cycle == -1)
-                return -1;
-            // record the cycle will resolve at depth "cycle"
-            if (child_cycle && child_cycle < cycle)
-                cycle = child_cycle;
-        }
-        // There is some probability that this method is already fully covered
-        // now, and we can delete this vertex now without anyone noticing.
-        if (subt && *found_minmax) {
-            if (*found_minmax == 2)
-                visited->items[idx] = (void*)1;
-        }
-        else if (check_interferences_covers(m, ti, t, visited, recursion_stack)) {
-            visited->items[idx] = (void*)1;
-        }
-        else if (check_fully_ambiguous(m, ti, t, include_ambiguous, has_ambiguity)) {
-            visited->items[idx] = (void*)1;
+    // Use arraylist_t for explicit stack of processing frames
+    arraylist_t frame_stack;
+    arraylist_new(&frame_stack, 0);
+
+    // Push initial frame
+    sort_stack_frame_t initial_frame = {
+        .idx = idx,
+        .interference_index = 0,
+        .interference_count = 0,
+        .depth = 0,
+        .cycle = 0,
+        .matc = NULL,
+        .m = NULL,
+        .ti = NULL,
+        .subt = 0,
+        .interferences = NULL,
+        .child_result = 0,
+        .state = STATE_VISITING
+    };
+    arraylist_push(&frame_stack, memcpy(malloc(sizeof(sort_stack_frame_t)), &initial_frame, sizeof(sort_stack_frame_t)));
+
+    int final_result = 0;
+
+    while (1) {
+        sort_stack_frame_t *current = (sort_stack_frame_t*)frame_stack.items[frame_stack.len - 1];
+        JL_GC_PROMISE_ROOTED(current->m);
+        JL_GC_PROMISE_ROOTED(current->interferences);
+        JL_GC_PROMISE_ROOTED(current->ti);
+
+        switch (current->state) {
+            case STATE_VISITING: {
+                size_t cycle = (size_t)visited->items[current->idx];
+                if (cycle != 0) {
+                    final_result = cycle - 1;
+                    goto propagate_to_parent;
+                }
+
+                arraylist_push(stack, (void*)current->idx);
+                current->depth = stack->len;
+                visited->items[current->idx] = (void*)(1 + current->depth);
+                current->matc = (jl_method_match_t*)jl_array_ptr_ref(t, current->idx);
+                current->m = current->matc->method;
+                current->ti = (jl_value_t*)current->matc->spec_types;
+                current->subt = current->matc->fully_covers != NOT_FULLY_COVERS;
+                current->interferences = jl_atomic_load_relaxed(&current->m->interferences);
+                current->cycle = current->depth;
+                current->interference_count = current->interferences->length;
+                current->interference_index = 0;
+                current->state = STATE_PROCESSING_INTERFERENCES;
+                break;
+            }
+
+            case STATE_PROCESSING_INTERFERENCES: {
+                // If we have a child result to process, handle it first
+                if (current->child_result != 0) {
+                    if (current->child_result == -1) {
+                        final_result = -1;
+                        goto propagate_to_parent;
+                    }
+                    // record the cycle will resolve at depth "cycle"
+                    if (current->child_result && current->child_result < current->cycle)
+                        current->cycle = current->child_result;
+                    current->child_result = 0; // Clear after processing
+                }
+
+                // Process interferences iteratively
+                while (current->interference_index < current->interference_count) {
+                    jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(current->interferences, current->interference_index);
+                    current->interference_index++;
+
+                    if (m2 == NULL)
+                        continue;
+
+                    int childidx = find_method_in_matches(t, m2);
+                    if (childidx < 0 || (size_t)childidx == current->idx)
+                        continue;
+
+                    int child_cycle = (size_t)visited->items[childidx];
+                    if (child_cycle == 1)
+                        continue; // already handled
+                    if (child_cycle != 0 && child_cycle - 1 >= current->cycle)
+                        continue; // already part of this cycle
+                    if (method_in_interferences(current->m, m2))
+                        continue;
+
+                    // m2 is morespecific, so attempt to visit it first
+                    if (child_cycle != 0) {
+                        // Child already being processed, use cached result
+                        int child_result = child_cycle - 1;
+                        if (child_result == -1) {
+                            final_result = -1;
+                            goto propagate_to_parent;
+                        }
+                        if (child_result && child_result < current->cycle)
+                            current->cycle = child_result;
+                    }
+                    else {
+                        // Need to process child - push new frame and pause current processing
+                        sort_stack_frame_t child_frame = {
+                            .idx = childidx,
+                            .interference_index = 0,
+                            .interference_count = 0,
+                            .depth = 0,
+                            .cycle = 0,
+                            .matc = NULL,
+                            .m = NULL,
+                            .ti = NULL,
+                            .subt = 0,
+                            .interferences = NULL,
+                            .child_result = 0,
+                            .state = STATE_VISITING
+                        };
+                        arraylist_push(&frame_stack, memcpy(malloc(sizeof(sort_stack_frame_t)), &child_frame, sizeof(sort_stack_frame_t)));
+                        goto continue_main_loop; // Resume processing after child completes
+                    }
+                }
+
+                current->state = STATE_CHECK_COVERS;
+                break;
+            }
+
+            case STATE_CHECK_COVERS: {
+                // There is some probability that this method is already fully covered
+                // now, and we can delete this vertex now without anyone noticing.
+                if (current->subt && *found_minmax) {
+                    if (*found_minmax == 2)
+                        visited->items[current->idx] = (void*)1;
+                }
+                else if (check_interferences_covers(current->m, current->ti, t, visited, recursion_stack)) {
+                    visited->items[current->idx] = (void*)1;
+                }
+                else if (check_fully_ambiguous(current->m, current->ti, t, include_ambiguous, has_ambiguity)) {
+                    visited->items[current->idx] = (void*)1;
+                }
+
+                // If there were no cycles hit either, then we can potentially delete all of its edges too.
+                if ((size_t)visited->items[current->idx] == 1 && stack->len == current->depth) {
+                    // n.b. cycle might be < depth, if we had a cycle with a child
+                    // idx, but since we are on the top of the stack, nobody
+                    // observed that and so we are content to ignore this
+                    size_t childidx = (size_t)arraylist_pop(stack);
+                    assert(childidx == current->idx); (void)childidx;
+                    final_result = 0;
+                    goto propagate_to_parent;
+                }
+
+                if (current->cycle != current->depth) {
+                    final_result = current->cycle;
+                    goto propagate_to_parent;
+                }
+
+                current->state = STATE_FINALIZE_SCC;
+                break;
+            }
+
+            case STATE_FINALIZE_SCC: {
+                // If this is in an SCC group, do some additional checks before returning or setting has_ambiguity
+                if (current->depth != stack->len) {
+                    int scc_count = 0;
+                    for (size_t i = current->depth - 1; i < stack->len; i++) {
+                        size_t childidx = (size_t)stack->items[i];
+                        if (visited->items[childidx] == (void*)1)
+                            continue;
+                        scc_count++;
+                    }
+                    if (scc_count > 1)
+                        *has_ambiguity = 1;
+                }
+
+                // copy this cycle into the results
+                for (size_t i = current->depth - 1; i < stack->len; i++) {
+                    size_t childidx = (size_t)stack->items[i];
+                    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
+                    int subt = matc->fully_covers != NOT_FULLY_COVERS;
+                    if (subt && *found_minmax)
+                        visited->items[childidx] = (void*)1;
+                    if ((size_t)visited->items[childidx] == 1)
+                        continue;
+                    assert(visited->items[childidx] == (void*)(2 + i));
+                    visited->items[childidx] = (void*)1;
+                    if (lim == -1 || result->len < lim)
+                        arraylist_push(result, (void*)childidx);
+                    else {
+                        final_result = -1;
+                        goto propagate_to_parent;
+                    }
+                }
+
+                // now finally cleanup the stack
+                while (stack->len >= current->depth) {
+                    size_t childidx = (size_t)arraylist_pop(stack);
+                    // always remove fully_covers matches after the first minmax ambiguity group is handled
+                    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
+                    int subt = matc->fully_covers == FULLY_COVERS;
+                    if (subt && *found_minmax == 1)
+                        *found_minmax = 2;
+                    assert(visited->items[childidx] == (void*)1);
+                }
+
+                final_result = 0;
+                goto propagate_to_parent;
+            }
         }
 
-        // If there were no cycles hit either, then we can potentially delete all of its edges too.
-        if ((size_t)visited->items[idx] == 1 && stack->len == depth) {
-            // n.b. cycle might be < depth, if we had a cycle with a child
-            // idx, but since we are on the top of the stack, nobody
-            // observed that and so we are content to ignore this
-            size_t childidx = (size_t)arraylist_pop(stack);
-            assert(childidx == idx); (void)childidx;
-            return 0;
-        }
-        if (cycle != depth)
-            return cycle;
-    }
-    // If this is in an SCC group, do some additional checks before returning or setting has_ambiguity
-    if (depth != stack->len) {
-        int scc_count = 0;
-        for (size_t i = depth - 1; i < stack->len; i++) {
-            size_t childidx = (size_t)stack->items[i];
-            if (visited->items[childidx] == (void*)1)
-                continue;
-            scc_count++;
-        }
-        if (scc_count > 1)
-            *has_ambiguity = 1;
-    }
-    // copy this cycle into the results
-    for (size_t i = depth - 1; i < stack->len; i++) {
-        size_t childidx = (size_t)stack->items[i];
-        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-        int subt = matc->fully_covers != NOT_FULLY_COVERS;
-        if (subt && *found_minmax)
-            visited->items[childidx] = (void*)1;
-        if ((size_t)visited->items[childidx] == 1)
+        continue_main_loop:
             continue;
-        assert(visited->items[childidx] == (void*)(2 + i));
-        visited->items[childidx] = (void*)1;
-        if (lim == -1 || result->len < lim)
-            arraylist_push(result, (void*)childidx);
-        else
-            return -1;
+
+        propagate_to_parent:
+            // Propagate result to parent if exists
+            free(arraylist_pop(&frame_stack));
+            if (frame_stack.len == 0)
+                break;
+            sort_stack_frame_t *parent = (sort_stack_frame_t*)frame_stack.items[frame_stack.len - 1];
+            parent->child_result = final_result;
     }
-    // now finally cleanup the stack
-    while (stack->len >= depth) {
-        size_t childidx = (size_t)arraylist_pop(stack);
-        // always remove fully_covers matches after the first minmax ambiguity group is handled
-        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-        int subt = matc->fully_covers == FULLY_COVERS;
-        if (subt && *found_minmax == 1)
-            *found_minmax = 2;
-        assert(visited->items[childidx] == (void*)1);
-    }
-    return 0;
+    assert(frame_stack.len == 0);
+    arraylist_free(&frame_stack);
+    return final_result;
 }
 
 

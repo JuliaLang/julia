@@ -1081,7 +1081,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "nothing");
     }
     else if (v == (jl_value_t*)jl_method_table) {
-        n += jl_printf(out, "Core.GlobalMethods");
+        n += jl_printf(out, "Core.methodtable");
     }
     else if (vt == jl_string_type) {
         n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1, 0);

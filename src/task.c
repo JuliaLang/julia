@@ -37,6 +37,10 @@
 #include "threading.h"
 #include "julia_assert.h"
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

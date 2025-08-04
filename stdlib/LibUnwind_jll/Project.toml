@@ -1,6 +1,6 @@
 name = "LibUnwind_jll"
 uuid = "745a5e78-f969-53e9-954f-d19f2f74f4e3"
-version = "1.8.2+0"
+version = "1.8.2+1"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
