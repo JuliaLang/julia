@@ -52,7 +52,7 @@ $(BIN)/basic_jll$(EXE): $(BIN)/basic_jll-o.a
 	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 $(BIN)/capplication$(EXE): $(SRCDIR)/capplication.c $(SRCDIR)/libsimple.h $(BIN)/libsimple-o.a
-	$(CC) -I$(BIN) -I$(SRCDIR) -I$(JULIA_LIBDIR) -o $@ $< -Wl,--whole-archive libsimple-o.a -Wl,--no-whole-archive $(LDFLAGS_ADD) $(LDFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
+	$(CC) -I$(BIN) -I$(SRCDIR) -I$(JULIA_LIBDIR) -o $@ $< -Wl,--whole-archive $(BIN)/libsimple-o.a -Wl,--no-whole-archive $(LDFLAGS_ADD) $(LDFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
 
 check: $(BIN)/hello$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
 	$(JULIA) --depwarn=error $(SRCDIR)/trimming.jl $<
