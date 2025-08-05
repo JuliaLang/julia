@@ -1625,11 +1625,11 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
     for idx in 1:length(ir.stmts)
         inst = ir.stmts[idx]
         flag = inst[:flag]
-        info = inst[:info]
 
         simpleres = process_simple!(todo, ir, idx, flag, state)
         simpleres === nothing && continue
         stmt, sig = simpleres
+        info = inst[:info]
 
         # `NativeInterpreter` won't need this, but provide a support for `:invoke` exprs here
         # for external `AbstractInterpreter`s that may run the inlining pass multiple times
