@@ -41,7 +41,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
 end
 function ExplicitEnv(envpath::String)
     # Handle missing project file by creating an empty environment
-    if !isfile(envpath)
+    if !isfile(envpath) || project_file_manifest_path(envpath) === nothing
         envpath = abspath(envpath)
         return ExplicitEnv(nothing, envpath)
     end
@@ -704,6 +704,7 @@ function _precompilepkgs(pkgs::Vector{String},
     circular_deps = Base.PkgId[]
     for pkg in keys(direct_deps)
         @assert isempty(stack)
+        pkg in serial_deps && continue # skip serial deps as we don't have their dependency graph
         if scan_pkg!(stack, could_be_cycle, cycles, pkg, direct_deps)
             push!(circular_deps, pkg)
             for pkg_config in keys(was_processed)
@@ -717,6 +718,10 @@ function _precompilepkgs(pkgs::Vector{String},
     end
     @debug "precompile: circular dep check done"
 
+    # If you have a workspace and want to precompile all projects in it, look through all packages in the manifest
+    # instead of collecting from a project i.e. not filter out packages that are in the current project.
+    # i.e. Pkg sets manifest to true for workspace precompile requests
+    # TODO: rename `manifest`?
     if !manifest
         if isempty(pkgs)
             pkgs = [pkg.name for pkg in project_deps]
