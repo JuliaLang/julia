@@ -471,7 +471,7 @@ function collect_all_deps(direct_deps, dep, alldeps=Set{Base.PkgId}())
 end
 
 
-function precompilepkgs(pkgs::Vector{String}=String[];
+function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
                         warn_loaded::Bool = true,
@@ -490,7 +490,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                    IOContext{IO}(io), fancyprint, manifest, ignore_loaded)
 end
 
-function _precompilepkgs(pkgs::Vector{String},
+function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          internal_call::Bool,
                          strict::Bool,
                          warn_loaded::Bool,
@@ -502,6 +502,23 @@ function _precompilepkgs(pkgs::Vector{String},
                          manifest::Bool,
                          ignore_loaded::Bool)
     requested_pkgs = copy(pkgs) # for understanding user intent
+    pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
+    if pkgs isa Vector{PkgId}
+        requested_pkgids = copy(pkgs)
+    else
+        requested_pkgids = PkgId[]
+        for name in pkgs
+            pkgid = Base.identify_package(name)
+            if pkgid === nothing
+                if _from_loading
+                    return # leave it up to loading to handle this
+                else
+                    throw(PkgPrecompileError("Unknown package: $name"))
+                end
+            end
+            push!(requested_pkgids, pkgid)
+        end
+    end
 
     time_start = time_ns()
 
@@ -655,8 +672,7 @@ function _precompilepkgs(pkgs::Vector{String},
         # if called from loading precompilation it may be a package from another environment stack
         # where we don't have access to the dep graph, so just add as a single package and do serial
         # precompilation of its deps within the job.
-        for pkg in requested_pkgs # In case loading asks for multiple packages
-            pkgid = Base.identify_package(pkg)
+        for pkgid in requested_pkgids # In case loading asks for multiple packages
             pkgid === nothing && continue
             if !haskey(direct_deps, pkgid)
                 @debug "precompile: package `$(pkgid)` is outside of the environment, so adding as single package serial job"
@@ -723,15 +739,24 @@ function _precompilepkgs(pkgs::Vector{String},
     # i.e. Pkg sets manifest to true for workspace precompile requests
     # TODO: rename `manifest`?
     if !manifest
-        if isempty(pkgs)
-            pkgs = [pkg.name for pkg in project_deps]
+        if isempty(pkg_names)
+            pkg_names = [pkg.name for pkg in project_deps]
         end
         keep = Set{Base.PkgId}()
         for dep in direct_deps
             dep_pkgid = first(dep)
-            if dep_pkgid.name in pkgs
+            if dep_pkgid.name in pkg_names
                 push!(keep, dep_pkgid)
                 collect_all_deps(direct_deps, dep_pkgid, keep)
+            end
+        end
+        # Also keep packages that were explicitly requested as PkgIds (for extensions)
+        if pkgs isa Vector{PkgId}
+            for requested_pkgid in requested_pkgids
+                if haskey(direct_deps, requested_pkgid)
+                    push!(keep, requested_pkgid)
+                    collect_all_deps(direct_deps, requested_pkgid, keep)
+                end
             end
         end
         for ext in keys(ext_to_parent)
@@ -941,7 +966,8 @@ function _precompilepkgs(pkgs::Vector{String},
     for (pkg, deps) in direct_deps
         cachepaths = get!(() -> Base.find_all_in_cache_path(pkg), cachepath_cache, pkg)
         sourcepath = Base.locate_package(pkg)
-        single_requested_pkg = length(requested_pkgs) == 1 && only(requested_pkgs) == pkg.name
+        single_requested_pkg = length(requested_pkgs) == 1 &&
+            (pkg in requested_pkgids || pkg.name in pkg_names)
         for config in configs
             pkg_config = (pkg, config)
             if sourcepath === nothing
@@ -1068,7 +1094,7 @@ function _precompilepkgs(pkgs::Vector{String},
         str = sprint(context=io) do iostr
             if !quick_exit
                 if fancyprint # replace the progress bar
-                    what = isempty(requested_pkgs) ? "packages finished." : "$(join(requested_pkgs, ", ", " and ")) finished."
+                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((p.name for p in requested_pkgids), ", ", " and ")) finished."
                     printpkgstyle(iostr, :Precompiling, what)
                 end
                 plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
