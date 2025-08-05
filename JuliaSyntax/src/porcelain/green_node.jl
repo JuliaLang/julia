@@ -118,6 +118,25 @@ function Base.show(io::IO, ::MIME"text/plain", node::GreenNode, str::AbstractStr
     _show_green_node(io, node, "", 1, str, show_trivia)
 end
 
+function _show_green_node_sexpr(io, node::GreenNode, position)
+    if is_leaf(node)
+        print(io, position, "-", position+node.span-1, "::", untokenize(head(node); unique=false))
+    else
+        print(io, "(", untokenize(head(node); unique=false))
+        p = position
+        for n in children(node)
+            print(io, ' ')
+            _show_green_node_sexpr(io, n, p)
+            p += n.span
+        end
+        print(io, ')')
+    end
+end
+
+function Base.show(io::IO, node::GreenNode)
+    _show_green_node_sexpr(io, node, 1)
+end
+
 function GreenNode(cursor::GreenTreeCursor)
     chead = head(cursor)
     T = typeof(chead)
