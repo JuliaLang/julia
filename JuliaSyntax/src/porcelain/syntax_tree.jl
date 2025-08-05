@@ -250,11 +250,9 @@ function _show_syntax_node_sexpr(io, node::AbstractSyntaxNode, show_kind)
         end
     else
         print(io, "(", untokenize(head(node)))
-        first = true
         for n in children(node)
             print(io, ' ')
             _show_syntax_node_sexpr(io, n, show_kind)
-            first = false
         end
         print(io, ')')
     end
