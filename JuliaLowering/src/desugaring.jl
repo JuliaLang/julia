@@ -690,10 +690,10 @@ function expand_dotcall(ctx, ex)
         ]
     elseif k == K"comparison"
         expand_dotcall(ctx, expand_compare_chain(ctx, ex))
-    elseif (k == K"&&" || k == K"||") && is_dotted(ex)
+    elseif k == K".&&" || k == K".||"
         @ast ctx ex [K"call"
             "broadcasted"::K"top"
-            (k == K"&&" ? "andand" : "oror")::K"top"
+            (k == K".&&" ? "andand" : "oror")::K"top"
             (expand_dotcall(ctx, arg) for arg in children(ex))...
         ]
     else
@@ -702,8 +702,7 @@ function expand_dotcall(ctx, ex)
 end
 
 function expand_fuse_broadcast(ctx, ex)
-    if kind(ex) == K"="
-        @assert is_dotted(ex)
+    if kind(ex) == K".=" || kind(ex) == K".op="
         @chk numchildren(ex) == 2
         lhs = ex[1]
         kl = kind(lhs)
@@ -1314,7 +1313,7 @@ end
 
 function expand_update_operator(ctx, ex)
     k = kind(ex)
-    dotted = is_dotted(ex)
+    dotted = k == K".op="
 
     @chk numchildren(ex) == 3
     lhs = ex[1]
@@ -1356,7 +1355,7 @@ function expand_update_operator(ctx, ex)
 
     @ast ctx ex [K"block"
         stmts...
-        [K"="(syntax_flags=(dotted ? JuliaSyntax.DOTOP_FLAG : nothing))
+        [(dotted ? K".=" : K"=")
             lhs
             [(dotted ? K"dotcall" : K"call")
                 op
@@ -4247,7 +4246,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         throw(LoweringError(ex, "unimplemented or unsupported atomic declaration"))
     elseif k == K"call"
         expand_call(ctx, ex)
-    elseif k == K"dotcall" || ((k == K"&&" || k == K"||") && is_dotted(ex))
+    elseif k == K"dotcall" || k == K".&&" || k == K".||" || k == K".="
         expand_forms_2(ctx, expand_fuse_broadcast(ctx, ex))
     elseif k == K"."
         expand_forms_2(ctx, expand_dot(ctx, ex))
@@ -4283,14 +4282,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             adopt_scope(string(k)::K"Identifier", ex)
             children(ex)...
         ])
-    elseif k == K"op="
+    elseif k == K"op=" || k == K".op="
         expand_forms_2(ctx, expand_update_operator(ctx, ex))
     elseif k == K"="
-        if is_dotted(ex)
-            expand_forms_2(ctx, expand_fuse_broadcast(ctx, ex))
-        else
-            expand_assignment(ctx, ex)
-        end
+        expand_assignment(ctx, ex)
     elseif k == K"break"
         numchildren(ex) > 0 ? ex :
             @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
