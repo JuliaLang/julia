@@ -36,7 +36,7 @@ end
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
-        (Core.Method, [:primary_world, :did_scan_source, :dispatch_status]),
+        (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
         (Core.MethodInstance, [:cache, :flags, :dispatch_status]),
         (Core.MethodTable, [:defs]),
         (Core.MethodCache, [:leafcache, :cache, :var""]),
@@ -2661,13 +2661,16 @@ struct D14919 <: Function; end
 @test B14919()() == "It's a brand new world"
 @test C14919()() == D14919()() == "Boo."
 
-let ex = ErrorException("cannot add methods to a builtin function")
+let ex_t = ErrorException, ex_r = r"cannot add methods to builtin function"
     for f in (:(Core.Any), :(Core.Function), :(Core.Builtin), :(Base.Callable), :(Union{Nothing,F} where F), :(typeof(Core.getfield)), :(Core.IntrinsicFunction))
-        @test_throws ex @eval (::$f)() = 1
+        @test_throws ex_t @eval (::$f)() = 1
+        @test_throws ex_r @eval (::$f)() = 1
     end
-    @test_throws ex @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    @test_throws ex_t @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    @test_throws ex_r @eval (::Union{Nothing,F})() where {F<:Function} = 1
     for f in (:(Core.getfield),)
-        @test_throws ex @eval $f() = 1
+        @test_throws ex_t @eval $f() = 1
+        @test_throws ex_r @eval $f() = 1
     end
 end
 
