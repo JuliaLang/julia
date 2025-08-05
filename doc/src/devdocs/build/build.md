@@ -181,6 +181,11 @@ On Debian-based distributions (e.g. Ubuntu), you can easily install them with `a
 sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
 ```
 
+On Red Hat-based distributions (e.g. Fedora, CentOS), you can install them with `yum`:
+```
+sudo dnf install gcc gcc-c++ gcc-gfortran python3 perl wget m4 cmake pkgconfig curl
+```
+
 Julia uses the following external libraries, which are automatically
 downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
