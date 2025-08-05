@@ -137,15 +137,18 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
 end
 
 function sethead!(graph, id::NodeId, h::JuliaSyntax.SyntaxHead)
-    graph.kind[id] = kind(h)
-    f = flags(h)
-    if f != 0
-        graph.syntax_flags[id] = f
-    end
+    sethead!(graph, id, kind(h))
+    setflags!(graph, id, flags(h))
 end
 
 function sethead!(graph, id::NodeId, k::Kind)
     graph.kind[id] = k
+end
+
+function setflags!(graph, id::NodeId, f::UInt16)
+    if f != 0
+        graph.syntax_flags[id] = f
+    end
 end
 
 function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
@@ -307,6 +310,7 @@ JuliaSyntax.source_line(src::LineNumberNode) = src.line
 # The follow somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
 JuliaSyntax.sourcefile(src::LineNumberNode) = src
+JuliaSyntax.sourcetext(src::LineNumberNode) = SubString("")
 JuliaSyntax.source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
 JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
 JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
@@ -537,13 +541,11 @@ end
 JuliaSyntax.sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 JuliaSyntax.byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
-function JuliaSyntax._expr_leaf_val(ex::SyntaxTree)
+function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
     name = get(ex, :name_val, nothing)
-    if !isnothing(name)
-        Symbol(name)
-    else
-        ex.value
-    end
+    !isnothing(name) && return Symbol(name)
+    name = get(ex, :value, nothing)
+    return name
 end
 
 Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
@@ -604,7 +606,7 @@ macro SyntaxTree(ex_old)
         throw(ArgumentError("@SyntaxTree expects a `quote` block or `:`-quoted expression"))
     end
     # 2. Re-parse the current source file as SyntaxTree instead
-    fname = String(__source__.file)
+    fname = isnothing(__source__.file) ? error("No current file") : String(__source__.file)
     if occursin(r"REPL\[\d+\]", fname)
         # Assume we should look at last history entry in REPL
         try
