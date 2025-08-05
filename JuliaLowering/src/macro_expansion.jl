@@ -79,13 +79,21 @@ struct MacroExpansionError
     ex::SyntaxTree
     msg::String
     position::Symbol
+    stacktrace::Vector{Base.StackTraces.StackFrame}
 end
 
 """
 `position` - the source position relative to the node - may be `:begin` or `:end` or `:all`
 """
 function MacroExpansionError(ex::SyntaxTree, msg::AbstractString; position=:all)
-    MacroExpansionError(nothing, ex, msg, position)
+    MacroExpansionError(nothing, ex, msg, position, scrub_expand_macro_stacktrace(stacktrace(backtrace())))
+end
+
+function scrub_expand_macro_stacktrace(stacktrace::Vector{Base.StackTraces.StackFrame})
+    idx = @something findfirst(stacktrace) do stackframe::Base.StackTraces.StackFrame
+        stackframe.func === :expand_macro && stackframe.file === Symbol(@__FILE__)
+    end error("`scrub_expand_macro_stacktrace` is expected to be called from `expand_macro`")
+    return stacktrace[1:idx-1]
 end
 
 function Base.showerror(io::IO, exc::MacroExpansionError)
@@ -113,7 +121,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     highlight(io, src.file, byterange, note=exc.msg)
 end
 
-function eval_macro_name(ctx, ex)
+function eval_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
     # `ex1` might contain a nontrivial mix of scope layers so we can't just
     # `eval()` it, as it's already been partially lowered by this point.
     # Instead, we repeat the latter parts of `lower()` here.
@@ -127,7 +135,7 @@ function eval_macro_name(ctx, ex)
     eval(mod, expr_form)
 end
 
-function expand_macro(ctx, ex)
+function expand_macro(ctx::MacroExpansionContext, ex::SyntaxTree)
     @assert kind(ex) == K"macrocall"
 
     macname = ex[1]
@@ -151,9 +159,9 @@ function expand_macro(ctx, ex)
         if exc isa MacroExpansionError
             # Add context to the error.
             # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
-            rethrow(MacroExpansionError(mctx, exc.ex, exc.msg, exc.position))
+            rethrow(MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.stacktrace))
         else
-            throw(MacroExpansionError(mctx, ex, "Error expanding macro", :all))
+            throw(MacroExpansionError(mctx, ex, "Error expanding macro", :all, scrub_expand_macro_stacktrace(stacktrace(catch_backtrace()))))
         end
     end
 
@@ -237,7 +245,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @chk numchildren(ex) == 1
         # TODO: Upstream should set a general flag for detecting parenthesized
         # expressions so we don't need to dig into `green_tree` here. Ugh!
-        plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) && 
+        plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) &&
                        kind(ex[1]) == K"Identifier" &&
                        (sr = sourceref(ex); sr isa SourceRef && kind(sr.green_tree[2]) != K"parens")
         if plain_symbol
@@ -337,4 +345,3 @@ function expand_forms_1(mod::Module, ex::SyntaxTree)
                                  ctx.current_layer)
     return ctx2, reparent(ctx2, ex2)
 end
-

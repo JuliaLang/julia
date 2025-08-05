@@ -1,6 +1,8 @@
-@testset "macros" begin
+module macros
 
-test_mod = Module()
+using JuliaLowering, Test
+
+module test_mod end
 
 JuliaLowering.include_string(test_mod, """
 module M
@@ -75,7 +77,7 @@ end
 """)
 
 @test JuliaLowering.include_string(test_mod, """
-let 
+let
     x = "`x` from outer scope"
     M.@foo x
 end
@@ -89,7 +91,7 @@ end
 
 @test !isdefined(test_mod.M, :a_global)
 @test JuliaLowering.include_string(test_mod, """
-begin 
+begin
     M.@set_a_global 42
     M.a_global
 end
@@ -133,13 +135,42 @@ M.@recursive 3
 """) == (3, (2, (1, 0)))
 
 @test let
-    ex = parsestmt(SyntaxTree, "M.@outer()", filename="foo.jl")
+    ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
     expanded = JuliaLowering.macroexpand(test_mod, ex)
-    sourcetext.(flattened_provenance(expanded[2]))
+    JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2]))
 end == [
     "M.@outer()"
     "@inner"
     "2"
 ]
 
+JuliaLowering.include_string(test_mod, """
+f_throw(x) = throw(x)
+macro m_throw(x)
+    :(\$(f_throw(x)))
 end
+""")
+let ret = try
+        JuliaLowering.include_string(test_mod, "_never_exist = @m_throw 42")
+    catch err
+        err
+    end
+    @test ret isa JuliaLowering.MacroExpansionError
+    @test length(ret.stacktrace) == 2
+    @test ret.stacktrace[1].func === :f_throw
+    @test ret.stacktrace[2].func === Symbol("@m_throw")
+end
+
+include("ccall_demo.jl")
+@test JuliaLowering.include_string(CCall, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
+let ret = try
+        JuliaLowering.include_string(CCall, "@ccall strlen(\"foo\"::Cstring)")
+    catch e
+        e
+    end
+    @test ret isa JuliaLowering.MacroExpansionError
+    @test ret.msg == "Expected a return type annotation like `::T`"
+    @test any(sf->sf.func===:ccall_macro_parse, ret.stacktrace)
+end
+
+end # module macros
