@@ -9,6 +9,7 @@ module ULPError
         # the ULP error is usually not required to great accuracy, so `Float32` should be precise enough
         zero_return = Float32(0)
         inf_return = Float32(Inf)
+        # handle floating-point edge cases
         let accur_is_nan = isnan(accurate), approx_is_nan = isnan(approximate)
             if accur_is_nan || approx_is_nan
                 if accur_is_nan === approx_is_nan
@@ -19,7 +20,7 @@ module ULPError
         end
         approx_is_inf = isinf(approximate)
         let accur_is_inf = isinf(accurate)
-            if accur_is_inf || iszero(accurate)  # handle floating-point edge cases
+            if accur_is_inf || iszero(accurate)
                 if accur_is_inf
                     if approx_is_inf && (signbit(accurate) == signbit(approximate))
                         return zero_return
