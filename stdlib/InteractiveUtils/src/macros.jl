@@ -106,7 +106,8 @@ function construct_callable(@nospecialize(func::Type))
     # Don't support type annotations otherwise, we don't want to give wrong answers
     # for callables such as `(::Returns{Int})(args...)` where using `Returns{Int}`
     # would give us code for the constructor, not for the callable object.
-    throw(ArgumentError("If a function type is explicitly provided, it must be a singleton whose only instance is the callable object"))
+    throw(ArgumentError("If a function type is explicitly provided, it must be a singleton whose only instance is the callable object.
+                         To alleviate this restriction, the reflection macro may use `use_signature_tuple = true` from `gen_call_with_extracted_types`."))
 end
 
 function separate_kwargs(exs::Vector{Any})
