@@ -10,20 +10,22 @@ module ULPError
         zero_return = 0f0
         inf_return = Inf32
         # handle floating-point edge cases
-        accur_is_nan = isnan(accurate)
-        approx_is_nan = isnan(approximate)
-        if accur_is_nan || approx_is_nan
-            return if accur_is_nan === approx_is_nan
-                zero_return
-            else
-                inf_return
+        if !(isfinite(accurate) && isfinite(approximate))
+            accur_is_nan = isnan(accurate)
+            approx_is_nan = isnan(approximate)
+            if accur_is_nan || approx_is_nan
+                return if accur_is_nan === approx_is_nan
+                    zero_return
+                else
+                    inf_return
+                end
             end
-        end
-        if isinf(approximate)
-            return if isinf(accurate) && (signbit(accurate) == signbit(approximate))
-                zero_return
-            else
-                inf_return
+            if isinf(approximate)
+                return if isinf(accurate) && (signbit(accurate) == signbit(approximate))
+                    zero_return
+                else
+                    inf_return
+                end
             end
         end
         # assuming `precision(BigFloat)` is great enough
