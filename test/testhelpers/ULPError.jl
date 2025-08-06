@@ -11,8 +11,6 @@ module ULPError
         inf_return = Float32(Inf)
         # handle floating-point edge cases
         accur_is_nan = isnan(accurate)
-        accur_is_inf = isinf(accurate)
-        approx_is_inf = isinf(approximate)
         approx_is_nan = isnan(approximate)
         if accur_is_nan || approx_is_nan
             return if accur_is_nan === approx_is_nan
@@ -21,8 +19,8 @@ module ULPError
                 inf_return
             end
         end
-        if approx_is_inf
-            return if accur_is_inf && (signbit(accurate) == signbit(approximate))
+        if isinf(approximate)
+            return if isinf(accurate) && (signbit(accurate) == signbit(approximate))
                 zero_return
             else
                 inf_return
