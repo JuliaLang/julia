@@ -6525,6 +6525,6 @@ function issue55548(a)
     return 2
 end
 @test Float64 <: Base.infer_return_type(issue55548, (Int,))
-@test issue55548(0) === 1.0
+@test issue55548(Int64(0)) === 1.0
 
 end # module inference
