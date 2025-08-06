@@ -28,6 +28,38 @@ has_fma = Dict(
     BigFloat => true,
 )
 
+@testset "meta test: ULPError" begin
+    @testset "edge cases" begin
+        @testset "zero error - two equivalent values" begin
+            @test 0 == @inferred ulp_error(NaN, NaN)
+            @test 0 == @inferred ulp_error(-NaN, -NaN)
+            @test 0 == @inferred ulp_error(-NaN, NaN)
+            @test 0 == @inferred ulp_error(NaN, -NaN)
+            @test 0 == @inferred ulp_error(Inf, Inf)
+            @test 0 == @inferred ulp_error(-Inf, -Inf)
+            @test 0 == @inferred ulp_error(0.0, 0.0)
+            @test 0 == @inferred ulp_error(-0.0, -0.0)
+            @test 0 == @inferred ulp_error(-0.0, 0.0)
+            @test 0 == @inferred ulp_error(0.0, -0.0)
+            @test 0 == @inferred ulp_error(3.0, 3.0)
+            @test 0 == @inferred ulp_error(-3.0, -3.0)
+        end
+        @testset "infinite error" begin
+            @test Inf == @inferred ulp_error(NaN, 0.0)
+            @test Inf == @inferred ulp_error(0.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, 3.0)
+            @test Inf == @inferred ulp_error(3.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, Inf)
+            @test Inf == @inferred ulp_error(Inf, -Inf)
+            @test Inf == @inferred ulp_error(-Inf, Inf)
+            @test Inf == @inferred ulp_error(0.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 0.0)
+            @test Inf == @inferred ulp_error(3.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 3.0)
+        end
+    end
+end
+
 @testset "clamp" begin
     let
         @test clamp(0, 1, 3) == 1
