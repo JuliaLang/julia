@@ -17,18 +17,20 @@ module ULPError
                 return inf_return
             end
         end
-        if isinf(accurate) || iszero(accurate)  # handle floating-point edge cases
-            if isinf(accurate)
-                if isinf(approximate) && (signbit(accurate) == signbit(approximate))
+        let accur_is_inf = isinf(accurate)
+            if accur_is_inf || iszero(accurate)  # handle floating-point edge cases
+                if accur_is_inf
+                    if isinf(approximate) && (signbit(accurate) == signbit(approximate))
+                        return zero_return
+                    end
+                    return inf_return
+                end
+                # `iszero(accurate)`
+                if iszero(approximate)
                     return zero_return
                 end
                 return inf_return
             end
-            # `iszero(accurate)`
-            if iszero(approximate)
-                return zero_return
-            end
-            return inf_return
         end
         # assuming `precision(BigFloat)` is great enough
         acc = if accurate isa BigFloat
