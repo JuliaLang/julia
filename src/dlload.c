@@ -410,6 +410,12 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 
     /* First, get the symbol value */
 #ifdef _OS_WINDOWS_
+    if (handle == jl_RTLD_DEFAULT_handle) {
+        if (throw_err)
+            jl_errorf("could not load symbol \"%s\":\nspecify a library explicitly", symbol);
+        else
+            return 0;
+    }
     *value = GetProcAddress((HMODULE) handle, symbol);
 #else
     *value = dlsym(handle, symbol);
@@ -472,7 +478,7 @@ JL_DLLEXPORT const char *jl_dlfind(const char *f_name)
     // https://cgit.freebsd.org/src/commit/?id=21a52f99440c9bec7679f3b0c5c9d888901c3694
     // (See https://github.com/JuliaLang/julia/issues/50846)
     if (strcmp(f_name, "dl_iterate_phdr") == 0)
-        return JL_EXE_LIBNAME;
+        return NULL;
 #endif
     void * dummy;
     if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0, 1))

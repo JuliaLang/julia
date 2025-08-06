@@ -21,6 +21,10 @@
 #include <pthread_np.h>
 #endif
 
+#if !defined(_OS_WINDOWS_)
+#include <dlfcn.h>
+#endif
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
@@ -730,8 +734,10 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1);
     jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1);
 #ifdef _OS_WINDOWS_
+    /* If this parameter is NULL, GetModuleHandle returns a handle to the file
+       used to create the calling process (.exe file). */
     jl_exe_handle = GetModuleHandleA(NULL);
-    jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
+    jl_RTLD_DEFAULT_handle = NULL;
     jl_ntdll_handle = jl_dlopen("ntdll.dll", JL_RTLD_NOLOAD); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", JL_RTLD_NOLOAD);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, JL_RTLD_NOLOAD);
@@ -741,12 +747,11 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     if (jl_dbghelp)
         jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1, 1);
 #else
-    jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW);
-#ifdef RTLD_DEFAULT
+    /* macOS dlopen(3): If path is NULL and the option RTLD_FIRST is used, the
+       handle returned will only search the main executable. */
+    jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW | JL_RTLD_NOLOAD | JL_RTLD_LOCAL | JL_RTLD_FIRST);
+    // RTLD_DEFAULT is mandatory on POSIX
     jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
-#else
-    jl_RTLD_DEFAULT_handle = jl_exe_handle;
-#endif
 #endif
 
     jl_init_rand();
