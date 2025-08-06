@@ -2345,7 +2345,7 @@ function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, 
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
         call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false, false), sv, #=max_methods=#1)::Future
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
-            return CallMeta(Nothing, Any, Effects(), FinalizerInfo(call.info, call.effects))
+            return CallMeta(Nothing, Any, Effects(), IndirectCallInfo(call.info, call.effects, false))
         end
     end
     return Future(CallMeta(Nothing, Any, Effects(), NoCallInfo()))
@@ -2679,6 +2679,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return Future(abstract_eval_isdefinedglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.get_binding_type
             return Future(abstract_eval_get_binding_type(interp, sv, argtypes))
+        elseif f === Core._task
+            return abstract_eval_task_builtin(interp, arginfo, si, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         ft = popfirst!(argtypes)
@@ -3206,6 +3208,57 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     consistent = !ismutabletype(rt) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
     effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
     return RTEffects(rt, Any, effects)
+end
+
+function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState)
+    (; fargs, argtypes) = arginfo
+    la = length(argtypes)
+    𝕃ᵢ = typeinf_lattice(interp)
+    # Check argument count: _task(func, size) or _task(func, size, ci)
+    if la < 3 || la > 4
+        return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    end
+    # Check that size argument is an Int
+    size_arg = argtypes[3]
+    if !(widenconst(size_arg) ⊑ Int)
+        return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    end
+
+    func_arg = argtypes[2]
+
+    # Handle optional Method/CodeInstance/Type argument (4th parameter)
+    if la == 4
+        invoke_args = Any[Const(Core.invoke), func_arg, argtypes[4]]
+        invoke_arginfo = ArgInfo(nothing, invoke_args)
+        invoke_future = abstract_invoke(interp, invoke_arginfo, si, sv)
+        return Future{CallMeta}(invoke_future, interp, sv) do invoke_result, interp, sv
+            fetch_type = invoke_result.rt
+            fetch_error = invoke_result.exct
+            task_effects = invoke_result.effects
+            if fetch_type === Any && fetch_error === Any
+                rt_result = Task
+            else
+                rt_result = PartialTask(fetch_type, fetch_error)
+            end
+            info_result = IndirectCallInfo(invoke_result.info, task_effects, true)
+            return CallMeta(rt_result, Any, Effects(), info_result)
+        end
+    end
+
+    # Fallback to abstract_call for function analysis
+    callinfo_future = abstract_call(interp, ArgInfo(nothing, Any[func_arg]), StmtInfo(true, si.saw_latestworld), sv, #=max_methods=#1)
+    return Future{CallMeta}(callinfo_future, interp, sv) do callinfo, interp, sv
+        fetch_type = callinfo.rt
+        fetch_error = callinfo.exct
+        task_effects = callinfo.effects
+        if fetch_type === Any && fetch_error === Any
+            rt_result = Task
+        else
+            rt_result = PartialTask(fetch_type, fetch_error)
+        end
+        info_result = IndirectCallInfo(callinfo.info, task_effects, true)
+        return CallMeta(rt_result, Any, Effects(), info_result)
+    end
 end
 
 function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, sstate::StatementState,

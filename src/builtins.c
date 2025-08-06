@@ -2166,6 +2166,18 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svecref(s, idx-1);
 }
 
+JL_CALLABLE(jl_f__task)
+{
+    JL_NARGS(_task, 2, 3);
+    jl_value_t *start = args[0];
+    JL_TYPECHK(_task, long, args[1]);
+    size_t ssize = jl_unbox_long(args[1]);
+    jl_value_t *invoke_arg = NULL;
+    if (nargs >= 3)
+        invoke_arg = args[2];
+    return (jl_value_t*)jl_new_task(start, jl_nothing, ssize, invoke_arg);
+}
+
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
     size_t nf = jl_svec_len(ft);
@@ -2564,6 +2576,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Const", (jl_value_t*)jl_const_type);
     add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
     add_builtin("PartialOpaque", (jl_value_t*)jl_partial_opaque_type);
+    add_builtin("PartialTask", (jl_value_t*)jl_partial_task_type);
     add_builtin("InterConditional", (jl_value_t*)jl_interconditional_type);
     add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
