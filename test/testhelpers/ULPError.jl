@@ -23,15 +23,12 @@ module ULPError
                 inf_return
             end
         end
-        if accur_is_inf || accur_is_zero
-            return if (accur_is_inf && approx_is_inf && (signbit(accurate) == signbit(approximate))) || (accur_is_zero && approx_is_zero)
+        if approx_is_inf
+            return if accur_is_inf && (signbit(accurate) == signbit(approximate))
                 zero_return
             else
                 inf_return
             end
-        end
-        if approx_is_inf
-            return inf_return
         end
         # assuming `precision(BigFloat)` is great enough
         acc = if accurate isa BigFloat
