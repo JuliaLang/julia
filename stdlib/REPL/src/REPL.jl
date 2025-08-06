@@ -594,33 +594,14 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
     Base.sigatomic_begin()
     val, iserr = response
     while true
-        try
-            Base.sigatomic_end()
-            if iserr
+        if iserr
+            # print error
+            try
+                Base.sigatomic_end()
                 val = Base.scrub_repl_backtrace(val)
                 Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
                 repl_display_error(errio, val)
-            else
-                if val !== nothing && show_value
-                    val2, iserr = if specialdisplay === nothing
-                        # display calls may require being run on the main thread
-                        call_on_backend(backend) do
-                            Base.invokelatest(display, val)
-                        end
-                    else
-                        call_on_backend(backend) do
-                            Base.invokelatest(display, specialdisplay, val)
-                        end
-                    end
-                    if iserr
-                        println(errio, "Error showing value of type ", typeof(val), ":")
-                        throw(val2)
-                    end
-                end
-            end
-            break
-        catch ex
-            if iserr
+            catch ex
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
@@ -634,10 +615,31 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                     println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
                             " while trying to handle a nested exception; giving up")
                 end
+            end
+            break
+        else
+            # display result
+            if val !== nothing && show_value
+                val2, iserr2 = if specialdisplay === nothing
+                    # display calls may require being run on the main thread
+                    call_on_backend(backend) do
+                        Base.invokelatest(display, val)
+                    end
+                else
+                    call_on_backend(backend) do
+                        Base.invokelatest(display, specialdisplay, val)
+                    end
+                end
+                if iserr2
+                    println(errio, "Error showing value of type ", typeof(val), ":")
+                    val = val2
+                    iserr = iserr2
+                else
+                    break
+                end
+            else
                 break
             end
-            val = current_exceptions()
-            iserr = true
         end
     end
     Base.sigatomic_end()
