@@ -28,12 +28,7 @@ module ULPError
                 end
             end
         end
-        # assuming `precision(BigFloat)` is great enough
-        acc = if accurate isa BigFloat
-            accurate
-        else
-            BigFloat(accurate)::BigFloat
-        end
+        acc = Float64(accurate)::Float64
         err = abs(Float32((approximate - acc) / eps(approximate))::Float32)
         if isnan(err)
             @noinline throw_invalid()  # unexpected
