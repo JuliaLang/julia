@@ -1245,7 +1245,7 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 #endif
 
-JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_finalize(jl_value_t *o);
@@ -2375,13 +2375,13 @@ STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
     return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
+JL_DLLEXPORT jl_value_t *jl_call(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_call0(jl_value_t *f JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call1(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call2(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
                                   jl_value_t *b JL_MAYBE_UNROOTED, jl_value_t *c JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
+JL_DLLEXPORT jl_value_t *jl_call4(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
                                   jl_value_t *b JL_MAYBE_UNROOTED, jl_value_t *c JL_MAYBE_UNROOTED,
                                   jl_value_t *d JL_MAYBE_UNROOTED);
 
@@ -2410,7 +2410,7 @@ struct _jl_handler_t {
 #define JL_TASK_STATE_DONE     1
 #define JL_TASK_STATE_FAILED   2
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
@@ -2722,9 +2722,9 @@ typedef struct {
 #define jl_root_task (jl_current_task->ptls->root_task)
 JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
-STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
+STATIC_INLINE jl_value_t *jl_get_function(jl_module_t *m, const char *name)
 {
-    return (jl_function_t*)jl_get_global(m, jl_symbol(name));
+    return (jl_value_t*)jl_get_global(m, jl_symbol(name));
 }
 
 // TODO: we need to pin the task while using this (set pure bit)

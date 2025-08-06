@@ -100,7 +100,7 @@ jl_array_t *jl_get_loaded_modules(void)
     if (loaded_modules_array == NULL && jl_base_module != NULL)
         loaded_modules_array = jl_get_global(jl_base_module, jl_symbol("loaded_modules_array"));
     if (loaded_modules_array != NULL)
-        return (jl_array_t*)jl_call0((jl_function_t*)loaded_modules_array);
+        return (jl_array_t*)jl_call0((jl_value_t*)loaded_modules_array);
     return NULL;
 }
 

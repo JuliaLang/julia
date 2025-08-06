@@ -939,12 +939,12 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_
     return 1;
 }
 
-jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
+jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
-    jl_typeinf_func = (jl_function_t*)f;
+    jl_typeinf_func = (jl_value_t*)f;
     jl_typeinf_world = jl_get_tls_world_age();
 }
 
@@ -4342,7 +4342,7 @@ jl_sym_t *jl_gf_supertype_name(jl_sym_t *name)
 }
 
 // Return value is rooted globally
-jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world)
+jl_value_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world)
 {
     // type name is function name prefixed with #
     jl_sym_t *tname = jl_gf_supertype_name(name);
@@ -4358,10 +4358,10 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     ftype->instance = f;
     jl_gc_wb(ftype, f);
     JL_GC_POP();
-    return (jl_function_t*)f;
+    return (jl_value_t*)f;
 }
 
-jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world)
+jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world)
 {
     return jl_new_generic_function_with_supertype(name, module, jl_function_type, new_world);
 }

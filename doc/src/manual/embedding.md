@@ -228,7 +228,7 @@ passing arguments computed in C to Julia. For this you will need to invoke Julia
 using `jl_call`:
 
 ```c
-jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
+jl_value_t *func = jl_get_function(jl_base_module, "sqrt");
 jl_value_t *argument = jl_box_float64(2.0);
 jl_value_t *ret = jl_call1(func, argument);
 ```
@@ -240,7 +240,7 @@ the function is called using `jl_call1`. `jl_call0`, `jl_call2`, and `jl_call3` 
 exist, to conveniently handle different numbers of arguments. To pass more arguments, use `jl_call`:
 
 ```
-jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+jl_value_t *jl_call(jl_value_t *f, jl_value_t **args, int32_t nargs)
 ```
 
 Its second argument `args` is an array of `jl_value_t*` arguments and `nargs` is the number of
@@ -319,7 +319,7 @@ jl_value_t *ret1 = jl_eval_string("sqrt(2.0)");
 JL_GC_PUSH1(&ret1);
 jl_value_t *ret2 = 0;
 {
-    jl_function_t *func = jl_get_function(jl_base_module, "exp");
+    jl_value_t *func = jl_get_function(jl_base_module, "exp");
     ret2 = jl_call1(func, ret1);
     JL_GC_PUSH1(&ret2);
     // Do something with ret2.
@@ -350,7 +350,7 @@ properly with mutable types.
 ```c
 // This functions shall be executed only once, during the initialization.
 jl_value_t* refs = jl_eval_string("refs = IdDict()");
-jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+jl_value_t* setindex = jl_get_function(jl_base_module, "setindex!");
 
 ...
 
@@ -374,7 +374,7 @@ container is created by `jl_call*`, then you will need to reload the pointer to 
 ```c
 // This functions shall be executed only once, during the initialization.
 jl_value_t* refs = jl_eval_string("refs = IdDict()");
-jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+jl_value_t* setindex = jl_get_function(jl_base_module, "setindex!");
 jl_datatype_t* reft = (jl_datatype_t*)jl_eval_string("Base.RefValue{Any}");
 
 ...
@@ -401,7 +401,7 @@ The GC can be allowed to deallocate a variable by removing the reference to it f
 the function `delete!`, provided that no other reference to the variable is kept anywhere:
 
 ```c
-jl_function_t* delete = jl_get_function(jl_base_module, "delete!");
+jl_value_t* delete = jl_get_function(jl_base_module, "delete!");
 jl_call2(delete, refs, rvar);
 ```
 
@@ -505,7 +505,7 @@ for (size_t i = 0; i < jl_array_nrows(x); i++)
 Now let us call a Julia function that performs an in-place operation on `x`:
 
 ```c
-jl_function_t *func = jl_get_function(jl_base_module, "reverse!");
+jl_value_t *func = jl_get_function(jl_base_module, "reverse!");
 jl_call1(func, (jl_value_t*)x);
 ```
 
@@ -517,7 +517,7 @@ If a Julia function returns an array, the return value of `jl_eval_string` and `
 cast to a `jl_array_t*`:
 
 ```c
-jl_function_t *func  = jl_get_function(jl_base_module, "reverse");
+jl_value_t *func  = jl_get_function(jl_base_module, "reverse");
 jl_array_t *y = (jl_array_t*)jl_call1(func, (jl_value_t*)x);
 ```
 
@@ -664,7 +664,7 @@ double c_func(int i)
     printf("[C %08x] i = %d\n", pthread_self(), i);
 
     // Call the Julia sqrt() function to compute the square root of i, and return it
-    jl_function_t *sqrt = jl_get_function(jl_base_module, "sqrt");
+    jl_value_t *sqrt = jl_get_function(jl_base_module, "sqrt");
     jl_value_t* arg = jl_box_int32(i);
     double ret = jl_unbox_float64(jl_call1(sqrt, arg));
 
