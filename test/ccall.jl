@@ -1537,6 +1537,14 @@ fn45187() = nothing
 @test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x, y, z)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
 
+# test for ccall first argument tuple validation errors
+@test_throws "ccall function name cannot be empty tuple" eval(:(f() = ccall((), A, (), )))
+@test_throws "ccall function name tuple can have at most 2 elements" eval(:(f() = ccall((:a, :b, :c), A, (), )))
+@test_throws "ccall function name tuple can have at most 2 elements" eval(:(f() = ccall((:a, :b, :c, :d), A, (), )))
+@test_throws TypeError eval(:(f() = ccall((1 + 2,), A, (), )))
+@test_throws TypeError eval(:(f() = ccall((:a, 1 + 2), A, (), )))
+@test_throws TypeError eval(:(ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)))
+
 # cfunction on non-function singleton
 struct CallableSingleton
 end
@@ -1751,18 +1759,16 @@ using Base: ccall_macro_parse, ccall_macro_lower
 end
 
 @testset "ensure the base-case of @ccall works, including library name and pointer interpolation" begin
-    call = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
+    ccallmacro = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
         str::Cstring,
         num1::Cint,
         num2::Cint
     )::Cstring))...)
-    @test call == Base.remove_linenums!(
-        quote
-        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
-        end)
+    ccallfunction = :(ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2))))
+    @test ccallmacro == ccallfunction
 
     local fptr = :x
-    @test_throws ArgumentError("interpolated function `fptr` was not a Ptr{Cvoid}, but Symbol") @ccall $fptr()::Cvoid
+    @test_throws TypeError @ccall $fptr()::Cvoid
 end
 
 @testset "check error paths" begin
@@ -1777,7 +1783,7 @@ end
     # no required args on varargs call
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
-    @test_throws ArgumentError("interpolated function `PROGRAM_FILE` was not a Ptr{Cvoid}, but String") @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
+    @test_throws TypeError @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
 end
 
 @testset "check error path for @cfunction" begin
@@ -1834,10 +1840,6 @@ end
 end
 
 # issue #36458
-compute_lib_name() = "libcc" * "alltest"
-ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)
-@test ccall_lazy_lib_name(0) == 0
-@test ccall_lazy_lib_name(3) == 1
 ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
 @test_throws UndefVarError(:xx_nOt_DeFiNeD_xx, @__MODULE__) ccall_with_undefined_lib()
 
