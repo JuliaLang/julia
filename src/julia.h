@@ -33,6 +33,15 @@
     #define jl_jmp_buf jmp_buf
 #endif
 
+// Fix MSVC (32-bit) and potentially other compilers
+#ifndef _P64
+#  if defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__) || defined(__ppc64__) || defined(__loongarch64__) || (defined(__riscv) && __riscv_xlen == 64)
+#    define _P64 1
+#  else
+#    define _P64 0
+#  endif
+#endif
+
 // Define the largest size (bytes) of a properly aligned object that the
 // processor family (MAX_ATOMIC_SIZE) and compiler (MAX_POINTERATOMIC_SIZE)
 // typically supports without a lock (assumed to be at least a pointer size)
