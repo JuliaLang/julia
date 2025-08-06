@@ -431,9 +431,10 @@ export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
-BUILD_OS := $(shell uname)
+RAW_BUILD_OS = $(shell uname)
+BUILD_OS := $(RAW_BUILD_OS)
 
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+ifneq (,$(findstring CYGWIN,$(RAW_BUILD_OS)))
 XC_HOST ?= $(shell uname -m)-w64-mingw32
 endif
 
@@ -561,7 +562,7 @@ JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
 JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
 JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security -fno-strict-aliasing
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
@@ -797,6 +798,8 @@ ifneq ($(OS), Darwin)
 endif
 endif
 
+bootstrap_julia_flags :=
+
 ifeq ($(SANITIZE),1)
 SANITIZE_OPTS :=
 SANITIZE_LDFLAGS :=
@@ -814,6 +817,9 @@ endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread
 SANITIZE_LDFLAGS += -fsanitize=thread
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+bootstrap_julia_flags += --target-sanitize=thread
+endif
 endif
 ifeq ($(SANITIZE_OPTS),)
 $(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
@@ -1579,7 +1585,9 @@ ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
-JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-reloc
+# N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
+# enforced visibility at this point.
+JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
@@ -1758,9 +1766,15 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE := $(CROSS_BOOTSTRAP_JULIA)
+else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+endif
 
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)

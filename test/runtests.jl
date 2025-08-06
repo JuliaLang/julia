@@ -25,6 +25,8 @@ else
     global running_under_rr() = false
 end
 
+const rmwait_timeout = running_under_rr() ? 300 : 30
+
 if use_revise
     # First put this at the top of the DEPOT PATH to install revise if necessary.
     # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
@@ -135,6 +137,7 @@ cd(@__DIR__) do
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+          Sys.uptime() = $(Sys.uptime()) ($(round(Sys.uptime() / (60 * 60), digits=1)) hours)
         """)
 
     #pretty print the information about gc and mem usage
@@ -277,7 +280,7 @@ cd(@__DIR__) do
                             elseif n > 1
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
-                                rmprocs(wrkr, waitfor=30)
+                                rmprocs(wrkr, waitfor=rmwait_timeout)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
@@ -290,7 +293,7 @@ cd(@__DIR__) do
                                 # the worker has reached the max-rss limit, recycle it
                                 # so future tests start with a smaller working set
                                 if n > 1
-                                    rmprocs(wrkr, waitfor=30)
+                                    rmprocs(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
@@ -304,7 +307,7 @@ cd(@__DIR__) do
                     end
                     if p != 1
                         # Free up memory =)
-                        rmprocs(p, waitfor=30)
+                        rmprocs(p, waitfor=rmwait_timeout)
                     end
                 end
             end
@@ -414,7 +417,7 @@ cd(@__DIR__) do
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
             fake.time_end = fake.time_start + duration
-            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1), nothing))
+            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
@@ -423,7 +426,7 @@ cd(@__DIR__) do
     for test in all_tests
         (test in completed_tests) && continue
         fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1), nothing))
+        Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = [])]), LineNumberNode(1), nothing))
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()

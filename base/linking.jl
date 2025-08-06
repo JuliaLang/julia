@@ -140,7 +140,15 @@ function link_image_cmd(path, out)
     LIBS = isdebugbuild() ? ("-ljulia-debug", "-ljulia-internal-debug") :
                         ("-ljulia", "-ljulia-internal")
     @static if Sys.iswindows()
-        LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
+        LIBS = (LIBS..., "-lopenlibm", "-lgcc_s", "-lgcc", "-lmsvcrt")
+        if isdebugbuild()
+            LIBS = (LIBS..., "-lssp")
+            if isfile(joinpath(private_libdir(), "libmingwex.a"))
+                # In MinGW 11, the ssp implementation was moved from libssp to
+                # libmingwex with ssp only being a stub. See #59020.
+                LIBS = (LIBS..., "-lmingwex", "-lkernel32")
+            end
+        end
     end
 
     V = verbose_linking() ? "--verbose" : ""

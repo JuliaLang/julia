@@ -99,12 +99,6 @@ static inline void msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFE
 static inline void msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT {}
 static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT {}
 #endif
-#ifdef _COMPILER_TSAN_ENABLED_
-JL_DLLIMPORT void *__tsan_create_fiber(unsigned flags);
-JL_DLLIMPORT void *__tsan_get_current_fiber(void);
-JL_DLLIMPORT void __tsan_destroy_fiber(void *fiber);
-JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
-#endif
 
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
@@ -182,7 +176,16 @@ JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #endif
 #endif
 
+#if defined(HAVE_SSP) && defined(_OS_DARWIN_)
+// On Darwin, this is provided by libSystem and imported
+extern JL_DLLIMPORT uintptr_t __stack_chk_guard;
+#elif defined(HAVE_SSP)
+// Added by compiler runtime in final link - not DLLIMPORT
+extern uintptr_t __stack_chk_guard;
+#else
+// The system doesn't have it - we define our own
 extern JL_DLLEXPORT uintptr_t __stack_chk_guard;
+#endif
 
 // If this is detected in a backtrace of segfault, it means the functions
 // that use this value must be reworked into their async form with cb arg
@@ -421,8 +424,8 @@ extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT extern int jl_lineno;
-JL_DLLEXPORT extern const char *jl_filename;
+JL_DLLEXPORT extern _Atomic(int) jl_lineno;
+JL_DLLEXPORT extern _Atomic(const char *) jl_filename;
 
 jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
                                    int osize);
@@ -687,8 +690,6 @@ typedef union {
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
-#define METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC 0b1000  // indicates there exists some other method that is not more specific than this one
-#define METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC 0b10000  // precompiled version of METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
@@ -1756,6 +1757,7 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
+JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;

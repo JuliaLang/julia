@@ -195,6 +195,8 @@ typedef struct {
     //  This contains the number of targets
     //  in addition to the name and feature set of each target.
     const void *target_data;
+    // Original CPU target string used to build this sysimage
+    const char *cpu_target_string;
 } jl_image_pointers_t;
 
 /**
@@ -210,10 +212,15 @@ typedef struct {
 jl_image_t jl_init_processor_sysimg(jl_image_buf_t image, const char *cpu_target);
 jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image);
 
+// Internal function to set the sysimage CPU target during initialization
+void jl_set_sysimage_cpu_target(const char *cpu_target);
+
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // Return the features of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
+// Return the CPU target string used to build the current sysimage
+JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void);
 // Dump the name and feature set of the host CPU
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
 // Check if the CPU has native FMA instructions;

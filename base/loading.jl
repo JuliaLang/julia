@@ -2378,7 +2378,8 @@ function __require(into::Module, mod::Symbol)
             else
                 manifest_warnings = collect_manifest_warnings()
                 throw(ArgumentError("""
-                Package $(where.name) does not have $mod in its dependencies:
+                Cannot load (`using/import`) module $mod into module $into in package $(where.name)
+                because package $(where.name) does not have $mod in its dependencies:
                 $manifest_warnings- You may have a partially installed environment. Try `Pkg.instantiate()`
                   to ensure all packages in the environment are installed.
                 - Or, if you have $(where.name) checked out for development and have
@@ -2624,8 +2625,7 @@ function __require_prelocked(pkg::PkgId, env)
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
             project = active_project()
-            if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation) && project !== nothing &&
-                    isfile(project) && project_file_manifest_path(project) !== nothing
+            if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
                 parallel_precompile_attempted = true
                 unlock(require_lock)
                 try

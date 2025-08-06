@@ -534,10 +534,15 @@ filter(flt, itr) = Filter(flt, itr)
 function iterate(f::Filter, state...)
     y = iterate(f.itr, state...)
     while y !== nothing
-        if f.flt(y[1])
-            return y
+        v, s = y
+        if f.flt(v)
+            if y isa Tuple{Any,Any}
+                return (v, s) # incorporate type information that may be improved by user-provided `f.flt`
+            else
+                return y
+            end
         end
-        y = iterate(f.itr, y[2])
+        y = iterate(f.itr, s)
     end
     nothing
 end
@@ -625,13 +630,19 @@ end
 """
     rest(iter, state)
 
-An iterator that yields the same elements as `iter`, but starting at the given `state`.
+An iterator that yields the same elements as `iter`, but starting at the given `state`, which
+must be a state obtainable via a sequence of one or more calls to `iterate(iter[, state])`
 
 See also: [`Iterators.drop`](@ref), [`Iterators.peel`](@ref), [`Base.rest`](@ref).
 
 # Examples
 ```jldoctest
-julia> collect(Iterators.rest([1,2,3,4], 2))
+julia> iter = [1,2,3,4];
+
+julia> val, state = iterate(iter)
+(1, 2)
+
+julia> collect(Iterators.rest(iter, state))
 3-element Vector{Int64}:
  2
  3

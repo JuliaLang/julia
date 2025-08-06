@@ -824,7 +824,7 @@ Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large
 
 Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
-See also: [`cispi`](@ref), [`sincosd`](@ref), [`cospi`](@ref).
+See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
 function cospi(x::T) where T<:IEEEFloat
     x = abs(x)

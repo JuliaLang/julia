@@ -2344,7 +2344,15 @@ void jl_dump_native_impl(void *native_code,
                                                         "jl_small_typeof");
             jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
             jl_small_typeof_copy->setDSOLocal(true);
-            AT = ArrayType::get(T_psize, 5);
+
+            // Create CPU target string constant
+            auto cpu_target_str = jl_options.cpu_target ? jl_options.cpu_target : "native";
+            auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
+            auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
+                                                       GlobalVariable::InternalLinkage,
+                                                       cpu_target_data, "jl_cpu_target_string");
+
+            AT = ArrayType::get(T_psize, 6);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
                                             ConstantArray::get(AT, {
@@ -2352,7 +2360,8 @@ void jl_dump_native_impl(void *native_code,
                                                     ConstantExpr::getBitCast(shards, T_psize),
                                                     ConstantExpr::getBitCast(ptls, T_psize),
                                                     ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
-                                                    ConstantExpr::getBitCast(target_ids, T_psize)
+                                                    ConstantExpr::getBitCast(target_ids, T_psize),
+                                                    ConstantExpr::getBitCast(cpu_target_global, T_psize)
                                             }),
                                             "jl_image_pointers");
             addComdat(pointers, TheTriple);

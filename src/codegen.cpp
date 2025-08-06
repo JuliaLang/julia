@@ -239,13 +239,13 @@ extern void __stack_chk_fail();
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
 extern void ___chkstk_ms(void);
 #else
 extern void __chkstk(void);
 #endif
 #else
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
 #undef _alloca
 extern void _alloca(void);
 #else
@@ -3862,8 +3862,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
     bool isboxed = layout->flags.arrayelem_isboxed;
     bool isunion = layout->flags.arrayelem_isunion;
-    bool isatomic = kind == (jl_value_t*)jl_atomic_sym;
-    bool needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
+    bool isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
+    bool needlock = layout->flags.arrayelem_islocked;
     size_t elsz = layout->size;
     size_t al = layout->alignment;
     if (al > JL_HEAP_ALIGNMENT)
@@ -4138,14 +4138,23 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     else if (f == BUILTIN(memoryrefnew) && (nargs == 2 || nargs == 3)) {
         const jl_cgval_t &ref = argv[1];
-        jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
-        if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
-            mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
-            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
+        jl_datatype_t *mty_dt = (jl_datatype_t*)jl_unwrap_unionall(ref.typ);
+        if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type((jl_value_t*)mty_dt)) {
+            mty_dt = (jl_datatype_t*)jl_field_type_concrete(mty_dt, 1);
+            const jl_datatype_layout_t *layout = mty_dt->layout;
             jl_value_t *boundscheck = nargs == 3 ? argv[3].constant : nullptr;
             if (nargs == 3)
                 emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "memoryrefnew");
             *ret = emit_memoryref(ctx, ref, argv[2], boundscheck, layout);
+            return true;
+        }
+        if (jl_is_genericmemory_type(mty_dt) && jl_is_concrete_type((jl_value_t*)mty_dt)) {
+            const jl_datatype_layout_t *layout = mty_dt->layout;
+            jl_value_t *boundscheck = nargs == 3 ? argv[3].constant : nullptr;
+            if (nargs == 3)
+                emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "memoryrefnew");
+            jl_value_t *typ = jl_apply_type((jl_value_t*)jl_genericmemoryref_type, jl_svec_data(mty_dt->parameters), jl_svec_len(mty_dt->parameters));
+            *ret = emit_memoryref_direct(ctx, ref, argv[2], typ, boundscheck, layout);
             return true;
         }
     }
@@ -4222,7 +4231,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             size_t al = layout->alignment;
             if (al > JL_HEAP_ALIGNMENT)
                 al = JL_HEAP_ALIGNMENT;
-            bool needlock = isatomic && !isboxed && elsz > MAX_ATOMIC_SIZE;
+            bool needlock = layout->flags.arrayelem_islocked;
             AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                     ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                     : get_llvm_atomic_order(order);
@@ -4308,7 +4317,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 *ret = jl_cgval_t(); // unreachable
                 return true;
             }
-            bool isatomic = kind == (jl_value_t*)jl_atomic_sym;
+            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
+            bool isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
             if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
                 emit_atomic_error(ctx, "memoryref_isassigned: non-atomic memory cannot be accessed atomically");
                 *ret = jl_cgval_t(); // unreachable
@@ -4324,13 +4334,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             jl_value_t *boundscheck = argv[3].constant;
             emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, fname);
-            const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
             Value *mem = emit_memoryref_mem(ctx, ref, layout);
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *oob = bounds_check_enabled(ctx, boundscheck) ? ctx.builder.CreateIsNull(mlen) : nullptr;
             bool isboxed = layout->flags.arrayelem_isboxed;
             if (isboxed || layout->first_ptr >= 0) {
-                bool needlock = isatomic && !isboxed && layout->size > MAX_ATOMIC_SIZE;
+                bool needlock = layout->flags.arrayelem_islocked;
                 AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                         ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                         : get_llvm_atomic_order(order);
@@ -4350,13 +4359,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     ctx.builder.SetInsertPoint(passBB);
                 }
                 Value *elem = emit_memoryref_ptr(ctx, ref, layout);
-                if (needlock) {
+                if (!isboxed)
+                    elem = emit_ptrgep(ctx, elem, layout->first_ptr * sizeof(void*));
+                else if (needlock)
                     // n.b. no actual lock acquire needed, as the check itself only needs to load a single pointer and check for null
                     // elem += sizeof(lock);
                     elem = emit_ptrgep(ctx, elem, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
-                }
-                if (!isboxed)
-                    elem = emit_ptrgep(ctx, elem, layout->first_ptr * sizeof(void*));
                 // emit this using the same type as BUILTIN(memoryrefget)
                 // so that LLVM may be able to load-load forward them and fold the result
                 auto tbaa = isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf;
@@ -6779,9 +6787,12 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
     rhs.promotion_point = nullptr;
     rhs.promotion_ssa = -1;
     if (gcstack_arg) {
-        w->setCallingConv(CallingConv::Swift);
         AttrBuilder param(ctx.builder.getContext());
-        param.addAttribute(Attribute::SwiftSelf);
+        if (ctx.emission_context.use_swiftcc) {
+            w->setCallingConv(CallingConv::Swift);
+            param.addAttribute(Attribute::SwiftSelf);
+        }
+        param.addAttribute("gcstack");
         param.addAttribute(Attribute::NonNull);
         Argument *gcstackarg = &*AI++;
         gcstackarg->addAttrs(param);
@@ -7957,6 +7968,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         AttrBuilder param(M->getContext());
         if (params.use_swiftcc)
             param.addAttribute(Attribute::SwiftSelf);
+        param.addAttribute("gcstack");
         param.addAttribute(Attribute::NonNull);
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(PointerType::get(M->getContext(), 0));
@@ -10041,13 +10053,13 @@ static void init_jit_functions(void)
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
     add_named_global("__julia_personality", &__julia_personality);
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
     add_named_global("___chkstk_ms", &___chkstk_ms);
 #else
     add_named_global("__chkstk", &__chkstk);
 #endif
 #else
-#if defined(_COMPILER_GCC_)
+#if defined(__MINGW32__)
     add_named_global("_alloca", &_alloca);
 #else
     add_named_global("_chkstk", &_chkstk);

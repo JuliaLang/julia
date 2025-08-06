@@ -1495,7 +1495,7 @@ end
 
         # helper function to load a package and return the output
         function load_package(name, args=``)
-            code = "using $name"
+            code = "Base.disable_parallel_precompile = true; using $name"
             cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
                         "JULIA_LOAD_PATH" => dir,
                         "JULIA_DEPOT_PATH" => depot_path,

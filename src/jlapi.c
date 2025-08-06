@@ -996,8 +996,8 @@ static NOINLINE int true_main(int argc, char *argv[])
     while (!ios_eof(ios_stdin)) {
         char *volatile line = NULL;
         JL_TRY {
-            ios_puts("\njulia> ", ios_stdout);
-            ios_flush(ios_stdout);
+            jl_printf(JL_STDOUT, "\njulia> ");
+            jl_uv_flush(JL_STDOUT);
             line = ios_readline(ios_stdin);
             jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             JL_GC_PUSH1(&val);
@@ -1013,7 +1013,6 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf(JL_STDOUT, "\n");
             free(line);
             line = NULL;
-            jl_process_events();
         }
         JL_CATCH {
             if (line) {
