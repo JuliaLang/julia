@@ -101,6 +101,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        0, // compress_sysimage
     };
     jl_options_initialized = 1;
 }
@@ -222,10 +223,13 @@ static const char opts_hidden[]  =
     "                          Enable or disable JIT compiler, or request exhaustive or minimal compilation\n\n"
 
     // compiler output options
-    " --output-o <name>        Generate an object file (including system image data)\n"
-    " --output-ji <name>       Generate a system image data file (.ji)\n"
-    " --strip-metadata         Remove docstrings and source location info from system image\n"
-    " --strip-ir               Remove IR (intermediate representation) of compiled functions\n\n"
+    " --output-o <name>              Generate an object file (including system image data)\n"
+    " --output-ji <name>             Generate a system image data file (.ji)\n"
+    " --strip-metadata               Remove docstrings and source location info from system image\n"
+    " --strip-ir                     Remove IR (intermediate representation) of compiled functions\n"
+    " --compress-sysimage={yes|no*}  Compress the sys/pkgimage heap at the expense of\n"
+    "                                slightly increased load time.\n"
+    "\n"
 
     // compiler debugging (see the devdocs for tips on using these options)
     " --output-unopt-bc <name> Generate unoptimized LLVM bitcode (.bc)\n"
@@ -282,7 +286,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
-           opt_permalloc_pkgimg
+           opt_permalloc_pkgimg,
+           opt_compress_sysimage,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -344,6 +349,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
         { 0, 0, 0, 0 }
     };
 
@@ -894,6 +900,12 @@ restart_switch:
                 jl_options.permalloc_pkgimg = 0;
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
+            break;
+        case opt_compress_sysimage:
+            if (!strcmp(optarg,"yes"))
+                jl_options.compress_sysimage = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.compress_sysimage = 0;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
