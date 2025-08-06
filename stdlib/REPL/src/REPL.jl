@@ -593,34 +593,12 @@ end
 function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
-    while true
-        if iserr
-            # print error
-            try
-                Base.sigatomic_end()
-                val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                repl_display_error(errio, val)
-            catch ex
-                println(errio) # an error during printing is likely to leave us mid-line
-                println(errio, "SYSTEM (REPL): showing an error caused an error")
-                try
-                    excs = Base.scrub_repl_backtrace(current_exceptions())
-                    setglobal!(Base.MainInclude, :err, excs)
-                    repl_display_error(errio, excs)
-                catch e
-                    # at this point, only print the name of the type as a Symbol to
-                    # minimize the possibility of further errors.
-                    println(errio)
-                    println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
-                            " while trying to print an exception; giving up")
-                end
-            end
-            break
-        else
-            # display result
+    if !iserr
+        # display result
+        try
+            Base.sigatomic_end()
             if val !== nothing && show_value
-                val2, iserr2 = if specialdisplay === nothing
+                val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
                         Base.invokelatest(display, val)
@@ -630,15 +608,39 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                         Base.invokelatest(display, specialdisplay, val)
                     end
                 end
-                if iserr2
+                if iserr
+                    println(errio)
                     println(errio, "Error showing value of type ", typeof(val), ":")
                     val = val2
-                    iserr = iserr2
-                else
-                    break
                 end
-            else
-                break
+            end
+        catch ex
+            println(errio)
+            println(errio, "SYSTEM (REPL): showing a value caused an error")
+            val = current_exceptions()
+            iserr = true
+        end
+    end
+    if iserr
+        # print error
+        try
+            Base.sigatomic_end()
+            val = Base.scrub_repl_backtrace(val)
+            Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
+            repl_display_error(errio, val)
+        catch ex
+            println(errio) # an error during printing is likely to leave us mid-line
+            println(errio, "SYSTEM (REPL): showing an error caused an error")
+            try
+                excs = Base.scrub_repl_backtrace(current_exceptions())
+                setglobal!(Base.MainInclude, :err, excs)
+                repl_display_error(errio, excs)
+            catch e
+                # at this point, only print the name of the type as a Symbol to
+                # minimize the possibility of further errors.
+                println(errio)
+                println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
+                        " while trying to print an exception; giving up")
             end
         end
     end
