@@ -105,7 +105,7 @@ function ccall_macro_lower(ex, convention, func, rettype, types, args, num_varar
         push!(roots, argi)
         push!(cargs, ast":(Base.unsafe_convert($type, $argi))")
     end
-    push!(statements, 
+    push!(statements,
           @ast ex ex [K"foreigncall"
               func
               rettype
@@ -126,5 +126,4 @@ function var"@ccall"(ctx::JuliaLowering.MacroContext, ex)
     ccall_macro_lower(ex, "ccall", ccall_macro_parse(ex)...)
 end
 
-end
-
+end # module CCall
