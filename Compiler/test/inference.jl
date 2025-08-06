@@ -6515,4 +6515,16 @@ end <: Bool
     Core.get_binding_type(m, n, xs...)
 end <: Type
 
+# JuliaLang/julia#55548: invalidate stale slot wrapper types in `ssavaluetypes`
+_issue55548_proj1(a, b) = a
+function issue55548(a)
+    a = Base.inferencebarrier(a)::Union{Int64,Float64}
+    if _issue55548_proj1(isa(a, Int64), (a = Base.inferencebarrier(1.0)::Union{Int64,Float64}; true))
+        return a
+    end
+    return 2
+end
+@test Float64 <: Base.infer_return_type(issue55548, (Int,))
+@test issue55548(0) === 1.0
+
 end # module inference
