@@ -2383,6 +2383,20 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svecref(s, idx-1);
 }
 
+JL_CALLABLE(jl_f__task)
+{
+    JL_NARGS(_task, 2, 3);
+    jl_value_t *start = args[0];
+    JL_TYPECHK(_task, long, args[1]);
+    size_t ssize = jl_unbox_long(args[1]);
+    jl_value_t *invoke_arg = NULL;
+    if (nargs >= 3)
+        invoke_arg = args[2];
+    jl_task_t *task = jl_new_task(start, jl_nothing, ssize);
+    task->invoked = invoke_arg;
+    return (jl_value_t*)task;
+}
+
 // If a field can reference its enclosing type, then the inlining
 // recursive depth is not statically bounded for some layouts, so we cannot
 // inline it. The only way fields can reference this type (due to

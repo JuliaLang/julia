@@ -603,6 +603,7 @@ add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
 end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
+
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
 
 @nospecs function _svec_len_tfunc(::AbstractLattice, s)
@@ -1203,6 +1204,12 @@ end
             end
         end
         s00 = s
+    elseif isa(s00, PartialTask)
+        # Special case: accessing the 'result' field of a PartialTask returns the fetch_type or error_type or some other value set by the user
+        #if isa(name, Const) && name.val === :result
+        #    return s00.fetch_type
+        #end
+        s00 = Task
     end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
 end
@@ -1501,7 +1508,7 @@ end
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
                 RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
             end
-            info = ModifyOpInfo(callinfo.info)
+            info = IndirectCallInfo(callinfo.info, callinfo.effects, true)
             return CallMeta(RT, Any, Effects(), info)
         end
     end
@@ -3375,7 +3382,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         # llvmcall can do arbitrary things
         return Effects()
     elseif f === atomic_pointermodify
-        # atomic_pointermodify has memory effects, plus any effects from the ModifyOpInfo
+        # atomic_pointermodify has memory effects, plus any effects from the IndirectCallInfo
         return Effects()
     end
     is_effect_free = _is_effect_free_infer(f)

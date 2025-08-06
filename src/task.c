@@ -1097,6 +1097,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->tls = jl_nothing;
     jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
     t->start = start;
+    t->invoked = NULL;
     t->result = jl_nothing;
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
@@ -1241,7 +1242,14 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT, ROOT);
-            res = jl_apply(&ct->start, 1);
+            // Check if we can use optimized invocation
+            if (ct->invoked != NULL) {
+                jl_value_t *invoke_args[2] = {ct->start, ct->invoked};
+                res = jl_f_invoke(NULL, invoke_args, 2);
+            }
+            else {
+                res = jl_apply(&ct->start, 1);
+            }
         }
         JL_CATCH {
             res = jl_current_exception(ct);
@@ -1550,6 +1558,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->tls = jl_nothing;
     jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     ct->start = NULL;
+    ct->invoked = NULL;
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);

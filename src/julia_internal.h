@@ -946,6 +946,7 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t) JL_CANSAFEPOINT;
     JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_f_tuple) JL_CANSAFEPOINT;
+JL_CALLABLE(jl_f_invoke) JL_CANSAFEPOINT;
 void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
 void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
