@@ -113,7 +113,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     highlight(io, src.file, byterange, note=exc.msg)
 end
 
-function eval_macro_name(ctx, ex)
+function eval_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
     # `ex1` might contain a nontrivial mix of scope layers so we can't just
     # `eval()` it, as it's already been partially lowered by this point.
     # Instead, we repeat the latter parts of `lower()` here.
@@ -127,7 +127,7 @@ function eval_macro_name(ctx, ex)
     eval(mod, expr_form)
 end
 
-function expand_macro(ctx, ex)
+function expand_macro(ctx::MacroExpansionContext, ex::SyntaxTree)
     @assert kind(ex) == K"macrocall"
 
     macname = ex[1]
@@ -148,12 +148,13 @@ function expand_macro(ctx, ex)
         # TODO: Allow invoking old-style macros for compat
         invokelatest(macfunc, macro_args...)
     catch exc
+        # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
+        # NOTE: Although currently rethrow() is necessary to allow outside catchers to access full stacktrace information
         if exc isa MacroExpansionError
             # Add context to the error.
-            # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
             rethrow(MacroExpansionError(mctx, exc.ex, exc.msg, exc.position))
         else
-            throw(MacroExpansionError(mctx, ex, "Error expanding macro", :all))
+            rethrow(MacroExpansionError(mctx, ex, "Error expanding macro", :all))
         end
     end
 
@@ -237,7 +238,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @chk numchildren(ex) == 1
         # TODO: Upstream should set a general flag for detecting parenthesized
         # expressions so we don't need to dig into `green_tree` here. Ugh!
-        plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) && 
+        plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) &&
                        kind(ex[1]) == K"Identifier" &&
                        (sr = sourceref(ex); sr isa SourceRef && kind(sr.green_tree[2]) != K"parens")
         if plain_symbol
@@ -337,4 +338,3 @@ function expand_forms_1(mod::Module, ex::SyntaxTree)
                                  ctx.current_layer)
     return ctx2, reparent(ctx2, ex2)
 end
-

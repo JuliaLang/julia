@@ -1,6 +1,8 @@
-@testset "macros" begin
+module macros
 
-test_mod = Module()
+using JuliaLowering, Test
+
+module test_mod end
 
 JuliaLowering.include_string(test_mod, """
 module M
@@ -75,7 +77,7 @@ end
 """)
 
 @test JuliaLowering.include_string(test_mod, """
-let 
+let
     x = "`x` from outer scope"
     M.@foo x
 end
@@ -89,7 +91,7 @@ end
 
 @test !isdefined(test_mod.M, :a_global)
 @test JuliaLowering.include_string(test_mod, """
-begin 
+begin
     M.@set_a_global 42
     M.a_global
 end
@@ -133,13 +135,43 @@ M.@recursive 3
 """) == (3, (2, (1, 0)))
 
 @test let
-    ex = parsestmt(SyntaxTree, "M.@outer()", filename="foo.jl")
+    ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
     expanded = JuliaLowering.macroexpand(test_mod, ex)
-    sourcetext.(flattened_provenance(expanded[2]))
+    JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2]))
 end == [
     "M.@outer()"
     "@inner"
     "2"
 ]
 
+JuliaLowering.include_string(test_mod, """
+f_throw(x) = throw(x)
+macro m_throw(x)
+    :(\$(f_throw(x)))
 end
+""")
+let (err, st) = try
+        JuliaLowering.include_string(test_mod, "_never_exist = @m_throw 42")
+    catch e
+        e, stacktrace(catch_backtrace())
+    end
+    @test err isa JuliaLowering.MacroExpansionError
+    # Check that `catch_backtrace` can capture the stacktrace of the macro functions
+    @test any(sf->sf.func===:f_throw, st)
+    @test any(sf->sf.func===Symbol("@m_throw"), st)
+end
+
+include("ccall_demo.jl")
+@test JuliaLowering.include_string(CCall, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
+let (err, st) = try
+        JuliaLowering.include_string(CCall, "@ccall strlen(\"foo\"::Cstring)")
+    catch e
+        e, stacktrace(catch_backtrace())
+    end
+    @test err isa JuliaLowering.MacroExpansionError
+    @test err.msg == "Expected a return type annotation like `::T`"
+    # Check that `catch_backtrace` can capture the stacktrace of the macro function
+    @test any(sf->sf.func===:ccall_macro_parse, st)
+end
+
+end # module macros
