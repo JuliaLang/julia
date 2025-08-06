@@ -79,21 +79,13 @@ struct MacroExpansionError
     ex::SyntaxTree
     msg::String
     position::Symbol
-    stacktrace::Vector{Base.StackTraces.StackFrame}
 end
 
 """
 `position` - the source position relative to the node - may be `:begin` or `:end` or `:all`
 """
 function MacroExpansionError(ex::SyntaxTree, msg::AbstractString; position=:all)
-    MacroExpansionError(nothing, ex, msg, position, scrub_expand_macro_stacktrace(stacktrace(backtrace())))
-end
-
-function scrub_expand_macro_stacktrace(stacktrace::Vector{Base.StackTraces.StackFrame})
-    idx = @something findfirst(stacktrace) do stackframe::Base.StackTraces.StackFrame
-        stackframe.func === :expand_macro && stackframe.file === Symbol(@__FILE__)
-    end error("`scrub_expand_macro_stacktrace` is expected to be called from `expand_macro`")
-    return stacktrace[1:idx-1]
+    MacroExpansionError(nothing, ex, msg, position)
 end
 
 function Base.showerror(io::IO, exc::MacroExpansionError)
@@ -156,12 +148,13 @@ function expand_macro(ctx::MacroExpansionContext, ex::SyntaxTree)
         # TODO: Allow invoking old-style macros for compat
         invokelatest(macfunc, macro_args...)
     catch exc
+        # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
+        # NOTE: Although currently rethrow() is necessary to allow outside catchers to access full stacktrace information
         if exc isa MacroExpansionError
             # Add context to the error.
-            # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
-            rethrow(MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.stacktrace))
+            rethrow(MacroExpansionError(mctx, exc.ex, exc.msg, exc.position))
         else
-            throw(MacroExpansionError(mctx, ex, "Error expanding macro", :all, scrub_expand_macro_stacktrace(stacktrace(catch_backtrace()))))
+            rethrow(MacroExpansionError(mctx, ex, "Error expanding macro", :all))
         end
     end
 
