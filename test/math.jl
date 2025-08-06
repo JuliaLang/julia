@@ -59,6 +59,12 @@ has_fma = Dict(
             @test Inf == @inferred ulp_error(Inf, 3.0)
         end
     end
+    @testset "faithful" begin
+        for x in (-2.0, -0.3, 0.1, 1.0)
+            @test 1 == @inferred ulp_error(x, nextfloat(x, 1))
+            @test 1 == @inferred ulp_error(x, nextfloat(x, -1))
+        end
+    end
 end
 
 @testset "clamp" begin
