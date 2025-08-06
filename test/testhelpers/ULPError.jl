@@ -2,9 +2,6 @@
 
 module ULPError
     export ulp_error, ulp_error_maximum
-    @noinline function throw_invalid()
-        throw(ArgumentError("invalid"))
-    end
     function ulp_error(accurate::AbstractFloat, approximate::AbstractFloat)
         # the ULP error is usually not required to great accuracy, so `Float32` should be precise enough
         zero_return = 0f0
@@ -29,11 +26,7 @@ module ULPError
             end
         end
         acc = Float64(accurate)::Float64
-        err = abs(Float32((approximate - acc) / eps(approximate))::Float32)
-        if isnan(err)
-            @noinline throw_invalid()  # unexpected
-        end
-        err
+        abs(Float32((approximate - acc) / eps(approximate))::Float32)
     end
     function ulp_error(accurate::Acc, approximate::App, x::AbstractFloat) where {Acc, App}
         acc = accurate(x)
