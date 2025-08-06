@@ -15,23 +15,18 @@ module ULPError
         approx_is_inf = isinf(approximate)
         approx_is_nan = isnan(approximate)
         if accur_is_nan || approx_is_nan
-            if accur_is_nan === approx_is_nan
-                return zero_return
+            return if accur_is_nan === approx_is_nan
+                zero_return
+            else
+                inf_return
             end
-            return inf_return
         end
         if accur_is_inf || iszero(accurate)
-            if accur_is_inf
-                if approx_is_inf && (signbit(accurate) == signbit(approximate))
-                    return zero_return
-                end
-                return inf_return
+            return if (approx_is_inf && (signbit(accurate) == signbit(approximate))) || iszero(approximate)
+                zero_return
+            else
+                inf_return
             end
-            # `iszero(accurate)`
-            if iszero(approximate)
-                return zero_return
-            end
-            return inf_return
         end
         if approx_is_inf
             return inf_return
