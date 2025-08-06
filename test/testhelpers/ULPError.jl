@@ -41,7 +41,7 @@ module ULPError
         ulp_error(acc, app)
     end
     function ulp_error(func::Func, x::AbstractFloat) where {Func}
-        ulp_error(func ∘ BigFloat, func, x)
+        ulp_error(func, func, x)
     end
     function ulp_error_maximum(func::Func, iterator) where {Func}
         function f(x::AbstractFloat)
