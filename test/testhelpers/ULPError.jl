@@ -7,8 +7,8 @@ module ULPError
     end
     function ulp_error(accurate::AbstractFloat, approximate::AbstractFloat)
         # the ULP error is usually not required to great accuracy, so `Float32` should be precise enough
-        zero_return = Float32(0)
-        inf_return = Float32(Inf)
+        zero_return = 0f0
+        inf_return = Inf32
         # handle floating-point edge cases
         accur_is_nan = isnan(accurate)
         approx_is_nan = isnan(approximate)
