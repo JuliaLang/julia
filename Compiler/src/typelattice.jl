@@ -740,7 +740,7 @@ function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Unio
 end
 
 @nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int) =
-    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && (n.ssadef == o.ssadef || o.ssadef == join_pc) && ⊑(lattice, n.typ, o.typ))))
+    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && (n.ssadef === o.ssadef || o.ssadef === join_pc) && ⊑(lattice, n.typ, o.typ))))
 
 # remove any lattice elements that wrap the reassigned slot object from the vartable
 function invalidate_slotwrapper(vt::VarState, changeid::Int)
