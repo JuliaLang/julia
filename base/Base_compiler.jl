@@ -348,7 +348,6 @@ using .Order
 
 include("coreir.jl")
 include("module.jl")
-include("invalidation.jl")
 
 BUILDROOT::String = ""
 DATAROOT::String = ""
@@ -377,6 +376,7 @@ process_sysimg_args!()
 function isready end
 
 include(strcat(DATAROOT, "julia/Compiler/src/Compiler.jl"))
+using .Compiler.ReinferUtils: ReinferUtils, invalidate_code_for_globalref!
 
 const _return_type = Compiler.return_type
 
