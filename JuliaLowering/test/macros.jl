@@ -156,6 +156,7 @@ let (err, st) = try
         e, stacktrace(catch_backtrace())
     end
     @test err isa JuliaLowering.MacroExpansionError
+    @test isdefined(err, :err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro functions
     @test any(sf->sf.func===:f_throw, st)
     @test any(sf->sf.func===Symbol("@m_throw"), st)
@@ -168,6 +169,7 @@ let res = try
     end
     @test res isa JuliaLowering.MacroExpansionError
     @test res.msg == "Macro not found"
+    @test isdefined(res, :err) && res.err isa UndefVarError
 end
 
 include("ccall_demo.jl")
@@ -179,6 +181,7 @@ let (err, st) = try
     end
     @test err isa JuliaLowering.MacroExpansionError
     @test err.msg == "Expected a return type annotation like `::T`"
+    @test !isdefined(err, :err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)
 end
