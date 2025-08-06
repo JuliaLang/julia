@@ -613,7 +613,7 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                     # minimize the possibility of further errors.
                     println(errio)
                     println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
-                            " while trying to handle a nested exception; giving up")
+                            " while trying to print an exception; giving up")
                 end
             end
             break
