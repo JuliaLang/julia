@@ -491,7 +491,7 @@ end
 """
     @cmd str
 
-Similar to `cmd`, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
+Similar to ``` `str` ```, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
 The [`Cmd`](@ref) object can be run as a process and can outlive the spawning julia process (see `Cmd` for more).
 
 # Examples
@@ -504,7 +504,7 @@ julia> run(cm)
 Process(`echo 1`, ProcessExited(0))
 ```
 """
-macro cmd(str)
+macro cmd(str::String)
     cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
     return :(cmd_gen($(esc(cmd_ex))))
 end

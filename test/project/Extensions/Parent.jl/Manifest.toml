@@ -1,0 +1,20 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.0-DEV"
+manifest_format = "2.0"
+project_hash = "b6ac643184d62cc94427c9aa665ff1fb63d66038"
+
+[[deps.DepWithParentExt]]
+path = "../DepWithParentExt.jl"
+uuid = "8a35c396-5ffc-40d2-b7ec-e8ed2248da32"
+version = "0.1.0"
+weakdeps = ["Parent"]
+
+    [deps.DepWithParentExt.extensions]
+    ParentExt = "Parent"
+
+[[deps.Parent]]
+deps = ["DepWithParentExt"]
+path = "."
+uuid = "58cecb9c-f68a-426e-b92a-89d456ae7acc"
+version = "0.1.0"

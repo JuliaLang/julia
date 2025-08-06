@@ -167,7 +167,7 @@ function GitShortHash(obj::GitObject)
 end
 
 """
-    raw(id::GitHash) -> Vector{UInt8}
+    raw(id::GitHash)::Vector{UInt8}
 
 Obtain the raw bytes of the [`GitHash`](@ref) as a vector of length $OID_RAWSZ.
 """
@@ -207,7 +207,7 @@ Base.cmp(id1::GitShortHash, id2::GitHash) = cmp(id1, GitShortHash(id2, OID_HEXSZ
 Base.isless(id1::AbstractGitHash, id2::AbstractGitHash)  = cmp(id1, id2) < 0
 
 """
-    iszero(id::GitHash) -> Bool
+    iszero(id::GitHash)::Bool
 
 Determine whether all hexadecimal digits of the given [`GitHash`](@ref) are zero.
 """

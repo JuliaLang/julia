@@ -68,8 +68,6 @@ const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
 #undef CRTDLL_BASENAME
 #endif
 
-#define PATHBUF 4096
-
 #ifdef _OS_WINDOWS_
 void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 {
@@ -240,28 +238,39 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 #endif
 }
 
-void *jl_find_dynamic_library_by_addr(void *symbol) {
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err) {
     void *handle;
 #ifdef _OS_WINDOWS_
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                             (LPCWSTR)symbol,
                             (HMODULE*)&handle)) {
-        jl_error("could not load base module");
+        if (throw_err)
+            jl_error("could not load base module");
+        return NULL;
     }
 #else
     Dl_info info;
     if (!dladdr(symbol, &info) || !info.dli_fname) {
-        jl_error("could not load base module");
+        if (throw_err)
+            jl_error("could not load base module");
+        return NULL;
     }
     handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-    dlclose(handle); // Undo ref count increment from `dlopen`
+#if !defined(__APPLE__)
+    if (handle == RTLD_DEFAULT && (RTLD_DEFAULT != NULL || dlerror() == NULL)) {
+        // We loaded the executable but got RTLD_DEFAULT back, ask for a real handle instead
+        handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    }
+#endif
+    if (handle != NULL)
+        dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
     return handle;
 }
 
 JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
-    char path[PATHBUF], relocated[PATHBUF];
+    ios_t path, relocated;
     int i;
 #ifdef _OS_WINDOWS_
     int err;
@@ -273,11 +282,10 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     // number of extensions to try — if modname already ends with the
     // standard extension, then we don't try adding additional extensions
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
-    int ret;
 
     // modname == NULL is a sentinel value requesting the handle of libjulia-internal
     if (modname == NULL)
-        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
+        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, throw_err);
 
     abspath = jl_isabspath(modname);
     is_atpath = 0;
@@ -298,6 +306,9 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     }
 #endif
 
+    ios_mem(&path, IOS_INLSIZE);
+    ios_mem(&relocated, IOS_INLSIZE);
+
     /*
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
       note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH),
@@ -307,50 +318,48 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
       While these exist as OS concepts on Darwin, we want to use them on other platforms
       such as Windows, so we emulate them here.
     */
-    if (!abspath && !is_atpath && jl_base_module != NULL) {
+    if (!abspath && !is_atpath && jl_base_module != NULL && jl_typeinf_world != 1) {
         jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"), 0);
-        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_atomic_load_relaxed(&b->value) : NULL);
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_get_binding_value_in_world(b, jl_typeinf_world) : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_nrows(DL_LOAD_PATH); j++) {
                 char *dl_path = jl_string_data(jl_array_ptr_data(DL_LOAD_PATH)[j]);
-                size_t len = strlen(dl_path);
-                if (len == 0)
+                if (*dl_path == 0)
                     continue;
 
+                ios_trunc(&relocated, 0);
+
                 // Is this entry supposed to be relative to the bindir?
-                if (len >= 16 && strncmp(dl_path, "@executable_path", 16) == 0) {
-                    snprintf(relocated, PATHBUF, "%s%s", jl_options.julia_bindir, dl_path + 16);
-                    len = len - 16 + strlen(jl_options.julia_bindir);
+                if (strncmp(dl_path, "@executable_path", 16) == 0) {
+                    ios_printf(&relocated, "%s%s", jl_options.julia_bindir, dl_path + 16);
                 } else {
-                    strncpy(relocated, dl_path, PATHBUF);
-                    relocated[PATHBUF-1] = '\0';
+                    ios_puts(dl_path, &relocated);
                 }
+                ios_putc(0, &relocated);
                 for (i = 0; i < n_extensions; i++) {
+                    ios_trunc(&path, 0);
                     const char *ext = extensions[i];
-                    path[0] = '\0';
-                    if (relocated[len-1] == PATHSEPSTRING[0])
-                        snprintf(path, PATHBUF, "%s%s%s", relocated, modname, ext);
-                    else {
-                        ret = snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", relocated, modname, ext);
-                        if (ret < 0)
-                            jl_errorf("path is longer than %d\n", PATHBUF);
-                    }
+                    if (relocated.buf[relocated.bpos - 2] == PATHSEPSTRING[0])
+                        ios_printf(&path, "%s%s%s", relocated.buf, modname, ext);
+                    else
+                        ios_printf(&path, "%s" PATHSEPSTRING "%s%s", relocated.buf, modname, ext);
+                    ios_putc(0, &path);
 
 #ifdef _OS_WINDOWS_
                     if (i == 0) { // LoadLibrary already tested the extensions, we just need to check the `stat` result
 #endif
-                        handle = jl_dlopen(path, flags);
+                        handle = jl_dlopen(path.buf, flags);
                         if (handle && !(flags & JL_RTLD_NOLOAD))
                             jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, jl_pathname_for_handle(handle));
                         if (handle)
-                            return handle;
+                            goto success;
 #ifdef _OS_WINDOWS_
                         err = GetLastError();
                     }
 #endif
                     // bail out and show the error if file actually exists
-                    if (jl_stat(path, (char*)&stbuf) == 0)
+                    if (jl_stat(path.buf, (char*)&stbuf) == 0)
                         goto notfound;
                 }
             }
@@ -359,20 +368,21 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 
     // now fall back and look in default library paths, for all extensions
     for (i = 0; i < n_extensions; i++) {
+        ios_trunc(&path, 0);
         const char *ext = extensions[i];
-        path[0] = '\0';
-        snprintf(path, PATHBUF, "%s%s", modname, ext);
-        handle = jl_dlopen(path, flags);
+        ios_printf(&path, "%s%s", modname, ext);
+        ios_putc(0, &path);
+        handle = jl_dlopen(path.buf, flags);
         if (handle && !(flags & JL_RTLD_NOLOAD))
             jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, jl_pathname_for_handle(handle));
         if (handle)
-            return handle;
+            goto success;
 #ifdef _OS_WINDOWS_
         err = GetLastError();
         break; // LoadLibrary already tested the rest
 #else
         // bail out and show the error if file actually exists
-        if (jl_stat(path, (char*)&stbuf) == 0)
+        if (jl_stat(path.buf, (char*)&stbuf) == 0)
             break;
 #endif
     }
@@ -385,10 +395,15 @@ notfound:
 #else
         const char *reason = dlerror();
 #endif
+        ios_close(&relocated);
+        ios_close(&path);
         jl_errorf("could not load library \"%s\"\n%s", modname, reason);
     }
     handle = NULL;
 
+success:
+    ios_close(&relocated);
+    ios_close(&path);
     return handle;
 }
 

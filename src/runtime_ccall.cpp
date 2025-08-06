@@ -4,11 +4,7 @@
 #include <map>
 #include <string>
 #include <llvm/ADT/StringMap.h>
-#if JL_LLVM_VERSION >= 170000
 #include <llvm/TargetParser/Host.h>
-#else
-#include <llvm/Support/Host.h>
-#endif
 #include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
@@ -299,7 +295,7 @@ jl_value_t *jl_get_cfunction_trampoline(
                 permanent = true;
         }
         if (permanent) {
-            result = jl_gc_permobj(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type);
+            result = jl_gc_permobj(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type, 0);
             memset(result, 0, jl_datatype_size(result_type));
         }
         else {
@@ -329,6 +325,123 @@ jl_value_t *jl_get_cfunction_trampoline(
     return result;
 }
 JL_GCC_IGNORE_STOP
+
+struct cfuncdata_t {
+    _Atomic(void *) fptr;
+    _Atomic(size_t) last_world;
+    jl_code_instance_t** plast_codeinst;
+    jl_code_instance_t* last_codeinst;
+    void *unspecialized;
+    jl_value_t *const *const declrt;
+    jl_value_t *const *const sigt;
+    size_t flags;
+};
+
+extern "C" JL_DLLEXPORT
+void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
+                                    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
+{
+    if (unspecialized)
+        return unspecialized;
+    jl_errorf("cfunction not available in this build of Julia");
+}
+
+static const inline char *name_from_method_instance(jl_method_instance_t *li) JL_NOTSAFEPOINT
+{
+    return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
+}
+
+static jl_mutex_t cfun_lock;
+// release jl_world_counter
+// store theFptr
+// release last_world_v
+//
+// acquire last_world_v
+// read theFptr
+// acquire jl_world_counter
+extern "C" JL_DLLEXPORT
+void *jl_get_abi_converter(jl_task_t *ct, void *data)
+{
+    cfuncdata_t *cfuncdata = (cfuncdata_t*)data;
+    jl_value_t *sigt = *cfuncdata->sigt;
+    JL_GC_PROMISE_ROOTED(sigt);
+    jl_value_t *declrt = *cfuncdata->declrt;
+    JL_GC_PROMISE_ROOTED(declrt);
+    bool specsig = cfuncdata->flags & 1;
+    size_t nargs = jl_nparams(sigt);
+    jl_method_instance_t *mi;
+    jl_code_instance_t *codeinst;
+    size_t world;
+    // check first, while behind this lock, of the validity of the current contents of this cfunc thunk
+    JL_LOCK(&cfun_lock);
+    do {
+        size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
+        void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
+        jl_code_instance_t *last_ci = cfuncdata->plast_codeinst ? *cfuncdata->plast_codeinst : nullptr;
+        world = jl_atomic_load_acquire(&jl_world_counter);
+        ct->world_age = world;
+        if (world == last_world_v) {
+            JL_UNLOCK(&cfun_lock);
+            return f;
+        }
+        mi = jl_get_specialization1((jl_tupletype_t*)sigt, world, 0);
+        if (f != nullptr) {
+            if (last_ci == nullptr) {
+                if (mi == nullptr) {
+                    jl_atomic_store_release(&cfuncdata->last_world, world);
+                    JL_UNLOCK(&cfun_lock);
+                    return f;
+                }
+            }
+            else {
+                if (jl_get_ci_mi(last_ci) == mi && jl_atomic_load_relaxed(&last_ci->max_world) >= world) { // same dispatch and source
+                    jl_atomic_store_release(&cfuncdata->last_world, world);
+                    JL_UNLOCK(&cfun_lock);
+                    return f;
+                }
+            }
+        }
+        JL_UNLOCK(&cfun_lock);
+        // next, try to figure out what the target should look like (outside of the lock since this is very slow)
+        codeinst = mi ? jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim) : nullptr;
+        // relock for the remainder of the function
+        JL_LOCK(&cfun_lock);
+    } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed
+    // double-check if the values were set on another thread
+    size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
+    void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
+    if (world == last_world_v) {
+        JL_UNLOCK(&cfun_lock);
+        return f; // another thread fixed this up while we were away
+    }
+    auto assign_fptr = [cfuncdata, world, codeinst](void *f) {
+        cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
+        cfuncdata->last_codeinst = codeinst;
+        jl_atomic_store_relaxed(&cfuncdata->fptr, f);
+        jl_atomic_store_release(&cfuncdata->last_world, world);
+        JL_UNLOCK(&cfun_lock);
+        return f;
+    };
+    bool is_opaque_closure = false;
+    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
+    if (codeinst == nullptr) {
+        // Generate an adapter to a dynamic dispatch
+        if (cfuncdata->unspecialized == nullptr)
+            cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, nullptr);
+
+        return assign_fptr(cfuncdata->unspecialized);
+    }
+
+    jl_value_t *astrt = codeinst->rettype;
+    if (astrt != (jl_value_t*)jl_bottom_type &&
+        jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+        // Do not warn if the function never returns since it is
+        // occasionally required by the C API (typically error callbacks)
+        // even though we're likely to encounter memory errors in that case
+        jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
+    }
+    return assign_fptr(jl_jit_abi_converter(ct, from_abi, codeinst));
+}
 
 void jl_init_runtime_ccall(void)
 {

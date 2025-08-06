@@ -158,7 +158,7 @@ value_t fl_cons(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
 value_t fl_list2(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
 value_t fl_listn(fl_context_t *fl_ctx, size_t n, ...) JL_NOTSAFEPOINT;
 value_t symbol(fl_context_t *fl_ctx, const char *str) JL_NOTSAFEPOINT;
-char *symbol_name(fl_context_t *fl_ctx, value_t v);
+char *symbol_name(fl_context_t *fl_ctx, value_t v) JL_NOTSAFEPOINT;
 int fl_is_keyword_name(const char *str, size_t len);
 value_t alloc_vector(fl_context_t *fl_ctx, size_t n, int init);
 size_t llength(value_t v);

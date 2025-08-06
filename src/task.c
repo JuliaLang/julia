@@ -37,6 +37,10 @@
 #include "threading.h"
 #include "julia_assert.h"
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -313,6 +317,13 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
+    if (ct->metrics_enabled) {
+        // [task] user_time -finished-> wait_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->finished_at, now);
+        jl_atomic_fetch_add_relaxed(&ct->running_time_ns, now - jl_atomic_load_relaxed(&ct->last_started_running_at));
+    }
     if (jl_atomic_load_relaxed(&ct->_isexception))
         jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
     else
@@ -328,7 +339,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     // let the runtime know this task is dead and find a new task to run
     jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
@@ -343,34 +354,6 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     }
     jl_gc_debug_critical_error();
     abort();
-}
-
-JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid)
-{
-    size_t off = 0;
-#ifndef _OS_WINDOWS_
-    jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (ptls0->root_task == task) {
-        // See jl_init_root_task(). The root task of the main thread
-        // has its buffer enlarged by an artificial 3000000 bytes, but
-        // that means that the start of the buffer usually points to
-        // inaccessible memory. We need to correct for this.
-        off = ROOT_TASK_STACK_ADJUSTMENT;
-    }
-#endif
-    jl_ptls_t ptls2 = task->ptls;
-    *ptid = -1;
-    if (ptls2) {
-        *ptid = jl_atomic_load_relaxed(&task->tid);
-#ifdef COPY_STACKS
-        if (task->ctx.copy_stack) {
-            *size = ptls2->stacksize;
-            return (char *)ptls2->stackbase - *size;
-        }
-#endif
-    }
-    *size = task->ctx.bufsz - off;
-    return (void *)((char *)task->ctx.stkbuf + off);
 }
 
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
@@ -771,48 +754,31 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack() /* Nothing */
 #endif
 
-#define throw_internal_body(altstack)                                          \
-    assert(!jl_get_safe_restore());                                            \
-    jl_ptls_t ptls = ct->ptls;                                                 \
-    ptls->io_wait = 0;                                                         \
-    jl_gc_unsafe_enter(ptls);                                                  \
-    if (exception) {                                                           \
-        /* The temporary ptls->bt_data is rooted by special purpose code in the\
-           GC. This exists only for the purpose of preserving bt_data until we \
-           set ptls->bt_size=0 below. */                                       \
-        jl_push_excstack(ct, &ct->excstack, exception,                         \
-                         ptls->bt_data, ptls->bt_size);                        \
-        ptls->bt_size = 0;                                                     \
-    }                                                                          \
-    assert(ct->excstack && ct->excstack->top);                                 \
-    jl_handler_t *eh = ct->eh;                                                 \
-    if (eh != NULL) {                                                          \
-        if (altstack) ptls->sig_exception = NULL;                              \
-        pop_timings_stack()                                                    \
-        asan_unpoison_task_stack(ct, &eh->eh_ctx);                             \
-        jl_longjmp(eh->eh_ctx, 1);                                             \
-    }                                                                          \
-    else {                                                                     \
-        jl_no_exc_handler(exception, ct);                                      \
-    }                                                                          \
-    assert(0);
-
 static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
 {
-CFI_NORETURN
     JL_GC_PUSH1(&exception);
-    throw_internal_body(0);
-    jl_unreachable();
-}
-
-/* On the signal stack, we don't want to create any asan frames, but we do on the
-   normal, stack, so we split this function in two, depending on which context
-   we're calling it in. This also lets us avoid making a GC frame on the altstack,
-   which might end up getting corrupted if we recur here through another signal. */
-JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception)
-{
-CFI_NORETURN
-    throw_internal_body(1);
+    jl_ptls_t ptls = ct->ptls;
+    ptls->io_wait = 0;
+    jl_gc_unsafe_enter(ptls);
+    if (exception) {
+        /* The temporary ptls->bt_data is rooted by special purpose code in the\
+           GC. This exists only for the purpose of preserving bt_data until we
+           set ptls->bt_size=0 below. */
+        jl_push_excstack(ct, &ct->excstack, exception,
+                         ptls->bt_data, ptls->bt_size);
+        ptls->bt_size = 0;
+    }
+    assert(ct->excstack && ct->excstack->top);
+    jl_handler_t *eh = ct->eh;
+    if (eh != NULL) {
+        pop_timings_stack()
+        asan_unpoison_task_stack(ct, &eh->eh_ctx);
+        jl_longjmp(eh->eh_ctx, 1);
+    }
+    else {
+        jl_no_exc_handler(exception, ct);
+    }
+    assert(0);
     jl_unreachable();
 }
 
@@ -840,24 +806,6 @@ JL_DLLEXPORT void jl_rethrow(void)
     if (!excstack || excstack->top == 0)
         jl_error("rethrow() not allowed outside a catch block");
     throw_internal(ct, NULL);
-}
-
-// Special case throw for errors detected inside signal handlers.  This is not
-// (cannot be) called directly in the signal handler itself, but is returned to
-// after the signal handler exits.
-JL_DLLEXPORT JL_NO_ASAN void JL_NORETURN jl_sig_throw(void)
-{
-CFI_NORETURN
-    jl_jmp_buf *safe_restore = jl_get_safe_restore();
-    jl_task_t *ct = jl_current_task;
-    if (safe_restore) {
-        asan_unpoison_task_stack(ct, safe_restore);
-        jl_longjmp(*safe_restore, 1);
-    }
-    jl_ptls_t ptls = ct->ptls;
-    jl_value_t *e = ptls->sig_exception;
-    JL_GC_PROMISE_ROOTED(e);
-    throw_internal_altstack(ct, e);
 }
 
 JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
@@ -1049,7 +997,7 @@ the xoshiro256 state. There are two problems with that fix, however:
    need four variations of the internal RNG stream for the four xoshiro256
    registers. That means we'd have to apply the PCG finalizer, add it to
    our dot product accumulator field in the child task, then apply the
-   MurmurHash3 finalizer to that dot product and use the result to purturb
+   MurmurHash3 finalizer to that dot product and use the result to perturb
    the main RNG state.
 
 We avoid both problems by recognizing that the mixing function can be much less
@@ -1178,6 +1126,11 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    t->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    jl_atomic_store_relaxed(&t->first_enqueued_at, 0);
+    jl_atomic_store_relaxed(&t->last_started_running_at, 0);
+    jl_atomic_store_relaxed(&t->running_time_ns, 0);
+    jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
 
     if (t->ctx.copy_stack)
@@ -1276,6 +1229,12 @@ CFI_NORETURN
 #endif
 
     ct->ctx.started = 1;
+    if (ct->metrics_enabled) {
+        // [task] wait_time -started-> user_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        assert(jl_atomic_load_relaxed(&ct->last_started_running_at) == 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, jl_hrtime());
+    }
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1526,6 +1485,14 @@ CFI_NORETURN
                     // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_RISCV64_)
+    asm volatile(
+        " mv sp, %0;\n"
+        " mv ra, zero;\n" // Clear return address register
+        " mv fp, zero;\n" // Clear frame pointer
+        " jr %1;\n" // call `fn` with fake stack frame
+        " ebreak" // abort
+        : : "r"(stk), "r"(fn) : "memory" );
 #elif defined(_CPU_PPC64_)
     // N.B.: There is two iterations of the PPC64 ABI.
     // v2 is current and used here. Make sure you have the
@@ -1572,7 +1539,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_set_pgcstack(&bootstrap_task.value.gcstack);
     bootstrap_task.value.ptls = ptls;
     if (jl_nothing == NULL) // make a placeholder
-        jl_nothing = jl_gc_permobj(0, jl_nothing_type);
+        jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));
@@ -1619,6 +1586,19 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
+    jl_atomic_store_relaxed(&ct->running_time_ns, 0);
+    jl_atomic_store_relaxed(&ct->finished_at, 0);
+    ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    if (ct->metrics_enabled) {
+        // [task] created -started-> user_time
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, now);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, now);
+    }
+    else {
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
+    }
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);

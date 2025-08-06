@@ -16,12 +16,6 @@
 extern "C" {
 #endif
 
-#if defined(_P64) && defined(UINT128MAX)
-typedef __uint128_t wideint_t;
-#else
-typedef uint64_t wideint_t;
-#endif
-
 #define MAXINTVAL (((size_t)-1)>>1)
 
 JL_DLLEXPORT int jl_array_validate_dims(size_t *nel, uint32_t ndims, size_t *dims)
@@ -30,10 +24,9 @@ JL_DLLEXPORT int jl_array_validate_dims(size_t *nel, uint32_t ndims, size_t *dim
     size_t _nel = 1;
     for (i = 0; i < ndims; i++) {
         size_t di = dims[i];
-        wideint_t prod = (wideint_t)_nel * (wideint_t)di;
-        if (prod >= (wideint_t) MAXINTVAL || di >= MAXINTVAL)
+        int overflow = __builtin_mul_overflow(_nel, di, &_nel);
+        if (overflow || di >= MAXINTVAL)
             return 1;
-        _nel = prod;
     }
     *nel = _nel;
     return 0;
@@ -204,7 +197,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     int isbitsunion = jl_genericmemory_isbitsunion(a->ref.mem);
     size_t newnrows = n + inc;
     if (!isbitsunion && elsz == 0) {
-        jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, MAXINTVAL - 1);
+        jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, MAXINTVAL - 2);
         a->ref.mem = newmem;
         jl_gc_wb(a, newmem);
         a->dimsize[0] = newnrows;

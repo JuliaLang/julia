@@ -275,7 +275,7 @@ Partially implemented by:
 
   * [`Array`](@ref)
 
-## Dequeues
+## Deques
 
 ```@docs
 Base.push!

@@ -95,7 +95,7 @@ end
     p = ["XXX","YYY"]
     a = Base.cconvert(Ptr{LibGit2.StrArrayStruct}, p)
     b = Base.unsafe_convert(Ptr{LibGit2.StrArrayStruct}, a)
-    @test p == convert(Vector{String}, unsafe_load(b))
+    @test p == collect(unsafe_load(b))
     @noinline gcuse(a) = a
     gcuse(a)
 end
@@ -1070,7 +1070,7 @@ mktempdir() do dir
 
                 # test workaround for git_tree_walk issue
                 # https://github.com/libgit2/libgit2/issues/4693
-                ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring),
+                ccall((:git_error_set_str, libgit2), Cvoid, (Cint, Cstring),
                       Cint(LibGit2.Error.Invalid), "previous error")
                 try
                     # file needs to exist in tree in order to trigger the stop walk condition
@@ -1152,6 +1152,7 @@ mktempdir() do dir
 
     function setup_clone_repo(cache_repo::AbstractString, path::AbstractString; name="AAAA", email="BBBB@BBBB.COM")
         repo = LibGit2.clone(cache_repo, path)
+        LibGit2.fetch(repo)
         # need to set this for merges to succeed
         cfg = LibGit2.GitConfig(repo)
         LibGit2.set!(cfg, "user.name", name)

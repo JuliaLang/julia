@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> String
+    pwd()::String
 
 Get the current working directory.
 
@@ -128,7 +128,7 @@ julia> pwd()
 "/home/JuliaUser"
 
 julia> cd(readdir, "/home/JuliaUser/Projects/julia")
-34-element Array{String,1}:
+34-element Vector{String}:
  ".circleci"
  ".freebsdci.sh"
  ".git"
@@ -164,7 +164,7 @@ required intermediate directories.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest; setup = :(curdir = pwd(); testdir = mktempdir(); cd(testdir)), teardown = :(cd(curdir); rm(testdir, recursive=true)), filter = r"^\\".*testingdir\\"\$"
 julia> mkdir("testingdir")
 "testingdir"
 
@@ -211,17 +211,17 @@ julia> mkpath("my/test/dir") # creates three directories
 "my/test/dir"
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "my"
 
 julia> cd("my")
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "test"
 
 julia> readdir("test")
-1-element Array{String,1}:
+1-element Vector{String}:
  "dir"
 
 julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directories
@@ -385,7 +385,7 @@ of the file or directory `src` refers to.
 Return `dst`.
 
 !!! note
-    The `cp` function is different from the `cp` command. The `cp` function always operates on
+    The `cp` function is different from the `cp` Unix command. The `cp` function always operates on
     the assumption that `dst` is a file, while the command does different things depending
     on whether `dst` is a directory or a file.
     Using `force=true` when `dst` is a directory will result in loss of all the contents present
@@ -438,6 +438,16 @@ julia> mv("hello.txt", "goodbye.txt", force=true)
 julia> rm("goodbye.txt");
 
 ```
+
+!!! note
+    The `mv` function is different from the `mv` Unix command. The `mv` function by
+    default will error if `dst` exists, while the command will delete
+    an existing `dst` file by default.
+    Also the `mv` function always operates on
+    the assumption that `dst` is a file, while the command does different things depending
+    on whether `dst` is a directory or a file.
+    Using `force=true` when `dst` is a directory will result in loss of all the contents present
+    in the `dst` directory, and `dst` will become a file that has the contents of `src` instead.
 """
 function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
     if force
@@ -506,7 +516,7 @@ If the file does not exist a new file is created.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest; setup = :(curdir = pwd(); testdir = mktempdir(); cd(testdir)), teardown = :(cd(curdir); rm(testdir, recursive=true)), filter = r"[\\d\\.]+e[\\+\\-]?\\d+"
 julia> write("my_little_file", 2);
 
 julia> mtime("my_little_file")
@@ -748,7 +758,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir(); cleanup=true, suffix="") -> String
+    tempname(parent=tempdir(); cleanup=true, suffix="")::String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
@@ -911,7 +921,7 @@ end
     readdir(dir::AbstractString=pwd();
         join::Bool = false,
         sort::Bool = true,
-    ) -> Vector{String}
+    )::Vector{String}
 
 Return the names in the directory `dir` or the current working directory if not
 given. When `join` is false, `readdir` returns just the names in the directory
@@ -933,7 +943,7 @@ See also: [`walkdir`](@ref).
 julia> cd("/home/JuliaUser/dev/julia")
 
 julia> readdir()
-30-element Array{String,1}:
+30-element Vector{String}:
  ".appveyor.yml"
  ".git"
  ".gitattributes"
@@ -943,7 +953,7 @@ julia> readdir()
  "usr-staging"
 
 julia> readdir(join=true)
-30-element Array{String,1}:
+30-element Vector{String}:
  "/home/JuliaUser/dev/julia/.appveyor.yml"
  "/home/JuliaUser/dev/julia/.git"
  "/home/JuliaUser/dev/julia/.gitattributes"
@@ -953,7 +963,7 @@ julia> readdir(join=true)
  "/home/JuliaUser/dev/julia/usr-staging"
 
 julia> readdir("base")
-145-element Array{String,1}:
+145-element Vector{String}:
  ".gitignore"
  "Base.jl"
  "Enums.jl"
@@ -963,7 +973,7 @@ julia> readdir("base")
  "weakkeydict.jl"
 
 julia> readdir("base", join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "base/.gitignore"
  "base/Base.jl"
  "base/Enums.jl"
@@ -973,7 +983,7 @@ julia> readdir("base", join=true)
  "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "/home/JuliaUser/dev/julia/base/.gitignore"
  "/home/JuliaUser/dev/julia/base/Base.jl"
  "/home/JuliaUser/dev/julia/base/Enums.jl"
@@ -1033,7 +1043,7 @@ isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.pat
 realpath(obj::DirEntry) = realpath(obj.path)
 
 """
-    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    _readdirx(dir::AbstractString=pwd(); sort::Bool = true)::Vector{DirEntry}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
@@ -1090,7 +1100,7 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
 end
 
 """
-    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+    walkdir(dir = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
 
 Return an iterator that walks the directory tree of a directory.
 
@@ -1107,6 +1117,9 @@ resume where the last left off, like [`Iterators.Stateful`](@ref).
 
 See also: [`readdir`](@ref).
 
+!!! compat "Julia 1.12"
+    `pwd()` as the default directory was added in Julia 1.12.
+
 # Examples
 ```julia
 for (path, dirs, files) in walkdir(".")
@@ -1121,7 +1134,7 @@ for (path, dirs, files) in walkdir(".")
 end
 ```
 
-```julia-repl
+```jldoctest; setup = :(prevdir = pwd(); tmpdir = mktempdir(); cd(tmpdir)), teardown = :(cd(prevdir); rm(tmpdir, recursive=true))
 julia> mkpath("my/test/dir");
 
 julia> itr = walkdir("my");
@@ -1136,7 +1149,7 @@ julia> (path, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(path; topdown=true, follow_symlinks=false, onerror=throw)
+function walkdir(path = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
     function _walkdir(chnl, path)
         tryf(f, p) = try
                 f(p)
@@ -1183,16 +1196,30 @@ function unlink(p::AbstractString)
 end
 
 """
-    rename(oldpath::AbstractString, newpath::AbstractString)
+    Base.rename(oldpath::AbstractString, newpath::AbstractString)
 
-Change the name of a file from `oldpath` to `newpath`. If `newpath` is an existing file it may be replaced.
-Equivalent to [rename(2)](https://man7.org/linux/man-pages/man2/rename.2.html).
-Throws an `IOError` on failure.
+Change the name of a file or directory from `oldpath` to `newpath`.
+If `newpath` is an existing file or empty directory it may be replaced.
+Equivalent to [rename(2)](https://man7.org/linux/man-pages/man2/rename.2.html) on Unix.
+If a path contains a "\\0" throw an `ArgumentError`.
+On other failures throw an `IOError`.
 Return `newpath`.
+
+This is a lower level filesystem operation used to implement [`mv`](@ref).
 
 OS-specific restrictions may apply when `oldpath` and `newpath` are in different directories.
 
+Currently there are a few differences in behavior on Windows which may be resolved in a future release.
+Specifically, currently on Windows:
+1. `rename` will fail if `oldpath` or `newpath` are opened files.
+2. `rename` will fail if `newpath` is an existing directory.
+3. `rename` may work if `newpath` is a file and `oldpath` is a directory.
+4. `rename` may remove `oldpath` if it is a hardlink to `newpath`.
+
 See also: [`mv`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was made public in Julia 1.12.
 """
 function rename(oldpath::AbstractString, newpath::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath)
@@ -1327,7 +1354,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> String
+    readlink(path::AbstractString)::String
 
 Return the target location a symbolic link `path` points to.
 """

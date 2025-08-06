@@ -14,7 +14,7 @@ function GitIndex(repo::GitRepo)
 end
 
 """
-    read!(idx::GitIndex, force::Bool = false) -> GitIndex
+    read!(idx::GitIndex, force::Bool = false)::GitIndex
 
 Update the contents of `idx` by reading changes made on disk. For example, `idx`
 might be updated if a file has been added to the repository since it was created.
@@ -30,7 +30,7 @@ function read!(idx::GitIndex, force::Bool = false)
 end
 
 """
-    write!(idx::GitIndex) -> GitIndex
+    write!(idx::GitIndex)::GitIndex
 
 Write the state of index `idx` to disk using a file lock.
 """
@@ -41,7 +41,7 @@ function write!(idx::GitIndex)
 end
 
 """
-    write_tree!(idx::GitIndex) -> GitHash
+    write_tree!(idx::GitIndex)::GitHash
 
 Write the index `idx` as a [`GitTree`](@ref) on disk. Trees will be recursively
 created for each subtree in `idx`. The returned [`GitHash`](@ref) can be used to
@@ -198,7 +198,7 @@ function Base.findall(path::String, idx::GitIndex)
 end
 
 """
-    stage(ie::IndexEntry) -> Cint
+    stage(ie::IndexEntry)::Cint
 
 Get the stage number of `ie`. The stage number `0` represents the current state
 of the working tree, but other numbers can be used in the case of a merge conflict.

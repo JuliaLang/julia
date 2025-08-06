@@ -163,22 +163,14 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            #if JL_LLVM_VERSION >= 170000
             Type *NewRetTy = PointerType::get(InstV->getType(), allocaAddressSpace);
-            #else
-            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), allocaAddressSpace);
-            #endif
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        #if JL_LLVM_VERSION >= 170000
         PointerType *TargetType = PointerType::get(CurrentV->getType(), allocaAddressSpace);
-        #else
-        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), allocaAddressSpace);
-        #endif
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -192,17 +184,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
         }
         if (LiftingMap.count(CurrentV))
             CurrentV = LiftingMap[CurrentV];
-        #if JL_LLVM_VERSION >= 170000
         assert(CurrentV->getType() == TargetType);
-        #else
-        if (CurrentV->getType() != TargetType) {
-            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-            assert(CurrentV->getContext().supportsTypedPointers());
-            auto *BCI = new BitCastInst(CurrentV, TargetType);
-            ToInsert.push_back(std::make_pair(BCI, InsertPt));
-            CurrentV = BCI;
-        }
-        #endif
         return CurrentV;
     };
 
@@ -262,7 +244,11 @@ void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
     Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest());
     if (!Replacement)
         return;
+#if JL_LLVM_VERSION >= 200000
+    Function *TheFn = Intrinsic::getOrInsertDeclaration(MI.getModule(), Intrinsic::memset,
+#else
     Function *TheFn = Intrinsic::getDeclaration(MI.getModule(), Intrinsic::memset,
+#endif
         {Replacement->getType(), MI.getOperand(1)->getType()});
     MI.setCalledFunction(TheFn);
     MI.setArgOperand(0, Replacement);
@@ -287,7 +273,11 @@ void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI)
     }
     if (Dest == MTI.getRawDest() && Src == MTI.getRawSource())
         return;
+#if JL_LLVM_VERSION >= 200000
+    Function *TheFn = Intrinsic::getOrInsertDeclaration(MTI.getModule(), MTI.getIntrinsicID(),
+#else
     Function *TheFn = Intrinsic::getDeclaration(MTI.getModule(), MTI.getIntrinsicID(),
+#endif
         {Dest->getType(), Src->getType(),
          MTI.getOperand(2)->getType()});
     MTI.setCalledFunction(TheFn);
@@ -299,7 +289,11 @@ bool propagateJuliaAddrspaces(Function &F) {
     PropagateJuliaAddrspacesVisitor visitor;
     visitor.visit(F);
     for (auto it : visitor.ToInsert)
+#if JL_LLVM_VERSION >= 200000
+        it.first->insertBefore(it.second->getIterator());
+#else
         it.first->insertBefore(it.second);
+#endif
     for (Instruction *I : visitor.ToDelete)
         I->eraseFromParent();
     visitor.ToInsert.clear();

@@ -10,17 +10,24 @@ tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
 fcviews(a::AbstractArray) = view(a, ntuple(Returns(:),ndims(a)-1)..., axes(a)[end])
 fcviews(a::AbstractArray{<:Any, 0}) = view(a)
+offset_nominal(a::AbstractArray) = OffsetArray(a)
+offset_maybe(a::AbstractArray) = (eltype(a) <: Real) ? a : OffsetArray(a, (1-ndims(A)):2:(ndims(A)-1)...)
 tslow(t::Tuple) = map(tslow, t)
 wrapper(t::Tuple) = map(wrapper, t)
 fcviews(t::Tuple) = map(fcviews, t)
+offset_nominal(t::Tuple) = map(offset_nominal, t)
+offset_maybe(t::Tuple) = map(offset_maybe, t)
 
 test_many_wrappers(testf, A, wrappers) = foreach(w -> testf(w(A)), wrappers)
-test_many_wrappers(testf, A) = test_many_wrappers(testf, A, (identity, tslow, wrapper, fcviews))
+test_many_wrappers(testf, A) = test_many_wrappers(
+    testf, A, (identity, tslow, wrapper, fcviews, offset_nominal, offset_maybe)
+)
 
 A = Int64[1, 2, 3, 4]
 Ars = Int64[1 3; 2 4]
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
 Av = [Int32[1,2], Int32[3,4]]
+C = view([1,1], [1,2])
 
 test_many_wrappers(Ars, (identity, tslow)) do Ar
     @test @inferred(ndims(reinterpret(reshape, Complex{Int64}, Ar))) == 1
@@ -62,6 +69,44 @@ end
 test_many_wrappers(B) do _B
     @test reinterpret(NTuple{3, Int64}, _B) == [(5,6,7),(8,9,10)]
     @test reinterpret(reshape, Int64, _B) == [5 7 9; 6 8 10]
+end
+
+@testset "setindex! converts before reinterpreting" begin
+    for dims in ((), 1)
+        z = reinterpret(UInt64, fill(1.0, dims))
+        @test z[] == z[1] == 0x3ff0000000000000
+        z[] = Int32(1)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000001
+        z[1] = Int32(2)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000002
+        z[1] = 3//1
+        @test z[] == z[1] == 0x0000000000000003
+        @test_throws InexactError z[] = 3//2
+        @test_throws InexactError z[] = 1.5
+        @test_throws InexactError z[1] = 3//2
+        @test_throws InexactError z[1] = 1.5
+
+        z = reinterpret(UInt64, fill(Int32(16)//Int32(1), dims))
+        @test z[] == z[1] == 0x0000000100000010
+        z[] = Int32(1)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000001
+        z[1] = Int32(2)//Int32(1)
+        @test z[] == z[1] == 0x0000000000000002
+        z[1] = 3//1
+        @test z[] == z[1] == 0x0000000000000003
+        @test_throws InexactError z[] = 3//2
+        @test_throws InexactError z[] = 1.5
+        @test_throws InexactError z[1] = 3//2
+        @test_throws InexactError z[1] = 1.5
+
+        z = reinterpret(Missing, fill(nothing, dims))
+        @test z[] === missing
+        @test z[1] === missing
+        @test_throws "cannot convert" z[] = nothing
+        @test_throws "cannot convert" z[1] = nothing
+        @test z[] === missing
+        @test z[1] === missing
+    end
 end
 
 # setindex
@@ -115,6 +160,18 @@ test_many_wrappers(A3) do A3_
     A3r[CartesianIndex(1,2)] = 300+400im
     @test A3[1,1,2] == 300
     @test A3[2,1,2] == 400
+end
+
+test_many_wrappers(C) do Cr_
+    Cr = deepcopy(Cr_)
+    r = reinterpret(reshape, Tuple{Int, Int}, Cr)
+    @test r == fill((1,1))
+    r[] = (2,2)
+    @test r[] === (2,2)
+    r[1] = (3,3)
+    @test r[1] === (3,3)
+    r[1,1] = (4,4)
+    @test r[1,1] === (4,4)
 end
 
 # same-size reinterpret where one of the types is non-primitive
@@ -272,7 +329,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 2)
     @test all(a .=== reinterpret(Float64, [Int64(2)])[1])
     @test all(r .=== Int64(2))
-    for badinds in (0, 16, (0,1), (1,0), (6,3), (5,4))
+    for badinds in ((), 0, 16, (0,1), (1,0), (6,3), (5,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -2
     end
@@ -285,7 +342,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 3)
     @test all(a .=== reinterpret(Float64, [(Int32(3), Int32(3))])[1])
     @test all(r .=== Int32(3))
-    for badinds in (0, 31, (0,1), (1,0), (11,3), (10,4))
+    for badinds in ((), 0, 31, (0,1), (1,0), (11,3), (10,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -3
     end
@@ -298,7 +355,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 4)
     @test all(a[1:2:5,:] .=== reinterpret(Float64, [Int64(4)])[1])
     @test all(r .=== Int64(4))
-    for badinds in (0, 10, (0,1), (1,0), (4,3), (3,4))
+    for badinds in ((), 0, 10, (0,1), (1,0), (4,3), (3,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -4
     end
@@ -311,7 +368,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 5)
     @test all(a[1:2:5,:] .=== reinterpret(Float64, [(Int32(5), Int32(5))])[1])
     @test all(r .=== Int32(5))
-    for badinds in (0, 19, (0,1), (1,0), (7,3), (6,4))
+    for badinds in ((), 0, 19, (0,1), (1,0), (7,3), (6,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -5
     end
@@ -320,6 +377,25 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
         @test r[goodinds...] == -5
     end
 end
+
+let a = rand(ComplexF32, 5)
+    r = reinterpret(reshape, Float32, a)
+    ref = Array(r)
+
+    @test all(r .== OffsetArray(r)[:, :, :])
+
+    @test r[1, :, 1]        == ref[1, :]
+    @test r[1, :, 1, 1, 1]  == ref[1, :]
+    @test r[1, :, UInt8(1)] == ref[1, :]
+
+    r[2, :, 1] .= 0f0
+    ref[2,  :] .= 0f0
+    @test r[2, :, 1] == ref[2, :]
+
+    @test r[4] == ref[4]
+    @test_throws BoundsError r[1, :, 2]
+end
+
 let ar = [(1,2), (3,4)]
     arr = reinterpret(reshape, Int, ar)
     @test @inferred(IndexStyle(arr)) == Base.IndexSCartesian2{2}()
@@ -606,4 +682,10 @@ let R = reinterpret(reshape, Float32, ComplexF32[1.0f0+2.0f0*im, 4.0f0+3.0f0*im]
     @test !isassigned(R, 1, 1, 2)
     @test !isassigned(R, 5)
     @test Array(R)::Matrix{Float32} == [1.0f0 4.0f0; 2.0f0 3.0f0]
+end
+
+@testset "issue #54623" begin
+    x = 0xabcdef01234567
+    @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
+    @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
 end

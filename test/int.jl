@@ -118,6 +118,10 @@ end
     @test big"1.0" == BigFloat(1.0)
     @test_throws ArgumentError big"1.0.3"
     @test_throws ArgumentError big"pi"
+
+    @test_throws ArgumentError big"_æ1"
+    @test_throws ArgumentError big"æ_1"
+    @test_throws ArgumentError big"_ææ"
 end
 
 @test round(UInt8, 123) == 123
@@ -354,6 +358,23 @@ end
                 else
                     # otherwise Unsigned wins
                     @test c isa (T <: Unsigned ? T : S)
+                end
+            end
+        end
+    end
+    # exhaustive UInt8/Int8 tests for mixed signedness
+    for f in (mod, rem)
+        for i in -128:127
+            for j in 0:255
+                if iszero(i)
+                    @test_throws DivideError f(UInt8(j), Int8(i))
+                else
+                    @test f(UInt8(j), Int8(i)) == f(j, i)
+                end
+                if iszero(j)
+                    @test_throws DivideError f(Int8(i), UInt8(j))
+                else
+                    @test f(Int8(i), UInt8(j)) == f(i,j)
                 end
             end
         end

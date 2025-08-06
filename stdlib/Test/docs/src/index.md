@@ -24,7 +24,7 @@ The `Test` module provides simple *unit testing* functionality. Unit testing is 
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete. You may also want to look at the
-documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#adding-tests-to-packages).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -59,7 +59,6 @@ julia> @test foo("f") == 20
 Test Failed at none:1
   Expression: foo("f") == 20
    Evaluated: 1 == 20
-
 ERROR: There was an error during testing
 ```
 
@@ -230,8 +229,6 @@ Test Passed
 julia> @test 1 ≈ 0.999999
 Test Failed at none:1
   Expression: 1 ≈ 0.999999
-   Evaluated: 1 ≈ 0.999999
-
 ERROR: There was an error during testing
 ```
 You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
@@ -479,13 +476,13 @@ Using our knowledge of `Test.jl`, here are some example tests we could add to `m
 @testset "Testset 1" begin
     @test 2 == simple_add(1, 1)
     @test 3.5 == simple_add(1, 2.5)
-        @test_throws MethodError simple_add(1, "A")
-        @test_throws MethodError simple_add(1, 2, 3)
+    @test_throws MethodError simple_add(1, "A")
+    @test_throws MethodError simple_add(1, 2, 3)
 end
 
 @testset "Testset 2" begin
     @test 1.0 == type_multiply(1.0, 1.0)
-        @test isa(type_multiply(2.0, 2.0), Float64)
+    @test isa(type_multiply(2.0, 2.0), Float64)
     @test_throws MethodError type_multiply(1, 2.5)
 end
 ```

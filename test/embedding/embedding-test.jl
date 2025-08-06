@@ -32,5 +32,5 @@ end
     @test lines[9] == "called bar"
     @test lines[10] == "calling new bar"
     @test lines[11] == "      From worker 2:\tTaking over the world..."
-    @test readline(err) == "exception caught from C"
+    @test "exception caught from C" in readlines(err)
 end

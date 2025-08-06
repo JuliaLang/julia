@@ -23,6 +23,15 @@ The `Core.Intrinsics` module holds the `Core.IntrinsicFunction` objects.
 Core.Intrinsics
 
 """
+    Core.memorynew(::Type{T} where T <: GenericMemory, n::Int)
+
+Construct an uninitialized [`GenericMemory`](@ref) of length `n`.
+
+See also [`Memory`](@ref Core.Memory), [`Memory{T}(undef, n)`](@ref Core.Memory(::UndefInitializer, ::Int)).
+"""
+Core.memorynew
+
+"""
     Core.memoryrefnew(::GenericMemory)
     Core.memoryrefnew(::GenericMemoryRef, index::Int, [boundscheck::Bool])
 
@@ -90,7 +99,7 @@ See also [`swapproperty!`](@ref Base.swapproperty!) and [`Core.memoryrefset!`](@
 Core.memoryrefswap!
 
 """
-    Core.memoryrefmodify!(::GenericMemoryRef, op, value, ordering::Symbol, boundscheck::Bool) -> Pair
+    Core.memoryrefmodify!(::GenericMemoryRef, op, value, ordering::Symbol, boundscheck::Bool)::Pair
 
 Atomically perform the operations to get and set a `MemoryRef` value after applying
 the function `op`.
@@ -128,6 +137,35 @@ a given value, only if it was previously not set.
 See also [`setpropertyonce!`](@ref Base.replaceproperty!) and [`Core.memoryrefset!`](@ref).
 """
 Core.memoryrefsetonce!
+
+
+"""
+    Core.Intrinsics.pointerref(p::Ptr{T}, i::Int, align::Int)
+
+Load a value of type `T` from the address of the `i`th element (1-indexed)
+starting at `p`. This is equivalent to the C expression `p[i-1]`.
+
+The alignment must be a power of two, or 0, indicating the default alignment
+for `T`. If `p[i-1]` is out of bounds, invalid, or is not aligned, the behavior
+is undefined. An alignment of 1 is always safe.
+
+See also [`unsafe_load`](@ref).
+"""
+Core.Intrinsics.pointerref
+
+"""
+    Core.Intrinsics.pointerset(p::Ptr{T}, x::T, i::Int, align::Int)
+
+Store a value of type `T` to the address of the `i`th element (1-indexed)
+starting at `p`.  This is equivalent to the C expression `p[i-1] = x`.
+
+The alignment must be a power of two, or `0`, indicating the default alignment
+for `T`. If `p[i-1]` is out of bounds, invalid, or is not aligned, the behavior
+is undefined. An alignment of 1 is always safe.
+
+See also [`unsafe_store!`](@ref).
+"""
+Core.Intrinsics.pointerset
 
 """
     Core.Intrinsics.atomic_pointerref(pointer::Ptr{T}, order::Symbol) --> T

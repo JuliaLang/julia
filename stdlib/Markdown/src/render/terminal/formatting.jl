@@ -19,9 +19,9 @@ function with_output_annotations(f::Function, io::AnnotIO, annots::Pair{Symbol, 
     start = position(aio) + 1
     f(io)
     stop = position(aio)
-    sortedindex = searchsortedlast(aio.annotations, (start:stop,), by=first)
+    sortedindex = searchsortedlast(aio.annotations, (region=start:stop,), by=a -> a.region)
     for (i, annot) in enumerate(annots)
-        insert!(aio.annotations, sortedindex + i, (start:stop, annot))
+        insert!(aio.annotations, sortedindex + i, (start:stop, annot...))
     end
 end
 

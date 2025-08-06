@@ -449,7 +449,7 @@
                   (check-dotop (cadr e))))))
   e)
 
-(define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+(define (vararg? x) (and (pair? x) (eq? (car x) '...) (length= x 2)))
 (define (vararg-type-expr? x)
   (or (eq? x 'Vararg)
       (and (length> x 1)
@@ -466,6 +466,7 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
+(define (thisfunction? e) (and (pair? e) (eq? (car e) 'thisfunction)))
 
 (define (tuple-call? e)
   (and (length> e 1)
@@ -493,6 +494,7 @@
 (define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
 (define (vinfo:read v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
+(define (vinfo:nospecialize v) (< 0 (logand (caddr v) 128)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured
 (define (vinfo:set-capt! v c)  (set-car! (cddr v) (set-bit (caddr v) 1 c)))
@@ -507,6 +509,7 @@
 ;; occurs undef: mask 32
 ;; whether var is called (occurs in function call head position)
 (define (vinfo:set-called! v a)  (set-car! (cddr v) (set-bit (caddr v) 64 a)))
+(define (vinfo:set-nospecialize! v c)  (set-car! (cddr v) (set-bit (caddr v) 128 c)))
 
 (define var-info-for assq)
 
