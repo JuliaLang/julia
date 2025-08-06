@@ -446,10 +446,10 @@ function from_intermustalias(𝕃ᵢ::AbstractLattice, rt::InterMustAlias, argin
     if fargs !== nothing && 1 ≤ rt.slot ≤ length(fargs)
         arg = ssa_def_slot(fargs[rt.slot], sv)
         if isa(arg, SlotNumber)
+            @assert vtypes !== nothing
             argtyp = widenslotwrapper(arginfo.argtypes[rt.slot])
             ⊑ = partialorder(𝕃ᵢ)
             if rt.vartyp ⊑ argtyp
-                @assert vtypes !== nothing
                 vtyp = vtypes[slot_id(arg)]
                 return MustAlias(arg, vtyp.ssadef, rt.vartyp, rt.fldidx, rt.fldtyp)
             else
@@ -4514,10 +4514,12 @@ end
 function condition_object_change(currstate::VarTable, condt::Conditional,
                                  condslot::SlotNumber, then_or_else::Symbol)
     vtype = currstate[slot_id(condslot)]
-    (thentype, elsetype) = if then_or_else === :then
-        (condt.thentype, Union{})
+    if then_or_else === :then
+        thentype = condt.thentype
+        elsetype = Union{}
     elseif then_or_else === :else
-        (Union{}, condt.elsetype)
+        thentype = Union{}
+        elsetype = condt.elsetype
     else @assert false end
     newcondt = Conditional(condt.slot, condt.ssadef, thentype, elsetype)
     return StateRefinement(slot_id(condslot), newcondt, vtype.undef)
