@@ -50,6 +50,7 @@ has_fma = Dict(
             @test Inf == @inferred ulp_error(NaN, 3.0)
             @test Inf == @inferred ulp_error(3.0, NaN)
             @test Inf == @inferred ulp_error(NaN, Inf)
+            @test Inf == @inferred ulp_error(Inf, NaN)
             @test Inf == @inferred ulp_error(Inf, -Inf)
             @test Inf == @inferred ulp_error(-Inf, Inf)
             @test Inf == @inferred ulp_error(0.0, Inf)
