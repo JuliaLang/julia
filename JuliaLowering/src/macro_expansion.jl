@@ -78,12 +78,16 @@ struct MacroExpansionError <: Exception
     context::Union{Nothing,MacroContext}
     ex::SyntaxTree
     msg::String
+    "The source position relative to the node - may be `:begin` or `:end` or `:all`"
     position::Symbol
+    "Error that occurred inside the macro function call (`nothing` if no inner exception)"
+    err
+    MacroExpansionError(
+        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString, position::Symbol,
+        @nospecialize err = nothing
+    ) = new(context, ex, msg, position, err)
 end
 
-"""
-`position` - the source position relative to the node - may be `:begin` or `:end` or `:all`
-"""
 function MacroExpansionError(ex::SyntaxTree, msg::AbstractString; position=:all)
     MacroExpansionError(nothing, ex, msg, position)
 end
@@ -126,8 +130,8 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::Syn
     expr_form = to_lowered_expr(mod, ex5)
     try
         eval(mod, expr_form)
-    catch
-        throw(MacroExpansionError(mctx, ex, "Macro not found", :all))
+    catch err
+        throw(MacroExpansionError(mctx, ex, "Macro not found", :all, err))
     end
 end
 
@@ -152,14 +156,14 @@ function expand_macro(ctx::MacroExpansionContext, ex::SyntaxTree)
         # TODO: Allow invoking old-style macros for compat
         invokelatest(macfunc, macro_args...)
     catch exc
-        # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
-        # NOTE: Although currently rethrow() is necessary to allow outside catchers to access full stacktrace information
         if exc isa MacroExpansionError
             # Add context to the error.
-            rethrow(MacroExpansionError(mctx, exc.ex, exc.msg, exc.position))
+            newexc = MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err)
         else
-            rethrow(MacroExpansionError(mctx, ex, "Error expanding macro", :all))
+            newexc = MacroExpansionError(mctx, ex, "Error expanding macro", :all, exc)
         end
+        # TODO: We can delete this rethrow when we move to AST-based error propagation.
+        rethrow(newexc)
     end
 
     if expanded isa SyntaxTree
