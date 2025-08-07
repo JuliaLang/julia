@@ -29,6 +29,10 @@ has_fma = Dict(
 )
 
 @testset "meta test: ULPError" begin
+    examples_f64 = (-3e0, -2e0, -1e0, -1e-1, -1e-10, -0e0, 0e0, 1e-10, 1e-1, 1e0, 2e0, 3e0)::Tuple{Vararg{Float64}}
+    examples_f16 = Float16.(examples_f64)
+    examples_f32 = Float32.(examples_f64)
+    examples = (examples_f16..., examples_f32..., examples_f64...)
     @testset "edge cases" begin
         @testset "zero error - two equivalent values" begin
             @test 0 == @inferred ulp_error(NaN, NaN)
@@ -60,9 +64,15 @@ has_fma = Dict(
         end
     end
     @testset "faithful" begin
-        for x in (-2.0, -0.3, 0.1, 1.0)
+        for x in examples
             @test 1 == @inferred ulp_error(x, nextfloat(x, 1))
             @test 1 == @inferred ulp_error(x, nextfloat(x, -1))
+        end
+    end
+    @testset "midpoint" begin
+        for x in examples
+            a = abs(x)
+            @test 1 == 2 * @inferred ulp_error(copysign((widen(a) + nextfloat(a, 1))/2, x), x)
         end
     end
 end
