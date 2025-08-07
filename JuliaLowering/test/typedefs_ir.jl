@@ -410,6 +410,52 @@ end
 35  (return core.nothing)
 
 ########################################
+# Empty struct with empty ctor
+struct X
+    X() = new()
+end
+#---------------------
+1   (global TestMod.X)
+2   latestworld
+3   (call core.svec)
+4   (call core.svec)
+5   (call core.svec)
+6   (call core._structtype TestMod :X %₃ %₄ %₅ false 0)
+7   (= slot₁/X %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (call core.isdefinedglobal TestMod :X false)
+10  (gotoifnot %₉ label₁₄)
+11  TestMod.X
+12  (= slot₂/if_val (call core._equiv_typedef %₁₁ %₆))
+13  (goto label₁₅)
+14  (= slot₂/if_val false)
+15  slot₂/if_val
+16  (gotoifnot %₁₅ label₂₀)
+17  TestMod.X
+18  (= slot₃/if_val %₁₇)
+19  (goto label₂₁)
+20  (= slot₃/if_val false)
+21  slot₃/if_val
+22  (gotoifnot %₁₅ label₂₃)
+23  (call core.svec)
+24  (call core._typebody! %₂₁ %₆ %₂₃)
+25  (constdecl TestMod.X %₂₄)
+26  latestworld
+27  TestMod.X
+28  (call core.apply_type core.Type %₂₇)
+29  (call core.svec %₂₈)
+30  (call core.svec)
+31  SourceLocation::2:5
+32  (call core.svec %₂₉ %₃₀ %₃₁)
+33  --- method core.nothing %₃₂
+    slots: [slot₁/#ctor-self#]
+    1   slot₁/#ctor-self#
+    2   (new %₁)
+    3   (return %₂)
+34  latestworld
+35  (return core.nothing)
+
+########################################
 # Basic struct
 struct X
     a

@@ -281,6 +281,22 @@ end
 9   (return %₈)
 
 ########################################
+# Error: Destructuring with tuple elimination and too few RHS elements
+(x,) = ()
+#---------------------
+LoweringError:
+(x,) = ()
+└───────┘ ── More variables on left hand side than right hand in tuple assignment
+
+########################################
+# Error: Destructuring with tuple elimination, slurping, and too few RHS elements
+(x,y,ys...) = (1,)
+#---------------------
+LoweringError:
+(x,y,ys...) = (1,)
+└────────────────┘ ── More variables on left hand side than right hand in tuple assignment
+
+########################################
 # Destructuring with tuple elimination but not in value position never creates
 # the tuple
 let

@@ -221,6 +221,15 @@ end
 """) === 3
 
 end
+#-------------------------------------------------------------------------------
+# Block condition
+@test JuliaLowering.include_string(test_mod, """
+let a = true
+    if begin; x = 2; a; end
+        x
+    end
+end
+""") === 2
 
 #-------------------------------------------------------------------------------
 @testset "`&&` and `||` chains" begin
