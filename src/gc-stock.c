@@ -220,7 +220,7 @@ static void gc_sync_cache(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) JL_NOTSA
 }
 
 // No other threads can be running marking at the same time
-static void gc_sync_all_caches(jl_ptls_t ptls)
+static void gc_sync_all_caches(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads);
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
