@@ -80,14 +80,11 @@ struct MacroExpansionError <: Exception
     msg::String
     "The source position relative to the node - may be `:begin` or `:end` or `:all`"
     position::Symbol
-    "Error that occurred inside the macro function call (note that this may not be defined)"
+    "Error that occurred inside the macro function call (`nothing` if no inner exception)"
     err
     MacroExpansionError(
-        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString, position::Symbol
-    ) = new(context, ex, msg, position)
-    MacroExpansionError(
         context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString, position::Symbol,
-        @nospecialize err
+        @nospecialize err = nothing
     ) = new(context, ex, msg, position, err)
 end
 
@@ -161,9 +158,7 @@ function expand_macro(ctx::MacroExpansionContext, ex::SyntaxTree)
     catch exc
         if exc isa MacroExpansionError
             # Add context to the error.
-            newexc = isdefined(exc, :err) ?
-                MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err) :
-                MacroExpansionError(mctx, exc.ex, exc.msg, exc.position)
+            newexc = MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err)
         else
             newexc = MacroExpansionError(mctx, ex, "Error expanding macro", :all, exc)
         end
