@@ -74,7 +74,7 @@ function adopt_scope(ex, ctx::MacroContext)
     adopt_scope(ex, ctx.scope_layer.id)
 end
 
-struct MacroExpansionError
+struct MacroExpansionError <: Exception
     context::Union{Nothing,MacroContext}
     ex::SyntaxTree
     msg::String
