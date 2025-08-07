@@ -113,7 +113,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     highlight(io, src.file, byterange, note=exc.msg)
 end
 
-function eval_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
+function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::SyntaxTree)
     # `ex1` might contain a nontrivial mix of scope layers so we can't just
     # `eval()` it, as it's already been partially lowered by this point.
     # Instead, we repeat the latter parts of `lower()` here.
@@ -124,21 +124,25 @@ function eval_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
     ctx5, ex5 = linearize_ir(ctx4, ex4)
     mod = ctx.current_layer.mod
     expr_form = to_lowered_expr(mod, ex5)
-    eval(mod, expr_form)
+    try
+        eval(mod, expr_form)
+    catch
+        throw(MacroExpansionError(mctx, ex, "Macro not found", :all))
+    end
 end
 
 function expand_macro(ctx::MacroExpansionContext, ex::SyntaxTree)
     @assert kind(ex) == K"macrocall"
 
     macname = ex[1]
-    macfunc = eval_macro_name(ctx, macname)
+    mctx = MacroContext(ctx.graph, ex, ctx.current_layer)
+    macfunc = eval_macro_name(ctx, mctx, macname)
     # Macro call arguments may be either
     # * Unprocessed by the macro expansion pass
     # * Previously processed, but spliced into a further macro call emitted by
     #   a macro expansion.
     # In either case, we need to set any unset scope layers before passing the
     # arguments to the macro call.
-    mctx = MacroContext(ctx.graph, ex, ctx.current_layer)
     macro_args = Any[mctx]
     for i in 2:numchildren(ex)
         push!(macro_args, set_scope_layer(ctx, ex[i], ctx.current_layer.id, false))

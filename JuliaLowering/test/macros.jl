@@ -161,6 +161,15 @@ let (err, st) = try
     @test any(sf->sf.func===Symbol("@m_throw"), st)
 end
 
+let res = try
+        JuliaLowering.include_string(test_mod, "_never_exist = @m_not_exist 42")
+    catch e
+        e
+    end
+    @test res isa JuliaLowering.MacroExpansionError
+    @test res.msg == "Macro not found"
+end
+
 include("ccall_demo.jl")
 @test JuliaLowering.include_string(CCall, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
 let (err, st) = try

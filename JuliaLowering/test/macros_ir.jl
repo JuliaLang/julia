@@ -125,3 +125,10 @@ function f()
 #─────┘ ── macro is only allowed in global scope
 end
 
+########################################
+# Error: Macros not found
+_never_exist = @m_not_exist 42
+#---------------------
+MacroExpansionError while expanding @m_not_exist in module Main.TestMod:
+_never_exist = @m_not_exist 42
+#               └─────────┘ ── Macro not found
