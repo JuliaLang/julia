@@ -25,7 +25,12 @@ module ULPError
                 end
             end
         end
-        acc = Float64(accurate)::Float64
+        acc = if accurate isa Union{Float16, Float32}
+            # widen for better accuracy when doing so does not impact performance too much
+            widen(accurate)
+        else
+            accurate
+        end
         abs(Float32((approximate - acc) / eps(approximate))::Float32)
     end
     function ulp_error(accurate::Acc, approximate::App, x::AbstractFloat) where {Acc, App}
