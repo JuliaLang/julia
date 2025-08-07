@@ -2629,7 +2629,7 @@ function __require_prelocked(pkg::PkgId, env)
                 parallel_precompile_attempted = true
                 unlock(require_lock)
                 try
-                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true, ignore_loaded=false)
+                    Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
                 finally
                     lock(require_lock)
                 end

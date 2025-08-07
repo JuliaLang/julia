@@ -2496,6 +2496,46 @@ precompile_test_harness("Package top-level load itself") do load_path
     end
 end
 
+precompile_test_harness("Package precompilation works without manifest") do load_path
+    pkg_dir = joinpath(load_path, "TestPkgNoManifest")
+    mkpath(pkg_dir)
+
+    # Create Project.toml with stdlib dependencies
+    write(joinpath(pkg_dir, "Project.toml"), """
+        name = "TestPkgNoManifest"
+        uuid = "f47a8e44-5f82-4c5c-9076-4b4e8b7e8e8e"
+        version = "0.1.0"
+
+        [deps]
+        Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+        Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+        """)
+
+    # Create src directory and main module file
+    src_dir = joinpath(pkg_dir, "src")
+    mkpath(src_dir)
+    write(joinpath(src_dir, "TestPkgNoManifest.jl"), """
+        module TestPkgNoManifest
+        end
+        """)
+
+    old_active_project = Base.active_project()
+    try
+        # Activate the new package environment
+        Base.set_active_project(joinpath(pkg_dir, "Project.toml"))
+
+        # Ensure there's no manifest file (this is the key to the test)
+        manifest_path = joinpath(pkg_dir, "Manifest.toml")
+        isfile(manifest_path) && rm(manifest_path)
+
+        # This should work without errors - precompiling a package with no manifest
+        @eval using TestPkgNoManifest
+    finally
+        # Restore original load path and active project
+        Base.set_active_project(old_active_project)
+    end
+end
+
 # Verify that inference / caching was not performed for any macros in the sysimage
 let m = only(methods(Base.var"@big_str"))
     @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
