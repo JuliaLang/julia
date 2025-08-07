@@ -124,6 +124,8 @@ struct NewPM {
     void run(Module &M) JL_NOTSAFEPOINT;
 
     void printTimers() JL_NOTSAFEPOINT;
+
+    void registerCallbacks(PassInstrumentationCallbacks &PIC) JL_NOTSAFEPOINT;
 };
 
 struct AnalysisManagers {
