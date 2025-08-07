@@ -2994,7 +2994,7 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
     return live_bytes;
 }
 
-uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
+uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor) JL_NOTSAFEPOINT
 {
     double est = factor * old_val + (1 - factor) * new_val;
     if (est <= 1)
@@ -3006,7 +3006,7 @@ uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
 
 // an overallocation curve inspired by array allocations
 // grows very fast initially, then much slower at large heaps
-static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val)
+static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val) JL_NOTSAFEPOINT
 {
     // compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
     // for small n, we grow much faster than O(n)
