@@ -703,7 +703,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if isnothing(outer_target)
             delete!(ctx.break_targets, name)
         else
-            ctx.break_targets = outer_target
+            ctx.break_targets[name] = outer_target
         end
         emit(ctx, end_label)
         if needs_value

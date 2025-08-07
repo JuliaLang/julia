@@ -57,6 +57,31 @@ end
 """) == 16
 
 #-------------------------------------------------------------------------------
+# Arrow syntax
+@test JuliaLowering.include_string(test_mod, """
+let
+    f = ((x::T, y::T) where T) -> x + y
+    f(1, 2)
+end
+""") === 3
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    f = ((x::T; y=2) where T) -> x + y
+    f(1)
+end
+""") === 3
+
+# Passes desugaring, but T is detected as unused and throws an error.
+# Is it clear whether this should be `f(x::T) where T` or `f(x::T where T)`?
+@test_broken JuliaLowering.include_string(test_mod, """
+let
+    f = ((x::T) where T) -> x
+    f(1)
+end
+""") === 1
+
+#-------------------------------------------------------------------------------
 # Function definitions
 @test JuliaLowering.include_string(test_mod, """
 begin
