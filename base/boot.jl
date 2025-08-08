@@ -1141,4 +1141,23 @@ typename(union::UnionAll) = typename(union.body)
 
 include(Core, "optimized_generics.jl")
 
+struct GCPreserveDuring
+    f::Any
+    # N.B: This field is opaque - the compiler is allowed to arbitrarily change it
+    # as long as it has the same GC rooting behavior.
+    root::Any
+    GCPreserveDuring(@nospecialize(f), @nospecialize(root)) = new(f, root)
+end
+
+# This has special support in inference and codegen and is only ever actually called
+# in fallback cases.
+function (this::GCPreserveDuring)(args...)
+    @noinline
+    r = this.f(args...)
+    # N.B.: This is correct, but stronger than required. If the call to `f` is deleted,
+    # this may be deleted as well.
+    donotdelete(this.root)
+    return r
+end
+
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

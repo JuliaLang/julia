@@ -3956,6 +3956,7 @@ void post_boot_hooks(void)
     jl_initerror_type        = (jl_datatype_t*)core("InitError");
     jl_missingcodeerror_type = (jl_datatype_t*)core("MissingCodeError");
     jl_trimfailure_type      = (jl_datatype_t*)core("TrimFailure");
+    jl_gc_preserve_during_type = (jl_datatype_t*)core("GCPreserveDuring");
 
     jl_pair_type             = core("Pair");
     jl_value_t *kwcall_func  = core("kwcall");
