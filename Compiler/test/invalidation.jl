@@ -325,3 +325,26 @@ end
 # This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
 # manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
 @test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)
+
+# Test drop_all_caches functionality
+@testset "drop_all_caches" begin
+    # Define test functions
+    drop_cache_test_f(x) = x + 1
+    drop_cache_test_g(x) = drop_cache_test_f(x) * 2
+
+    # Compile the functions
+    @test drop_cache_test_g(5) == 12
+
+    # Get the current world age
+    world_before = Base.get_world_counter()
+
+    # Drop all caches
+    Base.drop_all_caches()
+
+    # World age should have incremented
+    world_after = Base.get_world_counter()
+    @test world_after > world_before
+
+    # Functions should still work (but will be recompiled on next call)
+    @test drop_cache_test_g(5) == 12
+end

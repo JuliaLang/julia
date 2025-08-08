@@ -313,6 +313,12 @@ cd(@__DIR__) do
             end
         end
 
+        # if --code-coverage=all is requested throw away all compiled code (from the sysimage and up to this point)
+        # This is also done once in each worker at the end of testdefs.jl
+        if Base.JLOptions().code_coverage == 2
+            Base.drop_all_caches()
+        end
+
         n > 1 && length(node1_tests) > 1 && print("\nExecuting tests that run on node 1 only:\n")
         for t in node1_tests
             # As above, try to run each test

@@ -1453,3 +1453,14 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
     end
     return f, args, kwargs
 end
+
+"""
+    Base.drop_all_caches()
+
+Internal function to drop all native code caches and increment world age.
+This invalidates all compiled code as if a method was added that intersects
+with all existing methods.
+"""
+function drop_all_caches()
+    ccall(:jl_drop_all_caches, Cvoid, ())
+end
