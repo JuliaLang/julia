@@ -280,6 +280,12 @@ function exec_options(opts)
         end
     end
 
+    # drop all caches if code coverage is enabled. Do it here not earlier, so julia has a chance
+    # of starting up quickly
+    if Base.JLOptions().code_coverage == 2
+        Base.drop_all_caches()
+    end
+
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
