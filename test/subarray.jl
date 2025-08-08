@@ -1098,3 +1098,6 @@ end
     @test Base.mightalias(permutedims(V1), V1)
     @test Base.mightalias(permutedims(V1), permutedims(V1))
 end
+
+
+@test @views quote var"begin" + var"end" end isa Expr

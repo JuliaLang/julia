@@ -629,6 +629,21 @@ function unescape(@nospecialize ex)
 end
 
 """
+    Meta.reescape(unescaped_expr, original_expr)
+
+Re-wrap `unescaped_expr` with the same level of escaping as `original_expr` had.
+This is the inverse operation of [`unescape`](@ref) - if the original expression
+was escaped, the unescaped expression is wrapped in `:escape` again.
+"""
+function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
+    if isexpr(original_expr, :escape) || isexpr(original_expr, :var"hygienic-scope")
+        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+    else
+        return unescaped_expr
+    end
+end
+
+"""
     Meta.uncurly(expr)
 
 Turn `T{P...}` into just `T`.
