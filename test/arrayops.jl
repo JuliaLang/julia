@@ -3228,7 +3228,8 @@ end
         1:3,
         [1,2,3],
         [1 2 3],
-        [1;2;;;]
+        [1;2;;;],
+        OffsetArray(1:3, -1),
     )
     A = zeros(3, 3, 3)
     for (i, j, k) in Iterators.product(Iterators.repeated(idx_options, 3)...)
@@ -3242,8 +3243,9 @@ end
         X_prepend = reshape(X, 1, size(X)...)
         vX = vec(X)
         cX = reshape(vX, length(vX), 1)
+        oX = OffsetArray(X, (size(X) .- 2*(ndims(X) - 1))...)
 
-        for _X in (X, X_trail, X_prepend, vX, cX)
+        for _X in (X, X_trail, X_prepend, vX, cX, oX)
             AI = A[I...]
 
             if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
