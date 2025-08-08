@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using .Compiler: has_typevar
-using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator, 
+using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
             is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)

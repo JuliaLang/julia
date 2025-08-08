@@ -22,14 +22,24 @@ function rewrap_where(ex::Expr, where_params::Union{Nothing, Vector{Any}})
 end
 
 function get_typeof(@nospecialize ex)
-    isexpr(ex, :(::), 1) && return esc(ex.args[1])
-    isexpr(ex, :(::), 2) && return esc(ex.args[2])
+    # Always unescape to get the core expression, then reescape and esc
+    original_ex = ex
+    ex = Meta.unescape(ex)
+
+    if isexpr(ex, :(::), 1)
+        return esc(Meta.reescape(ex.args[1], original_ex))
+    end
+    if isexpr(ex, :(::), 2)
+        return esc(Meta.reescape(ex.args[2], original_ex))
+    end
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
-        isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, esc(splatted.args[1]))
-        return :(Any[Core.Typeof(x) for x in $(esc(splatted))]...)
+        if isexpr(splatted, :(::), 1)
+            return Expr(:curly, :Vararg, esc(Meta.reescape(splatted.args[1], original_ex)))
+        end
+        return :(Any[Core.Typeof(x) for x in $(esc(Meta.reescape(splatted, original_ex)))]...)
     end
-    return :(Core.Typeof($(esc(ex))))
+    return :(Core.Typeof($(esc(Meta.reescape(ex, original_ex)))))
 end
 
 function is_broadcasting_call(ex)
@@ -94,8 +104,14 @@ function recursive_dotcalls!(ex, args, i=1)
 end
 
 function extract_farg(@nospecialize arg)
-    !isexpr(arg, :(::), 1) && return esc(arg)
-    fT = esc(arg.args[1])
+    # Always unescape to get the core expression, then reescape and esc
+    original_arg = arg
+    arg = Meta.unescape(arg)
+
+    if !isexpr(arg, :(::), 1)
+        return esc(Meta.reescape(arg, original_arg))
+    end
+    fT = esc(Meta.reescape(arg.args[1], original_arg))
     :($construct_callable($fT))
 end
 
@@ -648,14 +664,11 @@ macro activate(what)
     if !(Component in allowed_components)
         error("Usage Error: Component $Component is not recognized. Expected one of $allowed_components")
     end
-    s = gensym()
     if Component === :Compiler && isempty(options)
         push!(options, :reflection)
     end
     options = map(options) do opt
         Expr(:kw, opt, true)
     end
-    Expr(:toplevel,
-        esc(:(import $Component as $s)),
-        esc(:($s.activate!(;$(options...)))))
+    return :(Base.require($__module__, $(QuoteNode(Component))).activate!(; $(options...)))
 end
