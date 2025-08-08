@@ -416,7 +416,7 @@ InferenceParams(interp::NativeInterpreter) = interp.inf_params
 OptimizationParams(interp::NativeInterpreter) = interp.opt_params
 get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
-cache_owner(interp::NativeInterpreter) = nothing
+cache_owner(::NativeInterpreter) = nothing
 
 engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, cache_owner(interp))
 engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reserve, Any, (Any, Any), mi, owner)::CodeInstance
@@ -460,7 +460,7 @@ and may be safely discarded between calls to this function.
 By default, a value of `nothing` is returned indicating that `CodeInstance`s should not be added to the JIT.
 Attempting to execute them via `invoke` will result in an error.
 """
-codegen_cache(interp::AbstractInterpreter) = nothing
+codegen_cache(::AbstractInterpreter) = nothing
 codegen_cache(interp::NativeInterpreter) = interp.codegen
 
 """
