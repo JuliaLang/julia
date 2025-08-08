@@ -111,8 +111,10 @@ Base.argmax
 Base.argmin
 Base.findmax
 Base.findmin
+Base.findextrema
 Base.findmax!
 Base.findmin!
+Base.findextrema!
 Base.sum
 Base.sum!
 Base.prod
