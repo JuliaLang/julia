@@ -87,7 +87,7 @@ be passed instead!). For example:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> InteractiveUtils.macroexpand(@__MODULE__, :(@edit println("")) )
-:(InteractiveUtils.edit(println, (Base.typesof)("")))
+:(InteractiveUtils.edit(println, InteractiveUtils.Tuple{(InteractiveUtils.Core).Typeof("")}))
 ```
 
 The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views
@@ -100,10 +100,12 @@ as assignments, branches, and calls:
 ```jldoctest; setup = (using Base: +, sin)
 julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
-1 ─ %1 =   dynamic 1 + 2
-│   %2 =   dynamic sin(0.5)
-│   %3 =   dynamic Base.vect(%1, %2)
-└──      return %3
+1 ─ %1 = :+
+│   %2 =   dynamic (%1)(1, 2)
+│   %3 = sin
+│   %4 =   dynamic (%3)(0.5)
+│   %5 =   dynamic Base.vect(%2, %4)
+└──      return %5
 ))))
 ```
 
@@ -140,7 +142,7 @@ For more information see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code
 ### Printing of debug information
 
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
-debug information printed.
+of debug information printed.
 
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"int.jl:\d+"
 julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)

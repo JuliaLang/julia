@@ -3,6 +3,13 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
+## [Table of contents](@id man-performance-tips-toc)
+
+```@contents
+Pages = ["performance-tips.md"]
+Depth = 3
+```
+
 ## General advice
 
 ### Performance critical code should be inside a function
@@ -51,14 +58,16 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 In the following REPL session:
 
-```julia-repl
+```jldoctest
 julia> x = 1.0
+1.0
 ```
 
 is equivalent to:
 
-```julia-repl
+```jldoctest
 julia> global x = 1.0
+1.0
 ```
 
 so all the performance issues discussed previously apply.
@@ -106,6 +115,8 @@ problem with type-stability or creating many small temporary arrays.
 Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
+
+For more information about memory management and garbage collection in Julia, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
 (the remaining allocation reported below is due to running the `@time` macro in global scope)
@@ -805,7 +816,7 @@ or `nothing` if it is not found, a clear type instability. In order to make it e
 type instabilities that are likely to be important, `Union`s containing either `missing` or `nothing`
 are color highlighted in yellow, instead of red.
 
-The following examples may help you interpret expressions marked as containing non-leaf types:
+The following examples may help you interpret expressions marked as containing non-concrete types:
 
   * Function body starting with `Body::Union{T1,T2})`
       * Interpretation: function with unstable return type
@@ -821,7 +832,7 @@ The following examples may help you interpret expressions marked as containing n
         element accesses
 
   * `Base.getfield(%%x, :(:data))::Array{Float64,N} where N`
-      * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
+      * Interpretation: getting a field that is of non-concrete type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
@@ -907,6 +918,40 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
+
+#### Use `@__FUNCTION__` for recursive closures
+
+For recursive closures specifically, the [`@__FUNCTION__`](@ref) macro can avoid both type instability and boxing.
+
+First, let's see the unoptimized version:
+
+```julia
+function make_fib_unoptimized()
+    fib(n) = n <= 1 ? 1 : fib(n - 1) + fib(n - 2)  # fib is boxed
+    return fib
+end
+```
+
+The `fib` function is boxed, meaning the return type is inferred as `Any`:
+
+```julia
+@code_warntype make_fib_unoptimized()
+```
+
+Now, to eliminate this type instability, we can instead use `@__FUNCTION__` to refer to the concrete function object:
+
+```julia
+function make_fib_optimized()
+    fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+    return fib
+end
+```
+
+This gives us a concrete return type:
+
+```julia
+@code_warntype make_fib_optimized()
+```
 
 
 ### [Types with values-as-parameters](@id man-performance-value-type)
@@ -1058,12 +1103,12 @@ the output. As a trivial example, compare
 
 ```jldoctest prealloc
 julia> function xinc(x)
-           return [x, x+1, x+2]
+           return [x + i for i  in 1:3000]
        end;
 
 julia> function loopinc()
            y = 0
-           for i = 1:10^7
+           for i = 1:10^5
                ret = xinc(i)
                y += ret[2]
            end
@@ -1075,16 +1120,16 @@ with
 
 ```jldoctest prealloc
 julia> function xinc!(ret::AbstractVector{T}, x::T) where T
-           ret[1] = x
-           ret[2] = x+1
-           ret[3] = x+2
+           for i in 1:3000
+               ret[i] = x+i
+           end
            nothing
        end;
 
 julia> function loopinc_prealloc()
-           ret = Vector{Int}(undef, 3)
+           ret = Vector{Int}(undef, 3000)
            y = 0
-           for i = 1:10^7
+           for i = 1:10^5
                xinc!(ret, i)
                y += ret[2]
            end
@@ -1096,12 +1141,12 @@ Timing results:
 
 ```jldoctest prealloc; filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> @time loopinc()
-  0.529894 seconds (40.00 M allocations: 1.490 GiB, 12.14% gc time)
-50000015000000
+  0.297454 seconds (200.00 k allocations: 2.239 GiB, 39.80% gc time)
+5000250000
 
 julia> @time loopinc_prealloc()
-  0.030850 seconds (6 allocations: 288 bytes)
-50000015000000
+  0.009410 seconds (2 allocations: 23.477 KiB)
+5000250000
 ```
 
 Preallocation has other advantages, for example by allowing the caller to control the "output"
@@ -1690,7 +1735,7 @@ in generated code by using Julia's [`code_native`](@ref) function.
 
 Note that `@fastmath` also assumes that `NaN`s will not occur during the computation, which can lead to surprising behavior:
 
-```julia-repl
+```jldoctest
 julia> f(x) = isnan(x);
 
 julia> f(NaN)

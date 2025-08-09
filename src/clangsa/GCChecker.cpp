@@ -31,7 +31,7 @@ namespace {
 using namespace clang;
 using namespace ento;
 
-#define PDP std::shared_ptr<PathDiagnosticPiece>
+typedef std::shared_ptr<PathDiagnosticPiece> PDP;
 #define MakePDP make_unique<PathDiagnosticEventPiece>
 
 static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
@@ -394,13 +394,18 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
-        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        if (Pos.isValid())
+          return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
           N->getLocationContext(), BRC.getSourceManager());
-      return MakePDP(Pos, "Safepoints re-enabled here");
+      if (Pos.isValid())
+        return MakePDP(Pos, "Safepoints re-enabled here");
+      //N->getLocation().dump();
     }
+    // n.b. there may be no position here to report if they were disabled by julia_notsafepoint_enter/leave
   }
   return nullptr;
 }
@@ -774,21 +779,27 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const S
 
 static bool isMutexLock(StringRef name) {
     return name == "uv_mutex_lock" ||
-           //name == "uv_mutex_trylock" ||
+           name == "uv_mutex_trylock" ||
            name == "pthread_mutex_lock" ||
-           //name == "pthread_mutex_trylock" ||
+           name == "pthread_mutex_trylock" ||
+           name == "__gthread_mutex_lock" ||
+           name == "__gthread_mutex_trylock" ||
+           name == "__gthread_recursive_mutex_lock" ||
+           name == "__gthread_recursive_mutex_trylock" ||
            name == "pthread_spin_lock" ||
-           //name == "pthread_spin_trylock" ||
+           name == "pthread_spin_trylock" ||
            name == "uv_rwlock_rdlock" ||
-           //name == "uv_rwlock_tryrdlock" ||
+           name == "uv_rwlock_tryrdlock" ||
            name == "uv_rwlock_wrlock" ||
-           //name == "uv_rwlock_trywrlock" ||
+           name == "uv_rwlock_trywrlock" ||
            false;
 }
 
 static bool isMutexUnlock(StringRef name) {
     return name == "uv_mutex_unlock" ||
            name == "pthread_mutex_unlock" ||
+           name == "__gthread_mutex_unlock" ||
+           name == "__gthread_recursive_mutex_unlock" ||
            name == "pthread_spin_unlock" ||
            name == "uv_rwlock_rdunlock" ||
            name == "uv_rwlock_wrunlock" ||
@@ -819,11 +830,13 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_tupletype_t") ||
                    Name.ends_with_insensitive("jl_gc_tracked_buffer_t") ||
                    Name.ends_with_insensitive("jl_binding_t") ||
+                   Name.ends_with_insensitive("jl_binding_partition_t") ||
                    Name.ends_with_insensitive("jl_ordereddict_t") ||
                    Name.ends_with_insensitive("jl_tvar_t") ||
                    Name.ends_with_insensitive("jl_typemap_t") ||
                    Name.ends_with_insensitive("jl_unionall_t") ||
                    Name.ends_with_insensitive("jl_methtable_t") ||
+                   Name.ends_with_insensitive("jl_methcache_t") ||
                    Name.ends_with_insensitive("jl_cgval_t") ||
                    Name.ends_with_insensitive("jl_codectx_t") ||
                    Name.ends_with_insensitive("jl_ast_context_t") ||
@@ -835,7 +848,9 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_vararg_t") ||
                    Name.ends_with_insensitive("jl_opaque_closure_t") ||
                    Name.ends_with_insensitive("jl_globalref_t") ||
-                   // Probably not technically true for these, but let's allow it
+                   Name.ends_with_insensitive("jl_abi_override_t") ||
+                   // Probably not technically true for these, but let's allow it as a root
+                   Name.ends_with_insensitive("jl_ircode_state") ||
                    Name.ends_with_insensitive("typemap_intersection_env") ||
                    Name.ends_with_insensitive("interpreter_state") ||
                    Name.ends_with_insensitive("jl_typeenv_t") ||

@@ -117,7 +117,7 @@ filtered, before any other work is done to construct the log record data
 structure itself.
 
 # Examples
-```julia-repl
+```jldoctest; setup = :(import Logging)
 julia> Logging.LogLevel(0) == Logging.Info
 true
 ```
@@ -132,6 +132,7 @@ isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
 +(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
 -(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
+convert(::Type{Int32}, level::LogLevel) = level.level
 
 """
     BelowMinLevel
@@ -171,7 +172,8 @@ Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
 const AboveMaxLevel = LogLevel( 1000001)
 
 # Global log limiting mechanism for super fast but inflexible global log limiting.
-const _min_enabled_level = Ref{LogLevel}(Debug)
+# Atomic ensures that the value is always consistent across threads.
+const _min_enabled_level = Threads.Atomic{Int32}(Debug)
 
 function show(io::IO, level::LogLevel)
     if     level == BelowMinLevel  print(io, "BelowMinLevel")
@@ -372,7 +374,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     kwargs = (;$(log_data.kwargs...))
                     true
                 else
-                    @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
+                    @invokelatest $(logging_error)(logger, level, _module, group, id, file, line, err, false)
                     false
                 end
             end
@@ -384,7 +386,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 kwargs = (;$(log_data.kwargs...))
                 true
             catch err
-                @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
+                @invokelatest $(logging_error)(logger, level, _module, group, id, file, line, err, true)
                 false
             end
         end
@@ -394,7 +396,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
             level = $level
             # simplify std_level code emitted, if we know it is one of our global constants
             std_level = $(level isa Symbol ? :level : :(level isa $LogLevel ? level : convert($LogLevel, level)::$LogLevel))
-            if std_level >= $(_min_enabled_level)[]
+            if std_level.level >= $(_min_enabled_level)[]
                 group = $(log_data._group)
                 _module = $(log_data._module)
                 logger = $(current_logger_for_env)(std_level, group, _module)
@@ -409,14 +411,30 @@ function logmsg_code(_module, file, line, level, message, exs...)
                         end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && invokelatest($handle_message,
-                            logger, level, msg, _module, group, id, file, line;
-                            kwargs...)
+                        if $(logrecord)
+                            @assert @isdefined(msg) "Assertion to tell the compiler about the definedness of this variable"
+                            @assert @isdefined(kwargs) "Assertion to tell the compiler about the definedness of this variable"
+                            $handle_message_nothrow(
+                                logger, level, msg, _module, group, id, file, line;
+                                kwargs...)
+                        end
                     end
                 end
             end
             nothing
         end
+    end
+end
+
+@noinline function handle_message_nothrow(logger, level, msg, _module, group, id, file, line; kwargs...)
+    @nospecialize
+    try
+        @invokelatest handle_message(
+            logger, level, msg, _module, group, id, file, line;
+            kwargs...)
+
+    catch err
+        @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
     end
 end
 
@@ -529,7 +547,8 @@ with_logstate(f::Function, logstate) = @with(CURRENT_LOGSTATE => logstate, f())
 
 Disable all log messages at log levels equal to or less than `level`.  This is
 a *global* setting, intended to make debug logging extremely cheap when
-disabled.
+disabled. Note that this cannot be used to enable logging that is currently disabled
+by other mechanisms.
 
 # Examples
 ```julia
@@ -651,17 +670,21 @@ close(closed_stream)
 Simplistic logger for logging all messages with level greater than or equal to
 `min_level` to `stream`. If stream is closed then messages with log level
 greater or equal to `Warn` will be logged to `stderr` and below to `stdout`.
+
+This Logger is thread-safe, with a lock taken around orchestration of message
+limits i.e. `maxlog`, and writes to the stream.
 """
 struct SimpleLogger <: AbstractLogger
     stream::IO
+    lock::ReentrantLock
     min_level::LogLevel
     message_limits::Dict{Any,Int}
 end
-SimpleLogger(stream::IO, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+SimpleLogger(stream::IO, level=Info) = SimpleLogger(stream, ReentrantLock(), level, Dict{Any,Int}())
 SimpleLogger(level=Info) = SimpleLogger(closed_stream, level)
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
-    get(logger.message_limits, id, 1) > 0
+    @lock logger.lock get(logger.message_limits, id, 1) > 0
 
 min_enabled_level(logger::SimpleLogger) = logger.min_level
 
@@ -672,15 +695,14 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     @nospecialize
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts
-        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
-        logger.message_limits[id] = remaining - 1
-        remaining > 0 || return
+        @lock logger.lock begin
+            remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+            remaining == 0 && return
+            logger.message_limits[id] = remaining - 1
+        end
     end
     buf = IOBuffer()
     stream::IO = logger.stream
-    if !(isopen(stream)::Bool)
-        stream = stderr
-    end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
     msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
@@ -694,7 +716,13 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
         println(iob, "│   ", key, " = ", val)
     end
     println(iob, "└ @ ", _module, " ", filepath, ":", line)
-    write(stream, take!(buf))
+    b = take!(buf)
+    @lock logger.lock begin
+        if !(isopen(stream)::Bool)
+            stream = stderr
+        end
+        write(stream, b)
+    end
     nothing
 end
 

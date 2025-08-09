@@ -3,7 +3,9 @@
 using Test
 using Distributed
 using Dates
-import REPL
+if !Sys.iswindows() && isa(stdin, Base.TTY)
+    import REPL
+end
 using Printf: @sprintf
 using Base: Experimental
 
@@ -11,9 +13,7 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-using .BuildkiteTestJSON
-
-(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()
@@ -25,9 +25,18 @@ else
     global running_under_rr() = false
 end
 
+const rmwait_timeout = running_under_rr() ? 300 : 30
+
 if use_revise
+    # First put this at the top of the DEPOT PATH to install revise if necessary.
+    # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
+    pushfirst!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
+    using Pkg
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
+    push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         using Revise
@@ -37,25 +46,17 @@ if use_revise
     end
 end
 
+if isempty(tests)
+    println("No tests selected. Exiting.")
+    exit()
+end
+
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
 else
     typemax(Csize_t)
 end
 limited_worker_rss = max_worker_rss != typemax(Csize_t)
-
-function test_path(test)
-    t = split(test, '/')
-    if t[1] in STDLIBS
-        if length(t) == 2
-            return joinpath(STDLIB_DIR, t[1], "test", t[2])
-        else
-            return joinpath(STDLIB_DIR, t[1], "test", "runtests")
-        end
-    else
-        return joinpath(@__DIR__, test)
-    end
-end
 
 # Check all test files exist
 isfiles = isfile.(test_path.(tests) .* ".jl")
@@ -123,7 +124,7 @@ cd(@__DIR__) do
     @everywhere include("testdefs.jl")
 
     if use_revise
-        Base.invokelatest(revise_trackall)
+        @invokelatest revise_trackall()
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
@@ -131,10 +132,12 @@ cd(@__DIR__) do
         Running parallel tests with:
           getpid() = $(getpid())
           nworkers() = $(nworkers())
-          nthreads() = $(Threads.threadpoolsize())
+          nthreads(:interactive) = $(Threads.threadpoolsize(:interactive))
+          nthreads(:default) = $(Threads.threadpoolsize(:default))
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+          Sys.uptime() = $(Sys.uptime()) ($(round(Sys.uptime() / (60 * 60), digits=1)) hours)
         """)
 
     #pretty print the information about gc and mem usage
@@ -261,7 +264,7 @@ cd(@__DIR__) do
                         wrkr = p
                         before = time()
                         resp, duration = try
-                                r = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                                r = remotecall_fetch(@Base.world(runtests, ∞), wrkr, test, test_path(test); seed=seed)
                                 r, time() - before
                             catch e
                                 isa(e, InterruptException) && return
@@ -277,7 +280,7 @@ cd(@__DIR__) do
                             elseif n > 1
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
-                                rmprocs(wrkr, waitfor=30)
+                                rmprocs(wrkr, waitfor=rmwait_timeout)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
@@ -290,7 +293,7 @@ cd(@__DIR__) do
                                 # the worker has reached the max-rss limit, recycle it
                                 # so future tests start with a smaller working set
                                 if n > 1
-                                    rmprocs(wrkr, waitfor=30)
+                                    rmprocs(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
@@ -304,7 +307,7 @@ cd(@__DIR__) do
                     end
                     if p != 1
                         # Free up memory =)
-                        rmprocs(p, waitfor=30)
+                        rmprocs(p, waitfor=rmwait_timeout)
                     end
                 end
             end
@@ -321,7 +324,7 @@ cd(@__DIR__) do
             t == "SharedArrays" && (isolate = false)
             before = time()
             resp, duration = try
-                    r = Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
                     r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()
@@ -379,6 +382,7 @@ cd(@__DIR__) do
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
     o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
+    BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
     for (testname, (resp,), duration) in results
@@ -413,7 +417,7 @@ cd(@__DIR__) do
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
             fake.time_end = fake.time_start + duration
-            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
+            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
@@ -422,15 +426,10 @@ cd(@__DIR__) do
     for test in all_tests
         (test in completed_tests) && continue
         fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1)))
+        Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = [])]), LineNumberNode(1), nothing))
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()
-    end
-
-    if Base.get_bool_env("CI", false)
-        @info "Writing test result data to $(@__DIR__)"
-        write_testset_json_files(@__DIR__, o_ts)
     end
 
     Test.TESTSET_PRINT_ENABLE[] = true

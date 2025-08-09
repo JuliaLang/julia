@@ -61,14 +61,9 @@ by [`take!`](@ref) on a writable [`IOBuffer`](@ref) and by calls to
 In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
-String(v::AbstractVector{UInt8}) = String(copyto!(StringMemory(length(v)), v))
-function String(v::Memory{UInt8})
-    len = length(v)
-    len == 0 && return ""
-    return ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), v, len)
-end
+String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
+
 function String(v::Vector{UInt8})
-    #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
     len == 0 && return ""
     ref = v.ref
@@ -82,6 +77,35 @@ function String(v::Vector{UInt8})
     setfield!(v, :ref, memoryref(Memory{UInt8}()))
     return str
 end
+
+"""
+    unsafe_takestring(m::Memory{UInt8})::String
+
+Create a `String` from `m`, changing the interpretation of the contents of `m`.
+This is done without copying, if possible. Thus, any access to `m` after
+calling this function, either to read or to write, is undefined behavior.
+"""
+function unsafe_takestring(m::Memory{UInt8})
+    isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
+end
+
+"""
+    takestring!(x) -> String
+
+Create a string from the content of `x`, emptying `x`.
+
+# Examples
+```jldoctest
+julia> v = [0x61, 0x62, 0x63];
+
+julia> s = takestring!(v)
+"abc"
+
+julia> isempty(v)
+true
+```
+"""
+takestring!(v::Vector{UInt8}) = String(v)
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
@@ -106,7 +130,7 @@ end
 # but the macro is not available at this time in bootstrap, so we write it manually.
 const _string_n_override = 0x04ee
 @eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String},
-    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override)), :(convert(Csize_t, n))))
+    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override, false)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)
@@ -225,7 +249,7 @@ end
     end)(s, i, n, l)
 end
 
-## checking UTF-8 & ACSII validity ##
+## checking UTF-8 & ASCII validity ##
 #=
     The UTF-8 Validation is performed by a shift based DFA.
     ┌───────────────────────────────────────────────────────────────────┐
@@ -373,7 +397,7 @@ end
 
 ##
 
-# Classifcations of string
+# Classifications of string
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -558,7 +582,7 @@ isascii(s::String) = isascii(codeunits(s))
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)
 
 """
-    repeat(c::AbstractChar, r::Integer) -> String
+    repeat(c::AbstractChar, r::Integer)::String
 
 Repeat a character `r` times. This can equivalently be accomplished by calling
 [`c^r`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).

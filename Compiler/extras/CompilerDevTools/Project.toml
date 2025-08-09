@@ -1,0 +1,5 @@
+name = "CompilerDevTools"
+uuid = "92b2d91f-d2bd-4c05-9214-4609ac33433f"
+
+[deps]
+Compiler = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"

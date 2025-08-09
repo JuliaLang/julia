@@ -5,7 +5,7 @@
   utilities for walking the stack and looking up information about code addresses
 */
 #include <inttypes.h>
-#include "gc-stock.h"
+#include "gc-common.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
@@ -98,9 +98,13 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             }
             uintptr_t oldsp = thesp;
             have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
-            if (oldsp >= thesp && !jl_running_under_rr(0)) {
-                // The stack pointer is clearly bad, as it must grow downwards.
+            if ((n < 2 ? oldsp > thesp : oldsp >= thesp) && !jl_running_under_rr(0)) {
+                // The stack pointer is clearly bad, as it must grow downwards,
                 // But sometimes the external unwinder doesn't check that.
+                // Except for n==0 when there is no oldsp and n==1 on all platforms but i686/x86_64.
+                // (on x86, the platform first pushes the new stack frame, then does the
+                // call, on almost all other platforms, the platform first does the call,
+                // then the user pushes the link register to the frame).
                 have_more_frames = 0;
             }
             if (return_ip == 0) {
@@ -132,11 +136,11 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             // * The way that libunwind handles it in `unw_get_proc_name`:
             //   https://lists.nongnu.org/archive/html/libunwind-devel/2014-06/msg00025.html
             uintptr_t call_ip = return_ip;
+            #if defined(_CPU_ARM_)
             // ARM instruction pointer encoding uses the low bit as a flag for
             // thumb mode, which must be cleared before further use. (Note not
             // needed for ARM AArch64.) See
             // https://github.com/libunwind/libunwind/pull/131
-            #ifdef _CPU_ARM_
             call_ip &= ~(uintptr_t)0x1;
             #endif
             // Now there's two main cases to adjust for:
@@ -208,7 +212,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
 //
 // The first `skip` frames are omitted, in addition to omitting the frame from
 // `rec_backtrace` itself.
-NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip)
+NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
 {
     bt_context_t context;
     memset(&context, 0, sizeof(context));
@@ -222,6 +226,24 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
     return bt_size;
+}
+
+NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+{
+    if (maxsize < 1) {
+        return 0;
+    }
+    bt_data[0].uintptr = (uintptr_t) &failed_to_sample_task_fun;
+    return 1;
+}
+
+NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+{
+    if (maxsize < 1) {
+        return 0;
+    }
+    bt_data[0].uintptr = (uintptr_t) &failed_to_stop_thread_fun;
+    return 1;
 }
 
 static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
@@ -304,7 +326,11 @@ static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
     bt = *btout = jl_alloc_array_1d(array_ptr_void_type, bt_size);
     static_assert(sizeof(jl_bt_element_t) == sizeof(void*),
                   "jl_bt_element_t is presented as Ptr{Cvoid} on julia side");
-    memcpy(jl_array_data(bt, jl_bt_element_t), bt_data, bt_size * sizeof(jl_bt_element_t));
+    if (bt_data != NULL) {
+        memcpy(jl_array_data(bt, jl_bt_element_t), bt_data, bt_size * sizeof(jl_bt_element_t));
+    } else {
+        assert(bt_size == 0);
+    }
     bt2 = *bt2out = jl_alloc_array_1d(jl_array_any_type, 0);
     // Scan the backtrace buffer for any gc-managed values
     for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
@@ -606,7 +632,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
             jl_svecset(r, 1, jl_empty_sym);
         free(frame.file_name);
         jl_svecset(r, 2, jl_box_long(frame.line));
-        jl_svecset(r, 3, frame.linfo != NULL ? (jl_value_t*)frame.linfo : jl_nothing);
+        jl_svecset(r, 3, frame.ci != NULL ? (jl_value_t*)frame.ci : jl_nothing);
         jl_svecset(r, 4, jl_box_bool(frame.fromC));
         jl_svecset(r, 5, jl_box_bool(frame.inlined));
     }
@@ -642,13 +668,13 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
     for (i = 0; i < n; i++) {
         jl_frame_t frame = frames[i];
         if (!frame.func_name) {
-            jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
+            jl_safe_printf("unknown function (ip: %p) at %s\n", (void*)ip, frame.file_name ? frame.file_name : "(unknown file)");
         }
         else {
             jl_safe_print_codeloc(frame.func_name, frame.file_name, frame.line, frame.inlined);
             free(frame.func_name);
-            free(frame.file_name);
         }
+        free(frame.file_name);
     }
     free(frames);
 }
@@ -974,7 +1000,13 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     #endif
 #elif defined(_OS_LINUX_) && defined(__GLIBC__)
     __jmp_buf *_ctx = &mctx->__jmpbuf;
+    #if defined(_CPU_AARCH64_)
+    // Only on aarch64-linux libunwind uses a different struct than system's one:
+    // <https://github.com/libunwind/libunwind/blob/e63e024b72d35d4404018fde1a546fde976da5c5/include/libunwind-aarch64.h#L193-L205>.
+    struct unw_sigcontext *mc = &c->uc_mcontext;
+    #else
     mcontext_t *mc = &c->uc_mcontext;
+    #endif
     #if defined(_CPU_X86_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/i386/jmpbuf-offsets.h
@@ -1225,26 +1257,65 @@ return 0;
 #endif
 }
 
-JL_DLLEXPORT size_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+typedef struct {
+    int16_t old;
+    bt_context_t *c;
+    int success;
+} suspend_t;
+static void suspend(void *ctx)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
+    suspend_t *suspenddata = (suspend_t*)ctx;
+    suspenddata->success = jl_thread_suspend_and_get_state(suspenddata->old, 1, suspenddata->c);
+}
+
+JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+{
+    int16_t tid = ptls2->tid;
+    jl_task_t *t = NULL;
+    bt_context_t *context = NULL;
+    bt_context_t c;
+    suspend_t suspenddata = {tid, &c};
+    jl_with_stackwalk_lock(suspend, &suspenddata);
+    if (!suspenddata.success) {
+        return 0;
+    }
+    // thread is stopped, safe to read the task it was running before we stopped it
+    t = jl_atomic_load_relaxed(&ptls2->current_task);
+    context = &c;
+    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+    jl_thread_resume(tid);
+    return bt_size;
+}
+
+JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
+{
+    int16_t tid = INT16_MAX;
+    jl_record_backtrace_result_t result = {0, tid};
+    jl_task_t *ct = NULL;
+    jl_ptls_t ptls = NULL;
+    if (!all_tasks_profiler) {
+        ct = jl_current_task;
+        ptls = ct->ptls;
+        ptls->bt_size = 0;
+        tid = ptls->tid;
+    }
     if (t == ct) {
-        return rec_backtrace(bt_data, max_bt_size, 0);
+        result.bt_size = rec_backtrace(bt_data, max_bt_size, 0);
+        result.tid = tid;
+        return result;
     }
     bt_context_t *context = NULL;
     bt_context_t c;
     int16_t old;
-    for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid; old = -1) {
-        int lockret = jl_lock_stackwalk();
+    for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
-        if (!jl_thread_suspend_and_get_state(old, 1, &c)) {
-            jl_unlock_stackwalk(lockret);
+        suspend_t suspenddata = {old, &c};
+        jl_with_stackwalk_lock(suspend, &suspenddata);
+        if (!suspenddata.success) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
-            return 0;
+            return result;
         }
-        jl_unlock_stackwalk(lockret);
         if (jl_atomic_load_relaxed(&t->tid) == old) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[old];
             if (ptls2->previous_task == t || // we might print the wrong stack here, since we can't know whether we executed the swapcontext yet or not, but it at least avoids trying to access the state inside uc_mcontext which might not be set yet
@@ -1277,13 +1348,16 @@ JL_DLLEXPORT size_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, 
 #endif
     }
     size_t bt_size = 0;
-    if (context)
-        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, t->gcstack);
+    if (context) {
+        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, all_tasks_profiler ? NULL : t->gcstack);
+    }
     if (old == -1)
         jl_atomic_store_relaxed(&t->tid, old);
-    else if (old != ptls->tid)
+    else if (old != tid)
         jl_thread_resume(old);
-    return bt_size;
+    result.bt_size = bt_size;
+    result.tid = old;
+    return result;
 }
 
 //--------------------------------------------------
@@ -1317,7 +1391,8 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
     jl_ptls_t ptls = ct->ptls;
     ptls->bt_size = 0;
     jl_bt_element_t *bt_data = ptls->bt_data;
-    size_t bt_size = jl_record_backtrace(t, bt_data, JL_MAX_BT_SIZE);
+    jl_record_backtrace_result_t r = jl_record_backtrace(t, bt_data, JL_MAX_BT_SIZE, 0);
+    size_t bt_size = r.bt_size;
     size_t i;
     for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);
@@ -1331,8 +1406,6 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
     jlbacktrace();
 }
 
-extern int gc_first_tid;
-
 // Print backtraces for all live tasks, for all threads, to jl_safe_printf stderr
 JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 {
@@ -1340,18 +1413,14 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
         jl_ptls_t ptls2 = allstates[i];
-        if (gc_is_parallel_collector_thread(i)) {
-            jl_safe_printf("==== Skipping backtrace for parallel GC thread %zu\n", i + 1);
-            continue;
-        }
-        if (gc_is_concurrent_collector_thread(i)) {
-            jl_safe_printf("==== Skipping backtrace for concurrent GC thread %zu\n", i + 1);
+        if (gc_is_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for parallel/concurrent GC thread %zu\n", i + 1);
             continue;
         }
         if (ptls2 == NULL) {
             continue;
         }
-        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
         int t_state = JL_TASK_STATE_DONE;
         jl_task_t *t = ptls2->root_task;

@@ -397,8 +397,28 @@ during image compilation. Defaults to 0.
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
-running on a dedicated machine: the master thread is on proc 0, and threads are
-affinitized. Otherwise, Julia lets the operating system handle thread policy.
+running on a dedicated machine: each thread in the default threadpool is
+affinitized.  [Interactive threads](@ref man-threadpools) remain under the
+control of the operating system scheduler.
+
+Otherwise, Julia lets the operating system handle thread policy.
+
+## Garbage Collection
+
+### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
+
+Environment variable equivalent to the `--heap-size-hint=<size>[<unit>]` command line option.
+
+Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of:
+
+    - B  (bytes)
+    - K  (kibibytes)
+    - M  (mebibytes)
+    - G  (gibibytes)
+    - T  (tebibytes)
+    - %  (percentage of physical memory)
+
+For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 
 ## REPL formatting
 
@@ -459,9 +479,15 @@ stored in memory.
 
 Valid values for [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) can be obtained by executing `julia -C help`.
 
+To get the CPU target string that was used to build the current system image,
+use [`Sys.sysimage_target()`](@ref). This can be useful for reproducing
+the same system image or understanding what CPU features were enabled during compilation.
+
 Setting [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) is important for heterogeneous compute systems where processors of
 distinct types or features may be present. This is commonly encountered in high performance
-computing (HPC) clusters since the component nodes may be using distinct processors.
+computing (HPC) clusters since the component nodes may be using distinct processors. In this case,
+you may want to use the `sysimage` CPU target to maintain the same configuration as the sysimage.
+See below for more details.
 
 The CPU target string is a list of strings separated by `;` each string starts with a CPU
 or architecture name and followed by an optional list of features separated by `,`.
@@ -469,14 +495,26 @@ A `generic` or empty CPU name means the basic required feature set of the target
 which is at least the architecture the C/C++ runtime is compiled with. Each string
 is interpreted by LLVM.
 
+!!! note
+    Package images can only target the same or more specific CPU features than
+    their base system image.
+
 A few special features are supported:
-1. `clone_all`
+
+1. `sysimage`
+
+     A special keyword that can be used as a CPU target name, which will be replaced
+     with the CPU target string that was used to build the current system image. This allows
+     you to specify CPU targets that build upon or extend the current sysimage's target, which
+     is particularly helpful for creating package images that are as flexible as the sysimage.
+
+2. `clone_all`
 
      This forces the target to have all functions in sysimg cloned.
      When used in negative form (i.e. `-clone_all`), this disables full clone that's
      enabled by default for certain targets.
 
-2. `base([0-9]*)`
+3. `base([0-9]*)`
 
      This specifies the (0-based) base target index. The base target is the target
      that the current target is based on, i.e. the functions that are not being cloned
@@ -484,11 +522,11 @@ A few special features are supported:
      fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
      The index can only be smaller than the current index.
 
-3. `opt_size`
+4. `opt_size`
 
      Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
 
-4. `min_size`
+5. `min_size`
 
      Optimize only for size. Clang's `-Oz`.
 
@@ -509,17 +547,6 @@ See [Triggered During Execution](@ref).
 Allows you to enable or disable zones for a specific Julia run.
 For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable
 the `INFERENCE` zones. See [Dynamically Enabling and Disabling Zones](@ref).
-
-### [`JULIA_GC_NO_GENERATIONAL`](@id JULIA_GC_NO_GENERATIONAL)
-
-If set to anything besides `0`, then the Julia garbage collector never performs
-"quick sweeps" of memory.
-
-!!! note
-
-    This environment variable only has an effect if Julia was compiled with
-    garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
-    in the build configuration).
 
 ### [`JULIA_GC_WAIT_FOR_DEBUGGER`](@id JULIA_GC_WAIT_FOR_DEBUGGER)
 

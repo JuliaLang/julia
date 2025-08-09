@@ -1,12 +1,20 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@test Base.Cartesian.exprresolve(:(1 + 3)) == 4
+
 ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
 @test ex.args[2] == QuoteNode(:x)
 
 @test Base.Cartesian.lreplace!("val_col", Base.Cartesian.LReplace{String}(:col, "col", 1)) == "val_1"
 @test Base.setindex(CartesianIndex(1,5,4),3,2) == CartesianIndex(1, 3, 4)
-
+@testset "Expression Resolve" begin
+    @test Base.Cartesian.exprresolve(:(1 + 3)) == 4
+    ex1 = Expr(:ref, [1, 2, 3], 2)
+    result1 = Base.Cartesian.exprresolve(ex1)
+    @test result1 == 2
+    ex2 = Expr(:ref, [1, 2, 3], "non-real-index")
+    result2 = Base.Cartesian.exprresolve(ex2)
+    @test result2 == ex2
+end
 @testset "CartesianIndices constructions" begin
     @testset "AbstractUnitRange" begin
         for oinds in [
@@ -564,4 +572,58 @@ end
         m
     end
     @test t3 == (1, 2, 0)
+end
+
+@testset "CartesianIndex show" begin
+    c = CartesianIndex()
+    @test sprint(show, c) == "CartesianIndex()"
+    c = CartesianIndex(3)
+    @test sprint(show, c) == "CartesianIndex(3)"
+    c = CartesianIndex(3, 3)
+    @test sprint(show, c) == "CartesianIndex(3, 3)"
+end
+
+@testset "CartesianIndex indexing with begin/end" begin
+    I = CartesianIndex(3,4)
+    @test I[begin] == I[1]
+    @test I[end] == I[2]
+end
+
+@testset "in for a CartesianIndex StepRangeLen" begin
+    @testset for l in [0, 1, 4], r in Any[
+            StepRangeLen(CartesianIndex(), CartesianIndex(), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(0), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(1), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(4), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(-4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, 4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, -4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, 2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, 2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, -2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, -2), l),
+            StepRangeLen(CartesianIndex(-1, 2, 0), CartesianIndex(0, 0, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2, 0), CartesianIndex(0, 0, -2), l),
+            ]
+
+        if length(r) == 0
+            @test !(first(r) in r)
+            @test !(last(r) in r)
+        end
+        for x in r
+            @test x in r
+            if step(r) != oneunit(x)
+                @test !((x + oneunit(x)) in r)
+            end
+        end
+        @test !(CartesianIndex(ntuple(x->0, ndims(r))) in r)
+        @test !(CartesianIndex(ntuple(x->typemax(Int), ndims(r))) in r)
+        @test !(CartesianIndex(ntuple(x->typemin(Int), ndims(r))) in r)
+        if ndims(r) > 1
+            @test !(CartesianIndex(ntuple(x->0, ndims(r)-1)...) in r)
+        end
+    end
 end
