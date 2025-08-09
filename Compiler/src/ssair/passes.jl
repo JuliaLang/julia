@@ -1532,7 +1532,7 @@ end
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     code::CodeInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    mi = code.def
+    mi = get_ci_mi(code)
     et = InliningEdgeTracker(inlining)
     if code isa CodeInstance
         if use_const_api(code)
@@ -1545,7 +1545,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         return false
     end
 
-    src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
+    src_inlining_policy(inlining.interp, mi, src, info, IR_FLAG_NULL) || return false
     src, spec_info, di = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
