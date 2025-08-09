@@ -597,4 +597,21 @@ function f()
     Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
 end
 end
-@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()
+
+# Test drop_all_caches function
+@testset "drop_all_caches world age behavior" begin
+    # Test that drop_all_caches increments world age
+    world_before = get_world_counter()
+    Base.drop_all_caches()
+    world_after = get_world_counter()
+    @test world_after > world_before
+    @test world_after == world_before + 1
+
+    # Test that it forces recompilation (indirectly by checking it doesn't crash)
+    test_drop_caches_f(x) = x^2 + 1
+    result_before = test_drop_caches_f(5)
+    Base.drop_all_caches()
+    result_after = test_drop_caches_f(5)
+    @test result_before == result_after == 26
+end

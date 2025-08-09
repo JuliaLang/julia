@@ -125,4 +125,9 @@ function revise_trackall()
     Revise.revise()
 end
 
+# if --code-coverage=all is requested throw away all compiled code (from the sysimage and up to this point)
+if Base.JLOptions().code_coverage == 2
+    Base.drop_all_caches()
+end
+
 nothing # File is loaded via a remotecall to "include". Ensure it returns "nothing".
