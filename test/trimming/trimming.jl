@@ -1,4 +1,9 @@
+import Pkg
+
+Pkg.add(["JSON"])
+
 using Test
+using JSON
 
 @test length(ARGS) == 1
 bindir = dirname(ARGS[1])
@@ -15,4 +20,40 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test lines[2] == lines[3]
     @test Base.VersionNumber(lines[2]) ≥ v"1.5.7"
     @test filesize(basic_jll_exe) < filesize(unsafe_string(Base.JLOptions().image_file))/10
+
+    # Test that the shared library can be used in a C application
+    capplication_exe = joinpath(bindir, "capplication" * exe_suffix)
+    lines = split(readchomp(`$capplication_exe`), "\n")
+    @test length(lines) == 2
+    @test lines[1] == "Sum of copied values: 6.000000"
+    @test lines[2] == "Count of same vectors: 1"
+
+    # Test that the logging of entrypoints and types works correctly
+    str = read(joinpath(bindir, "bindinginfo_libsimple.json"), String)
+
+    # The log should parse as valid JSON
+    abi = JSON.Parser.parse(str)
+
+    # `copyto_and_sum` should have been exported
+    @test any(Bool[func["symbol"] == "copyto_and_sum" for func in abi["functions"]])
+
+    # `CVector{Float32}` should have been exported with the correct info
+    @test any(Bool[type["name"] == "CVector{Float32}" for type in abi["types"]])
+    CVector_Float32 = abi["types"][findfirst(type["name"] == "CVector{Float32}" for type in abi["types"])]
+    @test length(CVector_Float32["fields"]) == 2
+    @test CVector_Float32["fields"][1]["offset"] == 0
+    @test CVector_Float32["fields"][2]["offset"] == 8
+    @test abi["types"][CVector_Float32["fields"][1]["type"]]["name"] == "Int32"
+    @test abi["types"][CVector_Float32["fields"][2]["type"]]["name"] == "Ptr{Float32}"
+    @test CVector_Float32["size"] == 16
+
+    # `CVectorPair{Float32}` should have been exported with the correct info
+    @test any(Bool[type["name"] == "CVectorPair{Float32}" for type in abi["types"]])
+    CVectorPair_Float32 = abi["types"][findfirst(type["name"] == "CVectorPair{Float32}" for type in abi["types"])]
+    @test length(CVectorPair_Float32["fields"]) == 2
+    @test CVectorPair_Float32["fields"][1]["offset"] == 0
+    @test CVectorPair_Float32["fields"][2]["offset"] == 16
+    @test abi["types"][CVectorPair_Float32["fields"][1]["type"]]["name"] == "CVector{Float32}"
+    @test abi["types"][CVectorPair_Float32["fields"][2]["type"]]["name"] == "CVector{Float32}"
+    @test CVectorPair_Float32["size"] == 32
 end
