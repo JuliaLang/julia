@@ -600,8 +600,8 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
     if !iserr
         # display result
         try
-            Base.sigatomic_end()
             if val !== nothing && show_value
+                Base.sigatomic_end() # allow display to be interrupted
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
@@ -612,6 +612,7 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                         __repl_entry_display(specialdisplay, val)
                     end
                 end
+                Base.sigatomic_begin()
                 if iserr
                     println(errio)
                     println(errio, "Error showing value of type ", typeof(val), ":")
@@ -628,7 +629,7 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
     if iserr
         # print error
         try
-            Base.sigatomic_end()
+            Base.sigatomic_end() # allow stacktrace printing to be interrupted
             val = Base.scrub_repl_backtrace(val)
             Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
             repl_display_error(errio, val)
@@ -636,6 +637,7 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
             println(errio) # an error during printing is likely to leave us mid-line
             println(errio, "SYSTEM (REPL): showing an error caused an error")
             try
+                Base.sigatomic_end() # allow stacktrace printing to be interrupted
                 excs = Base.scrub_repl_backtrace(current_exceptions())
                 setglobal!(Base.MainInclude, :err, excs)
                 repl_display_error(errio, excs)
