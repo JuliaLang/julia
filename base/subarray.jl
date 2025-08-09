@@ -65,6 +65,7 @@ viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 size(V::SubArray) = (@inline; map(length, axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
+similar(::Type{TA}, dims::Dims) where {T,N,P,TA<:SubArray{T,N,P}} = similar(P, dims)
 
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
