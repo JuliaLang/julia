@@ -107,6 +107,25 @@ end
     @test_throws "\"" throw("\"")
     @test_throws Returns(false) throw(Returns(false))
 end
+
+@testset "Pass - exception with pattern (3-arg form)" begin
+    # Test 3-argument form: @test_throws ExceptionType pattern expr
+    @test_throws ErrorException "error foo" error("error foo 1")
+    @test_throws DomainError r"sqrt.*negative" sqrt(-1)
+    @test_throws BoundsError "at index [2]" [1][2]
+    @test_throws ErrorException ["error", "foo"] error("error foo bar")
+
+    # Test with function pattern
+    @test_throws ErrorException (s -> occursin("foo", s)) error("error foo bar")
+
+    # Test output format
+    let result = @test_throws ErrorException "error foo" error("error foo 1")
+        output = sprint(show, result)
+        @test occursin("Test Passed", output)
+        @test occursin("Thrown: ErrorException", output)
+    end
+end
+
 # Test printing of Fail results
 include("nothrow_testset.jl")
 
@@ -399,6 +418,47 @@ let retval_tests = @testset NoThrowTestSet begin
     end
     for retval_test in retval_tests
         @test retval_test isa Test.Pass
+    end
+end
+
+@testset "Fail - exception with pattern (3-arg form)" begin
+    # Test type mismatch
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ArgumentError "error foo" error("error foo 1")  # Wrong type
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
+        @test occursin("ArgumentError with pattern \"error foo\"", fails[1].data)
+    end
+
+    # Test pattern mismatch
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ErrorException "wrong pattern" error("error foo 1")  # Wrong pattern
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
+        @test occursin("ErrorException with pattern \"wrong pattern\"", fails[1].data)
+    end
+
+    # Test no exception thrown
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ErrorException "error foo" 1 + 1  # No exception
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_nothing
+        @test occursin("ErrorException with pattern \"error foo\"", fails[1].data)
+    end
+
+    # Test first argument must be a type
+    let fails = @testset NoThrowTestSet begin
+        @test_throws "not a type" "error foo" error("error foo 1")  # First arg not a type
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
     end
 end
 
