@@ -27,19 +27,36 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
+// https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
+// https://learn.microsoft.com/en-us/windows/console/ctrl-c-and-ctrl-break-signals
+JL_DLLEXPORT static char *jl_sigabbrev(int sig)
+{
+    switch (sig) {
+    case SIGABRT:        return "ABRT";
+    case SIGABRT_COMPAT: return "ABRT_COMPAT";
+    case SIGBREAK:       return "BREAK";
+    case SIGFPE:         return "FPE";
+    case SIGILL:         return "ILL";
+    case SIGINT:         return "INT";
+    case SIGSEGV:        return "SEGV";
+    case SIGTERM:        return "TERM";
+    default:             return NULL;
+    }
+}
+
 static char *strsignal(int sig)
 {
     switch (sig) {
-    case SIGINT:         return "SIGINT"; break;
-    case SIGILL:         return "SIGILL"; break;
-    case SIGABRT_COMPAT: return "SIGABRT_COMPAT"; break;
-    case SIGFPE:         return "SIGFPE"; break;
-    case SIGSEGV:        return "SIGSEGV"; break;
-    case SIGTERM:        return "SIGTERM"; break;
-    case SIGBREAK:       return "SIGBREAK"; break;
-    case SIGABRT:        return "SIGABRT"; break;
+    case SIGABRT:        return "SIGABRT";
+    case SIGABRT_COMPAT: return "SIGABRT_COMPAT";
+    case SIGBREAK:       return "SIGBREAK";
+    case SIGFPE:         return "SIGFPE";
+    case SIGILL:         return "SIGILL";
+    case SIGINT:         return "SIGINT";
+    case SIGSEGV:        return "SIGSEGV";
+    case SIGTERM:        return "SIGTERM";
+    default:             return "?";
     }
-    return "?";
 }
 
 static void jl_try_throw_sigint(void)
@@ -513,26 +530,35 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     uv_mutex_unlock(&bt_data_prof_lock);
 }
 
+int jl_install_default_signal_handler(int sig)
+{
+    switch (sig) {
+    case SIGFPE:
+    case SIGILL:
+    case SIGINT:
+    case SIGSEGV:
+    case SIGTERM:
+    case SIGABRT:
+        sa_handler = crt_sig_handler;
+        break;
+    default:
+        return 0; // No default signal handler installed
+    }
+
+    if (signal(sig, (void (__cdecl *)(int))sa_handler) == SIG_ERR) {
+        jl_errorf("fatal error: Couldn't set %s", sigabbrev_np(sig));
+    }
+    return 1; // A default signal handler was installed
+}
+
 void jl_install_default_signal_handlers(void)
 {
-    if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGFPE");
-    }
-    if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGILL");
-    }
-    if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGINT");
-    }
-    if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGSEGV");
-    }
-    if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTERM");
-    }
-    if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGABRT");
-    }
+    jl_install_default_signal_handler(SIGFPE);
+    jl_install_default_signal_handler(SIGILL);
+    jl_install_default_signal_handler(SIGINT);
+    jl_install_default_signal_handler(SIGSEGV);
+    jl_install_default_signal_handler(SIGTERM);
+    jl_install_default_signal_handler(SIGABRT);
     SetUnhandledExceptionFilter(jl_exception_handler);
 }
 

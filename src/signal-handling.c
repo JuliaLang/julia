@@ -631,6 +631,8 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         if (sig != SIGINT)
             sigaddset(&sset, sig);
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+
+        // TODO: Need to hook in here as well
 #endif
         if (si_code)
             jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
