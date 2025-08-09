@@ -628,25 +628,25 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
     end
     if iserr
         # print error
-        try
-            Base.sigatomic_end() # allow stacktrace printing to be interrupted
-            val = Base.scrub_repl_backtrace(val)
-            Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-            repl_display_error(errio, val)
-        catch ex
-            println(errio) # an error during printing is likely to leave us mid-line
-            println(errio, "SYSTEM (REPL): showing an error caused an error")
+        iserr = false
+        while true
             try
                 Base.sigatomic_end() # allow stacktrace printing to be interrupted
-                excs = Base.scrub_repl_backtrace(current_exceptions())
-                setglobal!(Base.MainInclude, :err, excs)
-                repl_display_error(errio, excs)
-            catch e
-                # at this point, only print the name of the type as a Symbol to
-                # minimize the possibility of further errors.
-                println(errio)
-                println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
+                val = Base.scrub_repl_backtrace(val)
+                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
+                repl_display_error(errio, val)
+                break
+            catch ex
+                println(errio) # an error during printing is likely to leave us mid-line
+                if !iserr
+                    println(errio, "SYSTEM (REPL): showing an error caused an error")
+                    val = current_exceptions()
+                    iserr = true
+                else
+                    println(errio, "SYSTEM (REPL): caught exception of type ", typeof(ex).name.name,
                         " while trying to print an exception; giving up")
+                    break
+                end
             end
         end
     end
