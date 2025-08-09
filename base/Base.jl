@@ -279,6 +279,7 @@ include("binaryplatforms.jl")
 include("timing.jl")
 include("client.jl")
 include("asyncmap.jl")
+include("features.jl")
 
 # deprecated functions
 include("deprecated.jl")
