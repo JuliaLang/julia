@@ -740,9 +740,7 @@ end
 
     @testset "accuracy of `cosc` around the origin" begin
         for t in (Float32, Float64)
-            for x in range(start = t(-1), stop = t(1), length = 5000)
-                @test ulp_error(cosc, x) < 4
-            end
+            @test ulp_error_maximum(cosc, range(start = t(-1), stop = t(1), length = 5000)) < 4
         end
     end
 end
