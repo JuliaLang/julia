@@ -137,7 +137,7 @@ baremodule BuildSettings
 using Core: ARGS, include, Int, ===
 using ..Compiler: >, getindex, length
 
-global MAX_METHODS::Int = 3
+global MAX_METHODS::Int = 1
 
 if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
     include(BuildSettings, ARGS[3])
