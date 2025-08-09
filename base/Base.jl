@@ -35,7 +35,6 @@ include("subarray.jl")
 include("views.jl")
 
 # numeric operations
-include("hashing.jl")
 include("div.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -86,6 +85,9 @@ include("strings/string.jl")
 include("strings/substring.jl")
 include("strings/cstring.jl")
 
+include("cartesian.jl")
+using .Cartesian
+include("hashing.jl")
 include("osutils.jl")
 
 # Core I/O
@@ -112,8 +114,6 @@ include("arrayshow.jl")
 include("methodshow.jl")
 
 # multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
 include("multidimensional.jl")
 
 include("broadcast.jl")
