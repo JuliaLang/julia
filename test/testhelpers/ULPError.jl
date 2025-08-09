@@ -42,9 +42,6 @@ module ULPError
         ulp_error(func ∘ BigFloat, func, x)
     end
     function ulp_error_maximum(func::Func, iterator) where {Func}
-        function f(x::AbstractFloat)
-            ulp_error(func, x)
-        end
-        maximum(f, iterator)
+        maximum(Base.Fix1(ulp_error, func), iterator)
     end
 end
