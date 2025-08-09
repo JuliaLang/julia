@@ -202,76 +202,58 @@ function promote_shape(a::Indices, b::Indices)
 end
 
 function throw_setindex_mismatch(X, I)
-    if length(I) == 1
-        throw(DimensionMismatch("tried to assign $(length(X)) elements to $(I[1]) destinations"))
+    @noinline
+    pI = filter(!isnegative, I)
+    if length(pI) == 1
+        throw(DimensionMismatch("tried to assign $(length(X)) elements to $(pI[1]) destinations"))
     else
-        throw(DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(I)) destination"))
+        throw(DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(pI)) destination"))
     end
 end
 
-# check for valid sizes in A[I...] = X where X <: AbstractArray
-# we want to allow dimensions that are equal up to permutation, but only
-# for permutations that leave array elements in the same linear order.
-# those are the permutations that preserve the order of the non-singleton
-# dimensions.
-function setindex_shape_check(X::AbstractArray, I::Integer...)
-    li = ndims(X)
-    lj = length(I)
-    i = j = 1
-    while true
-        ii = length(axes(X,i))
-        jj = I[j]
-        if i == li || j == lj
-            while i < li
-                i += 1
-                ii *= length(axes(X,i))
-            end
-            while j < lj
-                j += 1
-                jj *= I[j]
-            end
-            if ii != jj
-                throw_setindex_mismatch(X, I)
-            end
-            return
-        end
-        if ii == jj
-            i += 1
-            j += 1
-        elseif ii == 1
-            i += 1
-        elseif jj == 1
-            j += 1
+const IntegerOrTuple = Union{Integer, Tuple{Vararg{Integer}}}
+
+_nnprod() = 1
+_nnprod(i::Integer, I::Integer...) =
+    (i == -1) ? _nnprod(I...) : i * _nnprod(I...)
+
+_trailing_dropped(I::Integer...) = true
+_trailing_dropped(i::Integer, I::Integer...)  = (i == -1) && _trailing_dropped(I...)
+
+_shapes_match(::Bool, ::Tuple{}) = true
+_shapes_match(isfirstdim::Bool, sz) = _shapes_match(isfirstdim, (), sz...)
+_shapes_match(isfirstdim::Bool, sz::Tuple{}, i::Integer, I::Integer...) =
+    isone(abs(i)) && _shapes_match(isfirstdim, sz, I...)
+function _shapes_match(isfirstdim, sz, i::Integer, I::Integer...)
+    if i == -1
+        return _shapes_match(isfirstdim, sz, I...)
+    else
+        if isfirstdim && _trailing_dropped(I...)
+            # sz comes from a call to size(X) and never contains negatives
+            return prod(sz) == i
         else
-            throw_setindex_mismatch(X, I)
+            return (first(sz) == i) && _shapes_match(false, tail(sz), I...)
         end
     end
 end
 
 setindex_shape_check(X::AbstractArray) =
-    (length(X)==1 || throw_setindex_mismatch(X,()))
+    (length(X) == 1 || throw_setindex_mismatch(X, ()))
 
 setindex_shape_check(X::AbstractArray, i::Integer) =
-    (length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (length(X) == i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check(X::AbstractArray{<:Any, 0}, i::Integer...) =
-    (length(X) == prod(i) || throw_setindex_mismatch(X, i))
+setindex_shape_check(X::AbstractArray{<:Any,0}, I::Integer...) =
+    (length(X) == _nnprod(I...) || throw_setindex_mismatch(X, I))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
-    (length(X)==i || throw_setindex_mismatch(X, (i,)))
+setindex_shape_check(X::AbstractArray{<:Any,1}, I::Integer...) =
+    (length(X) == _nnprod(I...) || throw_setindex_mismatch(X, I))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
-    (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
+setindex_shape_check(X::AbstractArray, I::IntegerOrTuple...) =
+    setindex_shape_check(X, flatten(I)...)
 
-function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
-    if length(X) != i*j
-        throw_setindex_mismatch(X, (i,j))
-    end
-    sx1 = length(axes(X,1))
-    if !(i == 1 || i == sx1 || sx1 == 1)
-        throw_setindex_mismatch(X, (i,j))
-    end
-end
+setindex_shape_check(X::AbstractArray, I::Integer...) =
+    _shapes_match(true, size(X), I...) || throw_setindex_mismatch(X, I)
 
 setindex_shape_check(::Any...) =
     throw(ArgumentError("indexed assignment with a single value to possibly many locations is not supported; perhaps use broadcasting `.=` instead?"))
