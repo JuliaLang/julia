@@ -375,4 +375,4 @@ function from(frame::StackFrame, m::Module)
     return parentmodule(frame) === m
 end
 
-end
+end  # module StackTraces
