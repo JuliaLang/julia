@@ -684,28 +684,27 @@
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
                        (if (any vararg? (butlast vals))
-                         ;; Forbid splat in all but the final default value
-                         (error "invalid \"...\" in non-final positional argument default value")
-                         (if (any (lambda (defaultv)
-                                  ;; does any default val expression...
-                                  (contains (lambda (e)
-                                              ;; contain "e" such that...
-                                              (any (lambda (a)
-                                                     ;; "e" is in an absent arg
-                                                     (contains (lambda (u)
-                                                                 (eq? u e))
-                                                               a))
-                                                   absent))
-                                            defaultv))
-                                vals)
-                           ;; then add only one next argument
-                           `(block
-                             ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
-                           ;; otherwise add all
-                           `(block
-                             ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
+                           ;; Forbid splat in all but the final default value
+                           (error "invalid \"...\" in non-final positional argument default value")
+                           (if (any (lambda (defaultv)
+                                      ;; does any default val expression...
+                                      (expr-contains-p
+                                       (lambda (e)
+                                         ;; contain "e" such that...
+                                         (any (lambda (a)
+                                                ;; "e" is in an absent arg
+                                                (expr-contains-eq e a))
+                                              absent))
+                                       defaultv))
+                                    vals)
+                               ;; then add only one next argument
+                               `(block
+                                 ,@prologue
+                                 (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
+                               ;; otherwise add all
+                               `(block
+                                 ,@prologue
+                                 (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))
@@ -1645,9 +1644,9 @@
                (expand-forms
                 ;; TODO: This behaviour (`const _:T = ...` does not call convert,
                 ;; but still evaluates RHS) should be documented.
-                `(const ,(car e) ,(if (underscore-symbol? (car e))
-                                rhs
-                                (convert-for-type-decl rhs T #t #f))))
+                `(const (= ,(car e) ,(if (underscore-symbol? (car e))
+                                         rhs
+                                         (convert-for-type-decl rhs T #t #f)))))
                (expand-forms
                 `(block ,@(cdr e)
                         ;; TODO: When x is a complex expression, this acts as a

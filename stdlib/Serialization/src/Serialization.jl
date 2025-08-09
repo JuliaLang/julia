@@ -1129,7 +1129,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             meth.recursion_relation = recursion_relation
         end
         if !is_for_opaque_closure
-            mt = Core.GlobalMethods
+            mt = Core.methodtable
             if nothing === ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, Base.get_world_counter()) # XXX: quite sketchy?
                 ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
             end

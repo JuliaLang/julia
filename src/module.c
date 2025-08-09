@@ -1145,8 +1145,8 @@ JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *var)
     return b && jl_binding_kind(bpart) == PARTITION_KIND_IMPORTED;
 }
 
-extern const char *jl_filename;
-extern int jl_lineno;
+extern _Atomic(const char *) jl_filename;
+extern _Atomic(int) jl_lineno;
 
 static char const dep_message_prefix[] = "_dep_message_";
 
@@ -1634,7 +1634,7 @@ void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *inv
         jl_error("Binding invalidation is not permitted during bootstrap.");
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 5);
-    fargs[0] = (jl_function_t*)invalidate_code_for_globalref;
+    fargs[0] = (jl_value_t*)invalidate_code_for_globalref;
     fargs[1] = (jl_value_t*)ref;
     fargs[2] = (jl_value_t*)invalidated_bpart;
     fargs[3] = (jl_value_t*)new_bpart;
@@ -1872,8 +1872,8 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
     jl_binding_dep_message(b);
 
     if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR) {
-        if (jl_lineno != 0) {
-            jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
+        if (jl_atomic_load_relaxed(&jl_lineno) != 0) {
+            jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
         }
     }
 

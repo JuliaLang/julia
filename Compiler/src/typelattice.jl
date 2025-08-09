@@ -8,6 +8,19 @@
 # inside the global code cache.
 import Core: Const, InterConditional, PartialStruct
 
+function may_form_limited_typ(@nospecialize(aty), @nospecialize(bty), @nospecialize(xty))
+    if aty isa LimitedAccuracy
+        if bty isa LimitedAccuracy
+            return LimitedAccuracy(xty, union!(copy(aty.causes), bty.causes))
+        else
+            return LimitedAccuracy(xty, copy(aty.causes))
+        end
+    elseif bty isa LimitedAccuracy
+        return LimitedAccuracy(xty, copy(bty.causes))
+    end
+    return nothing
+end
+
 """
     cnd::Conditional
 
@@ -40,6 +53,8 @@ struct Conditional
                          isdefined::Bool=false)
         assert_nested_slotwrapper(thentype)
         assert_nested_slotwrapper(elsetype)
+        limited = may_form_limited_typ(thentype, elsetype, Bool)
+        limited !== nothing && return limited
         return new(slot, thentype, elsetype, isdefined)
     end
 end
@@ -83,6 +98,8 @@ struct MustAlias
         assert_nested_slotwrapper(fldtyp)
         # @assert !isalreadyconst(vartyp) "vartyp is already const"
         # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
+        limited = may_form_limited_typ(vartyp, fldtyp, fldtyp)
+        limited !== nothing && return limited
         return new(slot, vartyp, fldidx, fldtyp)
     end
 end
@@ -104,6 +121,8 @@ struct InterMustAlias
         assert_nested_slotwrapper(fldtyp)
         # @assert !isalreadyconst(vartyp) "vartyp is already const"
         # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
+        limited = may_form_limited_typ(vartyp, fldtyp, fldtyp)
+        limited !== nothing && return limited
         return new(slot, vartyp, fldidx, fldtyp)
     end
 end

@@ -178,6 +178,7 @@
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
+    XX(jl_declare_constant_val) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \

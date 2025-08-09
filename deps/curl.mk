@@ -49,7 +49,7 @@ CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON)				\
         --without-brotli
 # A few things we actually enable
 CURL_CONFIGURE_FLAGS +=											\
-        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}	\
+        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-zstd=${build_prefix} --with-nghttp2=${build_prefix}	\
         --enable-versioned-symbols
 
 # We use different TLS libraries on different platforms.
