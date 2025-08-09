@@ -590,6 +590,10 @@ function repl_display_error(errio::IO, @nospecialize errval)
     return nothing
 end
 
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+__repl_entry_display(val) = Base.invokelatest(display, val)
+__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base.invokelatest(display, specialdisplay, val)
+
 function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
@@ -601,11 +605,11 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
-                        Base.invokelatest(display, val)
+                        __repl_entry_display(val)
                     end
                 else
                     call_on_backend(backend) do
-                        Base.invokelatest(display, specialdisplay, val)
+                        __repl_entry_display(specialdisplay, val)
                     end
                 end
                 if iserr

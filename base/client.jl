@@ -94,7 +94,6 @@ function scrub_repl_backtrace(bt)
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
-        eval_ind === nothing && (eval_ind = findlast(frame -> !frame.from_c && occursin("repl_backend_loop", String(frame.func)), bt))
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
