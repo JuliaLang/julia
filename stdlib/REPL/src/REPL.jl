@@ -578,7 +578,11 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     return nothing
 end
 
-function repl_display_error(errio::IO, @nospecialize errval)
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+__repl_entry_display(val) = Base.invokelatest(display, val)
+__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base.invokelatest(display, specialdisplay, val)
+
+function __repl_entry_display_error(errio::IO, @nospecialize errval)
     # this will be set to true if types in the stacktrace are truncated
     limitflag = Ref(false)
     errio = IOContext(errio, :stacktrace_types_limited => limitflag)
@@ -589,10 +593,6 @@ function repl_display_error(errio::IO, @nospecialize errval)
     end
     return nothing
 end
-
-# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-__repl_entry_display(val) = Base.invokelatest(display, val)
-__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base.invokelatest(display, specialdisplay, val)
 
 function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
@@ -634,7 +634,7 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                 Base.sigatomic_end() # allow stacktrace printing to be interrupted
                 val = Base.scrub_repl_backtrace(val)
                 Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                repl_display_error(errio, val)
+                __repl_entry_display_error(errio, val)
                 break
             catch ex
                 println(errio) # an error during printing is likely to leave us mid-line
