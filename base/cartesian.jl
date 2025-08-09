@@ -36,15 +36,14 @@ If you want just a post-expression, supply [`nothing`](@ref) for the pre-express
 parentheses and semicolons, you can supply multi-statement expressions.
 """
 macro nloops(N, itersym, rangeexpr, args...)
-    _nloops(N, itersym, rangeexpr, args...)
+    _nloops(N, itersym, true, rangeexpr, args...)
 end
 
-function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
-    @gensym d
-    _nloops(N, itersym, :($d->Base.axes($arraysym, $d)), args...)
+function _nloops(N::Int, itersym::Symbol, esc_rng::Bool, arraysym::Symbol, args::Expr...)
+    _nloops(N, itersym, false, :(d->axes($(esc(arraysym)), d)), args...)
 end
 
-function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
+function _nloops(N::Int, itersym::Symbol, esc_rng::Bool, rangeexpr::Expr, args::Expr...)
     if rangeexpr.head !== :->
         throw(ArgumentError("second argument must be an anonymous function expression to compute the range"))
     end
@@ -55,11 +54,13 @@ function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
     ex = Expr(:escape, body)
     for dim = 1:N
         itervar = inlineanonymous(itersym, dim)
+        itervar = esc(itervar)
         rng = inlineanonymous(rangeexpr, dim)
+        esc_rng && (rng = esc(rng))
         preexpr = length(args) > 1 ? inlineanonymous(args[1], dim) : (:(nothing))
         postexpr = length(args) > 2 ? inlineanonymous(args[2], dim) : (:(nothing))
         ex = quote
-            for $(esc(itervar)) = $(esc(rng))
+            for $itervar = $rng
                 $(esc(preexpr))
                 $ex
                 $(esc(postexpr))

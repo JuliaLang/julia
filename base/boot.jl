@@ -746,7 +746,7 @@ end
 
 # module providing the IR object model
 # excluding types already exported by Core (GlobalRef, QuoteNode, Expr, LineNumberNode)
-# any type beyond these is self-quoting (see also Base.is_ast_node)
+# any type beyond these is self-quoting (see also Base.isa_ast_node)
 module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
