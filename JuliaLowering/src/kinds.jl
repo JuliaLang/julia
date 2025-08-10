@@ -1,4 +1,3 @@
-
 # The following kinds are used in intermediate forms by lowering but are not
 # part of the surface syntax
 function _register_kinds()
