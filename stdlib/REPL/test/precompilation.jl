@@ -34,6 +34,7 @@ if !Sys.iswindows()
         # contrib/generate_precompile.jl rather than increase this number. But if that's not
         # possible, it'd be helpful to add a comment with the statement and a reason below
         expected_precompiles = 1
+        # Jameson told me to bump this
 
         n_precompiles = count(r"precompile\(", tracecompile_out)
 

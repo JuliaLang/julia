@@ -3,4 +3,4 @@
 NGHTTP2_JLL_NAME := nghttp2
 
 ## source build
-NGHTTP2_VER := 1.64.0
+NGHTTP2_VER := 1.65.0

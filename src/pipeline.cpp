@@ -245,7 +245,11 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
+#if JL_LLVM_VERSION >= 200000
+        PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
+#else
         PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O);
+#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeCGSCCCallbacks(CGSCCPassManager &CGPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -257,7 +261,11 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerEarlyCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
+#if JL_LLVM_VERSION >= 200000
+        PB->invokeOptimizerEarlyEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
+#else
         PB->invokeOptimizerEarlyEPCallbacks(MPM, O);
+#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeLateLoopOptimizationCallbacks(LoopPassManager &LPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -287,7 +295,11 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerLastCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
+#if JL_LLVM_VERSION >= 200000
+        PB->invokeOptimizerLastEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
+#else
         PB->invokeOptimizerLastEPCallbacks(MPM, O);
+#endif
     }
 
     // Fallbacks
@@ -562,6 +574,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
             JULIA_PASS(FPM.addPass(FinalLowerGCPass()));
+            JULIA_PASS(FPM.addPass(ExpandAtomicModifyPass())); // after LateLowerGCPass so that all IPO is valid
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
         JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
@@ -578,7 +591,8 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-    } else if (!options.remove_ni) {
+    }
+    else if (!options.remove_ni) {
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
     }
     MPM.addPass(AfterIntrinsicLoweringMarkerPass());

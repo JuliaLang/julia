@@ -258,10 +258,10 @@ end
 mutable struct ParserError <: Exception
     type::ErrorType
 
-    # Arbitrary data to store at the
+    # Data to store at the
     # call site to be used when formatting
     # the error
-    data
+    data::Union{Char, Nothing}
 
     # These are filled in before returning from parse function
     str       ::Union{String,   Nothing}
@@ -276,7 +276,7 @@ ParserError(type) = ParserError(type, nothing)
 # Defining these below can be useful when debugging code that erroneously returns a
 # ParserError because you get a stacktrace to where the ParserError was created
 #ParserError(type) = error(type)
-#ParserError(type, data) = error(type,data)
+#ParserError(type, data) = error(type, data)
 
 # Many functions return either a T or a ParserError
 const Err{T} = Union{T, ParserError}
@@ -284,7 +284,7 @@ const Err{T} = Union{T, ParserError}
 function format_error_message_for_err_type(error::ParserError)
     msg = err_message[error.type]
     if error.type == ErrInvalidBareKeyCharacter
-        c_escaped = escape_string(string(error.data)::String)
+        c_escaped = escape_string(string(error.data::Char))
         msg *= ": '$c_escaped'"
     end
     return msg
@@ -315,7 +315,7 @@ function point_to_line(str::AbstractString, a::Int, b::Int, context)
         c == '\n' && break
         print(io1, c)
     end
-    return String(take!(io1.io)), String(take!(io2.io))
+    return takestring!(io1.io), takestring!(io2.io)
 end
 
 function Base.showerror(io::IO, err::ParserError)
@@ -770,7 +770,7 @@ isvalid_hex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 isvalid_oct(c::Char) = '0' <= c <= '7'
 isvalid_binary(c::Char) = '0' <= c <= '1'
 
-const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
+const ValidSigs = Union{typeof(isvalid_hex), typeof(isvalid_oct), typeof(isvalid_binary), typeof(isdigit)}
 # This function eats things accepted by `f` but also allows eating `_` in between
 # digits. Returns if it ate at lest one character and if it ate an underscore
 function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}

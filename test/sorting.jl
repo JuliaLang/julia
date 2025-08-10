@@ -110,6 +110,14 @@ end
     @test Base.infer_return_type(sort, Tuple{Tuple{Vararg{Int}}}) == Tuple{Vararg{Int}}
 end
 
+@testset "KeySet and ValueIterator" begin
+    x = Dict(rand() => randstring() for _ in 1:10)
+    x0 = deepcopy(x)
+    @test issorted(sort(keys(x))::Vector{Float64})
+    @test issorted(sort(values(x))::Vector{String})
+    @test x == x0
+end
+
 @testset "partialsort" begin
     @test partialsort([3,6,30,1,9],3) == 6
     @test partialsort([3,6,30,1,9],3:4) == [6,9]
@@ -797,6 +805,16 @@ end
         M = rand(n, n)
         @test sort(M; dims=2) == sort(M; dims=2, scratch)
         @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, scratch)
+    end
+end
+
+@testset "partialsort(x; scratch)" begin
+    for n in [1,10,100,1000]
+        v = rand(n)
+        scratch = [0.0]
+        k = n ÷ 2 + 1
+        @test partialsort(v, k) == partialsort(v, k; scratch)
+        @test partialsort!(copy(v), k) == partialsort!(copy(v), k; scratch)
     end
 end
 

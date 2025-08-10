@@ -228,6 +228,27 @@ end
     return hi, lo
 end
 
+# generic, but involves double rounding
+function _180_over_pi(z::AbstractFloat)
+    180 / oftype(z, pi)
+end
+function _pi_over_180(z::AbstractFloat)
+    oftype(z, pi) / 180
+end
+
+# rounded to closest representable number where necessary
+function _180_over_pi(z::Union{Float16, Float32})
+    if z isa Float16
+        r = Float16(57.28)
+    elseif z isa Float32
+        r = 57.29578f0
+    end
+    r
+end
+function _pi_over_180(::Float16)
+    Float16(0.01746)
+end
+
 """
     rad2deg(x)
 
@@ -241,7 +262,7 @@ julia> rad2deg(pi)
 180.0
 ```
 """
-rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
+rad2deg(z::AbstractFloat) = z * _180_over_pi(z)
 
 """
     deg2rad(x)
@@ -256,7 +277,7 @@ julia> deg2rad(90)
 1.5707963267948966
 ```
 """
-deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
+deg2rad(z::AbstractFloat) = z * _pi_over_180(z)
 rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
 rad2deg(z::Number) = (z/pi)*180
@@ -482,7 +503,7 @@ asin(x::Number)
 """
     acos(x::T) where {T <: Number} -> float(T)
 
-Compute the inverse cosine of `x`, where the output is in radians
+Compute the inverse cosine of `x`, where the output is in radians.
 
 Return a `T(NaN)` if `isnan(x)`.
 """
@@ -898,7 +919,7 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x::Real) -> Int
+    exponent(x::Real)::Int
 
 Return the largest integer `y` such that `2^y ≤ abs(x)`.
 For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
@@ -1173,6 +1194,8 @@ end
     return @inline Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
 
+# @constprop aggressive to help the compiler see the switch between the integer and float
+# variants for callers with constant `y`
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
     x == 1 && return one(T)
     # Exponents greater than this will always overflow or underflow.
@@ -1183,15 +1206,29 @@ end
         y = sign(y)*max_exp
     end
     yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
-    y == yint && return x^yint
-    x < 0 && throw_exp_domainerror(x)
-    !isfinite(x) && return x*(y>0 || isnan(x))
-    x==0 && return abs(y)*T(Inf)*(!(y>0))
-    return pow_body(x, y)
+    yisint = y == yint
+    if yisint
+        yint == 0 && return one(T)
+        use_power_by_squaring(yint) && return pow_body(x, yint)
+    end
+    s = 1
+    if x < 0
+        !yisint && throw_exp_domainerror(x) # y isn't an integer
+        s = ifelse(isodd(yint), -1, 1)
+    end
+    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x)) # x is inf or NaN
+    return copysign(pow_body(abs(x), y), s)
 end
 
-@inline function pow_body(x::T, y::T) where T <: Union{Float16, Float32}
+@inline function pow_body(x::T, y) where T <: Union{Float16, Float32}
     return T(exp2(log2(abs(widen(x))) * y))
+end
+
+@inline function pow_body(x::Union{Float16, Float32}, n::Int32)
+    n == -2 && return (i=inv(x); i*i)
+    n == 3 && return x*x*x #keep compatibility with literal_pow
+    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)), -n))
+    return oftype(x, Base.power_by_squaring(widen(x), n))
 end
 
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
@@ -1242,11 +1279,17 @@ end
     return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
 end
 
-function ^(x::Union{Float16,Float32}, n::Integer)
-    n == -2 && return (i=inv(x); i*i)
-    n == 3 && return x*x*x #keep compatibility with literal_pow
-    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)),-n))
-    oftype(x, Base.power_by_squaring(widen(x),n))
+# @constprop aggressive to help the compiler see the switch between the integer and float
+# variants for callers with constant `y`
+@constprop :aggressive @inline function ^(x::T, n::Integer) where T <: Union{Float16, Float32}
+    n = clamp(n, Int32)
+    # Exponents greater than this will always overflow or underflow.
+    # Note that NaN can pass through this, but that will end up fine.
+    n == 0 && return one(x)
+    use_power_by_squaring(n) && return pow_body(x, n)
+    s = ifelse(x < 0 && isodd(n), -one(T), one(T))
+    x = abs(x)
+    return pow_body(x, widen(T)(n))
 end
 
 ## rem2pi-related calculations ##
@@ -1542,7 +1585,7 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :exponent, :sqrt, :cbrt, :sinpi, :cospi, :sincospi, :tanpi)
     @eval function ($f)(x::Real)
         xf = float(x)
-        x === xf && throw(MethodError($f, (x,)))
+        xf isa typeof(x) && throw(MethodError($f, (x,)))
         return ($f)(xf)
     end
     @eval $(f)(::Missing) = missing

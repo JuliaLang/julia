@@ -51,6 +51,10 @@ You can retrieve docs for functions, macros and other objects as follows:
     @doc @time
     @doc md""
 
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, retrieving documentation with the `@doc` macro requires that
+    the `REPL` stdlib is loaded.
+
 ## Functions & Methods
 Placing documentation before a method definition (e.g. `function foo() ...` or `foo() = ...`)
 will cause that specific method to be documented, as opposed to the whole function. Method
@@ -787,6 +791,9 @@ When `pattern` is a string, case is ignored. Results are printed to `io`.
 ```
 help?> "pattern"
 ```
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, `apropos` requires that the `REPL` stdlib is loaded.
 """
 function apropos end
 
@@ -797,6 +804,9 @@ Return all documentation that matches both `binding` and `sig`.
 
 If `getdoc` returns a non-`nothing` result on the value of the binding, then a
 dynamic docstring is returned instead of one based on the binding itself.
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, `Docs.doc` requires that the `REPL` stdlib is loaded.
 """
 function doc end
 

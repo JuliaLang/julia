@@ -391,6 +391,12 @@ julia> twothreearr()
  3
 ```
 
+### Is a function that ends with `!` allowed to allocate?
+
+Yes! A function name ending with `!` indicates that the function mutates at
+least one of its arguments (typically the first argument). However, it may
+still allocate a scratch space to expedite computation or produce that result.
+
 ## Types, type declarations, and constructors
 
 ### [What does "type-stable" mean?](@id man-type-stability)
@@ -1090,8 +1096,7 @@ You may wish to test against the nightly version to ensure that such regressions
 Finally, you may also consider building Julia from source for yourself. This option is mainly for those individuals who are comfortable at the command line, or interested in learning.
 If this describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
-Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
-Note that not all versions of Julia are available for all platforms.
+The [`juliaup` install manager](https://julialang.org/install/) has pre-defined channels named `release` and `lts` for the latest stable release and the current LTS release, as well as version-specific channels.
 
 ### How can I transfer the list of installed packages after updating my version of Julia?
 

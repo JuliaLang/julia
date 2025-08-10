@@ -97,9 +97,7 @@ JL_DLLEXPORT int jl_gc_is_enabled(void);
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 // Runs a GC cycle. This function's parameter determines whether we're running an
-// incremental, full, or automatic (i.e. heuristic driven) collection. Returns whether we
-// should run a collection cycle again (e.g. a full mark right after a full sweep to ensure
-// we do a full heap traversal).
+// incremental, full, or automatic (i.e. heuristic driven) collection.
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
@@ -245,10 +243,10 @@ STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 // so write barriers can be omitted until the next allocation. This function is a no-op that
 // can be used to annotate that a write barrier would be required were it not for this property
 // (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 // Used to annotate that a write barrier would be required, but may be omitted because `ptr`
 // is known to be an old object.
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 // Write-barrier function that must be used after copying multiple fields of an object into
 // another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.

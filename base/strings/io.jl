@@ -25,7 +25,7 @@ julia> io = IOBuffer();
 
 julia> print(io, "Hello", ' ', :World!)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello World!"
 ```
 """
@@ -51,7 +51,7 @@ function print(io::IO, xs...)
     return nothing
 end
 
-setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
+setfield!(typeof(print).name, :max_args, Int32(10), :monotonic)
 
 """
     println([io::IO], xs...)
@@ -70,13 +70,13 @@ julia> io = IOBuffer();
 
 julia> println(io, "Hello", ',', " world.")
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello, world.\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
 
-setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
+setfield!(typeof(println).name, :max_args, Int32(10), :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -84,10 +84,6 @@ setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
-specifying a property and its value, or a tuple of `Pair` specifying multiple
-properties and their values. `sizehint` suggests the capacity of the buffer (in
-bytes).
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
@@ -116,7 +112,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 function _str_sizehint(x)
@@ -150,9 +146,9 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
-setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
+setfield!(typeof(print_to_string).name, :max_args, Int32(10), :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
@@ -168,7 +164,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 """
@@ -298,10 +294,10 @@ Create a read-only `IOBuffer` on the data underlying the given string.
 ```jldoctest
 julia> io = IOBuffer("Haho");
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 ```
 """
@@ -589,7 +585,7 @@ julia> v[2]
 0x32
 ```
 """
-macro b_str(s)
+macro b_str(s::String)
     v = codeunits(unescape_string(s))
     QuoteNode(v)
 end
@@ -622,7 +618,7 @@ julia> println(raw"\\\\x \\\\\\"")
 macro raw_str(s); s; end
 
 """
-    escape_raw_string(s::AbstractString, delim='"') -> AbstractString
+    escape_raw_string(s::AbstractString, delim='"')::AbstractString
     escape_raw_string(io, s::AbstractString, delim='"')
 
 Escape a string in the manner used for parsing raw string literals.
@@ -678,7 +674,7 @@ end
 ## multiline strings ##
 
 """
-    indentation(str::AbstractString; tabwidth=8) -> (Int, Bool)
+    indentation(str::AbstractString; tabwidth=8) -> (width::Int, empty::Bool)
 
 Calculate the width of leading white space. Return the width and a flag to indicate
 if the string is empty.
@@ -778,7 +774,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             print(buf, ' ')
         end
     end
-    String(take!(buf))
+    takestring!(buf)
 end
 
 function String(a::AbstractVector{Char})

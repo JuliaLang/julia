@@ -2,7 +2,6 @@
 
 #define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
-    XX(jl_add_standard_imports) \
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
@@ -40,6 +39,7 @@
     XX(jl_atomic_store_bits) \
     XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
+    XX(jl_autoinit_and_adopt_thread) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_bitcast) \
@@ -97,7 +97,6 @@
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
-    XX(jl_defines_or_exports_p) \
     XX(jl_deprecate_binding) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
@@ -126,11 +125,6 @@
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
-    XX(jl_expand) \
-    XX(jl_expand_stmt) \
-    XX(jl_expand_stmt_with_loc) \
-    XX(jl_expand_with_loc) \
-    XX(jl_expand_with_loc_warn) \
     XX(jl_field_index) \
     XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
@@ -184,6 +178,7 @@
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
+    XX(jl_declare_constant_val) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
@@ -192,12 +187,11 @@
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
-    XX(jl_get_binding_for_method_def) \
-    XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_get_sysimage_cpu_target) \
     XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
@@ -243,11 +237,12 @@
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
     XX(jl_init) \
+    XX(jl_init_) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
-    XX(jl_init_with_image__threading) \
-    XX(jl_init__threading) \
+    XX(jl_init_with_image_file) \
+    XX(jl_init_with_image_handle) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -272,6 +267,7 @@
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
+    XX(jl_is_compilable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
@@ -294,6 +290,7 @@
     XX(jl_load_dynamic_library) \
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
+    XX(jl_lower) \
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
@@ -318,9 +315,7 @@
     XX(jl_module_names) \
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
-    XX(jl_module_public) \
     XX(jl_module_public_p) \
-    XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
     XX(jl_module_uuid) \
@@ -365,7 +360,7 @@
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
-    XX(jl_preload_sysimg_so) \
+    XX(jl_preload_sysimg) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
     XX(jl_print_backtrace) \
@@ -395,7 +390,6 @@
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
     XX(jl_restore_system_image) \
-    XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \
@@ -518,13 +512,13 @@
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_emit_codeinst_to_jit) \
-    YY(jl_extern_c) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
     YY(jl_get_llvm_mis) \
     YY(jl_dump_function_asm) \
@@ -535,7 +529,6 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
-    YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
     YY(jl_create_native) \

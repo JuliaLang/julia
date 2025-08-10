@@ -56,6 +56,19 @@ JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
     return v;
 }
 
+JL_DLLEXPORT jl_svec_t *jl_svec3(void *a, void *b, void *c)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 4,
+                                           jl_simplevector_type);
+    jl_set_typetagof(v, jl_simplevector_tag, 0);
+    jl_svec_set_len_unsafe(v, 3);
+    jl_svec_data(v)[0] = (jl_value_t*)a;
+    jl_svec_data(v)[1] = (jl_value_t*)b;
+    jl_svec_data(v)[2] = (jl_value_t*)c;
+    return v;
+}
+
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
 {
     jl_task_t *ct = jl_current_task;

@@ -18,6 +18,9 @@
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
+#define STR(csym)           #csym
+#define XSTR(csym)          STR(csym)
+
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
@@ -85,10 +88,11 @@ llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
             }
         }
     }
-    if (F.getCallingConv() == CallingConv::Swift) {
-        for (auto &arg : F.args()) {
-            if (arg.hasSwiftSelfAttr())
-                return &arg;
+    for (auto &arg : F.args()) {
+        // Check for the "gcstack" attribute
+        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
+        if (attrs.hasAttribute("gcstack")) {
+            return &arg;
         }
     }
     return nullptr;
@@ -240,7 +244,7 @@ namespace jl_intrinsics {
         SAFEPOINT_NAME,
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
-            auto T_psize = T_size->getPointerTo();
+            auto T_psize = PointerType::getUnqual(ctx);
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(ctx),

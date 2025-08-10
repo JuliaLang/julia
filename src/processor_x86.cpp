@@ -809,7 +809,7 @@ static inline void disable_depends(FeatureList<n> &features)
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
-static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(const char *cpu_target)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
@@ -818,7 +818,7 @@ static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(v
         set_bit(list, fbit, true);
         return true;
     };
-    auto &targets = ::get_cmdline_targets<feature_sz>(feature_cb);
+    auto &targets = ::get_cmdline_targets<feature_sz>(cpu_target, feature_cb);
     for (auto &t: targets) {
         if (auto nname = normalize_cpu_name(t.name)) {
             t.name = nname;
@@ -878,10 +878,11 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
     return 16;
 }
 
-static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
+static uint32_t sysimg_init_cb(void *ctx, const void *id, jl_value_t** rejection_reason)
 {
     // First see what target is requested for the JIT.
-    auto &cmdline = get_cmdline_targets();
+    const char *cpu_target = (const char *)ctx;
+    auto &cmdline = get_cmdline_targets(cpu_target);
     TargetData<feature_sz> target = arg_target_data(cmdline[0], true);
     // Then find the best match in the sysimg
     auto sysimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -924,7 +925,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
     return match.best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
+static uint32_t pkgimg_init_cb(void *ctx, const void *id, jl_value_t **rejection_reason)
 {
     TargetData<feature_sz> target = jit_targets.front();
     auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -939,9 +940,9 @@ static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
 
 //This function serves as a fallback during bootstrapping, at that point we don't have a sysimage with native code
 // so we won't call sysimg_init_cb, else this function shouldn't do anything.
-static void ensure_jit_target(bool imaging)
+static void ensure_jit_target(const char *cpu_target, bool imaging)
 {
-    auto &cmdline = get_cmdline_targets();
+    auto &cmdline = get_cmdline_targets(cpu_target);
     check_cmdline(cmdline, imaging);
     if (!jit_targets.empty())
         return;
@@ -1084,7 +1085,7 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
     jl_value_t *rejection_reason = NULL;
     JL_GC_PUSH1(&rejection_reason);
-    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(NULL, data, &rejection_reason);
     JL_GC_POP();
     if (match_idx == UINT32_MAX)
         return rejection_reason;
@@ -1101,25 +1102,25 @@ JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
         return jl_false;
 }
 
-jl_image_t jl_init_processor_sysimg(void *hdl)
+jl_image_t jl_init_processor_sysimg(jl_image_buf_t image, const char *cpu_target)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
-    return parse_sysimg(hdl, sysimg_init_cb);
+    return parse_sysimg(image, sysimg_init_cb, (void *)cpu_target);
 }
 
-jl_image_t jl_init_processor_pkgimg(void *hdl)
+jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
     if (jit_targets.size() > 1)
         jl_error("Expected only one JIT target");
-    return parse_sysimg(hdl, pkgimg_init_cb);
+    return parse_sysimg(image, pkgimg_init_cb, NULL);
 }
 
-std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags)
 {
-    ensure_jit_target(imaging);
+    ensure_jit_target(cpu_target, imaging);
     flags = jit_targets[0].en.flags;
     return get_llvm_target_vec(jit_targets[0]);
 }
@@ -1132,9 +1133,10 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 }
 //This function parses the -C command line to figure out which targets to multiversion to.
 #ifndef __clang_gcanalyzer__
-llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(const char *cpu_target)
 {
-    auto &cmdline = get_cmdline_targets();
+
+    auto &cmdline = get_cmdline_targets(cpu_target);
     check_cmdline(cmdline, true);
     llvm::SmallVector<TargetData<feature_sz>, 0> image_targets;
     for (auto &arg: cmdline) {

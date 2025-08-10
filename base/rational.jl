@@ -415,6 +415,12 @@ function *(y::Integer, x::Rational)
     yn, xd = divgcd(promote(y, x.den)...)
     unsafe_rational(checked_mul(yn, x.num), xd)
 end
+# make `false` a "strong zero": false*1//0 == 0//1 #57409
+# This is here instead of in bool.jl with the AbstractFloat method for bootstrapping
+function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Rational
+    return ifelse(x, y, copysign(zero(y), y))
+end
+*(y::Rational, x::Bool) = x * y
 /(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y
 /(x::Union{Integer, Complex{<:Union{Integer,Rational}}}, y::Rational) = x//y
 inv(x::Rational{T}) where {T} = checked_den(x.den, x.num)
@@ -566,13 +572,13 @@ float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
 function gcd(x::Rational, y::Rational)
     if isinf(x) != isinf(y)
-        throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
+        throw(ArgumentError("gcd is not defined between infinite and finite numbers"))
     end
     unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
 end
 function lcm(x::Rational, y::Rational)
     if isinf(x) != isinf(y)
-        throw(ArgumentError("lcm is not defined"))
+        throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
     end
     return unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
 end
@@ -614,7 +620,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         end
     end
     h = hash_integer(pow, h)
-    h = hash_integer(num, h)
+    h = hash_integer((pow > 0) ? (num << (pow % 64)) : num, h)
     return h
 end
 

@@ -22,7 +22,7 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
     gcframe_alloca->setAlignment(Align(16));
     // addrspacecast as needed for non-0 alloca addrspace
-    auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, T_prjlvalue->getPointerTo(0)));
+    auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
 
     // Zero out the GC frame.

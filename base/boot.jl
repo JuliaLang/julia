@@ -475,6 +475,7 @@ struct ABIOverride
 end
 
 struct PrecompilableError <: Exception end
+struct TrimFailure <: Exception end
 
 String(s::String) = s  # no constructor yet
 
@@ -589,8 +590,9 @@ const undef = UndefInitializer()
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
 
+# memoryref is simply convenience wrapper function around memoryrefnew
 memoryref(mem::GenericMemory) = memoryrefnew(mem)
-memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(mem, Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
@@ -694,18 +696,68 @@ function Symbol(a::Array{UInt8, 1})
 end
 Symbol(s::Symbol) = s
 
+# Minimal implementations of using/import for bootstrapping (supports only
+# `import .M: a, b, c, ...`, little error checking)
+let
+    fail() = throw(ArgumentError("unsupported import/using while bootstrapping"))
+    length(a::Array{T, 1}) where {T} = getfield(getfield(a, :size), 1)
+    function getindex(A::Array, i::Int)
+        Intrinsics.ult_int(Intrinsics.bitcast(UInt, Intrinsics.sub_int(i, 1)), Intrinsics.bitcast(UInt, length(A))) || fail()
+        memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
+    end
+    x == y = Intrinsics.eq_int(x, y)
+    x + y = Intrinsics.add_int(x, y)
+    x <= y = Intrinsics.sle_int(x, y)
+
+    global function _eval_import(explicit::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
+        from isa Expr || fail()
+        if length(from.args) == 2 && getindex(from.args, 1) === :.
+            from = getglobal(to, getindex(from.args, 2))
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Core
+            from = Core
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Base
+            from = Main.Base
+        else
+            fail()
+        end
+        from isa Module || fail()
+        i = 1
+        while i <= nfields(paths)
+            a = getfield(paths, i).args
+            length(a) == 1 || fail()
+            s = getindex(a, 1)
+            Core._import(to, from, s, s, explicit)
+            i += 1
+        end
+    end
+
+    global function _eval_using(to::Module, path::Expr)
+        getindex(path.args, 1) === :. || fail()
+        from = getglobal(to, getindex(path.args, 2))
+        i = 3
+        while i <= length(path.args)
+            from = getfield(from, getindex(path.args, i))
+            i += 1
+        end
+        from isa Module || fail()
+        Core._using(to, from)
+    end
+end
+
 # module providing the IR object model
+# excluding types already exported by Core (GlobalRef, QuoteNode, Expr, LineNumberNode)
+# any type beyond these is self-quoting (see also Base.is_ast_node)
 module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode
 
 end # module IR
 
@@ -997,8 +1049,9 @@ function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecia
     return x === mod ? t : getfield(x, name)
 end
 
-# Binding for the julia parser, called as
-#
+# Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
+# Core._parse and Core._lower respectively (if they are not `nothing`.)
+
 #    Core._parse(text, filename, lineno, offset, options)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
@@ -1008,14 +1061,23 @@ end
 #
 # `_parse` must return an `svec` containing an `Expr` and the new offset as an
 # `Int`.
-#
-# The internal jl_parse will call into Core._parse if not `nothing`.
 _parse = nothing
 
-_setparser!(parser) = setglobal!(Core, :_parse, parser)
+#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#
+# Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
+# the lowered code, and `xs` is possible additional information from
+# JuliaLowering (TBD).
+_lower = nothing
 
-# support for deprecated uses of internal _apply function
-_apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
+_setparser!(parser) = setglobal!(Core, :_parse, parser)
+_setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
+
+# support for deprecated uses of builtin functions
+_apply(x...) = _apply_iterate(Main.Base.iterate, x...)
+const _apply_pure = _apply
+const _call_latest = invokelatest
+const _call_in_world = invoke_in_world
 
 struct Pair{A, B}
     first::A

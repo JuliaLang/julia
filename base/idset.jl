@@ -78,7 +78,7 @@ pop!(s::IdSet, @nospecialize(x)) = _pop!(s, x) == -1 ? throw(KeyError(x)) : x
 pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = _pop!(s, x) == -1 ? default : x
 delete!(s::IdSet, @nospecialize(x)) = (_pop!(s, x); s)
 
-function sizehint!(s::IdSet, newsz)
+function sizehint!(s::IdSet, newsz::Integer)
     # TODO: grow/compact list and perform rehash, if profitable?
     # TODO: shrink?
     # s.list = resize(s.list, newsz)
@@ -92,8 +92,17 @@ function sizehint!(s::IdSet, newsz)
     nothing
 end
 
+function _zero!(a::Memory{<:BitInteger})
+    t = @_gc_preserve_begin a
+    p = unsafe_convert(Ptr{Cvoid}, a)
+    T = eltype(a)
+    memset(p, 0x0, (sizeof(T) * length(a)) % UInt)
+    @_gc_preserve_end t
+    return a
+end
+
 function empty!(s::IdSet)
-    fill!(s.idxs, 0x00)
+    _zero!(s.idxs)
     list = s.list
     for i = 1:s.max
         _unsetindex!(list, i)

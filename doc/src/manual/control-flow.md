@@ -893,6 +893,41 @@ When control leaves the `try` block (for example due to a `return`, or just fini
 continue propagating. A `catch` block may be combined with `try` and `finally` as well. In this
 case the `finally` block will run after `catch` has handled the error.
 
+When evaluating a `try/catch/else/finally` expression, the value of the entire
+expression is the value of the last block executed, excluding the `finally`
+block. For example:
+
+```jldoctest
+julia> try
+           1
+       finally
+           2
+       end
+1
+
+julia> try
+           error("")
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+1
+
+julia> try
+           0
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+2
+```
+
 ## [Tasks (aka Coroutines)](@id man-tasks)
 
 Tasks are a control flow feature that allows computations to be suspended and resumed in a flexible

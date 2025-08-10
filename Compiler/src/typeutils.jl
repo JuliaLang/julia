@@ -24,7 +24,7 @@ function hasuniquerep(@nospecialize t)
 end
 
 """
-    isTypeDataType(@nospecialize t) -> Bool
+    isTypeDataType(@nospecialize t)::Bool
 
 For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
 we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
@@ -303,7 +303,7 @@ end
 const unwraptv = unwraptv_ub
 
 """
-    is_identity_free_argtype(argtype) -> Bool
+    is_identity_free_argtype(argtype)::Bool
 
 Return `true` if the `argtype` object is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity (see `Base.isidentityfree`).
@@ -316,7 +316,7 @@ is_identity_free_argtype(@nospecialize ty) = is_identity_free_type(widenconst(ig
 is_identity_free_type(@nospecialize ty) = isidentityfree(ty)
 
 """
-    is_immutable_argtype(argtype) -> Bool
+    is_immutable_argtype(argtype)::Bool
 
 Return `true` if the `argtype` object is known to be immutable.
 This query is specifically designed for `getfield_effects` and `isdefined_effects`, allowing
@@ -334,7 +334,7 @@ function _is_immutable_type(@nospecialize ty)
 end
 
 """
-    is_mutation_free_argtype(argtype) -> Bool
+    is_mutation_free_argtype(argtype)::Bool
 
 Return `true` if `argtype` object is mutation free in the sense that no mutable memory
 is reachable from this type (either in the type itself) or through any fields

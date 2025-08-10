@@ -15,6 +15,7 @@ using Base: Base
 # imports
 import Base: ==, copy, getindex, setindex!
 # usings
+using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
 using Core.IR
 using Base:       # Base definitions

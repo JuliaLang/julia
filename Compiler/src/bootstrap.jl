@@ -10,7 +10,7 @@ function activate_codegen!()
     Core.eval(Compiler, quote
         let typeinf_world_age = Base.tls_world_age()
             @eval Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
-                Base.invoke_in_world($(Expr(:$, :typeinf_world_age)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode)
+                Base.invoke_in_world($(Expr(:$, :typeinf_world_age)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode, Compiler.TRIM_NO)
         end
     end)
 end
@@ -67,16 +67,9 @@ function bootstrap!()
                     end
                     mi = specialize_method(m.method, Tuple{params...}, m.sparams)
                     #isa_compileable_sig(mi) || println(stderr, "WARNING: inferring `", mi, "` which isn't expected to be called.")
-                    push!(methods, mi)
+                    typeinf_ext_toplevel(mi, world, isa_compileable_sig(mi) ? SOURCE_MODE_ABI : SOURCE_MODE_NOT_REQUIRED, TRIM_NO)
                 end
             end
-        end
-        codeinfos = typeinf_ext_toplevel(methods, [world], false)
-        for i = 1:2:length(codeinfos)
-            ci = codeinfos[i]::CodeInstance
-            src = codeinfos[i + 1]::CodeInfo
-            isa_compileable_sig(ci.def) || continue # println(stderr, "WARNING: compiling `", ci.def, "` which isn't expected to be called.")
-            ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, src)
         end
         endtime = time()
         println("Base.Compiler ──── ", sub_float(endtime,starttime), " seconds")

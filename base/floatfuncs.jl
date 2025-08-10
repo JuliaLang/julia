@@ -26,6 +26,8 @@ That is, `maxintfloat` returns the smallest positive integer-valued floating-poi
 `n` such that `n+1` is *not* exactly representable in the type `T`.
 
 When an `Integer`-type value is needed, use `Integer(maxintfloat(T))`.
+
+See also: [`typemax`](@ref), [`floatmax`](@ref).
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)

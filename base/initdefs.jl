@@ -33,7 +33,7 @@ const roottask = current_task()
 is_interactive::Bool = false
 
 """
-    isinteractive() -> Bool
+    isinteractive()::Bool
 
 Determine whether Julia is running an interactive session.
 """
@@ -284,22 +284,14 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
         if startswith(env, "@script")
-            if @isdefined(PROGRAM_FILE)
-                dir = dirname(PROGRAM_FILE)
-            else
-                cmds = unsafe_load_commands(JLOptions().commands)
-                if any(cmd::Pair{Char, String}->cmd_suppresses_program(first(cmd)), cmds)
-                    # Usage error. The user did not pass a script.
-                    return nothing
-                end
-                dir = dirname(ARGS[1])
-            end
-            if env == "@script"  # complete match, not startswith, so search upwards
-                return current_project(dir)
-            else
-                # starts with, so assume relative path is after
-                return abspath(replace(env, "@script" => dir))
-            end
+            program_file = JLOptions().program_file
+            program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
+            isnothing(program_file) && return nothing # User did not pass a script
+
+            # Expand trailing relative path
+            dir = dirname(program_file)
+            dir = env != "@script" ? (dir * env[length("@script")+1:end]) : dir
+            return current_project(dir)
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)

@@ -163,7 +163,7 @@ macro max_methods(n::Int, fdef::Expr)
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,4}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -527,7 +527,7 @@ function task_metrics(b::Bool)
 end
 
 """
-    Base.Experimental.task_running_time_ns(t::Task) -> Union{UInt64, Nothing}
+    Base.Experimental.task_running_time_ns(t::Task)::Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` has spent running.
 This metric is only updated when `t` yields or completes unless `t` is the current task, in
@@ -556,7 +556,7 @@ function task_running_time_ns(t::Task=current_task())
 end
 
 """
-    Base.Experimental.task_wall_time_ns(t::Task) -> Union{UInt64, Nothing}
+    Base.Experimental.task_wall_time_ns(t::Task)::Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` was runnable.
 This is the time since the task first entered the run queue until the time at which it
