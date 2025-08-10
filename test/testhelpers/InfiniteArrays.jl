@@ -21,11 +21,14 @@ Base.:(==)(::Infinity, ::Int) = false
 Base.:(==)(::Int, ::Infinity) = false
 Base.:(<)(::Int, ::Infinity) = true
 Base.:(≤)(::Int, ::Infinity) = true
+Base.:(<)(::Infinity, ::Int) = false
 Base.:(≤)(::Infinity, ::Int) = false
 Base.:(≤)(::Infinity, ::Infinity) = true
 Base.:(-)(::Infinity, ::Int) = Infinity()
 Base.:(+)(::Infinity, ::Int) = Infinity()
 Base.:(:)(::Infinity, ::Infinity) = 1:0
+Base.max(::Infinity, ::Int) = Infinity()
+Base.max(::Int, ::Infinity) = Infinity()
 
 """
     OneToInf(n)
@@ -34,7 +37,7 @@ Define an `AbstractInfUnitRange` that behaves like `1:∞`, with the added
 distinction that the limits are guaranteed (by the type system) to
 be 1 and ∞.
 """
-struct OneToInf{T<:Integer} <: AbstractUnitRange{T} end
+struct OneToInf{T<:Integer} <: Base.AbstractOneTo{T} end
 
 OneToInf() = OneToInf{Int}()
 
@@ -45,5 +48,6 @@ Base.length(r::OneToInf) = Infinity()
 Base.last(r::OneToInf) = Infinity()
 Base.unitrange(r::OneToInf) = r
 Base.oneto(::Infinity) = OneToInf()
+Base.unchecked_oneto(::Infinity) = OneToInf()
 
 end
