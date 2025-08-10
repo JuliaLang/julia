@@ -2876,6 +2876,7 @@ end
 # Issue 56936
 @testset "code printing of var\"keyword\" identifiers" begin
     @test_repr """:(var"do" = 1)"""
+    @test_repl """:(var"ccall" = 1)"""
     @weak_test_repr """:(let var"let" = 1; var"let"; end)"""
 end
 

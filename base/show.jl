@@ -1779,10 +1779,10 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
 end
 
 const keyword_syms = Set([
-    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
+    :baremodule, :begin, :break, :catch, :ccall, :const, :continue, :do, :else, :elseif,
     :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
     :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
-    :try, :using, :while ])
+    :try, :using, :while])
 
 function is_valid_identifier(sym)
     return (isidentifier(sym) && !(sym in keyword_syms)) ||
