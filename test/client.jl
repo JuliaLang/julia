@@ -81,12 +81,12 @@ end
     outstr = String(take!(errio))
     @test occursin("ERROR: LoadError: UndefVarError: `@bad`", outstr)
     @test !occursin("_repl_entry", outstr)
-    @test !occursin(r"[/\\]client.jl", outstr)
+    @test !occursin(r".[/\\]client.jl", outstr)
 
     errexpr = :(error("fail"))
     Base.eval_user_input(errio, errexpr, false)
     outstr = String(take!(errio))
     @test occursin("ERROR: fail", outstr)
     @test !occursin("_repl_entry", outstr)
-    @test !occursin(r"[/\\]client.jl", outstr)
+    @test !occursin(r".[/\\]client.jl", outstr)
 end
