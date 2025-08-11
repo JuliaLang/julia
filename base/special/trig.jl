@@ -1190,39 +1190,34 @@ struct _CosCardinalEvaluationScheme{
 end
 
 function (sch::_CosCardinalEvaluationScheme)(x::AbstractFloat)
+    function choose_poly(a::AbstractFloat, polynomials_close_to_origin::NTuple{2})
+        ((b1, p0), (_, p1)) = polynomials_close_to_origin
+        if a ≤ b1
+            p0
+        else
+            p1
+        end
+    end
+    function choose_poly(a::AbstractFloat, polynomials_close_to_origin::NTuple{4})
+        ((b1, p0), (b2, p1), (b3, p2), (_, p3)) = polynomials_close_to_origin
+        if a ≤ b2  # hardcoded binary search
+            if a ≤ b1
+                p0
+            else
+                p1
+            end
+        else
+            if a ≤ b3
+                p2
+            else
+                p3
+            end
+        end
+    end
     a = abs(x)
     polynomials_close_to_origin = sch.polynomials_close_to_origin
     if (polynomials_close_to_origin !== ()) && (a ≤ polynomials_close_to_origin[end][1])
-        let
-            if length(polynomials_close_to_origin) == 1  # hardcode for each allowed tuple size
-                p = only(polynomials_close_to_origin)[2]
-            elseif length(polynomials_close_to_origin) == 2
-                p = let ((b1, p0), (_, p1)) = polynomials_close_to_origin
-                    if a ≤ b1  # hardcoded binary search
-                        p0
-                    else
-                        p1
-                    end
-                end
-            elseif length(polynomials_close_to_origin) == 4
-                p = let ((b1, p0), (b2, p1), (b3, p2), (_, p3)) = polynomials_close_to_origin
-                    if a ≤ b2  # hardcoded binary search
-                        if a ≤ b1
-                            p0
-                        else
-                            p1
-                        end
-                    else
-                        if a ≤ b3
-                            p2
-                        else
-                            p3
-                        end
-                    end
-                end
-            end
-            x * evalpoly(x * x, p)
-        end
+        x * evalpoly(x * x, choose_poly(a, polynomials_close_to_origin))
     elseif isinf(x)
         typeof(x)(0)
     else
