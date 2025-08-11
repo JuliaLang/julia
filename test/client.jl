@@ -75,12 +75,18 @@ end
     @test scrubbed_repl_bt[1].func == :foo
     @test length(scrubbed_nonrepl_bt) == 3
 
-    # tests `eval` errors only; lowering by design defers errors to eval, so exceptions
-    # from `lower` could only occur in development and cannot be tested here.
-    errexpr = :(error("fail"))
     errio = IOBuffer()
+    lower_errexpr = :(@bad)
+    Base.eval_user_input(errio, lower_errexpr, false)
+    outstr = String(take!(errio))
+    @test occursin("ERROR: LoadError: UndefVarError: `@bad`", outstr)
+    @test !occursin("_repl_entry", outstr)
+    @test !occursin("client.jl", outstr)
+
+    errexpr = :(error("fail"))
     Base.eval_user_input(errio, errexpr, false)
     outstr = String(take!(errio))
+    @test occursin("ERROR: fail", outstr)
     @test !occursin("_repl_entry", outstr)
     @test !occursin("client.jl", outstr)
 end
