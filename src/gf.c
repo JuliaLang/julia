@@ -3523,9 +3523,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
 
         JL_GC_PUSH1(&codeinst);
-        double compile_time = jl_hrtime();
         int did_compile = jl_compile_codeinst(codeinst);
-        compile_time = jl_hrtime() - compile_time;
+        double compile_time = jl_hrtime() - start;
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
