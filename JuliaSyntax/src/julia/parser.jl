@@ -1519,7 +1519,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
     macro_atname_range = nothing
     # $A.@x  ==>  (macrocall (. ($ A) (macro_name x)))
     maybe_strmac = true
-    last_identifier_orig_kind = peek_behind(ps).orig_kind
+    last_identifier_pos = peek_behind_pos(ps)
+    last_identifier_orig_kind = peek_behind(ps, last_identifier_pos).orig_kind
     while true
         maybe_strmac_1 = false
         t = peek_token(ps)
@@ -1577,7 +1578,6 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # f (a)    ==>  (call f (error-t) a)
             processing_macro_name = maybe_parsed_macro_name(
                 ps, processing_macro_name, mark)
-            processing_macro_name = false
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             opts = parse_call_arglist(ps, K")")
@@ -1714,7 +1714,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                     bump(ps, TRIVIA_FLAG)
                 end
                 parse_macro_name(ps)
-                last_identifier_orig_kind = peek_behind(ps).orig_kind
+                last_identifier_pos = peek_behind_pos(ps)
+                last_identifier_orig_kind = peek_behind(ps, last_identifier_pos).orig_kind
                 !is_macrocall && emit(ps, m, K"macro_name")
                 macro_atname_range = (m, position(ps))
                 is_macrocall = true
@@ -1747,7 +1748,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                     emit(ps, macro_name_mark, K"macro_name")
                     misplaced_atsym_mark = (aterror_mark, position(ps))
                 end
-                last_identifier_orig_kind = peek_behind(ps).orig_kind
+                last_identifier_pos = peek_behind_pos(ps)
+                last_identifier_orig_kind = peek_behind(ps, last_identifier_pos).orig_kind
                 maybe_strmac_1 = true
                 emit(ps, mark, K".")
             end
@@ -1784,29 +1786,29 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                  origk = last_identifier_orig_kind;
                  origk == K"Identifier" || is_contextual_keyword(origk) || is_word_operator(origk))
             # Custom string and command literals
-            # x"str" ==> (macrocall (macro_name_str x) (string-r "str"))
-            # x`str` ==> (macrocall (macro_name_cmd x) (cmdstring-r "str"))
-            # x""    ==> (macrocall (macro_name_str x) (string-r ""))
-            # x``    ==> (macrocall (macro_name_cmd x) (cmdstring-r ""))
+            # x"str" ==> (macrocall @x_str (string-r "str"))
+            # x`str` ==> (macrocall @x_cmd (cmdstring-r "str"))
+            # x""    ==> (macrocall @x_str (string-r ""))
+            # x``    ==> (macrocall @x_cmd (cmdstring-r ""))
             # Triple quoted processing for custom strings
-            # r"""\nx"""          ==> (macrocall (macro_name_str r) (string-s-r "x"))
-            # r"""\n x\n y"""     ==> (macrocall (macro_name_str r) (string-s-r "x\n" "y"))
-            # r"""\n x\\n y"""    ==> (macrocall (macro_name_str r) (string-s-r "x\\\n" "y"))
+            # r"""\nx"""          ==> (macrocall @r_str (string-s-r "x"))
+            # r"""\n x\n y"""     ==> (macrocall @r_str (string-s-r "x\n" "y"))
+            # r"""\n x\\n y"""    ==> (macrocall @r_str (string-s-r "x\\\n" "y"))
             #
             # Use a special token kind for string and cmd macro names so the
             # names can be expanded later as necessary.
-            outk = is_string_delim(k) ? K"macro_name_str" : K"macro_name_cmd"
-            emit(ps, mark, outk)
+            name_kind = is_string_delim(k) ? K"StrMacroName" : K"CmdMacroName"
+            reset_node!(ps, last_identifier_pos, kind=name_kind)
             parse_string(ps, true)
             t = peek_token(ps)
             k = kind(t)
             if !preceding_whitespace(t) && is_string_macro_suffix(k)
                 # Macro suffixes can include keywords and numbers
-                # x"s"y    ==> (macrocall (macro_name_str x) (string-r "s") "y")
-                # x"s"end  ==> (macrocall (macro_name_str x) (string-r "s") "end")
-                # x"s"in   ==> (macrocall (macro_name_str x) (string-r "s") "in")
-                # x"s"2    ==> (macrocall (macro_name_str x) (string-r "s") 2)
-                # x"s"10.0 ==> (macrocall (macro_name_str x) (string-r "s") 10.0)
+                # x"s"y    ==> (macrocall @x_str (string-r "s") "y")
+                # x"s"end  ==> (macrocall @x_str (string-r "s") "end")
+                # x"s"in   ==> (macrocall @x_str (string-r "s") "in")
+                # x"s"2    ==> (macrocall @x_str (string-r "s") 2)
+                # x"s"10.0 ==> (macrocall @x_str (string-r "s") 10.0)
                 suffix_kind = (k == K"Identifier" || is_keyword(k) ||
                                is_word_operator(k)) ? K"String" : k
                 bump(ps, remap_kind=suffix_kind)

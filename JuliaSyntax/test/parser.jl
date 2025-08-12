@@ -463,28 +463,30 @@ tests = [
         "S{a,b}"  => "(curly S a b)"
         "T{y for x = xs; a}" => "(curly T (generator y (iteration (in x xs))) (parameters a))"
         # String macros
-        "x\"str\""   => """(macrocall (macro_name_str x) (string-r "str"))"""
-        "x`str`"     => """(macrocall (macro_name_cmd x) (cmdstring-r "str"))"""
-        "x\"\""      => """(macrocall (macro_name_str x) (string-r ""))"""
-        "x``"        => """(macrocall (macro_name_cmd x) (cmdstring-r ""))"""
-        "in\"str\""  => """(macrocall (macro_name_str in) (string-r "str"))"""
-        "outer\"str\"" => """(macrocall (macro_name_str outer) (string-r "str"))"""
+        "x\"str\""   => """(macrocall @x_str (string-r "str"))"""
+        "x`str`"     => """(macrocall @x_cmd (cmdstring-r "str"))"""
+        "x\"\""      => """(macrocall @x_str (string-r ""))"""
+        "x``"        => """(macrocall @x_cmd (cmdstring-r ""))"""
+        "in\"str\""  => """(macrocall @in_str (string-r "str"))"""
+        "outer\"str\"" => """(macrocall @outer_str (string-r "str"))"""
+        "A.x\"str\"" => """(macrocall (. A @x_str) (string-r "str"))"""
+        "A.x`str`" => """(macrocall (. A @x_cmd) (cmdstring-r "str"))"""
         # Triple quoted processing for custom strings
-        "r\"\"\"\nx\"\"\""        => raw"""(macrocall (macro_name_str r) (string-s-r "x"))"""
-        "r\"\"\"\n x\n y\"\"\""   => raw"""(macrocall (macro_name_str r) (string-s-r "x\n" "y"))"""
-        "r\"\"\"\n x\\\n y\"\"\"" => raw"""(macrocall (macro_name_str r) (string-s-r "x\\\n" "y"))"""
+        "r\"\"\"\nx\"\"\""        => raw"""(macrocall @r_str (string-s-r "x"))"""
+        "r\"\"\"\n x\n y\"\"\""   => raw"""(macrocall @r_str (string-s-r "x\n" "y"))"""
+        "r\"\"\"\n x\\\n y\"\"\"" => raw"""(macrocall @r_str (string-s-r "x\\\n" "y"))"""
         # Macro suffixes can include keywords and numbers
-        "x\"s\"y"    => """(macrocall (macro_name_str x) (string-r "s") "y")"""
-        "x\"s\"end"  => """(macrocall (macro_name_str x) (string-r "s") "end")"""
-        "x\"s\"in"   => """(macrocall (macro_name_str x) (string-r "s") "in")"""
-        "x\"s\"2"    => """(macrocall (macro_name_str x) (string-r "s") 2)"""
-        "x\"s\"10.0" => """(macrocall (macro_name_str x) (string-r "s") 10.0)"""
+        "x\"s\"y"    => """(macrocall @x_str (string-r "s") "y")"""
+        "x\"s\"end"  => """(macrocall @x_str (string-r "s") "end")"""
+        "x\"s\"in"   => """(macrocall @x_str (string-r "s") "in")"""
+        "x\"s\"2"    => """(macrocall @x_str (string-r "s") 2)"""
+        "x\"s\"10.0" => """(macrocall @x_str (string-r "s") 10.0)"""
         # Cmd macro suffixes
-        "x`s`y"    => """(macrocall (macro_name_cmd x) (cmdstring-r "s") "y")"""
-        "x`s`end"  => """(macrocall (macro_name_cmd x) (cmdstring-r "s") "end")"""
-        "x`s`in"   => """(macrocall (macro_name_cmd x) (cmdstring-r "s") "in")"""
-        "x`s`2"    => """(macrocall (macro_name_cmd x) (cmdstring-r "s") 2)"""
-        "x`s`10.0" => """(macrocall (macro_name_cmd x) (cmdstring-r "s") 10.0)"""
+        "x`s`y"    => """(macrocall @x_cmd (cmdstring-r "s") "y")"""
+        "x`s`end"  => """(macrocall @x_cmd (cmdstring-r "s") "end")"""
+        "x`s`in"   => """(macrocall @x_cmd (cmdstring-r "s") "in")"""
+        "x`s`2"    => """(macrocall @x_cmd (cmdstring-r "s") 2)"""
+        "x`s`10.0" => """(macrocall @x_cmd (cmdstring-r "s") 10.0)"""
     ],
     JuliaSyntax.parse_resword => [
         # In normal_context
@@ -1167,6 +1169,9 @@ parsestmt_with_kind_tests = [
     "a >>= b" => "(op= a::Identifier >>::Identifier b::Identifier)"
     ":+="    => "(quote-: +=::op=)"
     ":.+="   => "(quote-: (. +=::op=))"
+    # str/cmd macro name kinds
+    "x\"str\""   => """(macrocall x::StrMacroName (string-r "str"::String))"""
+    "x`str`"     => """(macrocall x::CmdMacroName (cmdstring-r "str"::CmdString))"""
 ]
 
 @testset "parser `Kind` remapping" begin
@@ -1195,8 +1200,8 @@ end
     # ɛµ normalizes to εμ
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5()") == "(call \u03B5\u03BC)"
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "@\u025B\u00B5") == "(macrocall (macro_name \u03B5\u03BC))"
-    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5\"\"") == "(macrocall (macro_name_str \u03B5\u03BC) (string-r \"\"))"
-    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5``") == "(macrocall (macro_name_cmd \u03B5\u03BC) (cmdstring-r \"\"))"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5\"\"") == "(macrocall @\u03B5\u03BC_str (string-r \"\"))"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5``") == "(macrocall @\u03B5\u03BC_cmd (cmdstring-r \"\"))"
     # · and · normalize to ⋅
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u00B7 b") == "(call-i a \u22C5 b)"
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u0387 b") == "(call-i a \u22C5 b)"
