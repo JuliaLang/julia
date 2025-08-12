@@ -3,7 +3,6 @@
 // Note that this file is `#include`d by "signal-handling.c"
 
 #include <signal.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
