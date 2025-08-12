@@ -198,7 +198,7 @@ sourcefile(node::AbstractSyntaxNode) = node.source
 
 function leaf_string(ex)
     if !is_leaf(ex)
-        throw(ArgumentError("_value_string should be used for leaf nodes only"))
+        throw(ArgumentError("leaf_string should be used for leaf nodes only"))
     end
     k = kind(ex)
     value = ex.val
@@ -243,7 +243,12 @@ function _show_syntax_node_sexpr(io, node::AbstractSyntaxNode, show_kind)
         if is_error(node)
             print(io, "(", untokenize(head(node)), ")")
         else
-            print(io, leaf_string(node))
+            str = leaf_string(node)
+            k = kind(node)
+            if is_identifier(k) && !show_kind
+                str = lower_identifier_name(str, k)
+            end
+            print(io, str)
             if show_kind
                 print(io, "::", kind(node))
             end

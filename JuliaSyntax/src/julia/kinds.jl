@@ -194,6 +194,10 @@ register_kinds!(JuliaSyntax, 0, [
     "BEGIN_IDENTIFIERS"
         "Identifier"
         "Placeholder" # Used for empty catch variables, and all-underscore identifiers in lowering
+        # String and command macro names are modeled as a special kind of
+        # identifier as they need to be mangled before lookup.
+        "StrMacroName"
+        "CmdMacroName"
     "END_IDENTIFIERS"
 
     "BEGIN_KEYWORDS"
@@ -1039,10 +1043,7 @@ register_kinds!(JuliaSyntax, 0, [
         "iteration"
         "comprehension"
         "typed_comprehension"
-        # Macro names
         "macro_name"
-        "macro_name_cmd"
-        "macro_name_str"
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
     "END_SYNTAX_KINDS"
@@ -1106,6 +1107,9 @@ const _nonunique_kind_names = Set([
     K"String"
     K"Char"
     K"CmdString"
+
+    K"StrMacroName"
+    K"CmdMacroName"
 ])
 
 """
