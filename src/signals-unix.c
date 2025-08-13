@@ -51,6 +51,7 @@ JL_DLLEXPORT const char *jl_sigabbrev(int sig)
 #if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 32))
     return sigabbrev_np(sig);
 #elif defined(__GLIBC__)
+    extern const char *const sys_sigabbrev[];
     if (sig < NSIG && sig > 0)
         return sys_sigabbrev[sig];
     else
