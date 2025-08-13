@@ -1081,7 +1081,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "nothing");
     }
     else if (v == (jl_value_t*)jl_method_table) {
-        n += jl_printf(out, "Core.GlobalMethods");
+        n += jl_printf(out, "Core.methodtable");
     }
     else if (vt == jl_string_type) {
         n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1, 0);
@@ -1294,6 +1294,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 }
                 else {
                     char *ptr = ((char*)m->ptr) + j * layout->size;
+                    if (layout->flags.arrayelem_islocked) {
+                        // Skip the lock at the beginning for locked arrays
+                        size_t lock_size = sizeof(jl_mutex_t);
+                        ptr += lock_size;
+                    }
                     n += jl_static_show_x_(out, (jl_value_t*)ptr,
                             (jl_datatype_t*)(typetagdata ? jl_nth_union_component(el_type, typetagdata[j]) : el_type),
                             depth, ctx);

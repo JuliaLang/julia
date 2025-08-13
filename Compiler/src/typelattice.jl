@@ -40,6 +40,9 @@ struct Conditional
                          isdefined::Bool=false)
         assert_nested_slotwrapper(thentype)
         assert_nested_slotwrapper(elsetype)
+        if thentype isa LimitedAccuracy || elsetype isa LimitedAccuracy
+            return Bool
+        end
         return new(slot, thentype, elsetype, isdefined)
     end
 end
@@ -83,6 +86,9 @@ struct MustAlias
         assert_nested_slotwrapper(fldtyp)
         # @assert !isalreadyconst(vartyp) "vartyp is already const"
         # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
+        if vartyp isa LimitedAccuracy || fldtyp isa LimitedAccuracy
+            return fldtyp
+        end
         return new(slot, vartyp, fldidx, fldtyp)
     end
 end
@@ -104,6 +110,9 @@ struct InterMustAlias
         assert_nested_slotwrapper(fldtyp)
         # @assert !isalreadyconst(vartyp) "vartyp is already const"
         # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
+        if vartyp isa LimitedAccuracy || fldtyp isa LimitedAccuracy
+            return fldtyp
+        end
         return new(slot, vartyp, fldidx, fldtyp)
     end
 end
