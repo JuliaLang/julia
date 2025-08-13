@@ -698,7 +698,7 @@ int dequeue_user_signal(void) {
     return sig;
 }
 
-static void notify_signal_router(int sig)
+void notify_signal_router(int sig)
 {
     enqueue_user_signal(sig);
     uv_async_t *handle = jl_atomic_load_relaxed(&jl_signal_router_condition);
@@ -727,9 +727,14 @@ JL_DLLEXPORT void jl_register_user_signal(int sig)
     if (err < 0)
         jl_errorf("fatal error: sigaddset: %s", strerror(errno));
 
-    // Overwrite the existing signal handler, if any. We avoid overwriting the handling of
-    // signals within the `sigwait_sigs` set as those cannot easily be restored. Instead,
-    // we have hooks in `signal_listener`.
+    // Overwrite the existing signal handler, if any.
+#if defined(_WIN32)
+    if (signal(sig, notify_signal_router) == SIG_ERR) {
+        jl_errorf("fatal error: Couldn't set %s", jl_sigabbrev(sig));
+    }
+#else
+    // We avoid overwriting the handling of signals within the `sigwait_sigs` set as those
+    // cannot easily be restored. Instead, we have hooks in `signal_listener`.
     sigset_t sset;
     jl_sigsetset(&sset);
     int ismember = sigismember(&sset, sig);
@@ -743,6 +748,7 @@ JL_DLLEXPORT void jl_register_user_signal(int sig)
     }
     else if (ismember < 0)
         jl_errorf("fatal error: sigismember: %s", strerror(errno));
+#endif
 }
 
 JL_DLLEXPORT void jl_deregister_user_signal(int sig)
