@@ -591,7 +591,7 @@ end
 end
 
 @testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
-    @testset "typ: $typ" for typ in (Float32, Float64)
+    @testset "typ: $typ" for typ in (Float16, Float32, Float64)
         @testset "f: $f" for f in (
             # all strictly increasing
             identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
