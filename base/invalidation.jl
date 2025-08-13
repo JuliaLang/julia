@@ -122,23 +122,23 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 invalidated_any |= invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
             end
         end
-        if isdefined(b, :backedges)
-            for edge in b.backedges
-                if isa(edge, CodeInstance)
-                    ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
-                    invalidated_any = true
-                elseif isa(edge, Core.Binding)
-                    isdefined(edge, :partitions) || continue
-                    latest_bpart = edge.partitions
-                    latest_bpart.max_world == typemax(UInt) || continue
-                    is_some_imported(binding_kind(latest_bpart)) || continue
-                    if is_some_binding_imported(binding_kind(latest_bpart))
-                        partition_restriction(latest_bpart) === b || continue
-                    end
-                    push!(queued_bindings, (edge, latest_bpart, latest_bpart))
-                else
-                    invalidated_any |= invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
+        nbackedges = ccall(:jl_binding_backedges_length, Csize_t, (Any,), b)
+        for i = 1:nbackedges
+            edge = ccall(:jl_binding_backedges_getindex, Any, (Any, Csize_t), b, i)
+            if isa(edge, CodeInstance)
+                ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
+                invalidated_any = true
+            elseif isa(edge, Core.Binding)
+                isdefined(edge, :partitions) || continue
+                latest_bpart = edge.partitions
+                latest_bpart.max_world == typemax(UInt) || continue
+                is_some_imported(binding_kind(latest_bpart)) || continue
+                if is_some_binding_imported(binding_kind(latest_bpart))
+                    partition_restriction(latest_bpart) === b || continue
                 end
+                push!(queued_bindings, (edge, latest_bpart, latest_bpart))
+            else
+                invalidated_any |= invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
             end
         end
     end
@@ -149,7 +149,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
         usings_backedges = ccall(:jl_get_module_usings_backedges, Any, (Any,), gr.mod)
         if usings_backedges !== nothing
             for user::Module in usings_backedges::Vector{Any}
-                user_binding = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), user, gr.name)
+                user_binding = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), user, gr.name)::Union{Core.Binding, Nothing}
                 user_binding === nothing && continue
                 isdefined(user_binding, :partitions) || continue
                 latest_bpart = user_binding.partitions
@@ -206,6 +206,10 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
 end
 
 function scan_new_methods!(extext_methods::Vector{Any}, internal_methods::Vector{Any}, image_backedges_only::Bool)
+    if image_backedges_only && Base.generating_output(true)
+        # Replacing image bindings is forbidden during incremental precompilation - skip backedge insertion
+        return
+    end
     for method in internal_methods
         if isa(method, Method)
            scan_new_method!(method, image_backedges_only)

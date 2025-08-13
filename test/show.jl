@@ -8,6 +8,8 @@ include("testenv.jl")
 replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
 showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
 
+const IRShow = Base.Compiler.IRShow
+
 @testset "IOContext" begin
     io = IOBuffer()
     ioc = IOContext(io)
@@ -2161,7 +2163,7 @@ end
 function compute_annotations(f, types)
     src = code_typed(f, types, debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
+    la, lb, ll = IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
     return join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
@@ -2216,6 +2218,8 @@ eval(Meta._parse_string("""function my_fun28173(x)
     return y
 end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
+    @test_throws "must be one of the following" sprint(IRShow.show_ir, src; context = :debuginfo => :_)
+    @test !contains(sprint(IRShow.show_ir, src; context = :debuginfo => :source_inline), "a"^80)
     ir = Core.Compiler.inflate_ir(src)
     src.debuginfo = Core.DebugInfo(src.debuginfo.def) # IRCode printing defaults to incomplete line info printing, so turn it off completely for CodeInfo too
     let source_slotnames = String["my_fun28173", "x"],
@@ -2245,18 +2249,16 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test pop!(lines2) == "18 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
-    # verbose linetable
-    io = IOBuffer()
-    Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
-    seekstart(io)
-    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+    # debuginfo = :source
+    output = sprint(Base.IRShow.show_ir, ir, Base.IRShow.default_config(ir; debuginfo=:source))
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), split(output, '\n')) == 10
+    @test output == sprint(show, ir; context = :debuginfo => :source)
+    @test output != sprint(show, ir)
+    @test_throws "must be one of the following" sprint(show, ir; context = :debuginfo => :_)
 
     # Test that a bad :invoke doesn't cause an error during printing
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
-    io = IOBuffer()
-    Base.IRShow.show_ir(io, ir)
-    seekstart(io)
-    @test contains(String(take!(io)), "Expr(:invoke, nothing")
+    @test contains(string(ir), "Expr(:invoke, nothing")
 end
 
 # Verify that extra instructions at the end of the IR

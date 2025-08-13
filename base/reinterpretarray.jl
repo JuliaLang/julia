@@ -311,16 +311,17 @@ SimdLoop.simd_inner_length(::SCartesianIndices2{K}, ::Any) where K = K
     SCartesianIndex2{K}(I1+1, Ilast)
 end
 
+_maybe_reshape(::IndexSCartesian2, A::AbstractArray, I...) = _maybe_reshape(IndexCartesian(), A, I...)
 _maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
 
 # fallbacks
-function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
+function _getindex(::IndexSCartesian2, A::AbstractArray, I::Vararg{Int, N}) where {N}
     @_propagate_inbounds_meta
-    getindex(A, I...)
+    _getindex(IndexCartesian(), A, I...)
 end
-function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
+function _setindex!(::IndexSCartesian2, A::AbstractArray, v, I::Vararg{Int, N}) where {N}
     @_propagate_inbounds_meta
-    setindex!(A, v, I...)
+    _setindex!(IndexCartesian(), A, v, I...)
 end
 # fallbacks for array types that use "pass-through" indexing (e.g., `IndexStyle(A) = IndexStyle(parent(A))`)
 # but which don't handle SCartesianIndex2
@@ -329,11 +330,25 @@ function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianInd
     J = _ind2sub(tail(axes(A)), ind.j)
     getindex(A, ind.i, J...)
 end
+
+function _getindex(::IndexSCartesian2{2}, A::AbstractArray{T,2}, ind::SCartesianIndex2) where {T}
+    @_propagate_inbounds_meta
+    J = first(axes(A, 2)) + ind.j - 1
+    getindex(A, ind.i, J)
+end
+
 function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
     J = _ind2sub(tail(axes(A)), ind.j)
     setindex!(A, v, ind.i, J...)
 end
+
+function _setindex!(::IndexSCartesian2{2}, A::AbstractArray{T,2}, v, ind::SCartesianIndex2) where {T}
+    @_propagate_inbounds_meta
+    J = first(axes(A, 2)) + ind.j - 1
+    setindex!(A, v, ind.i, J)
+end
+
 eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A))
 
 ## AbstractArray interface
@@ -391,7 +406,7 @@ check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
 check_ptr_indexable(a::Memory, sz) = true
 check_ptr_indexable(a::AbstractArray, sz) = false
 
-@propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
+@propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
@@ -412,7 +427,7 @@ end
     # Convert to full indices here, to avoid needing multiple conversions in
     # the loop in _getindex_ra
     inds = _to_subscript_indices(a, i)
-    isempty(inds) ? _getindex_ra(a, 1, ()) : _getindex_ra(a, inds[1], tail(inds))
+    isempty(inds) ? _getindex_ra(a, firstindex(a), ()) : _getindex_ra(a, inds[1], tail(inds))
 end
 
 @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
@@ -535,13 +550,13 @@ end
 
 @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
     if isprimitivetype(S) && isprimitivetype(T)
-        a.parent[] = reinterpret(S, v)
+        a.parent[] = reinterpret(S, convert(T, v)::T)
         return a
     end
     setindex!(a, v, firstindex(a))
 end
 
-@propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
+@propagate_inbounds setindex!(a::ReshapedReinterpretArray{T,0}, v) where {T} = setindex!(a, v, firstindex(a))
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
@@ -556,7 +571,7 @@ end
         return _setindex_ra!(a, v, i, ())
     end
     inds = _to_subscript_indices(a, i)
-    _setindex_ra!(a, v, inds[1], tail(inds))
+    isempty(inds) ? _setindex_ra!(a, v, firstindex(a), ()) : _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}

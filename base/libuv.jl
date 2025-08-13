@@ -39,8 +39,15 @@ macro handle_as(hand, typ)
     end
 end
 
-@nospecializeinfer associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
+function _uv_hook_close end
+
+function associate_julia_struct(handle::Ptr{Cvoid}, jlobj::T) where T
+    # This `cfunction` is not used anywhere, but it triggers compilation of this
+    # MethodInstance for `--trim` so that it will be available when dispatched to
+    # by `jl_uv_call_close_callback()`
+    _ = @cfunction(Base._uv_hook_close, Cvoid, (Ref{T},))
     ccall(:jl_uv_associate_julia_struct, Cvoid, (Ptr{Cvoid}, Any), handle, jlobj)
+end
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Cvoid}) =
     handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Cvoid, (Ptr{Cvoid},), handle)

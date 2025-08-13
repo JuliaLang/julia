@@ -387,6 +387,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @inline
     eachindex(IndexStyle(A,B...), A, B...)
 end
+eachindex(::IndexLinear, A::Union{Array, Memory}) = unchecked_oneto(length(A))
 eachindex(::IndexLinear, A::AbstractArray) = (@inline; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@inline; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
@@ -1237,15 +1238,15 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
 iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
-iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
-function _iterate(A::AbstractArray, state::Tuple)
+@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
+@inline function _iterate(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
 end
-function _iterate(A::AbstractArray, state::Integer)
+@inline function _iterate(A::AbstractArray, state::Integer)
     checkbounds(Bool, A, state) || return nothing
-    @inbounds(A[state]), state + one(state)
+    A[state], state + one(state)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
@@ -2566,8 +2567,15 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     end
 
     # discover number of rows or columns
+    # d1 dimension is increased by 1 to appropriately handle 0-length arrays
     for i ∈ 1:dims[d1]
         outdims[d1] += cat_size(as[i], d1)
+    end
+
+    # adjustment to handle 0-length arrays
+    first_dim_zero = outdims[d1] == 0
+    if first_dim_zero
+        outdims[d1] = dims[d1]
     end
 
     currentdims = zeros(Int, N)
@@ -2575,7 +2583,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     elementcount = 0
     for i ∈ eachindex(as)
         elementcount += cat_length(as[i])
-        currentdims[d1] += cat_size(as[i], d1)
+        currentdims[d1] += first_dim_zero ? 1 : cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
             for d ∈ (d2, 3:N...)
@@ -2602,6 +2610,10 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
             throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
         end
+    end
+    # restore 0-length adjustment
+    if first_dim_zero
+        outdims[d1] = 0
     end
 
     outlen = prod(outdims)

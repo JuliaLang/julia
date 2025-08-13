@@ -78,7 +78,7 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
-    if m.sig !== Tuple # OpaqueClosure or Builtin
+    if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
         sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
@@ -181,6 +181,7 @@ end
 Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
+functionloc(@nospecialize(argtypes::Union{Tuple, Type{<:Tuple}})) = functionloc(which(argtypes))
 
 function functionloc(@nospecialize(f))
     mt = methods(f)
@@ -218,8 +219,7 @@ function show_method(io::IO, m::Method;
                      modulecolor = :light_black, digit_align_width = 1,
                      print_signature_only::Bool = get(io, :print_method_signature_only, false)::Bool)
     tv, decls, file, line = arg_decl_parts(m)
-    sig = unwrap_unionall(m.sig)
-    if sig === Tuple
+    if m.sig <: Tuple{Core.Builtin, Vararg}
         # Builtin
         print(io, m.name, "(...)")
         file = "none"
@@ -424,8 +424,7 @@ end
 function show(io::IO, ::MIME"text/html", m::Method)
     tv, decls, file, line = arg_decl_parts(m, true)
     sig = unwrap_unionall(m.sig)
-    if sig === Tuple
-        # Builtin
+    if sig <: Tuple{Core.Builtin, Vararg}
         print(io, m.name, "(...) in ", parentmodule(m))
         return
     end

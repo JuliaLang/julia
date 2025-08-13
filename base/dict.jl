@@ -124,9 +124,10 @@ _shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
 #     sh::UInt8 - short hash (7 highest hash bits)
-function hashindex(key, sz)
+function hashindex(key, sz::Integer)
+    sz = Int(sz)::Int
     hsh = hash(key)::UInt
-    idx = (((hsh % Int) & (sz-1)) + 1)::Int
+    idx = ((hsh % Int) & (sz-1)) + 1
     return idx, _shorthash7(hsh)
 end
 
