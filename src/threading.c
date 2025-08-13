@@ -403,7 +403,10 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
     // ensures libunwind TLS space for this thread is allocated eagerly
     // to make unwinding async-signal-safe even when using thread local caches.
-    unw_ensure_tls();
+    void(*jl_unw_ensure_tls)(void) = NULL;
+    jl_dlsym(jl_exe_handle, "unw_ensure_tls", (void**)&jl_unw_ensure_tls, 0);
+    if (jl_unw_ensure_tls)
+        jl_unw_ensure_tls();
 #endif
 
     return ptls;
