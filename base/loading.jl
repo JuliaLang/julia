@@ -1729,6 +1729,22 @@ function show(io::IO, cf::CacheFlags)
     print(io, ")")
 end
 
+function Base.parse(::Type{CacheFlags}, s::AbstractString)
+    e = Meta.parse(s)
+    if !(e isa Expr && e.head === :call && length(e.args) == 2 &&
+        e.args[1] === :CacheFlags &&
+        e.args[2] isa Expr && e.args[2].head == :parameters)
+        throw(ArgumentError("Malformed CacheFlags string"))
+    end
+    params = Dict{Symbol, Any}(p.args[1] => p.args[2] for p in e.args[2].args)
+    use_pkgimages = get(params, :use_pkgimages, nothing)
+    debug_level = get(params, :debug_level, nothing)
+    check_bounds = get(params, :check_bounds, nothing)
+    inline = get(params, :inline, nothing)
+    opt_level = get(params, :opt_level, nothing)
+    return CacheFlags(; use_pkgimages, debug_level, check_bounds, inline, opt_level)
+end
+
 struct ImageTarget
     name::String
     flags::Int32
