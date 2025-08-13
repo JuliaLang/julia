@@ -731,8 +731,10 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1);
-    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1);
+    // Note that if we ever want to be able to unload Julia entirely, we will
+    // have to dlclose() these handles.
+    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1, 0);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1, 0);
 #ifdef _OS_WINDOWS_
     /* If this parameter is NULL, GetModuleHandle returns a handle to the file
        used to create the calling process (.exe file). */

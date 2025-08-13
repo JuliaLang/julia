@@ -240,7 +240,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 #endif
 }
 
-void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err) JL_NOTSAFEPOINT
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT
 {
     void *handle;
 #ifdef _OS_WINDOWS_
@@ -265,7 +265,7 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err) JL_NOTSAFEPOI
         handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
     }
 #endif
-    if (handle != NULL)
+    if (handle != NULL && close)
         dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
     return handle;
@@ -289,7 +289,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 
     // modname == NULL is a sentinel value requesting the handle of libjulia-internal
     if (modname == NULL)
-        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, throw_err);
+        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, throw_err, 1);
 
     abspath = jl_isabspath(modname);
     is_atpath = 0;
@@ -451,7 +451,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
      * library, so we must check where the symbol came from.
      */
     if (symbol_found && no_deps && handle != jl_RTLD_DEFAULT_handle && !rtld_first_handle) {
-        void *symbol_handle = jl_find_dynamic_library_by_addr(*value, 0);
+        void *symbol_handle = jl_find_dynamic_library_by_addr(*value, 0, 1);
         symbol_found = handle == symbol_handle;
     }
 #endif
