@@ -129,12 +129,6 @@ JL_DLLEXPORT const char *jl_sigabbrev(int sig)
     }
 #endif
 }
-#else
-JL_DLLEXPORT const char *jl_sigabbrev(int sig)
-{
-    return sigabbrev_np(sig);
-}
-#endif
 
 // helper function for returning the unw_context_t inside a ucontext_t
 // (also used by stackwalk.c)
