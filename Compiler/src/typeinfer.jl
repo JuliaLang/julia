@@ -741,6 +741,13 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
 end
 
 # record the backedges
+
+function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
+    meth = isa(edge, Method) ? edge : get_ci_mi(edge).def
+    ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
+    return nothing
+end
+
 function store_backedges(caller::CodeInstance, edges::SimpleVector)
     isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
 
