@@ -29,7 +29,7 @@ void __cdecl fpreset (void);
 
 // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
 // https://learn.microsoft.com/en-us/windows/console/ctrl-c-and-ctrl-break-signals
-JL_DLLEXPORT static char *jl_sigabbrev(int sig)
+JL_DLLEXPORT const char *jl_sigabbrev(int sig)
 {
     switch (sig) {
     case SIGABRT:        return "ABRT";
@@ -532,6 +532,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 
 int jl_install_default_signal_handler(int sig)
 {
+    void (__cdecl *)(int) sa_handler = NULL;
     switch (sig) {
     case SIGFPE:
     case SIGILL:
@@ -539,14 +540,14 @@ int jl_install_default_signal_handler(int sig)
     case SIGSEGV:
     case SIGTERM:
     case SIGABRT:
-        sa_handler = crt_sig_handler;
+        sa_handler = (void (__cdecl *)(int)) crt_sig_handler;
         break;
     default:
         return 0; // No default signal handler installed
     }
 
-    if (signal(sig, (void (__cdecl *)(int))sa_handler) == SIG_ERR) {
-        jl_errorf("fatal error: Couldn't set %s", sigabbrev_np(sig));
+    if (signal(sig, sa_handler) == SIG_ERR) {
+        jl_errorf("fatal error: Couldn't set %s", jl_sigabbrev(sig));
     }
     return 1; // A default signal handler was installed
 }

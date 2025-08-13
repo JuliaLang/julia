@@ -61,15 +61,73 @@ static _Atomic(size_t) signal_queue_tail = 0;
 
 #include "julia_assert.h"
 
-#if defined(_OS_DARWIN_) || defined(_OS_FREEBSD_)
 JL_DLLEXPORT const char *jl_sigabbrev(int sig)
 {
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 32))
+    return sigabbrev_np(sig);
+#elif defined(_OS_DARWIN_) || defined(_OS_FREEBSD_)
     // The POSIX implementation limits results to the list of standard signals
     if (sig < NSIG && sig > 0 && sig < 32)
         // Lowercase abbreviations which deviates from the POSIX `sigabbrev_np`
         return sys_signame[sig];
     else
         return NULL;
+#else
+    switch (sig) {
+    case SIGHUP:    return "HUP";
+    case SIGINT:    return "INT";
+    case SIGQUIT:   return "QUIT";
+    case SIGILL:    return "ILL";
+    case SIGTRAP:   return "TRAP";
+    case SIGABRT:   return "ABRT";
+    case SIGIOT:    return "IOT";
+    case SIGBUS:    return "BUS";
+#ifdef SIGEMT
+    case SIGEMT:    return "EMT";
+#endif
+    case SIGFPE:    return "FPE";
+    case SIGKILL:   return "KILL";
+    case SIGUSR1:   return "USR1";
+    case SIGSEGV:   return "SEGV";
+    case SIGUSR2:   return "USR2";
+    case SIGPIPE:   return "PIPE";
+    case SIGALRM:   return "ALRM";
+    case SIGTERM:   return "TERM";
+#ifdef SIGTKFLT
+    case SIGSTKFLT: return "STKFLT";
+#endif
+    case SIGCHLD:   return "CHLD";
+#ifdef SIGCLD
+    case SIGCLD:    return "CLD";
+#endif
+    case SIGCONT:   return "CONT";
+    case SIGSTOP:   return "STOP";
+    case SIGTSTP:   return "TSTP";
+    case SIGTTIN:   return "TTIN";
+    case SIGTTOU:   return "TTOU";
+    case SIGURG:    return "URG";
+    case SIGXCPU:   return "XCPU";
+    case SIGXFSZ:   return "XFSZ";
+    case SIGVTALRM: return "VTALRM";
+    case SIGPROF:   return "PROF";
+    case SIGWINCH:  return "WINCH";
+    case SIGIO:     return "IO";
+#ifdef SIGPWR
+    case SIGPWR:    return "PWR";
+#endif
+#ifdef SIGINFO
+    case SIGINFO:   return "INFO";
+#endif
+#ifdef SIGLOST
+    case SIGLOST:   return "LOST";
+#endif
+    case SIGSYS:    return "SYS";
+#ifdef SIGUNUSED
+    case SIGUNUSED: return "UNUSED";
+#endif
+    default:        return NULL;
+    }
+#endif
 }
 #else
 JL_DLLEXPORT const char *jl_sigabbrev(int sig)
