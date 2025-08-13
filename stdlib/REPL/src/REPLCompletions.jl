@@ -1395,9 +1395,7 @@ function complete_path_string(path, hint::Bool=false;
 end
 
 function __init__()
-    if !Base.Compiler.should_insert_coverage(@__MODULE__, debuginfo)
-        COMPLETION_WORLD[] = Base.get_world_counter()
-    end
+    COMPLETION_WORLD[] = Base.get_world_counter()
     return nothing
 end
 
