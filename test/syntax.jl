@@ -4555,3 +4555,50 @@ let d = Dict(:a=>1)
     foo(a::Int) = 2
     @test foo() == 1
 end
+
+# Test new macroexpand functionality - define test module at top level
+module MacroExpandTestModule
+    macro test_basic(x)
+        return :($x + 1)
+    end
+end
+
+@testset "hygienic-scope" begin
+    # Test macroexpand! (in-place expansion)
+    expr = :(MacroExpandTestModule.@test_basic(5))
+    result = macroexpand!(@__MODULE__, expr)
+    # macroexpand! returns a hygienic-scope wrapper with legacyscope=false (default)
+    @test Meta.isexpr(result, Symbol("hygienic-scope"))
+    @test result.args[1] == :(5 + 1)
+    @test result.args[2] === MacroExpandTestModule
+    @test result.args[3] isa Core.LineNumberNode
+
+    # Test legacyscope parameter
+    hygiene_expr = :(MacroExpandTestModule.@test_basic(100))
+
+    # With legacyscope=true (default for macroexpand)
+    expanded_with_scope = macroexpand(@__MODULE__, hygiene_expr; legacyscope=true)
+    @test expanded_with_scope == :($(GlobalRef(MacroExpandTestModule, :(+)))(100, 1))
+
+    # With legacyscope=false
+    expanded_no_scope = macroexpand(@__MODULE__, hygiene_expr; legacyscope=false)
+    @test Meta.isexpr(expanded_no_scope, Symbol("hygienic-scope"))
+    @test expanded_no_scope.args[1] == :(100 + 1)
+    @test expanded_no_scope.args[2] === MacroExpandTestModule
+    @test expanded_no_scope.args[3] isa Core.LineNumberNode
+
+    # Test macroexpand! with legacyscope=false (default for macroexpand!)
+    hygiene_copy = copy(hygiene_expr)
+    result_no_scope = macroexpand!(@__MODULE__, hygiene_copy; legacyscope=false)
+    @test Meta.isexpr(result_no_scope, Symbol("hygienic-scope"))
+    @test result_no_scope.args[1] == :(100 + 1)
+    @test result_no_scope.args[2] === MacroExpandTestModule
+    @test result_no_scope.args[3] isa Core.LineNumberNode
+end
+
+# Test error handling for malformed macro calls
+@testset "macroexpand error handling" begin
+    # Test with undefined macro
+    @test_throws UndefVarError macroexpand(@__MODULE__, :(@undefined_macro(x)))
+    @test_throws UndefVarError macroexpand!(@__MODULE__, :(@undefined_macro(x)))
+end

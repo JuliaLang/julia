@@ -1252,24 +1252,15 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule, int recursive, int inplace, int expand_scope)
 {
     JL_TIMING(LOWERING, LOWERING);
     JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_atomic_load_acquire(&jl_world_counter), 0);
-    expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
-    JL_GC_POP();
-    return expr;
-}
-
-JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
-{
-    JL_TIMING(LOWERING, LOWERING);
-    JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 1, jl_atomic_load_acquire(&jl_world_counter), 0);
-    expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
+    if (!inplace)
+        expr = jl_copy_ast(expr);
+    expr = jl_expand_macros(expr, inmodule, NULL, !recursive, jl_atomic_load_acquire(&jl_world_counter), 0);
+    if (expand_scope)
+        expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
 }
