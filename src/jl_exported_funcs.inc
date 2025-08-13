@@ -178,6 +178,7 @@
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
+    XX(jl_declare_constant_val) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
@@ -190,6 +191,7 @@
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_get_sysimage_cpu_target) \
     XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
@@ -238,6 +240,7 @@
     XX(jl_init_) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
+    XX(jl_init_with_image) \
     XX(jl_init_with_image_file) \
     XX(jl_init_with_image_handle) \
     XX(jl_install_sigint_handler) \
@@ -264,6 +267,7 @@
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
+    XX(jl_is_compilable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \

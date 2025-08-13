@@ -2003,3 +2003,11 @@ end
         end
     end
 end
+
+module Test57749
+using Test, Zstd_jll
+const prefix = "Zstd version: "
+const sym = :ZSTD_versionString
+get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
+@test startswith(get_zstd_version(), "Zstd")
+end

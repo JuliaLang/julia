@@ -609,6 +609,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->flags, 0);
+    jl_atomic_store_relaxed(&mi->dispatch_status, 0);
     return mi;
 }
 
@@ -719,7 +720,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
     jl_code_instance_t *ci = NULL;
     JL_GC_PUSH5(&ex, &func, &uninferred, &ci, &kind);
     jl_task_t *ct = jl_current_task;
-    int last_lineno = jl_lineno;
+    int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     int last_in = ct->ptls->in_pure_callback;
     size_t last_age = ct->world_age;
 
@@ -817,12 +818,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         }
 
         ct->ptls->in_pure_callback = last_in;
-        jl_lineno = last_lineno;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         ct->world_age = last_age;
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
-        jl_lineno = last_lineno;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         jl_rethrow();
     }
     JL_GC_POP();
@@ -957,6 +958,9 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     src = jl_copy_code_info(src);
     src->isva = m->isva; // TODO: It would be nice to reverse this
+    // If nargs hasn't been set yet, do it now. This can happen if an old CodeInfo is deserialized.
+    if (src->nargs == 0)
+        src->nargs = m->nargs;
     assert(m->nargs == src->nargs);
     src->code = copy;
     jl_gc_wb(src, copy);
@@ -1007,6 +1011,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
     jl_atomic_store_relaxed(&m->dispatch_status, 0);
+    jl_atomic_store_relaxed(&m->interferences, (jl_genericmemory_t*)jl_an_empty_memory_any);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
     jl_atomic_store_relaxed(&m->did_scan_source, 0);
@@ -1218,7 +1223,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     //    jl_value_t **ttypes = { jl_builtin_type, jl_tparam0(jl_anytuple_type) };
     //    jl_value_t *invalidt = jl_apply_tuple_type_v(ttypes, 2); // Tuple{Union{Builtin,OpaqueClosure}, Vararg}
     //    if (!jl_has_empty_intersection(argtype, invalidt))
-    //        jl_error("cannot add methods to a builtin function");
+    //        jl_error("cannot add methods to builtin function");
     //}
 
     assert(jl_is_linenode(functionloc));
@@ -1297,7 +1302,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     }
     ft = jl_rewrap_unionall(ft, argtype);
     if (!external_mt && !jl_has_empty_intersection(ft, (jl_value_t*)jl_builtin_type)) // disallow adding methods to Any, Function, Builtin, and subtypes, or Unions of those
-        jl_error("cannot add methods to a builtin function");
+        jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));
 
     m = jl_new_method_uninit(module);
     m->external_mt = (jl_value_t*)external_mt;

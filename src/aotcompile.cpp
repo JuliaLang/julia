@@ -652,7 +652,7 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
             }
         }
         Function *f = codeinst ? aot_abi_converter(params, M, cfunc.abi, codeinst, defM, func, "", false) : unspec;
-        return assign_fptr(f);
+        assign_fptr(f);
     }
 }
 
@@ -712,7 +712,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         fargs[2] = (jl_value_t*)worlds;
         jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
         jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
-        fargs[3] = jl_box_long(trim);
+        fargs[3] = jl_box_uint8(trim);
         size_t last_age = ct->world_age;
         ct->world_age = jl_typeinf_world;
         codeinfos = (jl_array_t*)jl_apply(fargs, 4);
@@ -2344,7 +2344,15 @@ void jl_dump_native_impl(void *native_code,
                                                         "jl_small_typeof");
             jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
             jl_small_typeof_copy->setDSOLocal(true);
-            AT = ArrayType::get(T_psize, 5);
+
+            // Create CPU target string constant
+            auto cpu_target_str = jl_options.cpu_target ? jl_options.cpu_target : "native";
+            auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
+            auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
+                                                       GlobalVariable::InternalLinkage,
+                                                       cpu_target_data, "jl_cpu_target_string");
+
+            AT = ArrayType::get(T_psize, 6);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
                                             ConstantArray::get(AT, {
@@ -2352,7 +2360,8 @@ void jl_dump_native_impl(void *native_code,
                                                     ConstantExpr::getBitCast(shards, T_psize),
                                                     ConstantExpr::getBitCast(ptls, T_psize),
                                                     ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
-                                                    ConstantExpr::getBitCast(target_ids, T_psize)
+                                                    ConstantExpr::getBitCast(target_ids, T_psize),
+                                                    ConstantExpr::getBitCast(cpu_target_global, T_psize)
                                             }),
                                             "jl_image_pointers");
             addComdat(pointers, TheTriple);
@@ -2488,7 +2497,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
                 if (mi == nullptr)
                     continue;
-                jl_code_instance_t *codeinst = jl_type_infer(mi, latestworld, SOURCE_MODE_NOT_REQUIRED);
+                jl_code_instance_t *codeinst = jl_type_infer(mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
                 if (codeinst == nullptr || compiled_functions.count(codeinst))
                     continue;
                 orc::ThreadSafeModule decl_m = jl_create_ts_module("extern", ctx, DL, TT);

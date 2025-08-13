@@ -26,9 +26,9 @@ extern "C" {
 #endif
 
 // current line number in a file
-JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is TLS
+JL_DLLEXPORT _Atomic(int) jl_lineno = 0; // need to update jl_critical_error if this is TLS
 // current file name
-JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_error if this is TLS
+JL_DLLEXPORT _Atomic(const char *) jl_filename = "none"; // need to update jl_critical_error if this is TLS
 
 htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
@@ -100,7 +100,7 @@ jl_array_t *jl_get_loaded_modules(void)
     if (loaded_modules_array == NULL && jl_base_module != NULL)
         loaded_modules_array = jl_get_global(jl_base_module, jl_symbol("loaded_modules_array"));
     if (loaded_modules_array != NULL)
-        return (jl_array_t*)jl_call0((jl_function_t*)loaded_modules_array);
+        return (jl_array_t*)jl_call0((jl_value_t*)loaded_modules_array);
     return NULL;
 }
 
@@ -619,8 +619,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 *toplevel_filename = jl_symbol_name((jl_sym_t*)file);
             }
             // Not thread safe. For debugging and last resort error messages (jl_critical_error) only.
-            jl_filename = *toplevel_filename;
-            jl_lineno = *toplevel_lineno;
+            jl_atomic_store_relaxed(&jl_filename, *toplevel_filename);
+            jl_atomic_store_relaxed(&jl_lineno, *toplevel_lineno);
             return jl_nothing;
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
@@ -757,7 +757,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
-            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI);
+            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ct->world_age = last_age;
@@ -780,8 +780,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 {
-    const char *filename = jl_filename;
-    int lineno = jl_lineno;
+    const char *filename = jl_atomic_load_relaxed(&jl_filename);
+    int lineno = jl_atomic_load_relaxed(&jl_lineno);
     return jl_toplevel_eval_flex(m, v, 1, 0, &filename, &lineno);
 }
 
@@ -819,23 +819,23 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     jl_check_top_level_effect(m, "eval");
     jl_value_t *v = NULL;
-    int last_lineno = jl_lineno;
-    const char *last_filename = jl_filename;
+    int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
+    const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
     jl_task_t *ct = jl_current_task;
-    jl_lineno = 1;
-    jl_filename = "none";
+    jl_atomic_store_relaxed(&jl_lineno, 1);
+    jl_atomic_store_relaxed(&jl_filename, "none");
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
-        jl_lineno = last_lineno;
-        jl_filename = last_filename;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+        jl_atomic_store_relaxed(&jl_filename, last_filename);
         jl_rethrow();
     }
-    jl_lineno = last_lineno;
-    jl_filename = last_filename;
+    jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+    jl_atomic_store_relaxed(&jl_filename, last_filename);
     ct->world_age = last_age;
     assert(v);
     return v;
@@ -867,12 +867,12 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     }
 
     jl_task_t *ct = jl_current_task;
-    int last_lineno = jl_lineno;
-    const char *last_filename = jl_filename;
+    int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
+    const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
     int lineno = 0;
-    jl_lineno = 0;
+    jl_atomic_store_relaxed(&jl_lineno, 0);
     const char *filename_str = jl_string_data(filename);
-    jl_filename = filename_str;
+    jl_atomic_store_relaxed(&jl_filename, filename_str);
 
     JL_TRY {
         size_t last_age = ct->world_age;
@@ -882,7 +882,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
             if (jl_is_linenode(expression)) {
                 // filename is already set above.
                 lineno = jl_linenode_line(expression);
-                jl_lineno = lineno;
+                jl_atomic_store_relaxed(&jl_lineno, lineno);
                 continue;
             }
             expression = jl_svecref(jl_lower(expression, module, jl_string_data(filename), lineno, ~(size_t)0, 1), 0);
@@ -893,16 +893,16 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     }
     JL_CATCH {
         result = jl_box_long(lineno); // (ab)use result to root error line
-        jl_lineno = last_lineno;
-        jl_filename = last_filename;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+        jl_atomic_store_relaxed(&jl_filename, last_filename);
         if (jl_loaderror_type == NULL)
             jl_rethrow();
         else
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, filename, result,
                                            jl_current_exception(ct)));
     }
-    jl_lineno = last_lineno;
-    jl_filename = last_filename;
+    jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+    jl_atomic_store_relaxed(&jl_filename, last_filename);
     JL_GC_POP();
     return result;
 }

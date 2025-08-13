@@ -20,7 +20,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xfz $<
+	cd $(dir $<) && $(TAR) -xzf $<
 	touch -c $(SRCCACHE)/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 
@@ -49,7 +49,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-missing-parameter-names.patch-appl
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-missing-parameter-names.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" LDFLAGS="$(LDFLAGS) $(LIBUNWIND_LDFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" LDFLAGS="$(LDFLAGS) $(LIBUNWIND_LDFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-debug_frame --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
@@ -102,7 +102,7 @@ $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz: | $(SRCCACHE)
 
 $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/source-extracted: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xf $<
+	cd $(dir $<) && $(TAR) -xf $<
 	mv $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).src $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)
 	echo 1 > $@
 

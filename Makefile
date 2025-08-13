@@ -89,7 +89,7 @@ julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia
 julia-stdlib: | $(DIRS) julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/stdlib
 
-julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl $(build_datarootdir)/julia/juliac.jl $(build_datarootdir)/julia/juliac-buildscript.jl
+julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl $(build_datarootdir)/julia/juliac/juliac.jl $(build_datarootdir)/julia/juliac/juliac-buildscript.jl $(build_datarootdir)/julia/juliac/juliac-trim-base.jl $(build_datarootdir)/julia/juliac/juliac-trim-stdlib.jl $(build_datarootdir)/julia/juliac/Artifacts.toml
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -110,8 +110,12 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.in
 julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
-julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% julia-src-% | $(build_private_libdir)
+julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
+
+# Useful for cross-bootstrapping
+julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysbase-$*
 
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest \
                                       julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest julia-base-cache
@@ -134,6 +138,15 @@ ifneq ($(NO_GIT), 1)
 	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl)
 else
 	$(warn "Skipping whitespace check because git is unavailable")
+endif
+
+fix-whitespace:
+ifneq ($(NO_GIT), 1)
+	@# Append the directory containing the julia we just built to the end of `PATH`,
+	@# to give us the best chance of being able to run this check.
+	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --fix
+else
+	$(warn "Skipping whitespace fix because git is unavailable")
 endif
 
 release-candidate: release testall
@@ -184,6 +197,7 @@ $(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysc
 	@cp $< $@
 
 $(build_datarootdir)/julia/%: $(JULIAHOME)/contrib/% | $(build_datarootdir)/julia
+	mkdir -p $(dir $@)
 	$(INSTALL_M) $< $(dir $@)
 
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
@@ -590,7 +604,7 @@ endif
 ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 endif
-	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
+	cd $(BUILDROOT) && $(TAR) -zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
 
 
 exe:
@@ -685,7 +699,7 @@ distcleanall: cleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
 
 .FORCE:
-.PHONY: .FORCE default debug release check-whitespace release-candidate \
+.PHONY: .FORCE default debug release check-whitespace fix-whitespace release-candidate \
 	julia-debug julia-release julia-stdlib julia-deps julia-deps-libs \
 	julia-cli-release julia-cli-debug julia-src-release julia-src-debug \
 	julia-symlink julia-base julia-sysimg julia-sysimg-ji julia-sysimg-release julia-sysimg-debug \

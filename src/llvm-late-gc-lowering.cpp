@@ -676,16 +676,6 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAll(State &S, Value *V) {
 }
 
 
-static void MaybeResize(BBState &BBS, unsigned Idx) {
-    /*
-    if (BBS.Defs.size() <= Idx) {
-        BBS.Defs.resize(Idx + 1);
-        BBS.UpExposedUses.resize(Idx + 1);
-        BBS.PhiOuts.resize(Idx + 1);
-    }
-    */
-}
-
 static bool HasBitSet(const LargeSparseBitVector &BV, unsigned Bit) {
     return BV.test(Bit);
 }
@@ -694,47 +684,47 @@ static bool HasBitSet(const BitVector &BV, unsigned Bit) {
     return Bit < BV.size() && BV[Bit];
 }
 
-static void NoteDef(State &S, BBState &BBS, int Num, const ArrayRef<int> &SafepointsSoFar) {
+static void NoteDef(State &S, BBState &BBS, int Num) {
     assert(Num >= 0);
-    MaybeResize(BBS, Num);
     assert(!BBS.Defs.test(Num) && "SSA Violation or misnumbering?");
     BBS.Defs.set(Num);
     BBS.UpExposedUses.reset(Num);
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
-    for (int Safepoint : SafepointsSoFar) {
-        S.LiveIfLiveOut[Safepoint].push_back(Num);
-    }
+    if (BBS.HasSafepoint)
+        for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint)
+            S.LiveIfLiveOut[Safepoint].push_back(Num);
 }
 
-void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def,
-                                    const ArrayRef<int> &SafepointsSoFar,
+bool LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def,
                                     SmallVector<int, 1> &&RefinedPtr) {
     Type *RT = Def->getType();
     if (isa<PointerType>(RT)) {
         if (!isSpecialPtr(RT))
-            return;
+            return false;
         assert(isTrackedValue(Def) && "Returned value of GC interest, but not tracked?");
         int Num = Number(S, Def);
-        NoteDef(S, BBS, Num, SafepointsSoFar);
+        NoteDef(S, BBS, Num);
         if (!RefinedPtr.empty())
             S.Refinements[Num] = std::move(RefinedPtr);
+        return true;
     }
     else {
         SmallVector<int, 0> Nums = NumberAll(S, Def);
         for (int Num : Nums) {
-            NoteDef(S, BBS, Num, SafepointsSoFar);
+            NoteDef(S, BBS, Num);
             if (!RefinedPtr.empty())
                 S.Refinements[Num] = RefinedPtr;
         }
+        return !Nums.empty();
     }
 }
 
 static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<int> &CalleeRoots) {
+    assert(BBS.FirstSafepoint == -1 || BBS.FirstSafepoint == S.MaxSafepointNumber);
     int Number = ++S.MaxSafepointNumber;
-    S.SafepointNumbering[CI] = Number;
-    S.ReverseSafepointNumbering.push_back(CI);
+    S.SafepointNumbering.push_back(CI);
     // Note which pointers are upward exposed live here. They need to be
     // considered live at this safepoint even when they have a def earlier
     // in this BB (i.e. even when they don't participate in the dataflow
@@ -742,6 +732,10 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<i
     S.LiveSets.push_back(BBS.UpExposedUses);
     S.LiveIfLiveOut.push_back(SmallVector<int, 0>{});
     S.CalleeRoots.push_back(std::move(CalleeRoots));
+    BBS.HasSafepoint = true;
+    if (BBS.LastSafepoint == -1)
+        BBS.LastSafepoint = Number;
+    BBS.FirstSafepoint = Number;
     return Number;
 }
 
@@ -761,7 +755,6 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitV
             int Num = Number(S, V);
             if (Num < 0)
                 return;
-            MaybeResize(BBS, Num);
             Uses.set(Num);
         }
     } else {
@@ -769,7 +762,6 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitV
         for (int Num : Nums) {
             if (Num < 0)
                 continue;
-            MaybeResize(BBS, Num);
             Uses.set(Num);
         }
     }
@@ -968,15 +960,6 @@ static uint64_t getLoadValueAlign(LoadInst *LI)
     if (!md)
         return 1;
     return mdconst::extract<ConstantInt>(md->getOperand(0))->getLimitedValue();
-}
-
-static bool LooksLikeFrameRef(Value *V) {
-    if (isSpecialPtr(V->getType()))
-        return false;
-    V = V->stripInBoundsOffsets();
-    if (isSpecialPtr(V->getType()))
-        return false;
-    return isa<Argument>(V);
 }
 
 SmallVector<int, 1> LateLowerGCFrame::GetPHIRefinements(PHINode *Phi, State &S)
@@ -1213,6 +1196,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
     SmallVector<int, 8> PHINumbers;
     for (BasicBlock &BB : F) {
         BBState &BBS = S.BBStates[&BB];
+        // Avoid tracking safepoints until we reach the first instruction the defines a value.
         for (auto it = BB.rbegin(); it != BB.rend(); ++it) {
             Instruction &I = *it;
             if (CallInst *CI = dyn_cast<CallInst>(&I)) {
@@ -1251,18 +1235,21 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 auto callee = CI->getCalledFunction();
                 if (callee && callee == typeof_func) {
-                    MaybeNoteDef(S, BBS, CI, BBS.Safepoints, SmallVector<int, 1>{-2});
+                    MaybeNoteDef(S, BBS, CI, SmallVector<int, 1>{-2});
                 }
                 else if (callee && callee->getName() == "julia.gc_loaded") {
                     continue;
                 }
                 else {
-                    MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
+                    if (MaybeNoteDef(S, BBS, CI))
+                        BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 }
+                bool HasDefBefore = false;
                 if (CI->hasStructRetAttr()) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
+                        HasDefBefore = true;
                         auto allocas_opt = FindSretAllocas((CI->arg_begin()[0])->stripInBoundsOffsets());
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
@@ -1305,57 +1292,54 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                 }
                 NoteOperandUses(S, BBS, I);
-                if (CI->canReturnTwice()) {
-                    S.ReturnsTwice.push_back(CI);
-                }
-                if (callee) {
-                    if (callee == gc_preserve_begin_func) {
-                        SmallVector<int, 0> args;
-                        for (Use &U : CI->args()) {
-                            Value *V = U;
-                            if (isa<Constant>(V))
-                                continue;
-                            if (isa<PointerType>(V->getType())) {
-                                if (isSpecialPtr(V->getType())) {
-                                    int Num = Number(S, V);
-                                    if (Num >= 0)
+                if (!CI->canReturnTwice()) {
+                    if (callee) {
+                        if (callee == gc_preserve_begin_func) {
+                            SmallVector<int, 0> args;
+                            for (Use &U : CI->args()) {
+                                Value *V = U;
+                                if (isa<Constant>(V))
+                                    continue;
+                                if (isa<PointerType>(V->getType())) {
+                                    if (isSpecialPtr(V->getType())) {
+                                        int Num = Number(S, V);
+                                        if (Num >= 0)
+                                            args.push_back(Num);
+                                    }
+                                } else {
+                                    SmallVector<int, 0> Nums = NumberAll(S, V);
+                                    for (int Num : Nums) {
+                                        if (Num < 0)
+                                            continue;
                                         args.push_back(Num);
-                                }
-                            } else {
-                                SmallVector<int, 0> Nums = NumberAll(S, V);
-                                for (int Num : Nums) {
-                                    if (Num < 0)
-                                        continue;
-                                    args.push_back(Num);
+                                    }
                                 }
                             }
+                            S.GCPreserves[CI] = args;
+                            continue;
                         }
-                        S.GCPreserves[CI] = args;
+                        // Known functions emitted in codegen that are not safepoints
+                        if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
+                            callee == gc_preserve_end_func || callee == typeof_func ||
+                            callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
+                            callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
+                            callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
+                            callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+                            callee->getName() == "memcmp") {
+                            continue;
+                        }
+                        if (callee->getMemoryEffects().onlyReadsMemory() ||
+                            callee->getMemoryEffects().onlyAccessesArgPointees()) {
+                            continue;
+                        }
+                    }
+                    if (isa<IntrinsicInst>(CI))
+                        // Intrinsics are never safepoints.
                         continue;
-                    }
-                    // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
-                        callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
-                        callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                        callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
-                        callee->getName() == "memcmp") {
+                    auto effects = CI->getMemoryEffects();
+                    if (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory())
+                        // Readonly functions and functions that cannot change GC state (which is inaccessiblemem) are not safepoints
                         continue;
-                    }
-                    if (callee->getMemoryEffects().onlyReadsMemory() ||
-                        callee->getMemoryEffects().onlyAccessesArgPointees()) {
-                        continue;
-                    }
-                    if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
-                        MaybeTrackDst(S, MI);
-                    }
-                }
-                if (isa<IntrinsicInst>(CI) ||
-                    CI->getMemoryEffects().onlyAccessesArgPointees() ||
-                    CI->getMemoryEffects().onlyReadsMemory()) {
-                    // Intrinsics are never safepoints.
-                    continue;
                 }
                 SmallVector<int, 0> CalleeRoots;
                 for (Use &U : CI->args()) {
@@ -1376,10 +1360,15 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     CalleeRoots.push_back(Num);
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI, CalleeRoots);
-                BBS.HasSafepoint = true;
-                BBS.TopmostSafepoint = SafepointNumber;
-                BBS.Safepoints.push_back(SafepointNumber);
-            } else if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
+                if (CI->canReturnTwice()) {
+                    S.ReturnsTwice.push_back(SafepointNumber);
+                    HasDefBefore = true;
+                }
+                if (HasDefBefore) // With sret, the Def happens before the instruction instead of after
+                    BBS.FirstSafepointAfterFirstDef = SafepointNumber;
+                continue;
+            }
+            if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
                 // If this is a load from an immutable, we know that
                 // this object will always be rooted as long as the
                 // object we're loading from is, so we can refine uses
@@ -1387,14 +1376,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 // from.
                 SmallVector<int, 1> RefinedPtr{};
                 Type *Ty = LI->getType()->getScalarType();
+                bool refined_globally = false;
                 bool task_local = false;
                 if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
                     RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
-                } else if (LI->getType()->isPointerTy() &&
-                        isSpecialPtr(Ty) &&
-                        LooksLikeFrameRef(LI->getPointerOperand())) {
-                    // Loads from a jlcall argument array
-                    RefinedPtr.push_back(-1);
                 }
                 else if (isLoadFromConstGV(LI, task_local)) {
                     // If this is a const load from a global,
@@ -1402,21 +1387,26 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // If this is a task local constant, we don't need to root it within the
                     // task but we do need to issue write barriers for when the current task dies.
                     RefinedPtr.push_back(task_local ? -1 : -2);
+                    refined_globally = true;
                 }
                 if (!hasLoadedTy(Ty))
-                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
+                    if (MaybeNoteDef(S, BBS, LI, std::move(RefinedPtr)))
+                        if (!refined_globally)
+                            BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 NoteOperandUses(S, BBS, I);
             } else if (auto *LI = dyn_cast<AtomicCmpXchgInst>(&I)) {
                 Type *Ty = LI->getNewValOperand()->getType()->getScalarType();
                 if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
-                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
+                    if (MaybeNoteDef(S, BBS, LI))
+                        BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 }
                 NoteOperandUses(S, BBS, I);
                 // TODO: do we need MaybeTrackStore(S, LI);
             } else if (auto *LI = dyn_cast<AtomicRMWInst>(&I)) {
                 Type *Ty = LI->getType()->getScalarType();
                 if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
-                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
+                    if (MaybeNoteDef(S, BBS, LI))
+                        BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 }
                 NoteOperandUses(S, BBS, I);
                 // TODO: do we need MaybeTrackStore(S, LI);
@@ -1432,7 +1422,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             Number(S, SI->getFalseValue())
                         };
                     }
-                    MaybeNoteDef(S, BBS, SI, BBS.Safepoints, std::move(RefinedPtr));
+                    MaybeNoteDef(S, BBS, SI, std::move(RefinedPtr));
                     NoteOperandUses(S, BBS, I);
                 } else if (tracked.count) {
                     // We need to insert extra selects for the GC roots
@@ -1446,7 +1436,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     if (isa<PointerType>(Phi->getType()))
                         // TODO: Vector refinements
                         PHIRefinements = GetPHIRefinements(Phi, S);
-                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints, std::move(PHIRefinements));
+                    MaybeNoteDef(S, BBS, Phi, std::move(PHIRefinements));
                     if (isa<PointerType>(Phi->getType())) {
                         PHINumbers.push_back(Number(S, Phi));
                     } else {
@@ -1478,7 +1468,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             RefinedPtr.push_back(task_local ? -1 : -2);
                         }
                     }
-                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, std::move(RefinedPtr));
+                    MaybeNoteDef(S, BBS, ASCI, std::move(RefinedPtr));
                 }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 Type *ElT = AI->getAllocatedType();
@@ -1489,7 +1479,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
         }
         // Pre-seed the dataflow variables;
         BBS.LiveIn = BBS.UpExposedUses;
-        BBS.Done = true;
     }
     FixUpRefinements(PHINumbers, S);
     return S;
@@ -1588,35 +1577,6 @@ SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, I
 //    return Ptrs.size();
 //}
 
-// turn a memcpy into a set of loads
-void LateLowerGCFrame::MaybeTrackDst(State &S, MemTransferInst *MI) {
-    //Value *Dst = MI->getRawDest()->stripInBoundsOffsets();
-    //if (AllocaInst *AI = dyn_cast<AllocaInst>(Dst)) {
-    //    Type *STy = AI->getAllocatedType();
-    //    if (!AI->isStaticAlloca() || (isa<PointerType>(STy) && STy->getPointerAddressSpace() == AddressSpace::Tracked) || S.ArrayAllocas.count(AI))
-    //        return; // already numbered this
-    //    auto tracked = CountTrackedPointers(STy);
-    //    unsigned nroots = tracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-    //    if (nroots) {
-    //        assert(!tracked.derived);
-    //        if (!tracked.all) {
-    //            // materialize shadow LoadInst and StoreInst ops to make a copy of just the tracked values inside
-    //            //assert(MI->getLength() == DL.getTypeAllocSize(AI->getAllocatedType()) && !AI->isArrayAllocation()); // XXX: handle partial copy
-    //            Value *Src = MI->getSource();
-    //            Src = new BitCastInst(Src, STy->getPointerTo(MI->getSourceAddressSpace()), "", MI);
-    //            auto &Shadow = S.ShadowAllocas[AI];
-    //            if (!Shadow)
-    //                Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, nroots), 0, "", MI);
-    //            AI = Shadow;
-    //            unsigned count = TrackWithShadow(Src, STy, true, AI, IRBuilder<>(MI));
-    //            assert(count == tracked.count); (void)count;
-    //        }
-    //        S.ArrayAllocas[AI] = nroots;
-    //    }
-    //}
-    //// TODO: else???
-}
-
 void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
     Value *PtrBase = I->getPointerOperand()->stripInBoundsOffsets();
     auto tracked = CountTrackedPointers(I->getValueOperand()->getType());
@@ -1690,10 +1650,11 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
 
 // For debugging
 JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const char *BBName) {
-    for (auto it : S.SafepointNumbering) {
-        if (it.first->getParent()->getName() == BBName) {
-            dbgs() << "Live at " << *it.first << "\n";
-            LargeSparseBitVector &LS = S.LiveSets[it.second];
+    for (Instruction *&it : S.SafepointNumbering) {
+        if (it->getParent()->getName() == BBName) {
+            int idx = &it - S.SafepointNumbering.begin();
+            dbgs() << "Live at " << idx << "\n";
+            LargeSparseBitVector &LS = S.LiveSets[idx];
             for (auto Idx : LS) {
                 dbgs() << "\t";
                 S.ReversePtrNumbering[Idx]->printAsOperand(dbgs());
@@ -1772,9 +1733,8 @@ void LateLowerGCFrame::RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRe
 void LateLowerGCFrame::ComputeLiveSets(State &S) {
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
-    for (auto it : S.SafepointNumbering) {
-        int idx = it.second;
-        Instruction *Safepoint = it.first;
+    for (Instruction *&Safepoint : S.SafepointNumbering) {
+        int idx = &Safepoint - S.SafepointNumbering.begin();
         BasicBlock *BB = Safepoint->getParent();
         BBState &BBS = S.BBStates[BB];
         LargeSparseBitVector LiveAcross = BBS.LiveIn;
@@ -1814,8 +1774,9 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
     }
     // Compute the interference graph
     S.Neighbors.resize(S.MaxPtrNumber+1);
-    for (auto it : S.SafepointNumbering) {
-        const LargeSparseBitVector &LS = S.LiveSets[it.second];
+    for (Instruction *&Safepoint : S.SafepointNumbering) {
+        int idx = &Safepoint - S.SafepointNumbering.begin();
+        const LargeSparseBitVector &LS = S.LiveSets[idx];
         for (int idx : LS) {
             S.Neighbors[idx] |= LS;
         }
@@ -1902,8 +1863,7 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     int PreAssignedColors = 0;
     /* First assign permanent slots to things that need them due
        to returns_twice */
-    for (auto it : S.ReturnsTwice) {
-        int Num = S.SafepointNumbering.at(it);
+    for (int Num : S.ReturnsTwice) {
         const LargeSparseBitVector &LS = S.LiveSets[Num];
         for (int Idx : LS) {
             if (Colors[Idx] == -1)
@@ -1964,11 +1924,6 @@ Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *
     return load;
 }
 
-// Enable this optimization only on LLVM 4.0+ since this cause LLVM to optimize
-// constant store loop to produce a `memset_pattern16` with a global variable
-// that's initialized by `addrspacecast`. Such a global variable is not supported by the backend.
-// This is not a problem on 4.0+ since that transformation (in loop-idiom) is disabled
-// for NI pointers.
 static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
 {
     if (!S)
@@ -2361,7 +2316,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     return ChangesMade;
 }
 
-static void AddInPredLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, State &S)
+// Compute the set of all objects that are live in from all predecessors
+// TODO: reset any slots that contain values which are only live from some predecessors
+static void AddInPredecessorLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, State &S)
 {
     bool First = true;
     std::set<BasicBlock *> Visited;
@@ -2382,7 +2339,7 @@ static void AddInPredLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, Stat
                 WorkList.push_back(Pred);
                 continue;
             } else {
-                int LastSP = S.BBStates[Pred].Safepoints.front();
+                int LastSP = S.BBStates[Pred].LastSafepoint;
                 if (First) {
                     LiveIn |= S.LiveSets[LastSP];
                     First = false;
@@ -2447,20 +2404,18 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
 {
     for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
-        if (!BBS.HasSafepoint) {
+        if (!BBS.HasSafepoint)
             continue;
-        }
         LargeSparseBitVector LiveIn;
-        AddInPredLiveOuts(&BB, LiveIn, S);
+        AddInPredecessorLiveOuts(&BB, LiveIn, S);
         const LargeSparseBitVector *LastLive = &LiveIn;
-        for(auto rit = BBS.Safepoints.rbegin();
-              rit != BBS.Safepoints.rend(); ++rit ) {
-            const LargeSparseBitVector &NowLive = S.LiveSets[*rit];
+        for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
+            const LargeSparseBitVector &NowLive = S.LiveSets[Safepoint];
             // reset slots which are no longer alive
             for (int Idx : *LastLive) {
                 if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
                     PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
-                        S.ReverseSafepointNumbering[*rit]);
+                        S.SafepointNumbering[Safepoint]);
                 }
             }
             // store values which are alive in this safepoint but
@@ -2468,7 +2423,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
-                      S.ReverseSafepointNumbering[*rit]);
+                      S.SafepointNumbering[Safepoint]);
                 }
             }
             LastLive = &NowLive;
@@ -2628,16 +2583,25 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
 
     pgcstack = getPGCstack(F);
-    if (!pgcstack)
-        return CleanupIR(F, nullptr, CFGModified);
-
-    State S = LocalScan(F);
-    ComputeLiveness(S);
-    auto Colors = ColorRoots(S);
-    std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
-    PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
-    CleanupIR(F, &S, CFGModified);
-
+    if (pgcstack) {
+      State S = LocalScan(F);
+      // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
+      if (std::any_of(S.BBStates.begin(), S.BBStates.end(),
+                  [&F](auto BBS) {
+                      if (BBS.first == &F.getEntryBlock())
+                          return BBS.second.FirstSafepointAfterFirstDef != -1;
+                      return BBS.second.HasSafepoint;
+                  })) {
+        ComputeLiveness(S);
+        auto Colors = ColorRoots(S);
+        std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
+        PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
+      }
+      CleanupIR(F, &S, CFGModified);
+    }
+    else {
+      CleanupIR(F, nullptr, CFGModified);
+    }
 
     // We lower the julia.gc_alloc_bytes intrinsic in this pass to insert slowpath/fastpath blocks for MMTk
     // For now, we do nothing for the Stock GC

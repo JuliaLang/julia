@@ -592,7 +592,7 @@ const undef = UndefInitializer()
 
 # memoryref is simply convenience wrapper function around memoryrefnew
 memoryref(mem::GenericMemory) = memoryrefnew(mem)
-memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(mem, Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
