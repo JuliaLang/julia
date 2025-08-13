@@ -532,7 +532,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 
 int jl_install_default_signal_handler(int sig)
 {
-    void (__cdecl *)(int) sa_handler = NULL;
+    void __cdecl (*sa_handler)(int);
     switch (sig) {
     case SIGFPE:
     case SIGILL:
