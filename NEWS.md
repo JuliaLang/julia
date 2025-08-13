@@ -75,11 +75,13 @@ Standard library changes
 #### REPL
 
 * The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
+* Display of repeated frames and cycles in stack traces has been improved by bracketing them in the trace and treating them consistently ([#55841]).
 
 #### Test
 
 * Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
 * Transparent test sets (`@testset let`) now show context when tests error ([#58727]).
+* `@test_throws` now supports a three-argument form `@test_throws ExceptionType pattern expr` to test both exception type and message pattern in one call ([#59117]).
 
 #### InteractiveUtils
 

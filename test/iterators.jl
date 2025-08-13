@@ -1070,6 +1070,7 @@ end
 @testset "last for iterators" begin
     @test last(Iterators.map(identity, 1:3)) == 3
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
+    @test last(enumerate(Iterators.flatten((1,2,3)))) == (3,3)
 end
 
 @testset "isempty and isdone for Generators" begin
@@ -1201,3 +1202,8 @@ end
 @testset "Iterators docstrings" begin
     @test isempty(Docs.undocumented_names(Iterators))
 end
+
+# Filtered list comprehension (`Filter` construct) type inference
+@test Base.infer_return_type((Vector{Any},)) do xs
+    [x for x in xs if x isa Int]
+end == Vector{Int}
