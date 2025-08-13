@@ -664,9 +664,11 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
 
 void init_signal_router(void)
 {
+#ifndef _OS_WINDOWS_
     sigemptyset(&signal_router_sset);
     if (pthread_mutex_init(&signal_router_sset_lock, NULL) != 0)
         jl_error("phread_mutex_init failed for: signal_router_sset_lock");
+#endif
 }
 
 void enqueue_user_signal(int sig) {
