@@ -31,10 +31,6 @@ static const uint64_t GIGA = 1000000000ULL;
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
 
-// The set of unblocked signals utilized by user-defined signal handlers.
-static sigset_t signal_router_sset;  // protected by `signal_router_sset_lock`
-pthread_mutex_t signal_router_sset_lock;
-
 JL_DLLIMPORT _Atomic(uv_async_t *) jl_signal_router_condition JL_GLOBALLY_ROOTED;
 
 // POSIX standard signals are not queued when a single is pending. As our user signal
@@ -713,57 +709,6 @@ JL_DLLEXPORT void jl_set_signal_router_condition(void *condition)
 
 JL_DLLEXPORT int jl_consume_user_signal(void) {
     return dequeue_user_signal();
-}
-
-JL_DLLEXPORT void jl_register_user_signal(int sig)
-{
-    uv_async_t *handle = jl_atomic_load_relaxed(&jl_signal_router_condition);
-    if (!handle)
-        jl_errorf("fatal error: jl_signal_router_contion unset");
-
-    pthread_mutex_lock(&signal_router_sset_lock);
-    int err = sigaddset(&signal_router_sset, sig);
-    pthread_mutex_unlock(&signal_router_sset_lock);
-    if (err < 0)
-        jl_errorf("fatal error: sigaddset: %s", strerror(errno));
-
-    // Overwrite the existing signal handler, if any.
-#if defined(_WIN32)
-    if (signal(sig, notify_signal_router) == SIG_ERR) {
-        jl_errorf("fatal error: Couldn't set %s", jl_sigabbrev(sig));
-    }
-#else
-    // We avoid overwriting the handling of signals within the `sigwait_sigs` set as those
-    // cannot easily be restored. Instead, we have hooks in `signal_listener`.
-    sigset_t sset;
-    jl_sigsetset(&sset);
-    int ismember = sigismember(&sset, sig);
-    if (ismember == 0) {  // Signal is not in the `sigwait_sigs` set
-        struct sigaction act;
-        memset(&act, 0, sizeof(struct sigaction));
-        sigemptyset(&act.sa_mask);
-        act.sa_handler = notify_signal_router;
-        if (sigaction(sig, &act, NULL) < 0)
-            jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    else if (ismember < 0)
-        jl_errorf("fatal error: sigismember: %s", strerror(errno));
-#endif
-}
-
-JL_DLLEXPORT void jl_deregister_user_signal(int sig)
-{
-    pthread_mutex_lock(&signal_router_sset_lock);
-    int err = sigdelset(&signal_router_sset, sig);
-    pthread_mutex_unlock(&signal_router_sset_lock);
-    if (err < 0)
-        jl_errorf("fatal error: sigdelset: %s", strerror(errno));
-
-    // Restore the default Julia signal handler, if one was set for this signal. Will not
-    // interfere with the `sigwait_sigs` set used by `signal_listener` since we do not
-    // define default signal handlers for those signals.
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
-        jl_install_default_signal_handler(sig);
 }
 
 #ifdef __cplusplus

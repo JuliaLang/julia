@@ -577,3 +577,20 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
         have_backtrace_fiber = 1;
     }
 }
+
+JL_DLLEXPORT void jl_register_user_signal(int sig)
+{
+    uv_async_t *handle = jl_atomic_load_relaxed(&jl_signal_router_condition);
+    if (!handle)
+        jl_errorf("fatal error: jl_signal_router_condition unset");
+
+    // Overwrite the existing signal handler, if any.
+    if (signal(sig, notify_signal_router) == SIG_ERR)
+        jl_errorf("fatal error: Couldn't set %s", jl_sigabbrev(sig));
+}
+
+JL_DLLEXPORT void jl_deregister_user_signal(int sig)
+{
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_default_signal_handler(sig);
+}
