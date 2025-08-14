@@ -2883,6 +2883,14 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
             return Future(CallMeta(rewrap_unionall(uft.parameters[2], wft), Any, Effects(), NoCallInfo()))
         end
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    elseif hasintersect(wft, Core.GCPreserveDuring)
+        wrapped_ft = getfield_tfunc(typeinf_lattice(interp), ft, Const(1))
+        newargtypes = copy(arginfo.argtypes)
+        newargtypes[1] = wrapped_ft
+        call = abstract_call(interp, ArgInfo(nothing, newargtypes), si, sv, max_methods)
+        return Future{CallMeta}(call, interp, sv) do call, interp, sv
+            CallMeta(call.rt, call.exct, call.effects, GCPreserveDuringCallInfo(call.info))
+        end
     end
     # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
     atype = argtypes_to_type(arginfo.argtypes)
@@ -3157,6 +3165,10 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                             push!(undefs, nothing)
                         end
                     end
+                end
+                # Special case GCPreserveDuring's root type is not observable - don't try to const prop it
+                if rt === GCPreserveDuring
+                    ats[2] = Any
                 end
                 rt = PartialStruct(𝕃ᵢ, rt, undefs, ats)
             end

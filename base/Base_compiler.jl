@@ -136,7 +136,8 @@ convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 include("coreio.jl")
 
-import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
+import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd,
+    GCPreserveDuring
 
 # Export list
 include("exports.jl")

@@ -367,6 +367,11 @@ function start_profile_listener()
     ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
+function print_padded_time(io, mod, maxlen, t)
+    print(io, rpad(string(mod) * "  ", maxlen + 3, "─"))
+    Base.time_print(io, t * 10^9); println(io)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false

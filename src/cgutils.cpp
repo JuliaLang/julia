@@ -3820,6 +3820,10 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
     if (jt == jl_bottom_type || jt == NULL)
         // We have an undef value on a (hopefully) dead branch
         return UndefValue::get(ctx.types().T_prjlvalue);
+    Value *box;
+    if (vinfo.wrapped_typ) {
+        assert(false && "TODO");
+    }
     if (vinfo.constant)
         return track_pjlvalue(ctx, literal_pointer_val(ctx, vinfo.constant));
     // This can happen in early bootstrap for `gc_preserve_begin` return value.
@@ -3831,7 +3835,6 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
         return vinfo.V;
     }
 
-    Value *box;
     if (vinfo.TIndex) {
         SmallBitVector skip_none;
         box = box_union(ctx, vinfo, skip_none);

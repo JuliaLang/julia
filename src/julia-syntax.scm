@@ -2555,6 +2555,17 @@
                         (every check-path (cdar e)))))
     (error (string "malformed \"" what "\" statement"))))
 
+(define (wrap-gc-preserve e x)
+  (if (pair? e)
+    (cond ((memq (car e) '(method lambda)) e)
+      ((eq? (car e) 'foreigncall)
+        `(,(car e) ,@(list-head (cdr e) 5) ,@(map (lambda (c) (wrap-gc-preserve c x)) (list-tail e 6))))
+      ((eq? (car e) 'cfunction) e)
+      ((eq? (car e) 'call)
+        `(call (new (top GCPreserveDuring) ,(cadr e) ,x) ,@(map (lambda (c) (wrap-gc-preserve c x)) (cddr e))))
+      (else `(,(car e) ,@(map (lambda (c) (wrap-gc-preserve c x)) (cdr e)))))
+    e))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -2944,13 +2955,7 @@
 
     'gc_preserve
     (lambda (e)
-      (let* ((s (make-ssavalue))
-             (r (make-ssavalue)))
-        `(block
-          (= ,s (gc_preserve_begin ,@(cddr e)))
-          (= ,r ,(expand-forms (cadr e)))
-          (gc_preserve_end ,s)
-          ,r)))
+      (wrap-gc-preserve (expand-forms (cadr e)) (caddr e)))
 
     'line
     (lambda (e)
