@@ -599,6 +599,7 @@ end
             identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
             sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
             Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
+            Base.Fix1(*, n1), Base.Fix2(*, n1), Base.Fix2(/, n1),
         )
             @testset "s: $s" for s in (-1, 1)
                 z = s * n0
