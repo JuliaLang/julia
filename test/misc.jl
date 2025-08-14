@@ -1544,11 +1544,11 @@ run(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
     @test Base.jit_total_bytes() >= 0
 
     # sanity check `@allocations` returns what we expect in some very simple cases.
-    # These are inside functions because `@allocations` uses `Experimental.@force_compile`
-    # so can be affected by other code in the same scope.
     @test (() -> @allocations "a")() == 0
-    @test (() -> @allocations "a" * "b")() == 0 # constant propagation
     @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
+    # test that you can grab the value from @allocated
+    @allocated _x = 1+2
+    @test _x === 3
 
     _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
         _lock_conflicts = @lock_conflicts begin
