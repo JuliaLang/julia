@@ -600,7 +600,7 @@ end
         RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundToZero, RoundFromZero, RoundUp, RoundDown,
     )
     rounders = map(rounder, rounding_modes)
-    @testset "typ: $typ" for typ in (Float16, Float32, Float64)
+    @testset "typ: $typ" for typ in (Float16, Float32, Float64, BigFloat)
         (n0, n1) = typ.(0:1)
         rounders_typ = Base.Fix1.(rounders, typ)
         @testset "f: $f" for f in (
@@ -614,6 +614,9 @@ end
             @testset "s: $s" for s in (-1, 1)
                 z = s * n0
                 z::typ
+                @test z == f(z)::typ
+                @test signbit(z) === signbit(f(z))
+                isbitstype(typ) &&
                 @test z === @inferred f(z)
             end
         end
