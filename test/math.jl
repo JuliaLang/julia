@@ -591,13 +591,24 @@ end
 end
 
 @testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
+    function rounder(rm::RoundingMode)
+        function closure(::Type{T}, x::AbstractFloat) where {T <: AbstractFloat}
+            round(T, x, rm)
+        end
+    end
+    rounding_modes = (
+        RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundToZero, RoundFromZero, RoundUp, RoundDown,
+    )
+    rounders = map(rounder, rounding_modes)
     @testset "typ: $typ" for typ in (Float16, Float32, Float64)
         (n0, n1) = typ.(0:1)
+        rounders_typ = Base.Fix1.(rounders, typ)
         @testset "f: $f" for f in (
             # all strictly increasing
             identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
             sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
             Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
+            rounders_typ...,
             Base.Fix1(*, n1), Base.Fix2(*, n1), Base.Fix2(/, n1),
         )
             @testset "s: $s" for s in (-1, 1)
