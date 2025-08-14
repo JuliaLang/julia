@@ -59,6 +59,12 @@ function with_libgit2_temp_home(f)
     end
 end
 
+function readerr(cmd::Base.AbstractCmd)
+    buf = IOBuffer()
+    run(cmd, devnull, devnull, buf)
+    return take!(buf)
+end
+
 #########
 # TESTS #
 #########
@@ -3011,6 +3017,7 @@ mktempdir() do dir
     @testset "Hostname verification" begin
         openssl_installed = false
         common_name = ""
+        openssl_config = `-config $(joinpath(@__DIR__, "inputs", "openssl.cnf"))`
         if Sys.islinux()
             try
                 # OpenSSL needs to be on the path
@@ -3056,27 +3063,36 @@ mktempdir() do dir
                 pem = joinpath(root, common_name * ".pem")
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
+                run(pipeline(`openssl req $openssl_config -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
-                local pobj, port
-                for attempt in 1:10
-                    # Find an available port by listening, but there's a race condition where
-                    # another process could grab this port, so retry on failure
+                local pobj, port, server
+                mkdir(joinpath(root, "Example.jl"))
+                if contains(String(readerr(`openssl s_server -help`)), "-listen_fd")
                     port, server = listenany(49152)
-                    close(server)
-
-                    # Make a fake Julia package and minimal HTTPS server with our generated
-                    # certificate. The minimal server can't actually serve a Git repository.
-                    mkdir(joinpath(root, "Example.jl"))
                     pobj = cd(root) do
-                        run(pipeline(`openssl s_server -key $key -cert $cert -WWW -accept $port`, stderr=RawFD(2)), wait=false)
+                        run(`openssl s_server -key $key -cert $cert -WWW -listen_fd 3`, devnull, devnull, RawFD(2), server, wait=false)
                     end
-                    @test readuntil(pobj, "ACCEPT") == ""
+                    close(server)
+                else
+                    @warn "Installed openssl version does not support -listen_fd - test may fail intermittently"
+                    for attempt in 1:10
+                        # Find an available port by listening, but there's a race condition where
+                        # another process could grab this port, so retry on failure
+                        port, server = listenany(49142 + attempt * 10)
+                        close(server)
 
-                    # Two options: Either we reached "ACCEPT" and the process is running and ready
-                    # or it failed to listen and exited, in which case we try again.
-                    process_running(pobj) && break
+                        # Make a fake Julia package and minimal HTTPS server with our generated
+                        # certificate. The minimal server can't actually serve a Git repository.
+                        pobj = cd(root) do
+                            run(pipeline(`openssl s_server -key $key -cert $cert -WWW -accept $port`, stderr=RawFD(2)), wait=false)
+                        end
+                        @test readuntil(pobj, "ACCEPT") == ""
+
+                        # Two options: Either we reached "ACCEPT" and the process is running and ready
+                        # or it failed to listen and exited, in which case we try again.
+                        process_running(pobj) && break
+                    end
                 end
 
                 @test process_running(pobj)
