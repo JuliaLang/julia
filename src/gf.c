@@ -5087,6 +5087,65 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype
     JL_GC_POP();
 }
 
+// Drop all method caches and increment world age as if adding a method that intersects everything
+static void invalidate_method_instance_caches(jl_method_instance_t *mi, size_t world)
+{
+    if ((jl_value_t*)mi == jl_nothing)
+        return;
+
+    // Walk through all code instances for this method instance
+    jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+    while (ci != NULL) {
+        // Invalidate this code instance by setting max_world to current world
+        if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
+            jl_atomic_store_release(&ci->max_world, world);
+        }
+        ci = jl_atomic_load_relaxed(&ci->next);
+    }
+}
+
+static int invalidate_all_specializations(jl_typemap_entry_t *def, void *closure)
+{
+    size_t world = *(size_t*)closure;
+    jl_method_t *method = def->func.method;
+    JL_LOCK(&method->writelock);
+    jl_value_t *specializations = jl_atomic_load_relaxed(&method->specializations);
+    if (jl_is_svec(specializations)) {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
+            invalidate_method_instance_caches(mi, world);
+        }
+    }
+    else if (specializations != NULL) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
+        invalidate_method_instance_caches(mi, world);
+    }
+    JL_UNLOCK(&method->writelock);
+    return 1;
+}
+
+static int invalidate_all_caches_visitor(jl_methtable_t *mt, void *env)
+{
+    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), invalidate_all_specializations, env);
+}
+
+JL_DLLEXPORT void jl_drop_all_caches(void)
+{
+    JL_LOCK(&world_counter_lock);
+
+    // Get current world age - we'll invalidate everything at this world
+    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
+
+    invalidate_all_caches_visitor(jl_method_table, &current_world);
+
+    // Increment world age - this forces all subsequent compilation to happen in the new world
+    size_t new_world = current_world + 1;
+    jl_atomic_store_release(&jl_world_counter, new_world);
+
+    JL_UNLOCK(&world_counter_lock);
+}
+
 
 #ifdef __cplusplus
 }

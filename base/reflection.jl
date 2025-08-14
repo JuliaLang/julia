@@ -1453,3 +1453,20 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
     end
     return f, args, kwargs
 end
+
+"""
+    Base.drop_all_caches()
+
+Internal function to drop all native code caches and increment world age.
+This invalidates all compiled code as if a method was added that intersects
+with all existing methods.
+"""
+function drop_all_caches()
+    ccall(:jl_drop_all_caches, Cvoid, ())
+
+    # Reset loading.jl world age so that loading code is regenerated
+    _require_world_age[] = typemax(UInt)
+
+    # Call Base.Compiler.activate!() after dropping caching to activate coverage of the Compiler code itself
+    Base.Compiler.activate!()
+end
