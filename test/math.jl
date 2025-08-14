@@ -595,7 +595,7 @@ end
         @testset "f: $f" for f in (
             # all strictly increasing
             identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
-            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand,
+            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, one(typ)), Base.Fix2(atand, one(typ)),
             Base.Fix1(round, typ), Base.Fix1(trunc, typ), (+), ∘(-, -), ∘(-, cosc),
         )
             @testset "s: $s" for s in (-1, 1)
