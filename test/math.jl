@@ -592,14 +592,16 @@ end
 
 @testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
     @testset "typ: $typ" for typ in (Float16, Float32, Float64)
+        n0 = typ(0)
+        n1 = typ(1)
         @testset "f: $f" for f in (
             # all strictly increasing
             identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
-            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, one(typ)), Base.Fix2(atand, one(typ)),
+            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
             Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
         )
             @testset "s: $s" for s in (-1, 1)
-                z = s * typ(0)
+                z = s * n0
                 z::typ
                 @test z === @inferred f(z)
             end
