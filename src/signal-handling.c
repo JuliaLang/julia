@@ -632,7 +632,7 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
             sigaddset(&sset, sig);
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
-        if (si_code)
+        if (si_code != INT_MAX)
             jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
             jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
