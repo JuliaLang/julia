@@ -472,19 +472,19 @@ function gc_bytes()
     b[]
 end
 
-function allocated(f, args::Vararg{Any,N}) where {N}
+@constprop :none function allocated(f, args::Vararg{Any,N}) where {N}
     b0 = Ref{Int64}(0)
     b1 = Ref{Int64}(0)
     Base.gc_bytes(b0)
-    f(args...)
+    @noinline f(args...)
     Base.gc_bytes(b1)
     return b1[] - b0[]
 end
 only(methods(allocated)).called = 0xff
 
-function allocations(f, args::Vararg{Any,N}) where {N}
+@constprop :none function allocations(f, args::Vararg{Any,N}) where {N}
     stats = Base.gc_num()
-    f(args...)
+    @noinline f(args...)
     diff = Base.GC_Diff(Base.gc_num(), stats)
     return Base.gc_alloc_count(diff)
 end
@@ -501,11 +501,56 @@ function is_simply_call(@nospecialize ex)
     return true
 end
 
+function _gen_allocation_measurer(ex, fname::Symbol)
+    if isexpr(ex, :call)
+        if !is_simply_call(ex)
+            ex = :((() -> $ex)())
+        end
+        pushfirst!(ex.args, GlobalRef(Base, fname))
+        return esc(ex)
+    elseif fname === :allocated
+        # v1.11-compatible implementation
+        return quote
+            Experimental.@force_compile
+            local b0 = Ref{Int64}(0)
+            local b1 = Ref{Int64}(0)
+            gc_bytes(b0)
+            $(esc(ex))
+            gc_bytes(b1)
+            b1[] - b0[]
+        end
+    else
+        @assert fname === :allocations
+        return quote
+            Experimental.@force_compile
+            # Note this value is unused, but without it `allocated` and `allocations`
+            # are sufficiently different that the compiler can remove allocations here
+            # that it cannot remove there, giving inconsistent numbers.
+            local b1 = Ref{Int64}(0)
+            local stats = Base.gc_num()
+            $(esc(ex))
+            local diff = Base.GC_Diff(Base.gc_num(), stats)
+            gc_bytes(b1)
+            Base.gc_alloc_count(diff)
+        end
+    end
+end
+
 """
     @allocated
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 total number of bytes allocated during evaluation of the expression.
+
+If the expression is a function call, an effort is made to measure only allocations
+during the function, excluding any overhead from calling it and not performing
+constant propagation with the provided argument values. This mode of use is recommended.
+If you want to include those effects, i.e. measuring the call site as well,
+use the syntax `@allocated (()->f(1))()`.
+
+For more complex expressions, the code is simply run in place and therefore may see
+allocations due to the surrounding context. For example it is possible for
+`@allocated f(1)` and `@allocated x = f(1)` to give different results.
 
 See also [`@allocations`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
@@ -516,11 +561,37 @@ julia> @allocated rand(10^6)
 ```
 """
 macro allocated(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
+    _gen_allocation_measurer(ex, :allocated)
+end
+
+"""
+    @allocated inside f(...)
+
+Return the number of bytes allocated during the execution of a given function,
+excluding any allocations in the argument expressions or due to the call itself.
+
+```julia-repl
+julia> @allocated identity([])
+32
+
+julia> @allocated inside identity([])
+0
+```
+
+!!! compat "Julia 1.12"
+    This macro was added in Julia 1.12.
+"""
+macro allocated(how, ex)
+    if how === :inside
+        if isexpr(ex, :call)
+            pushfirst!(ex.args, GlobalRef(Base, :allocated))
+            return esc(ex)
+        else
+            error("`@allocated inside` requires a call expression")
+        end
+    else
+        error("Unrecognized symbol argument to `@allocated`; must be `inside`")
     end
-    pushfirst!(ex.args, GlobalRef(Base, :allocated))
-    return esc(ex)
 end
 
 """
@@ -541,11 +612,37 @@ julia> @allocations rand(10^6)
     This macro was added in Julia 1.9.
 """
 macro allocations(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
+    _gen_allocation_measurer(ex, :allocations)
+end
+
+"""
+    @allocations inside f(...)
+
+Return the number of allocations during the execution of a given function,
+excluding any allocations in the argument expressions or due to the call itself.
+
+```julia-repl
+julia> @allocations identity([])
+1
+
+julia> @allocations inside identity([])
+0
+```
+
+!!! compat "Julia 1.12"
+    This macro was added in Julia 1.12.
+"""
+macro allocations(how, ex)
+    if how === :inside
+        if isexpr(ex, :call)
+            pushfirst!(ex.args, GlobalRef(Base, :allocations))
+            return esc(ex)
+        else
+            error("`@allocations inside` requires a call expression")
+        end
+    else
+        error("Unrecognized symbol argument to `@allocations`; must be `inside`")
     end
-    pushfirst!(ex.args, GlobalRef(Base, :allocations))
-    return esc(ex)
 end
 
 
