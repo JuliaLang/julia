@@ -414,12 +414,6 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 
     /* First, get the symbol value */
 #ifdef _OS_WINDOWS_
-    if (handle == jl_RTLD_DEFAULT_handle) {
-        if (throw_err)
-            jl_errorf("could not load symbol \"%s\":\nspecify a library explicitly", symbol);
-        else
-            return 0;
-    }
     *value = GetProcAddress((HMODULE) handle, symbol);
 #else
     *value = dlsym(handle, symbol);
