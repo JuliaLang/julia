@@ -34,6 +34,9 @@ import Base.Experimental.entrypoint
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
+    setglobal!(Base, :PROGRAM_FILE, args[1])
+    popfirst!(args)
+    append!(Base.ARGS, args)
     return Main.main(args)
 end
 
