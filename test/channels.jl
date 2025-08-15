@@ -700,3 +700,34 @@ end
     @test_throws ErrorException(message) t.scope
     @test t.state == :runnable
 end
+
+function _task(@nospecialize(f), stack::Int, @nospecialize(invoke))
+    t = Core._task(f, stack, invoke)
+    t.donenotify = Base.ThreadSynchronizer()
+    return t
+end
+@testset "Core._task with invoke arguments" begin
+    # Test _task with invoke Type argument
+    f1() = 43
+    f1(x...) = x
+    t1 = _task(f1, 0, Tuple{})
+    @test fetch(schedule(t1)) === 43
+    t1 = _task(f1, 0, Tuple{Vararg})
+    @test fetch(schedule(t1)) === ()
+    t1 = _task(f1, 0, Tuple{typeof(f1)})
+    schedule(t1)
+    @test_throws TaskFailedException fetch(t1)
+
+    # Test _task with Method argument
+    m = which(f1, (Vararg,))
+    t1 = _task(f1, 0, m)
+    @test fetch(schedule(t1)) === ()
+
+    # Test that _task validates argument types
+    t1 = _task(f1, 0, "invalid")
+    schedule(t1)
+    @test_throws TaskFailedException fetch(t1)
+    @test_throws TypeError Core._task(f1, "invalid_size")
+    @test_throws TypeError Core._task(f1, "invalid_size", m)
+    @test_throws ArgumentError Core._task(f1, 0, m, 1)
+end
