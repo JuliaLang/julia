@@ -118,3 +118,7 @@ end
         end
     end
 end
+
+@eval Base.CoreLogging begin
+    @inline current_logger_for_env(std_level::LogLevel, group, _module) = nothing
+end
