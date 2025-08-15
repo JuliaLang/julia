@@ -105,7 +105,7 @@ The signals `SIGKILL` and `SIGSTOP` cannot be caught and attempting to register 
 will throw an `ArgumentError`.
 """
 function register_handler(handler, signum::Integer)
-    if signum == SIGKILL || signum == SIGSTOP
+    if Sys.isunix() && (signum == SIGKILL || signum == SIGSTOP)
         throw(ArgumentError("$(signal_name(signum)) is impossible to catch"))
     end
 

@@ -1,6 +1,7 @@
 using Base.Signals
 
 const VALID_SIGNALS = Sys.iswindows() ? [2, 4, 6, 8, 11, 15, 21, 22] : 1:31
+const TEST_SIGNAL = Sys.iswindows() ? SIGBREAK : SIGURG
 
 @testset "signal_abbrev" begin
     @test signal_abbrev(0) === nothing
@@ -30,7 +31,7 @@ end
 
     # The handler we provide may, although unlikely, be triggered by external factors. We
     # need to be careful as to which signal we utilize for our tests.
-    Signals.register_handler(SIGURG) do signal
+    Signals.register_handler(TEST_SIGNAL) do signal
         num_calls[] += 1
         last_signal[] = signal
         return false
@@ -38,33 +39,33 @@ end
 
     try
         @test num_calls[] == 0
-        kill(SIGURG)
+        kill(TEST_SIGNAL)
 
         # Signal handler may not be called immediately
         @test timedwait(() -> num_calls[] > 0, 5) === :ok
         @test num_calls[] >= 1
-        @test last_signal[] == SIGURG
+        @test last_signal[] == TEST_SIGNAL
 
-        Signals.deregister_handler(SIGURG)
+        Signals.deregister_handler(TEST_SIGNAL)
         last_num_calls = num_calls[]
 
-        # Executes default signal handler. We need to choose our signal carefully to ensure this
-        # doesn't cause Julia to abend.
-        kill(SIGURG)
+        # Executes default signal handler. We need to choose our signal carefully to ensure
+        # this would not cause Julia to abend when using the Julia default signal handlers.
+        kill(TEST_SIGNAL)
 
-        # Deregistration is immediate but we should wait a little in case the signal handler is
-        # not deregistered and the handler has not yet been called.
+        # Deregistration is immediate but we should wait a little in case the signal handler
+        # is not deregistered and the handler has not yet been called.
         @test timedwait(() -> num_calls[] > last_num_calls, 5) === :timed_out
         @test num_calls[] == last_num_calls
     finally
-        Signals.deregister_handler(SIGURG)
+        Signals.deregister_handler(TEST_SIGNAL)
     end
 end
 
 # The C-function used as the signal handler must return `Cvoid`
 @testset "ignore handler return" begin
     num_calls = Threads.Atomic{Int}(0)
-    Signals.register_handler(SIGURG) do signal
+    Signals.register_handler(TEST_SIGNAL) do signal
         num_calls[] += 1
         # return 1
         return false
@@ -73,10 +74,10 @@ end
     try
         # A failure here will look like:
         # `WARNING: cfunction: return type of _root_signal_handler does not match`
-        kill(SIGURG)
+        kill(TEST_SIGNAL)
         @test timedwait(() -> num_calls[] > 0, 5) === :ok
     finally
-        Signals.deregister_handler(SIGURG)
+        Signals.deregister_handler(TEST_SIGNAL)
     end
 end
 
@@ -86,42 +87,42 @@ end
 
     try
         # Define a signal handler
-        Signals.register_handler(SIGURG) do signal
+        Signals.register_handler(TEST_SIGNAL) do signal
             num_calls1[] += 1
             return false
         end
 
         # Overwrite the signal handler
-        Signals.register_handler(SIGURG) do signal
+        Signals.register_handler(TEST_SIGNAL) do signal
             num_calls2[] += 1
             return false
         end
 
-        kill(SIGURG)
+        kill(TEST_SIGNAL)
         @test timedwait(() -> num_calls1[] + num_calls2[] > 0, 5) === :ok
         @test num_calls1[] == 0
         @test num_calls2[] >= 1
     finally
-        Signals.deregister_handler(SIGURG)
+        Signals.deregister_handler(TEST_SIGNAL)
     end
 end
 
 @testset "external signal" begin
     num_calls = Threads.Atomic{Int}(0)
 
-    Signals.register_handler(SIGURG) do signal
+    Signals.register_handler(TEST_SIGNAL) do signal
         num_calls[] += 1
         return false
     end
 
     try
         # Receive a signal from another process
-        run(`kill -SIGURG $(getpid())`)
+        run(`kill -$TEST_SIGNAL $(getpid())`)
 
         @test timedwait(() -> num_calls[] > 0, 5) === :ok
         @test num_calls[] >= 1
     finally
-        Signals.deregister_handler(SIGURG)
+        Signals.deregister_handler(TEST_SIGNAL)
     end
 end
 
