@@ -262,3 +262,33 @@ end
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end
+
+
+@testset "Dispatch backtraces" begin
+    # Check that it's possible to capture a backtrace upon entrance to inference
+    # This test ensures that SnoopCompile will continue working
+    # See in particular SnoopCompile/SnoopCompileCore/src/snoop_inference.jl
+    # and the "diagnostics" devdoc.
+    @noinline callee(x::Int) = sin(x)
+    caller(x) = invokelatest(callee, x)
+
+    @test sin(0) == 0  # force compilation of sin(::Int)
+    dispatch_backtraces = []
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), dispatch_backtraces)
+    caller(3)
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), nothing)
+    ln = @__LINE__() - 2
+    fl = Symbol(@__FILE__())
+    @test length(dispatch_backtraces) == 2
+    mcallee, mcaller = only(methods(callee)), only(methods(caller))
+    @test any(dispatch_backtraces) do (ci, trace)
+        ci.def.def === mcallee && any(stacktrace(trace)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+    @test any(dispatch_backtraces) do (ci, trace)
+        ci.def.def === mcaller && any(stacktrace(trace)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+end
