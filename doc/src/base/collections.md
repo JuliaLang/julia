@@ -1,5 +1,13 @@
 # Collections and Data Structures
 
+_If you are new to Julia and not sure where to start:_
+
+Julia has
+  * [`Arrays`](@ref lib-arrays) (1-dimensional Arrays are known as Vectors, 2-dimensional as Matrices)
+  * [`Dictionaries`](#Dictionaries)
+  * [`Sets`](#Set-Like-Collections)
+  * [`Tuples`](@ref Tuples)
+
 ## [Iteration](@id lib-collections-iteration)
 
 Sequential iteration is implemented by the [`iterate`](@ref) function.
