@@ -319,6 +319,12 @@ end
     @test_throws ArgumentError dropdims(a, dims=3)
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
+
+    h1 = HeterogeneousAxisArray(rand(4, 1))
+    h2 = HeterogeneousAxisArray(rand(1, 4))
+    @test size(dropdims(h1, dims=2)) == (4,)
+    @test size(dropdims(h2, dims=1)) == (4,)
+
     @testset "insertdims" begin
         a = rand(8, 7)
         @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))

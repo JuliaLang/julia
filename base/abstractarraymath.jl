@@ -92,7 +92,8 @@ function _dropdims(A::AbstractArray, dims::Dims)
     _dropdims_reshape(A, ax, axes(A), dims)
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
-_dropdims_reshape(A, ax::NTuple{N,OneTo}, ox, dims) where {N} = reshape(A, ax::typeof(_sub(ox, dims)))
+
+_dropdims_reshape(A, ax, ox::NTuple{N,T}, dims) where {N,T} = reshape(A, ax::typeof(_sub(ox, dims)))
 _dropdims_reshape(A, ax, _, _) = reshape(A, map(length, ax))
 
 
