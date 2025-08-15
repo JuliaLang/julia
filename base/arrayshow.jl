@@ -442,9 +442,7 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
                         print(io, undef_ref_str)
                     else
                         el = X[i,j]
-                        if !show_circular(io, el)
-                            show(io, el)
-                        end
+                        show(io, el)
                     end
                 end
                 if last(cr) == last(indc)
@@ -493,6 +491,7 @@ function show(io::IO, X::AbstractArray)
     if isempty(X)
         return _show_empty(io, X)
     end
+    show_circular(io, X) && return
     recur_io = IOContext(io, :SHOWN_SET => X)
     _show_nonempty(recur_io, X, prefix)
 end
