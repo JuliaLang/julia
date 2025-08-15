@@ -494,10 +494,10 @@ end
                 @test_throws ErrorException wait_with_timeout(recvs, 2e8)
             end
         catch e
-            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
+            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "ENODEV"
+                @warn "UDP IPv6 broadcast test skipped (no IPv6 device with multicast enabled)"
+            elseif isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
                 @warn "UDP IPv6 broadcast test skipped (permission denied upon send, restrictive firewall?)"
-            elseif isa(e, Base.IOError) && Base.uverrorname(e.code) == "ENODEV"
-                @warn "UDP IPv6 broadcast test skipped (`join_multicast_group`/`udp_set_membership` likely threw IOError: uv_udp_set_membership: no such device (ENODEV))"
             else
                 rethrow()
             end
