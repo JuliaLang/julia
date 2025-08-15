@@ -494,10 +494,13 @@ end
 ## hook for disabling threaded libraries ##
 
 library_threading_enabled::Bool = true
-const disable_library_threading_hooks = []
+
+# Base.OncePerProcess ensures that any registered hooks do not outlive the session.
+# (even if they are registered during the sysimage build process by top-level code)
+const disable_library_threading_hooks = Base.OncePerProcess(Vector{Any})
 
 function at_disable_library_threading(f)
-    push!(disable_library_threading_hooks, f)
+    push!(disable_library_threading_hooks(), f)
     if !library_threading_enabled
         disable_library_threading()
     end
@@ -506,8 +509,8 @@ end
 
 function disable_library_threading()
     global library_threading_enabled = false
-    while !isempty(disable_library_threading_hooks)
-        f = pop!(disable_library_threading_hooks)
+    while !isempty(disable_library_threading_hooks())
+        f = pop!(disable_library_threading_hooks())
         try
             f()
         catch err
