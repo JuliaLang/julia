@@ -3660,6 +3660,10 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
     jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
     jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1);
 
+    void *start = (void *)((uintptr_t)data & ~(getpagesize() - 1));
+    size_t size = LLT_ALIGN(*plen, getpagesize());
+    madvise(start, size, MADV_WILLNEED);
+
     image->size = ZSTD_getFrameContentSize(data, *plen);
     image->data = (char *)malloc(image->size);
     ZSTD_decompress((void *)image->data, image->size, data, *plen);
