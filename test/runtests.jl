@@ -286,8 +286,7 @@ cd(@__DIR__) do
                                 elapsed_minutes = elapsed.value ÷ (1000 * 60)
 
                                 elapsed_str = if elapsed_minutes >= 60
-                                    hours = elapsed_minutes ÷ 60
-                                    mins = elapsed_minutes % 60
+                                    hours, mins = divrem(elapsed_minutes, 60)
                                     "$(hours)h $(mins)m"
                                 else
                                     "$(elapsed_minutes)m"
@@ -403,7 +402,7 @@ cd(@__DIR__) do
             schedule(stdin_monitor, InterruptException(); error=true)
         end
         if @isdefined test_timers
-            foreach(close, timer in values(test_timers))
+            foreach(close, values(test_timers))
         end
     end
 
