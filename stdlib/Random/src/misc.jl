@@ -207,7 +207,7 @@ function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
         function closure(i::Int)
             @inbounds tup[mem[i]]
         end
-        ntuple(closure, Val{N}())::typeof(tup)
+        ntuple(closure, Val{N}())
     end
 end
 
