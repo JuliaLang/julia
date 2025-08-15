@@ -8,6 +8,7 @@ Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
 
 # Initialize some things not usually initialized when output is requested
 Sys.__init__()
+Base.reinit_stdio()
 Base.init_depot_path()
 Base.init_load_path()
 Base.init_active_project()
