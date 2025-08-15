@@ -440,9 +440,9 @@ end
 @inline function _getindex_ptr(a::ReinterpretArray{T}, inds...) where {T}
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
-    ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
-    GC.@preserve ap return unsafe_load(p)
+    GC.@preserve a begin
+        return unsafe_load(pointer(a), li)
+    end
 end
 
 @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
@@ -589,9 +589,9 @@ end
 @inline function _setindex_ptr!(a::ReinterpretArray{T}, v, inds...) where {T}
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
-    ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
-    GC.@preserve ap unsafe_store!(p, v)
+    GC.@preserve a begin
+        unsafe_store!(pointer(a), v, li)
+    end
     return a
 end
 
