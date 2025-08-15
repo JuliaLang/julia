@@ -146,9 +146,7 @@ function sethead!(graph, id::NodeId, k::Kind)
 end
 
 function setflags!(graph, id::NodeId, f::UInt16)
-    if f != 0
-        graph.syntax_flags[id] = f
-    end
+    graph.syntax_flags[id] = f
 end
 
 function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
@@ -246,7 +244,7 @@ function attrnames(ex::SyntaxTree)
     [name for (name, value) in pairs(attrs) if haskey(value, ex._id)]
 end
 
-function setattr(ex::SyntaxTree; extra_attrs...)
+function copy_node(ex::SyntaxTree)
     graph = syntax_graph(ex)
     id = newnode!(graph)
     if !is_leaf(ex)
@@ -254,6 +252,11 @@ function setattr(ex::SyntaxTree; extra_attrs...)
     end
     ex2 = SyntaxTree(graph, id)
     copy_attrs!(ex2, ex, true)
+    ex2
+end
+
+function setattr(ex::SyntaxTree; extra_attrs...)
+    ex2 = copy_node(ex)
     setattr!(ex2; extra_attrs...)
     ex2
 end

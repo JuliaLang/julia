@@ -25,4 +25,5 @@ include("utils.jl")
     include("quoting.jl")
     include("scopes.jl")
     include("typedefs.jl")
+    include("compat.jl")
 end

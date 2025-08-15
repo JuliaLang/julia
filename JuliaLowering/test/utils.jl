@@ -44,7 +44,7 @@ macro ast_(tree)
     end
 end
 
-function ~(ex1, ex2)
+function ≈(ex1, ex2)
     if kind(ex1) != kind(ex2) || is_leaf(ex1) != is_leaf(ex2)
         return false
     end
@@ -52,7 +52,7 @@ function ~(ex1, ex2)
         if numchildren(ex1) != numchildren(ex2)
             return false
         end
-        return all(c1 ~ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
+        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
     else
         return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
                get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
@@ -92,7 +92,7 @@ end
     format_as_ast_macro(ex)
 
 Format AST `ex` as a Juila source code call to the `@ast_` macro for generating
-test case comparisons with the `~` function.
+test case comparisons with the `≈` function.
 """
 format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
 

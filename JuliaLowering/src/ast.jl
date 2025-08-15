@@ -498,7 +498,7 @@ end
 # the middle of a pass.
 const CompileHints = Base.ImmutableDict{Symbol,Any}
 
-function setmeta(ex::SyntaxTree; kws...)
+function setmeta!(ex::SyntaxTree; kws...)
     @assert length(kws) == 1 # todo relax later ?
     key = first(keys(kws))
     value = first(values(kws))
@@ -506,8 +506,11 @@ function setmeta(ex::SyntaxTree; kws...)
         m = get(ex, :meta, nothing)
         isnothing(m) ? CompileHints(key, value) : CompileHints(m, key, value)
     end
-    setattr(ex; meta=meta)
+    setattr!(ex; meta=meta)
+    ex
 end
+
+setmeta(ex::SyntaxTree; kws...) = setmeta!(copy_node(ex); kws...)
 
 function getmeta(ex::SyntaxTree, name::Symbol, default)
     meta = get(ex, :meta, nothing)

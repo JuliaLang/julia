@@ -11,7 +11,7 @@ begin
     end
 end
 """)
-@test ex ~ @ast_ [K"block"
+@test ex ≈ @ast_ [K"block"
     [K"call"
         "f"::K"Identifier"
         11::K"Value"
@@ -107,7 +107,7 @@ let
     end
 end
 """)
-@test ex ~ @ast_ [K"block"
+@test ex ≈ @ast_ [K"block"
     [K"="
         "x"::K"Identifier"
         1::K"Integer"

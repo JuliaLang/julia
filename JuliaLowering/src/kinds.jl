@@ -48,6 +48,9 @@ function _register_kinds()
             # Internal initializer for struct types, for inner constructors/functions
             "new"
             "splatnew"
+            # For expr-macro compatibility; gone after expansion
+            "escape"
+            "hygienic_scope"
             # Catch-all for additional syntax extensions without the need to
             # extend `Kind`. Known extensions include:
             #   locals, islocal
