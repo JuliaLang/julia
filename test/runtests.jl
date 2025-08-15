@@ -13,16 +13,8 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-longrunning_delay = if haskey(ENV, "JULIA_TEST_LONGRUNNING_DELAY") # minutes
-    parse(Int, ENV["JULIA_TEST_LONGRUNNING_DELAY"]) * 60
-else
-    45 * 60  # 45 minutes
-end
-longrunning_interval = if haskey(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL") # minutes
-    parse(Int, ENV["JULIA_TEST_LONGRUNNING_INTERVAL"]) * 60
-else
-    15 * 60  # 15 minutes
-end
+const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
+const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
 
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
