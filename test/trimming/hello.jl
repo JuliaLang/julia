@@ -17,6 +17,7 @@ sum_areas(v::Vector{Shape}) = sum(area, v)
 
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
+    println(Core.stdout, PROGRAM_FILE)
     foreach(x->println(Core.stdout, x), args)
 
     # test map/mapreduce; should work but relies on inlining and other optimizations
