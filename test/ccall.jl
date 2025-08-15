@@ -1985,7 +1985,7 @@ end
     @test_throws ErrorException ccall((:sqrt, libccalltest), Cdouble, (Cdouble,), 2.0)
     # Test that jl_dlfind finds things in the expected places.
     @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
-    @static if Sys.iswindows()
+    @static if !Sys.iswindows()
         @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
     end
     @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
