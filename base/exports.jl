@@ -837,6 +837,7 @@ export
     gensym,
     @kwdef,
     macroexpand,
+    macroexpand!,
     @macroexpand1,
     @macroexpand,
     parse,
