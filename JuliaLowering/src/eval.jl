@@ -232,6 +232,10 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         if name == "cglobal"
             # cglobal isn't a true name within core - instead it's a builtin
             :cglobal
+        elseif name == "nothing"
+            # Translate Core.nothing into literal `nothing`s (flisp uses a
+            # special form (null) for this during desugaring, etc)
+            nothing
         else
             GlobalRef(Core, Symbol(name))
         end
@@ -286,9 +290,13 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
         Core.NewvarNode(to_lowered_expr(mod, ex[1], ssa_offset))
-    elseif k == K"new_opaque_closure"
+    elseif k == K"opaque_closure_method"
         args = map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))
-        Expr(:new_opaque_closure, args...)
+        # opaque_closure_method has special non-evaluated semantics for the
+        # `functionloc` line number node so we need to undo a level of quoting
+        @assert args[4] isa QuoteNode
+        args[4] = args[4].value
+        Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
         args = Any[to_lowered_expr(mod, e, ssa_offset) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
@@ -317,7 +325,7 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
                k == K"cfunction"         ? :cfunction         :
-               k == K"opaque_closure_method" ? :opaque_closure_method :
+               k == K"new_opaque_closure" ? :new_opaque_closure :
                nothing
         if isnothing(head)
             throw(LoweringError(ex, "Unhandled form for kind $k"))

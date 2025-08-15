@@ -235,4 +235,10 @@ let
 end
 """) == (3,4,5)
 
+# opaque_closure_method internals
+method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].code[3]
+@test method_ex.head === :opaque_closure_method
+@test method_ex.args[1] === nothing
+@test method_ex.args[4] isa LineNumberNode
+
 end
