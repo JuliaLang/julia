@@ -496,33 +496,35 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --code-coverage
     mktempdir() do dir
+        # don't inherit global coverage settings that could confuse these tests
+        cov_exename = `$(Base.julia_cmd()[1]) --startup-file=no --color=no`
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
         expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
-        defaultcov = readchomp(`$exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
+        defaultcov = readchomp(`$cov_exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
         opts = Base.JLOptions()
         coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
         @test !isfile(covfile)
         @test defaultcov == string(opts.code_coverage != 0 && (isempty(coverage_file) || occursin("%p", coverage_file)))
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=none`) == "0"
         @test !isfile(covfile)
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
@@ -531,7 +533,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
-        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+        @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
             --code-coverage=$covfile --code-coverage=@$tfile`) == "(3, $(repr(tfile)))"
         @test isfile(covfile)
         got = read(covfile, String)
@@ -540,7 +542,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
-        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+        @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
             --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
         @test isfile(covfile)
         got = read(covfile, String)
@@ -551,7 +553,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
             # there may be atrailing separator here so use rstrip
-            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
@@ -562,7 +564,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
         cd(dirname(tdir)) do
-            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@testhelpers`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
@@ -573,7 +575,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
-            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@../testhelpers`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
@@ -583,7 +585,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
-        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+        @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
             --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(realpath(tdir))))"
         @test isfile(covfile)
         got = read(covfile, String)
@@ -594,7 +596,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             mktemp(dir) do srcfile, io
                 write(io, src); close(io)
                 outfile = tempname(dir, cleanup=false)*".info"
-                run(`$exename --code-coverage=$outfile $srcfile`)
+                run(`$cov_exename --code-coverage=$outfile $srcfile`)
                 result = read(outfile, String)
                 rm(outfile, force=true)
                 result
