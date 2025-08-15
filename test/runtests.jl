@@ -199,10 +199,10 @@ cd(@__DIR__) do
         at = lpad("($wrkr)", name_align - textwidth(name) + 1, " ")
         lock(print_lock)
         try
-            printstyled(name, at, " |", " "^elapsed_align,
-                    "started at $(now())",
+            printstyled(name, at, " |", " "^elapsed_align, color=:white)
+            printstyled("started at $(now())",
                     (pid > 0 ? " on pid $pid" : ""),
-                    "\n", color=:white)
+                    "\n", color=:light_black)
         finally
             unlock(print_lock)
         end
@@ -296,7 +296,12 @@ cd(@__DIR__) do
                                 @lock print_lock begin
                                     print(test)
                                     print(lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
-                                    printstyled("       has been running for $(elapsed_str)\n", color=Base.warn_color())
+                                    # Calculate total width of data columns: "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)"
+                                    # This is: elapsed_align + 3 + gc_align + 3 + percent_align + 3 + alloc_align + 3 + rss_align
+                                    data_width = elapsed_align + gc_align + percent_align + alloc_align + rss_align + 12  # 12 = 4 * " | "
+                                    message = "has been running for $(elapsed_str)"
+                                    centered_message = lpad(rpad(message, (data_width + textwidth(message)) ÷ 2), data_width)
+                                    printstyled(centered_message, "\n", color=:light_black)
                                 end
                             end
                         end
