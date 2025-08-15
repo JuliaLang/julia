@@ -244,17 +244,17 @@ end
 
 # findall
 # ----------------
-@testset "Iterators.findall" begin
-    let findall = Iterators.findall
-        f = findall(isnumeric, "abc257wf")
+@testset "Iterators.findeach" begin
+    let findeach = Iterators.findeach
+        f = findeach(isnumeric, "abc257wf")
         @test !(f isa AbstractArray) # it's lazy
         @test collect(f) == [4,5,6]
 
-        f = findall(isodd, Dict(1 => 2, 2 => 4, 3 => 6))
+        f = findeach(isodd, Dict(1 => 2, 2 => 4, 3 => 6))
         @test isempty(f)
         @test isnothing(iterate(f)) # test isempty works correctly
 
-        f = findall(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
+        f = findeach(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
         @test only(f) == 2
     end
 end
