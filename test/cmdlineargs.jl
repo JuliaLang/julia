@@ -24,6 +24,20 @@ function readchomperrors(exename::Cmd)
     return (success(p), fetch(o), fetch(e))
 end
 
+# helper function for tests that expect successful command execution
+# logs detailed error information if the command fails
+function test_read_success(cmd::Cmd, expected_type::Type=String)
+    success, out, err = readchomperrors(cmd)
+    if !success
+        println("---- Command failed: $cmd")
+        println("stdout:$out")
+        println("stderr: $err")
+        println("----")
+    end
+    @test success
+    return expected_type == String ? out : parse(expected_type, out)
+end
+
 function format_filename(s)
     p = ccall(:jl_format_filename, Cstring, (Cstring,), s)
     r = unsafe_string(p)
@@ -640,16 +654,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 
     # --track-allocation
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
+    alloc_exename = `$(Base.julia_cmd()) --startup-file=no --color=no --track-allocation=none`
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
 
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(dir, "allocation_file.jl")
         cp(joinpath(helperdir,"allocation_file.jl"), inputfile)
-        pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
+        pid = readchomp(`$alloc_exename -E "getpid()" -L $inputfile --track-allocation=user`)
         memfile = "$inputfile.$pid.mem"
         got = readlines(memfile)
         rm(memfile)
@@ -1291,19 +1306,19 @@ end
         ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
     ]
     @testset "--hard-heap-limit=$str" for (str, val) in one_hundred_mb_strs_and_vals
-        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+        @test test_read_success(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, UInt64) == val
     end
     two_and_a_half_gigabytes_strs_and_vals = [
         ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
     ]
     @testset "--hard-heap-limit=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
-        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+        @test test_read_success(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, UInt64) == val
     end
     one_terabyte_strs_and_vals = [
         ("1TB", 1t), ("1024GB", 1t),
     ]
     @testset "--hard-heap-limit=$str" for (str, val) in one_terabyte_strs_and_vals
-        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+        @test test_read_success(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, UInt64) == val
     end
 end
 
@@ -1321,26 +1336,26 @@ end
         ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
     ]
     @testset "--heap-target-increment=$str" for (str, val) in one_hundred_mb_strs_and_vals
-        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+        @test test_read_success(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, UInt64) == val
     end
     two_and_a_half_gigabytes_strs_and_vals = [
         ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
     ]
     @testset "--heap-target-increment=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
-        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+        @test test_read_success(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, UInt64) == val
     end
     one_terabyte_strs_and_vals = [
         ("1TB", 1t), ("1024GB", 1t),
     ]
     @testset "--heap-target-increment=$str" for (str, val) in one_terabyte_strs_and_vals
-        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+        @test test_read_success(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, UInt64) == val
     end
 end
 
 @testset "--timeout-for-safepoint-straggler" begin
     exename = `$(Base.julia_cmd())`
     timeout = 120
-    @test parse(Int,read(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, String)) == timeout
+    @test test_read_success(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, Int) == timeout
 end
 
 @testset "--strip-metadata" begin
