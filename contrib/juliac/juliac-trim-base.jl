@@ -85,6 +85,7 @@ end
 # Used for LinearAlgebre ldiv with SVD
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval Base.Sort begin
+        # identical to existing Base def. but specializes on `lt` / `by`
         $s(v::AbstractVector, x, o::Ordering) = $s(v,x,firstindex(v),lastindex(v),o)
         $s(v::AbstractVector, x;
             lt::T=isless, by::F=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where {T,F} =
@@ -120,5 +121,7 @@ end
 end
 
 @eval Base.CoreLogging begin
+    # Disable logging (TypedCallable is required to support the existing dynamic
+    # logger interface, but it's not implemented yet)
     @inline current_logger_for_env(std_level::LogLevel, group, _module) = nothing
 end
