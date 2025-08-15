@@ -13,6 +13,17 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
+longrunning_delay = if haskey(ENV, "JULIA_TEST_LONGRUNNING_DELAY") # minutes
+    parse(Int, ENV["JULIA_TEST_LONGRUNNING_DELAY"]) * 60
+else
+    45 * 60  # 45 minutes
+end
+longrunning_interval = if haskey(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL") # minutes
+    parse(Int, ENV["JULIA_TEST_LONGRUNNING_INTERVAL"]) * 60
+else
+    15 * 60  # 15 minutes
+end
+
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
@@ -228,6 +239,10 @@ cd(@__DIR__) do
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
         running_tests = Dict{String, DateTime}()
+
+        # Track timeout timers for each test
+        test_timers = Dict{String, Timer}()
+
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
@@ -262,6 +277,29 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
+
+                        # Create a timer for this test to report long-running status
+                        test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
+                            if haskey(running_tests, test)  # Check test is still running
+                                start_time = running_tests[test]
+                                elapsed = now() - start_time
+                                elapsed_minutes = elapsed.value ÷ (1000 * 60)
+
+                                elapsed_str = if elapsed_minutes >= 60
+                                    hours = elapsed_minutes ÷ 60
+                                    mins = elapsed_minutes % 60
+                                    "$(hours)h $(mins)m"
+                                else
+                                    "$(elapsed_minutes)m"
+                                end
+
+                                @lock print_lock begin
+                                    print(test)
+                                    print(lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
+                                    printstyled("       has been running for $(elapsed_str)\n", color=Base.warn_color())
+                                end
+                            end
+                        end
                         before = time()
                         resp, duration = try
                                 r = remotecall_fetch(@Base.world(runtests, ∞), wrkr, test, test_path(test); seed=seed)
@@ -271,6 +309,10 @@ cd(@__DIR__) do
                                 Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
+                        if haskey(test_timers, test)
+                            close(test_timers[test])
+                            delete!(test_timers, test)
+                        end
                         push!(results, (test, resp, duration))
                         if length(resp) == 1
                             print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
@@ -354,6 +396,9 @@ cd(@__DIR__) do
     finally
         if @isdefined stdin_monitor
             schedule(stdin_monitor, InterruptException(); error=true)
+        end
+        if @isdefined test_timers
+            foreach(close, timer in values(test_timers))
         end
     end
 
