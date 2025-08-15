@@ -10,6 +10,9 @@
 In the example below, the values are all `isequal` so they get overwritten in the ordinary `Set`.
 The `IdSet` compares by `===` and so preserves the 3 different values.
 
+!!! compat "Julia 1.10"
+    In Julia 1.10 and earlier, `IdSet` is not exported by `Base`.
+
 # Examples
 ```jldoctest; filter = r"\\n\\s*(1|1\\.0|true)"
 julia> Set(Any[true, 1, 1.0])
