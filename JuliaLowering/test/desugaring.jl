@@ -11,7 +11,7 @@ test_mod = Module(:TestMod)
 #     end
 #     (x, y)
 # end
-# """) ~ @ast_ [K"block"
+# """) ≈ @ast_ [K"block"
 #     [K"block"
 #         [K"="
 #             "y"::K"Identifier"
