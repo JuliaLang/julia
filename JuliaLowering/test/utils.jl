@@ -262,6 +262,11 @@ function watch_ir_tests(dir, delay=0.5)
     end
 end
 
+function lower_str(mod, s)
+    ex = parsestmt(JuliaLowering.SyntaxTree, s)
+    return JuliaLowering.to_lowered_expr(mod, JuliaLowering.lower(mod, ex))
+end
+
 # See Julia Base tests in "test/docs.jl"
 function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
