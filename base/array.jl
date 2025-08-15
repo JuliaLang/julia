@@ -382,6 +382,7 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1)
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
+similar(::Type{Array{T,N}}, dims::Dims) where {T,N} = similar(Array{T}, dims)
 
 # T[x...] constructs Array{T,1}
 """
