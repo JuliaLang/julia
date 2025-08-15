@@ -1633,7 +1633,7 @@ julia> det(M)
 function det(A::AbstractMatrix{T}) where {T}
     if istriu(A) || istril(A)
         S = promote_type(T, typeof((one(T)*zero(T) + zero(T))/one(T)))
-        return convert(S, det(UpperTriangular(A)))
+        return prod(Base.Fix1(convert, S), @view A[diagind(A)]; init=one(S))
     end
     return det(lu(A; check = false))
 end
