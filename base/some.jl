@@ -14,8 +14,6 @@ end
 
 Some(::Type{T}) where {T} = Some{Type{T}}(T)
 
-promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
-
 nonnothingtype(@nospecialize(T::Type)) = typesplit(T, Nothing)
 promote_rule(T::Type{Nothing}, S::Type) = Union{S, Nothing}
 function promote_rule(T::Type{>:Nothing}, S::Type)
