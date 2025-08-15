@@ -82,6 +82,15 @@ end
 @eval Base.Sys begin
     __init_build() = nothing # VersionNumber parsing is not supported yet
 end
+# Used for LinearAlgebre ldiv with SVD
+for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
+    @eval Base.Sort begin
+        $s(v::AbstractVector, x, o::Ordering) = $s(v,x,firstindex(v),lastindex(v),o)
+        $s(v::AbstractVector, x;
+            lt::T=isless, by::F=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where {T,F} =
+            $s(v,x,ord(lt,by,rev,order))
+    end
+end
 @eval Base.GMP begin
     function __init__() # VersionNumber parsing is not supported yet
         try
