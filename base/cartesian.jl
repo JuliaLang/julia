@@ -36,15 +36,14 @@ If you want just a post-expression, supply [`nothing`](@ref) for the pre-express
 parentheses and semicolons, you can supply multi-statement expressions.
 """
 macro nloops(N, itersym, rangeexpr, args...)
-    _nloops(N, itersym, rangeexpr, args...)
+    _nloops(N, itersym, true, rangeexpr, args...)
 end
 
-function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
-    @gensym d
-    _nloops(N, itersym, :($d->Base.axes($arraysym, $d)), args...)
+function _nloops(N::Int, itersym::Symbol, esc_rng::Bool, arraysym::Symbol, args::Expr...)
+    _nloops(N, itersym, false, :(d->axes($(esc(arraysym)), d)), args...)
 end
 
-function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
+function _nloops(N::Int, itersym::Symbol, esc_rng::Bool, rangeexpr::Expr, args::Expr...)
     if rangeexpr.head !== :->
         throw(ArgumentError("second argument must be an anonymous function expression to compute the range"))
     end
@@ -55,14 +54,16 @@ function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
     ex = Expr(:escape, body)
     for dim = 1:N
         itervar = inlineanonymous(itersym, dim)
+        itervar = esc(itervar)
         rng = inlineanonymous(rangeexpr, dim)
-        preexpr = length(args) > 1 ? inlineanonymous(args[1], dim) : (:(nothing))
-        postexpr = length(args) > 2 ? inlineanonymous(args[2], dim) : (:(nothing))
+        esc_rng && (rng = esc(rng))
+        preexpr = length(args) > 1 ? esc(inlineanonymous(args[1], dim)) : nothing
+        postexpr = length(args) > 2 ? esc(inlineanonymous(args[2], dim)) : nothing
         ex = quote
-            for $(esc(itervar)) = $(esc(rng))
-                $(esc(preexpr))
+            for $itervar = $rng
+                $preexpr
                 $ex
-                $(esc(postexpr))
+                $postexpr
             end
         end
     end
@@ -290,14 +291,15 @@ struct LReplace{S<:AbstractString}
 end
 LReplace(sym::Symbol, val::Integer) = LReplace(sym, string(sym), val)
 
-lreplace(ex::Expr, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
+lreplace(ex::Expr, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val), false, 0)
 
-function lreplace!(sym::Symbol, r::LReplace)
+function lreplace!(sym::Symbol, r::LReplace, in_quote_context::Bool, escs::Int)
+    escs == 0 || return sym
     sym == r.pat_sym && return r.val
-    Symbol(lreplace!(string(sym), r))
+    Symbol(lreplace_string!(string(sym), r))
 end
 
-function lreplace!(str::AbstractString, r::LReplace)
+function lreplace_string!(str::String, r::LReplace)
     i = firstindex(str)
     pat = r.pat_str
     j = firstindex(pat)
@@ -329,7 +331,7 @@ function lreplace!(str::AbstractString, r::LReplace)
         if matching && j > lastindex(pat)
             if i > lastindex(str) || str[i] == '_'
                 # We have a match
-                return string(str[1:prevind(str, istart)], r.val, lreplace!(str[i:end], r))
+                return string(str[1:prevind(str, istart)], r.val, lreplace_string!(str[i:end], r))
             end
             matching = false
             j = firstindex(pat)
@@ -339,24 +341,42 @@ function lreplace!(str::AbstractString, r::LReplace)
     str
 end
 
-function lreplace!(ex::Expr, r::LReplace)
+function lreplace!(ex::Expr, r::LReplace, in_quote_context::Bool, escs::Int)
     # Curly-brace notation, which acts like parentheses
-    if ex.head === :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]::Symbol), "_")
-        excurly = exprresolve(lreplace!(ex.args[2], r))
+    if !in_quote_context && ex.head === :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]::Symbol), "_")
+        excurly = exprresolve(lreplace!(ex.args[2], r, in_quote_context, escs))
         if isa(excurly, Int)
             return Symbol(ex.args[1]::Symbol, excurly)
         else
             ex.args[2] = excurly
             return ex
         end
+    elseif ex.head === :meta || ex.head === :inert
+        return ex
+    elseif ex.head === :$
+        # no longer an executable expression (handle all equivalent forms of :inert, :quote, and QuoteNode the same way)
+        in_quote_context = false
+    elseif ex.head === :quote
+        # executable again
+        in_quote_context = true
+    elseif ex.head === :var"hygienic-scope"
+        # no longer our expression
+        escs += 1
+    elseif ex.head === :escape
+        # our expression again once zero
+        escs == 0 && return ex
+        escs -= 1
+    elseif ex.head === :macrocall
+        # n.b. blithely go about altering arguments to macros also, assuming that is at all what the user intended
+        # it is probably the user's fault if they put a macro inside here and didn't mean for it to get rewritten
     end
     for i in 1:length(ex.args)
-        ex.args[i] = lreplace!(ex.args[i], r)
+        ex.args[i] = lreplace!(ex.args[i], r, in_quote_context, escs)
     end
     ex
 end
 
-lreplace!(arg, r::LReplace) = arg
+lreplace!(@nospecialize(arg), r::LReplace, in_quote_context::Bool, escs::Int) = arg
 
 
 poplinenum(arg) = arg

@@ -30,6 +30,9 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# metaprogramming
+include("meta.jl")
+
 # subarrays
 include("subarray.jl")
 include("views.jl")
@@ -156,9 +159,6 @@ include("weakkeydict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")
-
-# metaprogramming
-include("meta.jl")
 
 # Logging
 include("logging/logging.jl")

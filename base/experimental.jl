@@ -41,7 +41,7 @@ within this scope, even if the compiler can't prove this to be the case.
     Experimental API. Subject to change without deprecation.
 """
 macro aliasscope(body)
-    sym = gensym()
+    sym = :aliasscope_result
     quote
         $(Expr(:aliasscope))
         $sym = $(esc(body))
