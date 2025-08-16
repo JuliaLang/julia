@@ -73,6 +73,8 @@ Standard library changes
 
 * `randperm!` and `randcycle!` now support non-`Array` `AbstractArray` inputs, assuming they are mutable and their indices are one-based ([#58596]).
 
+* `shuffle` now may take an argument of `NTuple` value ([#56906]).
+
 #### REPL
 
 * The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
