@@ -106,7 +106,7 @@ public:
     bool operator!=(const ValueState &VS) const {
       return S != VS.S || Root != VS.Root || RootDepth != VS.RootDepth;
     }
-
+    //Profile function to add interger and pointer
     void Profile(llvm::FoldingSetNodeID &ID) const {
       ID.AddInteger(S);
       ID.AddPointer(Root);
