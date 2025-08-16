@@ -3676,7 +3676,8 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
     jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1);
     jl_prefetch_system_image(data, *plen);
     image->size = ZSTD_getFrameContentSize(data, *plen);
-    size_t aligned_size = LLT_ALIGN(image->size, jl_page_size);
+    size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
+    size_t aligned_size = LLT_ALIGN(image->size, page_size);
 #if defined(_OS_WINDOWS_)
     size_t large_page_size = GetLargePageMinimum();
     if (image->size > 4 * large_page_size) {
@@ -3688,20 +3689,17 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
         image->data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
                                            PAGE_READWRITE);
     }
-#elif defined(_OS_LINUX_)
-    image->data = (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
-                               MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
 #else
     image->data =
-        (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
-    if (!image->data) {
+    if (!image->data || image->data == (void *)-1) {
         jl_printf(JL_STDERR, "ERROR: failed to allocate space for system image\n");
         jl_exit(1);
     }
 
     ZSTD_decompress((void *)image->data, image->size, data, *plen);
-    size_t len = (*plen) & ~(jl_page_size - 1);
+    size_t len = (*plen) & ~(page_size - 1);
 #ifdef _OS_WINDOWS_
     if (len)
         VirtualFree((void *)data, len, MEM_RELEASE);
