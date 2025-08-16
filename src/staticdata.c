@@ -81,7 +81,9 @@ External links:
 #include "processor.h"
 #include "serialize.h"
 
-#ifndef _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
+#include <memoryapi.h>
+#else
 #include <dlfcn.h>
 #include <sys/mman.h>
 #endif
@@ -3643,6 +3645,18 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 
 typedef void jl_image_unpack_func_t(void *handle, jl_image_buf_t *image);
 
+static void jl_prefetch_system_image(const char *data, size_t size)
+{
+    void *start = (void *)((uintptr_t)data & ~(jl_page_size - 1));
+    size_t size_aligned = LLT_ALIGN(size, jl_page_size);
+#ifdef _OS_WINDOWS_
+    WIN32_MEMORY_RANGE_ENTRY entry = {start, size_aligned};
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &entry, 0);
+#else
+    madvise(start, size_aligned, MADV_WILLNEED);
+#endif
+}
+
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
@@ -3650,6 +3664,7 @@ JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
     jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1);
     jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1);
     image->size = *plen;
+    jl_prefetch_system_image(image->data, image->size);
 }
 
 JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
@@ -3658,24 +3673,40 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
     const char *data;
     jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
     jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
-    jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1);
-
-    void *start = (void *)((uintptr_t)data & ~(getpagesize() - 1));
-    size_t size = LLT_ALIGN(*plen, getpagesize());
-    madvise(start, size, MADV_WILLNEED);
-
+    jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1);
+    jl_prefetch_system_image(data, *plen);
     image->size = ZSTD_getFrameContentSize(data, *plen);
-    image->data = (char *)malloc(image->size);
+    size_t aligned_size = LLT_ALIGN(image->size, jl_page_size);
+#if defined(_OS_WINDOWS_)
+    size_t large_page_size = GetLargePageMinimum();
+    if (image->size > 4 * large_page_size) {
+        size_t aligned_size = LLT_ALIGN(image->size, large_page_size);
+        image->data = (char *)VirtualAlloc(
+            NULL, aligned_size, MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
+    }
+    else {
+        image->data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
+                                           PAGE_READWRITE);
+    }
+#elif defined(_OS_LINUX_)
+    image->data = (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
+                               MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+#else
+    image->data =
+        (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+#endif
+    if (!image->data) {
+        jl_printf(JL_STDERR, "ERROR: failed to allocate space for system image\n");
+        jl_exit(1);
+    }
+
     ZSTD_decompress((void *)image->data, image->size, data, *plen);
-    size_t len = (*plen) & ~(jl_getpagesize() - 1);
+    size_t len = (*plen) & ~(jl_page_size - 1);
 #ifdef _OS_WINDOWS_
     if (len)
         VirtualFree((void *)data, len, MEM_RELEASE);
 #else
-    if (len && munmap((void *)data, len)) {
-        perror("munmap");
-        jl_exit(1);
-    }
+    munmap((void *)data, len);
 #endif
 }
 

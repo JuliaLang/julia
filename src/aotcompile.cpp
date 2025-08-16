@@ -2167,7 +2167,7 @@ void jl_dump_native_impl(void *native_code,
         auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
-        sysdata->setAlignment(Align(jl_getpagesize()));
+        sysdata->setAlignment(Align(jl_page_size));
 #if JL_LLVM_VERSION >= 180000
         sysdata->setCodeModel(CodeModel::Large);
 #else
