@@ -1233,11 +1233,13 @@ const _cosc_f64 = let b = Float64 ∘ Float16
     )
 end
 
-function _cosc(x::Float32)
-    _cos_cardinal_eval(x, _cosc_f32)
-end
-function _cosc(x::Float64)
-    _cos_cardinal_eval(x, _cosc_f64)
+function _cosc(x::Union{Float32, Float64})
+    if x isa Float32
+        pols = _cosc_f32
+    elseif x isa Float64
+        pols = _cosc_f64
+    end
+    _cos_cardinal_eval(x, pols)
 end
 
 # hard-code Float64/Float32 Taylor series, with coefficients
