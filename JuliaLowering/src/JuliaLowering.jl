@@ -33,6 +33,7 @@ _include("syntax_macros.jl")
 
 _include("eval.jl")
 _include("compat.jl")
+_include("hooks.jl")
 
 function __init__()
     _register_kinds()

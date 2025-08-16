@@ -26,4 +26,5 @@ include("utils.jl")
     include("scopes.jl")
     include("typedefs.jl")
     include("compat.jl")
+    include("hooks.jl")
 end
