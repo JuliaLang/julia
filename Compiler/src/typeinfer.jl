@@ -396,7 +396,7 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
                 cost_threshold += 4*default
             end
         end
-        return inline_cost_model(ir, params, cost_threshold)
+        return inline_cost_model(mi, ir, params, cost_threshold)
     end
 end
 
