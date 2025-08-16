@@ -325,3 +325,39 @@ end
 # This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
 # manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
 @test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)
+
+# Test drop_all_caches functionality
+@testset "drop_all_caches" begin
+    # Run in subprocess to avoid disrupting the main test process
+    script = """
+        # Define test functions
+        drop_cache_test_f(x) = x + 1
+        drop_cache_test_g(x) = drop_cache_test_f(x) * 2
+
+        # Compile the functions and capture stderr
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "==DROPPING ALL CACHES==")
+
+        # Drop all caches
+        Base.drop_all_caches()
+
+        # Functions should still work (but will be recompiled on next call)
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "SUCCESS: drop_all_caches test passed")
+        exit(0)
+    """
+
+    io = Pipe()
+    # Run the test in a subprocess because Base.drop_all_caches() is extreme
+    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io))
+    close(io.in)
+    err = read(io, String)
+    # println(err)
+    @test success(result)
+    err_before, err_after = split(err, "==DROPPING ALL CACHES==")
+    @test occursin("SUCCESS: drop_all_caches test passed", err_after)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int}) # recompile", err_after)
+end

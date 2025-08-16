@@ -226,16 +226,16 @@ function expand_ccallable(name, rt, def)
             else
                 f = :(typeof($f))
             end
-            at = map(sig.args[2:end]) do a
-                if isa(a,Expr) && a.head === :(::)
-                    a.args[end]
-                else
-                    :Any
-                end
-            end
+            at = Any[let a = sig.args[i]
+                    if isa(a,Expr) && a.head === :(::)
+                        a.args[end]
+                    else
+                        :Any
+                    end
+                end for i in 2:length(sig.args)]
             return quote
                 @__doc__ $(esc(def))
-                _ccallable($name, $(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
+                _ccallable($name, $(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map!(esc, at, at)...)))
             end
         end
     end
@@ -349,7 +349,7 @@ function ccall_macro_parse(exprs)
     end
     # add any varargs if necessary
     nreq = 0
-    if !isnothing(varargs)
+    if varargs !== nothing
         if length(args) == 0
             throw(ArgumentError("C ABI prohibits vararg without one required argument"))
         end
@@ -389,7 +389,7 @@ function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq
 
     return Expr(:block, statements...,
                 Expr(:call, :ccall, func, cconv, esc(rettype),
-                     Expr(:tuple, map(esc, types)...), map(esc, args)...))
+                     Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...))
 end
 
 """

@@ -34,10 +34,13 @@ import Base.Experimental.entrypoint
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
+    setglobal!(Base, :PROGRAM_FILE, args[1])
+    popfirst!(args)
+    append!(Base.ARGS, args)
     return Main.main(args)
 end
 
-let mod = Base.include(Main, ARGS[1])
+let include_result = Base.include(Main, ARGS[1])
     Core.@latestworld
     if ARGS[2] == "--output-exe"
         have_cmain = false
@@ -49,6 +52,11 @@ let mod = Base.include(Main, ARGS[1])
                     break
                 end
             end
+        elseif include_result isa Module && isdefined(include_result, :main)
+            error("""
+                  The `main` function must be defined in `Main`. If you are defining it inside a
+                  module, try adding `import .$(nameof(include_result)).main` to $(ARGS[1]).
+                  """)
         end
         if !have_cmain
             if Base.should_use_main_entrypoint()
@@ -59,7 +67,7 @@ let mod = Base.include(Main, ARGS[1])
                     error("`@main` must accept a `Vector{String}` argument.")
                 end
             else
-                error("To generate an executable a `@main` function must be defined.")
+                error("To generate an executable a `@main` function must be defined in the `Main` module.")
             end
         end
     end

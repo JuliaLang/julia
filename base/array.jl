@@ -336,7 +336,7 @@ function fill!(dest::Array{T}, x) where T
 end
 function _fill!(dest::Array{T}, x::T) where T
     for i in eachindex(dest)
-        @inbounds dest[i] = x
+        dest[i] = x
     end
     return dest
 end

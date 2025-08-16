@@ -317,6 +317,11 @@ typedef struct _jl_code_info_t {
 
 // This type describes a single method definition, and stores data
 // shared by the specializations of a function.
+//
+// Reading or writing requires `writelock` or exclusive ownership:
+//   roots, root_blocks, nroots_sysimg, ccallable
+// No lock is required to read these fields, set once on construction:
+//   all other fields
 typedef struct _jl_method_t {
     JL_DATA_TYPE
     jl_sym_t *name;  // for error reporting
@@ -382,13 +387,19 @@ typedef struct _jl_method_t {
     _jl_purity_overrides_t purity;
 
 // hidden fields:
-    // lock for modifications to the method
     jl_mutex_t writelock;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
 // can can be used as a unique dictionary key representation of a call to a particular Method
 // with a particular set of argument types
+//
+// Reading or writing requires `def.method->writelock` or exclusive ownership:
+//   backedges
+// Reading or writing requires the associated jl_methcache_t's `writelock`:
+//   cache_with_orig
+// No lock is required to read these fields, set once on construction:
+//   def, specTypes, sparam_vals
 struct _jl_method_instance_t {
     JL_DATA_TYPE
     union {
@@ -425,6 +436,11 @@ typedef struct _jl_opaque_closure_t {
 } jl_opaque_closure_t;
 
 // This type represents an executable operation
+//
+// No lock is required to read these fields, which are set while we have
+// exclusive ownership of the CodeInstance:
+//   def, owner, rettype, exctype, rettype_const, analysis_results,
+//   time_infer_total, time_infer_self
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
     jl_value_t *def; // MethodInstance or ABIOverride
@@ -795,6 +811,15 @@ typedef struct {
     uint64_t lo;
 } jl_uuid_t;
 
+// Reading or writing requires `lock`:
+//   scanned_methods, usings
+// Reading or writing requires `Base.require_lock`:
+//   uuid
+// Reading or writing requires `world_counter_lock`:
+//   usings_backedges (TODO)
+// No lock is required to read these fields, set once on construction:
+//   name, parent, file, line, build_id, uuid, nospecialize, optlevel, compile,
+//   infer, iistopmod, max_methods
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
@@ -1220,7 +1245,7 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 #endif
 
-JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_finalize(jl_value_t *o);
@@ -1955,6 +1980,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_get_tls_world_age(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_drop_all_caches(void);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x) JL_NOTSAFEPOINT;
@@ -2350,13 +2376,13 @@ STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
     return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
+JL_DLLEXPORT jl_value_t *jl_call(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_call0(jl_value_t *f JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call1(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call2(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
                                   jl_value_t *b JL_MAYBE_UNROOTED, jl_value_t *c JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
+JL_DLLEXPORT jl_value_t *jl_call4(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
                                   jl_value_t *b JL_MAYBE_UNROOTED, jl_value_t *c JL_MAYBE_UNROOTED,
                                   jl_value_t *d JL_MAYBE_UNROOTED);
 
@@ -2385,7 +2411,7 @@ struct _jl_handler_t {
 #define JL_TASK_STATE_DONE     1
 #define JL_TASK_STATE_FAILED   2
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
@@ -2697,9 +2723,9 @@ typedef struct {
 #define jl_root_task (jl_current_task->ptls->root_task)
 JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
-STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
+STATIC_INLINE jl_value_t *jl_get_function(jl_module_t *m, const char *name)
 {
-    return (jl_function_t*)jl_get_global(m, jl_symbol(name));
+    return (jl_value_t*)jl_get_global(m, jl_symbol(name));
 }
 
 // TODO: we need to pin the task while using this (set pure bit)
