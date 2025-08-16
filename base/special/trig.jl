@@ -1182,14 +1182,7 @@ polynomial_3;
 
 =#
 
-struct _CosCardinalEvaluationScheme{
-    T <: AbstractFloat,
-    PolynomialsCloseToZero <: (Tuple{Tuple{T, P}, Vararg{Tuple{T, P}}} where {P <: Tuple{T, Vararg{T}}}),
-}
-    polynomials_close_to_origin::PolynomialsCloseToZero
-end
-
-function (sch::_CosCardinalEvaluationScheme)(x::AbstractFloat)
+function _cos_cardinal_eval(x::AbstractFloat, polynomials_close_to_origin::NTuple)
     function choose_poly(a::AbstractFloat, polynomials_close_to_origin::NTuple{2})
         ((b1, p0), (_, p1)) = polynomials_close_to_origin
         if a ≤ b1
@@ -1226,30 +1219,26 @@ function (sch::_CosCardinalEvaluationScheme)(x::AbstractFloat)
 end
 
 const _cosc_f32 = let b = Float32 ∘ Float16
-    _CosCardinalEvaluationScheme(
-        (
-            (b(0.27), (-3.289868f0, 3.246966f0, -1.1443111f0, 0.20542027f0)),
-            (b(0.45), (-3.2898617f0, 3.2467577f0, -1.1420113f0, 0.1965574f0)),
-        ),
+    (
+        (b(0.27), (-3.289868f0, 3.246966f0, -1.1443111f0, 0.20542027f0)),
+        (b(0.45), (-3.2898617f0, 3.2467577f0, -1.1420113f0, 0.1965574f0)),
     )
 end
 
 const _cosc_f64 = let b = Float64 ∘ Float16
-    _CosCardinalEvaluationScheme(
-        (
-            (b(0.17), (-3.289868133696453, 3.2469697011333203, -1.1445109446992934, 0.20918277797812262, -0.023460519561502552, 0.001772485141534688)),
-            (b(0.27), (-3.289868133695205, 3.246969700970421, -1.1445109360543062, 0.20918254132488637, -0.023457115021035743, 0.0017515112964895303)),
-            (b(0.34), (-3.289868133634355, 3.246969697075094, -1.1445108347839286, 0.209181201609773, -0.023448079433318045, 0.001726628430505518)),
-            (b(0.4),  (-3.289868133074254, 3.2469696736659346, -1.1445104406286049, 0.20917785794416457, -0.02343378376047161, 0.0017019796223768677)),
-        ),
+    (
+        (b(0.17), (-3.289868133696453, 3.2469697011333203, -1.1445109446992934, 0.20918277797812262, -0.023460519561502552, 0.001772485141534688)),
+        (b(0.27), (-3.289868133695205, 3.246969700970421, -1.1445109360543062, 0.20918254132488637, -0.023457115021035743, 0.0017515112964895303)),
+        (b(0.34), (-3.289868133634355, 3.246969697075094, -1.1445108347839286, 0.209181201609773, -0.023448079433318045, 0.001726628430505518)),
+        (b(0.4),  (-3.289868133074254, 3.2469696736659346, -1.1445104406286049, 0.20917785794416457, -0.02343378376047161, 0.0017019796223768677)),
     )
 end
 
 function _cosc(x::Float32)
-    _cosc_f32(x)
+    _cos_cardinal_eval(x, _cosc_f32)
 end
 function _cosc(x::Float64)
-    _cosc_f64(x)
+    _cos_cardinal_eval(x, _cosc_f64)
 end
 
 # hard-code Float64/Float32 Taylor series, with coefficients
