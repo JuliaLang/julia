@@ -32,7 +32,7 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         return getzonedexpr(name, ex, :unknown_julia_function, __source__.file, __source__.line, 0)
     end
 else
-    macro zone(name, ex::Expr)
+    macro zone(_, ex::Expr)
         return esc(ex)
     end
 end

@@ -2736,9 +2736,8 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     return false
 end
 
-function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
+function current_scope_tfunc(::AbstractInterpreter, sv::InferenceState)
     pc = sv.currpc
-    handler_info = sv.handler_info
     while true
         pchandler = gethandler(sv, pc)
         if pchandler === nothing
@@ -2760,7 +2759,7 @@ function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
         pc = pchandler.enter_idx
     end
 end
-current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
+current_scope_tfunc(::AbstractInterpreter, ::IRInterpretationState) = Any
 
 hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
 
@@ -2946,7 +2945,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     end
 
     if f === Intrinsics.bitcast
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         xty = widenconst(argtypes[2])
         if !isconcrete
             return Union{ErrorException, TypeError}
@@ -2962,7 +2961,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
              Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
         # If !isconcrete, `ty` may be Union{} at runtime even if we have
         # isprimitivetype(ty).
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
@@ -2992,7 +2991,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     end
 
     if f === Intrinsics.have_fma
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         if !(isconcrete && isprimitivetype(ty))
             return TypeError
         end
@@ -3115,7 +3114,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
     tt = Core.Box(tt)
-    return Future{CallMeta}(call, interp, sv) do call, interp, sv
+    return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
         end
@@ -3193,7 +3192,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     else
         return CallMeta(Any, Any, Effects(), NoCallInfo())
     end
-    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
+    (types, isexact, _, _) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
     isexact || return CallMeta(Bool, Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
     if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
@@ -3270,7 +3269,7 @@ add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)
 
 const FOREIGNCALL_ARG_START = 6
 
-function foreigncall_effects(@nospecialize(abstract_eval), e::Expr)
+function foreigncall_effects(@nospecialize(abstract_eval), ::Expr)
     # `:foreigncall` can potentially perform all sorts of operations, including calling
     # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
     # concern that the method calls that potentially occur within the `:foreigncall` will
@@ -3293,7 +3292,7 @@ function new_genericmemory_nothrow(@nospecialize(abstract_eval), args::Vector{An
     0 < dimval < typemax(Int) || return false
     tot, ovflw = Intrinsics.checked_smul_int(dimval, elsz)
     ovflw && return false
-    isboxed = 1; isunion = 2
+    isunion = 2
     tot, ovflw = Intrinsics.checked_sadd_int(tot, arrayelem == isunion ? 1 + dimval : 1)
     ovflw && return false
     return true
