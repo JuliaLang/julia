@@ -1208,7 +1208,6 @@ function _cos_cardinal_eval(x::AbstractFloat, polynomials_close_to_origin::NTupl
         end
     end
     a = abs(x)
-    polynomials_close_to_origin = sch.polynomials_close_to_origin
     if (polynomials_close_to_origin !== ()) && (a ≤ polynomials_close_to_origin[end][1])
         x * evalpoly(x * x, choose_poly(a, polynomials_close_to_origin))
     elseif isinf(x)
