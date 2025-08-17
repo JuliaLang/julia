@@ -91,7 +91,7 @@ function _dropdims(A::AbstractArray, dims::Dims)
     ox = axes(A)
     ax = _foldoneto((ds, d) -> d in dims ? ds : (ds..., axes(A,d)), (), Val(ndims(A)))
     if isconcretetype(eltype(ox))
-        # if all the axes are the same type, we can ue the tail as the
+        # if all the axes are the same type, we can use the tail as the
         # axes of the result rather than extracting one at each index
         return reshape(A, ax::typeof(_sub(ox, dims)))
     else
