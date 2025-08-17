@@ -382,7 +382,7 @@ end
     @test ndims(sA) == 3
     @test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
     @test axes(similar(typeof(A),axes(A))) == axes(A)
-    @time eltype(similar(typeof(A),axes(A))) == eltype(A)
+    @test eltype(similar(typeof(A),axes(A))) == eltype(A)
 end
 
 @testset "logical indexing #4763" begin
