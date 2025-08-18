@@ -888,11 +888,21 @@ function write(io::IO, s::Symbol)
 end
 
 function write(to::IO, from::IO)
-    n = 0
+    n::Int64 = 0
+    buf = UInt8[]
     while !eof(from)
-        n += write(to, readavailable(from))
+        nb = Int(clamp(bytesavailable(from), 2^10, 2^24))
+        resize!(buf, nb)
+        nr = Int(readbytes!(from, buf))
+        resize!(buf, nr)
+        nw = write(to, buf)
+        if nw != nr
+            # This should be unreachable as `write` should throw in this case.
+            error("short write")
+        end
+        n += nw
     end
-    return n
+    n
 end
 
 @noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
