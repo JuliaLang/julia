@@ -1209,8 +1209,7 @@ static void jl_compilation_sig(
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
                               !jl_has_free_typevars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
-        if (notcalled_func && (type_i == (jl_value_t*)jl_any_type ||
-                               type_i == (jl_value_t*)jl_function_type ||
+        if (notcalled_func && (jl_subtype((jl_value_t*)jl_function_type, type_i) ||
                                (jl_is_uniontype(type_i) && // Base.Callable
                                 ((((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_function_type &&
                                   ((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_type_type) ||
