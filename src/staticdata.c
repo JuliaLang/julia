@@ -3647,8 +3647,9 @@ typedef void jl_image_unpack_func_t(void *handle, jl_image_buf_t *image);
 
 static void jl_prefetch_system_image(const char *data, size_t size)
 {
-    void *start = (void *)((uintptr_t)data & ~(jl_page_size - 1));
-    size_t size_aligned = LLT_ALIGN(size, jl_page_size);
+    size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
+    void *start = (void *)((uintptr_t)data & ~(page_size - 1));
+    size_t size_aligned = LLT_ALIGN(size, page_size);
 #ifdef _OS_WINDOWS_
     WIN32_MEMORY_RANGE_ENTRY entry = {start, size_aligned};
     PrefetchVirtualMemory(GetCurrentProcess(), 1, &entry, 0);
