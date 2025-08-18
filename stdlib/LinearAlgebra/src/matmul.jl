@@ -745,11 +745,13 @@ function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::Abst
                 C[i] = zero(A[i]*B[1] + A[i]*B[1])
             end
         end
-        for k = 1:mB
-            aoffs = (k-1)*Astride
-            b = _add(B[k])
-            for i = 1:mA
-                C[i] += A[aoffs + i] * b
+        if !iszero(_add.alpha)
+            for k = 1:mB
+                aoffs = (k-1)*Astride
+                b = _add(B[k])
+                for i = 1:mA
+                    C[i] += A[aoffs + i] * b
+                end
             end
         end
     end

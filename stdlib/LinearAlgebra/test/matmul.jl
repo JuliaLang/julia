@@ -857,11 +857,23 @@ Base.:*(x::Float64, a::A32092) = x * a.x
 end
 
 @testset "strong zero" begin
-    @testset for α in Any[false, 0.0, 0], n in 1:4
-        C = ones(n, n)
-        A = fill!(zeros(n, n), NaN)
-        B = ones(n, n)
+    @testset for α in Any[false, 0.0, 0], n in 1:4, T in (Float16, Float64)
+        C = ones(T, n)
+        A = fill(T(NaN), n, n)
+        B = ones(T, n)
         @test mul!(copy(C), A, B, α, 1.0) == C
+        C = ones(T, n, n)
+        B = ones(T, n, n)
+        @test mul!(copy(C), A, B, α, 1.0) == C
+    end
+    @testset for α in Any[false, 0.0, 0], β in Any[false, 0.0, 0], n in 1:4, T in (Float16, Float64)
+        C = fill(T(NaN), n)
+        A = fill(T(NaN), n, n)
+        B = fill(T(NaN), n)
+        @test iszero(mul!(copy(C), A, B, α, β))
+        C = fill(T(NaN), n, n)
+        B = fill(T(NaN), n, n)
+        @test iszero(mul!(copy(C), A, B, α, β))
     end
 end
 
