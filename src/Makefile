@@ -524,7 +524,7 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 # before attempting this static analysis, so that all necessary headers
 # and dependencies are properly installed:
 #   make -C src install-analysis-deps
-ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc
+ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd
 ifeq ($(OS),Darwin)
 ANALYSIS_DEPS += llvmunwind
 else ifeq ($(OS),OpenBSD)
