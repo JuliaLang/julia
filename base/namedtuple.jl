@@ -535,7 +535,7 @@ when it is printed in the stack trace view.
 
 ```julia
 julia> @Kwargs{init::Int} # the internal representation of keyword arguments
-Base.Pairs{Symbol, Int64, Tuple{Symbol}, @NamedTuple{init::Int64}}
+Base.Pairs{Symbol, Int64, Nothing, @NamedTuple{init::Int64}}
 
 julia> sum("julia"; init=1)
 ERROR: MethodError: no method matching +(::Char, ::Char)
@@ -578,7 +578,7 @@ Stacktrace:
 macro Kwargs(ex)
     return :(let
         NT = @NamedTuple $ex
-        Base.Pairs{keytype(NT),eltype(NT),typeof(NT.parameters[1]),NT}
+        Base.Pairs{keytype(NT),eltype(NT),Nothing,NT}
     end)
 end
 
