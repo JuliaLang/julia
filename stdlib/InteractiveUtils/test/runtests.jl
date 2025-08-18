@@ -395,8 +395,9 @@ end
     @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
 
     @testset "Callable objects" begin
-        @test (@code_typed (::Base.Fix2{typeof(+), Float64})(3))[2] == Float64
-        @test (@code_typed optimize=false (::Returns{Float64})(::Int64; name::String))[2] == Float64
+        @test (@code_typed (::Base.Fix2{typeof(+), Float64})(3))[2] === Float64
+        @test (@code_typed optimize=false (::Returns{Float64})(::Int64; name::String))[2] === Float64
+        @test (@code_typed (::Returns{T})(3.0) where {T<:Real})[2] === Real
     end
 
     @testset "Opaque closures" begin
