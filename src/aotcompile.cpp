@@ -2149,8 +2149,7 @@ void jl_dump_native_impl(void *native_code,
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
 
-        char *compression_str = getenv("JULIA_IMAGE_COMPRESSION");
-        unsigned long compression = compression_str ? strtoul(compression_str, nullptr, 10) : 0;
+        int compression = jl_options.compress_sysimage ? 15 : 0;
         ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
         SmallVector<char, 0> compressed_data;
         if (compression) {
