@@ -2,10 +2,6 @@
 
 # Script to run in the process that generates juliac's object file output
 
-# Run the verifier in the current world (before modifications), so that error
-# messages and types print in their usual way.
-Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
-
 # Initialize some things not usually initialized when output is requested
 Sys.__init__()
 Base.init_depot_path()
@@ -21,10 +17,6 @@ uuid_tuple = (UInt64(0), UInt64(0))
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
 if Base.get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
     Base.JuliaSyntax.enable_in_core!()
-end
-
-if Base.JLOptions().trim != 0
-    include(joinpath(@__DIR__, "juliac-trim-base.jl"))
 end
 
 # Load user code
@@ -78,7 +70,12 @@ let mod = Base.include(Main, ARGS[1])
     end
 end
 
+# Run the verifier in the current world (before build-script modifications),
+# so that error messages and types print in their usual way.
+Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
+
 if Base.JLOptions().trim != 0
+    include(joinpath(@__DIR__, "juliac-trim-base.jl"))
     include(joinpath(@__DIR__, "juliac-trim-stdlib.jl"))
 end
 
