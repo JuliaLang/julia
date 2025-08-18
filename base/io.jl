@@ -891,7 +891,7 @@ function write(to::IO, from::IO)
     n::Int64 = 0
     buf = UInt8[]
     while !eof(from)
-        nb = Int(clamp(bytesavailable(from), 2^10, 2^24))
+        nb = Int(clamp(bytesavailable(from), 1, 2^24))
         resize!(buf, nb)
         nr = Int(readbytes!(from, buf))
         resize!(buf, nr)
