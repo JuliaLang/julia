@@ -3063,7 +3063,7 @@ mktempdir() do dir
                 for attempt in 1:10
                     # Find an available port by listening, but there's a race condition where
                     # another process could grab this port, so retry on failure
-                    port, server = listenany(49152)
+                    port, server = listenany(49052 + rand(1:100) + attempt*10)
                     close(server)
 
                     # Make a fake Julia package and minimal HTTPS server with our generated

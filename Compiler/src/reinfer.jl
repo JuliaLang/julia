@@ -1,10 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using ..Compiler.Base
+using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
+    _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
+    morespecific, RefValue, get_require_world, Vector, IdDict
 using .Core: CodeInstance, MethodInstance
-using .Base: JLOptions, Compiler, get_world_counter, _methods_by_ftype, get_methodtable, get_ci_mi, morespecific
 
 const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
-const _jl_debug_method_invalidation = Ref{Union{Nothing,Vector{Any}}}(nothing)
+const _jl_debug_method_invalidation = RefValue{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
     _jl_debug_method_invalidation[] = onoff ? Any[] : nothing
 
@@ -70,7 +73,7 @@ function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-    Base.scan_new_methods!(extext_methods, internal_methods, backedges_only)
+    scan_new_methods!(extext_methods, internal_methods, backedges_only)
     workspace = VerifyMethodWorkspace()
     _insert_backedges(edges, workspace)
     if ext_ci_list !== nothing
@@ -135,23 +138,23 @@ function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::
     if JLOptions().code_coverage != 0 || JLOptions().malloc_log != 0
         # test if the code needs to run with instrumentation, in which case we cannot use existing generated code
         if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower and less reliable
-            Compiler.should_instrument(def.module, def.debuginfo) :
-            isdefined(codeinst, :debuginfo) && Compiler.should_instrument(def.module, codeinst.debuginfo)
+            should_instrument(def.module, def.debuginfo) :
+            isdefined(codeinst, :debuginfo) && should_instrument(def.module, codeinst.debuginfo)
             return true
         end
         gensig = gen_staged_sig(def, mi)
         if gensig !== nothing
             # if this is defined by a generator, try to consider forcing re-running the generators too, to add coverage for them
-            minworld = Ref{UInt}(1)
-            maxworld = Ref{UInt}(typemax(UInt))
-            has_ambig = Ref{Int32}(0)
+            minworld = RefValue{UInt}(1)
+            maxworld = RefValue{UInt}(typemax(UInt))
+            has_ambig = RefValue{Int32}(0)
             result = _methods_by_ftype(gensig, nothing, -1, validation_world, #=ambig=#false, minworld, maxworld, has_ambig)
             if result !== nothing
                 for k = 1:length(result)
                     match = result[k]::Core.MethodMatch
                     genmethod = match.method
                     # no, I refuse to refuse to recurse into your cursed generated function generators and will only test one level deep here
-                    if isdefined(genmethod, :debuginfo) && Compiler.should_instrument(genmethod.module, genmethod.debuginfo)
+                    if isdefined(genmethod, :debuginfo) && should_instrument(genmethod.module, genmethod.debuginfo)
                         return true
                     end
                 end
@@ -194,7 +197,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                 continue
             end
 
-            minworld, maxworld = Base.get_require_world(), validation_world
+            minworld, maxworld = get_require_world(), validation_world
 
             if haskey(workspace.visiting, initial.codeinst)
                 workspace.result_states[current_depth] = VerifyMethodResultState(workspace.visiting[initial.codeinst], minworld, maxworld)
@@ -209,7 +212,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             # Check for invalidation of GlobalRef edges
             if (initial.def.did_scan_source & 0x1) == 0x0
                 backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-                Base.scan_new_method!(initial.def, backedges_only)
+                scan_new_method!(initial.def, backedges_only)
             end
             if (initial.def.did_scan_source & 0x4) != 0x0
                 maxworld = 0
@@ -220,7 +223,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             end
 
             # Process all non-CodeInstance edges
-            if !isempty(initial.callees) && maxworld != Base.get_require_world()
+            if !isempty(initial.callees) && maxworld != get_require_world()
                 matches = []
                 j = 1
                 while j <= length(initial.callees)
@@ -248,7 +251,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         j += 1
                         min_valid2 = minworld
                         max_valid2 = maxworld
-                        if !Base.binding_was_invalidated(edge)
+                        if !binding_was_invalidated(edge)
                             if isdefined(edge, :partitions)
                                 min_valid2 = edge.partitions.min_world
                                 max_valid2 = edge.partitions.max_world
@@ -333,7 +336,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                     end
                     @atomic :monotonic child.max_world = result.result_maxworld
                     if result.result_maxworld == validation_world && validation_world == get_world_counter()
-                        Compiler.store_backedges(child, child.edges)
+                        store_backedges(child, child.edges)
                     end
                     @assert workspace.visiting[child] == length(workspace.stack) + 1
                     delete!(workspace.visiting, child)
@@ -559,9 +562,9 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
    end
     # next, compare the current result of ml_matches to the old result
     lim = _jl_debug_method_invalidation[] !== nothing ? Int(typemax(Int32)) : n
-    minworld = Ref{UInt}(1)
-    maxworld = Ref{UInt}(typemax(UInt))
-    has_ambig = Ref{Int32}(0)
+    minworld = RefValue{UInt}(1)
+    maxworld = RefValue{UInt}(typemax(UInt))
+    has_ambig = RefValue{Int32}(0)
     result = _methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
     if result === nothing
         empty!(matches)
@@ -626,7 +629,7 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
             minworld = 1
             maxworld = 0
         else
-            matched, valid_worlds = Compiler._findsup(invokesig, mt, world)
+            matched, valid_worlds = _findsup(invokesig, mt, world)
             minworld, maxworld = valid_worlds.min_world, valid_worlds.max_world
             if matched === nothing
                 maxworld = 0
@@ -640,4 +643,10 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
         end
     end
     return minworld, maxworld
+end
+
+# Wrapper to call insert_backedges in typeinf_world for external calls
+function insert_backedges_typeinf(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
+    args = Any[insert_backedges, edges, ext_ci_list, extext_methods, internal_methods]
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end

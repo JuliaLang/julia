@@ -663,8 +663,8 @@ static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 JL_CALLABLE(jl_f__apply_iterate)
 {
     JL_NARGSV(_apply_iterate, 2);
-    jl_function_t *iterate = args[0];
-    jl_function_t *f = args[1];
+    jl_value_t *iterate = args[0];
+    jl_value_t *f = args[1];
     assert(iterate);
     args += 1;
     nargs -= 1;

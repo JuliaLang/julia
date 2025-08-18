@@ -120,6 +120,10 @@ function display_error(io::IO, er, bt)
 end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+__repl_entry_client_lower(mod::Module, @nospecialize(ast)) = Meta.lower(mod, ast)
+__repl_entry_client_eval(mod::Module, @nospecialize(ast)) = Core.eval(mod, ast)
+
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
@@ -136,8 +140,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 errcount = 0
                 lasterr = nothing
             else
-                ast = Meta.lower(Main, ast)
-                value = Core.eval(Main, ast)
+                ast = __repl_entry_client_lower(Main, ast)
+                value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
@@ -278,6 +282,12 @@ function exec_options(opts)
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             !(repl || is_interactive::Bool) && exit(1)
         end
+    end
+
+    # drop all caches if code coverage is enabled. Do it here not earlier, so julia has a chance
+    # of starting up quickly
+    if Base.JLOptions().code_coverage == 2
+        Base.drop_all_caches()
     end
 
     # process cmds list

@@ -606,6 +606,9 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
         jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, arg1, (jl_value_t*)jl_voidpointer_type);
     }
+    else if (jl_is_cpointer_type(jl_typeof(ptr))) {
+        fptr = *(void(**)(void))jl_data_ptr(ptr);
+    }
     else {
         out.gcroot = ptr;
         if (jl_is_tuple(ptr) && jl_nfields(ptr) == 1) {
@@ -632,9 +635,6 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                     f_lib = jl_dlfind(f_name);
                 }
             }
-        }
-        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-            fptr = *(void(**)(void))jl_data_ptr(ptr);
         }
         else if (jl_is_tuple(ptr) && jl_nfields(ptr) > 1) {
             jl_value_t *t0 = jl_fieldref(ptr, 0);

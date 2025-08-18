@@ -214,7 +214,7 @@ try
                 prop = getproperty(m, prop_name)
                 if isa(prop, Libdl.LazyLibrary)
                     lib_path = dlpath(prop)
-                    lazy_lib_deps = strip_soversion.(basename.(dlpath.(prop.dependencies)))
+                    lazy_lib_deps = strip_soversion.(basename.(dlpath.(prop.dependencies())))
                     real_lib_deps = filter(!is_system_lib, get_deps_objectfile(lib_path))
 
                     # See if there are missing dependencies in the lazy library deps

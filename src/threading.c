@@ -409,15 +409,15 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
-static _Atomic(jl_function_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
+static _Atomic(jl_value_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
 
 static void jl_init_task_lock(jl_task_t *ct)
 {
     size_t last_age = ct->world_age;
     ct->world_age = jl_get_world_counter();
-    jl_function_t *done = jl_atomic_load_relaxed(&init_task_lock_func);
+    jl_value_t *done = jl_atomic_load_relaxed(&init_task_lock_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("init_task_lock"), ct->world_age);
+        done = (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("init_task_lock"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&init_task_lock_func, done);
     }

@@ -597,4 +597,4 @@ function f()
     Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
 end
 end
-@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()

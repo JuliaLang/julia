@@ -198,7 +198,7 @@ size(e::Enumerate) = size(e.itr)
     n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
-last(e::Enumerate) = (length(e.itr), e.itr[end])
+last(e::Enumerate) = (length(e.itr), last(e.itr))
 
 eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
 
