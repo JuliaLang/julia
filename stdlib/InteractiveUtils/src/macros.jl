@@ -107,7 +107,7 @@ function construct_callable(@nospecialize(func::Type))
     # for callables such as `(::Returns{Int})(args...)` where using `Returns{Int}`
     # would give us code for the constructor, not for the callable object.
     throw(ArgumentError("If a function type is explicitly provided, it must be a singleton whose only instance is the callable object.
-                         To alleviate this restriction, the reflection macro may use `use_signature_tuple = true` from `gen_call_with_extracted_types`."))
+                         To alleviate this restriction, the reflection macro may set `use_signature_tuple = true` if using `gen_call_with_extracted_types`."))
 end
 
 function separate_kwargs(exs::Vector{Any})
@@ -196,9 +196,21 @@ function merge_namedtuple_types(nt::Type{<:NamedTuple}, nts::Type{<:NamedTuple}.
 end
 
 function gen_call(fcn, args, where_params, kws; use_signature_tuple::Bool)
-    use_signature_tuple && return :($fcn($(esc(typesof_expr(args, where_params))); $(kws...)))
     f, args... = args
-    return :($fcn($(esc(extract_farg(f))), $(esc(typesof_expr(args, where_params))); $(kws...)))
+    args = collect(Any, args)
+    !use_signature_tuple && return :($fcn($(esc(extract_farg(f))), $(esc(typesof_expr(args, where_params))); $(kws...)))
+    # We use a signature tuple only if we are sure we won't get an opaque closure as first argument.
+    # If we do get one, we have to use the 2-argument form.
+    with_signature_tuple = :($fcn($(esc(typesof_expr(Any[f, args...], where_params))); $(kws...)))
+    isexpr(f, :(::)) && return with_signature_tuple # we have a type, not a value, so not an OpaqueClosure
+    return quote
+        f = $(esc(f))
+        if isa(f, Core.OpaqueClosure)
+            $fcn(f, $(esc(typesof_expr(args, where_params))); $(kws...))
+        else
+            $with_signature_tuple
+        end
+    end
 end
 
 is_code_macro(fcn) = startswith(string(fcn), "code_")

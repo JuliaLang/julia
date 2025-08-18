@@ -398,6 +398,27 @@ end
         @test (@code_typed (::Base.Fix2{typeof(+), Float64})(3))[2] == Float64
         @test (@code_typed optimize=false (::Returns{Float64})(::Int64; name::String))[2] == Float64
     end
+
+    @testset "Opaque closures" begin
+        opaque_f(@nospecialize(x::Type), @nospecialize(y::Type)) = sizeof(x) == sizeof(y)
+        src, _ = only(code_typed(opaque_f, (Type, Type)))
+        src.slottypes[1] = Tuple{}
+
+        # from CodeInfo
+        oc = Core.OpaqueClosure(src; sig = Tuple{Type, Type}, rettype = Bool, nargs = 2)
+        ret = @code_typed oc(Int64, Float64)
+        @test [ret] == code_typed(oc)
+        _, rt = ret
+        @test rt === Bool
+
+        # from optimized IR
+        ir = Core.Compiler.inflate_ir(src)
+        oc = Core.OpaqueClosure(ir)
+        ret = @code_typed oc(Int64, Float64)
+        @test [ret] == code_typed(oc)
+        _, rt = ret
+        @test rt === Bool
+    end
 end
 
 module MacroTest
