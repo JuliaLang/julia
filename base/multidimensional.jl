@@ -447,7 +447,7 @@ module IteratorsMD
         end
         iterfirst, iterfirst
     end
-    @inline function iterate(iter::CartesianIndices, state)
+    @inline function iterate(iter::CartesianIndices, state::CartesianIndex)
         valid, I = __inc(state.I, iter.indices)
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
@@ -960,7 +960,7 @@ Fallback to `iterate` by default, but optimized for indices type in `Base`.
 _prechecked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
 _prechecked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
 _prechecked_iterate(iter::CartesianIndices) = first(iter), first(iter)
-function _prechecked_iterate(iter::CartesianIndices, i)
+function _prechecked_iterate(iter::CartesianIndices, i::CartesianIndex)
     i′ = IteratorsMD.inc(i.I, iter.indices)
     return i′, i′
 end
