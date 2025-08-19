@@ -115,6 +115,10 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
                 pos == :end     ? (lb+1:lb) :
                 error("Unknown position $pos")
     highlight(io, src.file, byterange, note=exc.msg)
+    if !isnothing(exc.err)
+        print(io, "\nCaused by:\n")
+        showerror(io, exc.err)
+    end
 end
 
 function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::SyntaxTree)
@@ -222,6 +226,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         if all(==('_'), name_str)
             @ast ctx ex ex=>K"Placeholder"
         elseif is_ccall_or_cglobal(name_str)
+            # Lower special identifiers `cglobal` and `ccall` to `K"core"`
+            # psuedo-refs very early so that cglobal and ccall can never be
+            # turned into normal bindings (eg, assigned to)
             @ast ctx ex name_str::K"core"
         else
             layerid = get(ex, :scope_layer, ctx.current_layer.id)

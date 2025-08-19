@@ -517,6 +517,8 @@ function getmeta(ex::SyntaxTree, name::Symbol, default)
     isnothing(meta) ? default : get(meta, name, default)
 end
 
+name_hint(name) = CompileHints(:name_hint, name)
+
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
 

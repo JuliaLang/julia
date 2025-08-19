@@ -51,6 +51,11 @@ function _register_kinds()
             # For expr-macro compatibility; gone after expansion
             "escape"
             "hygienic_scope"
+            # An expression which will eventually be evaluated "statically" in
+            # the context of a CodeInfo and thus allows access only to globals
+            # and static parameters. Used for ccall, cfunction, cglobal
+            # TODO: Use this for GeneratedFunctionStub also?
+            "static_eval"
             # Catch-all for additional syntax extensions without the need to
             # extend `Kind`. Known extensions include:
             #   locals, islocal

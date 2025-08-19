@@ -302,6 +302,15 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         args[1] = args[1].value
         Expr(:meta, args...)
+    elseif k == K"static_eval"
+        @assert numchildren(ex) == 1
+        to_lowered_expr(mod, ex[1], ssa_offset)
+    elseif k == K"cfunction"
+        args = Any[to_lowered_expr(mod, e, ssa_offset) for e in children(ex)]
+        if kind(ex[2]) == K"static_eval"
+            args[2] = QuoteNode(args[2])
+        end
+        Expr(:cfunction, args...)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -324,7 +333,6 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
                k == K"gc_preserve_begin" ? :gc_preserve_begin :
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
-               k == K"cfunction"         ? :cfunction         :
                k == K"new_opaque_closure" ? :new_opaque_closure :
                nothing
         if isnothing(head)
