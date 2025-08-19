@@ -1706,7 +1706,7 @@ function _nth(::IteratorSize, itr, n::Integer)
     y[1]
 end
 
-_nth(::Union{HasShape, HasLength}, z::Zip, n::Integer) = Base.map(nth(n), z.is)
+_nth(::IteratorSize, z::Zip, n::Integer) = Base.map(nth(n), z.is)
 
 """
     nth(n::Integer)
