@@ -43,8 +43,8 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test length(CVector_Float32["fields"]) == 2
     @test CVector_Float32["fields"][1]["offset"] == 0
     @test CVector_Float32["fields"][2]["offset"] == 8
-    @test abi["types"][CVector_Float32["fields"][1]["type"]]["name"] == "Int32"
-    @test abi["types"][CVector_Float32["fields"][2]["type"]]["name"] == "Ptr{Float32}"
+    @test abi["types"][CVector_Float32["fields"][1]["type_id"]]["name"] == "Int32"
+    @test abi["types"][CVector_Float32["fields"][2]["type_id"]]["name"] == "Ptr{Float32}"
     @test CVector_Float32["size"] == 16
 
     # `CVectorPair{Float32}` should have been exported with the correct info
@@ -53,7 +53,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test length(CVectorPair_Float32["fields"]) == 2
     @test CVectorPair_Float32["fields"][1]["offset"] == 0
     @test CVectorPair_Float32["fields"][2]["offset"] == 16
-    @test abi["types"][CVectorPair_Float32["fields"][1]["type"]]["name"] == "CVector{Float32}"
-    @test abi["types"][CVectorPair_Float32["fields"][2]["type"]]["name"] == "CVector{Float32}"
+    @test abi["types"][CVectorPair_Float32["fields"][1]["type_id"]]["name"] == "CVector{Float32}"
+    @test abi["types"][CVectorPair_Float32["fields"][2]["type_id"]]["name"] == "CVector{Float32}"
     @test CVectorPair_Float32["size"] == 32
 end

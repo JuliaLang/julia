@@ -74,7 +74,7 @@ function emit_pointer_info!(ctx::TypeEmitter, @nospecialize(dt::DataType); inden
         indented_println("  \"id\": ", ctx.type_ids[dt], ",")
         indented_println("  \"kind\": \"pointer\",")
         indented_println("  \"name\": ", type_name_json(dt), ",")
-        indented_println("  \"pointee\": ", pointee_type_id)
+        indented_println("  \"pointee_type_id\": ", pointee_type_id)
         print(ctx.io, " " ^ indent, "}")
     end
 end
@@ -85,7 +85,7 @@ function emit_field_info!(ctx::TypeEmitter, @nospecialize(dt::DataType), field::
     print(ctx.io, " " ^ indent)
     print(ctx.io, "{")
     print(ctx.io, " \"name\": ", field_name_json(dt, field), ",")
-    print(ctx.io, " \"type\": ", type_id, ",")
+    print(ctx.io, " \"type_id\": ", type_id, ",")
     print(ctx.io, " \"offset\": ", desc.offset)
     print(ctx.io, " }")
 end
@@ -161,11 +161,11 @@ function emit_method_info!(ctx::TypeEmitter, method::Core.Method; indent::Int = 
             print(ctx.io, " " ^ (indent + 4))
             print(ctx.io, "{")
             print(ctx.io, " \"name\": ", escape_string_json(argnames[i]), ",")
-            print(ctx.io, " \"type\": ", ctx.type_ids[sig.parameters[i]])
+            print(ctx.io, " \"type_id\": ", ctx.type_ids[sig.parameters[i]])
             println(ctx.io, i == length(sig.parameters) ? " }" : " },")
         end
         indented_println("  ],")
-        indented_println("  \"returns\": { \"type\": ", ctx.type_ids[rt], " }")
+        indented_println("  \"returns\": { \"type_id\": ", ctx.type_ids[rt], " }")
         print(ctx.io, " " ^ indent, "}")
     end
 end
