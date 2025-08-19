@@ -1767,7 +1767,8 @@ function testset_beginend_call(args, tests, source)
         # by wrapping the body in a function
         local default_rng_orig = copy(default_rng())
         local tls_seed_orig = copy(Random.get_tls_seed())
-        local tls_seed = isnothing(get_rng(ts)) ? set_rng!(ts, tls_seed_orig) : get_rng(ts)
+        local ts_rng = get_rng(ts)
+        local tls_seed = isnothing(ts_rng) ? set_rng!(ts, tls_seed_orig) : ts_rng
         try
             # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
             copy!(Random.default_rng(), tls_seed)
