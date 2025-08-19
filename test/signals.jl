@@ -8,7 +8,7 @@ const TEST_SIGNAL = Sys.iswindows() ? SIGBREAK : SIGURG
     for signum in VALID_SIGNALS
         sigabbrev = signal_abbrev(signum)
         @test !isempty(sigabbrev)
-        @test all(c -> isuppercase(c) || isdigit(c), sigabbrev)
+        @test all(c -> isuppercase(c) || isdigit(c) || c == '_', sigabbrev)
         @test !startswith(sigabbrev, "SIG")
     end
     @test signal_abbrev(32) === nothing
@@ -117,7 +117,7 @@ end
 
     try
         # Receive a signal from another process
-        run(`kill -$TEST_SIGNAL $(getpid())`)
+        run(`$(Base.julia_cmd()) -e "kill($(getpid()), $TEST_SIGNAL)"`)
 
         @test timedwait(() -> num_calls[] > 0, 5) === :ok
         @test num_calls[] >= 1
