@@ -1601,6 +1601,18 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, 
     ctx.builder.SetInsertPoint(ifok);
 }
 
+
+static bool has_known_null_nullptr(Type *T)
+{
+    if (auto PT = cast<PointerType>(T)) {
+        auto addrspace = PT->getAddressSpace();
+        if (addrspace == AddressSpace::Generic || (AddressSpace::FirstSpecial <= addrspace && addrspace <= AddressSpace::LastSpecial)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // ctx.builder.CreateIsNotNull(v) lowers incorrectly in non-standard
 // address spaces where null is not zero
 // TODO: adapt to https://github.com/llvm/llvm-project/pull/131557 once merged
@@ -1608,10 +1620,11 @@ static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 {
     ++EmittedNullchecks;
     Type *T = v->getType();
-    return ctx.builder.CreateICmpNE(
-            v,
-            ctx.builder.CreateAddrSpaceCast(
-                Constant::getNullValue(ctx.builder.getPtrTy(0)), T));
+    if (has_known_null_nullptr(T))
+        return ctx.builder.CreateIsNotNull(v);
+    else
+        return ctx.builder.CreateICmpNE(v, ctx.builder.CreateAddrSpaceCast(
+            Constant::getNullValue(ctx.builder.getPtrTy(0)), T));
 }
 
 
@@ -3257,7 +3270,7 @@ static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *
         if (jl_is_genericmemoryref_type(sty))
             sty = (jl_datatype_t*)jl_field_type_concrete(sty, 1);
         size_t sz = sty->layout->size;
-        if (sty->layout->flags.arrayelem_isunion)
+        if (sty->layout->flags.arrayelem_isunion && add_isunion)
             sz++;
         auto elsize = ConstantInt::get(ctx.types().T_size, sz);
         return elsize;
@@ -4711,9 +4724,10 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             setName(ctx.emission_context, ovflw, "memoryref_ovflw");
         }
 #endif
-        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jl_tparam1(ref.typ));
-        newdata = ctx.builder.CreateGEP(elty, data, offset);
-        setName(ctx.emission_context, newdata, "memoryref_data_offset");
+        boffset = ctx.builder.CreateMul(offset, elsz);
+        setName(ctx.emission_context, boffset, "memoryref_byteoffset");
+        newdata = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
+        setName(ctx.emission_context, newdata, "memoryref_data_byteoffset");
         (void)boffset; // LLVM is very bad at handling GEP with types different from the load
         if (bc) {
             BasicBlock *failBB, *endBB;

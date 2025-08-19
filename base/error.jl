@@ -233,14 +233,12 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        # N.B. To reduce the risk of invalidation caused by the complex callstack involved
-        # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
-        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
+        msg = :($_assert_tostring($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(_assert_tostring($(Expr(:quote,msg))))
+        msg = :($_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end

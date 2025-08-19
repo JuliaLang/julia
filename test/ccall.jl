@@ -1979,3 +1979,12 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     # check for the gc_safe store
     @test occursin("store atomic i8 2", llvm)
 end
+
+# This test is different on master but we need to use zlib on 1.12
+module Test57749
+    using Test, Zlib_jll
+    const prefix = "Zlib version: "
+    const sym = :zlibVersion
+    get_zlib_version() = prefix * unsafe_string(ccall((sym, libz), Cstring, ()))
+    @test startswith(get_zlib_version(), "Zlib")
+end
