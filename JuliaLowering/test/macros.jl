@@ -172,15 +172,23 @@ let err = try
     @test err.err isa UndefVarError
 end
 
-include("ccall_demo.jl")
-@test JuliaLowering.include_string(CCall, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
+@test JuliaLowering.include_string(test_mod, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
+@test JuliaLowering.include_string(test_mod, "@ccall strlen(\"asdf\"::Cstring)::Csize_t gc_safe=true") == 4
+@test JuliaLowering.include_string(test_mod, """
+begin
+    buf = zeros(UInt8, 20)
+    @ccall sprintf(buf::Ptr{UInt8}, "num:%d str:%s"::Cstring; 42::Cint, "hello"::Cstring)::Cint
+    String(buf)
+end
+""") == "num:42 str:hello\0\0\0\0"
+
 let (err, st) = try
-        JuliaLowering.include_string(CCall, "@ccall strlen(\"foo\"::Cstring)")
+        JuliaLowering.include_string(test_mod, "@ccall strlen(\"foo\"::Cstring)")
     catch e
         e, stacktrace(catch_backtrace())
     end
     @test err isa JuliaLowering.MacroExpansionError
-    @test err.msg == "Expected a return type annotation like `::T`"
+    @test err.msg == "Expected a return type annotation `::SomeType`"
     @test isnothing(err.err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)

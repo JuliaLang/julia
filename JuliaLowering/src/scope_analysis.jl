@@ -630,6 +630,24 @@ function init_closure_bindings!(ctx, fname)
     end
 end
 
+function find_any_local_binding(ctx, ex)
+    k = kind(ex)
+    if k == K"BindingId"
+        bkind = lookup_binding(ctx, ex.var_id).kind
+        if bkind != :global && bkind != :static_parameter
+            return ex
+        end
+    elseif !is_leaf(ex) && !is_quoted(ex)
+        for e in children(ex)
+            r = find_any_local_binding(ctx, e)
+            if !isnothing(r)
+                return r
+            end
+        end
+    end
+    return nothing
+end
+
 # Update ctx.bindings and ctx.lambda_bindings metadata based on binding usage
 function analyze_variables!(ctx, ex)
     k = kind(ex)
@@ -648,6 +666,13 @@ function analyze_variables!(ctx, ex)
             end
         end
     elseif is_leaf(ex) || is_quoted(ex)
+        return
+    elseif k == K"static_eval"
+        badvar = find_any_local_binding(ctx, ex[1])
+        if !isnothing(badvar)
+            name_hint = getmeta(ex, :name_hint, "syntax")
+            throw(LoweringError(badvar, "$(name_hint) cannot reference local variable"))
+        end
         return
     elseif k == K"local" || k == K"global"
         # Presence of BindingId within local/global is ignored.

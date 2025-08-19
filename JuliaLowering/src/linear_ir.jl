@@ -3,7 +3,7 @@
 
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert top core quote"
+    if is_simple_atom(ctx, ex) || k in KSet"inert top core quote static_eval"
         true
     elseif k == K"BindingId"
         binfo = lookup_binding(ctx, ex)
@@ -112,7 +112,7 @@ end
 function is_simple_arg(ctx, ex)
     k = kind(ex)
     return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
-           k == K"top" || k == K"core" || k == K"globalref"
+           k == K"top" || k == K"core" || k == K"globalref" || k == K"static_eval"
 end
 
 function is_single_assign_var(ctx::LinearIRContext, ex)
@@ -128,7 +128,7 @@ function is_const_read_arg(ctx, ex)
     # Even if we have side effects, we know that singly-assigned
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
-    return k == K"inert" || k == K"top" || k == K"core" ||
+    return k == K"inert" || k == K"top" || k == K"core" || k == K"static_eval" ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
@@ -165,19 +165,6 @@ function compile_args(ctx, args)
         end
     end
     return args_out
-end
-
-# Compile the (sym,lib) argument to ccall/cglobal
-function compile_C_library_symbol(ctx, ex)
-    if kind(ex) == K"call" && kind(ex[1]) == K"core" && ex[1].name_val == "tuple"
-        # Tuples like core.tuple(:funcname, mylib_name) are allowed and are
-        # kept inline, but may only reference globals.
-        check_no_local_bindings(ctx, ex,
-            "function name and library expression cannot reference local variables")
-        ex
-    else
-        only(compile_args(ctx, (ex,)))
-    end
 end
 
 function emit(ctx::LinearIRContext, ex)
@@ -593,7 +580,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
             k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" ||
-            k == K"SourceLocation"
+            k == K"SourceLocation" || k == K"static_eval"
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
@@ -614,39 +601,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
             k == K"new_opaque_closure" || k == K"cfunction"
-        if k == K"foreigncall"
-            args = SyntaxList(ctx)
-            push!(args, compile_C_library_symbol(ctx, ex[1]))
-            # 2nd to 5th arguments of foreigncall are special. They must be
-            # left in place but cannot reference locals.
-            check_no_local_bindings(ctx, ex[2], "ccall return type cannot reference local variables")
-            for argt in children(ex[3])
-                check_no_local_bindings(ctx, argt,
-                    "ccall argument types cannot reference local variables")
-            end
-            append!(args, ex[2:5])
-            append!(args, compile_args(ctx, ex[6:end]))
-            args
-        elseif k == K"cfunction"
-            # Arguments of cfunction must be left in place except for argument
-            # 2 (fptr)
-            args = copy(children(ex))
-            args[2] = only(compile_args(ctx, args[2:2]))
-            check_no_local_bindings(ctx, ex[3],
-                "cfunction return type cannot reference local variables")
-            for arg in children(ex[4])
-                check_no_local_bindings(ctx, arg,
-                    "cfunction argument cannot reference local variables")
-            end
-        elseif k == K"call" && is_core_ref(ex[1], "cglobal")
-            args = SyntaxList(ctx)
-            push!(args, ex[1])
-            push!(args, compile_C_library_symbol(ctx, ex[2]))
-            append!(args, compile_args(ctx, ex[3:end]))
-        else
-            args = compile_args(ctx, children(ex))
-        end
-        callex = makenode(ctx, ex, k, args)
+        callex = makenode(ctx, ex, k, compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
         elseif needs_value
@@ -909,7 +864,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
 end
 
 function _remove_vars_with_isdefined_check!(vars, ex)
-    if is_leaf(ex) || is_quoted(ex)
+    if is_leaf(ex) || is_quoted(ex) || kind(ex) == K"static_eval"
         return
     elseif kind(ex) == K"isdefined"
         delete!(vars, ex[1].var_id)
@@ -1017,10 +972,11 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 makeleaf(ctx, ex, K"globalref", binfo.name, mod=binfo.mod)
             end
         end
-    elseif k == K"meta"
+    elseif k == K"meta" || k == K"static_eval"
         # Somewhat-hack for Expr(:meta, :generated, gen) which has
         # weird top-level semantics for `gen`, but we still need to translate
-        # the binding it contains to a globalref.
+        # the binding it contains to a globalref. (TODO: use
+        # static_eval for this meta, somehow)
         mapchildren(ctx, ex) do e
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
         end

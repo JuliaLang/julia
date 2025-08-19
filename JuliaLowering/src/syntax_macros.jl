@@ -91,30 +91,151 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
         # Kinda weird semantics here - without `$`, the callable is a top level
         # expression which will be evaluated by `jl_resolve_globals_in_ir`,
         # implicitly within the module where the `@cfunction` is expanded into.
-        #
-        # TODO: The existing flisp implementation is arguably broken because it
-        # ignores macro hygiene when `callable` is the result of a macro
-        # expansion within a different module. For now we've inherited this
-        # brokenness.
-        #
-        # Ideally we'd fix this by bringing the scoping rules for this
-        # expression back into lowering. One option may be to wrap the
-        # expression in a form which pushes it to top level - maybe as a whole
-        # separate top level thunk like closure lowering - then use the
-        # K"captured_local" mechanism to interpolate it back in. This scheme
-        # would make the complicated scope semantics explicit and let them be
-        # dealt with in the right place in the frontend rather than putting the
-        # rules into the runtime itself.
-        fptr = @ast __context__ callable QuoteNode(Expr(callable))::K"Value"
+        fptr = @ast __context__ callable [K"static_eval"(
+                meta=name_hint("cfunction function name"))
+            callable
+        ]
         typ = Ptr{Cvoid}
     end
     @ast __context__ __context__.macrocall [K"cfunction"
         typ::K"Value"
         fptr
-        return_type
-        arg_types_svec
+        [K"static_eval"(meta=name_hint("cfunction return type"))
+            return_type
+        ]
+        [K"static_eval"(meta=name_hint("cfunction argument type"))
+            arg_types_svec
+        ]
         "ccall"::K"Symbol"
     ]
+end
+
+function ccall_macro_parse(ctx, ex, opts)
+    gc_safe=false
+    for opt in opts
+        if kind(opt) != K"=" || numchildren(opt) != 2 ||
+                kind(opt[1]) != K"Identifier"
+            throw(MacroExpansionError(opt, "Bad option to ccall"))
+        else
+            optname = opt[1].name_val
+            if optname == "gc_safe"
+                if kind(opt[2]) == K"Bool"
+                    gc_safe = opt[2].value::Bool
+                else
+                    throw(MacroExpansionError(opt[2], "gc_safe must be true or false"))
+                end
+            else
+                throw(MacroExpansionError(opt[1], "Unknown option name for ccall"))
+            end
+        end
+    end
+
+    if kind(ex) != K"::"
+        throw(MacroExpansionError(ex, "Expected a return type annotation `::SomeType`", position=:end))
+    end
+
+    rettype = ex[2]
+    call = ex[1]
+    if kind(call) != K"call"
+        throw(MacroExpansionError(call, "Expected function call syntax `f()`"))
+    end
+
+    func = call[1]
+    varargs = numchildren(call) > 1 && kind(call[end]) == K"parameters" ?
+        children(call[end]) : nothing
+
+    # collect args and types
+    args = SyntaxList(ctx)
+    types = SyntaxList(ctx)
+    function pusharg!(arg)
+        if kind(arg) != K"::"
+            throw(MacroExpansionError(arg, "argument needs a type annotation"))
+        end
+        push!(args, arg[1])
+        push!(types, arg[2])
+    end
+
+    for e in call[2:(isnothing(varargs) ? end : end-1)]
+        kind(e) != K"parameters" || throw(MacroExpansionError(call[end], "Multiple parameter blocks not allowed"))
+        pusharg!(e)
+    end
+
+    if !isnothing(varargs)
+        num_required_args = length(args)
+        if num_required_args == 0
+            throw(MacroExpansionError(call[end], "C ABI prohibits varargs without one required argument"))
+        end
+        for e in varargs
+            pusharg!(e)
+        end
+    else
+        num_required_args = 0 # Non-vararg call
+    end
+
+    return func, rettype, types, args, gc_safe, num_required_args
+end
+
+function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_safe, num_required_args)
+    statements = SyntaxTree[]
+    kf = kind(func)
+    if kf == K"Identifier"
+        lowered_func = @ast ctx func func=>K"Symbol"
+    elseif kf == K"."
+        lowered_func = @ast ctx func [K"tuple"
+            func[2]=>K"Symbol"
+            [K"static_eval"(meta=name_hint("@ccall library name"))
+                func[1]
+            ]
+        ]
+    elseif kf == K"$"
+        check = @SyntaxTree quote
+            func = $(func[1])
+            if !isa(func, Ptr{Cvoid})
+                name = :($(func[1]))
+                throw(ArgumentError("interpolated function `$name` was not a `Ptr{Cvoid}`, but $(typeof(func))"))
+            end
+        end
+        push!(statements, check)
+        lowered_func = check[1][1]
+    else
+        throw(MacroExpansionError(func,
+            "Function name must be a symbol like `foo`, a library and function name like `libc.printf` or an interpolated function pointer like `\$ptr`"))
+    end
+
+    roots = SyntaxTree[]
+    cargs = SyntaxTree[]
+    for (i, (type, arg)) in enumerate(zip(types, args))
+        argi = @ast ctx arg "arg$i"::K"Identifier"
+        # TODO: Does it help to emit ssavar() here for the `argi`?
+        push!(statements, @SyntaxTree :(local $argi = Base.cconvert($type, $arg)))
+        push!(roots, argi)
+        push!(cargs, @SyntaxTree :(Base.unsafe_convert($type, $argi)))
+    end
+    effect_flags = UInt16(0)
+    push!(statements, @ast ctx ex [K"foreigncall"
+        lowered_func
+        [K"static_eval"(meta=name_hint("@ccall return type"))
+            rettype
+        ]
+        [K"static_eval"(meta=name_hint("@ccall argument type"))
+            [K"call"
+                "svec"::K"core"
+                types...
+            ]
+        ]
+        num_required_args::K"Integer"
+        QuoteNode((convention, effect_flags, gc_safe))::K"Value"
+        cargs...
+        roots...
+    ])
+
+    @ast ctx ex [K"block"
+        statements...
+    ]
+end
+
+function Base.var"@ccall"(ctx::MacroContext, ex, opts...)
+    ccall_macro_lower(ctx, ex, :ccall, ccall_macro_parse(ctx, ex, opts)...)
 end
 
 function Base.GC.var"@preserve"(__context__::MacroContext, exs...)

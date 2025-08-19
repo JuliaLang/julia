@@ -360,7 +360,7 @@ ccall(:strlen, Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall :strlen TestMod.Csize_t (call core.svec TestMod.Cstring) 0 :ccall %₃ %₂)
+4   (foreigncall :strlen (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
@@ -370,14 +370,14 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (call core.tuple :strlen TestMod.libc) TestMod.Csize_t (call core.svec TestMod.Cstring) 0 :ccall %₃ %₂)
+4   (foreigncall (static_eval (call core.tuple :strlen TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
 # ccall with a calling convention
 ccall(:foo, stdcall, Csize_t, ())
 #---------------------
-1   (foreigncall :foo TestMod.Csize_t (call core.svec) 0 :stdcall)
+1   (foreigncall :foo (static_eval TestMod.Csize_t) (static_eval (call core.svec)) 0 :stdcall)
 2   (return %₁)
 
 ########################################
@@ -386,7 +386,7 @@ ccall(:foo, stdcall, Csize_t, (Any,), x)
 #---------------------
 1   core.Any
 2   TestMod.x
-3   (foreigncall :foo TestMod.Csize_t (call core.svec core.Any) 0 :stdcall %₂)
+3   (foreigncall :foo (static_eval TestMod.Csize_t) (static_eval (call core.svec core.Any)) 0 :stdcall %₂)
 4   (return %₃)
 
 ########################################
@@ -397,7 +397,7 @@ ccall(ptr, Csize_t, (Cstring,), "asdfg")
 2   (call top.cconvert %₁ "asdfg")
 3   TestMod.ptr
 4   (call top.unsafe_convert %₁ %₂)
-5   (foreigncall %₃ TestMod.Csize_t (call core.svec TestMod.Cstring) 0 :ccall %₄ %₂)
+5   (foreigncall %₃ (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₄ %₂)
 6   (return %₅)
 
 ########################################
@@ -412,7 +412,7 @@ ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")
 6   (call top.unsafe_convert %₁ %₃)
 7   (call top.unsafe_convert %₂ %₄)
 8   (call top.unsafe_convert %₂ %₅)
-9   (foreigncall :printf TestMod.Cint (call core.svec TestMod.Cstring TestMod.Cstring TestMod.Cstring) 1 :ccall %₆ %₇ %₈ %₃ %₄ %₅)
+9   (foreigncall :printf (static_eval TestMod.Cint) (static_eval (call core.svec TestMod.Cstring TestMod.Cstring TestMod.Cstring)) 1 :ccall %₆ %₇ %₈ %₃ %₄ %₅)
 10  (return %₉)
 
 ########################################
@@ -456,7 +456,7 @@ end
 LoweringError:
 let libc = "libc"
     ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
-#         └─────────────┘ ── function name and library expression cannot reference local variables
+#                   └──┘ ── function name and library expression cannot reference local variable
 end
 
 ########################################
@@ -468,7 +468,7 @@ end
 LoweringError:
 let Csize_t = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
-#                  └─────┘ ── ccall return type cannot reference local variables
+#                  └─────┘ ── ccall return type cannot reference local variable
 end
 
 ########################################
@@ -480,7 +480,7 @@ end
 LoweringError:
 let Cstring = 1
     ccall(:strlen, Csize_t, (Cstring,), "asdfg")
-#                            └─────┘ ── ccall argument types cannot reference local variables
+#                            └─────┘ ── ccall argument type cannot reference local variable
 end
 
 ########################################
@@ -520,7 +520,7 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 cglobal((:sym, lib), Int)
 #---------------------
 1   TestMod.Int
-2   (call core.cglobal (call core.tuple :sym TestMod.lib) %₁)
+2   (call core.cglobal (static_eval (call core.tuple :sym TestMod.lib)) %₁)
 3   (return %₂)
 
 ########################################
@@ -532,6 +532,26 @@ cglobal(f(), Int)
 3   TestMod.Int
 4   (call core.cglobal %₂ %₃)
 5   (return %₄)
+
+########################################
+# Error: cglobal with library name referencing local variable
+let func="myfunc"
+    cglobal((func, "somelib"), Int)
+end
+#---------------------
+LoweringError:
+let func="myfunc"
+    cglobal((func, "somelib"), Int)
+#            └──┘ ── function name and library expression cannot reference local variable
+end
+
+########################################
+# Error: cglobal too many arguments
+cglobal(:sym, Int, blah)
+#---------------------
+LoweringError:
+cglobal(:sym, Int, blah)
+└──────────────────────┘ ── cglobal must have one or two arguments
 
 ########################################
 # Error: assigning to `cglobal`

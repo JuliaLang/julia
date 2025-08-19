@@ -320,7 +320,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         else
             access
         end
-    elseif is_leaf(ex) || k == K"inert"
+    elseif is_leaf(ex) || k == K"inert" || k == K"static_eval"
         ex
     elseif k == K"="
         convert_assignment(ctx, ex)

@@ -1626,6 +1626,17 @@ function expand_kw_call(ctx, srcref, farg, args, kws)
     ]
 end
 
+# Expand the (sym,lib) argument to ccall/cglobal
+function expand_C_library_symbol(ctx, ex)
+    expanded = expand_forms_2(ctx, ex)
+    if kind(ex) == K"tuple"
+        expanded = @ast ctx ex [K"static_eval"(meta=name_hint("function name and library expression"))
+            expanded
+        ]
+    end
+    return expanded
+end
+
 function expand_ccall(ctx, ex)
     @assert kind(ex) == K"call" && is_core_ref(ex[1], "ccall")
     if numchildren(ex) < 4
@@ -1633,10 +1644,6 @@ function expand_ccall(ctx, ex)
     end
     cfunc_name = ex[2]
     # Detect calling convention if present.
-    #
-    # Note `@ccall` also emits `Expr(:cconv, convention, nreq)`, but this is a
-    # somewhat undocumented performance workaround. Instead we should just make
-    # sure @ccall can emit foreigncall directly and efficiently.
     known_conventions = ("cdecl", "stdcall", "fastcall", "thiscall", "llvmcall")
     cconv = if any(is_same_identifier_like(ex[3], id) for id in known_conventions)
         ex[3]
@@ -1748,11 +1755,15 @@ function expand_ccall(ctx, ex)
     @ast ctx ex [K"block"
         sctx.stmts...
         [K"foreigncall"
-            expand_forms_2(ctx, cfunc_name)
-            expand_forms_2(ctx, return_type)
-            [K"call"
-                "svec"::K"core"
-                expanded_types...
+            expand_C_library_symbol(ctx, cfunc_name)
+            [K"static_eval"(meta=name_hint("ccall return type"))
+                expand_forms_2(ctx, return_type)
+            ]
+            [K"static_eval"(meta=name_hint("ccall argument type"))
+                [K"call"
+                    "svec"::K"core"
+                    expanded_types...
+                ]
             ]
             num_required_args::K"Integer"
             if isnothing(cconv)
@@ -1828,6 +1839,15 @@ function expand_call(ctx, ex)
     farg = ex[1]
     if is_core_ref(farg, "ccall")
         return expand_ccall(ctx, ex)
+    elseif is_core_ref(farg, "cglobal")
+        @chk numchildren(ex) in 2:3  (ex, "cglobal must have one or two arguments")
+        return @ast ctx ex [K"call"
+            ex[1]
+            expand_C_library_symbol(ctx, ex[2])
+            if numchildren(ex) == 3
+                expand_forms_2(ctx, ex[3])
+            end
+        ]
     end
     args = copy(ex[2:end])
     kws = remove_kw_args!(ctx, args)

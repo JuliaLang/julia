@@ -323,7 +323,7 @@ JuxtTest.@emit_juxt
 # @cfunction expansion with global generic function as function argument
 @cfunction(callable, Int, (Int, Float64))
 #---------------------
-1   (cfunction Ptr{Nothing} :(:callable) TestMod.Int (call core.svec TestMod.Int TestMod.Float64) :ccall)
+1   (cfunction Ptr{Nothing} (static_eval TestMod.callable) (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
 2   (return %₁)
 
 ########################################
@@ -331,7 +331,7 @@ JuxtTest.@emit_juxt
 @cfunction($close_over, Int, (Int, Float64))
 #---------------------
 1   TestMod.close_over
-2   (cfunction Base.CFunction %₁ TestMod.Int (call core.svec TestMod.Int TestMod.Float64) :ccall)
+2   (cfunction Base.CFunction %₁ (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
 3   (return %₂)
 
 ########################################
@@ -351,7 +351,7 @@ end
 LoweringError:
 let T=Float64
     @cfunction(f, T, (Float64,))
-#                 ╙ ── cfunction return type cannot reference local variables
+#                 ╙ ── cfunction return type cannot reference local variable
 end
 
 ########################################
@@ -363,8 +363,122 @@ end
 LoweringError:
 let T=Float64
     @cfunction(f, Float64, (Float64,T))
-#                                   ╙ ── cfunction argument cannot reference local variables
+#                                   ╙ ── cfunction argument type cannot reference local variable
 end
+
+########################################
+# Basic @ccall lowering
+@ccall foo(x::X, y::Y)::R
+#---------------------
+1   JuliaLowering.Base
+2   (call top.getproperty %₁ :cconvert)
+3   TestMod.X
+4   TestMod.x
+5   (= slot₁/arg1 (call %₂ %₃ %₄))
+6   JuliaLowering.Base
+7   (call top.getproperty %₆ :cconvert)
+8   TestMod.Y
+9   TestMod.y
+10  (= slot₂/arg2 (call %₇ %₈ %₉))
+11  JuliaLowering.Base
+12  (call top.getproperty %₁₁ :unsafe_convert)
+13  TestMod.X
+14  slot₁/arg1
+15  (call %₁₂ %₁₃ %₁₄)
+16  JuliaLowering.Base
+17  (call top.getproperty %₁₆ :unsafe_convert)
+18  TestMod.Y
+19  slot₂/arg2
+20  (call %₁₇ %₁₈ %₁₉)
+21  slot₁/arg1
+22  slot₂/arg2
+23  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 :($(QuoteNode((:ccall, 0x0000, false)))) %₁₅ %₂₀ %₂₁ %₂₂)
+24  (return %₂₃)
+
+########################################
+# @ccall lowering with varargs and gc_safe
+@ccall foo(x::X; y::Y)::R gc_safe=true
+#---------------------
+1   JuliaLowering.Base
+2   (call top.getproperty %₁ :cconvert)
+3   TestMod.X
+4   TestMod.x
+5   (= slot₁/arg1 (call %₂ %₃ %₄))
+6   JuliaLowering.Base
+7   (call top.getproperty %₆ :cconvert)
+8   TestMod.Y
+9   TestMod.y
+10  (= slot₂/arg2 (call %₇ %₈ %₉))
+11  JuliaLowering.Base
+12  (call top.getproperty %₁₁ :unsafe_convert)
+13  TestMod.X
+14  slot₁/arg1
+15  (call %₁₂ %₁₃ %₁₄)
+16  JuliaLowering.Base
+17  (call top.getproperty %₁₆ :unsafe_convert)
+18  TestMod.Y
+19  slot₂/arg2
+20  (call %₁₇ %₁₈ %₁₉)
+21  slot₁/arg1
+22  slot₂/arg2
+23  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 :($(QuoteNode((:ccall, 0x0000, true)))) %₁₅ %₂₀ %₂₁ %₂₂)
+24  (return %₂₃)
+
+########################################
+# Error: No return annotation on @ccall
+@ccall strlen("foo"::Cstring)
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall strlen("foo"::Cstring)
+#                            └ ── Expected a return type annotation `::SomeType`
+
+########################################
+# Error: No argument type on @ccall
+@ccall foo("blah"::Cstring, "bad")::Int
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo("blah"::Cstring, "bad")::Int
+#                           └───┘ ── argument needs a type annotation
+
+########################################
+# Error: @ccall varags without one fixed argument
+@ccall foo(; x::Int)::Int
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo(; x::Int)::Int
+#          └──────┘ ── C ABI prohibits varargs without one required argument
+
+########################################
+# Error: Multiple varargs blocks
+@ccall foo(; x::Int; y::Float64)::Int
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo(; x::Int; y::Float64)::Int
+#                  └──────────┘ ── Multiple parameter blocks not allowed
+
+########################################
+# Error: Bad @ccall option
+@ccall foo(x::Int)::Int bad_opt
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo(x::Int)::Int bad_opt
+#                       └─────┘ ── Bad option to ccall
+
+########################################
+# Error: Unknown @ccall option name
+@ccall foo(x::Int)::Int bad_opt=true
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo(x::Int)::Int bad_opt=true
+#                       └─────┘ ── Unknown option name for ccall
+
+########################################
+# Error: Unknown option type
+@ccall foo(x::Int)::Int gc_safe="hi"
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo(x::Int)::Int gc_safe="hi"
+#                               └──┘ ── gc_safe must be true or false
 
 ########################################
 # Error: unary & syntax
