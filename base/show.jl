@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using .Compiler: has_typevar
+using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
+            is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
+            is_unary_and_binary_operator
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
@@ -1542,104 +1545,6 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
                          :ncat =>('[',']'), :nrow =>('[',']'),
                          :braces=>('{','}'), :bracescat=>('{','}'))
 
-## AST decoding helpers ##
-
-is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
-is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
-
-"""
-     isidentifier(s) -> Bool
-
-Return whether the symbol or string `s` contains characters that are parsed as
-a valid ordinary identifier (not a binary/unary operator) in Julia code;
-see also [`Base.isoperator`](@ref).
-
-Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
-and macros automatically use variable names containing `#` in order to avoid
-naming collision with the surrounding code. In order for the parser to
-recognize a variable, it uses a limited set of characters (greatly extended by
-Unicode). `isidentifier()` makes it possible to query the parser directly
-whether a symbol contains valid characters.
-
-# Examples
-```jldoctest
-julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
-(true, false)
-```
-"""
-function isidentifier(s::AbstractString)
-    x = Iterators.peel(s)
-    isnothing(x) && return false
-    (s == "true" || s == "false") && return false
-    c, rest = x
-    is_id_start_char(c) || return false
-    return all(is_id_char, rest)
-end
-isidentifier(s::Symbol) = isidentifier(string(s))
-
-is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
-
-_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
-
-"""
-    isoperator(s::Symbol)
-
-Return `true` if the symbol can be used as an operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isoperator(:+), Meta.isoperator(:f)
-(true, false)
-```
-"""
-isoperator(s::Union{Symbol,AbstractString}) = _isoperator(s) || ispostfixoperator(s)
-
-"""
-    isunaryoperator(s::Symbol)
-
-Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperator(:f)
-(true, true, false)
-```
-"""
-isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
-is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
-is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
-
-"""
-    isbinaryoperator(s::Symbol)
-
-Return `true` if the symbol can be used as a binary (infix) operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isbinaryoperator(:-), Meta.isbinaryoperator(:√), Meta.isbinaryoperator(:f)
-(true, false, false)
-```
-"""
-function isbinaryoperator(s::Symbol)
-    return _isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s)) &&
-        s !== Symbol("'")
-end
-
-"""
-    ispostfixoperator(s::Union{Symbol,AbstractString})
-
-Return `true` if the symbol can be used as a postfix operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ")), Meta.ispostfixoperator(:-)
-(true, true, false)
-```
-"""
-function ispostfixoperator(s::Union{Symbol,AbstractString})
-    s = String(s)::String
-    return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
-end
 
 """
     operator_precedence(s::Symbol)
@@ -1778,19 +1683,6 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
-const keyword_syms = Set([
-    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
-    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
-    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
-    :try, :using, :while ])
-
-function is_valid_identifier(sym)
-    return (isidentifier(sym) && !(sym in keyword_syms)) ||
-        (_isoperator(sym) &&
-        !(sym in (Symbol("'"), :(::), :?)) &&
-        !is_syntactic_operator(sym)
-    )
-end
 
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 # kw: `=` expressions are parsed with head `kw` in this context
