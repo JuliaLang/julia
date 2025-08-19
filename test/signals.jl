@@ -1,7 +1,7 @@
 using Base.Signals
 
 const VALID_SIGNALS = Sys.iswindows() ? [2, 4, 6, 8, 11, 15, 21, 22] : 1:31
-const TEST_SIGNAL = Sys.iswindows() ? SIGBREAK : SIGURG
+const TEST_SIGNAL = Sys.iswindows() ? SIGABRT_COMPAT : SIGURG
 
 @testset "signal_abbrev" begin
     @test signal_abbrev(0) === nothing
@@ -19,7 +19,7 @@ end
     for signum in VALID_SIGNALS
         signame = signal_name(signum)
         @test length(signame) > 3
-        @test all(c -> isuppercase(c) || isdigit(c), signame)
+        @test all(c -> isuppercase(c) || isdigit(c) || c == '_', signame)
         @test startswith(signame, "SIG")
     end
     @test signal_name(32) === nothing
