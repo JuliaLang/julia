@@ -481,7 +481,7 @@ module IteratorsMD
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    iterate(iter::CartesianIndices{0}, done=false) = done ? nothing : (CartesianIndex(), true)
+    iterate(iter::CartesianIndices{0}, done::Bool=false) = done ? nothing : (CartesianIndex(), true)
 
     size(iter::CartesianIndices) = map(length, iter.indices)
 
