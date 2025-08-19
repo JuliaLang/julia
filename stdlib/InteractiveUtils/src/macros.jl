@@ -481,7 +481,8 @@ for fname in [:which, :less, :edit, :functionloc]
         macro ($fname)(ex0)
             gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[];
                                           is_source_reflection = true,
-                                          supports_binding_reflection = $(fname === :which))
+                                          supports_binding_reflection = $(fname === :which),
+                                          use_signature_tuple = true)
         end
     end
 end
