@@ -147,11 +147,14 @@ function lookup(ip::Base.InterpreterIP)
             if isa(def, Core.ABIOverride)
                 def = def.def
             end
-            if isa(def, MethodInstance) && isa(def.def, Method)
-                meth = def.def
-                func = meth.name
-                file = meth.file
-                line = meth.line
+            if isa(def, MethodInstance)
+                let meth = def.def
+                    if isa(meth, Method)
+                        func = meth.name
+                        file = meth.file
+                        line = meth.line
+                    end
+                end
             end
         else
             codeinfo = code::CodeInfo
