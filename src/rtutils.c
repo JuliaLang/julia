@@ -216,20 +216,6 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTE
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
-                                                   size_t *idxs, size_t nidxs)
-{
-    size_t i;
-    jl_value_t *t = NULL;
-    JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
-    t = (jl_value_t*)jl_alloc_svec(nidxs);
-    for (i = 0; i < nidxs; i++) {
-        jl_svecset(t, i, jl_box_long(idxs[i]));
-    }
-    t = jl_f_tuple(NULL, jl_svec_data(t), nidxs);
-    jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
-}
-
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
 {
     if (!jl_isa(x,t))
