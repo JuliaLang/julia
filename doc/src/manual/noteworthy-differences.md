@@ -62,9 +62,9 @@ may trip up Julia users accustomed to MATLAB:
     but in Julia `exp.(A)` applies elementwise and `exp(A)` is the matrix exponential.
   * In Julia, the operators [`&`](@ref), [`|`](@ref), and [`⊻`](@ref xor) ([`xor`](@ref)) perform the
     bitwise operations equivalent to `and`, `or`, and `xor` respectively in MATLAB, and have precedence
-    similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise
-    across arrays and can be used to combine logical arrays, but note the difference in order of operations:
-    parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) .| (A .== 2)`).
+    similar to Python's bitwise operators (unlike C). To apply logical boolean operators over an array
+    (like common uses of MATLAB's `&` and `|`), broadcast Julia's short-circuiting operators `.&&` and `.||`.
+    For example, to test if the elements in an array `A` are equal to 1 or 2, you can use `A .== 1 .|| A .== 2`.
   * In Julia, the elements of a collection can be passed as arguments to a function using the splat
     operator `...`, as in `xs=[1,2]; f(xs...)`.
   * Julia's [`svd`](@ref) returns singular values as a vector instead of as a dense diagonal matrix.
