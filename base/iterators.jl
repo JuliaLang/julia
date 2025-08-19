@@ -473,11 +473,7 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-function last(z::Zip)
-    IteratorSize(z) == SizeUnknown() &&
-        throw(ArgumentError("Cannot get last element of zipped iterators of undefined lengths"))
-    return nth(z, length(z))
-end
+last(z::Zip) = nth(z, length(z))
 
 function reverse(z::Zip)
     if !first(_zip_lengths_finite_equal(z.is))

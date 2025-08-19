@@ -1221,12 +1221,12 @@ end == Vector{Int}
 
     # Cannot statically know length of zipped iterator if any of its components are of
     # unknown length
-    @test_throws ArgumentError last(zip(1:3, Iterators.filter(x -> x > 0, -5:5))) # (3, 3)
-    @test_throws ArgumentError last(zip(Iterators.filter(x -> x > 0, -5:5), 1:3)) # (3, 3)
-    @test_throws ArgumentError last(zip(1:10, Iterators.filter(x -> x > 0, -5:5))) # (5, 5)
+    @test_throws MethodError last(zip(1:3, Iterators.filter(x -> x > 0, -5:5))) # (3, 3)
+    @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), 1:3)) # (3, 3)
+    @test_throws MethodError last(zip(1:10, Iterators.filter(x -> x > 0, -5:5))) # (5, 5)
 
     # We also can't know the length of zipped iterators when all constituents are of an
     # unknown length.  In this test, the answer is (5, 4), but we can't know that without
     # a greedy algorithm
-    @test_throws ArgumentError last(zip(Iterators.filter(x -> x > 0, -5:5), Iterators.filter(x -> x % 2 == 0, -5:5)))  # (5, 4)
+    @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), Iterators.filter(x -> x % 2 == 0, -5:5)))  # (5, 4)
 end
