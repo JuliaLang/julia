@@ -257,7 +257,13 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL
         return NULL;
     }
     handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-#if !defined(__APPLE__)
+#if defined(_OS_FREEBSD_)
+    // FreeBSD will not give you a handle for the executable if you dlopen() it
+    // with RTLD_NOLOAD, so check jl_exe_handle.
+    if (handle == NULL && dlerror() == NULL) {
+        handle = jl_exe_handle;
+    }
+#elif !defined(__APPLE__)
     if (handle == RTLD_DEFAULT && (RTLD_DEFAULT != NULL || dlerror() == NULL)) {
         // We loaded the executable but got RTLD_DEFAULT back, ask for a real handle instead
         handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
