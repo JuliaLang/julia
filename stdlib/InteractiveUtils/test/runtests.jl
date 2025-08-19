@@ -960,3 +960,13 @@ end # module
     using .OuterModule
     @test_nowarn subtypes(Integer);
 end
+
+@testset "Lowering behavior for keyword arguments" begin
+    f_with_kw(; T = Int) = T
+    _, rt = @code_typed f_with_kw()
+    @test rt === Type{Int}
+    _, rt = @code_typed f_with_kw(; T::Type{Int})
+    @test rt === Type{Int}
+    _, rt = @code_typed f_with_kw(; T = Int)
+    @test rt === DataType
+end
