@@ -219,9 +219,9 @@ is_code_macro(fcn) = startswith(string(fcn), "code_")
     gen_call_with_extracted_types(__module__, fcn, ex, kws = Expr[]; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false, use_signature_tuple = false)
 
 Destructures the input expression `ex` into a function call or a binding access, then generates a call to either:
-- `fcn(f, tt)`
-- `fcn(sigt)` # if `use_signature_tuple = true`
-- `fcn(mod, name)` # if `supports_binding_reflection = true`
+- `fcn(f, tt; kws...)`
+- `fcn(sigt; kws...)` # if `use_signature_tuple = true`
+- `fcn(mod, name; kws...)` # if `supports_binding_reflection = true`
 
 ## `fcn` API requirements
 
