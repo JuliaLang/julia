@@ -167,7 +167,7 @@ function lookup(ip::Base.InterpreterIP)
     if isempty(scopes)
         return [StackFrame(func, file, line, code, false, false, 0)]
     end
-    closure = let inlined::Bool = false, def = def, codeinfo = codeinfo
+    closure = let inlined::Bool = false, def = def
         function closure_inner(lno)
             if inlined
                 def = lno.method
