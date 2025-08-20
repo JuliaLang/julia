@@ -1,4 +1,4 @@
-# Lowering Pass 2 - syntax desugaring 
+# Lowering Pass 2 - syntax desugaring
 
 struct DesugaringContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
@@ -74,7 +74,7 @@ end
 
 function check_no_parameters(ex::SyntaxTree, msg)
     i = find_parameters_ind(children(ex))
-    if i > 0 
+    if i > 0
         throw(LoweringError(ex[i], msg))
     end
 end
@@ -523,7 +523,7 @@ function expand_compare_chain(ctx, ex)
 end
 
 #-------------------------------------------------------------------------------
-# Expansion of array indexing 
+# Expansion of array indexing
 function _arg_to_temp(ctx, stmts, ex, eq_is_kw=false)
     k = kind(ex)
     if is_effect_free(ex)
@@ -937,6 +937,29 @@ function expand_comprehension_to_loops(ctx, ex)
         ]
         result
     ]
+end
+
+function expand_splat(ctx, ex, topfunc, args)
+    return @ast ctx ex [K"call"
+        "_apply_iterate"::K"core"
+        "iterate"::K"top"
+        topfunc
+        expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, args))...
+    ]
+end
+
+function expand_array(ctx, ex, topfunc)
+    args = children(ex)
+    check_no_assignment(args)
+    topfunc = @ast ctx ex topfunc::K"top"
+    if any(kind(arg) == K"..." for arg in args)
+        expand_splat(ctx, ex, topfunc, args)
+    else
+        @ast ctx ex [K"call"
+            topfunc
+            expand_forms_2(ctx, args)...
+        ]
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -1735,10 +1758,10 @@ function expand_ccall(ctx, ex)
         if is_core_Any(raw_argt)
             push!(unsafe_args, exarg)
         else
-            cconverted_arg = emit_assign_tmp(sctx, 
+            cconverted_arg = emit_assign_tmp(sctx,
                 @ast ctx argt [K"call"
                     "cconvert"::K"top"
-                    argt 
+                    argt
                     exarg
                 ]
             )
@@ -1856,12 +1879,7 @@ function expand_call(ctx, ex)
     end
     if any(kind(arg) == K"..." for arg in args)
         # Splatting, eg, `f(a, xs..., b)`
-        @ast ctx ex [K"call" 
-            "_apply_iterate"::K"core"
-            "iterate"::K"top"
-            expand_forms_2(ctx, farg)
-            expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, args))...
-        ]
+        expand_splat(ctx, ex, expand_forms_2(ctx, farg), args)
     elseif kind(farg) == K"Identifier" && farg.name_val == "include"
         # world age special case
         r = ssavar(ctx, ex)
@@ -1905,7 +1923,7 @@ function expand_dot(ctx, ex)
             throw(LoweringError(rhs, "Unrecognized field access syntax"))
         end
         @ast ctx ex [K"call"
-            "getproperty"::K"top" 
+            "getproperty"::K"top"
             ex[1]
             rhs
         ]
@@ -3092,7 +3110,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
                 ]
             ]
         ]
-        [K"removable" 
+        [K"removable"
             isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
         ]
     ]
@@ -3131,7 +3149,7 @@ end
 
 function expand_arrow(ctx, ex)
     @chk numchildren(ex) == 2
-    expand_forms_2(ctx, 
+    expand_forms_2(ctx,
         @ast ctx ex [K"function"
             expand_arrow_arglist(ctx, ex[1], string(kind(ex)))
             ex[2]
@@ -3515,7 +3533,7 @@ function default_inner_constructors(ctx, srcref, global_struct_name,
                              [K"curly"
                                  "Type"::K"core"
                                  [K"curly"
-                                     global_struct_name 
+                                     global_struct_name
                                      typevar_names...
                                  ]
                              ]
@@ -3570,7 +3588,7 @@ function default_outer_constructor(ctx, srcref, global_struct_name,
                                    typevar_names, typevar_stmts, field_names, field_types)
     @ast ctx srcref [K"function"
         [K"where"
-            [K"call" 
+            [K"call"
                 # We use `::Type{$global_struct_name}` here rather than just
                 # `struct_name` because global_struct_name is a binding to a
                 # type - we know we're not creating a new `Function` and
@@ -4189,7 +4207,7 @@ function expand_module(ctx, ex::SyntaxTree)
                     "x"              ::K"Identifier"
                 ]
                 [K"call"
-                    "eval"           ::K"core"      
+                    "eval"           ::K"core"
                     modname          ::K"Identifier"
                     "x"              ::K"Identifier"
                 ]
@@ -4216,11 +4234,11 @@ function expand_module(ctx, ex::SyntaxTree)
                     "x"              ::K"Identifier"
                 ]
                 [K"call"
-                    "_call_latest"   ::K"core" 
-                    "include"        ::K"top" 
-                    "mapexpr"        ::K"Identifier" 
-                    modname          ::K"Identifier" 
-                    "x"              ::K"Identifier" 
+                    "_call_latest"   ::K"core"
+                    "include"        ::K"top"
+                    "mapexpr"        ::K"Identifier"
+                    modname          ::K"Identifier"
+                    "x"              ::K"Identifier"
                 ]
             ]
         ]
@@ -4254,7 +4272,7 @@ end
 
 """
 Lowering pass 2 - desugaring
- 
+
 This pass simplifies expressions by expanding complicated syntax sugar into a
 small set of core syntactic forms. For example, field access syntax `a.b` is
 expanded to a function call `getproperty(a, :b)`.
@@ -4377,7 +4395,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
         else
-            @ast ctx ex [K"call" 
+            @ast ctx ex [K"call"
                 "string"::K"top"
                 expand_forms_2(ctx, children(ex))...
             ]
@@ -4393,7 +4411,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         elseif any_assignment(children(ex))
             expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex)))
         else
-            expand_forms_2(ctx, @ast ctx ex [K"call" 
+            expand_forms_2(ctx, @ast ctx ex [K"call"
                 "tuple"::K"core"
                 children(ex)...
             ])
@@ -4438,23 +4456,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"vect"
         check_no_parameters(ex, "unexpected semicolon in array expression")
-        check_no_assignment(children(ex))
-        @ast ctx ex [K"call"
-            "vect"::K"top"
-            expand_forms_2(ctx, children(ex))...
-        ]
+        expand_array(ctx, ex, "vect")
     elseif k == K"hcat"
-        check_no_assignment(children(ex))
-        @ast ctx ex [K"call"
-            "hcat"::K"top"
-            expand_forms_2(ctx, children(ex))...
-        ]
+        expand_array(ctx, ex, "hcat")
     elseif k == K"typed_hcat"
-        check_no_assignment(children(ex))
-        @ast ctx ex [K"call"
-            "typed_hcat"::K"top"
-            expand_forms_2(ctx, children(ex))...
-        ]
+        expand_array(ctx, ex, "typed_hcat")
     elseif k == K"opaque_closure"
         expand_forms_2(ctx, expand_opaque_closure(ctx, ex))
     elseif k == K"vcat" || k == K"typed_vcat"
@@ -4513,4 +4519,3 @@ function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
     ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
     ctx1, ex1
 end
-

@@ -1,3 +1,5 @@
+using Test, JuliaLowering
+
 @testset "Array syntax" begin
 
 test_mod = Module()
@@ -23,6 +25,22 @@ end
 Int[1.0 2.0 3.0]
 """) ≅ [1 2 3]
 
+# splat with vect/hcat/typed_hcat
+@test JuliaLowering.include_string(test_mod, """
+let xs = [1,2,3]
+    [0, xs...]
+end
+""") ≅ [0,1,2,3]
+@test JuliaLowering.include_string(test_mod, """
+let xs = [1,2,3]
+    [0 xs...]
+end
+""") ≅ [0 1 2 3]
+@test JuliaLowering.include_string(test_mod, """
+let xs = [1,2,3]
+    Int[0 xs...]
+end
+""") ≅ Int[0 1 2 3]
 
 # vcat
 @test JuliaLowering.include_string(test_mod, """
@@ -127,4 +145,4 @@ let
 end
 """) == (3, 7, 2, 5)
 
-end
+end # @testset "Array syntax" begin
