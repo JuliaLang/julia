@@ -4,7 +4,7 @@ using JuliaLowering, Test
 
 module test_mod end
 
-JuliaLowering.include_string(test_mod, """
+JuliaLowering.include_string(test_mod, raw"""
 module M
     using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope
     using JuliaSyntax
@@ -28,51 +28,49 @@ module M
     macro foo(ex)
         :(begin
             x = "`x` from @foo"
-            (x, someglobal, \$ex)
+            (x, someglobal, $ex)
         end)
     end
 
     # Set `a_global` in M
     macro set_a_global(val)
         :(begin
-            global a_global = \$val
+            global a_global = $val
         end)
     end
 
     macro set_other_global(ex, val)
         :(begin
-            global \$ex = \$val
+            global $ex = $val
         end)
     end
 
     macro set_global_in_parent(ex)
         e1 = adopt_scope(:(sym_introduced_from_M), __context__)
         quote
-            \$e1 = \$ex
+            $e1 = $ex
             nothing
         end
     end
 
     macro inner()
-        :(2)
+        :(y)
     end
 
     macro outer()
-        :((1, @inner))
+        :((x, @inner))
     end
 
-    # # Recursive macro call
-    # # TODO: Need branching!
-    # macro recursive(N)
-    #     Nval = N.value #::Int
-    #     if Nval < 1
-    #         return N
-    #     end
-    #     quote
-    #         x = \$N
-    #         (@recursive \$(Nval-1), x)
-    #     end
-    # end
+    macro recursive(N)
+        Nval = N.value::Int
+        if Nval < 1
+            return N
+        end
+        quote
+            x = $N
+            (x, @recursive $(Nval-1))
+        end
+    end
 end
 """)
 
@@ -83,6 +81,7 @@ let
 end
 """) == ("`x` from @foo", "global in module M", "`x` from outer scope")
 @test !isdefined(test_mod.M, :x)
+
 
 @test JuliaLowering.include_string(test_mod, """
 #line1
@@ -106,43 +105,21 @@ JuliaLowering.include_string(test_mod, "M.@set_other_global global_in_test_mod 1
 @test !isdefined(test_mod.M, :global_in_test_mod)
 @test test_mod.global_in_test_mod == 100
 
-Base.eval(test_mod.M, :(
-# Recursive macro call
-function var"@recursive"(mctx, N)
-    @chk kind(N) == K"Integer"
-    Nval = N.value::Int
-    if Nval < 1
-        return N
-    end
-    @ast mctx (@HERE) [K"block"
-        [K"="(@HERE)
-            "x"::K"Identifier"(@HERE)
-            N
-        ]
-        [K"tuple"(@HERE)
-            "x"::K"Identifier"(@HERE)
-            [K"macrocall"(@HERE)
-                "@recursive"::K"Identifier"
-                (Nval-1)::K"Integer"
-            ]
-        ]
-    ]
-end
-))
-
 @test JuliaLowering.include_string(test_mod, """
 M.@recursive 3
 """) == (3, (2, (1, 0)))
 
-@test let
-    ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
-    expanded = JuliaLowering.macroexpand(test_mod, ex)
-    JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2]))
-end == [
+ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
+ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex)
+@test JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"
-    "2"
+    "y"
 ]
+# Layer parenting
+@test expanded[1].scope_layer == 2
+@test expanded[2].scope_layer == 3
+@test getfield.(ctx.scope_layers, :parent_layer) == [0,1,2]
 
 JuliaLowering.include_string(test_mod, """
 f_throw(x) = throw(x)
@@ -192,6 +169,128 @@ let (err, st) = try
     @test isnothing(err.err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)
+end
+
+# Tests for interop between old and new-style macros
+
+# Hygiene interop
+JuliaLowering.include_string(test_mod, raw"""
+    macro call_oldstyle_macro(a)
+        quote
+            x = "x in call_oldstyle_macro"
+            @oldstyle $a x
+        end
+    end
+
+    macro newstyle(a, b, c)
+        quote
+            x = "x in @newstyle"
+            ($a, $b, $c, x)
+        end
+    end
+""")
+# TODO: Make this macro lowering go via JuliaSyntax rather than the flisp code
+# (JuliaSyntax needs support for old-style quasiquote processing)
+Base.eval(test_mod, :(
+macro oldstyle(a, b)
+    quote
+        x = "x in @oldstyle"
+        @newstyle $(esc(a)) $(esc(b)) x
+    end
+end
+))
+@test JuliaLowering.include_string(test_mod, """
+let x = "x in outer scope"
+    @call_oldstyle_macro x
+end
+""") == ("x in outer scope",
+         "x in call_oldstyle_macro",
+         "x in @oldstyle",
+         "x in @newstyle")
+
+# Old style unhygenic escaping with esc()
+Base.eval(test_mod, :(
+macro oldstyle_unhygenic()
+    esc(:x)
+end
+))
+@test JuliaLowering.include_string(test_mod, """
+let x = "x in outer scope"
+    @oldstyle_unhygenic
+end
+""") == "x in outer scope"
+
+# Exceptions in old style macros
+Base.eval(test_mod, :(
+macro oldstyle_error()
+    error("Some error in old style macro")
+end
+))
+@test try
+    JuliaLowering.include_string(test_mod, """
+    @oldstyle_error
+    """)
+catch exc
+    sprint(showerror, exc)
+end == """
+MacroExpansionError while expanding @oldstyle_error in module Main.macros.test_mod:
+@oldstyle_error
+└─────────────┘ ── Error expanding macro
+Caused by:
+Some error in old style macro"""
+
+# Old-style macros returning non-Expr values
+Base.eval(test_mod, :(
+macro oldstyle_non_Expr()
+    42
+end
+))
+@test JuliaLowering.include_string(test_mod, """
+@oldstyle_non_Expr
+""") === 42
+
+# New-style macros called with the wrong arguments
+JuliaLowering.include_string(test_mod, raw"""
+macro method_error_test(a)
+end
+""")
+Base.eval(test_mod, :(
+macro method_error_test()
+end
+))
+try
+    JuliaLowering.include_string(test_mod, raw"""
+    @method_error_test x y
+    """)
+    @test false
+catch exc
+    @test exc isa JuliaLowering.MacroExpansionError
+    mexc = exc.err
+    @test mexc isa MethodError
+    @test mexc.args isa Tuple{JuliaLowering.MacroContext, JuliaLowering.SyntaxTree, JuliaLowering.SyntaxTree}
+end
+
+@testset "calling with old/new macro signatures" begin
+    # Old defined with 1 arg, new with 2 args, both with 3 (but with different values)
+    Base.eval(test_mod, :(macro sig_mismatch(x); x; end))
+    Base.eval(test_mod, :(macro sig_mismatch(x, y, z); z; end))
+    JuliaLowering.include_string(test_mod, "macro sig_mismatch(x, y); x; end")
+    JuliaLowering.include_string(test_mod, "macro sig_mismatch(x, y, z); x; end")
+
+    @test JuliaLowering.include_string(test_mod, "@sig_mismatch(1)") === 1
+    @test JuliaLowering.include_string(test_mod, "@sig_mismatch(1, 2)") === 1
+    @test JuliaLowering.include_string(test_mod, "@sig_mismatch(1, 2, 3)") === 1 # 3 if we prioritize old sig
+    err = try
+        JuliaLowering.include_string(test_mod, "@sig_mismatch(1, 2, 3, 4)") === 1
+    catch exc
+        sprint(showerror, exc, context=:module=>@__MODULE__)
+    end
+    @test startswith(err, """
+    MacroExpansionError while expanding @sig_mismatch in module Main.macros.test_mod:
+    @sig_mismatch(1, 2, 3, 4)
+    └───────────────────────┘ ── Error expanding macro
+    Caused by:
+    MethodError: no method matching var"@sig_mismatch"(::JuliaLowering.MacroContext, ::JuliaLowering.SyntaxTree""")
 end
 
 end # module macros

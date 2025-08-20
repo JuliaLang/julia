@@ -48,8 +48,11 @@ function _register_kinds()
             # Internal initializer for struct types, for inner constructors/functions
             "new"
             "splatnew"
-            # For expr-macro compatibility; gone after expansion
+            # Used for converting `esc()`'d expressions arising from old macro
+            # invocations during macro expansion (gone after macro expansion)
             "escape"
+            # Used for converting the old-style macro hygienic-scope form (gone
+            # after macro expansion)
             "hygienic_scope"
             # An expression which will eventually be evaluated "statically" in
             # the context of a CodeInfo and thus allows access only to globals
