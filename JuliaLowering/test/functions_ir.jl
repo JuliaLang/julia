@@ -200,6 +200,34 @@ end
 19  (return %₁₈)
 
 ########################################
+# Static parameter with lower bound
+function f(::S{T}) where T >: X
+    T
+end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   TestMod.X
+4   (= slot₁/T (call core.TypeVar :T %₃ core.Any))
+5   TestMod.f
+6   (call core.Typeof %₅)
+7   TestMod.S
+8   slot₁/T
+9   (call core.apply_type %₇ %₈)
+10  (call core.svec %₆ %₉)
+11  slot₁/T
+12  (call core.svec %₁₁)
+13  SourceLocation::1:10
+14  (call core.svec %₁₀ %₁₂ %₁₃)
+15  --- method core.nothing %₁₄
+    slots: [slot₁/#self#(!read) slot₂/_(!read)]
+    1   static_parameter₁
+    2   (return %₁)
+16  latestworld
+17  TestMod.f
+18  (return %₁₇)
+
+########################################
 # Static parameter which is used only in the bounds of another static parameter
 # See https://github.com/JuliaLang/julia/issues/49275
 function f(x, y::S) where {T, S<:AbstractVector{T}}

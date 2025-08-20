@@ -3266,7 +3266,7 @@ function analyze_typevar(ctx, ex)
         (ex[1], nothing, ex[2])
     elseif k == K">:" && numchildren(ex) == 2
         kind(ex[2]) == K"Identifier" || throw(LoweringError(ex[2], "expected type name"))
-        (ex[2], ex[1], nothing)
+        (ex[1], ex[2], nothing)
     else
         throw(LoweringError(ex, "expected type name or type bounds"))
     end

@@ -25,10 +25,10 @@ A where X <: UB
 # where expression with lower bound
 A where X >: LB
 #---------------------
-1   TestMod.X
-2   (call core.TypeVar :LB %₁ core.Any)
-3   (= slot₁/LB %₂)
-4   slot₁/LB
+1   TestMod.LB
+2   (call core.TypeVar :X %₁ core.Any)
+3   (= slot₁/X %₂)
+4   slot₁/X
 5   TestMod.A
 6   (call core.UnionAll %₄ %₅)
 7   (return %₆)
