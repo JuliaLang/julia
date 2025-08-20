@@ -180,7 +180,7 @@ function lookup(ip::Base.InterpreterIP)
             return sf
         end
     end
-    return map(closure, scopes)::Vector{StackFrame}
+    return map(closure, scopes)
 end
 
 """
