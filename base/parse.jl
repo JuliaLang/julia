@@ -189,6 +189,10 @@ function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
         return nothing
     end
 
+    if !(typeof(sbuff) <: Union{String,SubString{String}})
+        sbuff = String(sbuff)
+    end
+
     if isnumeric(sbuff[1])
         intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
         (intres == 1) && return true
