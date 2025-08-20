@@ -662,8 +662,8 @@ function to_symbol(ctx, ex)
     @ast ctx ex ex=>K"Symbol"
 end
 
-function new_scope_layer(ctx, mod_ref::Module=ctx.mod; is_macro_expansion=true)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, is_macro_expansion)
+function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end

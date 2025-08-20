@@ -306,12 +306,11 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
                               )
 
     # Macro expansion
-    layers = ScopeLayer[ScopeLayer(1, mod, false)]
-    ctx1 = MacroExpansionContext(graph, Bindings(), layers, layers[1])
+    ctx1 = MacroExpansionContext(graph, mod)
 
     # Run code generator - this acts like a macro expander and like a macro
     # expander it gets a MacroContext.
-    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layers[1])
+    mctx = MacroContext(syntax_graph(ctx1), g.srcref, ctx1.scope_layers[end])
     ex0 = g.gen(mctx, args...)
     if ex0 isa SyntaxTree
         if !is_compatible_graph(ctx1, ex0)
@@ -326,11 +325,11 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Expand any macros emitted by the generator
     ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
     ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
-                                 ctx1.bindings, ctx1.scope_layers, ctx1.current_layer)
+                                 ctx1.bindings, ctx1.scope_layers, LayerId[])
     ex1 = reparent(ctx1, ex1)
 
     # Desugaring
-    ctx2, ex2 = expand_forms_2(  ctx1, ex1)
+    ctx2, ex2 = expand_forms_2(ctx1, ex1)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
     ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false)
@@ -342,12 +341,11 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
         ]
         ex2
     ]
-    ctx3, ex3 = resolve_scopes(  ctx2, ex2)
-
+    ctx3, ex3 = resolve_scopes(ctx2, ex2)
 
     # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
-    ctx5, ex5 = linearize_ir(    ctx4, ex4)
+    ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(mod, ex5)
     @assert ci isa Core.CodeInfo
     return ci
@@ -413,4 +411,9 @@ function lookup_method_instance(func, args, world::Integer)
     mi = @ccall jl_method_lookup(allargs::Ptr{Any}, length(allargs)::Csize_t,
                                  world::Csize_t)::Ptr{Cvoid}
     return mi == C_NULL ? nothing : unsafe_pointer_to_objref(mi)
+end
+
+# Like `Base.methods()` but with world age support
+function methods_in_world(func, arg_sig, world)
+    Base._methods(func, arg_sig, -1, world)
 end

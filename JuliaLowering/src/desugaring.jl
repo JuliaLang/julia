@@ -15,7 +15,7 @@ function DesugaringContext(ctx)
                               scope_type=Symbol, # :hard or :soft
                               var_id=IdTag,
                               is_toplevel_thunk=Bool)
-    DesugaringContext(graph, ctx.bindings, ctx.scope_layers, ctx.current_layer.mod)
+    DesugaringContext(graph, ctx.bindings, ctx.scope_layers, first(ctx.scope_layers).mod)
 end
 
 #-------------------------------------------------------------------------------
@@ -2555,7 +2555,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     end
     # TODO: Is the layer correct here? Which module should be the parent module
     # of this body function?
-    layer = new_scope_layer(ctx; is_macro_expansion=false)
+    layer = new_scope_layer(ctx)
     body_func_name = adopt_scope(@ast(ctx, callex_srcref, mangled_name::K"Identifier"), layer)
 
     kwcall_arg_names = SyntaxList(ctx)

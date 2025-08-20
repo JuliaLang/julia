@@ -429,7 +429,7 @@ attrsummary(name, value::Number) = "$name=$value"
 function _value_string(ex)
     k = kind(ex)
     str = k == K"Identifier" || k == K"MacroName" || is_operator(k) ? ex.name_val :
-          k == K"Placeholder" ? ex.name_val :
+          k == K"Placeholder" ? ex.name_val           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
           k == K"label"       ? "label"               :
@@ -546,9 +546,16 @@ JuliaSyntax.byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
 function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
     name = get(ex, :name_val, nothing)
-    !isnothing(name) && return Symbol(name)
-    name = get(ex, :value, nothing)
-    return name
+    if !isnothing(name)
+        n = Symbol(name)
+        if hasattr(ex, :scope_layer)
+            Expr(:scope_layer, n, ex.scope_layer)
+        else
+            n
+        end
+    else
+        get(ex, :value, nothing)
+    end
 end
 
 Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
@@ -586,6 +593,21 @@ function _find_SyntaxTree_macro(ex, line)
         end
     end
     return nothing # Will get here if multiple children are on the same line.
+end
+
+# Translate JuliaLowering hygiene to esc() for use in @SyntaxTree
+function _scope_layer_1_to_esc!(ex)
+    if ex isa Expr
+        if ex.head == :scope_layer
+            @assert ex.args[2] === 1
+            return esc(_scope_layer_1_to_esc!(ex.args[1]))
+        else
+            map!(_scope_layer_1_to_esc!, ex.args, ex.args)
+            return ex
+        end
+    else
+        return ex
+    end
 end
 
 """
@@ -630,10 +652,10 @@ macro SyntaxTree(ex_old)
     # discover the piece of AST which should be returned.
     ex = _find_SyntaxTree_macro(full_ex, __source__.line)
     # 4. Do the first step of JuliaLowering's syntax lowering to get
-    # synax interpolations to work
+    # syntax interpolations to work
     _, ex1 = expand_forms_1(__module__, ex)
     @assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast
-    esc(Expr(:call, interpolate_ast, ex1[2][1], map(Expr, ex1[3:end])...))
+    Expr(:call, :interpolate_ast, ex1[2][1], map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[3:end])...)
 end
 
 #-------------------------------------------------------------------------------

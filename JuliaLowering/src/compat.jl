@@ -24,7 +24,8 @@ function expr_to_syntaxtree(@nospecialize(e), lnn::Union{LineNumberNode, Nothing
         SyntaxGraph(),
         kind=Kind, syntax_flags=UInt16,
         source=SourceAttrType, var_id=Int, value=Any,
-        name_val=String, is_toplevel_thunk=Bool)
+        name_val=String, is_toplevel_thunk=Bool,
+        scope_layer=LayerId)
     expr_to_syntaxtree(graph, e, lnn)
 end
 
@@ -423,6 +424,13 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             @assert nargs === 1
             child_exprs[1] = Expr(:quoted_symbol, e.args[1])
         end
+    elseif e.head === :scope_layer 
+        @assert nargs === 2
+        @assert e.args[1] isa Symbol
+        @assert e.args[2] isa LayerId
+        st_id, src = _insert_convert_expr(e.args[1], graph, src)
+        setattr!(graph, st_id, scope_layer=e.args[2])
+        return st_id, src
     elseif e.head === :symbolicgoto || e.head === :symboliclabel
         @assert nargs === 1
         st_k = e.head === :symbolicgoto ? K"symbolic_label" : K"symbolic_goto"

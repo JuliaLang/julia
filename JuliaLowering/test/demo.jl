@@ -43,7 +43,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Module containing macros used in the demo.
-define_macros = false
+define_macros = true
 if !define_macros
     eval(:(module M end))
 else
@@ -92,6 +92,34 @@ eval(JuliaLowering.@SyntaxTree :(baremodule M
             x = "`x` from @foo"
             (x, someglobal, A.@bar $ex)
             #(x, someglobal, $ex, A.@bar($ex), A.@bar(x))
+        end
+    end
+
+    macro call_show(x)
+        quote
+            z = "z in @call_show"
+            @show z $x
+        end
+    end
+
+    macro call_info(x)
+        quote
+            z = "z in @call_info"
+            @info "hi" z $x
+        end
+    end
+
+    macro call_oldstyle_macro(y)
+        quote
+            x = "x in call_oldstyle_macro"
+            @oldstyle $y x
+        end
+    end
+
+    macro newstyle(x, y, z)
+        quote
+            x = "x in @newstyle"
+            ($x, $y, $z, x)
         end
     end
 
@@ -182,6 +210,16 @@ eval(JuliaLowering.@SyntaxTree :(baremodule M
 
 end))
 end
+
+Base.eval(M, :(
+macro oldstyle(a, b)
+    quote
+        x = "x in @oldstyle"
+        @newstyle $(esc(a)) $(esc(b)) x
+    end
+end
+))
+
 #
 #-------------------------------------------------------------------------------
 # Demos of the prototype
@@ -794,7 +832,24 @@ end
 """
 
 src = """
-cglobal(:jl_uv_stdin, Ptr{Cvoid})
+let
+    z = "z in outer ctx"
+    @call_show z
+end
+"""
+
+src = """
+let
+    x = "x in outer ctx"
+    @call_oldstyle_macro x
+end
+"""
+
+src = """
+let
+    z = "z in outer ctx"
+    @call_info z
+end
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
