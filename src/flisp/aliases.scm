@@ -35,6 +35,9 @@
 (define (read-char (s *input-stream*)) (io.getc s))
 (define (peek-char (s *input-stream*)) (io.peekc s))
 (define (write-char c (s *output-stream*)) (io.putc s c))
+(define (peek-number-of-where-tokens (s *input-stream*)) (io.peek-number-of-where-tokens s))
+(define (peek-char-after-where-tokens (s *input-stream*)) (io.peek-char-after-where-tokens s))
+(define (peek-space-after-where-tokens? (s *input-stream*)) (io.peek-space-after-where-tokens? s))
 
 (define (port-eof? p) (io.eof? p))
 (define (open-input-string str)
