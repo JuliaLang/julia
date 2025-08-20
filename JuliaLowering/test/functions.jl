@@ -204,6 +204,14 @@ end
 
     @test JuliaLowering.include_string(test_mod, """
     begin
+        f_def_typevar_with_lowerbound(x::T) where {T>:Int} =
+            (x, @isdefined(T))
+        (f_def_typevar_with_lowerbound(1), f_def_typevar_with_lowerbound(1.0))
+    end
+    """) == ((1, true), (1.0, false))
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
         function f_def_slurp(x=1, ys...)
             (x, ys)
         end
