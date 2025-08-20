@@ -421,6 +421,18 @@
             "summary": "A massively spiffy yet delicately unobtrusive compression library."
         },
         {
+            "name": "zstd",
+            "SPDXID": "SPDXRef-zstd",
+            "downloadLocation": "git+https://github.com/facebook/zstd.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.zstd.net",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/zstd.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "GPL-2.0+ OR BSD-3-Clause",
+            "copyrightText": "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.",
+            "summary": "Zstandard, or zstd as short version, is a fast lossless compression algorithm."
+        },
+        {
             "name": "patchelf",
             "SPDXID": "SPDXRef-patchelf",
             "downloadLocation": "git+https://github.com/NixOS/patchelf.git",
@@ -624,6 +636,11 @@
         },
         {
             "spdxElementId": "SPDXRef-zlib",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-zstd",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
