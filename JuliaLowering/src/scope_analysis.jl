@@ -194,7 +194,7 @@ function add_lambda_args(ctx, var_ids, args, args_kind)
                       "static parameter name not distinct from function argument"
                 throw(LoweringError(arg, msg))
             end
-            is_always_defined = args_kind == :argument || args_kind == :static_parameter
+            is_always_defined = args_kind == :argument
             id = init_binding(ctx, arg, varkey, args_kind;
                               is_nospecialize=getmeta(arg, :nospecialize, false),
                               is_always_defined=is_always_defined)

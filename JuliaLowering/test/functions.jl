@@ -194,6 +194,16 @@ end
 
     @test JuliaLowering.include_string(test_mod, """
     begin
+        function f_def_typevar_vararg_undef(x::T, y::Vararg{S}) where {T,S}
+            (x, y, @isdefined S)
+        end
+
+        (f_def_typevar_vararg_undef(1), f_def_typevar_vararg_undef(1,2), f_def_typevar_vararg_undef(1,2,3))
+    end
+    """) === ((1, (), false), (1, (2,), true), (1, (2, 3), true))
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
         function f_def_slurp(x=1, ys...)
             (x, ys)
         end
