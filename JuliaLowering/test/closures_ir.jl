@@ -206,7 +206,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   (call core.svec :T)
-4   (call core.svec false)
+4   (call core.svec true)
 5   (call JuliaLowering.eval_closure_type TestMod :#f#g##2 %₃ %₄)
 6   latestworld
 7   TestMod.#f#g##2
@@ -215,11 +215,17 @@ end
 10  SourceLocation::2:14
 11  (call core.svec %₈ %₉ %₁₀)
 12  --- method core.nothing %₁₁
-    slots: [slot₁/#self#(!read)]
+    slots: [slot₁/#self#(!read) slot₂/T(!read)]
     1   TestMod.use
     2   (call core.getfield slot₁/#self# :T)
-    3   (call %₁ %₂)
-    4   (return %₃)
+    3   (call core.isdefined %₂ :contents)
+    4   (gotoifnot %₃ label₆)
+    5   (goto label₈)
+    6   (newvar slot₂/T)
+    7   slot₂/T
+    8   (call core.getfield %₂ :contents)
+    9   (call %₁ %₈)
+    10  (return %₉)
 13  latestworld
 14  (= slot₁/T (call core.TypeVar :T))
 15  TestMod.f
@@ -234,13 +240,10 @@ end
     slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/g]
     1   TestMod.#f#g##2
     2   static_parameter₁
-    3   (call core.typeof %₂)
-    4   (call core.apply_type %₁ %₃)
-    5   static_parameter₁
-    6   (new %₄ %₅)
-    7   (= slot₃/g %₆)
-    8   slot₃/g
-    9   (return %₈)
+    3   (new %₁ %₂)
+    4   (= slot₃/g %₃)
+    5   slot₃/g
+    6   (return %₅)
 24  latestworld
 25  TestMod.f
 26  (return %₂₅)
