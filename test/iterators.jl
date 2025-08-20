@@ -5,6 +5,9 @@ using Random
 using Base: IdentityUnitRange
 using Dates: Date, Day
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @test (@inferred Base.IteratorSize(Any)) isa Base.SizeUnknown
 
 # zip and filter iterators
@@ -1141,7 +1144,6 @@ end
 end
 
 @testset "nth" begin
-
     Z = Array{Int,0}(undef)
     Z[] = 17
     it_result_pairs = Dict(
@@ -1170,7 +1172,6 @@ end
         (Iterators.cycle("String", 10), 16) => 'i',
         (Iterators.cycle(((),)), 1000) => ()
     )
-
 
     @testset "iter: $IT" for (IT, n) in keys(it_result_pairs)
         @test it_result_pairs[(IT, n)] == nth(IT, n)
@@ -1207,3 +1208,26 @@ end
 @test Base.infer_return_type((Vector{Any},)) do xs
     [x for x in xs if x isa Int]
 end == Vector{Int}
+
+@testset "issue #58922" begin
+    # `last` short circuits correctly
+    @test last(zip(1:10, 2:11)) == (10, 11)  # same length
+    @test last(zip(1:3, 2:11)) == (3, 4)     # different length
+
+    # Finite-guarded zip iterator: one iterator bounded and the other is not
+    @test last(zip(1:3, Iterators.countfrom(2))) == (3, 4)
+    @test last(zip(1:3, Iterators.cycle(('x', 'y')))) == (3, 'x')
+    @test last(zip(1:3, Iterators.repeated('x'))) == (3, 'x')
+    @test last(zip(OffsetArray(1:10, 2), OffsetArray(1:10, 3))) == (10, 10)
+
+    # Cannot statically know length of zipped iterator if any of its components are of
+    # unknown length
+    @test_throws MethodError last(zip(1:3, Iterators.filter(x -> x > 0, -5:5))) # (3, 3)
+    @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), 1:3)) # (3, 3)
+    @test_throws MethodError last(zip(1:10, Iterators.filter(x -> x > 0, -5:5))) # (5, 5)
+
+    # We also can't know the length of zipped iterators when all constituents are of an
+    # unknown length.  In this test, the answer is (5, 4), but we can't know that without
+    # a greedy algorithm
+    @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), Iterators.filter(x -> x % 2 == 0, -5:5)))  # (5, 4)
+end

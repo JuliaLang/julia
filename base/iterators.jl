@@ -473,7 +473,8 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+last(z::Zip) = nth(z, length(z))
+
 function reverse(z::Zip)
     if !first(_zip_lengths_finite_equal(z.is))
         throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
@@ -1700,6 +1701,9 @@ function _nth(::IteratorSize, itr, n::Integer)
     y === nothing && throw(BoundsError(itr, n))
     y[1]
 end
+
+_nth(::IteratorSize, z::Zip, n::Integer) = Base.map(nth(n), z.is)
+
 """
     nth(n::Integer)
 

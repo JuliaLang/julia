@@ -1920,7 +1920,8 @@ function testset_beginend_call(args, tests, source)
         # by wrapping the body in a function
         local default_rng_orig = copy(default_rng())
         local tls_seed_orig = copy(Random.get_tls_seed())
-        local tls_seed = isnothing(get_rng(ts)) ? set_rng!(ts, tls_seed_orig) : get_rng(ts)
+        local ts_rng = get_rng(ts)
+        local tls_seed = isnothing(ts_rng) ? set_rng!(ts, tls_seed_orig) : ts_rng
         try
             # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
             copy!(Random.default_rng(), tls_seed)
@@ -2229,11 +2230,12 @@ function _inferred(ex, mod, allow = :(Union{}))
                 allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
                 $(if any(@nospecialize(a)->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                     # Has keywords
-                    args = gensym()
-                    kwargs = gensym()
+                    # Create the call expression with escaped user expressions
+                    call_expr = :($(esc(ex.args[1]))(args...; kwargs...))
                     quote
-                        $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...)); is_source_reflection = false))
+                        args, kwargs, result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                        # wrap in dummy hygienic-scope to work around scoping issues with `call_expr` already having `esc` on the necessary parts
+                        inftype = $(Expr(:var"hygienic-scope", gen_call_with_extracted_types(mod, Base.infer_return_type, call_expr; is_source_reflection = false), Test))
                     end
                 else
                     # No keywords

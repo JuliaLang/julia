@@ -2720,6 +2720,7 @@ function f15894(d)
     s
 end
 @test f15894(fill(1, 100)) == 100
+@test (@nexprs 2 i -> "_i_: $i") == "_i_: 2"
 end
 
 @testset "sign, conj[!], ~" begin
