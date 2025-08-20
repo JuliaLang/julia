@@ -6,6 +6,29 @@
 2   (return %₁)
 
 ########################################
+# vect with splat
+[x, xs...]
+#---------------------
+1   TestMod.x
+2   (call core.tuple %₁)
+3   TestMod.xs
+4   (call core._apply_iterate top.iterate top.vect %₂ %₃)
+5   (return %₄)
+
+########################################
+# vect with splats
+[x, xs..., y, ys...]
+#---------------------
+1   TestMod.x
+2   (call core.tuple %₁)
+3   TestMod.xs
+4   TestMod.y
+5   (call core.tuple %₄)
+6   TestMod.ys
+7   (call core._apply_iterate top.iterate top.vect %₂ %₃ %₅ %₆)
+8   (return %₇)
+
+########################################
 # Error: vect syntax with parameters
 [10, 20; 30]
 #---------------------
@@ -29,12 +52,33 @@ LoweringError:
 2   (return %₁)
 
 ########################################
+# hcat with splat
+[x xs...]
+#---------------------
+1   TestMod.x
+2   (call core.tuple %₁)
+3   TestMod.xs
+4   (call core._apply_iterate top.iterate top.hcat %₂ %₃)
+5   (return %₄)
+
+########################################
 # typed hcat syntax
 T[10 20 30]
 #---------------------
 1   TestMod.T
 2   (call top.typed_hcat %₁ 10 20 30)
 3   (return %₂)
+
+########################################
+# typed hcat syntax with splat
+T[x xs...]
+#---------------------
+1   TestMod.T
+2   TestMod.x
+3   (call core.tuple %₁ %₂)
+4   TestMod.xs
+5   (call core._apply_iterate top.iterate top.typed_hcat %₃ %₄)
+6   (return %₅)
 
 ########################################
 # Error: hcat syntax with embedded assignments
@@ -452,4 +496,3 @@ a[] = rhs
 2   TestMod.a
 3   (call top.setindex! %₂ %₁)
 4   (return %₁)
-
