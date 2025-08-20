@@ -1410,15 +1410,118 @@ struct ShardTimers {
     }
 };
 
+class AOTOutput {
+public:
+    AOTOutput(const Twine &prefix, const char *suffix)
+      : name((prefix + "." + suffix).str()), state(OPEN)
+    {
+        std::error_code err = sys::fs::createTemporaryFile(prefix, suffix, fd, path);
+        if (err)
+            jl_errorf("failed to create temporary file: %s", err.message().c_str());
+    }
+    ~AOTOutput() { remove(); }
+    AOTOutput(const AOTOutput &) = delete;
+    AOTOutput &operator=(const AOTOutput &) = delete;
+    AOTOutput(AOTOutput &&other) noexcept
+      : name(std::move(other.name)),
+        state(other.state),
+        fd(other.fd),
+        path(std::move(other.path))
+    {
+        other.state = EMPTY;
+    }
+    AOTOutput &operator=(AOTOutput &&other) noexcept
+    {
+        remove();
+        name = std::move(other.name);
+        std::swap(state, other.state);
+        fd = other.fd;
+        path = std::move(other.path);
+        return *this;
+    }
+
+    std::unique_ptr<raw_pwrite_stream> ostream()
+    {
+        open();
+        return std::make_unique<raw_fd_stream>(fd, false);
+    }
+
+    ErrorOr<std::unique_ptr<MemoryBuffer>> memorybuf()
+    {
+        open();
+        auto f = sys::fs::convertFDToNativeFile(fd);
+        sys::fs::file_status status;
+        if (auto err = sys::fs::status(fd, status))
+            return err;
+        return MemoryBuffer::getOpenFile(f, name, status.getSize(), false);
+    }
+
+    StringRef get_name() { return name; }
+
+    void open()
+    {
+        using namespace sys::fs;
+        assert(state == EXISTS || state == OPEN);
+        if (state == OPEN)
+            return;
+        auto err = openFileForReadWrite(path, fd, CD_OpenExisting, OF_None);
+        if (err)
+            jl_errorf("failed to open temporary file %s\n", path.c_str());
+        state = OPEN;
+    }
+
+    void close()
+    {
+        if (state == OPEN) {
+            auto f = sys::fs::convertFDToNativeFile(fd);
+            (void)sys::fs::closeFile(f);
+            state = EXISTS;
+        }
+    }
+
+    void remove()
+    {
+        close();
+        if (state == EXISTS) {
+            assert(!path.empty());
+            (void)sys::fs::remove(path);
+            state = EMPTY;
+        }
+    }
+
+private:
+    std::string name;
+    enum { EMPTY, EXISTS, OPEN } state;
+    int fd;
+    SmallString<128> path;
+};
+
 struct AOTOutputs {
-    SmallVector<char, 0> unopt, opt, obj, asm_;
+    AOTOutputs(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
+               const char *asm_fname)
+      : bc_fname(bc_fname),
+        unopt_bc_fname(unopt_bc_fname),
+        obj_fname(obj_fname),
+        asm_fname(asm_fname)
+    {
+        if (bc_fname)
+            opt.emplace();
+        if (unopt_bc_fname)
+            unopt.emplace();
+        if (obj_fname)
+            obj.emplace();
+        if (asm_fname)
+            asm_.emplace();
+    }
+
+    std::mutex lock;
+    const char *bc_fname, *unopt_bc_fname, *obj_fname, *asm_fname;
+    // If one of the vectors is present, this output is being requested.
+    std::optional<SmallVector<AOTOutput, 0>> unopt, opt, obj, asm_;
 };
 
 // Perform the actual optimization and emission of the output files
-static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
-        bool unopt, bool opt, bool obj, bool asm_) {
-    assert((unopt || opt || obj || asm_) && "no output requested");
-    AOTOutputs out;
+static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &SourceTM, ShardTimers *timer = nullptr) {
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple().str(),
@@ -1429,23 +1532,35 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             SourceTM.getCodeModel(),
             SourceTM.getOptLevel()));
     fixupTM(*TM);
-    if (unopt) {
-        timers.unopt.startTimer();
-        raw_svector_ostream OS(out.unopt);
-        PassBuilder PB;
-        AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
-        ModulePassManager MPM;
-        MPM.addPass(BitcodeWriterPass(OS));
-        MPM.run(M, AM.MAM);
-        timers.unopt.stopTimer();
+    if (outputs.unopt) {
+        if (timer)
+            timer->unopt.startTimer();
+        AOTOutput out{M.getModuleIdentifier(), "unopt.bc"};
+        auto OS = out.ostream();
+        {
+            PassBuilder PB;
+            AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
+            ModulePassManager MPM;
+            MPM.addPass(BitcodeWriterPass(*OS));
+            MPM.run(M, AM.MAM);
+        }
+        if (timer)
+            timer->unopt.stopTimer();
+        OS->flush();
+        out.close();
+        {
+            std::lock_guard guard{outputs.lock};
+            outputs.unopt->push_back(std::move(out));
+        }
     }
-    if (!opt && !obj && !asm_) {
-        return out;
+    if (!outputs.opt && !outputs.obj && !outputs.asm_) {
+        return;
     }
     assert(!verifyLLVMIR(M));
 
     {
-        timers.optimize.startTimer();
+        if (timer)
+            timer->optimize.startTimer();
 
         auto PMTM = std::unique_ptr<TargetMachine>(
             SourceTM.getTarget().createTargetMachine(
@@ -1507,51 +1622,85 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             injectCRTAlias(M, "__truncsdbf2", "julia__truncdfbf2",
                     FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
         }
-        timers.optimize.stopTimer();
+        if (timer)
+            timer->optimize.stopTimer();
     }
 
-    if (opt) {
-        timers.opt.startTimer();
-        raw_svector_ostream OS(out.opt);
-        PassBuilder PB;
-        AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
-        ModulePassManager MPM;
-        MPM.addPass(BitcodeWriterPass(OS));
-        MPM.run(M, AM.MAM);
-        timers.opt.stopTimer();
+    if (outputs.opt) {
+        if (timer)
+            timer->opt.startTimer();
+        AOTOutput out{M.getModuleIdentifier(), "bc"};
+        auto OS = out.ostream();
+        {
+            PassBuilder PB;
+            AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
+            ModulePassManager MPM;
+            MPM.addPass(BitcodeWriterPass(*OS));
+            MPM.run(M, AM.MAM);
+        }
+        OS->flush();
+        out.close();
+        if (timer)
+            timer->opt.stopTimer();
+        {
+            std::lock_guard guard{outputs.lock};
+            outputs.opt->push_back(std::move(out));
+        }
     }
 
-    if (obj) {
-        timers.obj.startTimer();
-        raw_svector_ostream OS(out.obj);
-        legacy::PassManager emitter;
-        addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+    if (outputs.obj) {
+        if (timer)
+            timer->obj.startTimer();
+        AOTOutput out{M.getModuleIdentifier(), "o"};
+        auto OS = out.ostream();
+        {
+            legacy::PassManager emitter;
+            addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
 #if JL_LLVM_VERSION >= 180000
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CodeGenFileType::ObjectFile, false))
+            if (TM->addPassesToEmitFile(emitter, *OS, nullptr, CodeGenFileType::ObjectFile, false))
 #else
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_ObjectFile, false))
+            if (TM->addPassesToEmitFile(emitter, *OS, nullptr, CGFT_ObjectFile, false))
 #endif
-            jl_safe_printf("ERROR: target does not support generation of object files\n");
-        emitter.run(M);
-        timers.obj.stopTimer();
+                jl_safe_printf("ERROR: target does not support generation of object files\n");
+            emitter.run(M);
+        }
+        OS->flush();
+        out.close();
+        if (timer)
+            timer->obj.stopTimer();
+        {
+            std::lock_guard guard{outputs.lock};
+            outputs.obj->push_back(std::move(out));
+        }
     }
 
-    if (asm_) {
-        timers.asm_.startTimer();
-        raw_svector_ostream OS(out.asm_);
-        legacy::PassManager emitter;
-        addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+    if (outputs.asm_) {
+        if (timer)
+            timer->asm_.startTimer();
+        AOTOutput out{M.getModuleIdentifier(), "s"};
+        auto OS = out.ostream();
+        {
+            legacy::PassManager emitter;
+            addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
 #if JL_LLVM_VERSION >= 180000
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CodeGenFileType::AssemblyFile, false))
+            if (TM->addPassesToEmitFile(emitter, *OS, nullptr,
+                                        CodeGenFileType::AssemblyFile, false))
 #else
-        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
+            if (TM->addPassesToEmitFile(emitter, *OS, nullptr, CGFT_AssemblyFile, false))
 #endif
-            jl_safe_printf("ERROR: target does not support generation of assembly files\n");
-        emitter.run(M);
-        timers.asm_.stopTimer();
+                jl_safe_printf(
+                    "ERROR: target does not support generation of assembly files\n");
+            emitter.run(M);
+        }
+        OS->flush();
+        out.close();
+        if (timer)
+            timer->asm_.stopTimer();
+        {
+            std::lock_guard guard{outputs.lock};
+            outputs.asm_->push_back(std::move(out));
+        }
     }
-
-    return out;
 }
 
 // serialize module to bitcode
@@ -1724,14 +1873,53 @@ extern "C" void lambda_trampoline(void* arg) {
     delete func;
 }
 
+template<typename ModuleReleasedFunc>
+static void
+add_output_no_partition(AOTOutputs &outputs, Module &M, TargetMachine &TM, StringRef name, ModuleReleasedFunc module_released)
+{
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_Opt);
+        // convert gvars to the expected offset table format for shard 0
+        if (M.getGlobalVariable("jl_gvars")) {
+            auto gvars = consume_gv<Constant>(M, "jl_gvars", false);
+            Type *T_size = M.getDataLayout().getIntPtrType(M.getContext());
+            emit_offset_table(M, T_size, gvars, "jl_gvar",
+                              "_0"); // module flag "julia.mv.suffix"
+            M.getGlobalVariable("jl_gvar_idxs")->setName("jl_gvar_idxs_0");
+        }
+        add_output_impl(outputs, M, TM);
+    }
+    // Don't need M anymore
+    module_released(M);
+}
+
+static bool should_report_image_timings()
+{
+    bool report_timings = false;
+    if (auto env = getenv("JULIA_IMAGE_TIMINGS")) {
+        char *endptr;
+        unsigned long val = strtoul(env, &endptr, 10);
+        if (endptr != env && !*endptr && val <= 1) {
+            report_timings = val;
+        } else {
+            if (StringRef("true").compare_insensitive(env) == 0)
+                report_timings = true;
+            else if (StringRef("false").compare_insensitive(env) == 0)
+                report_timings = false;
+            else
+                errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
+        }
+    }
+    return report_timings;
+}
+
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
 template<typename ModuleReleasedFunc>
-static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads,
-                bool unopt_out, bool opt_out, bool obj_out, bool asm_out, ModuleReleasedFunc module_released) {
-    SmallVector<AOTOutputs, 16> outputs(threads);
+static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, StringRef name,
+                       unsigned threads, ModuleReleasedFunc module_released)
+{
     assert(threads);
-    assert(unopt_out || opt_out || obj_out || asm_out);
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     SmallVector<ShardTimers, 1> timers(threads);
@@ -1751,49 +1939,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     Timer partition_timer("partition", "Partition module", timer_group);
     Timer serialize_timer("serialize", "Serialize module", timer_group);
     Timer output_timer("output", "Add outputs", timer_group);
-    bool report_timings = false;
-    if (auto env = getenv("JULIA_IMAGE_TIMINGS")) {
-        char *endptr;
-        unsigned long val = strtoul(env, &endptr, 10);
-        if (endptr != env && !*endptr && val <= 1) {
-            report_timings = val;
-        } else {
-            if (StringRef("true").compare_insensitive(env) == 0)
-                report_timings = true;
-            else if (StringRef("false").compare_insensitive(env) == 0)
-                report_timings = false;
-            else
-                errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
-        }
-    }
-    // Single-threaded case
-    if (threads == 1) {
-        output_timer.startTimer();
-        {
-            JL_TIMING(NATIVE_AOT, NATIVE_Opt);
-            // convert gvars to the expected offset table format for shard 0
-            if (M.getGlobalVariable("jl_gvars")) {
-                auto gvars = consume_gv<Constant>(M, "jl_gvars", false);
-                Type *T_size = M.getDataLayout().getIntPtrType(M.getContext());
-                emit_offset_table(M, T_size, gvars, "jl_gvar", "_0"); // module flag "julia.mv.suffix"
-                M.getGlobalVariable("jl_gvar_idxs")->setName("jl_gvar_idxs_0");
-            }
-            outputs[0] = add_output_impl(M, TM, timers[0], unopt_out, opt_out, obj_out, asm_out);
-        }
-        output_timer.stopTimer();
-        // Don't need M anymore
-        module_released(M);
-
-        if (!report_timings) {
-            timer_group.clear();
-        } else {
-            timer_group.print(dbgs(), true);
-            for (auto &t : timers) {
-                t.print(dbgs(), true);
-            }
-        }
-        return outputs;
-    }
+    bool report_timings = should_report_image_timings();
 
     partition_timer.startTimer();
     uint64_t counter = 0;
@@ -1804,6 +1950,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
             G.setName("jl_ext_" + Twine(counter++));
         }
     }
+
     auto partitions = partitionModule(M, threads);
     partition_timer.stopTimer();
 
@@ -1826,7 +1973,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module
                 timers[i].deserialize.startTimer();
-                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
+                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), name), ctx);
                 // Make sure this also fails with only julia, but not LLVM assertions enabled,
                 // otherwise, the first error we hit is the LLVM module verification failure,
                 // which will look very confusing, because the module was partially deserialized.
@@ -1842,6 +1989,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 timers[i].construct.startTimer();
                 std::string suffix = "_" + std::to_string(i);
                 construct_vars(*M, partitions[i], suffix);
+                M->setModuleIdentifier((Twine(M->getModuleIdentifier()) + "#" + Twine(i)).str());
                 M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), suffix));
                 // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
                 // or it may skip emitting debug info for that file. Here set it to ./julia#N
@@ -1850,7 +1998,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                     CU->replaceOperandWith(0, topfile);
                 timers[i].construct.stopTimer();
 
-                outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
+                add_output_impl(outputs, *M, TM, &timers[i]);
             };
             auto arg = new std::function<void()>(func);
             uv_thread_create(&workers[i], lambda_trampoline, arg); // Use libuv thread to avoid issues with stack sizes
@@ -1881,7 +2029,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         }
         dbgs() << "]\n";
     }
-    return outputs;
 }
 
 extern int jl_is_timing_passes;
@@ -2016,13 +2163,8 @@ void jl_dump_native_impl(void *native_code,
         OverrideStackAlignment = M.getOverrideStackAlignment();
     });
 
-    auto compile = [&](Module &M, StringRef name, unsigned threads, auto module_released) {
-        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, module_released);
-    };
+    AOTOutputs outputs{bc_fname, unopt_bc_fname, obj_fname, asm_fname};
 
-    SmallVector<AOTOutputs, 16> sysimg_outputs;
-    SmallVector<AOTOutputs, 16> data_outputs;
-    SmallVector<AOTOutputs, 16> metadata_outputs;
     if (z) {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
@@ -2053,10 +2195,10 @@ void jl_dump_native_impl(void *native_code,
         // Results in serious memory savings
         ios_close(z);
         free(z);
-        // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
+        // Note that we don't set z to null, this allows the check in write_archive
         // to function as expected
         // no need to free the module/context, destructor handles that
-        sysimg_outputs = compile(sysimgM, "sysimg", 1, [](Module &) {});
+        add_output_no_partition(outputs, sysimgM, *SourceTM, "sysimg", [](Module &){});
     }
 
     const bool imaging_mode = true;
@@ -2161,14 +2303,15 @@ void jl_dump_native_impl(void *native_code,
         auto lock = TSCtx.getLock();
         auto dataM = data->M.getModuleUnlocked();
 
-        data_outputs = compile(*dataM, "text", threads, [data, &lock, &TSCtx](Module &) {
-            // Delete data when add_output thinks it's done with it
-            // Saves memory for use when multithreading
-            auto lock2 = std::move(lock);
-            delete data;
-            // Drop last reference to shared LLVM::Context
-            auto TSCtx2 = std::move(TSCtx);
-        });
+        add_output(outputs, *dataM, *SourceTM, "text", threads,
+                   [data, &lock, &TSCtx](Module &) {
+                       // Delete data when add_output thinks it's done with it
+                       // Saves memory for use when multithreading
+                       auto lock2 = std::move(lock);
+                       delete data;
+                       // Drop last reference to shared LLVM::Context
+                       auto TSCtx2 = std::move(TSCtx);
+                   });
     }
 
     if (params->emit_metadata) {
@@ -2258,7 +2401,7 @@ void jl_dump_native_impl(void *native_code,
         }
 
         // no need to free module/context, destructor handles that
-        metadata_outputs = compile(metadataM, "data", 1, [](Module &) {});
+        add_output_no_partition(outputs, metadataM, *SourceTM, "data", [](Module &) {});
     }
 
     {
@@ -2270,32 +2413,32 @@ void jl_dump_native_impl(void *native_code,
 #else
 #define WritingMode true
 #endif
-#define WRITE_ARCHIVE(fname, field, prefix, suffix) \
-    if (fname) {\
-        SmallVector<NewArchiveMember, 0> archive; \
-        SmallVector<std::string, 16> filenames; \
-        SmallVector<StringRef, 16> buffers; \
-        for (size_t i = 0; i < threads; i++) { \
-            filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
-            buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
-        } \
-        filenames.push_back("metadata" prefix suffix); \
-        buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
-        if (z) { \
-            filenames.push_back("sysimg" prefix suffix); \
-            buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
-        } \
-        for (size_t i = 0; i < filenames.size(); i++) { \
-            archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
-        } \
-        handleAllErrors(writeArchive(fname, archive, WritingMode, Kind, true, false), reportWriterError); \
-    }
+        auto write_archive = [&](const char *fname, SmallVector<AOTOutput, 0> &outputs) {
+            if (!fname)
+                return;
+            SmallVector<NewArchiveMember, 0> archive;
+            // Must be SmallString<0> so StringRefs in NewArchiveMembers aren't invalidated
+            SmallVector<std::unique_ptr<MemoryBuffer>, 0> buffers;
+            for (auto &out : outputs) {
+                auto buf = out.memorybuf();
+                if (buf.getError())
+                    jl_errorf("failed to read temporary object file: %s",
+                              buf.getError().message().c_str());
+                buffers.push_back(std::move(*buf));
+                archive.push_back(NewArchiveMember{*buffers.back()});
+            }
+            handleAllErrors(writeArchive(fname, archive, WritingMode, Kind, true, false),
+                            reportWriterError);
+        };
 
-        WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
-        WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
-        WRITE_ARCHIVE(obj_fname, obj, "", ".o");
-        WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
-#undef WRITE_ARCHIVE
+        if (outputs.unopt)
+            write_archive(unopt_bc_fname, *outputs.unopt);
+        if (outputs.opt)
+            write_archive(bc_fname, *outputs.opt);
+        if (outputs.obj)
+            write_archive(obj_fname, *outputs.obj);
+        if (outputs.asm_)
+            write_archive(asm_fname, *outputs.asm_);
     }
 }
 
