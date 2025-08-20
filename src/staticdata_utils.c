@@ -142,21 +142,24 @@ JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t* _inference_en
     assert(_inference_entrance_backtraces == NULL || _inference_entrance_backtraces == jl_nothing || jl_is_array(_inference_entrance_backtraces));
     if (_inference_entrance_backtraces == jl_nothing)
         _inference_entrance_backtraces = NULL;
-    inference_entrance_backtraces = (jl_array_t*) _inference_entrance_backtraces;
-}
-
-JL_DLLEXPORT int jl_recording_inference_entrance_backtraces(void)
-{
-    return inference_entrance_backtraces != NULL;
-}
-
-JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t* ci_bt_pair)
-{
-    assert(inference_entrance_backtraces);
     JL_LOCK(&inference_entrance_backtraces_mutex);
+    inference_entrance_backtraces = (jl_array_t*) _inference_entrance_backtraces;
+    JL_UNLOCK(&inference_entrance_backtraces_mutex);
+}
+
+
+JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t* ci)
+{
+    JL_LOCK(&inference_entrance_backtraces_mutex);
+    if (inference_entrance_backtraces == NULL) {
+        JL_UNLOCK(&inference_entrance_backtraces_mutex);
+        return;
+    }
+    jl_value_t* backtrace = jl_backtrace_from_here(0, 1);
     size_t end = jl_array_nrows(inference_entrance_backtraces);
-    jl_array_grow_end(inference_entrance_backtraces, 1);
-    jl_array_ptr_set(inference_entrance_backtraces, end, ci_bt_pair);
+    jl_array_grow_end(inference_entrance_backtraces, 2);
+    jl_array_ptr_set(inference_entrance_backtraces, end, ci);
+    jl_array_ptr_set(inference_entrance_backtraces, end + 1, backtrace);
     JL_UNLOCK(&inference_entrance_backtraces_mutex);
 }
 

@@ -25,3 +25,13 @@ different purposes:
   `ccall`s records a backtrace on every entrance to type-inference, so that
   SnoopCompile can determine the caller of a dynamically-dispatched call. This
   is needed to attribute "cause" for new type inference.
+
+  The `jl_set_inference_entrance_backtraces` function accepts an array where
+  inference entrance events will be recorded. Each inference event stores two
+  consecutive array elements: first the `CodeInstance` object, then the
+  backtrace representation. So for N inference events, the array will contain 2N
+  elements arranged as: `[ci₁, bt₁, ci₂, bt₂, ..., ciₙ, btₙ]`.
+
+  Note that the backtrace elements `btᵢ` contain raw backtrace data that
+  typically needs to be processed using `stacktrace(Base._reformat_bt(btᵢ...))`.
+  to convert them into a usable stack trace format for analysis.

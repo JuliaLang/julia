@@ -279,15 +279,21 @@ end
     ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), nothing)
     ln = @__LINE__() - 2
     fl = Symbol(@__FILE__())
-    @test length(dispatch_backtraces) == 2
+    @test length(dispatch_backtraces) == 4  # 2 ci-backtrace pairs, stored as 4 separate elements
     mcallee, mcaller = only(methods(callee)), only(methods(caller))
-    @test any(dispatch_backtraces) do (ci, trace)
-        ci.def.def === mcallee && any(stacktrace(trace)) do sf
+    # Extract pairs from the flattened array format: ci at odd indices, backtrace at even indices
+    pairs = [(dispatch_backtraces[i], dispatch_backtraces[i+1]) for i in 1:2:length(dispatch_backtraces)]
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcallee && any(stacktrace(bt)) do sf
             sf.file == fl && sf.line == ln
         end
     end
-    @test any(dispatch_backtraces) do (ci, trace)
-        ci.def.def === mcaller && any(stacktrace(trace)) do sf
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcaller && any(stacktrace(bt)) do sf
             sf.file == fl && sf.line == ln
         end
     end
