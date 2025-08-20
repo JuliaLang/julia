@@ -47,8 +47,13 @@ for signum in 1:31
 end
 
 # https://docs.libuv.org/en/latest/guide/processes.html#sending-signals-to-processes
-Base.kill(pid::Integer, signum::Integer) = ccall(:uv_kill, Cvoid, (Cint, Cint), pid, signum)
-Base.kill(signum::Integer) = kill(getpid(), signum)
+Base.kill(pid::Integer, signum::Integer) = ccall(:kill, Cvoid, (Cint, Cint), pid, signum)
+# Base.kill(signum::Integer) = kill(getpid(), signum)
+
+function Base.kill(signum::Integer)
+    ccall(:raise, Cint, (Cint,), signum)
+    return nothing
+end
 
 const _SIGNAL_HANDLER_LOCK = Base.ReentrantLock()
 const _SIGNAL_HANDLER = Dict{Cint,Base.Callable}()
