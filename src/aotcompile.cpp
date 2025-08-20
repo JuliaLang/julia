@@ -1000,11 +1000,11 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_ptr) {
 }
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_header_t.
-static GlobalVariable *emit_image_header(Module &M, unsigned threads, unsigned nfvars, unsigned ngvars) {
+static GlobalVariable *emit_image_header(Module &M, unsigned shards, unsigned nfvars, unsigned ngvars) {
     constexpr uint32_t version = 1;
     std::array<uint32_t, 4> header{
         version,
-        threads,
+        shards,
         nfvars,
         ngvars,
     };
@@ -1913,17 +1913,9 @@ static bool should_report_image_timings()
     return report_timings;
 }
 
-// Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
-// as well as partitioning, serialization, and deserialization.
-template<typename ModuleReleasedFunc>
-static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, StringRef name,
-                       unsigned threads, ModuleReleasedFunc module_released)
+static void initialize_shard_timers(StringRef name, SmallVector<ShardTimers, 1> &timers)
 {
-    assert(threads);
-    // Timers for timing purposes
-    TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
-    SmallVector<ShardTimers, 1> timers(threads);
-    for (unsigned i = 0; i < threads; ++i) {
+    for (unsigned i = 0; i < timers.size(); ++i) {
         auto idx = std::to_string(i);
         timers[i].name = "shard_" + idx;
         timers[i].desc = ("Timings for " + name + " module shard " + idx).str();
@@ -1936,6 +1928,18 @@ static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, String
         timers[i].obj.init("obj_" + idx, "Emit object file");
         timers[i].asm_.init("asm_" + idx, "Emit assembly file");
     }
+}
+
+// Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
+// as well as partitioning, serialization, and deserialization.
+template<typename ModuleReleasedFunc>
+static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, StringRef name,
+                       unsigned threads, unsigned shards,
+                       ModuleReleasedFunc module_released)
+{
+    assert(threads);
+    // Timers for timing purposes
+    TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     Timer partition_timer("partition", "Partition module", timer_group);
     Timer serialize_timer("serialize", "Serialize module", timer_group);
     Timer output_timer("output", "Add outputs", timer_group);
@@ -1951,7 +1955,7 @@ static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, String
         }
     }
 
-    auto partitions = partitionModule(M, threads);
+    auto partitions = partitionModule(M, shards);
     partition_timer.stopTimer();
 
     serialize_timer.startTimer();
@@ -1961,47 +1965,59 @@ static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, String
     // Don't need M anymore, since we'll only read from serialized from now on
     module_released(M);
 
+    SmallVector<ShardTimers, 1> timers(shards);
+    initialize_shard_timers(name, timers);
+
+    std::atomic<unsigned> next_part = 0;
+
     output_timer.startTimer();
 
     // Start all of the worker threads
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Opt);
         std::vector<uv_thread_t> workers(threads);
-        for (unsigned i = 0; i < threads; i++) {
-            std::function<void()> func = [&, i]() {
-                LLVMContext ctx;
-                ctx.setDiscardValueNames(true);
-                // Lazily deserialize the entire module
-                timers[i].deserialize.startTimer();
-                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), name), ctx);
-                // Make sure this also fails with only julia, but not LLVM assertions enabled,
-                // otherwise, the first error we hit is the LLVM module verification failure,
-                // which will look very confusing, because the module was partially deserialized.
-                bool deser_succeeded = (bool)EM;
-                auto M = cantFail(std::move(EM), "Error loading module");
-                assert(deser_succeeded); (void)deser_succeeded;
-                timers[i].deserialize.stopTimer();
+        for (unsigned tid = 0; tid < threads; tid++) {
+            std::function<void()> func = [&]() {
+                while (1) {
+                    unsigned i = std::atomic_fetch_add(&next_part, 1);
+                    if (i >= shards)
+                        return;
 
-                timers[i].materialize.startTimer();
-                materializePreserved(*M, partitions[i]);
-                timers[i].materialize.stopTimer();
+                    Partition &partition = partitions[i];
+                    LLVMContext ctx;
+                    ctx.setDiscardValueNames(true);
+                    // Lazily deserialize the entire module
+                    timers[i].deserialize.startTimer();
+                    auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), name), ctx);
+                    // Make sure this also fails with only julia, but not LLVM assertions enabled,
+                    // otherwise, the first error we hit is the LLVM module verification failure,
+                    // which will look very confusing, because the module was partially deserialized.
+                    bool deser_succeeded = (bool)EM;
+                    auto M = cantFail(std::move(EM), "Error loading module");
+                    assert(deser_succeeded); (void)deser_succeeded;
+                    timers[i].deserialize.stopTimer();
 
-                timers[i].construct.startTimer();
-                std::string suffix = "_" + std::to_string(i);
-                construct_vars(*M, partitions[i], suffix);
-                M->setModuleIdentifier((Twine(M->getModuleIdentifier()) + "#" + Twine(i)).str());
-                M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), suffix));
-                // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
-                // or it may skip emitting debug info for that file. Here set it to ./julia#N
-                DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                for (DICompileUnit *CU : M->debug_compile_units())
-                    CU->replaceOperandWith(0, topfile);
-                timers[i].construct.stopTimer();
+                    timers[i].materialize.startTimer();
+                    materializePreserved(*M, partition);
+                    timers[i].materialize.stopTimer();
 
-                add_output_impl(outputs, *M, TM, &timers[i]);
+                    timers[i].construct.startTimer();
+                    std::string suffix = "_" + std::to_string(i);
+                    construct_vars(*M, partition, suffix);
+                    M->setModuleIdentifier((Twine(M->getModuleIdentifier()) + "#" + Twine(i)).str());
+                    M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), suffix));
+                    // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
+                    // or it may skip emitting debug info for that file. Here set it to ./julia#N
+                    DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
+                    for (DICompileUnit *CU : M->debug_compile_units())
+                        CU->replaceOperandWith(0, topfile);
+                    timers[i].construct.stopTimer();
+
+                    add_output_impl(outputs, *M, TM, &timers[i]);
+                }
             };
             auto arg = new std::function<void()>(func);
-            uv_thread_create(&workers[i], lambda_trampoline, arg); // Use libuv thread to avoid issues with stack sizes
+            uv_thread_create(&workers[tid], lambda_trampoline, arg); // Use libuv thread to avoid issues with stack sizes
         }
 
         // Wait for all of the worker threads to finish
@@ -2297,13 +2313,18 @@ void jl_dump_native_impl(void *native_code,
         has_veccall = !!dataM.getModuleFlag("julia.mv.veccall");
     });
 
+    size_t nshards;
     {
         // Don't use withModuleDo here since we delete the TSM midway through
         auto TSCtx = data->M.getContext();
         auto lock = TSCtx.getLock();
         auto dataM = data->M.getModuleUnlocked();
 
-        add_output(outputs, *dataM, *SourceTM, "text", threads,
+        auto info = compute_module_info(*dataM);
+        constexpr size_t weight_per_partition = 500000;
+        nshards = std::max<size_t>(1, info.weight / weight_per_partition);
+
+        add_output(outputs, *dataM, *SourceTM, "text", threads, nshards,
                    [data, &lock, &TSCtx](Module &) {
                        // Delete data when add_output thinks it's done with it
                        // Saves memory for use when multithreading
@@ -2372,9 +2393,9 @@ void jl_dump_native_impl(void *native_code,
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
                                         value, "jl_dispatch_target_ids");
-            auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
+            auto shards = emit_shard_table(metadataM, T_size, T_psize, nshards);
             auto ptls = emit_ptls_table(metadataM, T_size, T_ptr);
-            auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
+            auto header = emit_image_header(metadataM, nshards, nfvars, ngvars);
             auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
             auto jl_small_typeof_copy = new GlobalVariable(metadataM, AT, false,
                                                         GlobalVariable::ExternalLinkage,
