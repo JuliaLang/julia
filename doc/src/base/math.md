@@ -35,7 +35,8 @@ Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
 Base.bitrotate
-Base.:(:)
+Base.:(:)(::Any, ::Any, ::Any)
+Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
 Base.range
 Base.OneTo
 Base.StepRangeLen
