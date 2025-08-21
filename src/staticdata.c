@@ -121,172 +121,19 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    151
+#define NUM_TAGS    6
 
-// An array of references that need to be restored from the sysimg
-// This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
+// An array of special references that need to be restored from the sysimg
 static void get_tags(jl_value_t **tags[NUM_TAGS])
 {
     // Make sure to keep an extra slot at the end to sentinel length
     unsigned int i = 0;
 #define INSERT_TAG(sym) tags[i++] = (jl_value_t**)&(sym)
-    // builtin types
-    INSERT_TAG(jl_any_type);
-    INSERT_TAG(jl_symbol_type);
-    INSERT_TAG(jl_ssavalue_type);
-    INSERT_TAG(jl_datatype_type);
-    INSERT_TAG(jl_slotnumber_type);
-    INSERT_TAG(jl_simplevector_type);
-    INSERT_TAG(jl_array_type);
-    INSERT_TAG(jl_expr_type);
-    INSERT_TAG(jl_binding_type);
-    INSERT_TAG(jl_binding_partition_type);
-    INSERT_TAG(jl_globalref_type);
-    INSERT_TAG(jl_string_type);
-    INSERT_TAG(jl_module_type);
-    INSERT_TAG(jl_tvar_type);
-    INSERT_TAG(jl_method_instance_type);
-    INSERT_TAG(jl_method_type);
-    INSERT_TAG(jl_code_instance_type);
-    INSERT_TAG(jl_linenumbernode_type);
-    INSERT_TAG(jl_lineinfonode_type);
-    INSERT_TAG(jl_gotonode_type);
-    INSERT_TAG(jl_quotenode_type);
-    INSERT_TAG(jl_gotoifnot_type);
-    INSERT_TAG(jl_enternode_type);
-    INSERT_TAG(jl_argument_type);
-    INSERT_TAG(jl_returnnode_type);
-    INSERT_TAG(jl_const_type);
-    INSERT_TAG(jl_partial_struct_type);
-    INSERT_TAG(jl_partial_opaque_type);
-    INSERT_TAG(jl_interconditional_type);
-    INSERT_TAG(jl_method_match_type);
-    INSERT_TAG(jl_pinode_type);
-    INSERT_TAG(jl_phinode_type);
-    INSERT_TAG(jl_phicnode_type);
-    INSERT_TAG(jl_upsilonnode_type);
-    INSERT_TAG(jl_type_type);
-    INSERT_TAG(jl_bottom_type);
-    INSERT_TAG(jl_ref_type);
-    INSERT_TAG(jl_pointer_type);
-    INSERT_TAG(jl_llvmpointer_type);
-    INSERT_TAG(jl_vararg_type);
-    INSERT_TAG(jl_abstractarray_type);
-    INSERT_TAG(jl_densearray_type);
-    INSERT_TAG(jl_nothing_type);
-    INSERT_TAG(jl_function_type);
-    INSERT_TAG(jl_typeofbottom_type);
-    INSERT_TAG(jl_unionall_type);
-    INSERT_TAG(jl_typename_type);
-    INSERT_TAG(jl_builtin_type);
-    INSERT_TAG(jl_code_info_type);
-    INSERT_TAG(jl_opaque_closure_type);
-    INSERT_TAG(jl_task_type);
-    INSERT_TAG(jl_uniontype_type);
-    INSERT_TAG(jl_abstractstring_type);
-    INSERT_TAG(jl_array_any_type);
-    INSERT_TAG(jl_intrinsic_type);
-    INSERT_TAG(jl_methtable_type);
-    INSERT_TAG(jl_methcache_type);
-    INSERT_TAG(jl_typemap_level_type);
-    INSERT_TAG(jl_typemap_entry_type);
-    INSERT_TAG(jl_voidpointer_type);
-    INSERT_TAG(jl_uint8pointer_type);
-    INSERT_TAG(jl_newvarnode_type);
-    INSERT_TAG(jl_anytuple_type_type);
-    INSERT_TAG(jl_anytuple_type);
-    INSERT_TAG(jl_namedtuple_type);
-    INSERT_TAG(jl_emptytuple_type);
-    INSERT_TAG(jl_array_symbol_type);
-    INSERT_TAG(jl_array_uint8_type);
-    INSERT_TAG(jl_array_uint32_type);
-    INSERT_TAG(jl_array_int32_type);
-    INSERT_TAG(jl_array_uint64_type);
-    INSERT_TAG(jl_int32_type);
-    INSERT_TAG(jl_int64_type);
-    INSERT_TAG(jl_bool_type);
-    INSERT_TAG(jl_uint8_type);
-    INSERT_TAG(jl_uint16_type);
-    INSERT_TAG(jl_uint32_type);
-    INSERT_TAG(jl_uint64_type);
-    INSERT_TAG(jl_char_type);
-    INSERT_TAG(jl_weakref_type);
-    INSERT_TAG(jl_int8_type);
-    INSERT_TAG(jl_int16_type);
-    INSERT_TAG(jl_float16_type);
-    INSERT_TAG(jl_float32_type);
-    INSERT_TAG(jl_float64_type);
-    INSERT_TAG(jl_bfloat16_type);
-    INSERT_TAG(jl_floatingpoint_type);
-    INSERT_TAG(jl_number_type);
-    INSERT_TAG(jl_signed_type);
-    INSERT_TAG(jl_pair_type);
-    INSERT_TAG(jl_genericmemory_type);
-    INSERT_TAG(jl_memory_any_type);
-    INSERT_TAG(jl_memory_uint8_type);
-    INSERT_TAG(jl_memory_uint16_type);
-    INSERT_TAG(jl_memory_uint32_type);
-    INSERT_TAG(jl_memory_uint64_type);
-    INSERT_TAG(jl_genericmemoryref_type);
-    INSERT_TAG(jl_memoryref_any_type);
-    INSERT_TAG(jl_memoryref_uint8_type);
-    INSERT_TAG(jl_addrspace_type);
-    INSERT_TAG(jl_addrspace_typename);
-    INSERT_TAG(jl_addrspacecore_type);
-    INSERT_TAG(jl_debuginfo_type);
-    INSERT_TAG(jl_abioverride_type);
-    INSERT_TAG(jl_kwcall_type);
-
-    // special typenames
-    INSERT_TAG(jl_tuple_typename);
-    INSERT_TAG(jl_pointer_typename);
-    INSERT_TAG(jl_llvmpointer_typename);
-    INSERT_TAG(jl_array_typename);
-    INSERT_TAG(jl_type_typename);
-    INSERT_TAG(jl_namedtuple_typename);
-    INSERT_TAG(jl_vecelement_typename);
-    INSERT_TAG(jl_opaque_closure_typename);
-    INSERT_TAG(jl_genericmemory_typename);
-    INSERT_TAG(jl_genericmemoryref_typename);
-
-    // special exceptions
-    INSERT_TAG(jl_errorexception_type);
-    INSERT_TAG(jl_argumenterror_type);
-    INSERT_TAG(jl_typeerror_type);
-    INSERT_TAG(jl_methoderror_type);
-    INSERT_TAG(jl_loaderror_type);
-    INSERT_TAG(jl_initerror_type);
-    INSERT_TAG(jl_undefvarerror_type);
-    INSERT_TAG(jl_fielderror_type);
-    INSERT_TAG(jl_stackovf_exception);
-    INSERT_TAG(jl_diverror_exception);
-    INSERT_TAG(jl_interrupt_exception);
-    INSERT_TAG(jl_boundserror_type);
-    INSERT_TAG(jl_memory_exception);
-    INSERT_TAG(jl_undefref_exception);
-    INSERT_TAG(jl_readonlymemory_exception);
-    INSERT_TAG(jl_atomicerror_type);
-    INSERT_TAG(jl_missingcodeerror_type);
-    INSERT_TAG(jl_precompilable_error);
-
-    // other special values
-    INSERT_TAG(jl_emptysvec);
-    INSERT_TAG(jl_emptytuple);
-    INSERT_TAG(jl_false);
-    INSERT_TAG(jl_true);
-    INSERT_TAG(jl_an_empty_string);
-    INSERT_TAG(jl_an_empty_vec_any);
-    INSERT_TAG(jl_an_empty_memory_any);
+    INSERT_TAG(jl_method_table);
     INSERT_TAG(jl_module_init_order);
-    INSERT_TAG(jl_core_module);
-    INSERT_TAG(jl_base_module);
-    INSERT_TAG(jl_main_module);
-    INSERT_TAG(jl_top_module);
     INSERT_TAG(jl_typeinf_func);
     INSERT_TAG(jl_compile_and_emit_func);
-    INSERT_TAG(jl_opaque_closure_method);
-    INSERT_TAG(jl_nulldebuginfo);
-    INSERT_TAG(jl_method_table);
+    INSERT_TAG(jl_libdl_dlopen_func);
     // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
     assert(i == NUM_TAGS - 1);
@@ -510,6 +357,7 @@ typedef struct {
 } jl_serializer_state;
 
 static jl_value_t *jl_bigint_type = NULL;
+static jl_debuginfo_t *jl_nulldebuginfo;
 static int gmp_limb_size = 0;
 
 #ifdef _P64
@@ -3073,6 +2921,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_new(&bits_replace, 0);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir) {
+        if (jl_options.strip_metadata) {
+            jl_nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
+            if (jl_nulldebuginfo == NULL)
+                jl_errorf("Core.NullDebugInfo required for --strip-metadata option");
+        }
         jl_strip_all_codeinfos(mod_array);
         jl_strip_all_docmeta(mod_array);
     }
@@ -3217,6 +3070,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             for (i = 0; i < jl_n_builtins; i++)
                 jl_queue_for_serialization(&s, jl_builtin_instances[i]);
+#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name);
+            JL_EXPORTED_DATA_POINTERS(XX)
+#undef XX
+#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name);
+            JL_CONST_GLOBAL_VARS(XX)
+#undef XX
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
@@ -3398,6 +3257,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             for (i = 0; i < jl_n_builtins; i++)
                 jl_write_value(&s, jl_builtin_instances[i]);
+#define XX(name, type) jl_write_value(&s, (jl_value_t*)jl_##name);
+            JL_EXPORTED_DATA_POINTERS(XX)
+#undef XX
+#define XX(name, type) jl_write_value(&s, (jl_value_t*)jl_##name);
+            JL_CONST_GLOBAL_VARS(XX)
+#undef XX
             jl_write_value(&s, global_roots_list);
             jl_write_value(&s, global_roots_keyset);
             jl_write_value(&s, s.ptls->root_task->tls);
@@ -3765,6 +3630,7 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
 
 extern void rebuild_image_blob_tree(void);
 extern void export_jl_small_typeof(void);
+extern void export_jl_sysimg_globals(void);
 
 // When an image is loaded with ignore_native, all subsequent image loads must ignore
 // native code in the cache-file since we can't gurantuee that there are no call edges
@@ -3949,11 +3815,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         }
         for (i = 0; i < jl_n_builtins; i++)
             jl_builtin_instances[i] = jl_read_value(&s);
+#define XX(name, type) jl_##name = (type)jl_read_value(&s);
+        JL_EXPORTED_DATA_POINTERS(XX)
+#undef XX
+#define XX(name, type) jl_##name = (type)jl_read_value(&s);
+        JL_CONST_GLOBAL_VARS(XX)
+#undef XX
 #define XX(name) \
         ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type;
         JL_SMALL_TYPEOF(XX)
 #undef XX
         export_jl_small_typeof();
+        export_jl_sysimg_globals();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
         s.ptls->root_task->tls = jl_read_value(&s);
