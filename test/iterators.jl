@@ -242,7 +242,7 @@ end
     @test (@inferred Base.IteratorEltype(typeof(dropwhile(<(4),Iterators.map(identity, 1:10))))) isa Base.EltypeUnknown
 end
 
-# findall
+# findeach
 # ----------------
 @testset "Iterators.findeach" begin
     let findeach = Iterators.findeach

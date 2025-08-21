@@ -957,7 +957,7 @@ If `f` is not specified, default to `identity`.
 `Iterators.findeach` is the lazy equivalent of `findall`.
 
 !!! compat "Julia 1.13"
-    Lazy `findeach` requires at least Julia 1.13.
+    `findeach` requires at least Julia 1.13.
 
 # Examples
 ```jldoctest
