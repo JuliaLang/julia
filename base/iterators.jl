@@ -969,7 +969,7 @@ julia> only(Iterators.findeach(==(1), [3,6,2,1]))
 4
 ```
 """
-findeach(f, it) = map(first, filter(i -> f(last(i)), pairs(it)))
+findeach(f, it) = (k for (k, v) in pairs(it) if f(v))
 
 findeach(it) = findeach(identity, it)
 
