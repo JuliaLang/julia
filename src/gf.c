@@ -492,6 +492,14 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     if (ci && !jl_is_code_instance(ci)) {
         ci = NULL;
     }
+
+    // Record inference entrance backtrace if enabled
+    if (ci) {
+        JL_GC_PUSH1(&ci);
+        jl_push_inference_entrance_backtraces((jl_value_t*)ci);
+        JL_GC_POP();
+    }
+
     JL_GC_POP();
 #endif
 
