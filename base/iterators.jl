@@ -32,7 +32,7 @@ import Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
 public accumulate, filter, map, peel, reverse, Stateful
 
 """
@@ -945,6 +945,34 @@ end
 IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
 eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
+"""
+    findeach(f, it)
+    findeach(it)
+
+An iterator that generates every key from the key/value pairs of `pairs(it)`,
+where `f(value)` returns `true`.
+
+If `f` is not specified, default to `identity`.
+
+`Iterators.findeach` is the lazy equivalent of `findall`.
+
+!!! compat "Julia 1.13"
+    `findeach` requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> collect(Iterators.findeach(isodd, Dict(2 => 3, 3 => 2)))
+1-element Vector{Int64}:
+ 2
+
+julia> only(Iterators.findeach(==(1), [3,6,2,1]))
+4
+```
+"""
+findeach(f, it) = (k for (k, v) in pairs(it) if f(v))
+
+findeach(it) = findeach(identity, it)
 
 
 # Cycle an iterator forever
