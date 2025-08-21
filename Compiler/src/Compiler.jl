@@ -48,8 +48,8 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
     PARTITION_FLAG_DEPWARN,
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
-    EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
-    OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
+    EffectsOverride, Filter, Generator, NUM_EFFECTS_OVERRIDES,
+    OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
     argument_datatype, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
@@ -64,9 +64,11 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
-    _uncompressed_ir, maybe_add_binding_backedge!, datatype_min_ninitialized,
+    _uncompressed_ir, datatype_min_ninitialized,
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
-    get_ci_mi
+    get_ci_mi, get_methodtable, morespecific, specializations, has_image_globalref,
+    PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
+    BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions
 
 using Base.Order
 
@@ -187,6 +189,10 @@ include("optimize.jl")
 include("bootstrap.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
+
+baremodule ReinferUtils end
+include(ReinferUtils, "reinfer.jl")
+include(ReinferUtils, "bindinginvalidations.jl")
 
 macro __SOURCE_FILE__()
     __source__.file === nothing && return nothing

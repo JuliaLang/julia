@@ -1055,9 +1055,9 @@ precompile_test_harness("code caching") do dir
         const glbi = LogBindingInvalidation(2.0)
     end)
     @eval using $StaleC
-    invalidations = Base.StaticData.debug_method_invalidation(true)
+    invalidations = Base.ReinferUtils.debug_method_invalidation(true)
     @eval using $StaleB
-    Base.StaticData.debug_method_invalidation(false)
+    Base.ReinferUtils.debug_method_invalidation(false)
     invokelatest() do
         MB = getfield(@__MODULE__, StaleB)
         MC = getfield(@__MODULE__, StaleC)

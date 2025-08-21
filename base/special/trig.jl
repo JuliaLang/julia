@@ -1112,6 +1112,7 @@ function _cosc(x::Number)
         # generic Taylor series: π ∑ (-1)^n (πx)^{2n-1}/a(n) where
         # a(n) = (1+2n)*(2n-1)! (= OEIS A174549)
         s = (term = -(π*x))/3
+        iszero(s) && return s  # preserve floating-point signed zero
         π²x² = term^2
         ε = eps(fastabs(term)) # error threshold to stop sum
         n = 1

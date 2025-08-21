@@ -1,26 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct GlobalRefIterator
-    mod::Module
-end
-IteratorSize(::Type{GlobalRefIterator}) = SizeUnknown()
-globalrefs(mod::Module) = GlobalRefIterator(mod)
-
-function iterate(gri::GlobalRefIterator, i = 1)
-    m = gri.mod
-    table = ccall(:jl_module_get_bindings, Ref{SimpleVector}, (Any,), m)
-    i > length(table) && return nothing
-    b = table[i]
-    b === nothing && return iterate(gri, i+1)
-    return ((b::Core.Binding).globalref, i+1)
-end
+using ..Compiler: _uncompressed_ir, specializations, get_ci_mi, convert, unsafe_load, cglobal, generating_output, has_image_globalref,
+    PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
+    BINDING_FLAG_ANY_IMPLICIT_EDGES, binding_kind, partition_restriction, is_some_imported,
+    is_some_binding_imported, is_some_implicit, SizeUnknown, maybe_add_binding_backedge!, walk_binding_partition, abstract_eval_partition_load, userefs
+using .Core: SimpleVector, CodeInfo
 
 function foreachgr(visit, src::CodeInfo)
     stmts = src.code
     for i = 1:length(stmts)
         stmt = stmts[i]
         isa(stmt, GlobalRef) && visit(stmt)
-        for ur in Compiler.userefs(stmt)
+        for ur in userefs(stmt)
             arg = ur[]
             isa(arg, GlobalRef) && visit(arg)
         end
@@ -35,7 +26,7 @@ function anygr(visit, src::CodeInfo)
             visit(stmt) && return true
             continue
         end
-        for ur in Compiler.userefs(stmt)
+        for ur in userefs(stmt)
             arg = ur[]
             isa(arg, GlobalRef) && visit(arg) && return true
         end
@@ -69,7 +60,7 @@ function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalid
         src = _uncompressed_ir(method)
         invalidate_all = should_invalidate_code_for_globalref(gr, src)
     end
-    if invalidate_all && !Base.generating_output()
+    if invalidate_all && !generating_output()
         @atomic method.did_scan_source |= 0x4
     end
     invalidated_any = false
@@ -99,15 +90,15 @@ export_affecting_partition_flags(bpart::Core.BindingPartition) =
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt)
     gr = b.globalref
 
-    (_, (ib, ibpart)) = Compiler.walk_binding_partition(b, invalidated_bpart, new_max_world)
-    (_, (nb, nbpart)) = Compiler.walk_binding_partition(b, new_bpart, new_max_world+1)
+    (_, (ib, ibpart)) = walk_binding_partition(b, invalidated_bpart, new_max_world)
+    (_, (nb, nbpart)) = walk_binding_partition(b, new_bpart, new_max_world+1)
 
     # `abstract_eval_partition_load` is the maximum amount of information that inference
     # reads from a binding partition. If this information does not change - we do not need to
     # invalidate any code that inference created, because we know that the result will not change.
     need_to_invalidate_code =
-        Compiler.abstract_eval_partition_load(nothing, ib, ibpart) !==
-        Compiler.abstract_eval_partition_load(nothing, nb, nbpart)
+        abstract_eval_partition_load(nothing, ib, ibpart) !==
+        abstract_eval_partition_load(nothing, nb, nbpart)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)
@@ -173,12 +164,6 @@ end
 invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt) =
     invalidate_code_for_globalref!(convert(Core.Binding, gr), invalidated_bpart, new_bpart, new_max_world)
 
-function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
-    meth = isa(edge, Method) ? edge : get_ci_mi(edge).def
-    ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
-    return nothing
-end
-
 function binding_was_invalidated(b::Core.Binding)
     # At least one partition is required for invalidation
     !isdefined(b, :partitions) && return false
@@ -206,7 +191,7 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
 end
 
 function scan_new_methods!(extext_methods::Vector{Any}, internal_methods::Vector{Any}, image_backedges_only::Bool)
-    if image_backedges_only && Base.generating_output(true)
+    if image_backedges_only && generating_output(true)
         # Replacing image bindings is forbidden during incremental precompilation - skip backedge insertion
         return
     end
