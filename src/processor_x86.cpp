@@ -1158,13 +1158,6 @@ extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(
                 break;
             }
         }
-        static constexpr uint32_t clone_bf16[] = {Feature::avx512bf16};
-        for (auto fe: clone_bf16) {
-            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
-                t.en.flags |= JL_TARGET_CLONE_BFLOAT16;
-                break;
-            }
-        }
     }
     if (image_targets.empty())
         jl_error("No targets specified");
