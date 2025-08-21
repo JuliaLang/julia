@@ -347,11 +347,13 @@ end
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
     @nospecialize
+    msg = gensym(:msg)
+    kwargs = gensym(:kwargs)
     log_data = process_logmsg_exs(_module, file, line, level, message, exs...)
     if !isa(message, Symbol) && issimple(message) && isempty(log_data.kwargs)
         logrecord = quote
-            msg = $(message)
-            kwargs = (;)
+            $(msg) = $(message)
+            $(kwargs) = (;)
             true
         end
     elseif issimple(message) && all(issimplekw, log_data.kwargs)
@@ -370,8 +372,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
         logrecord = quote
             let err = $checkerrors
                 if err === nothing
-                    msg = $(message)
-                    kwargs = (;$(log_data.kwargs...))
+                    $(msg) = $(message)
+                    $(kwargs) = (;$(log_data.kwargs...))
                     true
                 else
                     @invokelatest $(logging_error)(logger, level, _module, group, id, file, line, err, false)
@@ -382,8 +384,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
     else
         logrecord = quote
             try
-                msg = $(esc(message))
-                kwargs = (;$(log_data.kwargs...))
+                $(msg) = $(esc(message))
+                $(kwargs) = (;$(log_data.kwargs...))
                 true
             catch err
                 @invokelatest $(logging_error)(logger, level, _module, group, id, file, line, err, true)
@@ -410,13 +412,13 @@ function logmsg_code(_module, file, line, level, message, exs...)
                             file = Base.fixup_stdlib_path(file)
                         end
                         line = $(log_data._line)
-                        local msg, kwargs
+                        local $(msg), $(kwargs)
                         if $(logrecord)
-                            @assert @isdefined(msg) "Assertion to tell the compiler about the definedness of this variable"
-                            @assert @isdefined(kwargs) "Assertion to tell the compiler about the definedness of this variable"
+                            $(Expr(:isdefined, msg)) || throw(AssertionError("Assertion to tell the compiler about the definedness of this variable"))
+                            $(Expr(:isdefined, kwargs)) || throw(AssertionError("Assertion to tell the compiler about the definedness of this variable"))
                             $handle_message_nothrow(
-                                logger, level, msg, _module, group, id, file, line;
-                                kwargs...)
+                                logger, level, $(msg), _module, group, id, file, line;
+                                $(kwargs)...)
                         end
                     end
                 end
