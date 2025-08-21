@@ -2,163 +2,165 @@
 
 // Pointers that are exposed through the public libjulia
 #define JL_EXPORTED_DATA_POINTERS(XX) \
-    XX(jl_abioverride_type) \
-    XX(jl_abstractarray_type) \
-    XX(jl_abstractstring_type) \
-    XX(jl_addrspace_type) \
-    XX(jl_addrspace_typename) \
-    XX(jl_addrspacecore_type) \
-    XX(jl_an_empty_string) \
-    XX(jl_an_empty_vec_any) \
-    XX(jl_an_empty_memory_any) \
-    XX(jl_anytuple_type) \
-    XX(jl_anytuple_type_type) \
-    XX(jl_any_type) \
-    XX(jl_argumenterror_type) \
-    XX(jl_argument_type) \
-    XX(jl_array_any_type) \
-    XX(jl_array_int32_type) \
-    XX(jl_array_symbol_type) \
-    XX(jl_array_type) \
-    XX(jl_array_typename) \
-    XX(jl_array_uint8_type) \
-    XX(jl_array_uint32_type) \
-    XX(jl_array_uint64_type) \
-    XX(jl_atomicerror_type) \
-    XX(jl_base_module) \
-    XX(jl_bool_type) \
-    XX(jl_bottom_type) \
-    XX(jl_boundserror_type) \
-    XX(jl_builtin_type) \
-    XX(jl_char_type) \
-    XX(jl_code_info_type) \
-    XX(jl_code_instance_type) \
-    XX(jl_const_type) \
-    XX(jl_core_module) \
-    XX(jl_datatype_type) \
-    XX(jl_debuginfo_type) \
-    XX(jl_densearray_type) \
-    XX(jl_diverror_exception) \
-    XX(jl_emptysvec) \
-    XX(jl_emptytuple) \
-    XX(jl_emptytuple_type) \
-    XX(jl_errorexception_type) \
-    XX(jl_expr_type) \
-    XX(jl_false) \
-    XX(jl_float16_type) \
-    XX(jl_float32_type) \
-    XX(jl_float64_type) \
-    XX(jl_bfloat16_type) \
-    XX(jl_floatingpoint_type) \
-    XX(jl_function_type) \
-    XX(jl_binding_type) \
-    XX(jl_binding_partition_type) \
-    XX(jl_globalref_type) \
-    XX(jl_gotoifnot_type) \
-    XX(jl_enternode_type) \
-    XX(jl_gotonode_type) \
-    XX(jl_initerror_type) \
-    XX(jl_int16_type) \
-    XX(jl_int32_type) \
-    XX(jl_int64_type) \
-    XX(jl_int8_type) \
-    XX(jl_interconditional_type) \
-    XX(jl_interrupt_exception) \
-    XX(jl_intrinsic_type) \
-    XX(jl_kwcall_type) \
-    XX(jl_libdl_module) \
-    XX(jl_libdl_dlopen_func) \
-    XX(jl_lineinfonode_type) \
-    XX(jl_linenumbernode_type) \
-    XX(jl_llvmpointer_type) \
-    XX(jl_llvmpointer_typename) \
-    XX(jl_loaderror_type) \
-    XX(jl_main_module) \
-    XX(jl_memory_any_type) \
-    XX(jl_memory_exception) \
-    XX(jl_genericmemory_type) \
-    XX(jl_genericmemory_typename) \
-    XX(jl_memory_uint8_type) \
-    XX(jl_memory_uint16_type) \
-    XX(jl_memory_uint32_type) \
-    XX(jl_memory_uint64_type) \
-    XX(jl_memoryref_any_type) \
-    XX(jl_genericmemoryref_type) \
-    XX(jl_genericmemoryref_typename) \
-    XX(jl_memoryref_uint8_type) \
-    XX(jl_methoderror_type) \
-    XX(jl_method_instance_type) \
-    XX(jl_method_match_type) \
-    XX(jl_method_type) \
-    XX(jl_methtable_type) \
-    XX(jl_methcache_type) \
-    XX(jl_missingcodeerror_type) \
-    XX(jl_module_type) \
-    XX(jl_n_threads_per_pool) \
-    XX(jl_namedtuple_type) \
-    XX(jl_namedtuple_typename) \
-    XX(jl_newvarnode_type) \
-    XX(jl_nothing) \
-    XX(jl_nothing_type) \
-    XX(jl_number_type) \
-    XX(jl_opaque_closure_type) \
-    XX(jl_opaque_closure_typename) \
-    XX(jl_pair_type) \
-    XX(jl_partial_opaque_type) \
-    XX(jl_partial_struct_type) \
-    XX(jl_phicnode_type) \
-    XX(jl_phinode_type) \
-    XX(jl_pinode_type) \
-    XX(jl_pointer_type) \
-    XX(jl_pointer_typename) \
-    XX(jl_precompilable_error) \
-    XX(jl_quotenode_type) \
-    XX(jl_readonlymemory_exception) \
-    XX(jl_ref_type) \
-    XX(jl_returnnode_type) \
-    XX(jl_signed_type) \
-    XX(jl_simplevector_type) \
-    XX(jl_slotnumber_type) \
-    XX(jl_ssavalue_type) \
-    XX(jl_stackovf_exception) \
-    XX(jl_string_type) \
-    XX(jl_symbol_type) \
-    XX(jl_task_type) \
-    XX(jl_top_module) \
-    XX(jl_true) \
-    XX(jl_tuple_typename) \
-    XX(jl_tvar_type) \
-    XX(jl_typeerror_type) \
-    XX(jl_typemap_entry_type) \
-    XX(jl_typemap_level_type) \
-    XX(jl_typename_type) \
-    XX(jl_typeofbottom_type) \
-    XX(jl_type_type) \
-    XX(jl_type_typename) \
-    XX(jl_uint16_type) \
-    XX(jl_uint32_type) \
-    XX(jl_uint64_type) \
-    XX(jl_uint8pointer_type) \
-    XX(jl_uint8_type) \
-    XX(jl_undefref_exception) \
-    XX(jl_undefvarerror_type) \
-    XX(jl_fielderror_type) \
-    XX(jl_unionall_type) \
-    XX(jl_uniontype_type) \
-    XX(jl_upsilonnode_type) \
-    XX(jl_vararg_type) \
-    XX(jl_vecelement_typename) \
-    XX(jl_voidpointer_type) \
-    XX(jl_void_type) \
-    XX(jl_weakref_type) \
+    XX(abioverride_type, jl_datatype_t*) \
+    XX(abstractarray_type, jl_unionall_t*) \
+    XX(abstractstring_type, jl_datatype_t*) \
+    XX(addrspace_type, jl_unionall_t*) \
+    XX(addrspace_typename, jl_typename_t*) \
+    XX(addrspacecore_type, jl_datatype_t*) \
+    XX(an_empty_string, jl_value_t*) \
+    XX(an_empty_vec_any, jl_value_t*) \
+    XX(an_empty_memory_any, jl_value_t*) \
+    XX(anytuple_type, jl_datatype_t*) \
+    XX(anytuple_type_type, jl_unionall_t*) \
+    XX(any_type, jl_datatype_t*) \
+    XX(argumenterror_type, jl_datatype_t*) \
+    XX(argument_type, jl_datatype_t*) \
+    XX(array_any_type, jl_value_t*) \
+    XX(array_int32_type, jl_value_t*) \
+    XX(array_symbol_type, jl_value_t*) \
+    XX(array_type, jl_unionall_t*) \
+    XX(array_typename, jl_typename_t*) \
+    XX(array_uint8_type, jl_value_t*) \
+    XX(array_uint32_type, jl_value_t*) \
+    XX(array_uint64_type, jl_value_t*) \
+    XX(atomicerror_type, jl_datatype_t*) \
+    XX(base_module, jl_module_t*) \
+    XX(bool_type, jl_datatype_t*) \
+    XX(bottom_type, jl_value_t*) \
+    XX(boundserror_type, jl_datatype_t*) \
+    XX(builtin_type, jl_datatype_t*) \
+    XX(char_type, jl_datatype_t*) \
+    XX(code_info_type, jl_datatype_t*) \
+    XX(code_instance_type, jl_datatype_t*) \
+    XX(const_type, jl_datatype_t*) \
+    XX(core_module, jl_module_t*) \
+    XX(datatype_type, jl_datatype_t*) \
+    XX(debuginfo_type, jl_datatype_t*) \
+    XX(densearray_type, jl_unionall_t*) \
+    XX(diverror_exception, jl_value_t*) \
+    XX(emptysvec, jl_svec_t*) \
+    XX(emptytuple, jl_value_t*) \
+    XX(emptytuple_type, jl_datatype_t*) \
+    XX(errorexception_type, jl_datatype_t*) \
+    XX(expr_type, jl_datatype_t*) \
+    XX(float16_type, jl_datatype_t*) \
+    XX(float32_type, jl_datatype_t*) \
+    XX(float64_type, jl_datatype_t*) \
+    XX(bfloat16_type, jl_datatype_t*) \
+    XX(floatingpoint_type, jl_datatype_t*) \
+    XX(function_type, jl_datatype_t*) \
+    XX(binding_type, jl_datatype_t*) \
+    XX(binding_partition_type, jl_datatype_t*) \
+    XX(globalref_type, jl_datatype_t*) \
+    XX(gotoifnot_type, jl_datatype_t*) \
+    XX(enternode_type, jl_datatype_t*) \
+    XX(gotonode_type, jl_datatype_t*) \
+    XX(initerror_type, jl_datatype_t*) \
+    XX(int16_type, jl_datatype_t*) \
+    XX(int32_type, jl_datatype_t*) \
+    XX(int64_type, jl_datatype_t*) \
+    XX(int8_type, jl_datatype_t*) \
+    XX(interconditional_type, jl_datatype_t*) \
+    XX(interrupt_exception, jl_value_t*) \
+    XX(intrinsic_type, jl_datatype_t*) \
+    XX(kwcall_type, jl_datatype_t*) \
+    XX(lineinfonode_type, jl_datatype_t*) \
+    XX(linenumbernode_type, jl_datatype_t*) \
+    XX(llvmpointer_type, jl_unionall_t*) \
+    XX(llvmpointer_typename, jl_typename_t*) \
+    XX(loaderror_type, jl_datatype_t*) \
+    XX(main_module, jl_module_t*) \
+    XX(memory_any_type, jl_value_t*) \
+    XX(memory_exception, jl_value_t*) \
+    XX(genericmemory_type, jl_unionall_t*) \
+    XX(genericmemory_typename, jl_typename_t*) \
+    XX(memory_uint8_type, jl_value_t*) \
+    XX(memory_uint16_type, jl_value_t*) \
+    XX(memory_uint32_type, jl_value_t*) \
+    XX(memory_uint64_type, jl_value_t*) \
+    XX(memoryref_any_type, jl_value_t*) \
+    XX(genericmemoryref_type, jl_unionall_t*) \
+    XX(genericmemoryref_typename, jl_typename_t*) \
+    XX(memoryref_uint8_type, jl_value_t*) \
+    XX(methoderror_type, jl_datatype_t*) \
+    XX(method_instance_type, jl_datatype_t*) \
+    XX(method_match_type, jl_datatype_t*) \
+    XX(method_type, jl_datatype_t*) \
+    XX(methtable_type, jl_datatype_t*) \
+    XX(methcache_type, jl_datatype_t*) \
+    XX(missingcodeerror_type, jl_datatype_t*) \
+    XX(module_type, jl_datatype_t*) \
+    XX(namedtuple_type, jl_unionall_t*) \
+    XX(namedtuple_typename, jl_typename_t*) \
+    XX(newvarnode_type, jl_datatype_t*) \
+    XX(nothing_type, jl_datatype_t*) \
+    XX(number_type, jl_datatype_t*) \
+    XX(opaque_closure_method, jl_method_t*) \
+    XX(opaque_closure_type, jl_unionall_t*) \
+    XX(opaque_closure_typename, jl_typename_t*) \
+    XX(pair_type, jl_value_t*) \
+    XX(partial_opaque_type, jl_datatype_t*) \
+    XX(partial_struct_type, jl_datatype_t*) \
+    XX(phicnode_type, jl_datatype_t*) \
+    XX(phinode_type, jl_datatype_t*) \
+    XX(pinode_type, jl_datatype_t*) \
+    XX(pointer_type, jl_unionall_t*) \
+    XX(pointer_typename, jl_typename_t*) \
+    XX(precompilable_error, jl_value_t*) \
+    XX(quotenode_type, jl_datatype_t*) \
+    XX(readonlymemory_exception, jl_value_t*) \
+    XX(ref_type, jl_unionall_t*) \
+    XX(returnnode_type, jl_datatype_t*) \
+    XX(signed_type, jl_datatype_t*) \
+    XX(simplevector_type, jl_datatype_t*) \
+    XX(slotnumber_type, jl_datatype_t*) \
+    XX(ssavalue_type, jl_datatype_t*) \
+    XX(stackovf_exception, jl_value_t*) \
+    XX(string_type, jl_datatype_t*) \
+    XX(symbol_type, jl_datatype_t*) \
+    XX(task_type, jl_datatype_t*) \
+    XX(top_module, jl_module_t*) \
+    XX(trimfailure_type, jl_datatype_t*) \
+    XX(tuple_typename, jl_typename_t*) \
+    XX(tvar_type, jl_datatype_t*) \
+    XX(typeerror_type, jl_datatype_t*) \
+    XX(typemap_entry_type, jl_datatype_t*) \
+    XX(typemap_level_type, jl_datatype_t*) \
+    XX(typename_type, jl_datatype_t*) \
+    XX(typeofbottom_type, jl_datatype_t*) \
+    XX(type_type, jl_unionall_t*) \
+    XX(type_typename, jl_typename_t*) \
+    XX(uint16_type, jl_datatype_t*) \
+    XX(uint32_type, jl_datatype_t*) \
+    XX(uint64_type, jl_datatype_t*) \
+    XX(uint8pointer_type, jl_datatype_t*) \
+    XX(uint8_type, jl_datatype_t*) \
+    XX(undefref_exception, jl_value_t*) \
+    XX(undefvarerror_type, jl_datatype_t*) \
+    XX(fielderror_type, jl_datatype_t*) \
+    XX(unionall_type, jl_datatype_t*) \
+    XX(uniontype_type, jl_datatype_t*) \
+    XX(upsilonnode_type, jl_datatype_t*) \
+    XX(vararg_type, jl_datatype_t*) \
+    XX(vecelement_typename, jl_typename_t*) \
+    XX(voidpointer_type, jl_datatype_t*) \
+    XX(weakref_type, jl_datatype_t*) \
+
+// Global constant values (jl_true, jl_false, jl_nothing)
+#define JL_CONST_GLOBAL_VARS(YY) \
+    YY(nothing, jl_value_t*) \
+    YY(false, jl_value_t*) \
+    YY(true, jl_value_t*) \
 
 // Data symbols that are defined inside the public libjulia
-#define JL_EXPORTED_DATA_SYMBOLS(XX) \
-    XX(jl_n_threadpools, int) \
-    XX(jl_n_threads, _Atomic(int)) \
-    XX(jl_n_gcthreads, int) \
-    XX(jl_options, jl_options_t) \
-    XX(jl_task_gcstack_offset, int) \
-    XX(jl_task_ptls_offset, int) \
+#define JL_EXPORTED_DATA_SYMBOLS(ZZ) \
+    ZZ(jl_n_threads_per_pool, int*) \
+    ZZ(jl_n_gcthreads, int) \
+    ZZ(jl_n_threadpools, int) \
+    ZZ(jl_n_threads, _Atomic(int)) \
+    ZZ(jl_options, jl_options_t) \
+    ZZ(jl_task_gcstack_offset, int) \
+    ZZ(jl_task_ptls_offset, int) \
 
 // end of file
