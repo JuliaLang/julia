@@ -1024,22 +1024,24 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     assert(gvars_gv);
     assert(fvars_idxs);
     assert(gvars_idxs);
-    auto fvars_init = cast<ConstantArray>(fvars_gv->getInitializer());
-    auto gvars_init = cast<ConstantArray>(gvars_gv->getInitializer());
-    for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
-        auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
-        assert(gv && gv->hasName() && "fvar must be a named global");
-        assert(!fvars.count(gv) && "Duplicate fvar");
-        fvars[gv] = i;
+    if (auto fvars_init = dyn_cast<ConstantArray>(fvars_gv->getInitializer())) {
+        for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
+            auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
+            assert(gv && gv->hasName() && "fvar must be a named global");
+            assert(!fvars.count(gv) && "Duplicate fvar");
+            fvars[gv] = i;
+        }
+        assert(fvars.size() == fvars_init->getNumOperands());
     }
-    assert(fvars.size() == fvars_init->getNumOperands());
-    for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
-        auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
-        assert(gv && gv->hasName() && "gvar must be a named global");
-        assert(!gvars.count(gv) && "Duplicate gvar");
-        gvars[gv] = i;
+    if (auto gvars_init = dyn_cast<ConstantArray>(gvars_gv->getInitializer())) {
+        for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
+            auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
+            assert(gv && gv->hasName() && "gvar must be a named global");
+            assert(!gvars.count(gv) && "Duplicate gvar");
+            gvars[gv] = i;
+        }
+        assert(gvars.size() == gvars_init->getNumOperands());
     }
-    assert(gvars.size() == gvars_init->getNumOperands());
     fvars_gv->eraseFromParent();
     gvars_gv->eraseFromParent();
     fvars_idxs->eraseFromParent();
