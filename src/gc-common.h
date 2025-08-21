@@ -195,7 +195,7 @@ extern arraylist_t to_finalize;
 void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT;
 void run_finalizer(jl_task_t *ct, void *o, void *ff);
 void run_finalizers(jl_task_t *ct, int finalizers_thread);
-JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
 
 

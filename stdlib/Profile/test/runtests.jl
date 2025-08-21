@@ -220,9 +220,19 @@ end
 
 import InteractiveUtils
 
+@generated function compile_takes_1_second(x)
+    t = time_ns()
+    while time_ns() < t + 1e9
+        # busy wait for 1 second
+    end
+    return :(x)
+end
 @testset "Module short names" begin
     Profile.clear()
-    @profile InteractiveUtils.peakflops()
+    @profile begin
+        @eval compile_takes_1_second(1) # to increase chance of profiling hitting compilation code
+        InteractiveUtils.peakflops()
+    end
     io = IOBuffer()
     ioc = IOContext(io, :displaysize=>(1000,1000))
     Profile.print(ioc, C=true)

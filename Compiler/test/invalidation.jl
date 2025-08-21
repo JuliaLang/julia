@@ -3,6 +3,7 @@
 # setup
 # -----
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
@@ -161,6 +162,42 @@ begin
     @test "42" == String(take!(GLOBAL_BUFFER))
 end
 
+begin
+    deduped_callee(x::Int) = @noinline rand(Int)
+    deduped_caller1(x::Int) = @noinline deduped_callee(x)
+    deduped_caller2(x::Int) = @noinline deduped_callee(x)
+
+    # run inference on both `deduped_callerx` and `deduped_callee`
+    let (src, rt) = code_typed((Int,); interp=InvalidationTester()) do x
+            @inline deduped_caller1(x)
+            @inline deduped_caller2(x)
+        end |> only
+        @test rt === Int
+        @test any(isinvoke(:deduped_callee), src.code)
+    end
+
+    # Verify that adding the backedge again does not actually add a new backedge
+    let mi = Base.method_instance(deduped_caller1, (Int,)),
+        ci = mi.cache
+
+        callee_mi = Base.method_instance(deduped_callee, (Int,))
+
+        # Inference should have added the callers to the callee's backedges
+        @test ci in callee_mi.backedges
+
+        # In practice, inference will never end up calling `store_backedges`
+        # twice on the same CodeInstance like this - we only need to check
+        # that de-duplication works for a single invocation
+        N = length(callee_mi.backedges)
+        Core.Compiler.store_backedges(ci, Core.svec(callee_mi, callee_mi))
+        N′ = length(callee_mi.backedges)
+
+        # A single `store_backedges` invocation should de-duplicate any of the
+        # edges it is adding.
+        @test N′ - N == 1
+    end
+end
+
 # we can avoid adding backedge even if the callee's return type is not the top
 # when the return value is not used within the caller
 begin take!(GLOBAL_BUFFER)
@@ -282,4 +319,45 @@ begin take!(GLOBAL_BUFFER)
 
     @test isnothing(pr48932_caller_inlined(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
+end
+
+# Issue #57696
+# This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
+# manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
+@test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)
+
+# Test drop_all_caches functionality
+@testset "drop_all_caches" begin
+    # Run in subprocess to avoid disrupting the main test process
+    script = """
+        # Define test functions
+        drop_cache_test_f(x) = x + 1
+        drop_cache_test_g(x) = drop_cache_test_f(x) * 2
+
+        # Compile the functions and capture stderr
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "==DROPPING ALL CACHES==")
+
+        # Drop all caches
+        Base.drop_all_caches()
+
+        # Functions should still work (but will be recompiled on next call)
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "SUCCESS: drop_all_caches test passed")
+        exit(0)
+    """
+
+    io = Pipe()
+    # Run the test in a subprocess because Base.drop_all_caches() is extreme
+    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io))
+    close(io.in)
+    err = read(io, String)
+    # println(err)
+    @test success(result)
+    err_before, err_after = split(err, "==DROPPING ALL CACHES==")
+    @test occursin("SUCCESS: drop_all_caches test passed", err_after)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int}) # recompile", err_after)
 end

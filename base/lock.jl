@@ -398,7 +398,7 @@ macro lock_nofail(l, expr)
 end
 
 """
-  Lockable(value, lock = ReentrantLock())
+    Lockable(value, lock = ReentrantLock())
 
 Creates a `Lockable` object that wraps `value` and
 associates it with the provided `lock`. This object
@@ -431,7 +431,7 @@ Lockable(value) = Lockable(value, ReentrantLock())
 getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
 
 """
-  lock(f::Function, l::Lockable)
+    lock(f::Function, l::Lockable)
 
 Acquire the lock associated with `l`, execute `f` with the lock held,
 and release the lock when `f` returns. `f` will receive one positional
@@ -562,6 +562,36 @@ function acquire(f, s::Semaphore)
 end
 
 """
+    Base.@acquire s::Semaphore expr
+
+Macro version of `Base.acquire(f, s::Semaphore)` but with `expr` instead of `f` function.
+Expands to:
+```julia
+Base.acquire(s)
+try
+    expr
+finally
+    Base.release(s)
+end
+```
+This is similar to using [`acquire`](@ref) with a `do` block, but avoids creating a closure.
+
+!!! compat "Julia 1.13"
+    `Base.@acquire` was added in Julia 1.13
+"""
+macro acquire(s, expr)
+    quote
+        local temp = $(esc(s))
+        Base.acquire(temp)
+        try
+            $(esc(expr))
+        finally
+            Base.release(temp)
+        end
+    end
+end
+
+"""
     release(s::Semaphore)
 
 Return one permit to the pool,
@@ -674,6 +704,9 @@ calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -705,7 +738,9 @@ mutable struct OncePerProcess{T, F} <: Function
         return once
     end
 end
+OncePerProcess{T}(initializer::Type{U}) where {T, U} = OncePerProcess{T, Type{U}}(initializer)
 OncePerProcess{T}(initializer::F) where {T, F} = OncePerProcess{T, F}(initializer)
+OncePerProcess(initializer::Type{U}) where U = OncePerProcess{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeof(initializer)}(initializer)
 @inline function (once::OncePerProcess{T,F})() where {T,F}
     state = (@atomic :acquire once.state)
@@ -782,6 +817,9 @@ if that behavior is correct within your library's threading-safety design.
 
 See also: [`OncePerTask`](@ref).
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -812,7 +850,9 @@ mutable struct OncePerThread{T, F} <: Function
         return once
     end
 end
+OncePerThread{T}(initializer::Type{U}) where {T, U} = OncePerThread{T,Type{U}}(initializer)
 OncePerThread{T}(initializer::F) where {T, F} = OncePerThread{T,F}(initializer)
+OncePerThread(initializer::Type{U}) where U = OncePerThread{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(initializer)}(initializer)
 @inline (once::OncePerThread{T,F})() where {T,F} = once[Threads.threadid()]
 @inline function getindex(once::OncePerThread{T,F}, tid::Integer) where {T,F}
@@ -908,6 +948,9 @@ exactly once per Task. All future calls in the same Task will return exactly the
 
 See also: [`task_local_storage`](@ref).
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -931,8 +974,10 @@ false
 mutable struct OncePerTask{T, F} <: Function
     const initializer::F
 
+    OncePerTask{T}(initializer::Type{U}) where {T, U} = new{T,Type{U}}(initializer)
     OncePerTask{T}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
+    OncePerTask(initializer::Type{U}) where U = new{Base.promote_op(initializer), Type{U}}(initializer)
     OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
 end
 @inline function (once::OncePerTask{T,F})() where {T,F}

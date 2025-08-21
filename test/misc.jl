@@ -237,6 +237,24 @@ end
     @test all(<=(sem_size), history)
     @test all(>=(0), history)
     @test history[end] == 0
+
+    # macro form
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            @test Base.@acquire s begin
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                sleep(rand(0:0.01:0.1))
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+                return :resultvalue
+            end === :resultvalue
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
 end
 
 # task switching
@@ -481,12 +499,12 @@ begin
     local second = @capture_stdout @time @eval calldouble2(1.0)
 
     # these functions were not recompiled
-    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", first))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
 
-    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", second))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
@@ -1614,10 +1632,10 @@ end
 let errs = IOBuffer()
     run(`$(Base.julia_cmd()) -e '
         using Test
-        @test isdefined(DataType.name.mt, :backedges)
+        @test !isempty(Core.methodtable.backedges)
         Base.Experimental.disable_new_worlds()
         @test_throws "disable_new_worlds" @eval f() = 1
-        @test !isdefined(DataType.name.mt, :backedges)
+        @test isempty(Core.methodtable.backedges)
         @test_throws "disable_new_worlds" Base.delete_method(which(+, (Int, Int)))
         @test 1+1 == 2
         using Dates

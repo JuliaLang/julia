@@ -4,6 +4,7 @@ using Test
 using Base.Meta
 using Core.IR
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # domsort
@@ -920,7 +921,7 @@ let # Test that CFG simplify doesn't try to merge every block in a loop into
 end
 
 # `cfg_simplify!` shouldn't error in a presence of `try/catch` block
-let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+let ir = Base.code_ircode(; optimize_until="CC: SLOT2REG") do
         v = try
         catch
         end
@@ -1180,7 +1181,7 @@ end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
 
-# We consider a potential deprecatio warning an effect, so for completely unkown getglobal,
+# We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.
 @test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
@@ -1458,7 +1459,7 @@ function f_with_early_try_catch_exit()
     result
 end
 
-let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="compact")))
+let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="CC: SLOT2REG")))
     for i = 1:length(ir.stmts)
         expr = ir.stmts[i][:stmt]
         if isa(expr, PhiCNode)
@@ -2109,4 +2110,14 @@ let src = code_typed1(()) do
         a[]
     end
     @test count(iscall((src, isdefined)), src.code) == 0
+end
+# We should successfully fold the default values of a ScopedValue
+const svalconstprop = ScopedValue(1)
+foosvalconstprop() = svalconstprop[]
+
+let src = code_typed1(foosvalconstprop, ())
+    function is_constfield_load(expr)
+        iscall((src, getfield))(expr) && expr.args[3] in (:(:has_default), :(:default))
+    end
+    @test count(is_constfield_load, src.code) == 0
 end

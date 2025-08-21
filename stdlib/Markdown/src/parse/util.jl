@@ -141,7 +141,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
         while !eof(stream)
             if startswith(stream, delimiter)
                 if count == 0
-                    return String(take!(buffer))
+                    return takestring!(buffer)
                 else
                     count -= 1
                     write(buffer, delimiter)
@@ -187,7 +187,7 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false
             if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
-                trailing == 0 && return String(take!(buffer))
+                trailing == 0 && return takestring!(buffer)
                 write(buffer, delimiter ^ (n + trailing))
             end
         end

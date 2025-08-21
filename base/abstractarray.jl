@@ -321,11 +321,13 @@ eachindex(itrs...) = keys(itrs...)
 eachindex(A::AbstractVector) = (@inline(); axes1(A))
 
 
-@noinline function throw_eachindex_mismatch_indices(::IndexLinear, inds...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(inds, ", ", " and "))"))
-end
-@noinline function throw_eachindex_mismatch_indices(::IndexCartesian, inds...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(inds, ", ", " and "))"))
+# we unroll the join for easier inference
+_join_comma_and(indsA, indsB) = LazyString(indsA, " and ", indsB)
+_join_comma_and(indsA, indsB, indsC...) = LazyString(indsA, ", ", _join_comma_and(indsB, indsC...))
+@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs...)
+    throw(DimensionMismatch(
+            LazyString("all inputs to eachindex must have the same ", indices_str, ", got ",
+                _join_comma_and(indsA, indsBs...))))
 end
 
 """
@@ -385,20 +387,17 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @inline
     eachindex(IndexStyle(A,B...), A, B...)
 end
+eachindex(::IndexLinear, A::Union{Array, Memory}) = unchecked_oneto(length(A))
 eachindex(::IndexLinear, A::AbstractArray) = (@inline; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@inline; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @inline
     indsA = eachindex(IndexLinear(), A)
-    _all_match_first(X->eachindex(IndexLinear(), X), indsA, B...) ||
-        throw_eachindex_mismatch_indices(IndexLinear(), eachindex(A), eachindex.(B)...)
+    indsBs = map(X -> eachindex(IndexLinear(), X), B)
+    all(==(indsA), indsBs) ||
+        throw_eachindex_mismatch_indices("indices", indsA, indsBs...)
     indsA
 end
-function _all_match_first(f::F, inds, A, B...) where F<:Function
-    @inline
-    (inds == f(A)) & _all_match_first(f, inds, B...)
-end
-_all_match_first(f::F, inds) where F<:Function = true
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
@@ -798,7 +797,7 @@ julia> similar(1:10, 1, 4)
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
 elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
 
-```julia-repl
+```jldoctest; filter = r"[01]"
 julia> similar(trues(10,10), 2)
 2-element BitVector:
  0
@@ -818,15 +817,18 @@ julia> similar(falses(10), Float64, 2, 4)
 See also: [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
-similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
-similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
-similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, axes(a))
+similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, dims)
+similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, dims)
+similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, dims)
 # Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
 # thereof. Ideally, we'd just convert Integers to OneTos and then call a canonical method with the axes,
 # but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T} = similar(a, T, to_shape(dims))
+# legacy method for packages that specialize similar(A::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}}}
+# leaving this method in ensures that Base owns the more specific method
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
@@ -837,7 +839,9 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
-to_shape(r::OneTo) = Int(last(r))
+to_shape(r::AbstractOneTo) = _to_shape(last(r))
+_to_shape(x::Integer) = to_shape(x)
+_to_shape(x) = Int(x)
 to_shape(r::AbstractUnitRange) = r
 
 """
@@ -863,6 +867,8 @@ would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 """
 similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims)
+similar(::Type{T}, shape::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
+# legacy method for packages that specialize similar(::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}})
 similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
 similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
@@ -1229,10 +1235,18 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 # While the definitions for IndexLinear are all simple enough to inline on their
 # own, IndexCartesian's CartesianIndices is more complicated and requires explicit
 # inlining.
-function iterate(A::AbstractArray, state=(eachindex(A),))
+iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
+iterate_starting_state(A, ::IndexLinear) = firstindex(A)
+iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
+@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
+@inline function _iterate(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
+end
+@inline function _iterate(A::AbstractArray, state::Integer)
+    checkbounds(Bool, A, state) || return nothing
+    A[state], state + one(state)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
@@ -2553,8 +2567,15 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     end
 
     # discover number of rows or columns
+    # d1 dimension is increased by 1 to appropriately handle 0-length arrays
     for i ∈ 1:dims[d1]
         outdims[d1] += cat_size(as[i], d1)
+    end
+
+    # adjustment to handle 0-length arrays
+    first_dim_zero = outdims[d1] == 0
+    if first_dim_zero
+        outdims[d1] = dims[d1]
     end
 
     currentdims = zeros(Int, N)
@@ -2562,7 +2583,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     elementcount = 0
     for i ∈ eachindex(as)
         elementcount += cat_length(as[i])
-        currentdims[d1] += cat_size(as[i], d1)
+        currentdims[d1] += first_dim_zero ? 1 : cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
             for d ∈ (d2, 3:N...)
@@ -2589,6 +2610,10 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
             throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
         end
+    end
+    # restore 0-length adjustment
+    if first_dim_zero
+        outdims[d1] = 0
     end
 
     outlen = prod(outdims)
@@ -3412,12 +3437,19 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    idxs1 = LinearIndices(As[1])
-    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
-    for i = idxs1
-        @inbounds I = ith_all(i, As)
-        val = f(I...)
-        @inbounds dest[i] = val
+    idxs = LinearIndices(dest)
+    if all(x -> LinearIndices(x) == idxs, As)
+        for i in idxs
+            @inbounds as = ith_all(i, As)
+            val = f(as...)
+            @inbounds dest[i] = val
+        end
+    else
+        for (i, Is...) in zip(eachindex(dest), map(eachindex, As)...)
+            as = ntuple(j->getindex(As[j], Is[j]), length(As))
+            val = f(as...)
+            dest[i] = val
+        end
     end
     return dest
 end
@@ -3547,81 +3579,6 @@ pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 # sizehint! does not nothing by default
 sizehint!(a::AbstractVector, _) = a
 
-## hashing AbstractArray ##
-
-const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
-function hash(A::AbstractArray, h::UInt)
-    h += hash_abstractarray_seed
-    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
-    # Instead hash the tuple of firsts and lasts along each dimension
-    h = hash(map(first, axes(A)), h)
-    h = hash(map(last, axes(A)), h)
-
-    # For short arrays, it's not worth doing anything complicated
-    if length(A) < 8192
-        for x in A
-            h = hash(x, h)
-        end
-        return h
-    end
-
-    # Goal: Hash approximately log(N) entries with a higher density of hashed elements
-    # weighted towards the end and special consideration for repeated values. Colliding
-    # hashes will often subsequently be compared by equality -- and equality between arrays
-    # works elementwise forwards and is short-circuiting. This means that a collision
-    # between arrays that differ by elements at the beginning is cheaper than one where the
-    # difference is towards the end. Furthermore, choosing `log(N)` arbitrary entries from a
-    # sparse array will likely only choose the same element repeatedly (zero in this case).
-
-    # To achieve this, we work backwards, starting by hashing the last element of the
-    # array. After hashing each element, we skip `fibskip` elements, where `fibskip`
-    # is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
-    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension
-    # and only end up hashing one slice of the array (as might happen with powers of
-    # two). Finally, we find the next distinct value from the one we just hashed.
-
-    # This is a little tricky since skipping an integer number of values inherently works
-    # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
-    ks = keys(A)
-    key_to_linear = LinearIndices(ks) # Index into this map to compute the linear index
-    linear_to_key = vec(ks)           # And vice-versa
-
-    # Start at the last index
-    keyidx = last(ks)
-    linidx = key_to_linear[keyidx]
-    fibskip = prevfibskip = oneunit(linidx)
-    first_linear = first(LinearIndices(linear_to_key))
-    n = 0
-    while true
-        n += 1
-        # Hash the element
-        elt = A[keyidx]
-        h = hash(keyidx=>elt, h)
-
-        # Skip backwards a Fibonacci number of indices -- this is a linear index operation
-        linidx = key_to_linear[keyidx]
-        linidx < fibskip + first_linear && break
-        linidx -= fibskip
-        keyidx = linear_to_key[linidx]
-
-        # Only increase the Fibonacci skip once every N iterations. This was chosen
-        # to be big enough that all elements of small arrays get hashed while
-        # obscenely large arrays are still tractable. With a choice of N=4096, an
-        # entirely-distinct 8000-element array will have ~75% of its elements hashed,
-        # with every other element hashed in the first half of the array. At the same
-        # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
-        if rem(n, 4096) == 0
-            fibskip, prevfibskip = fibskip + prevfibskip, fibskip
-        end
-
-        # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
-        keyidx = findprev(!isequal(elt), A, keyidx)
-        keyidx === nothing && break
-    end
-
-    return h
-end
-
 # The semantics of `collect` are weird. Better to write our own
 function rest(a::AbstractArray{T}, state...) where {T}
     v = Vector{T}(undef, 0)
@@ -3629,7 +3586,6 @@ function rest(a::AbstractArray{T}, state...) where {T}
     sizehint!(v, length(a))
     return foldl(push!, Iterators.rest(a, state...), init=v)
 end
-
 
 ## keepat! ##
 

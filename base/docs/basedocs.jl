@@ -2470,14 +2470,19 @@ julia> Tuple(Real[1, 2, pi])  # takes a collection
 tuple
 
 """
-    getfield(value, name::Symbol, [order::Symbol])
-    getfield(value, i::Int, [order::Symbol])
+    getfield(value, name::Symbol, [boundscheck::Bool=true], [order::Symbol])
+    getfield(value, i::Int, [boundscheck::Bool=true], [order::Symbol])
 
-Extract a field from a composite `value` by name or position. Optionally, an
-ordering can be defined for the operation. If the field was declared `@atomic`,
-the specification is strongly recommended to be compatible with the stores to
-that location. Otherwise, if not declared as `@atomic`, this parameter must be
-`:not_atomic` if specified.
+Extract a field from a composite `value` by name or position.
+
+Optionally, an ordering can be defined for the operation.  If the field was
+declared `@atomic`, the specification is strongly recommended to be compatible
+with the stores to that location. Otherwise, if not declared as `@atomic`, this
+parameter must be `:not_atomic` if specified.
+
+The bounds check may be disabled, in which case the behavior of this function is
+undefined if `i` is out of bounds.
+
 See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
@@ -2754,6 +2759,25 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 setglobalonce!
 
 """
+   _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, imported::Bool])
+
+With all five arguments, imports `sym` from module `from` into `to` with name
+`asname`.  `imported` is true for bindings created with `import` (set it to
+false for `using A: ...`).
+
+With only the first three arguments, creates a binding for the module `from`
+with name `asname` in `to`.
+"""
+Core._import
+
+"""
+   _using(to::Module, from::Module)
+
+Add `from` to the usings list of `to`.
+"""
+Core._using
+
+"""
     typeof(x)
 
 Get the concrete type of `x`.
@@ -2830,6 +2854,9 @@ a value set.
 
 If `allow_import` is `false`, the global variable must be defined inside `m`
 and may not be imported from another module.
+
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.
 
 See also [`@isdefined`](@ref).
 

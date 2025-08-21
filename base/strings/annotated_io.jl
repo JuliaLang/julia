@@ -199,3 +199,78 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{RegionA
         push!(io.annotations, setindex(annotations[index], start+offset:stop+offset, :region))
     end
 end
+
+# NOTE: This is an interim solution to the invalidations caused
+# by the split styled display implementation. This should be
+# replaced by a more robust solution (such as a consolidation of
+# the type and method definitions) in the near future.
+module AnnotatedDisplay
+
+using ..Base: IO, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
+using ..Base: eachregion, invoke_in_world, tls_world_age
+
+# Write
+
+ansi_write(f::Function, io::IO, x::Any) = f(io, String(x))
+
+ansi_write_(f::Function, io::IO, @nospecialize(x::Any)) =
+    invoke_in_world(tls_world_age(), ansi_write, f, io, x)
+
+Base.write(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
+    ansi_write_(write, io, s)::Int
+
+Base.write(io::IO, c::AnnotatedChar) =
+    ansi_write_(write, io, c)::Int
+
+function Base.write(io::IO, aio::AnnotatedIOBuffer)
+    if get(io, :color, false) == true
+        # This does introduce an overhead that technically
+        # could be avoided, but I'm not sure that it's currently
+        # worth the effort to implement an efficient version of
+        # writing from a AnnotatedIOBuffer with style.
+        # In the meantime, by converting to an `AnnotatedString` we can just
+        # reuse all the work done to make that work.
+        ansi_write_(write, io, read(aio, AnnotatedString))::Int
+    else
+        write(io, aio.io)
+    end
+end
+
+# Print
+
+Base.print(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
+    (ansi_write_(write, io, s); nothing)
+
+Base.print(io::IO, s::AnnotatedChar) =
+    (ansi_write_(write, io, s); nothing)
+
+Base.print(io::AnnotatedIOBuffer, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
+    (write(io, s); nothing)
+
+Base.print(io::AnnotatedIOBuffer, c::AnnotatedChar) =
+    (write(io, c); nothing)
+
+# Escape
+
+Base.escape_string(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}},
+              esc = ""; keep = (), ascii::Bool=false, fullhex::Bool=false) =
+    (ansi_write_((io, s) -> escape_string(io, s, esc; keep, ascii, fullhex), io, s); nothing)
+
+# Show
+
+show_annot(io::IO, ::Any) = nothing
+show_annot(io::IO, ::MIME, ::Any) = nothing
+
+show_annot_(io::IO, @nospecialize(x::Any)) =
+    invoke_in_world(tls_world_age(), show_annot, io, x)::Nothing
+
+show_annot_(io::IO, m::MIME, @nospecialize(x::Any)) =
+    invoke_in_world(tls_world_age(), show_annot, io, m, x)::Nothing
+
+Base.show(io::IO, m::MIME"text/html", s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
+    show_annot_(io, m, s)
+
+Base.show(io::IO, m::MIME"text/html", c::AnnotatedChar) =
+    show_annot_(io, m, c)
+
+end

@@ -128,7 +128,7 @@ _trimmedshape(i::AbstractArray{<:ScalarIndex}, rest...) = (length(i), _trimmedsh
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedshape(rest...)
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{N}}, rest...) where {N} = (length(i), ntuple(Returns(1), Val(N - 1))..., _trimmedshape(rest...)...)
 _trimmedshape() = ()
-# We can avoid the repeation from `AbstractArray{CartesianIndex{0}}`
+# We can avoid the repetition from `AbstractArray{CartesianIndex{0}}`
 _trimmedpind(i, rest...) = (map(Returns(:), axes(i))..., _trimmedpind(rest...)...)
 _trimmedpind(i::AbstractRange, rest...) = (i, _trimmedpind(rest...)...)
 _trimmedpind(i::Union{UnitRange,StepRange,OneTo}, rest...) = ((:), _trimmedpind(rest...)...)
@@ -520,6 +520,16 @@ _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
     @inline
     (axes(i1)..., _indices_sub(I...)...)
+end
+
+axes1(::SubArray{<:Any,0}) = OneTo(1)
+axes1(S::SubArray) = (@inline; _axes1_sub(S.indices...))
+_axes1_sub() = ()
+_axes1_sub(::Real, I...) = (@inline; _axes1_sub(I...))
+_axes1_sub(::AbstractArray{<:Any,0}, I...) = _axes1_sub(I...)
+function _axes1_sub(i1::AbstractArray, I...)
+    @inline
+    axes1(i1)
 end
 
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)

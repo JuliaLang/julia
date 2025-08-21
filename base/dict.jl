@@ -124,9 +124,10 @@ _shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
 #     sh::UInt8 - short hash (7 highest hash bits)
-function hashindex(key, sz)
+function hashindex(key, sz::Integer)
+    sz = Int(sz)::Int
     hsh = hash(key)::UInt
-    idx = (((hsh % Int) & (sz-1)) + 1)::Int
+    idx = ((hsh % Int) & (sz-1)) + 1
     return idx, _shorthash7(hsh)
 end
 
@@ -190,7 +191,8 @@ end
     return h
 end
 
-function sizehint!(d::Dict{T}, newsz; shrink::Bool=true) where T
+function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
+    newsz = Int(newsz)::Int
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)
@@ -532,7 +534,7 @@ end
 Determine whether a collection has a mapping for a given `key`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -554,7 +556,7 @@ in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 Return the key matching argument `key` if one exists in `collection`, otherwise return `default`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
