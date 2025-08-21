@@ -42,6 +42,9 @@
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 
+#ifndef _OS_WINDOWS_
+#include <sys/mman.h>
+#endif
 
 using namespace llvm;
 
@@ -1520,14 +1523,22 @@ struct ShardTimers {
     }
 };
 
+#ifdef _OS_WINDOWS_
+#define JL_USE_TEMP_FILES
+#endif
+
 class AOTOutput {
 public:
-    AOTOutput(const Twine &prefix, const char *suffix)
-      : name((prefix + "." + suffix).str()), state(OPEN)
+    AOTOutput(const Twine &prefix, const char *suffix) : name((prefix + "." + suffix).str())
     {
+#ifdef JL_USE_TEMP_FILES
         std::error_code err = sys::fs::createTemporaryFile(prefix, suffix, fd, path);
         if (err)
             jl_errorf("failed to create temporary file: %s", err.message().c_str());
+        state = OPEN;
+#else
+        state = MEMORY;
+#endif
     }
     ~AOTOutput() { remove(); }
     AOTOutput(const AOTOutput &) = delete;
@@ -1536,43 +1547,53 @@ public:
       : name(std::move(other.name)),
         state(other.state),
         fd(other.fd),
-        path(std::move(other.path))
+        path(std::move(other.path)),
+        buf(std::move(other.buf))
     {
         other.state = EMPTY;
     }
     AOTOutput &operator=(AOTOutput &&other) noexcept
     {
         remove();
-        name = std::move(other.name);
+        std::swap(name, other.name);
         std::swap(state, other.state);
-        fd = other.fd;
-        path = std::move(other.path);
+        std::swap(fd, other.fd);
+        std::swap(path, other.path);
+        std::swap(buf, other.buf);
         return *this;
     }
 
     std::unique_ptr<raw_pwrite_stream> ostream()
     {
         open();
-        return std::make_unique<raw_fd_stream>(fd, false);
+        if (state == OPEN)
+            return std::make_unique<raw_fd_stream>(fd, false);
+        else
+            return std::make_unique<raw_svector_ostream>(buf);
     }
 
     ErrorOr<std::unique_ptr<MemoryBuffer>> memorybuf()
     {
         open();
-        auto f = sys::fs::convertFDToNativeFile(fd);
-        sys::fs::file_status status;
-        if (auto err = sys::fs::status(fd, status))
-            return err;
-        return MemoryBuffer::getOpenFile(f, name, status.getSize(), false);
+        if (state == OPEN) {
+            auto f = sys::fs::convertFDToNativeFile(fd);
+            sys::fs::file_status status;
+            if (auto err = sys::fs::status(fd, status))
+                return err;
+            return MemoryBuffer::getOpenFile(f, name, status.getSize(), false);
+        }
+        else if (state == MEMORY) {
+            return MemoryBuffer::getMemBuffer(StringRef{buf.data(), buf.size()}, name,
+                                              false);
+        }
+        jl_unreachable();
     }
-
-    StringRef get_name() { return name; }
 
     void open()
     {
         using namespace sys::fs;
-        assert(state == EXISTS || state == OPEN);
-        if (state == OPEN)
+        assert(state == EXISTS || state == OPEN || state == MEMORY);
+        if (state == OPEN || state == MEMORY)
             return;
         auto err = openFileForReadWrite(path, fd, CD_OpenExisting, OF_None);
         if (err)
@@ -1587,6 +1608,20 @@ public:
             (void)sys::fs::closeFile(f);
             state = EXISTS;
         }
+        else if (state == MEMORY) {
+            void *p = (void *)((uintptr_t)buf.data() & ~(jl_page_size - 1));
+            size_t s = LLT_ALIGN(buf.size(), jl_page_size);
+#if defined(_OS_DARWIN_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)
+            if (s > 0)
+                madvise(p, s, MADV_DONTNEED);
+#elif defined(_OS_LINUX_) && defined(MADV_COLD)
+            if (s > 0)
+                madvise(p, s, MADV_COLD);
+#else
+            (void)p;
+            (void)s;
+#endif
+        }
     }
 
     void remove()
@@ -1597,13 +1632,22 @@ public:
             (void)sys::fs::remove(path);
             state = EMPTY;
         }
+        else if (state == MEMORY) {
+            buf.clear();
+        }
     }
 
 private:
     std::string name;
-    enum { EMPTY, EXISTS, OPEN } state;
+    enum {
+        EMPTY,               // Temporary file removed/buffer freed
+        EXISTS,              // Temporary file exists but is not open (save FDs)
+        OPEN,                // Temporary file exists and is open
+        MEMORY,              // Contents are stored in memory
+    } state;
     int fd;
     SmallString<128> path;
+    SmallVector<char, 0> buf;
 };
 
 struct AOTOutputs {
@@ -2336,7 +2380,7 @@ void jl_dump_native_impl(void *native_code,
 
     const bool imaging_mode = true;
     unsigned threads = 1;
-    unsigned nshards;
+    unsigned nshards = 1;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
