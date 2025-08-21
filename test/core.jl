@@ -288,7 +288,7 @@ o59327(1)
 )
 
 # _do_ specialize if the signature is specific
-@noinline n59327(f::typeof(+), x) where F = Any[f, x]
+@noinline n59327(f::typeof(+), x) = Any[f, x]
 o59327(x) = n59327(+, Any[x][1])
 o59327(1)
 @test !any(
