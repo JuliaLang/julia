@@ -587,7 +587,8 @@ end
 _should_instrument(loc::Symbol) = is_file_tracked(loc)
 _should_instrument(loc::Method) = _should_instrument(loc.file)
 _should_instrument(loc::MethodInstance) = _should_instrument(loc.def)
-_should_instrument(loc::Module) = false
+_should_instrument(::Module) = false
+_should_instrument(::Nothing) = false
 function _should_instrument(info::DebugInfo)
     linetable = info.linetable
     linetable === nothing || (_should_instrument(linetable) && return true)

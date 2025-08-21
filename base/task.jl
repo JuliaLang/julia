@@ -139,7 +139,7 @@ true
 ```
 """
 macro task(ex)
-    thunk = Base.replace_linenums!(:(()->$(esc(ex))), __source__)
+    thunk = replace_linenums!(:(()->$(esc(ex))), __source__)
     :(Task($thunk))
 end
 
@@ -495,7 +495,7 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
         for i in findall(remaining_mask)
             waiter = waiter_tasks[i]
             donenotify = tasks[i].donenotify::ThreadSynchronizer
-            @lock donenotify Base.list_deletefirst!(donenotify.waitq, waiter)
+            @lock donenotify list_deletefirst!(donenotify.waitq, waiter)
         end
         done_tasks = tasks[done_mask]
         if throwexc && exception
@@ -660,15 +660,15 @@ isolating the asynchronous code from changes to the variable's value in the curr
     Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
-    do_async_macro(expr, __source__)
+    do_async_macro(expr, __source__, identity)
 end
 
 # generate the code for @async, possibly wrapping the task in something before
 # pushing it to the wait queue.
-function do_async_macro(expr, linenums; wrap=identity)
-    letargs = Base._lift_one_interp!(expr)
+function do_async_macro(expr, linenums, wrap)
+    letargs = _lift_one_interp!(expr)
 
-    thunk = Base.replace_linenums!(:(()->($(esc(expr)))), linenums)
+    thunk = replace_linenums!(:(()->($(esc(expr)))), linenums)
     var = esc(sync_varname)
     quote
         let $(letargs...)
@@ -708,7 +708,7 @@ fetch(t::UnwrapTaskFailedException) = unwrap_task_failed(fetch, t)
 
 # macro for running async code that doesn't throw wrapped exceptions
 macro async_unwrap(expr)
-    do_async_macro(expr, __source__, wrap=task->:(Base.UnwrapTaskFailedException($task)))
+    do_async_macro(expr, __source__, taskvar->:(UnwrapTaskFailedException($taskvar)))
 end
 
 """
@@ -758,29 +758,37 @@ function errormonitor(t::Task)
 end
 
 # Capture interpolated variables in $() and move them to let-block
-function _lift_one_interp!(e)
+function _lift_one_interp!(@nospecialize e)
     letargs = Any[]  # store the new gensymed arguments
-    _lift_one_interp_helper(e, false, letargs) # Start out _not_ in a quote context (false)
-    letargs
+    _lift_one_interp_helper(e, false, 0, letargs) # Start out _not_ in a quote context (false) and not needing escapes
+    return letargs
 end
-_lift_one_interp_helper(v, _, _) = v
-function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
+_lift_one_interp_helper(@nospecialize(v), _::Bool, _::Int, _::Vector{Any}) = v
+function _lift_one_interp_helper(expr::Expr, in_quote_context::Bool, escs::Int, letargs::Vector{Any})
     if expr.head === :$
         if in_quote_context  # This $ is simply interpolating out of the quote
             # Now, we're out of the quote, so any _further_ $ is ours.
             in_quote_context = false
-        else
+        elseif escs == 0
+            # if escs is non-zero, then we cannot hoist expr.args without violating hygiene rules
             newarg = gensym()
             push!(letargs, :($(esc(newarg)) = $(esc(expr.args[1]))))
             return newarg  # Don't recurse into the lifted $() exprs
         end
+    elseif expr.head === :meta || expr.head === :inert
+        return expr
     elseif expr.head === :quote
         in_quote_context = true   # Don't try to lift $ directly out of quotes
     elseif expr.head === :macrocall
         return expr  # Don't recur into macro calls, since some other macros use $
+    elseif expr.head === :var"hygienic-scope"
+        escs += 1
+    elseif expr.head === :escape
+        escs == 0 && return expr
+        escs -= 1
     end
     for (i,e) in enumerate(expr.args)
-        expr.args[i] = _lift_one_interp_helper(e, in_quote_context, letargs)
+        expr.args[i] = _lift_one_interp_helper(e, in_quote_context, escs, letargs)
     end
     expr
 end
@@ -1007,7 +1015,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        q = t.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
+        q = t.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
@@ -1033,7 +1041,7 @@ function yield()
     try
         wait()
     catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end
