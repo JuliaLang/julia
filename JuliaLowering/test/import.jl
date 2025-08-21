@@ -39,4 +39,37 @@ end
 """)
 @test C.D.f === C.E.f
 
+# Test that `using` F brings in the symbol G immediately
+F = JuliaLowering.include_string(test_mod, """
+module F
+    export G
+    module G
+        export G_global
+        G_global = "exported from G"
+    end
+end
+""")
+JuliaLowering.include_string(test_mod, """
+using .F, .G
+""")
+@test test_mod.F === F
+@test test_mod.G === F.G
+@test test_mod.G_global === "exported from G"
+
+# Similarly, that import makes symbols available immediately
+H = JuliaLowering.include_string(test_mod, """
+module H
+    module I
+        module J
+        end
+    end
+end
+""")
+JuliaLowering.include_string(test_mod, """
+import .H.I, .I.J
+""")
+@test test_mod.I === H.I
+@test test_mod.J === H.I.J
+@test test_mod.G_global === "exported from G"
+
 end

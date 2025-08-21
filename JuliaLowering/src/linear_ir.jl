@@ -855,6 +855,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     elseif k == K"latestworld"
+        if needs_value
+            throw(LoweringError(ex, "misplaced latestsworld"))
+        end
         emit_latestworld(ctx, ex)
     elseif k == K"latestworld_if_toplevel"
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)

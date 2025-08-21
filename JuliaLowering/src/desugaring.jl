@@ -4098,7 +4098,9 @@ end
 #-------------------------------------------------------------------------------
 # Expand import / using / export
 
-function _append_importpath(ctx, path_spec, path)
+function expand_importpath(path)
+    @chk kind(path) == K"importpath"
+    path_spec = Expr(:.)
     prev_was_dot = true
     for component in children(path)
         k = kind(component)
@@ -4114,13 +4116,12 @@ function _append_importpath(ctx, path_spec, path)
             throw(LoweringError(component, "invalid import path: `.` in identifier path"))
         end
         prev_was_dot = is_dot
-        push!(path_spec, @ast(ctx, component, name::K"String"))
+        push!(path_spec.args, Symbol(name))
     end
-    path_spec
+    return path_spec
 end
 
-function expand_import(ctx, ex)
-    is_using = kind(ex) == K"using"
+function expand_import_or_using(ctx, ex)
     if kind(ex[1]) == K":"
         # import M: x.y as z, w
         # (import (: (importpath M) (as (importpath x y) z) (importpath w)))
@@ -4131,57 +4132,87 @@ function expand_import(ctx, ex)
         #  (call core.svec  2 "x" "y" "z"  1 "w" "w"))
         @chk numchildren(ex[1]) >= 2
         from = ex[1][1]
-        @chk kind(from) == K"importpath"
-        from_path = @ast ctx from [K"call"
-            "svec"::K"core"
-            _append_importpath(ctx, SyntaxList(ctx), from)...
-        ]
+        from_path = @ast ctx from QuoteNode(expand_importpath(from))::K"Value"
         paths = ex[1][2:end]
     else
         # import A.B
         # (using (importpath A B))
-        # (call module_import true nothing (call core.svec 1 "w"))
+        # (call eval_import true nothing (call core.svec 1 "w"))
         @chk numchildren(ex) >= 1
-        from_path = nothing_(ctx, ex)
+        from_path = nothing
         paths = children(ex)
     end
-    path_spec = SyntaxList(ctx)
-    for path in paths
+    # Here we represent the paths as quoted `Expr` data structures
+    path_specs = SyntaxList(ctx)
+    for spec in paths
         as_name = nothing
-        if kind(path) == K"as"
-            @chk numchildren(path) == 2
-            as_name = path[2]
-            @chk kind(as_name) == K"Identifier"
-            path = path[1]
+        if kind(spec) == K"as"
+            @chk numchildren(spec) == 2
+            @chk kind(spec[2]) == K"Identifier"
+            as_name = Symbol(spec[2].name_val)
+            path = QuoteNode(Expr(:as, expand_importpath(spec[1]), as_name))
+        else
+            path = QuoteNode(expand_importpath(spec))
         end
-        @chk kind(path) == K"importpath"
-        push!(path_spec, @ast(ctx, path, numchildren(path)::K"Integer"))
-        _append_importpath(ctx, path_spec, path)
-        push!(path_spec, isnothing(as_name) ? nothing_(ctx, ex) :
-                         @ast(ctx, as_name, as_name.name_val::K"String"))
+        push!(path_specs, @ast ctx spec path::K"Value")
+    end
+    is_using = kind(ex) == K"using"
+    stmts = SyntaxList(ctx)
+    if isnothing(from_path)
+        for spec in path_specs
+            if is_using
+                push!(stmts,
+                    @ast ctx spec [K"call"
+                        eval_using   ::K"Value"
+                        ctx.mod      ::K"Value"
+                        spec
+                    ]
+                )
+            else
+                push!(stmts,
+                    @ast ctx spec [K"call"
+                        eval_import   ::K"Value"
+                        (!is_using)   ::K"Bool"
+                        ctx.mod       ::K"Value"
+                        "nothing"     ::K"top"
+                        spec
+                    ]
+                )
+            end
+            # latestworld required between imports so that previous symbols
+            # become visible
+            push!(stmts, @ast ctx spec (::K"latestworld"))
+        end
+    else
+        push!(stmts, @ast ctx ex [K"call"
+            eval_import   ::K"Value"
+            (!is_using)   ::K"Bool"
+            ctx.mod       ::K"Value"
+            from_path
+            path_specs...
+        ])
+        push!(stmts, @ast ctx ex (::K"latestworld"))
     end
     @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
-        [K"call"
-            module_import ::K"Value"
-            ctx.mod       ::K"Value"
-            is_using      ::K"Value"
-            from_path
-            [K"call"
-                "svec"::K"core"
-                path_spec...
-            ]
-        ]
+        stmts...
+        [K"removable" "nothing"::K"core"]
     ]
 end
 
 # Expand `public` or `export`
 function expand_public(ctx, ex)
+    identifiers = String[]
+    for e in children(ex)
+        @chk kind(e) == K"Identifier" (ex, "Expected identifier")
+        push!(identifiers, e.name_val)
+    end
+    (e.name_val::K"String" for e in children(ex))
     @ast ctx ex [K"call"
-        module_public::K"Value"
+        eval_public::K"Value"
         ctx.mod::K"Value"
         (kind(ex) == K"export")::K"Bool"
-        (e.name_val::K"String" for e in children(ex))...
+        identifiers::K"Value"
     ]
 end
 
@@ -4421,7 +4452,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"module"
         expand_module(ctx, ex)
     elseif k == K"import" || k == K"using"
-        expand_import(ctx, ex)
+        expand_import_or_using(ctx, ex)
     elseif k == K"export" || k == K"public"
         expand_public(ctx, ex)
     elseif k == K"abstract" || k == K"primitive"

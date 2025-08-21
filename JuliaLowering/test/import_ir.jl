@@ -2,36 +2,45 @@
 # Basic import
 import A: b
 #---------------------
-1   (call core.svec "A")
-2   (call core.svec 1 "b" core.nothing)
-3   (call JuliaLowering.module_import TestMod false %₁ %₂)
-4   (return %₃)
+1   (call JuliaLowering.eval_import true TestMod :($(QuoteNode(:($(Expr(:., :A)))))) :($(QuoteNode(:($(Expr(:., :b)))))))
+2   latestworld
+3   (return core.nothing)
 
 ########################################
 # Import with paths and `as`
 import A.B.C: b, c.d as e
 #---------------------
-1   (call core.svec "A" "B" "C")
-2   (call core.svec 1 "b" core.nothing 2 "c" "d" "e")
-3   (call JuliaLowering.module_import TestMod false %₁ %₂)
-4   (return %₃)
+1   (call JuliaLowering.eval_import true TestMod :($(QuoteNode(:($(Expr(:., :A, :B, :C)))))) :($(QuoteNode(:($(Expr(:., :b)))))) :($(QuoteNode(:(c.d as e)))))
+2   latestworld
+3   (return core.nothing)
 
 ########################################
-# Using
-using A
+# Imports without `from` module need separating with latestworld
+import A, B
 #---------------------
-1   (call core.svec 1 "A" core.nothing)
-2   (call JuliaLowering.module_import TestMod true core.nothing %₁)
-3   (return %₂)
+1   (call JuliaLowering.eval_import true TestMod top.nothing :($(QuoteNode(:($(Expr(:., :A)))))))
+2   latestworld
+3   (call JuliaLowering.eval_import true TestMod top.nothing :($(QuoteNode(:($(Expr(:., :B)))))))
+4   latestworld
+5   (return core.nothing)
+
+########################################
+# Multiple usings need separating with latestworld
+using A, B
+#---------------------
+1   (call JuliaLowering.eval_using TestMod :($(QuoteNode(:($(Expr(:., :A)))))))
+2   latestworld
+3   (call JuliaLowering.eval_using TestMod :($(QuoteNode(:($(Expr(:., :B)))))))
+4   latestworld
+5   (return core.nothing)
 
 ########################################
 # Using with paths and `as`
 using A.B.C: b, c.d as e
 #---------------------
-1   (call core.svec "A" "B" "C")
-2   (call core.svec 1 "b" core.nothing 2 "c" "d" "e")
-3   (call JuliaLowering.module_import TestMod true %₁ %₂)
-4   (return %₃)
+1   (call JuliaLowering.eval_import false TestMod :($(QuoteNode(:($(Expr(:., :A, :B, :C)))))) :($(QuoteNode(:($(Expr(:., :b)))))) :($(QuoteNode(:(c.d as e)))))
+2   latestworld
+3   (return core.nothing)
 
 ########################################
 # Error: Import not at top level
@@ -49,13 +58,13 @@ end
 # Export
 export a, b, c
 #---------------------
-1   (call JuliaLowering.module_public TestMod true "a" "b" "c")
+1   (call JuliaLowering.eval_public TestMod true ["a", "b", "c"])
 2   (return %₁)
 
 ########################################
 # Public
 public a, b, c
 #---------------------
-1   (call JuliaLowering.module_public TestMod false "a" "b" "c")
+1   (call JuliaLowering.eval_public TestMod false ["a", "b", "c"])
 2   (return %₁)
 

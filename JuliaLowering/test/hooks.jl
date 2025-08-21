@@ -19,20 +19,22 @@ const JL = JuliaLowering
         end
     end
 
-    @testset "integration: `JuliaLowering.activate!`" begin
-        prog = parseall(Expr, "global asdf = 1")
-        JL.activate!()
-        out = Core.eval(test_mod, prog)
-        JL.activate!(false)
-        @test out === 1
-        @test isdefined(test_mod, :asdf)
+    if isdefined(Core, :_lower)
+        @testset "integration: `JuliaLowering.activate!`" begin
+            prog = parseall(Expr, "global asdf = 1")
+            JL.activate!()
+            out = Core.eval(test_mod, prog)
+            JL.activate!(false)
+            @test out === 1
+            @test isdefined(test_mod, :asdf)
 
-        prog = parseall(Expr, "module M; x = 1; end")
-        JL.activate!()
-        out = Core.eval(test_mod, prog)
-        JL.activate!(false)
-        @test out isa Module
-        @test isdefined(test_mod, :M)
-        @test isdefined(test_mod.M, :x)
+            prog = parseall(Expr, "module M; x = 1; end")
+            JL.activate!()
+            out = Core.eval(test_mod, prog)
+            JL.activate!(false)
+            @test out isa Module
+            @test isdefined(test_mod, :M)
+            @test isdefined(test_mod.M, :x)
+        end
     end
 end
