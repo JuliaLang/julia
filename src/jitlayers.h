@@ -317,7 +317,7 @@ enum CompilationPolicy {
     Extern = 1,
 };
 
-Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
+Function *jl_cfunction_object(jl_value_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
 
 extern "C" JL_DLLEXPORT_CODEGEN

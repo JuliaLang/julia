@@ -282,12 +282,12 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
 /**
  * @brief Call a Julia function with a specified number of arguments.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param args An array of pointers to `jl_value_t` representing the arguments.
  * @param nargs The number of arguments in the array.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_call(jl_value_t *f, jl_value_t **args, uint32_t nargs)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -317,10 +317,10 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t n
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
+JL_DLLEXPORT jl_value_t *jl_call0(jl_value_t *f)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -345,11 +345,11 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the argument to the function.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
+JL_DLLEXPORT jl_value_t *jl_call1(jl_value_t *f, jl_value_t *a)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -377,12 +377,12 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the first argument.
  * @param b A pointer to `jl_value_t` representing the second argument.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_value_t *jl_call2(jl_value_t *f, jl_value_t *a, jl_value_t *b)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -411,13 +411,13 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the first argument.
  * @param b A pointer to `jl_value_t` representing the second argument.
  * @param c A pointer to `jl_value_t` representing the third argument.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
+JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c)
 {
     jl_value_t *v;
@@ -448,14 +448,14 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the first argument.
  * @param b A pointer to `jl_value_t` representing the second argument.
  * @param c A pointer to `jl_value_t` representing the third argument.
  * @param d A pointer to `jl_value_t` representing the fourth argument.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
+JL_DLLEXPORT jl_value_t *jl_call4(jl_value_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c,
                                   jl_value_t *d)
 {
@@ -961,8 +961,8 @@ static NOINLINE int true_main(int argc, char *argv[])
     size_t last_age = ct->world_age;
     ct->world_age = jl_get_world_counter();
 
-    jl_function_t *start_client = jl_base_module ?
-        (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("_start"), ct->world_age) : NULL;
+    jl_value_t *start_client = jl_base_module ?
+        (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("_start"), ct->world_age) : NULL;
 
     if (start_client) {
         int ret = 1;

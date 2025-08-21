@@ -10,3 +10,5 @@ USE_BINARYBUILDER_LLVM=1
 
 override SANITIZE=1
 override SANITIZE_THREAD=1
+override CROSS_BOOTSTRAP_JULIA=$(BUILDROOT)/../bootstrap/usr/bin/julia
+override CROSS_BOOTSTRAP_SYSBASE=$(BUILDROOT)/../bootstrap/usr/lib/julia/sysbase.$(SHLIB_EXT)

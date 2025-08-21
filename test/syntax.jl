@@ -4548,3 +4548,10 @@ end
         )
     end
 end
+
+let d = Dict(:a=>1)
+    # quoted symbols should not be recognized as argument uses
+    foo(a=d[:a], b=d[:a]) = 1
+    foo(a::Int) = 2
+    @test foo() == 1
+end
