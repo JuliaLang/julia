@@ -313,10 +313,7 @@ JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
     return jl_current_task->ptls->rngseed;
 }
 
-
-#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
-    extern int unw_ensure_tls (void);
-#endif
+typedef void (*unw_tls_ensure_func)(void) JL_NOTSAFEPOINT;
 
 // get thread local rng
 JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
@@ -403,7 +400,10 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
     // ensures libunwind TLS space for this thread is allocated eagerly
     // to make unwinding async-signal-safe even when using thread local caches.
-    unw_ensure_tls();
+    unw_tls_ensure_func jl_unw_ensure_tls = NULL;
+    jl_dlsym(jl_exe_handle, "unw_ensure_tls", (void**)&jl_unw_ensure_tls, 0);
+    if (jl_unw_ensure_tls)
+        jl_unw_ensure_tls();
 #endif
 
     return ptls;
