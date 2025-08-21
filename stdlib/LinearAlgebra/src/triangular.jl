@@ -232,17 +232,46 @@ Base.isassigned(A::UnitUpperTriangular, i::Int, j::Int) =
 Base.isassigned(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? isassigned(A.data, i, j) : true
 
-getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
-    i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-getindex(A::LowerTriangular, i::Integer, j::Integer) =
-    i >= j ? A.data[i,j] : zero(A.data[j,i])
-getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
-    i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-getindex(A::UpperTriangular, i::Integer, j::Integer) =
-    i <= j ? A.data[i,j] : zero(A.data[j,i])
-
-function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
+Base.@propagate_inbounds function getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T}
     if i > j
+        A.data[i,j]
+    else
+        @boundscheck checkbounds(A, i, j)
+        ifelse(i == j, oneunit(T), zero(T))
+    end
+end
+Base.@propagate_inbounds function getindex(A::LowerTriangular, i::Integer, j::Integer)
+    if i >= j
+        A.data[i,j]
+    else
+        @boundscheck checkbounds(A, i, j)
+        @inbounds zero(A.data[j,i])
+    end
+end
+Base.@propagate_inbounds function getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T}
+    if i < j
+        A.data[i,j]
+    else
+        @boundscheck checkbounds(A, i, j)
+        ifelse(i == j, oneunit(T), zero(T))
+    end
+end
+Base.@propagate_inbounds function getindex(A::UpperTriangular, i::Integer, j::Integer)
+    if i <= j
+        A.data[i,j]
+    else
+        @boundscheck checkbounds(A, i, j)
+        @inbounds zero(A.data[j,i])
+    end
+end
+
+Base.@propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
+    if i > j
+        @boundscheck checkbounds(A, i, j)
+        # the value must be convertible to the eltype for setindex! to be meaningful
+        # however, the converted value is unused, and the compiler is free to remove
+        # the conversion if the call is guaranteed to succeed
+        convert(eltype(A), x)
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
     else
@@ -251,21 +280,33 @@ function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
-    if i > j
-        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
-    elseif i == j
-        x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
-            "of a UnitUpperTriangular matrix to a non-unit value ($x)"))
-    else
+Base.@propagate_inbounds function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
+    if i < j
         A.data[i,j] = x
+    else
+        @boundscheck checkbounds(A, i, j)
+        # the value must be convertible to the eltype for setindex! to be meaningful
+        # however, the converted value is unused, and the compiler is free to remove
+        # the conversion if the call is guaranteed to succeed
+        convert(eltype(A), x)
+        if i == j # diagonal
+            x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+                "of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+        else
+            iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
+                "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+        end
     end
     return A
 end
 
-function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
+Base.@propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
+        @boundscheck checkbounds(A, i, j)
+        # the value must be convertible to the eltype for setindex! to be meaningful
+        # however, the converted value is unused, and the compiler is free to remove
+        # the conversion if the call is guaranteed to succeed
+        convert(eltype(A), x)
         iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
             "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
     else
@@ -274,15 +315,22 @@ function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
-    if i < j
-        iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
-    elseif i == j
-        x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
-            "of a UnitLowerTriangular matrix to a non-unit value ($x)"))
-    else
+Base.@propagate_inbounds function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
+    if i > j
         A.data[i,j] = x
+    else
+        @boundscheck checkbounds(A, i, j)
+        # the value must be convertible to the eltype for setindex! to be meaningful
+        # however, the converted value is unused, and the compiler is free to remove
+        # the conversion if the call is guaranteed to succeed
+        convert(eltype(A), x)
+        if i == j # diagonal
+            x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+                "of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+        else
+            iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
+                "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+        end
     end
     return A
 end
@@ -493,7 +541,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Nu
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds _modify!(_add, B[j,j] * c, A, (j,j))
         for i = 1:(j - 1)
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
@@ -504,7 +552,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriang
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds _modify!(_add, c * B[j,j], A, (j,j))
         for i = 1:(j - 1)
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
@@ -535,7 +583,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Nu
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds _modify!(_add, B[j,j] * c, A, (j,j))
         for i = (j + 1):n
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
@@ -546,7 +594,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriang
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
-        @inbounds _modify!(_add, c, A, (j,j))
+        @inbounds _modify!(_add, c * B[j,j], A, (j,j))
         for i = (j + 1):n
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end

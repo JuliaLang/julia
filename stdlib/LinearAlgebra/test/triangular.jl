@@ -8,6 +8,10 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 debug && println("Triangular matrices")
 
 n = 9
@@ -926,6 +930,80 @@ end
     @test ldiv!(U, B2v) ≈ ldiv!(U, B2vc)
     B2 = copy(B); B2v = view(B2, 1:2:9, 1:5); B2vc = copy(B2v)
     @test rdiv!(B2v, U) ≈ rdiv!(B2vc, U)
+end
+
+@testset "indexing checks" begin
+    P = [1 2; 3 4]
+    @testset "getindex" begin
+        U = UnitUpperTriangular(P)
+        @test_throws BoundsError U[0,0]
+        @test_throws BoundsError U[1,0]
+
+        U = UpperTriangular(P)
+        @test_throws BoundsError U[1,0]
+
+        L = UnitLowerTriangular(P)
+        @test_throws BoundsError L[0,0]
+        @test_throws BoundsError L[0,1]
+
+        L = LowerTriangular(P)
+        @test_throws BoundsError L[0,1]
+    end
+    @testset "setindex!" begin
+        A = SizedArrays.SizedArray{(2,2)}(P)
+        M = fill(A, 2, 2)
+        U = UnitUpperTriangular(M)
+        @test_throws "Cannot `convert` an object of type $Int" U[1,1] = 1
+        non_unit_msg = "cannot set index on the diagonal $((1,1)) of a UnitUpperTriangular matrix to a non-unit value"
+        @test_throws non_unit_msg U[1,1] = A
+        L = UnitLowerTriangular(M)
+        @test_throws "Cannot `convert` an object of type $Int" L[1,1] = 1
+        non_unit_msg = "cannot set index on the diagonal $((1,1)) of a UnitLowerTriangular matrix to a non-unit value"
+        @test_throws non_unit_msg L[1,1] = A
+
+        for UT in (UnitUpperTriangular, UpperTriangular)
+            U = UT(M)
+            @test_throws "Cannot `convert` an object of type $Int" U[2,1] = 0
+        end
+        for LT in (UnitLowerTriangular, LowerTriangular)
+            L = LT(M)
+            @test_throws "Cannot `convert` an object of type $Int" L[1,2] = 0
+        end
+
+        U = UnitUpperTriangular(P)
+        @test_throws BoundsError U[0,0] = 1
+        @test_throws BoundsError U[1,0] = 0
+
+        U = UpperTriangular(P)
+        @test_throws BoundsError U[1,0] = 0
+
+        L = UnitLowerTriangular(P)
+        @test_throws BoundsError L[0,0] = 1
+        @test_throws BoundsError L[0,1] = 0
+
+        L = LowerTriangular(P)
+        @test_throws BoundsError L[0,1] = 0
+    end
+end
+
+@testset "scaling unit triangular by one" begin
+    @testset for UT in (UnitUpperTriangular, UnitLowerTriangular)
+        U = UT(rand(3,3))
+        U2 = copy(U)
+        @test rmul!(U, 1) == U2
+        @test lmul!(1, U) == U2
+    end
+end
+
+@testset "unit triangular l/rdiv!" begin
+    A = rand(3,3)
+    @testset for (UT,T) in ((UnitUpperTriangular, UpperTriangular),
+                            (UnitLowerTriangular, LowerTriangular))
+        UnitTri = UT(A)
+        Tri = T(Matrix(UnitTri))
+        @test 2 \ UnitTri ≈ 2 \ Tri
+        @test UnitTri / 2 ≈ Tri / 2
+    end
 end
 
 end # module TestTriangular
