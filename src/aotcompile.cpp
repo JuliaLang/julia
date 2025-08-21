@@ -2221,6 +2221,7 @@ void jl_dump_native_impl(void *native_code,
 
     const bool imaging_mode = true;
     unsigned threads = 1;
+    unsigned nshards;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
@@ -2278,6 +2279,17 @@ void jl_dump_native_impl(void *native_code,
             );
             threads = compute_image_thread_count(module_info);
             LLVM_DEBUG(dbgs() << "Using " << threads << " to emit aot image\n");
+
+            char *weight_s = getenv("JULIA_IMAGE_PARTITION_WEIGHT");
+            size_t weight = 100000;
+            char *end;
+            if (weight_s) {
+                size_t x = strtol(weight_s, &end, 10);
+                if (weight_s != end)
+                    weight = x;
+            }
+            nshards = std::max<size_t>(1, module_info.weight / weight);
+
             nfvars = data->jl_sysimg_fvars.size();
             ngvars = data->jl_sysimg_gvars.size();
             emit_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
@@ -2315,17 +2327,11 @@ void jl_dump_native_impl(void *native_code,
         has_veccall = !!dataM.getModuleFlag("julia.mv.veccall");
     });
 
-    size_t nshards;
     {
         // Don't use withModuleDo here since we delete the TSM midway through
         auto TSCtx = data->M.getContext();
         auto lock = TSCtx.getLock();
         auto dataM = data->M.getModuleUnlocked();
-
-        auto info = compute_module_info(*dataM);
-        constexpr size_t weight_per_partition = 500000;
-        nshards = std::max<size_t>(1, info.weight / weight_per_partition);
-
         add_output(outputs, *dataM, *SourceTM, "text", threads, nshards,
                    [data, &lock, &TSCtx](Module &) {
                        // Delete data when add_output thinks it's done with it
