@@ -492,6 +492,14 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     if (ci && !jl_is_code_instance(ci)) {
         ci = NULL;
     }
+
+    // Record inference entrance backtrace if enabled
+    if (ci) {
+        JL_GC_PUSH1(&ci);
+        jl_push_inference_entrance_backtraces((jl_value_t*)ci);
+        JL_GC_POP();
+    }
+
     JL_GC_POP();
 #endif
 
@@ -939,12 +947,12 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_
     return 1;
 }
 
-jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
+jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
-    jl_typeinf_func = (jl_function_t*)f;
+    jl_typeinf_func = (jl_value_t*)f;
     jl_typeinf_world = jl_get_tls_world_age();
 }
 
@@ -3523,9 +3531,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
 
         JL_GC_PUSH1(&codeinst);
-        double compile_time = jl_hrtime();
         int did_compile = jl_compile_codeinst(codeinst);
-        compile_time = jl_hrtime() - compile_time;
+        double compile_time = jl_hrtime() - start;
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
@@ -4342,7 +4349,7 @@ jl_sym_t *jl_gf_supertype_name(jl_sym_t *name)
 }
 
 // Return value is rooted globally
-jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world)
+jl_value_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world)
 {
     // type name is function name prefixed with #
     jl_sym_t *tname = jl_gf_supertype_name(name);
@@ -4358,10 +4365,10 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     ftype->instance = f;
     jl_gc_wb(ftype, f);
     JL_GC_POP();
-    return (jl_function_t*)f;
+    return (jl_value_t*)f;
 }
 
-jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world)
+jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world)
 {
     return jl_new_generic_function_with_supertype(name, module, jl_function_type, new_world);
 }
@@ -5085,6 +5092,65 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype
         meth->ccallable = jl_svec3(declrt, (jl_value_t*)sigt, name);
     jl_gc_wb(meth, meth->ccallable);
     JL_GC_POP();
+}
+
+// Drop all method caches and increment world age as if adding a method that intersects everything
+static void invalidate_method_instance_caches(jl_method_instance_t *mi, size_t world)
+{
+    if ((jl_value_t*)mi == jl_nothing)
+        return;
+
+    // Walk through all code instances for this method instance
+    jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+    while (ci != NULL) {
+        // Invalidate this code instance by setting max_world to current world
+        if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
+            jl_atomic_store_release(&ci->max_world, world);
+        }
+        ci = jl_atomic_load_relaxed(&ci->next);
+    }
+}
+
+static int invalidate_all_specializations(jl_typemap_entry_t *def, void *closure)
+{
+    size_t world = *(size_t*)closure;
+    jl_method_t *method = def->func.method;
+    JL_LOCK(&method->writelock);
+    jl_value_t *specializations = jl_atomic_load_relaxed(&method->specializations);
+    if (jl_is_svec(specializations)) {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
+            invalidate_method_instance_caches(mi, world);
+        }
+    }
+    else if (specializations != NULL) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
+        invalidate_method_instance_caches(mi, world);
+    }
+    JL_UNLOCK(&method->writelock);
+    return 1;
+}
+
+static int invalidate_all_caches_visitor(jl_methtable_t *mt, void *env)
+{
+    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), invalidate_all_specializations, env);
+}
+
+JL_DLLEXPORT void jl_drop_all_caches(void)
+{
+    JL_LOCK(&world_counter_lock);
+
+    // Get current world age - we'll invalidate everything at this world
+    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
+
+    invalidate_all_caches_visitor(jl_method_table, &current_world);
+
+    // Increment world age - this forces all subsequent compilation to happen in the new world
+    size_t new_world = current_world + 1;
+    jl_atomic_store_release(&jl_world_counter, new_world);
+
+    JL_UNLOCK(&world_counter_lock);
 }
 
 

@@ -198,7 +198,7 @@ size(e::Enumerate) = size(e.itr)
     n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
-last(e::Enumerate) = (length(e.itr), e.itr[end])
+last(e::Enumerate) = (length(e.itr), last(e.itr))
 
 eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
 
@@ -267,7 +267,7 @@ pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
 pairs(tuple::Tuple) = Pairs{Int}(tuple, keys(tuple))
-pairs(nt::NamedTuple) = Pairs{Symbol}(nt, keys(nt))
+pairs(nt::NamedTuple) = Pairs{Symbol}(nt, nothing)
 pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
@@ -275,40 +275,40 @@ pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, Base.CartesianIndices(axes(A)))
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 
-length(v::Pairs) = length(getfield(v, :itr))
-axes(v::Pairs) = axes(getfield(v, :itr))
-size(v::Pairs) = size(getfield(v, :itr))
+length(v::Pairs) = length(keys(v))
+axes(v::Pairs) = axes(keys(v))
+size(v::Pairs) = size(keys(v))
 
 Base.@eval @propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
     return $(Expr(:new, :(Pair{K, V}), :idx, :(getfield(p, :data)[idx])))
 end
 
 @propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
-    x = iterate(getfield(p, :itr), state...)
+    x = iterate(keys(p), state...)
     x === nothing && return x
     idx, next = x
     return (_pairs_elt(p, idx), next)
 end
 
-@propagate_inbounds function iterate(r::Reverse{<:Pairs}, state=(reverse(getfield(r.itr, :itr)),))
+@propagate_inbounds function iterate(r::Reverse{<:Pairs}, state=(reverse(keys(r.itr)),))
     x = iterate(state...)
     x === nothing && return x
     idx, next = x
     return (_pairs_elt(r.itr, idx), (state[1], next))
 end
 
-@inline isdone(v::Pairs, state...) = isdone(getfield(v, :itr), state...)
+@inline isdone(v::Pairs, state...) = isdone(keys(v), state...)
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:AbstractUnitRange, <:Tuple}}) = HasLength()
 
 function last(v::Pairs{K, V}) where {K, V}
-    idx = last(getfield(v, :itr))
+    idx = last(keys(v))
     return Pair{K, V}(idx, v[idx])
 end
 
-haskey(v::Pairs, key) = (key in getfield(v, :itr))
-keys(v::Pairs) = getfield(v, :itr)
+haskey(v::Pairs, key) = key in keys(v)
+keys(v::Pairs) = getfield(v, :itr) === nothing ? keys(getfield(v, :data)) : getfield(v, :itr)
 values(v::Pairs) = getfield(v, :data) # TODO: this should be a view of data subset by itr
 getindex(v::Pairs, key) = getfield(v, :data)[key]
 setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
@@ -473,7 +473,8 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+last(z::Zip) = nth(z, length(z))
+
 function reverse(z::Zip)
     if !first(_zip_lengths_finite_equal(z.is))
         throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
@@ -1700,6 +1701,9 @@ function _nth(::IteratorSize, itr, n::Integer)
     y === nothing && throw(BoundsError(itr, n))
     y[1]
 end
+
+_nth(::IteratorSize, z::Zip, n::Integer) = Base.map(nth(n), z.is)
+
 """
     nth(n::Integer)
 

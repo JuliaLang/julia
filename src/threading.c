@@ -313,10 +313,7 @@ JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
     return jl_current_task->ptls->rngseed;
 }
 
-
-#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
-    extern int unw_ensure_tls (void);
-#endif
+typedef void (*unw_tls_ensure_func)(void) JL_NOTSAFEPOINT;
 
 // get thread local rng
 JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
@@ -403,21 +400,24 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
     // ensures libunwind TLS space for this thread is allocated eagerly
     // to make unwinding async-signal-safe even when using thread local caches.
-    unw_ensure_tls();
+    unw_tls_ensure_func jl_unw_ensure_tls = NULL;
+    jl_dlsym(jl_exe_handle, "unw_ensure_tls", (void**)&jl_unw_ensure_tls, 0);
+    if (jl_unw_ensure_tls)
+        jl_unw_ensure_tls();
 #endif
 
     return ptls;
 }
 
-static _Atomic(jl_function_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
+static _Atomic(jl_value_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
 
 static void jl_init_task_lock(jl_task_t *ct)
 {
     size_t last_age = ct->world_age;
     ct->world_age = jl_get_world_counter();
-    jl_function_t *done = jl_atomic_load_relaxed(&init_task_lock_func);
+    jl_value_t *done = jl_atomic_load_relaxed(&init_task_lock_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("init_task_lock"), ct->world_age);
+        done = (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("init_task_lock"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&init_task_lock_func, done);
     }
