@@ -110,7 +110,7 @@ end
 
 #--------------------------------------------------
 # Functions called by closure conversion
-function eval_closure_type(mod, closure_type_name, field_names, field_is_box)
+function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_is_box)
     type_params = Core.TypeVar[]
     field_types = []
     for (name, isbox) in zip(field_names, field_is_box)
@@ -129,7 +129,7 @@ function eval_closure_type(mod, closure_type_name, field_names, field_is_box)
                             false,
                             length(field_names))
     Core._setsuper!(type, Core.Function)
-    Base.eval(mod, :(const $closure_type_name = $type))
+    @ccall jl_set_const(mod::Module, closure_type_name::Symbol, type::Any)::Cvoid
     Core._typebody!(false, type, Core.svec(field_types...))
     type
 end
@@ -176,39 +176,29 @@ function eval_module(parentmod, modname, body)
     ))
 end
 
-# Evaluate content of `import` or `using` statement
-function module_import(into_mod::Module, is_using::Bool,
-                       from_mod::Union{Nothing,Core.SimpleVector}, paths::Core.SimpleVector)
-    # For now, this function converts our lowered representation back to Expr
-    # and calls eval() to avoid replicating all of the fiddly logic in
-    # jl_toplevel_eval_flex.
-    # TODO: ccall Julia runtime functions directly?
-    #   * jl_module_using jl_module_use_as
-    #   * import_module jl_module_import_as
-    path_args = []
-    i = 1
-    while i < length(paths)
-        nsyms = paths[i]::Int
-        n = i + nsyms
-        path = Expr(:., [Symbol(paths[i+j]::String) for j = 1:nsyms]...)
-        as_name = paths[i+nsyms+1]
-        push!(path_args, isnothing(as_name) ? path :
-                         Expr(:as, path, Symbol(as_name)))
-        i += nsyms + 2
-    end
-    ex = if isnothing(from_mod)
-        Expr(is_using ? :using : :import,
-             path_args...)
+const _Base_has_eval_import = isdefined(Base, :_eval_import)
+
+function eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
+    if _Base_has_eval_import
+        Base._eval_import(imported, to, from, paths...)
     else
-        from_path = Expr(:., [Symbol(s::String) for s in from_mod]...)
-        Expr(is_using ? :using : :import,
-             Expr(:(:), from_path, path_args...))
+        head = imported ? :import : :using
+        ex = isnothing(from) ?
+            Expr(head, paths...) :
+            Expr(head, Expr(Symbol(":"), from, paths...))
+        Base.eval(to, ex)
     end
-    eval(into_mod, ex)
-    nothing
 end
 
-function module_public(mod::Module, is_exported::Bool, identifiers...)
+function eval_using(to::Module, path::Expr)
+    if _Base_has_eval_import
+        Base._eval_using(to, path)
+    else
+        Base.eval(to, Expr(:using, path))
+    end
+end
+
+function eval_public(mod::Module, is_exported::Bool, identifiers)
     # symbol jl_module_public is no longer exported as of #57765
     eval(mod, Expr((is_exported ? :export : :public), map(Symbol, identifiers)...))
 end
