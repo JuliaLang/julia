@@ -110,7 +110,7 @@ M.@recursive 3
 """) == (3, (2, (1, 0)))
 
 ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
-ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex)
+ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false)
 @test JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"

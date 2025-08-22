@@ -171,7 +171,7 @@ LoweringError:
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
     slots: [slot₁/#self#(!read) slot₂/_(!read)]
-    1   (call JuliaLowering.interpolate_ast (inert (return x)))
+    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert (return x)))
     2   (return %₁)
 11  latestworld
 12  TestMod.#->##6

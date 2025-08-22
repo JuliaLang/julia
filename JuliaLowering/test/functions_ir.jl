@@ -1565,9 +1565,9 @@ end
 10  (call core.svec %₇ %₈ %₉)
 11  --- method core.nothing %₁₀
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
-    1   (call JuliaLowering.interpolate_ast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     2   (call core.tuple %₁)
-    3   (call JuliaLowering.interpolate_ast (inert (block (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff)))) %₂)
+    3   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff)))) %₂)
     4   (return %₃)
 12  latestworld
 13  TestMod.f_partially_generated

@@ -653,9 +653,10 @@ macro SyntaxTree(ex_old)
     ex = _find_SyntaxTree_macro(full_ex, __source__.line)
     # 4. Do the first step of JuliaLowering's syntax lowering to get
     # syntax interpolations to work
-    _, ex1 = expand_forms_1(__module__, ex)
+    _, ex1 = expand_forms_1(__module__, ex, false)
     @assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast
-    Expr(:call, :interpolate_ast, ex1[2][1], map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[3:end])...)
+    Expr(:call, :interpolate_ast, SyntaxTree, ex1[3][1],
+         map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[4:end])...)
 end
 
 #-------------------------------------------------------------------------------

@@ -17,7 +17,7 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
 
     st0 = code isa Expr ? expr_to_syntaxtree(code, LineNumberNode(line, file)) : code
     try
-        ctx1, st1 = expand_forms_1(  mod,  st0)
+        ctx1, st1 = expand_forms_1(  mod,  st0, true)
         ctx2, st2 = expand_forms_2(  ctx1, st1)
         ctx3, st3 = resolve_scopes(  ctx2, st2)
         ctx4, st4 = convert_closures(ctx3, st3)

@@ -20,11 +20,12 @@ struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
     bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     scope_layer_stack::Vector{LayerId}
+    expr_compat_mode::Bool
 end
 
-function MacroExpansionContext(graph::SyntaxGraph, mod::Module)
+function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode::Bool)
     layers = ScopeLayer[ScopeLayer(1, mod, 0, false)]
-    MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)])
+    MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode)
 end
 
 current_layer(ctx::MacroExpansionContext) = ctx.scope_layers[last(ctx.scope_layer_stack)]
@@ -67,6 +68,7 @@ function expand_quote(ctx, ex)
     # (ex, @HERE) ?
     @ast ctx ex [K"call"
         interpolate_ast::K"Value"
+        (ctx.expr_compat_mode ? Expr : SyntaxTree)::K"Value"
         [K"inert" ex]
         unquoted...
     ]
@@ -447,18 +449,18 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     end
 end
 
-function expand_forms_1(mod::Module, ex::SyntaxTree)
+function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool)
     graph = ensure_attributes(syntax_graph(ex),
                               var_id=IdTag,
                               scope_layer=LayerId,
                               __macro_ctx__=Nothing,
                               meta=CompileHints)
-    ctx = MacroExpansionContext(graph, mod)
+    ctx = MacroExpansionContext(graph, mod, expr_compat_mode)
     ex2 = expand_forms_1(ctx, reparent(ctx, ex))
     graph2 = delete_attributes(graph, :__macro_ctx__)
     # TODO: Returning the context with pass-specific mutable data is a bad way
     # to carry state into the next pass. We might fix this by attaching such
     # data to the graph itself as global attributes?
-    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, LayerId[])
+    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, LayerId[], expr_compat_mode)
     return ctx2, reparent(ctx2, ex2)
 end
