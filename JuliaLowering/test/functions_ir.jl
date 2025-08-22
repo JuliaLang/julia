@@ -996,6 +996,28 @@ end
 12  (return %₁₁)
 
 ########################################
+# Function return in value position is allowed
+function f()
+    x = return 1
+end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   TestMod.f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
+    1   (return 1)
+    2   (= slot₂/x core.nothing)
+10  latestworld
+11  TestMod.f
+12  (return %₁₁)
+
+########################################
 # Binding docs to functions
 """
 some docs

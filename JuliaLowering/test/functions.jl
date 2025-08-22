@@ -159,6 +159,16 @@ begin
 end
 """)
 
+@test JuliaLowering.include_string(test_mod, """
+x = 0
+function f_return_in_value_pos()
+    global x
+    x = return 42
+end
+
+(f_return_in_value_pos(), x)
+""") === (42, 0)
+
 @testset "Default positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
     begin
