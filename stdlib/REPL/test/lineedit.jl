@@ -946,33 +946,33 @@ end
     # This tests that edit_move_right works correctly when complete_line returns
     # the old format (Vector{String}, String, Bool) instead of the new format
     # (Vector{NamedCompletion}, Region, Bool)
-    
+
     # Create a mock completion provider that returns the old format
     struct OldFormatCompletionProvider end
     function LineEdit.complete_line(::OldFormatCompletionProvider, s, mod; hint::Bool=false)
         # Return old format: Vector{String}, String, Bool
         return ["minimap2_jll"], "minimap2", true
     end
-    
+
     # Set up a mock REPL state
     term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
     repl = REPL.LineEditREPL(term, true)
-    
+
     # Create a prompt with the old-format completion provider
     prompt = LineEdit.Prompt("test> ";
         complete = OldFormatCompletionProvider(),
         on_enter = s -> true)
-    
+
     # Set up the mode state
     mode_state = LineEdit.init_state(term, prompt)
     s = LineEdit.MIState(repl, mode_state, LineEdit.mode(repl, prompt), nothing)
     LineEdit.activate(s, prompt, term, term)
-    
+
     # Set up the input buffer with the problematic text
     ps = LineEdit.state(s, prompt)
     write(ps.input_buffer, "add minimap2")
     seek(ps.input_buffer, sizeof("add minimap2"))
-    
+
     # This should not throw an error (it used to throw FieldError: type String has no field `second`)
     @test_nowarn LineEdit.edit_move_right(s)
 end
