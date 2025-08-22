@@ -3487,7 +3487,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     // Ok, compilation is enabled. We'll need to try to compile something (probably).
 
     // Everything from here on is considered (user facing) compile time
-    uint64_t start = jl_typeinf_timing_begin();
+    uint64_t compilation_start = jl_hrtime();
+    uint64_t inference_start = jl_typeinf_timing_begin(); // Special-handling for reentrancy
 
     // Is a recompile if there is cached code, and it was compiled (not only inferred) before
     int is_recompile = 0;
@@ -3514,14 +3515,14 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     if (codeinst) {
         if (jl_is_compiled_codeinst(codeinst)) {
-            jl_typeinf_timing_end(start, is_recompile);
+            jl_typeinf_timing_end(inference_start, is_recompile);
             // Already compiled - e.g. constabi, or compiled by a different thread while we were waiting.
             return codeinst;
         }
 
         JL_GC_PUSH1(&codeinst);
         int did_compile = jl_compile_codeinst(codeinst);
-        double compile_time = jl_hrtime() - start;
+        double compile_time = jl_hrtime() - compilation_start;
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
@@ -3551,7 +3552,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         if (ucache_invoke != jl_fptr_sparam &&
             ucache_invoke != jl_fptr_interpret_call) {
             // only these care about the exact specTypes, otherwise we can use it directly
-            jl_typeinf_timing_end(start, is_recompile);
+            jl_typeinf_timing_end(inference_start, is_recompile);
             return ucache;
         }
         uint8_t specsigflags;
@@ -3569,7 +3570,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_mi_cache_insert(mi, codeinst);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
-    jl_typeinf_timing_end(start, is_recompile);
+    jl_typeinf_timing_end(inference_start, is_recompile);
     return codeinst;
 }
 
