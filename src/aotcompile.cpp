@@ -1461,7 +1461,7 @@ public:
     {
         open();
         if (state == OPEN)
-            return std::make_unique<raw_fd_stream>(fd, false);
+            return std::make_unique<raw_fd_ostream>(fd, false);
         else
             return std::make_unique<raw_svector_ostream>(buf);
     }
