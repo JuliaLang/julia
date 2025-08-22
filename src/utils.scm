@@ -119,3 +119,16 @@
          (cons (car lst) (filter (lambda (x) (not (pred x))) (cdr lst))))
         (else
          (cons (car lst) (keep-first pred (cdr lst))))))
+
+(define (take lst n)
+  (let loop ((lst lst) (n n) (out '()))
+    (if (= n 0) (reverse out)
+        (loop (cdr lst) (- n 1) (cons (car lst) out)))))
+
+(define (drop lst n)
+  (if (= n 0) lst
+      (drop (cdr lst) (- n 1))))
+
+;; functional update at position i
+(define (list-set lst i val)
+  (append (take lst i) (list val) (drop lst (+ i 1))))

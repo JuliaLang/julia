@@ -225,6 +225,8 @@ Mark a command object so that running it will not throw an error if the result c
 ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus=true)
 ignorestatus(cmd::Union{OrCmds,AndCmds}) =
     typeof(cmd)(ignorestatus(cmd.a), ignorestatus(cmd.b))
+ignorestatus(cmd::CmdRedirect) =
+    CmdRedirect(ignorestatus(cmd.cmd), cmd.handle, cmd.stream_no, cmd.readable)
 
 """
     detach(command)
@@ -504,7 +506,7 @@ julia> run(cm)
 Process(`echo 1`, ProcessExited(0))
 ```
 """
-macro cmd(str)
+macro cmd(str::String)
     cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
     return :(cmd_gen($(esc(cmd_ex))))
 end

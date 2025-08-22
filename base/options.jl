@@ -9,7 +9,7 @@ struct JLOptions
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
-    nthreadpools::Int16
+    nthreadpools::Int8
     nthreads::Int16
     nmarkthreads::Int16
     nsweepthreads::Int8
@@ -17,6 +17,7 @@ struct JLOptions
     nprocs::Int32
     machine_file::Ptr{UInt8}
     project::Ptr{UInt8}
+    program_file::Ptr{UInt8}
     isinteractive::Int8
     color::Int8
     historyfile::Int8
@@ -59,9 +60,13 @@ struct JLOptions
     strip_ir::Int8
     permalloc_pkgimg::Int8
     heap_size_hint::UInt64
+    hard_heap_limit::UInt64
+    heap_target_increment::UInt64
     trace_compile_timing::Int8
     trim::Int8
     task_metrics::Int8
+    timeout_for_safepoint_straggler_s::Int16
+    gc_sweep_always_full::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

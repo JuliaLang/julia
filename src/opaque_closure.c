@@ -159,7 +159,6 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables
     jl_atomic_store_release(&meth->primary_world, world);
-    jl_atomic_store_release(&meth->deleted_world, world);
 
     if (isinferred) {
         jl_value_t *argslotty = jl_array_ptr_ref(ci->slottypes, 0);
@@ -169,7 +168,7 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
         if (!jl_is_svec(edges))
             edges = jl_emptysvec; // OC doesn't really have edges, so just drop them for now
         inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
-            0, world, world, 0, jl_nothing, 0, ci->debuginfo, edges);
+            0, world, world, 0, jl_nothing, ci->debuginfo, edges);
         jl_mi_cache_insert(mi, inst);
     }
 

@@ -349,10 +349,16 @@ static char *libstdcxxprobe(void)
             pid_t npid = waitpid(pid, &wstatus, 0);
             if (npid == -1) {
                 if (errno == EINTR) continue;
-                if (errno != EINTR) {
-                    perror("Error during libstdcxxprobe in parent process:\nwaitpid");
-                    exit(1);
+                if (errno == ECHILD) {
+                    // SIGCHLD is set to SIG_IGN or has flag SA_NOCLDWAIT, so the child
+                    // did not become a zombie and wait for `waitpid` - it just exited.
+                    //
+                    // Assume that it exited successfully and use whatever libpath we
+                    // got out of the pipe, if any.
+                    break;
                 }
+                perror("Error during libstdcxxprobe in parent process:\nwaitpid");
+                exit(1);
             }
             else if (!WIFEXITED(wstatus)) {
                 const char *err_str = "Error during libstdcxxprobe in parent process:\n"
