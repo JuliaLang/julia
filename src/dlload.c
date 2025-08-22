@@ -414,7 +414,14 @@ success:
     return handle;
 }
 
-JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int throw_err, int no_deps) JL_NOTSAFEPOINT
+/*
+ * When search_deps is 1, act like dlsym and search both the library for the
+ * handle and all its dependencies.  Use this option only when compatibility
+ * with dlsym(3) is required, thought this behaviour is not possible on Windows.
+ *
+ * At time of writing, only Base.dlsym() uses search_deps = 1.
+ */
+JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int throw_err, int search_deps) JL_NOTSAFEPOINT
 {
     int symbol_found = 0;
 
@@ -454,7 +461,8 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
      * Unlike GetProcAddress, dlsym will search the dependencies of the given
      * library, so we must check where the symbol came from.
      */
-    if (symbol_found && no_deps && handle != jl_RTLD_DEFAULT_handle && !rtld_first_handle) {
+    if (symbol_found && !search_deps && handle != jl_RTLD_DEFAULT_handle &&
+        !rtld_first_handle) {
         void *symbol_handle = jl_find_dynamic_library_by_addr(*value, 0, 1);
         symbol_found = handle == symbol_handle;
     }
@@ -485,20 +493,20 @@ JL_DLLEXPORT const char *jl_dlfind(const char *f_name)
         return NULL;
 #endif
     void * dummy;
-    if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0, 1))
+    if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0, 0))
         return JL_LIBJULIA_INTERNAL_DL_LIBNAME;
-    if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0, 1))
+    if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0, 0))
         return JL_LIBJULIA_DL_LIBNAME;
-    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0, 1))
+    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0, 0))
         return JL_EXE_LIBNAME;
 #ifdef _OS_WINDOWS_
-    if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0, 1))
+    if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0, 0))
         return "kernel32";
-    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0, 1)) // Prefer crtdll over ntdll
+    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0, 0)) // Prefer crtdll over ntdll
         return jl_crtdll_basename;
-    if (jl_dlsym(jl_ntdll_handle, f_name, &dummy, 0, 1))
+    if (jl_dlsym(jl_ntdll_handle, f_name, &dummy, 0, 0))
         return "ntdll";
-    if (jl_dlsym(jl_winsock_handle, f_name, &dummy, 0, 1))
+    if (jl_dlsym(jl_winsock_handle, f_name, &dummy, 0, 0))
         return "ws2_32";
 #endif
     // additional common libraries (libc?) could be added here, but in general,

@@ -747,7 +747,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     HMODULE jl_dbghelp = (HMODULE) jl_dlopen("dbghelp.dll", JL_RTLD_NOLOAD);
     needsSymRefreshModuleList = 0;
     if (jl_dbghelp)
-        jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1, 1);
+        jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1, 0);
 #else
     /* macOS dlopen(3): If path is NULL and the option RTLD_FIRST is used, the
        handle returned will only search the main executable. */

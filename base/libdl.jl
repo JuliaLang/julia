@@ -61,7 +61,7 @@ function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = tr
     val = Ref(Ptr{Cvoid}(0))
     symbol_found = ccall(:jl_dlsym, Cint,
         (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint, Cint),
-        hnd, s, val, Int64(throw_error), Int64(0)
+        hnd, s, val, Int64(throw_error), Int64(1)
     )
     if symbol_found == 0
         return nothing
