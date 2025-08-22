@@ -42,7 +42,9 @@
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 
-#ifndef _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
+#include <llvm/Support/Windows/WindowsSupport.h>
+#else
 #include <sys/mman.h>
 #endif
 
@@ -1523,19 +1525,33 @@ struct ShardTimers {
     }
 };
 
-#ifdef _OS_WINDOWS_
-#define JL_USE_TEMP_FILES
-#endif
+// If an AOTOutput is greater than this many bytes, we should write it to a
+// temporary file on Windows, or MADV_DONTNEED/MADV_COLD it on Unix to alleviate
+// memory pressure.  Except in rare cases, this should be triggered only by the
+// output containing the heap image.
+constexpr size_t jl_large_aotoutput = 64 * 1024 * 1024; // 64 MiB
 
 class AOTOutput {
 public:
     AOTOutput(const Twine &prefix, const char *suffix) : name((prefix + "." + suffix).str())
     {
-#ifdef JL_USE_TEMP_FILES
-        std::error_code err = sys::fs::createTemporaryFile(prefix, suffix, fd, path);
-        if (err)
-            jl_errorf("failed to create temporary file: %s", err.message().c_str());
-        state = OPEN;
+#ifdef _OS_WINDOWS_
+        SmallString<128> path;
+        SmallVector<wchar_t, 128> path_utf16;
+        auto model = prefix + "-%%%%%%." + suffix;
+        sys::fs::createUniquePath(model, path, true);
+        auto fail = [&]() {
+            jl_errorf("failed to create temporary file: %s", path.c_str());
+        };
+        if (sys::windows::widenPath(path, path_utf16))
+            fail();
+        file = CreateFileW(path_utf16.begin(), GENERIC_READ | GENERIC_WRITE,
+                           FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+                           FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+            fail();
+        fd = _open_osfhandle((intptr_t)file, 0);
+        state = TMP_OPEN;
 #else
         state = MEMORY;
 #endif
@@ -1546,9 +1562,12 @@ public:
     AOTOutput(AOTOutput &&other) noexcept
       : name(std::move(other.name)),
         state(other.state),
+#ifdef _OS_WINDOWS_
+        file(other.file),
         fd(other.fd),
-        path(std::move(other.path)),
+#endif
         buf(std::move(other.buf))
+
     {
         other.state = EMPTY;
     }
@@ -1557,58 +1576,45 @@ public:
         remove();
         std::swap(name, other.name);
         std::swap(state, other.state);
+#ifdef _OS_WINDOWS_
+        std::swap(file, other.file);
         std::swap(fd, other.fd);
-        std::swap(path, other.path);
+#endif
         std::swap(buf, other.buf);
         return *this;
     }
 
     std::unique_ptr<raw_pwrite_stream> ostream()
     {
-        open();
-        if (state == OPEN)
+#ifdef _OS_WINDOWS_
+        if (state == TMP_OPEN) {
             return std::make_unique<raw_fd_ostream>(fd, false);
-        else
-            return std::make_unique<raw_svector_ostream>(buf);
+        }
+#endif
+        assert(state == MEMORY);
+        return std::make_unique<raw_svector_ostream>(buf);
     }
 
     ErrorOr<std::unique_ptr<MemoryBuffer>> memorybuf()
     {
-        open();
-        if (state == OPEN) {
-            auto f = sys::fs::convertFDToNativeFile(fd);
+#ifdef _OS_WINDOWS_
+        if (state == TMP_OPEN) {
             sys::fs::file_status status;
             if (auto err = sys::fs::status(fd, status))
                 return err;
-            return MemoryBuffer::getOpenFile(f, name, status.getSize(), false);
+            return MemoryBuffer::getOpenFile(file, name, status.getSize(), false);
         }
-        else if (state == MEMORY) {
-            return MemoryBuffer::getMemBuffer(StringRef{buf.data(), buf.size()}, name,
-                                              false);
-        }
-        jl_unreachable();
+#endif
+        assert(state == MEMORY);
+        return MemoryBuffer::getMemBuffer(StringRef{buf.data(), buf.size()}, name, false);
     }
 
-    void open()
+    // Signal that we are done with writing to this output for the time being;
+    // inform the operating system it should page the memory out if we're
+    // running low.
+    void done()
     {
-        using namespace sys::fs;
-        assert(state == EXISTS || state == OPEN || state == MEMORY);
-        if (state == OPEN || state == MEMORY)
-            return;
-        auto err = openFileForReadWrite(path, fd, CD_OpenExisting, OF_None);
-        if (err)
-            jl_errorf("failed to open temporary file %s\n", path.c_str());
-        state = OPEN;
-    }
-
-    void close()
-    {
-        if (state == OPEN) {
-            auto f = sys::fs::convertFDToNativeFile(fd);
-            (void)sys::fs::closeFile(f);
-            state = EXISTS;
-        }
-        else if (state == MEMORY) {
+        if (state == MEMORY && buf.size() >= jl_large_aotoutput) {
             void *p = (void *)((uintptr_t)buf.data() & ~(jl_page_size - 1));
             size_t s = LLT_ALIGN(buf.size(), jl_page_size);
 #if defined(_OS_DARWIN_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)
@@ -1626,27 +1632,30 @@ public:
 
     void remove()
     {
-        close();
-        if (state == EXISTS) {
-            assert(!path.empty());
-            (void)sys::fs::remove(path);
+#ifdef _OS_WINDOWS_
+        if (state == TMP_OPEN) {
+            close(fd);
             state = EMPTY;
+            return;
         }
-        else if (state == MEMORY) {
+#endif
+        if (state == MEMORY) {
             buf.clear();
+            state = EMPTY;
         }
     }
 
 private:
     std::string name;
     enum {
-        EMPTY,               // Temporary file removed/buffer freed
-        EXISTS,              // Temporary file exists but is not open (save FDs)
-        OPEN,                // Temporary file exists and is open
-        MEMORY,              // Contents are stored in memory
+        EMPTY,    // Temporary file removed/buffer freed
+        TMP_OPEN, // Temporary file exists and is open, but will be deleted on close (Windows).
+        MEMORY,   // Contents are stored in memory
     } state;
+#ifdef _OS_WINDOWS_
+    HANDLE file;
     int fd;
-    SmallString<128> path;
+#endif
     SmallVector<char, 0> buf;
 };
 
@@ -1701,7 +1710,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
         if (timer)
             timer->unopt.stopTimer();
         OS->flush();
-        out.close();
+        out.done();
         {
             std::lock_guard guard{outputs.lock};
             outputs.unopt->push_back(std::move(out));
@@ -1793,7 +1802,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
             MPM.run(M, AM.MAM);
         }
         OS->flush();
-        out.close();
+        out.done();
         if (timer)
             timer->opt.stopTimer();
         {
@@ -1819,7 +1828,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
             emitter.run(M);
         }
         OS->flush();
-        out.close();
+        out.done();
         if (timer)
             timer->obj.stopTimer();
         {
@@ -1847,7 +1856,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
             emitter.run(M);
         }
         OS->flush();
-        out.close();
+        out.done();
         if (timer)
             timer->asm_.stopTimer();
         {
