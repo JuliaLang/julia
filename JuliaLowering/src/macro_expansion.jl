@@ -118,14 +118,18 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     # * How to deal with highlighting trivia? Could provide a token kind or
     #   child position within the raw tree? How to abstract this??
     src = sourceref(exc.ex)
-    fb = first_byte(src)
-    lb = last_byte(src)
-    pos = exc.position
-    byterange = pos == :all     ? (fb:lb)   :
-                pos == :begin   ? (fb:fb-1) :
-                pos == :end     ? (lb+1:lb) :
-                error("Unknown position $pos")
-    highlight(io, src.file, byterange, note=exc.msg)
+    if src isa LineNumberNode
+        highlight(io, src, note=exc.msg)
+    else
+        fb = first_byte(src)
+        lb = last_byte(src)
+        pos = exc.position
+        byterange = pos == :all     ? (fb:lb)   :
+            pos == :begin   ? (fb:fb-1) :
+            pos == :end     ? (lb+1:lb) :
+            error("Unknown position $pos")
+        highlight(io, src.file, byterange, note=exc.msg)
+    end
     if !isnothing(exc.err)
         print(io, "\nCaused by:\n")
         showerror(io, exc.err)
@@ -238,7 +242,10 @@ function expand_macro(ctx, ex)
     else
         # Compat: attempt to invoke an old-style macro if there's no applicable
         # method for new-style macro arguments.
-        macro_loc = source_location(LineNumberNode, ex)
+        macro_loc = let loc = source_location(LineNumberNode, ex)
+            # Some macros, e.g. @cmd, don't play nicely with file == nothing
+            isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
+        end
         macro_args = Any[macro_loc, current_layer(ctx).mod]
         for arg in raw_args
             # For hygiene in old-style macros, we omit any additional scope
@@ -388,6 +395,10 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             e2 = @ast ctx e2 e2=>K"Symbol"
         end
         @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
+    elseif k == K"cmdstring"
+        @chk numchildren(ex) == 1
+        e2 = @ast ctx ex [K"macrocall" "@cmd"::K"core" ex[1]]
+        expand_macro(ctx, e2)
     elseif (k == K"call" || k == K"dotcall")
         # Do some initial desugaring of call and dotcall here to simplify
         # the later desugaring pass

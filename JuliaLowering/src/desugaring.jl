@@ -4544,6 +4544,15 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert"
         ex
+    elseif k == K"gc_preserve"
+        s = ssavar(ctx, ex)
+        r = ssavar(ctx, ex)
+        @ast ctx ex [K"block"
+            s := [K"gc_preserve_begin" children(ex)[2:end]...]
+            r := expand_forms_2(ctx, children(ex)[1])
+            [K"gc_preserve_end" s]
+            r
+        ]
     elseif k == K"&"
         throw(LoweringError(ex, "invalid syntax"))
     elseif k == K"$"

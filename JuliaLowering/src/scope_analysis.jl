@@ -494,6 +494,16 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             id = lookup_var(ctx, NameKey(ex[2]))
             islocal = !isnothing(id) && var_kind(ctx, id) != :global
             @ast ctx ex islocal::K"Bool"
+        elseif etype == "isglobal"
+            e2 = ex[2]
+            @chk kind(e2) in KSet"Identifier Placeholder"
+            isglobal = if kind(e2) == K"Identifier"
+                id = lookup_var(ctx, NameKey(e2))
+                isnothing(id) || var_kind(ctx, id) == :global
+            else
+                false
+            end
+            @ast ctx ex isglobal::K"Bool"
         elseif etype == "locals"
             stmts = SyntaxList(ctx)
             locals_dict = ssavar(ctx, ex, "locals_dict")

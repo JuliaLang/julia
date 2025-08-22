@@ -239,6 +239,13 @@ MacroExpansionError while expanding @oldstyle_error in module Main.macros.test_m
 Caused by:
 Some error in old style macro"""
 
+@test sprint(
+    showerror,
+    JuliaLowering.MacroExpansionError(
+        JuliaLowering.expr_to_syntaxtree(:(foo), LineNumberNode(1)),
+        "fake error")) ==
+            "MacroExpansionError:\n#= line 1 =# - fake error"
+
 # Old-style macros returning non-Expr values
 Base.eval(test_mod, :(
 macro oldstyle_non_Expr()
@@ -291,6 +298,35 @@ end
     └───────────────────────┘ ── Error expanding macro
     Caused by:
     MethodError: no method matching var"@sig_mismatch"(::JuliaLowering.MacroContext, ::JuliaLowering.SyntaxTree""")
+end
+
+@testset "old macros producing exotic expr heads" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let # example from @preserve docstring
+        x = Ref{Int}(101)
+        p = Base.unsafe_convert(Ptr{Int}, x)
+        GC.@preserve x unsafe_load(p)
+    end""") === 101 # Expr(:gc_preserve)
+
+    # only invokelatest produces :isglobal now, so MWE here
+    Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
+    @test JuliaLowering.include_string(test_mod, """
+    some_global = 1
+    function isglobal_chk(some_arg)
+       local some_local = 1
+       (@isglobal(some_undefined), @isglobal(some_global), @isglobal(some_arg), @isglobal(some_local))
+    end
+    isglobal_chk(1)
+    """) === (true, true, false, false)
+    # with K"Placeholder"s
+    @test JuliaLowering.include_string(test_mod, """
+    __ = 1
+    function isglobal_chk(___)
+       local ____ = 1
+       (@isglobal(_), @isglobal(__), @isglobal(___), @isglobal(____))
+    end
+    isglobal_chk(1)
+    """) === (false, false, false, false)
 end
 
 end # module macros

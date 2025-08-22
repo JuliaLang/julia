@@ -136,3 +136,14 @@ Caused by:
 UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
 Suggestion: check for spelling errors or missing imports.
 
+########################################
+# Simple cmdstring
+`echo 1`
+#---------------------
+1   Base.cmd_gen
+2   (call core.tuple "echo")
+3   (call core.tuple "1")
+4   (call core.tuple %₂ %₃)
+5   (call %₁ %₄)
+6   (return %₅)
+

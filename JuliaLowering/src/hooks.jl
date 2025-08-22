@@ -25,10 +25,14 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
         ex = to_lowered_expr(mod, st5)
         return Core.svec(ex, st5, ctx5)
     catch exc
-        @error("JuliaLowering failed — falling back to flisp!",
-               exception=(exc,catch_backtrace()),
-               code=code, file=file, line=line, mod=mod)
-        return Base.fl_lower(code, mod, file, line, world, warn)
+        @info("JuliaLowering threw given input:", code=code, st0=st0, file=file, line=line, mod=mod)
+        rethrow(exc)
+
+        # TODO: Re-enable flisp fallback once we're done collecting errors
+        # @error("JuliaLowering failed — falling back to flisp!",
+        #        exception=(exc,catch_backtrace()),
+        #        code=code, file=file, line=line, mod=mod)
+        # return Base.fl_lower(code, mod, file, line, world, warn)
     end
 end
 
