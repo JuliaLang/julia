@@ -832,7 +832,7 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        completions, reg, should_complete = complete_line(s.p.complete, s, m.active_module)
+        completions, reg, should_complete = complete_line_named(s.p.complete, s, m.active_module)
         if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
             # Replace word by completion
             prev_pos = position(s)
@@ -2257,7 +2257,7 @@ setmodifiers!(c) = nothing
 
 # Search Mode completions
 function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
-    completions, reg, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
+    completions, reg, should_complete = complete_line_named(s.histprompt.complete, s, mod; hint)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
