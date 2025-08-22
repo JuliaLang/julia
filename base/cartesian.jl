@@ -395,9 +395,9 @@ end
 
 ## Resolve expressions at parsing time ##
 
-const exprresolve_arith_dict = Dict{Symbol,Function}(:+ => +,
+const exprresolve_arith_dict = IdDict{Symbol,Function}(:+ => +,
     :- => -, :* => *, :/ => /, :^ => ^, :div => div)
-const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
+const exprresolve_cond_dict = IdDict{Symbol,Function}(:(==) => ==,
     :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
 
 function exprresolve_arith(ex::Expr)

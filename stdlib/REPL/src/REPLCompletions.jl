@@ -598,14 +598,6 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
                                               sv::CC.InferenceState)
 end
 
-function is_repl_frame_getproperty(sv::CC.InferenceState)
-    def = sv.linfo.def
-    def isa Method || return false
-    def.name === :getproperty || return false
-    CC.is_cached(sv) && return false
-    return is_repl_frame(CC.frame_parent(sv))
-end
-
 # aggressive concrete evaluation for `:inconsistent` frames within `repl_frame`
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
@@ -635,6 +627,8 @@ function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.A
     return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
 end
 
+# Perform some post-hoc mutation on lowered code, as expected by some abstract interpretation
+# routines, especially for `:foreigncall` and `:cglobal`.
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     @ccall jl_resolve_definition_effects_in_ir(
         #=jl_array_t *stmts=# src.code::Any,
@@ -643,6 +637,11 @@ function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
         #=jl_value_t *binding_edge=# C_NULL::Ptr{Cvoid},
         #=int binding_effects=# 0::Int)::Cvoid
     return src
+end
+
+function construct_toplevel_mi(src::Core.CodeInfo, context_module::Module)
+    resolve_toplevel_symbols!(src, context_module)
+    return @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
 end
 
 # lower `ex` and run type inference on the resulting top-level expression
@@ -664,10 +663,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
     src = lwr.args[1]::Core.CodeInfo
 
-    resolve_toplevel_symbols!(src, context_module)
-    # construct top-level `MethodInstance`
-    mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, context_module)
-
+    mi = construct_toplevel_mi(src, context_module)
     interp = REPLInterpreter(limit_aggressive_inference)
     result = CC.InferenceResult(mi)
     frame = CC.InferenceState(result, src, #=cache=#:no, interp)

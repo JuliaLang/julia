@@ -1116,6 +1116,8 @@ function show_type_name(io::IO, tn::Core.TypeName)
 end
 
 function maybe_kws_nt(x::DataType)
+    # manually-written version of
+    # x <: (Pairs{Symbol, eltype(NT), Nothing, NT} where NT <: NamedTuple)
     x.name === typename(Pairs) || return nothing
     length(x.parameters) == 4 || return nothing
     x.parameters[1] === Symbol || return nothing
@@ -1125,7 +1127,7 @@ function maybe_kws_nt(x::DataType)
         types isa DataType || return nothing
         x.parameters[2] === eltype(p4) || return nothing
         isa(syms, Tuple) || return nothing
-        x.parameters[3] === typeof(syms) || return nothing
+        x.parameters[3] === Nothing || return nothing
         return p4
     end
     return nothing
@@ -3219,7 +3221,7 @@ function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, to
     print(io, "pairs(IndexLinear(), ::", T, ")")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
+function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, Nothing, T}, toplevel) where {T <: NamedTuple}
     print(io, "pairs(::NamedTuple)")
 end
 

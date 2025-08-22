@@ -574,7 +574,12 @@ function _start()
             ret = repl_main(ARGS)
         end
         ret === nothing && (ret = 0)
-        ret = Cint(ret)
+        ret = try
+            Cint(ret)
+        catch
+            @error "The return value of `main` should be `nothing` or convertible to `Cint`"
+            Cint(1)
+        end
     catch
         ret = Cint(1)
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
