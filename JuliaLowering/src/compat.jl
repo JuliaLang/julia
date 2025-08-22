@@ -243,7 +243,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         elseif a1 isa Function
             # pass
         else
-            error("Unknown macrocall form $(sprint(dump, e))")
+            error("Unknown macrocall form at $src: $(sprint(dump, e))")
             @assert false
         end
     elseif e.head === Symbol("'")
@@ -258,9 +258,6 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             child_exprs = pushfirst!(tuple_exprs, e.args[1])
         elseif a2 isa QuoteNode && a2.value isa Symbol
             child_exprs[2] = a2.value
-        elseif a2 isa Expr && a2.head === :MacroName
-        else
-            @error "Unknown 2-arg dot form" e
         end
     elseif e.head === :for
         @assert nargs === 2
@@ -420,8 +417,15 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
                 setmeta!(SyntaxTree(graph, st_id); nospecialize=true)
                 return st_id, src
             end
+        elseif e.args[1] in (:inline, :noinline, :generated, :generated_only,
+                             :max_methods, :optlevel, :toplevel, :push_loc, :pop_loc,
+                             :aggressive_constprop, :specialize, :compile, :infer,
+                             :nospecializeinfer)
+            # TODO: Some need to be handled in lowering
+            child_exprs[1] = Expr(:quoted_symbol, e.args[1])
         else
-            @assert nargs === 1
+            # Can't throw a hard error; it is explicitly tested that meta can take arbitrary keys.
+            @error("Unknown meta form at $src: `$e`\n$(sprint(dump, e))")
             child_exprs[1] = Expr(:quoted_symbol, e.args[1])
         end
     elseif e.head === :scope_layer 
@@ -436,9 +440,14 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         st_k = e.head === :symbolicgoto ? K"symbolic_label" : K"symbolic_goto"
         st_attrs[:name_val] = string(e.args[1])
         child_exprs = nothing
-    elseif e.head === :inline || e.head === :noinline
+    elseif e.head in (:inline, :noinline)
         @assert nargs === 1 && e.args[1] isa Bool
         # TODO: JuliaLowering doesn't accept this (non-:meta) form yet
+        st_k = K"TOMBSTONE"
+        child_exprs = nothing
+    elseif e.head === :inbounds
+        @assert nargs === 1 && typeof(e.args[1]) in (Symbol, Bool)
+        # TODO: JuliaLowering doesn't accept this form yet
         st_k = K"TOMBSTONE"
         child_exprs = nothing
     elseif e.head === :core
@@ -484,7 +493,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     # Throw if this script isn't complete.  Finally, insert a new node into the
     # graph and recurse on child_exprs
     if st_k === K"None"
-        error("Unknown expr head `$(e.head)`\n$(sprint(dump, e))")
+        error("Unknown expr head at $src: `$(e.head)`\n$(sprint(dump, e))")
     end
 
     st_id = _insert_tree_node(graph, st_k, src, st_flags; st_attrs...)
