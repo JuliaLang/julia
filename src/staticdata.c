@@ -3892,12 +3892,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         export_jl_small_typeof();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
-        // set typeof extra-special values now that we have the type set by tags above
-        jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
         s.ptls->root_task->tls = jl_read_value(&s);
         jl_gc_wb(s.ptls->root_task, s.ptls->root_task->tls);
-        jl_init_int32_int64_cache();
-        jl_init_box_caches();
 
         uint32_t gs_ctr = read_uint32(f);
         jl_require_world = read_uint(f);
