@@ -342,7 +342,7 @@ function emit_assignment(ctx, srcref, lhs, rhs, op=K"=")
     else
         # in unreachable code (such as after return); still emit the assignment
         # so that the structure of those uses is preserved
-        emit_simple_assignment(ctx, srcref, lhs, @ast ctx srcref "nothing"::K"core", op)
+        emit_simple_assignment(ctx, srcref, lhs, nothing_(ctx, srcref), op)
         nothing
     end
 end
