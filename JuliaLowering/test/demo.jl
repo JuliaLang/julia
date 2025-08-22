@@ -35,7 +35,7 @@ end
 # Currently broken - need to push info back onto src
 # function annotate_scopes(mod, ex)
 #     ex = ensure_attributes(ex, var_id=Int)
-#     ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex)
+#     ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex, false)
 #     ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
 #     ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar)
 #     ex
@@ -859,7 +859,7 @@ ex = ensure_attributes(ex, var_id=Int)
 
 in_mod = M
 # in_mod=Main
-ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
+ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex, false)
 @info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
 #@info "Macro expanded" formatsrc(ex_macroexpand, color_by=e->JuliaLowering.flattened_provenance(e)[1:end-1])
 

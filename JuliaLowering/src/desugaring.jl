@@ -5,9 +5,10 @@ struct DesugaringContext{GraphType} <: AbstractLoweringContext
     bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     mod::Module
+    expr_compat_mode::Bool
 end
 
-function DesugaringContext(ctx)
+function DesugaringContext(ctx, expr_compat_mode::Bool)
     graph = ensure_attributes(syntax_graph(ctx),
                               kind=Kind, syntax_flags=UInt16,
                               source=SourceAttrType,
@@ -15,7 +16,11 @@ function DesugaringContext(ctx)
                               scope_type=Symbol, # :hard or :soft
                               var_id=IdTag,
                               is_toplevel_thunk=Bool)
-    DesugaringContext(graph, ctx.bindings, ctx.scope_layers, first(ctx.scope_layers).mod)
+    DesugaringContext(graph,
+                      ctx.bindings,
+                      ctx.scope_layers,
+                      first(ctx.scope_layers).mod,
+                      expr_compat_mode)
 end
 
 #-------------------------------------------------------------------------------
@@ -3246,20 +3251,39 @@ function expand_macro_def(ctx, ex)
     name = sig[1]
     args = remove_empty_parameters(children(sig))
     @chk kind(args[end]) != K"parameters" (args[end], "macros cannot accept keyword arguments")
-    ret = @ast ctx ex [K"function"
-        [K"call"(sig)
-            _make_macro_name(ctx, name)
-            [K"::"
-                adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"),
-                            kind(name) == K"." ? name[1] : name)
-                MacroContext::K"Value"
+    scope_ref = kind(name) == K"." ? name[1] : name
+    if ctx.expr_compat_mode
+        @ast ctx ex [K"function"
+            [K"call"(sig)
+                _make_macro_name(ctx, name)
+                [K"::"
+                    # TODO: should we be adopting the scope of the K"macro" expression itself?
+                    adopt_scope(@ast(ctx, sig, "__source__"::K"Identifier"), scope_ref)
+                    LineNumberNode::K"Value"
+                ]
+                [K"::"
+                    adopt_scope(@ast(ctx, sig, "__module__"::K"Identifier"), scope_ref)
+                    Module::K"Value"
+                ]
+                map(e->_apply_nospecialize(ctx, e), args[2:end])...
             ]
-            # flisp: We don't mark these @nospecialize because all arguments to
-            # new macros will be of type SyntaxTree
-            args[2:end]...
+            ex[2]
         ]
-        ex[2]
-    ]
+    else
+        @ast ctx ex [K"function"
+            [K"call"(sig)
+                _make_macro_name(ctx, name)
+                [K"::"
+                    adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"), scope_ref)
+                    MacroContext::K"Value"
+                ]
+                # flisp: We don't mark these @nospecialize because all arguments to
+                # new macros will be of type SyntaxTree
+                args[2:end]...
+            ]
+            ex[2]
+        ]
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -4284,9 +4308,10 @@ function expand_module(ctx, ex::SyntaxTree)
             [K"inert" ex]
         ]
         [K"call"
-            eval_module ::K"Value"
-            ctx.mod     ::K"Value"
-            modname     ::K"String"
+            eval_module           ::K"Value"
+            ctx.mod               ::K"Value"
+            modname               ::K"String"
+            ctx.expr_compat_mode  ::K"Bool"
             [K"inert"(body)
                 [K"toplevel"
                     std_defs
@@ -4477,14 +4502,21 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"toplevel"
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.
-        @ast ctx ex [K"block"
+        ex2 = @ast ctx ex [K"block"
             [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
             [K"call"
-                eval          ::K"Value"
-                ctx.mod       ::K"Value"
+                eval                  ::K"Value"
+                ctx.mod               ::K"Value"
                 [K"inert" ex]
+                [K"parameters"
+                    [K"="
+                        "expr_compat_mode"::K"Identifier"
+                        ctx.expr_compat_mode::K"Bool"
+                    ]
+                ]
             ]
         ]
+        expand_forms_2(ctx, ex2)
     elseif k == K"vect"
         check_no_parameters(ex, "unexpected semicolon in array expression")
         expand_array(ctx, ex, "vect")
@@ -4546,7 +4578,7 @@ function expand_forms_2(ctx::StatementListCtx, args...)
 end
 
 function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
-    ctx1 = DesugaringContext(ctx)
+    ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
     ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
     ctx1, ex1
 end

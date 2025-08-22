@@ -6,7 +6,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast (inert (block (call-i ($ x) + 1))) %₂)
+3   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (call-i ($ x) + 1))) %₂)
 4   (return %₃)
 
 ########################################
@@ -15,7 +15,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast (inert ($ x)) %₂)
+3   (call JuliaLowering.interpolate_ast SyntaxTree (inert ($ x)) %₂)
 4   (return %₃)
 
 ########################################
@@ -28,7 +28,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast (inert (block (quote (block (call-i ($ ($ x)) + 1))))) %₂)
+3   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (quote (block (call-i ($ ($ x)) + 1))))) %₂)
 4   (return %₃)
 
 ########################################

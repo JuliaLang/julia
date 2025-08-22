@@ -35,7 +35,7 @@ end
 9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
-    2   (call JuliaLowering.interpolate_ast (inert (block (call-i ($ ex) + 1))) %₁)
+    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (call-i ($ ex) + 1))) %₁)
     3   (return %₂)
 10  latestworld
 11  TestMod.@add_one
