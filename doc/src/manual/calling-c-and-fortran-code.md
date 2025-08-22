@@ -27,9 +27,9 @@ commonly passed in registers when using C or Julia calling conventions.
 The syntax for [`@ccall`](@ref) to generate a call to the library function is:
 
 ```julia
-  @ccall library.function_name(argvalue1::argtype1, ...)::returntype
-  @ccall function_name(argvalue1::argtype1, ...)::returntype
-  @ccall $function_pointer(argvalue1::argtype1, ...)::returntype
+@ccall library.function_name(argvalue1::argtype1, ...)::returntype
+@ccall function_name(argvalue1::argtype1, ...)::returntype
+@ccall $function_pointer(argvalue1::argtype1, ...)::returntype
 ```
 
 where `library` is a string constant or literal (but see [Non-constant Function
@@ -69,7 +69,7 @@ julia> unsafe_string(path)
 
 In practice, especially when providing reusable functionality, one generally wraps `@ccall`
 uses in Julia functions that set up arguments and then check for errors in whatever manner the
-C or Fortran function specifies. And if an error occurs it is thrown as a normal Julia exception. This is especially
+C or Fortran function specifies. If an error occurs it is thrown as a normal Julia exception. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
@@ -224,7 +224,7 @@ julia> A
 ```
 
 As the example shows, the original Julia array `A` has now been sorted: `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
-[takes care of converting the array to a `Ptr{Cdouble}`](@ref automatic-type-conversion)), computing
+[takes care of converting the array to a `Ptr{Cdouble}`](@ref automatic-type-conversion), computing
 the size of the element type in bytes, and so on.
 
 For fun, try inserting a `println("mycompare($a, $b)")` line into `mycompare`, which will allow
@@ -357,7 +357,7 @@ an `Int` in Julia).
 | `unsigned long long`                                    |                          | `Culonglong`         | `UInt64`                                                                                                       |
 | `intmax_t`                                              |                          | `Cintmax_t`          | `Int64`                                                                                                        |
 | `uintmax_t`                                             |                          | `Cuintmax_t`         | `UInt64`                                                                                                       |
-| `float`                                                 | `REAL*4i`                | `Cfloat`             | `Float32`                                                                                                      |
+| `float`                                                 | `REAL*4`                 | `Cfloat`             | `Float32`                                                                                                      |
 | `double`                                                | `REAL*8`                 | `Cdouble`            | `Float64`                                                                                                      |
 | `complex float`                                         | `COMPLEX*8`              | `ComplexF32`         | `Complex{Float32}`                                                                                             |
 | `complex double`                                        | `COMPLEX*16`             | `ComplexF64`         | `Complex{Float64}`                                                                                             |
@@ -547,15 +547,14 @@ is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
 
-Note: This feature is currently implemented on 64-bit x86 and AArch64 platforms only.
-
 If a C/C++ routine has an argument or return value that is a native SIMD type, the corresponding
 Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIMD type. Specifically:
 
->   * The tuple must be the same size as the SIMD type. For example, a tuple representing an `__m128`
->     on x86 must have a size of 16 bytes.
->   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a primitive type that
->     is 1, 2, 4 or 8 bytes.
+>   * The tuple must be the same size and elements as the SIMD type. For example, a tuple
+>     representing an `__m128` on x86 must have a size of 16 bytes and Float32 elements.
+>   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a
+>     primitive type with a power-of-two number of bytes (e.g. 1, 2, 4, 8, 16, etc) such as
+>     Int8 or Float64.
 
 For instance, consider this C routine that uses AVX intrinsics:
 
@@ -628,6 +627,10 @@ For translating a C argument list to Julia:
 
       * `T`, where `T` is a concrete Julia type
       * argument value will be copied (passed by value)
+  * `vector T` (or `__attribute__ vector_size`, or a typedef such as `__m128`)
+
+      * `NTuple{N, VecElement{T}}`, where `T` is a primitive Julia type of the correct size
+        and N is the number of elements in the vector (equal to `vector_size / sizeof T`).
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
@@ -674,13 +677,16 @@ For translating a C return type to Julia:
   * `T`, where `T` is one of the primitive types: `char`, `int`, `long`, `short`, `float`, `double`,
     `complex`, `enum` or any of their `typedef` equivalents
 
-      * `T`, where `T` is an equivalent Julia Bits Type (per the table above)
-      * if `T` is an `enum`, the argument type should be equivalent to `Cint` or `Cuint`
+      * same as C argument list
       * argument value will be copied (returned by-value)
   * `struct T` (including typedef to a struct)
 
-      * `T`, where `T` is a concrete Julia Type
+      * same as C argument list
       * argument value will be copied (returned by-value)
+
+  * `vector T`
+
+      * same as C argument list
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
@@ -825,7 +831,7 @@ Instead define a [`Base.cconvert`](@ref) method and pass the variables directly 
 automatically arranges that all of its arguments will be preserved from garbage collection until
 the call returns. If a C API will store a reference to memory allocated by Julia, after the `@ccall`
 returns, you must ensure that the object remains visible to the garbage collector. The suggested
-way to do this is to make a global variable of type `Array{Ref,1}` to hold these values until
+way to do this is to make a global variable of type `Vector{Ref}` to hold these values until
 the C library notifies you that it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data exists until
@@ -1009,7 +1015,7 @@ be a calling convention specifier (the `@ccall` macro currently does not support
 giving a calling convention). Without any specifier, the platform-default C
 calling convention is used. Other supported conventions are: `stdcall`, `cdecl`,
 `fastcall`, and `thiscall` (no-op on 64-bit Windows). For example (from
-`base/libc.jl`) we see the same `gethostname``ccall` as above, but with the
+`base/libc.jl`) we see the same `gethostname` `ccall` as above, but with the
 correct signature for Windows:
 
 ```julia

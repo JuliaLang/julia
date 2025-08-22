@@ -335,6 +335,7 @@ is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly
 
 is_consistent_overlay(effects::Effects) = effects.nonoverlayed === CONSISTENT_OVERLAY
 
+# (sync this with codegen.cpp and staticdata.c effects_foldable functions)
 function encode_effects(e::Effects)
     return ((e.consistent          % UInt32) << 0)  |
            ((e.effect_free         % UInt32) << 3)  |

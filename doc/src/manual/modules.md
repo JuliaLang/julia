@@ -114,6 +114,12 @@ and above. To maintain compatibility with Julia 1.10 and below, use the `@compat
 VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public a, b, c"))
 ```
 
+`export` is a keyword wherever it occurs whereas the `public` keyword is currently limited to the
+syntactic top level within a file or module. This limitation exists for compatibility reasons,
+as `public` was introduced as a new keyword in Julia 1.11 while `export` has existed since Julia
+1.0. However, this restriction on `public` may be lifted in future releases, so do not use `public`
+as an identifier.
+
 ### Standalone `using` and `import`
 
 For interactive use, the most common way of loading a module is `using ModuleName`. This [loads](@ref
@@ -192,8 +198,6 @@ julia> nice(::Cat) = "nice 😸"
 ERROR: invalid method definition in Main: function NiceStuff.nice must be explicitly imported to be extended
 Stacktrace:
  [1] top-level scope
-   @ none:0
- [2] top-level scope
    @ none:1
 ```
 
@@ -318,6 +322,68 @@ Here, Julia cannot decide which `f` you are referring to, so you have to make a 
 
 3. When the names in question *do* share a meaning, it is common for one module to import it from another, or have a lightweight “base” package with the sole function of defining an interface like this, which can be used by other packages. It is conventional to have such package names end in `...Base` (which has nothing to do with Julia's `Base` module).
 
+### Precedence order of definitions
+
+There are in general four kinds of binding definitions:
+   1. Those provided via implicit import through `using M`
+   2. Those provided via explicit import (e.g. `using M: x`, `import M: x`)
+   3. Those declared implicitly as global (via `global x` without type specification)
+   4. Those declared explicitly using definition syntax (`const`, `global x::T`, `struct`, etc.)
+
+Syntactically, we divide these into three precedence levels (from weakest to strongest)
+   1. Implicit imports
+   2. Implicit declarations
+   3. Explicit declarations and imports
+
+In general, we permit replacement of weaker bindings by stronger ones:
+
+```julia-repl
+julia> module M1; const x = 1; export x; end
+Main.M1
+
+julia> using .M1
+
+julia> x # Implicit import from M1
+1
+
+julia> begin; f() = (global x; x = 1) end
+
+julia> x # Implicit declaration
+ERROR: UndefVarError: `x` not defined in `Main`
+Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
+
+julia> const x = 2 # Explicit declaration
+2
+```
+
+However, within the explicit precedence level, replacement is syntactically disallowed:
+```julia-repl
+julia> module M1; const x = 1; export x; end
+Main.M1
+
+julia> import .M1: x
+
+julia> const x = 2
+ERROR: cannot declare Main.x constant; it was already declared as an import
+Stacktrace:
+ [1] top-level scope
+   @ REPL[3]:1
+```
+
+or ignored:
+
+```julia-repl
+julia> const y = 2
+2
+
+julia> import .M1: x as y
+WARNING: import of M1.x into Main conflicts with an existing identifier; ignored.
+```
+
+The resolution of an implicit binding depends on the set of all `using`'d modules visible
+in the current world age. See [the manual chapter on world age](@ref man-worldage) for more
+details.
+
 ### Default top-level definitions and bare modules
 
 Modules automatically contain `using Core`, `using Base`, and definitions of the [`eval`](@ref)
@@ -373,7 +439,7 @@ There are three important standard modules:
 
 Modules can contain *submodules*, nesting the same syntax `module ... end`. They can be used to introduce separate namespaces, which can be helpful for organizing complex codebases. Note that each `module` introduces its own [scope](@ref scope-of-variables), so submodules do not automatically “inherit” names from their parent.
 
-It is recommended that submodules refer to other modules within the enclosing parent module (including the latter) using *relative module qualifiers* in `using` and `import` statements. A relative module qualifier starts with a period (`.`), which corresponds to the current module, and each successive `.` leads to the parent of the current module. This should be followed by modules if necessary, and eventually the actual name to access, all separated by `.`s.
+It is recommended that submodules refer to other modules within the enclosing parent module (including the latter) using *relative module qualifiers* in `using` and `import` statements. A relative module qualifier starts with a period (`.`), which corresponds to the current module, and each successive `.` leads to the parent of the current module. This should be followed by modules if necessary, and eventually the actual name to access, all separated by `.`s. As a special case, however, referring to the module root can be written without `.`, avoiding the need to count the depth to reach that module.
 
 Consider the following example, where the submodule `SubA` defines a function, which is then extended in its “sibling” module:
 
@@ -388,6 +454,7 @@ julia> module ParentModule
        export add_D # export it from ParentModule too
        module SubB
        import ..SubA: add_D # relative path for a “sibling” module
+       # import ParentModule.SubA: add_D # when in a package, such as when this is loaded by using or import, this would be equivalent to the previous import, but not at the REPL
        struct Infinity end
        add_D(x::Infinity) = x
        end
@@ -395,12 +462,16 @@ julia> module ParentModule
 
 ```
 
-You may see code in packages, which, in a similar situation, uses
+You may see code in packages, which, in a similar situation, uses import without the `.`:
+```jldoctest
+julia> import ParentModule.SubA: add_D
+ERROR: ArgumentError: Package ParentModule not found in current path.
+```
+However, since this operates through [code loading](@ref code-loading), it only works if `ParentModule` is in a package in a file. If `ParentModule` was defined at the REPL, it is necessary to use use relative paths:
 ```jldoctest module_manual
 julia> import .ParentModule.SubA: add_D
 
 ```
-However, this operates through [code loading](@ref code-loading), and thus only works if `ParentModule` is in a package. It is better to use relative paths.
 
 Note that the order of definitions also matters if you are evaluating values. Consider
 
@@ -493,8 +564,12 @@ In particular, if you define a `function __init__()` in a module, then Julia wil
 immediately *after* the module is loaded (e.g., by `import`, `using`, or `require`) at runtime
 for the *first* time (i.e., `__init__` is only called once, and only after all statements in the
 module have been executed). Because it is called after the module is fully imported, any submodules
-or other imported modules have their `__init__` functions called *before* the `__init__` of the
-enclosing module.
+or other imported modules have their `__init__` functions called *before* the `__init__` of
+the enclosing module. This is also synchronized across threads, so that code can safely rely upon
+this ordering of effects, such that all `__init__` will have run, in dependency ordering,
+before the `using` result is completed. They may run concurrently with other `__init__`
+methods which are not dependencies however, so be careful when accessing any shared state
+outside the current module to use locks when needed.
 
 Two typical uses of `__init__` are calling runtime initialization functions of external C libraries
 and initializing global constants that involve pointers returned by external libraries. For example,
@@ -525,17 +600,6 @@ includes complicated heap-allocated objects like arrays. However, any routine th
 pointer value must be called at runtime for precompilation to work ([`Ptr`](@ref) objects will turn into
 null pointers unless they are hidden inside an [`isbits`](@ref) object). This includes the return values
 of the Julia functions [`@cfunction`](@ref) and [`pointer`](@ref).
-
-Dictionary and set types, or in general anything that depends on the output of a `hash(key)` method,
-are a trickier case. In the common case where the keys are numbers, strings, symbols, ranges,
-`Expr`, or compositions of these types (via arrays, tuples, sets, pairs, etc.) they are safe to
-precompile. However, for a few other key types, such as `Function` or `DataType` and generic
-user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
-on the memory address of the object (via its `objectid`) and hence may change from run to run.
-If you have one of these key types, or if you aren't sure, to be safe you can initialize this
-dictionary from within your `__init__` function. Alternatively, you can use the [`IdDict`](@ref)
-dictionary type, which is specially handled by precompilation so that it is safe to initialize
-at compile-time.
 
 When using precompilation, it is important to keep a clear sense of the distinction between the
 compilation phase and the execution phase. In this mode, it will often be much more clearly apparent

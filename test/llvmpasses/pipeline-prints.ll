@@ -285,25 +285,18 @@ attributes #2 = { inaccessiblemem_or_argmemonly }
 
 ; COM: InstSimplify/InstCombine should kill this zext-trunc pair
 ; AFTEREARLYSIMPLIFICATION: [[ZEXT:%.*]] = zext i1 {{%.*}} to i8
-; AFTEREARLYSIMPLIFICATION-NEXT: trunc i8 [[ZEXT]] to i1
-
-; BEFOREEARLYOPTIMIZATION: [[ZEXT:%.*]] = zext i1 {{%.*}} to i8
-; BEFOREEARLYOPTIMIZATION-NEXT: trunc i8 [[ZEXT]] to i1
 
 ; AFTEREARLYOPTIMIZATION-NOT: zext i1 {{%.*}} to i8
-; AFTEREARLYOPTIMIZATION-NOT: trunc i8 {{%.*}} to i1
 
 ; BEFORELOOPOPTIMIZATION-NOT: zext i1 {{%.*}} to i8
-; BEFORELOOPOPTIMIZATION-NOT: trunc i8 {{%.*}} to i1
 
 ; COM: Loop simplification makes the exit condition obvious
 ; AFTERLOOPSIMPLIFICATION: L35.lr.ph:
 ; AFTERLOOPSIMPLIFICATION: add nuw nsw
 
-; COM: Scalar optimization removes the previous add from the preheader
-; AFTERSCALAROPTIMIZATION: L35.lr.ph:
-; AFTERSCALAROPTIMIZATION-NOT: add nuw nsw
-; AFTERSCALAROPTIMIZATION: br label %L35
+; COM: Scalar optimization removes the preheader
+; AFTERSCALAROPTIMIZATION: L17:
+; AFTERSCALAROPTIMIZATION: icmp eq i64 {{%.*}}, 1,
 
 ; COM: Vectorization does stuff
 ; AFTERVECTORIZATION: vector.body

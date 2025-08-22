@@ -25,7 +25,7 @@ This is an infix operator, allowing `s ∪ itr`.
 See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> union([1, 2], [3])
 3-element Vector{Int64}:
  1
@@ -68,7 +68,7 @@ Maintain order with arrays.
 $(_DOCS_ALIASING_WARNING)
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> a = Set([3, 4, 5]);
 
 julia> union!(a, 1:2:7);
@@ -302,9 +302,9 @@ end
 const ⊆ = issubset
 function ⊇ end
 """
-    issubset(a, b) -> Bool
-    ⊆(a, b) -> Bool
-    ⊇(b, a) -> Bool
+    issubset(a, b)::Bool
+    ⊆(a, b)::Bool
+    ⊇(b, a)::Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
 
@@ -394,8 +394,8 @@ used to implement specialized methods.
 function ⊊ end
 function ⊋ end
 """
-    ⊊(a, b) -> Bool
-    ⊋(b, a) -> Bool
+    ⊊(a, b)::Bool
+    ⊋(b, a)::Bool
 
 Determines if `a` is a subset of, but not equal to, `b`.
 
@@ -446,8 +446,8 @@ used to implement specialized methods.
 function ⊈ end
 function ⊉ end
 """
-    ⊈(a, b) -> Bool
-    ⊉(b, a) -> Bool
+    ⊈(a, b)::Bool
+    ⊉(b, a)::Bool
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
 
@@ -496,7 +496,7 @@ used to implement specialized methods.
 ## set equality comparison
 
 """
-    issetequal(a, b) -> Bool
+    issetequal(a, b)::Bool
 
 Determine whether `a` and `b` have the same elements. Equivalent
 to `a ⊆ b && b ⊆ a` but more efficient when possible.
@@ -544,7 +544,7 @@ issetequal(a) = Fix2(issetequal, a)
 
 ## set disjoint comparison
 """
-    isdisjoint(a, b) -> Bool
+    isdisjoint(a, b)::Bool
 
 Determine whether the collections `a` and `b` are disjoint.
 Equivalent to `isempty(a ∩ b)` but more efficient when possible.

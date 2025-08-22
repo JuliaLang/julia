@@ -12,7 +12,8 @@ using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_ins
     CachedMethodTable, CFG, compute_basic_blocks, DebugInfoStream, Effects,
     EMPTY_SPTYPES, getdebugidx, IncrementalCompact, InferenceResult, InferenceState,
     InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
-    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst
+    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst,
+    get_ci_mi, get_ci_abi
 
 @nospecialize
 
@@ -67,7 +68,7 @@ function builtin_call_has_dispatch(
                 return true
             end
         end
-    elseif (f === Core._apply_pure || f === Core._call_in_world || f === Core._call_in_world_total || f === Core._call_latest)
+    elseif (f === Core.invoke_in_world || f === Core._call_in_world_total || f === Core.invokelatest)
         # These apply-like builtins are effectively dynamic calls
         return true
     end
@@ -95,16 +96,39 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
     elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], Union{MethodInstance,CodeInstance})
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
-        printstyled(io, "   invoke "; color = :light_black)
-        mi = stmt.args[1]
-        if !(mi isa Core.MethodInstance)
-            mi = (mi::Core.CodeInstance).def
+        ci = stmt.args[1]
+        if ci isa Core.CodeInstance
+            printstyled(io, "   invoke "; color = :light_black)
+            mi = get_ci_mi(ci)
+            abi = get_ci_abi(ci)
+        else
+            printstyled(io, "dynamic invoke "; color = :yellow)
+            abi = (ci::Core.MethodInstance).specTypes
         end
-        show_unquoted(io, stmt.args[2], indent)
-        print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
-        sig = mi.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(mi.specTypes).parameters::Core.SimpleVector
+        sig = abi == Tuple ? Core.svec() : Base.unwrap_unionall(abi).parameters::Core.SimpleVector
+        f = stmt.args[2]
+        ft = maybe_argextype(f, code, sptypes)
+
+        # We can elide the type for arg0 if it...
+        skip_ftype = (length(sig) == 0) # doesn't exist...
+        skip_ftype = skip_ftype || (
+            # ... or, f prints as a user-accessible value...
+            (f isa GlobalRef) &&
+            # ... and matches the value of the singleton type of the invoked MethodInstance
+            (singleton_type(ft) === singleton_type(sig[1]) !== nothing)
+        )
+        if skip_ftype
+            show_unquoted(io, f, indent)
+        else
+            print(io, "(")
+            show_unquoted(io, f, indent)
+            print(io, "::", sig[1], ")")
+        end
+
+        # Print the remaining arguments (with type annotations from the invoked MethodInstance)
+        print(io, "(")
         print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
@@ -195,7 +219,7 @@ end
 end
 
 """
-    Compute line number annotations for an IRCode
+    Compute line number annotations for an IRCode or CodeInfo.
 
 This functions compute three sets of annotations for each IR line. Take the following
 example (taken from `@code_typed sin(1.0)`):
@@ -254,7 +278,7 @@ to catch up and print the intermediate scopes. Which scope is printed is indicat
 by the indentation of the method name and by an increased thickness of the appropriate
 line for the scope.
 """
-function compute_ir_line_annotations(code::IRCode)
+function compute_ir_line_annotations(code::Union{IRCode,CodeInfo})
     loc_annotations = String[]
     loc_methods = String[]
     loc_lineno = String[]
@@ -264,7 +288,8 @@ function compute_ir_line_annotations(code::IRCode)
     last_printed_depth = 0
     debuginfo = code.debuginfo
     def = :var"unknown scope"
-    for idx in 1:length(code.stmts)
+    n = isa(code, IRCode) ? length(code.stmts) : length(code.code)
+    for idx in 1:n
         buf = IOBuffer()
         print(buf, "│")
         stack = buildLineInfoNode(debuginfo, def, idx)
@@ -323,7 +348,7 @@ function compute_ir_line_annotations(code::IRCode)
             loc_method = string(" "^printing_depth, loc_method)
             last_stack = stack
         end
-        push!(loc_annotations, String(take!(buf)))
+        push!(loc_annotations, takestring!(buf))
         push!(loc_lineno, (lineno != 0 && lineno != last_lineno) ? string(lineno) : "")
         push!(loc_methods, loc_method)
         (lineno != 0) && (last_lineno = lineno)
@@ -828,7 +853,7 @@ function new_nodes_iter(compact::IncrementalCompact)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
-function inline_linfo_printer(code::IRCode)
+function inline_linfo_printer(code::Union{IRCode,CodeInfo})
     loc_annotations, loc_methods, loc_lineno = compute_ir_line_annotations(code)
     max_loc_width = maximum(length, loc_annotations)
     max_lineno_width = maximum(length, loc_lineno)
@@ -897,12 +922,15 @@ function stmts_used(::IO, code::CodeInfo)
     return used
 end
 
-function default_config(code::IRCode; verbose_linetable=false)
-    return IRShowConfig(verbose_linetable ? statementidx_lineinfo_printer(code)
-                                          : inline_linfo_printer(code);
-                        bb_color=:normal)
+function default_config(code::IRCode; debuginfo = :source_inline)
+    return IRShowConfig(get_debuginfo_printer(code, debuginfo); bb_color=:normal)
 end
-default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
+default_config(code::CodeInfo; debuginfo = :source) = IRShowConfig(get_debuginfo_printer(code, debuginfo))
+function default_config(io::IO, src)
+    debuginfo = get(io, :debuginfo, nothing)
+    debuginfo !== nothing && return default_config(src; debuginfo)
+    return default_config(src)
+end
 
 function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
                        sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
@@ -922,8 +950,7 @@ function finish_show_ir(io::IO, cfg::CFG, config::IRShowConfig)
     return nothing
 end
 
-function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
-                 pop_new_node! = new_nodes_iter(ir))
+function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(io, ir); pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
     maxssaid = length(ir.stmts) + length(ir.new_nodes)
@@ -933,7 +960,7 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
     finish_show_ir(io, cfg, config)
 end
 
-function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
+function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
     cfg = compute_basic_blocks(ci.code)
@@ -947,7 +974,7 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
     finish_show_ir(io, cfg, config)
 end
 
-function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(io, compact.ir))
     cfg = compact.ir.cfg
 
 
@@ -1149,3 +1176,35 @@ const __debuginfo = Dict{Symbol, Any}(
     )
 const default_debuginfo = Ref{Symbol}(:none)
 debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
+
+const __debuginfo = Dict{Symbol, Any}(
+    # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
+    :source => src -> statementidx_lineinfo_printer(src),
+    :source_inline => src -> inline_linfo_printer(src),
+    # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
+    :none => src -> lineinfo_disabled,
+    )
+
+const debuginfo_modes = [:none, :source, :source_inline]
+@assert Set(debuginfo_modes) == Set(keys(__debuginfo))
+
+function validate_debuginfo_mode(mode::Symbol)
+    in(mode, debuginfo_modes) && return true
+    throw(ArgumentError("`debuginfo` must be one of the following: $(join([repr(mode) for mode in debuginfo_modes], ", "))"))
+end
+
+const default_debuginfo_mode = Ref{Symbol}(:none)
+function expand_debuginfo_mode(mode::Symbol, default = default_debuginfo_mode[])
+    if mode === :default
+        mode = default
+    end
+    validate_debuginfo_mode(mode)
+    return mode
+end
+
+function get_debuginfo_printer(mode::Symbol)
+    mode = expand_debuginfo_mode(mode)
+    return __debuginfo[mode]
+end
+
+get_debuginfo_printer(src, mode::Symbol) = get_debuginfo_printer(mode)(src)

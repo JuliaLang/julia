@@ -329,12 +329,15 @@ void jl_task_wait_empty(void)
     jl_task_t *ct = jl_current_task;
     if (jl_atomic_load_relaxed(&ct->tid) == 0 && jl_base_module) {
         jl_wait_empty_begin();
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("wait"));
-        wait_empty = ct;
         size_t lastage = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        if (f)
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("wait"), ct->world_age);
+        wait_empty = ct;
+        if (f) {
+            JL_GC_PUSH1(&f);
             jl_apply_generic(f, NULL, 0);
+            JL_GC_POP();
+        }
         // we are back from jl_task_get_next now
         ct->world_age = lastage;
         wait_empty = NULL;

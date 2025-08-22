@@ -208,7 +208,7 @@ end
     @test iterate(t, y3[2]) === nothing
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
-    @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+    @test_throws DimensionMismatch eachindex((2,5,"foo"), (1,2,5,7))
 
     @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
@@ -369,9 +369,9 @@ end
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
 
-    @test hash(()) === Base.tuplehash_seed
-    @test hash((1,)) === hash(1, Base.tuplehash_seed)
-    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
+    @test hash(()) === Base.tuplehash_seed ⊻ Base.HASH_SEED
+    @test hash((1,)) === hash(1, Base.tuplehash_seed ⊻ Base.HASH_SEED)
+    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed ⊻ Base.HASH_SEED))
 
     # Test Any32 methods
     t = ntuple(identity, 32)
@@ -393,7 +393,7 @@ end
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
 
-    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
+    @test hash(t) === foldr(hash, vcat(1:32, (), Base.HASH_SEED))
 end
 
 @testset "functions" begin
