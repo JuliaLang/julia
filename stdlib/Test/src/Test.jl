@@ -35,9 +35,8 @@ const record_passes = OncePerProcess{Bool}() do
     return Base.get_bool_env("JULIA_TEST_RECORD_PASSES", false)
 end
 
-const FAIL_FAST = Ref{Bool}(false)
-function __init__()
-    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
+const global_fail_fast = OncePerProcess{Bool}() do
+    return Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 end
 
 #-----------------------------------------------------------------------
@@ -1238,7 +1237,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
         if parent_ts isa DefaultTestSet
             failfast = parent_ts.failfast
         else
-            failfast = FAIL_FAST[]
+            failfast = global_fail_fast()
         end
     end
     return DefaultTestSet(String(desc)::String,
