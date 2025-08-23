@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.ScopedValues
-using Test
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
@@ -81,10 +80,13 @@ import Base.Threads: @spawn
 end
 
 @testset "show" begin
-    @test sprint(show, ScopedValue{Int}()) == "$ScopedValue{$Int}(undefined)"
-    @test sprint(show, sval) == "$ScopedValue{$Int}(1)"
+    @test sprint(show, ScopedValue{Int}()) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
+    @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(1)"
+    @test sprint(show, Core.current_scope()) == "nothing"
     with(sval => 2.0) do
-        @test sprint(show, sval) == "$ScopedValue{$Int}(2)"
+        @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(2)"
+        objid = sprint(show, Base.objectid(sval))
+        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(Base.ScopedValues.ScopedValue{$Int}@$objid => 2)"
     end
 end
 
@@ -176,9 +178,8 @@ end
 
 # Handle nothrow scope bodies correctly (#56609)
 @eval function nothrow_scope()
-    s = Core.current_scope()
     $(Expr(:tryfinally, :(), nothing, 1))
-    @test Core.current_scope() === s
+    @test Core.current_scope() === nothing
 end
 nothrow_scope()
 
