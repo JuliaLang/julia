@@ -146,9 +146,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 latest_bpart = user_binding.partitions
                 latest_bpart.max_world == typemax(UInt) || continue
                 is_some_implicit(binding_kind(latest_bpart)) || continue
-                new_bpart = need_to_invalidate_export ?
-                    ccall(:jl_maybe_reresolve_implicit, Any, (Any, Csize_t), user_binding, new_max_world) :
-                    latest_bpart
+                new_bpart = ccall(:jl_maybe_reresolve_implicit, Any, (Any, Csize_t), user_binding, new_max_world)
                 if need_to_invalidate_code || new_bpart !== latest_bpart
                     push!(queued_bindings, (convert(Core.Binding, user_binding), latest_bpart, new_bpart))
                 end
