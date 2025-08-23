@@ -2008,3 +2008,28 @@ end
         @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
     end
 end
+
+@testset "io argument for Test output functions" begin
+    # Test print_test_results and print_test_errors with io redirection
+    io = IOBuffer()
+
+    # Create a testset with passing and failing tests
+    ts = Test.DefaultTestSet("IO Test")
+    Test.record(ts, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(1), false))
+    fail = Test.Fail(:test, "1 == 2", nothing, nothing, LineNumberNode(2, Symbol("test.jl")))
+    push!(ts.results, fail)
+
+    # Test print_test_results with io
+    Test.print_test_results(io, ts)
+    output = String(take!(io))
+    @test occursin("Test Summary:", output)
+    @test occursin("IO Test", output)
+    @test occursin("Pass", output)
+    @test occursin("Fail", output)
+
+    # Test print_test_errors with io
+    Test.print_test_errors(io, ts)
+    output = String(take!(io))
+    @test occursin("Error in testset", output)
+    @test occursin("1 == 2", output)
+end
