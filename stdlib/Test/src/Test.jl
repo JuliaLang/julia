@@ -1408,9 +1408,6 @@ function print_test_results(io::IO, ts::AbstractTestSet, depth_pad=0)
     end
 end
 
-
-const TESTSET_PRINT_ENABLE = Ref(true)
-
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
 function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
@@ -2105,6 +2102,7 @@ end
 
 const CURRENT_TESTSET = ScopedValue{AbstractTestSet}(FallbackTestSet())
 const TESTSET_DEPTH = ScopedValue{Int}(0)
+const TESTSET_PRINT_ENABLE = ScopedValue{Bool}(true)
 
 macro with_testset(ts, expr)
     :(@with(CURRENT_TESTSET => $(esc(ts)), TESTSET_DEPTH => get_testset_depth() + 1, $(esc(expr))))
