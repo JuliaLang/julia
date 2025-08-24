@@ -26,6 +26,16 @@ function InliningTodo(mi::MethodInstance, ir::IRCode, spec_info::SpecInfo, di::D
     return InliningTodo(mi, ir, spec_info, di, linear_inline_eligible(ir), effects)
 end
 
+struct GCPreserveRewrite
+    actual_callee::Any
+    preservee::Any
+end
+
+struct GCPreserveInliningTodo
+    gc_preserve::GCPreserveRewrite
+    inlining::InliningTodo
+end
+
 struct ConstantCase
     val::Any
     edge::CodeInstance
@@ -357,8 +367,31 @@ function adjust_boundscheck!(inline_compact::IncrementalCompact, idx′::Int, st
     return nothing
 end
 
+function apply_gc_preserve_inlining!(insert_node!::Inserter, inline_compact::IncrementalCompact, line, @nospecialize(stmt′), @nospecialize(gc_preserve))
+    if isexpr(stmt′,  :invoke_modify)
+        # TODO: The combination of an existing invoke_modify and gc_preserve causes trouble. Bail for now.
+        stmt′.head = :call
+        popfirst!(stmt′.args)
+    end
+    if isexpr(stmt′, :call) || isexpr(stmt′, :invoke)
+        refarg = stmt′.head === :call ? 1 : 2
+        if stmt′.head === :invoke
+            stmt′.head = :invoke_modify
+        end
+        oldarg = stmt′.args[refarg]
+        stmt′.args[refarg] = insert_node!(NewInstruction(
+            Expr(:new, GlobalRef(Core, :GCPreserveDuring), oldarg, gc_preserve),
+            PartialStruct(Core.GCPreserveDuring,
+                Any[argextype(oldarg, inline_compact), argextype(gc_preserve, inline_compact)]),
+                NoCallInfo(), line,
+                IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
+    elseif isexpr(stmt′, :foreigncall)
+        push!(stmt′.args, gc_preserve)
+    end
+end
+
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
-                         item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
+                         item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}}, @nospecialize(gc_preserve::Any))
     # Ok, do the inlining here
     inlined_at = compact.result[idx][:line]
     ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.spec_info, item.di, item.mi, inlined_at, argexprs)
@@ -380,7 +413,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # something better eventually.
             inline_compact[idx′] = nothing
             # alter the line number information for InsertBefore to point to the current instruction in the new linetable
-            inline_compact[SSAValue(idx′)][:line] = (ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(lineidx))
+            line = (ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(lineidx))
+            inline_compact[SSAValue(idx′)][:line] = line
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute_op!(insert_node!, inline_compact[SSAValue(idx′)], stmt′, ssa_substitute)
             if isa(stmt′, ReturnNode)
@@ -394,6 +428,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 break
             elseif isexpr(stmt′, :boundscheck)
                 adjust_boundscheck!(inline_compact, idx′, stmt′, boundscheck)
+            elseif gc_preserve !== nothing
+                apply_gc_preserve_inlining!(insert_node!, inline_compact, line, stmt′, gc_preserve)
             end
             inline_compact[idx′] = stmt′
         end
@@ -412,7 +448,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         @assert isempty(inline_compact.perm) && isempty(inline_compact.pending_perm) "linetable not in canonical form (missing compact call)"
         for ((lineidx, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            inline_compact[SSAValue(idx′)][:line] = (ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(lineidx))
+            line = (ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(lineidx))
+            inline_compact[SSAValue(idx′)][:line] = line
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute_op!(insert_node!, inline_compact[SSAValue(idx′)], stmt′, ssa_substitute)
             if isa(stmt′, ReturnNode)
@@ -433,6 +470,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 stmt′ = PhiNode(Int32[edge+bb_offset for edge in stmt′.edges], stmt′.values)
             elseif isexpr(stmt′, :boundscheck)
                 adjust_boundscheck!(inline_compact, idx′, stmt′, boundscheck)
+            elseif gc_preserve !== nothing
+                apply_gc_preserve_inlining!(insert_node!, inline_compact, line, stmt′, gc_preserve)
             end
             inline_compact[idx′] = stmt′
         end
@@ -578,7 +617,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
             end
         end
         if isa(case, InliningTodo)
-            val = ir_inline_item!(compact, idx, argexprs′, case, boundscheck, todo_bbs)
+            val = ir_inline_item!(compact, idx, argexprs′, case, boundscheck, todo_bbs, nothing)
         elseif isa(case, InvokeCase)
             invoke_stmt = Expr(:invoke, case.invoke, argexprs′...)
             flag = flags_for_effects(case.effects)
@@ -624,7 +663,19 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
         if isa(item, UnionSplit)
             cfg_inline_unionsplit!(ir, idx, item, state, params)
         else
-            item = item::InliningTodo
+            if isa(item, GCPreserveInliningTodo)
+                item = item::GCPreserveInliningTodo
+                # Rewrite the call now to drop the GCPreserveDuring, since we're committed to inlining.
+                # This makes sure that it gets renamed properly. We also need to rename the GC preservee,
+                # but we don't have a good place to put that, so temporarily append it to the argument list -
+                # we'll undo this below.
+                stmt = ir[SSAValue(idx)][:stmt]
+                stmt.args[1] = item.gc_preserve.actual_callee
+                push!(stmt.args, item.gc_preserve.preservee)
+                item = item.inlining
+            else
+                item = item::InliningTodo
+            end
             # A linear inline does not modify the CFG
             item.linear_inline_eligible && continue
             cfg_inline_item!(ir, idx, item, state, false)
@@ -660,7 +711,9 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                     refinish = true
                 end
                 if isa(item, InliningTodo)
-                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
+                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, nothing)
+                elseif isa(item, GCPreserveInliningTodo)
+                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item.inlining, boundscheck, state.todo_bbs, pop!(argexprs))
                 elseif isa(item, UnionSplit)
                     compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, interp)
                 end
@@ -988,7 +1041,7 @@ function retrieve_ir_for_inlining(mi::MethodInstance, opt::OptimizationState, pr
 end
 
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
-    ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case),
+    ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case), gc_preserve::Union{GCPreserveRewrite, Nothing},
     isinvoke::Bool = false)
     if isa(case, ConstantCase)
         ir[SSAValue(idx)][:stmt] = case.val
@@ -996,9 +1049,12 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
         is_foldable_nothrow(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
         if stmt.head === :invoke
+            if gc_preserve !== nothing
+                stmt.head = :invoke_modify
+            end
             stmt.args[1] = case.invoke
         else
-            stmt.head = :invoke
+            stmt.head = gc_preserve === nothing ? :invoke : :invoke_modify
             pushfirst!(stmt.args, case.invoke)
         end
         add_flag!(ir[SSAValue(idx)], flags_for_effects(case.effects))
@@ -1006,7 +1062,9 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
         # Do, well, nothing
     else
         isinvoke && rewrite_invoke_exprargs!(stmt)
-        push!(todo, idx=>(case::InliningTodo))
+        case = case::InliningTodo
+        push!(todo, idx=>gc_preserve === nothing ? case :
+            GCPreserveInliningTodo(gc_preserve, case))
     end
     return nothing
 end
@@ -1237,6 +1295,7 @@ end
 # functions.
 function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag::UInt32,
                          state::InliningState)
+    gc_preserve = nothing
     inst = ir[SSAValue(idx)]
     stmt = inst[:stmt]
     if !(stmt isa Expr)
@@ -1261,6 +1320,22 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
 
     sig = call_sig(ir, stmt)
     sig === nothing && return nothing
+
+    # Handle GCPreserveDuring
+    if isa(inst[:info], GCPreserveDuringCallInfo)
+        # See if we can strip the construction of this
+        wrapped_f = stmt.args[1]
+        if isa(wrapped_f, SSAValue)
+            wrapping_stmt = ir[wrapped_f][:stmt]
+            if isexpr(wrapping_stmt, :new)
+                ft = argextype(wrapping_stmt.args[2], ir)
+                gc_preserve = GCPreserveRewrite(wrapping_stmt.args[2], wrapping_stmt.args[3])
+                new_argtypes = copy(sig.argtypes)
+                new_argtypes[1] = ft
+                sig = Signature(singleton_type(ft), ft, new_argtypes)
+            end
+        end
+    end
 
     # Handle _apply_iterate
     sig = inline_apply!(todo, ir, idx, stmt, sig, state)
@@ -1303,7 +1378,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
         return nothing
     end
 
-    return stmt, sig
+    return stmt, sig, gc_preserve
 end
 
 function handle_any_const_result!(cases::Vector{InliningCase},
@@ -1409,13 +1484,13 @@ end
 
 function handle_call!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature,
-    state::InliningState)
+    state::InliningState, gc_preserve::Union{GCPreserveRewrite, Nothing})
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
     cases, handled_all_cases, fully_covered, joint_effects = cases
     atype = argtypes_to_type(sig.argtypes)
     atype === Union{} && return nothing # accidentally actually unreachable
-    handle_cases!(todo, ir, idx, stmt, atype, cases, handled_all_cases, fully_covered, joint_effects)
+    handle_cases!(todo, ir, idx, stmt, atype, cases, handled_all_cases, fully_covered, joint_effects, gc_preserve)
 end
 
 function handle_match!(cases::Vector{InliningCase},
@@ -1499,18 +1574,18 @@ end
 
 function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::Expr,
     @nospecialize(atype), cases::Vector{InliningCase}, handled_all_cases::Bool, fully_covered::Bool,
-    joint_effects::Effects)
+    joint_effects::Effects, gc_preserve::Union{GCPreserveRewrite, Nothing})
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
     # onto the todo list
     if fully_covered && handled_all_cases && length(cases) == 1
-        handle_single_case!(todo, ir, idx, stmt, cases[1].item)
+        handle_single_case!(todo, ir, idx, stmt, cases[1].item, gc_preserve)
     elseif length(cases) > 0 || handled_all_cases
         isa(atype, DataType) || return nothing
         for case in cases
             isa(case.sig, DataType) || return nothing
         end
-        push!(todo, idx=>UnionSplit(handled_all_cases, fully_covered, atype, cases))
+        push!(todo, idx=>UnionSplit(handled_all_cases, fully_covered, atype, cases, gc_preserve))
     else
         add_flag!(ir[SSAValue(idx)], flags_for_effects(joint_effects))
     end
@@ -1629,13 +1704,17 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
 
         simpleres = process_simple!(todo, ir, idx, flag, state)
         simpleres === nothing && continue
-        stmt, sig = simpleres
+        stmt, sig, gc_preserve = simpleres
 
         info = ir.stmts[idx][:info]
+        if gc_preserve !== nothing && isa(info, GCPreserveDuringCallInfo)
+            info = info.info
+        end
 
         # `NativeInterpreter` won't need this, but provide a support for `:invoke` exprs here
         # for external `AbstractInterpreter`s that may run the inlining pass multiple times
         if isexpr(stmt, :invoke)
+            gc_preserve === nothing || continue
             handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
             continue
         end
@@ -1652,16 +1731,20 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
 
         # handle special cased builtins
         if isa(info, OpaqueClosureCallInfo)
+            gc_preserve === nothing || continue
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, ModifyOpInfo)
+            gc_preserve === nothing || continue
             handle_modifyop!_call!(ir, idx, stmt, info, state)
         elseif sig.f === Core.invoke
+            gc_preserve === nothing || continue
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, FinalizerInfo)
+            gc_preserve === nothing || continue
             handle_finalizer_call!(ir, idx, stmt, info, state)
         else
             # cascade to the generic (and extendable) handler
-            handle_call!(todo, ir, idx, stmt, info, flag, sig, state)
+            handle_call!(todo, ir, idx, stmt, info, flag, sig, state, gc_preserve)
         end
     end
 

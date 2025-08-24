@@ -1719,6 +1719,11 @@ struct jl_cgval_t {
     //       handling to account for the possibility that this may be NULL.
     Value *Vboxed;
 
+    // If non-null, this value was an unwrapped GCPreserveDuring, where this value is the preservee.
+    // Calls of this value need toapply appropriate gc preserve handling.
+    SmallVector<Value*,0> preservees;
+    jl_value_t *wrapped_typ;
+
     Value *TIndex; // if `V` is an unboxed (tagged) Union described by `typ`, this gives the DataType index (1-based, small int) as an i8
     SmallVector<Value*,0> inline_roots; // if present, `V` is a pointer, but not in canonical layout
     jl_value_t *constant; // constant value (rooted in linfo.def.roots)
@@ -4914,7 +4919,7 @@ isdefined_unknown_idx:
 
 // Returns ctx.types().T_prjlvalue
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
-                             ArrayRef<jl_cgval_t> argv, size_t nargs, JuliaFunction<> *trampoline)
+                             ArrayRef<jl_cgval_t> argv, size_t nargs, ArrayRef<Value *> roots, JuliaFunction<> *trampoline)
 {
     ++EmittedJLCalls;
     Function *TheTrampoline = prepare_call(trampoline);
@@ -4935,7 +4940,9 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
         }
         theArgs.push_back(arg);
     }
-    CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
+
+    OperandBundleDef OpBundle("jl_roots", roots);
+    CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs, ArrayRef<OperandBundleDef>(&OpBundle, roots.empty() ? 0 : 1));
     result->setAttributes(TheTrampoline->getAttributes());
     // TODO: we could add readonly attributes in many cases to the args
     return result;
@@ -4948,7 +4955,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
 
-static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs)
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs, ArrayRef<Value*> roots)
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
@@ -5047,7 +5054,9 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         idx++;
     }
     assert(idx == nfargs);
-    CallInst *call = ctx.builder.CreateCall(returninfo.decl, argvals);
+
+    OperandBundleDef OpBundle("jl_roots", roots);
+    CallInst *call = ctx.builder.CreateCall(returninfo.decl, argvals, ArrayRef<OperandBundleDef>(&OpBundle, roots.empty() ? 0 : 1));
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
@@ -5140,7 +5149,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t 
 }
 
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
-                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *inferred_retty)
+                                          ArrayRef<jl_cgval_t> argv, size_t nargs, ArrayRef<Value *> roots, jl_value_t *inferred_retty)
 {
     Value *theFptr;
     if (fromexternal) {
@@ -5160,7 +5169,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
         theFptr = jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee();
         addRetAttr(cast<Function>(theFptr), Attribute::NonNull);
     }
-    Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, julia_call);
+    Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, roots, julia_call);
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
 
@@ -5181,7 +5190,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     return emit_invoke(ctx, lival, argv, nargs, rt, false);
 }
 
-static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *rt, bool always_inline)
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *rt,
+                              ArrayRef<Value *> roots, bool always_inline)
 {
     ++EmittedInvokes;
     bool handled = false;
@@ -5205,18 +5215,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             Function *f = ctx.f;
             FunctionType *ft = f->getFunctionType();
             if (ft == ctx.types().T_jlfunc) {
-                Value *ret = emit_jlcall(ctx, f, nullptr, argv, nargs, julia_call);
+                Value *ret = emit_jlcall(ctx, f, nullptr, argv, nargs, roots, julia_call);
                 result = update_julia_type(ctx, mark_julia_type(ctx, ret, true, ctx.rettype), rt);
             }
             else if (ft == ctx.types().T_jlfuncparams) {
-                Value *ret = emit_jlcall(ctx, f, ctx.spvals_ptr, argv, nargs, julia_call2);
+                Value *ret = emit_jlcall(ctx, f, ctx.spvals_ptr, argv, nargs, roots, julia_call2);
                 result = update_julia_type(ctx, mark_julia_type(ctx, ret, true, ctx.rettype), rt);
             }
             else {
                 unsigned return_roots = 0;
                 jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                 StringRef protoname = f->getName();
-                result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, nullptr, argv, nargs, &cc, &return_roots, rt);
+                result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, nullptr, argv, nargs, roots, &cc, &return_roots, rt);
             }
             handled = true;
         }
@@ -5232,7 +5242,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, roots, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
                     }
                     else {
@@ -5288,9 +5298,9 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                         unsigned return_roots = 0;
                         if (specsig)
-                            result = emit_call_specfun_other(ctx, codeinst, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt);
+                            result = emit_call_specfun_other(ctx, codeinst, protoname, external ? codeinst : nullptr, argv, nargs, roots, &cc, &return_roots, rt);
                         else
-                            result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt);
+                            result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, roots, rt);
                         if (need_to_emit) {
                             Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
                             ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, nullptr, specsig, !always_inline, always_inline};
@@ -5302,7 +5312,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         }
     }
     if (!handled) {
-        Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
+        Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, roots, julia_call2);
         result = mark_julia_type(ctx, r, true, rt);
     }
     if (result.typ == jl_bottom_type) {
@@ -5329,7 +5339,13 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
             return jl_cgval_t();
     }
     const jl_cgval_t &f = argv[0];
-    if (f.constant) {
+    if (f.typ == jl_gc_preserve_during_type) {
+        f.typ = f.wrapped_typ;
+        SmallVector<Value*, 1> roots = f.preservees;
+        f.preservees.clear();
+        return emit_invoke(ctx, lival, argv, nargs, roots, rt, false);
+    }
+    else if (f.constant) {
         jl_cgval_t ret;
         auto it = builtin_func_map().end();
         if (f.constant == BUILTIN(modifyfield)) {
@@ -6469,11 +6485,20 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         if (jl_is_type_type(ty) &&
                 jl_is_datatype(jl_tparam0(ty)) &&
                 jl_is_concrete_type(jl_tparam0(ty))) {
-            assert(nargs <= jl_datatype_nfields(jl_tparam0(ty)) + 1);
-            jl_cgval_t res = emit_new_struct(ctx, jl_tparam0(ty), nargs - 1, ArrayRef<jl_cgval_t>(argv).drop_front(), is_promotable);
-            if (is_promotable && res.promotion_point && res.promotion_ssa==-1)
-                res.promotion_ssa = ssaidx_0based;
-            return res;
+            jl_value_t *allocated_type = jl_tparam0(ty);
+            assert(nargs <= jl_datatype_nfields(allocated_type) + 1);
+            if (allocated_type == jl_gc_preserve_during_type) {
+                jl_cgval_t res = argv[1];
+                res.preservees.append(get_gc_roots_for(ctx, argv[2]));
+                res.wrapped_typ = res.typ;
+                res.typ = allocated_type;
+                return res;
+            } else {
+                jl_cgval_t res = emit_new_struct(ctx, allocated_type, nargs - 1, ArrayRef<jl_cgval_t>(argv).drop_front(), is_promotable);
+                if (is_promotable && res.promotion_point && res.promotion_ssa==-1)
+                    res.promotion_ssa = ssaidx_0based;
+                return res;
+            }
         }
         Value *val = emit_jlcall(ctx, jlnew_func, nullptr, argv, nargs, julia_call);
         // temporarily mark as `Any`, expecting `emit_ssaval_assign` to update
