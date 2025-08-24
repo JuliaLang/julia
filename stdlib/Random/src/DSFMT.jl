@@ -144,7 +144,7 @@ function sqrmod!(f::GF2X, m::GF2X)::GF2X
                 setcoeff!(g, 2i) :
                 xor!(g, sqrs[i])
         end
-        foldl(sqrmod_closure, filter(i->coeff(f, i), 0:degree(f)); init=GF2X(0))
+        foldl(sqrmod_closure, filter(Base.Fix1(coeff, f), 0:degree(f)); init=GF2X(0))
     end
 end
 
