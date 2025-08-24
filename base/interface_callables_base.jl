@@ -13,6 +13,7 @@ for c ∈ Symbol[
     :ndims, :one, :zero, :oneunit, :widen,
     :promote_rule, :convert,
     :similar,
+    :+, :-, :*, :/, ://, :<<, :>>, :>>>, :div, :fld, :cld,
 ]
     @eval function $c end
 end
