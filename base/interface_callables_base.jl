@@ -30,7 +30,7 @@ for c ∈ Any[
     strides, stride,
     +, -, *, /, //, <<, >>, >>>, div, fld, cld,
 ]
-    Base._stable_typeof(f).name.max_methods = 0x1
+    Base._stable_typeof(c).name.max_methods = 0x1
 end
 
 # Callables which take type arguments and need a method for the bottom type need a
@@ -44,5 +44,5 @@ for c ∈ Any[
     promote_rule, convert,
     similar,
 ]
-    Base._stable_typeof(f).name.max_methods = 0x2
+    Base._stable_typeof(c).name.max_methods = 0x2
 end
