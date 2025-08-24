@@ -17,7 +17,7 @@ for c ∈ Symbol[
     @eval function $c end
 end
 
-# Disable world spliting for callables to which users should add new methods.
+# Disable world splitting for callables to which users should add new methods.
 for c ∈ Any[
     propertynames, getproperty, setproperty!,
     show, print,
