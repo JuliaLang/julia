@@ -2271,9 +2271,14 @@ void jl_dump_native_impl(void *native_code,
         auto lock = TSCtx.getLock();
         auto dataM = data->M.getModuleUnlocked();
 
-        // Delete data when add_output thinks it's done with it
-        // Saves memory for use when multithreading
-        data_outputs = compile(*dataM, "text", threads, [data](Module &) { delete data; });
+        data_outputs = compile(*dataM, "text", threads, [data, &lock, &TSCtx](Module &) {
+            // Delete data when add_output thinks it's done with it
+            // Saves memory for use when multithreading
+            auto lock2 = std::move(lock);
+            delete data;
+            // Drop last reference to shared LLVM::Context
+            auto TSCtx2 = std::move(TSCtx);
+        });
     }
 
     if (params->emit_metadata) {

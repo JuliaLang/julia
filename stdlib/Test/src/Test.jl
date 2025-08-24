@@ -1302,34 +1302,43 @@ record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 @specialize
 
 """
-    print_test_errors(::AbstractTestSet)
+    print_test_errors([io::IO], ts::AbstractTestSet)
 
 Prints the errors that were recorded by this `AbstractTestSet` after it
-was `finish`ed.
+was `finish`ed. If `io` is not provided, defaults to `stdout`.
 """
 function print_test_errors(ts::AbstractTestSet)
+    print_test_errors(stdout, ts)
+end
+
+function print_test_errors(io::IO, ts::AbstractTestSet)
     for t in results(ts)
         if isa(t, Error) || isa(t, Fail)
-            println("Error in testset $(ts.description):")
-            show(t)
-            println()
+            println(io, "Error in testset $(ts.description):")
+            show(io, t)
+            println(io)
         elseif isa(t, AbstractTestSet)
-            print_test_errors(t)
+            print_test_errors(io, t)
         end
     end
 end
 
 """
-    print_test_results(ts::AbstractTestSet, depth_pad=0)
+    print_test_results([io::IO], ts::AbstractTestSet, depth_pad=0)
 
 Print the results of an `AbstractTestSet` as a formatted table.
 
 `depth_pad` refers to how much padding should be added in front of all output.
+If `io` is not provided, defaults to `stdout`.
 
 Called inside of `Test.finish`, if the `finish`ed testset is the topmost
 testset.
 """
 function print_test_results(ts::AbstractTestSet, depth_pad=0)
+    print_test_results(stdout, ts, depth_pad)
+end
+
+function print_test_results(io::IO, ts::AbstractTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
     tc = get_test_counts(ts)
@@ -1355,34 +1364,34 @@ function print_test_results(ts::AbstractTestSet, depth_pad=0)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, depth_pad), textwidth("Test Summary:"))
     # Print the outer test set header once
-    printstyled(rpad("Test Summary:", align, " "), " |", " "; bold=true)
+    printstyled(io, rpad("Test Summary:", align, " "), " |", " "; bold=true)
     if pass_width > 0
-        printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
+        printstyled(io, lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end
     if fail_width > 0
-        printstyled(lpad("Fail", fail_width, " "), "  "; bold=true, color=Base.error_color())
+        printstyled(io, lpad("Fail", fail_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if error_width > 0
-        printstyled(lpad("Error", error_width, " "), "  "; bold=true, color=Base.error_color())
+        printstyled(io, lpad("Error", error_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if broken_width > 0
-        printstyled(lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
+        printstyled(io, lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
     end
     if total_width > 0 || total == 0
-        printstyled(lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
+        printstyled(io, lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
     end
     timing = isdefined(ts, :showtiming) ? ts.showtiming : false
     if timing
-        printstyled(lpad("Time", duration_width, " "); bold=true)
+        printstyled(io, lpad("Time", duration_width, " "); bold=true)
     end
-    println()
+    println(io)
     # Recursively print a summary at every level
-    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
+    print_counts(io, ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
     # Print the RNG of the outer testset if there are failures
     if total != total_pass + total_broken
         rng = get_rng(ts)
         if !isnothing(rng)
-            println("RNG of the outermost testset: ", rng)
+            println(io, "RNG of the outermost testset: ", rng)
         end
     end
 end
@@ -1572,7 +1581,7 @@ results(::AbstractTestSet) = ()
 
 # Recursive function that prints out the results at each level of
 # the tree of test sets
-function print_counts(ts::AbstractTestSet, depth, align,
+function print_counts(io::IO, ts::AbstractTestSet, depth, align,
                       pass_width, fail_width, error_width, broken_width, total_width, duration_width, showtiming)
     # Count results by each type at this level, and recursively
     # through any child test sets
@@ -1582,58 +1591,58 @@ function print_counts(ts::AbstractTestSet, depth, align,
                tc.cumulative_passes + tc.cumulative_fails + tc.cumulative_errors + tc.cumulative_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
-    print(rpad(string("  "^depth, ts.description), align, " "), " | ")
+    print(io, rpad(string("  "^depth, ts.description), align, " "), " | ")
 
     n_passes = tc.passes + tc.cumulative_passes
     if n_passes > 0
-        printstyled(lpad(string(n_passes), pass_width, " "), "  ", color=:green)
+        printstyled(io, lpad(string(n_passes), pass_width, " "), "  ", color=:green)
     elseif pass_width > 0
         # No passes at this level, but some at another level
-        printstyled(lpad(fallbackstr, pass_width, " "), "  ", color=:green)
+        printstyled(io, lpad(fallbackstr, pass_width, " "), "  ", color=:green)
     end
 
     n_fails = tc.fails + tc.cumulative_fails
     if n_fails > 0
-        printstyled(lpad(string(n_fails), fail_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(string(n_fails), fail_width, " "), "  ", color=Base.error_color())
     elseif fail_width > 0
         # No fails at this level, but some at another level
-        printstyled(lpad(fallbackstr, fail_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(fallbackstr, fail_width, " "), "  ", color=Base.error_color())
     end
 
     n_errors = tc.errors + tc.cumulative_errors
     if n_errors > 0
-        printstyled(lpad(string(n_errors), error_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(string(n_errors), error_width, " "), "  ", color=Base.error_color())
     elseif error_width > 0
         # No errors at this level, but some at another level
-        printstyled(lpad(fallbackstr, error_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(fallbackstr, error_width, " "), "  ", color=Base.error_color())
     end
 
     n_broken = tc.broken + tc.cumulative_broken
     if n_broken > 0
-        printstyled(lpad(string(n_broken), broken_width, " "), "  ", color=Base.warn_color())
+        printstyled(io, lpad(string(n_broken), broken_width, " "), "  ", color=Base.warn_color())
     elseif broken_width > 0
         # None broken at this level, but some at another level
-        printstyled(lpad(fallbackstr, broken_width, " "), "  ", color=Base.warn_color())
+        printstyled(io, lpad(fallbackstr, broken_width, " "), "  ", color=Base.warn_color())
     end
 
     if n_passes == 0 && n_fails == 0 && n_errors == 0 && n_broken == 0
         total_str = tc.customized ? string(subtotal) : "?"
-        printstyled(lpad(total_str, total_width, " "), "  ", color=Base.info_color())
+        printstyled(io, lpad(total_str, total_width, " "), "  ", color=Base.info_color())
     else
-        printstyled(lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
+        printstyled(io, lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
     end
 
     if showtiming
-        printstyled(lpad(tc.duration, duration_width, " "))
+        printstyled(io, lpad(tc.duration, duration_width, " "))
     end
-    println()
+    println(io)
 
     # Only print results at lower levels if we had failures or if the user
     # wants. Requires the given `AbstractTestSet` to have a vector of results
     if ((n_passes + n_broken != subtotal) || print_verbose(ts))
         for t in results(ts)
             if isa(t, AbstractTestSet)
-                print_counts(t, depth + 1, align,
+                print_counts(io, t, depth + 1, align,
                     pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
             end
         end

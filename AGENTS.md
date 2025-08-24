@@ -97,7 +97,7 @@ make sure to take them into account.
 - Do not `ccall` runtime C functions directly if there are existing wrappers for the function.
 - Do not explicitly add a module prefix if the code you're adding is in the same module. E.g. do not use `Base.` for code in Base unless required.
 
-## Commit message formatting
+## Commit messages and pull requests
 
 When writing commit messages, follow the format "component: Brief summary" for
 the title. In the body of the commit message, provide a brief prose summary
@@ -109,7 +109,7 @@ If your change fixes one or more issues, use the syntax "Fixes #" at the end of 
 When referencing external GitHub PRs or issues, use proper GitHub interlinking format (e.g., `owner/repo#123` for PRs/issues).
 When fixing CI failures, include the link to the specific CI failure in the commit message.
 
-When creating pull requests, if the pull request consists of one commit only,
-use the body of the commit for the body of the pull request. If there are multiple
-commits in the pull request, follow the same guidelines for the pull request
-as for the commit body.
+When creating pull requests:
+1. If the pull request consists of one commit only, use the body of the commit for the body of the pull request.
+2. If there are multiple commits in the pull request, follow the same guidelines for the pull request as for the commit body.
+3. Make sure that the base commit of the pull request is recent (within the past two days) - if not rebase your changes first.
