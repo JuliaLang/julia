@@ -422,20 +422,20 @@ cd(@__DIR__) do
     =#
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
-    o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
+    @atomic o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
     BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
     for (testname, (resp,), duration) in results
         push!(completed_tests, testname)
         if isa(resp, Test.DefaultTestSet)
-            resp.time_end = resp.time_start + duration
+            @atomic resp.time_end = resp.time_start + duration
             Test.push_testset(resp)
             Test.record(o_ts, resp)
             Test.pop_testset()
         elseif isa(resp, Test.TestSetException)
             fake = Test.DefaultTestSet(testname)
-            fake.time_end = fake.time_start + duration
+            @atomic fake.time_end = fake.time_start + duration
             for i in 1:resp.pass
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
             end
@@ -457,7 +457,7 @@ cd(@__DIR__) do
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
-            fake.time_end = fake.time_start + duration
+            @atomic fake.time_end = fake.time_start + duration
             Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
@@ -477,7 +477,7 @@ cd(@__DIR__) do
     println()
     # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
-    if !o_ts.anynonpass
+    if !Test.anynonpass(o_ts)
         printstyled("    SUCCESS\n"; bold=true, color=:green)
     else
         printstyled("    FAILURE\n\n"; bold=true, color=:red)

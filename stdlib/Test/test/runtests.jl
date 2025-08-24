@@ -584,7 +584,7 @@ end
         @test total_error  == 6
         @test total_broken == 0
     end
-    ts.anynonpass = false
+    @atomic ts.anynonpass = false
     deleteat!(Test.get_testset().results, 1)
 end
 

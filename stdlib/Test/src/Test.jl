@@ -1208,17 +1208,27 @@ are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
 mutable struct DefaultTestSet <: AbstractTestSet
-    description::String
-    results::Vector{Any}
-    n_passed::Int
-    anynonpass::Bool
-    verbose::Bool
-    showtiming::Bool
-    time_start::Float64
-    time_end::Union{Float64,Nothing}
-    failfast::Bool
-    file::Union{String,Nothing}
+    const description::String
+    const verbose::Bool
+    const showtiming::Bool
+    const failfast::Bool
+    const file::Union{String,Nothing}
+    const time_start::Float64
+
+    # Warning: Not thread-safe
     rng::Union{Nothing,AbstractRNG}
+
+    @atomic n_passed::Int
+    @atomic time_end::Float64
+
+    # Memoized test result state over `results` - Computed only once the test set is finished
+    # 0x0: Unknown
+    # 0x1: All passed
+    # 0x2: Some failed
+    @atomic anynonpass::UInt8
+
+    results_lock::ReentrantLock
+    results::Vector{Any}
 end
 function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
     if isnothing(failfast)
@@ -1230,7 +1240,9 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source), rng)
+    return DefaultTestSet(String(desc)::String,
+        verbose, showtiming, failfast, extract_file(source),
+        time(), rng, 0, 0., 0x00, ReentrantLock(), Any[])
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
 extract_file(file::Symbol) = string(file)
@@ -1239,15 +1251,15 @@ extract_file(::Nothing) = nothing
 struct FailFastError <: Exception end
 
 # For a broken result, simply store the result
-record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
+record(ts::DefaultTestSet, t::Broken) = ((@lock ts.results_lock push!(ts.results, t)); t)
 # For a passed result, do not store the result since it uses a lot of memory, unless
 # `record_passes()` is true. i.e. set env var `JULIA_TEST_RECORD_PASSES=true` before running any testsets
 function record(ts::DefaultTestSet, t::Pass)
-    ts.n_passed += 1
+    @atomic :monotonic ts.n_passed += 1
     if record_passes()
         # throw away the captured data so it can be GC-ed
         t_nodata = Pass(t.test_type, t.orig_expr, nothing, t.value, t.source, t.message_only)
-        push!(ts.results, t_nodata)
+        @lock ts.results_lock push!(ts.results, t_nodata)
         return t_nodata
     end
     return t
@@ -1268,7 +1280,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
             println()
         end
     end
-    push!(ts.results, t)
+    @lock ts.results_lock push!(ts.results, t)
     (FAIL_FAST[] || ts.failfast) && throw(FailFastError())
     return t
 end
@@ -1297,7 +1309,7 @@ results(ts::DefaultTestSet) = ts.results
 # When a DefaultTestSet finishes, it records itself to its parent
 # testset, if there is one. This allows for recursive printing of
 # the results at the end of the tests
-record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
+record(ts::DefaultTestSet, t::AbstractTestSet) = @lock ts.results_lock push!(ts.results, t)
 
 @specialize
 
@@ -1402,7 +1414,9 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
 function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
-    ts.time_end = time()
+    if (@atomicswap ts.time_end = time()) !== 0.
+        error("Test set was finished more than once")
+    end
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
     if get_testset_depth() != 0
@@ -1432,24 +1446,6 @@ function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     # return the testset so it is returned from the @testset macro
     return ts
 end
-
-# Recursive function that finds the column that the result counts
-# can begin at by taking into account the width of the descriptions
-# and the amount of indentation. If a test set had no failures, and
-# no failures in child test sets, there is no need to include those
-# in calculating the alignment
-function get_alignment(ts::DefaultTestSet, depth::Int)
-    # The minimum width at this depth is
-    ts_width = 2*depth + length(ts.description)
-    # If not verbose and all passing, no need to look at children
-    !ts.verbose && !ts.anynonpass && return ts_width
-    # Return the maximum of this width and the minimum width
-    # for all children (if they exist)
-    isempty(ts.results) && return ts_width
-    child_widths = map(t->get_alignment(t, depth+1), ts.results)
-    return max(ts_width, maximum(child_widths))
-end
-get_alignment(ts, depth::Int) = 0
 
 # Recursive function that fetches backtraces for any and all errors
 # or failures the testset and its children encountered
@@ -1536,7 +1532,7 @@ function get_test_counts(ts::DefaultTestSet)
     passes, fails, errors, broken = ts.n_passed, 0, 0, 0
     # cumulative results
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
-    for t in ts.results
+    @lock ts.results_lock for t in ts.results
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
@@ -1549,9 +1545,36 @@ function get_test_counts(ts::DefaultTestSet)
         end
     end
     duration = format_duration(ts)
-    ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
-    return TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
+    tc = TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
+    # Memoize for printing convenience
+    @atomic :monotonic ts.anynonpass = (anynonpass(tc) ? 0x02 : 0x01)
+    return tc
 end
+anynonpass(tc::TestCounts) = (tc.fails + tc.errors + tc.cumulative_fails + tc.cumulative_errors > 0)
+function anynonpass(ts::DefaultTestSet)
+    if (@atomic :monotonic ts.anynonpass) == 0x00
+        get_test_counts(ts) # fills in the anynonpass field
+    end
+    return (@atomic :monotonic ts.anynonpass) != 0x01
+end
+
+# Recursive function that finds the column that the result counts
+# can begin at by taking into account the width of the descriptions
+# and the amount of indentation. If a test set had no failures, and
+# no failures in child test sets, there is no need to include those
+# in calculating the alignment
+function get_alignment(ts::DefaultTestSet, depth::Int)
+    # The minimum width at this depth is
+    ts_width = 2*depth + length(ts.description)
+    # If not verbose and all passing, no need to look at children
+    !ts.verbose && !anynonpass(ts) && return ts_width
+    # Return the maximum of this width and the minimum width
+    # for all children (if they exist)
+    isempty(ts.results) && return ts_width
+    child_widths = map(t->get_alignment(t, depth+1), ts.results)
+    return max(ts_width, maximum(child_widths))
+end
+get_alignment(ts, depth::Int) = 0
 
 """
     format_duration(::AbstractTestSet)
@@ -1564,7 +1587,7 @@ format_duration(::AbstractTestSet) = "?s"
 
 function format_duration(ts::DefaultTestSet)
     (; time_start, time_end) = ts
-    isnothing(time_end) && return ""
+    time_end === 0. && return ""
 
     dur_s = time_end - time_start
     if dur_s < 60
