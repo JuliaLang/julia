@@ -5,8 +5,7 @@ using Test, Random
 include("buildkitetestjson.jl")
 
 function runtests(name, path, isolate=true; seed=nothing)
-    old_print_setting = Test.TESTSET_PRINT_ENABLE[]
-    Test.TESTSET_PRINT_ENABLE[] = false
+    @Base.ScopedValues.with Test.TESTSET_PRINT_ENABLE=>false begin
     # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
     # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
     empty!(Base.Experimental._hint_handlers)
@@ -103,11 +102,11 @@ function runtests(name, path, isolate=true; seed=nothing)
                              rss)
         return res_and_time_data
     catch ex
-        Test.TESTSET_PRINT_ENABLE[] = old_print_setting
         ex isa TestSetException || rethrow()
         return Any[ex]
     end
     end # withenv
+    end # TESET_PRINT_ENABLE
 end
 
 # looking in . messes things up badly
