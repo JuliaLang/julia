@@ -29,11 +29,7 @@ using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
 using Base: typesplit, remove_linenums!
 using Serialization: Serialization
-using Base.ScopedValues: ScopedValue, @with
-
-const record_passes = OncePerProcess{Bool}() do
-    return Base.get_bool_env("JULIA_TEST_RECORD_PASSES", false)
-end
+using Base.ScopedValues: LazyScopedValue, ScopedValue, @with
 
 const global_fail_fast = OncePerProcess{Bool}() do
     return Base.get_bool_env("JULIA_TEST_FAILFAST", false)
@@ -1253,10 +1249,11 @@ struct FailFastError <: Exception end
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = ((@lock ts.results_lock push!(ts.results, t)); t)
 # For a passed result, do not store the result since it uses a lot of memory, unless
-# `record_passes()` is true. i.e. set env var `JULIA_TEST_RECORD_PASSES=true` before running any testsets
+# `TEST_RECORD_PASSES[]` is true. i.e. overridden by scoped value or with env var
+# `JULIA_TEST_RECORD_PASSES=true` set in the environment.
 function record(ts::DefaultTestSet, t::Pass)
     @atomic :monotonic ts.n_passed += 1
-    if record_passes()
+    if TEST_RECORD_PASSES[]
         # throw away the captured data so it can be GC-ed
         t_nodata = Pass(t.test_type, t.orig_expr, nothing, t.value, t.source, t.message_only)
         @lock ts.results_lock push!(ts.results, t_nodata)
@@ -2103,6 +2100,9 @@ end
 const CURRENT_TESTSET = ScopedValue{AbstractTestSet}(FallbackTestSet())
 const TESTSET_DEPTH = ScopedValue{Int}(0)
 const TESTSET_PRINT_ENABLE = ScopedValue{Bool}(true)
+const TEST_RECORD_PASSES = LazyScopedValue{Bool}(OncePerProcess{Bool}() do
+    return Base.get_bool_env("JULIA_TEST_RECORD_PASSES", false)
+end)
 
 macro with_testset(ts, expr)
     :(@with(CURRENT_TESTSET => $(esc(ts)), TESTSET_DEPTH => get_testset_depth() + 1, $(esc(expr))))
