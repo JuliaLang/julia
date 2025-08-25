@@ -2,14 +2,15 @@
 
 # macro wrappers for various reflection functions
 
-using Base: insert!, replace_ref_begin_end_!,
+using Base: insert!, replace_ref_begin_end!,
     infer_return_type, infer_exception_type, infer_effects, code_ircode, isexpr
 
 # defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[get_typeof(a) for a in args]...)}), where_params)
+typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[esc(reescape(get_typeof, a)) for a in args]...)}), where_params)
+typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[reescape(get_typeof, a) for a in args]...)}), where_params)
 
 function extract_where_parameters(ex::Expr)
     isexpr(ex, :where) || return ex, nothing
@@ -18,7 +19,24 @@ end
 
 function rewrap_where(ex::Expr, where_params::Union{Nothing, Vector{Any}})
     isnothing(where_params) && return ex
-    Expr(:where, ex, where_params...)
+    Expr(:where, ex, esc.(where_params)...)
+end
+
+function reescape(f::Function, @nospecialize ex)
+    isa(ex, Expr) || return f(ex)
+    unescaped = Meta.unescape(ex)
+    new = f(unescaped)
+    return reescape(new, ex)
+end
+
+function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
+    if isexpr(original_expr, :escape)
+        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+    elseif isexpr(original_expr, :var"hygienic-scope")
+        return reescape(Expr(:var"hygienic-scope", unescaped_expr, original_expr.args[2]), original_expr.args[1])
+    else
+        return unescaped_expr
+    end
 end
 
 get_typeof(ex::Ref) = ex[]
@@ -27,29 +45,10 @@ function get_typeof(@nospecialize ex)
     isexpr(ex, :(::), 2) && return ex.args[2]
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
-        isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, splatted.args[1])
+        isexpr(splatted, :(::), 1) && return Expr(:curly, :(Core.Vararg), splatted.args[1])
         return :(Any[Core.Typeof(x) for x in $splatted]...)
     end
     return :(Core.Typeof($ex))
-
-    # # Always unescape to get the core expression, then reescape and esc
-    # original_ex = ex
-    # ex = Meta.unescape(ex)
-
-    # if isexpr(ex, :(::), 1)
-    #     return esc(Meta.reescape(ex.args[1], original_ex))
-    # end
-    # if isexpr(ex, :(::), 2)
-    #     return esc(Meta.reescape(ex.args[2], original_ex))
-    # end
-    # if isexpr(ex, :..., 1)
-    #     splatted = ex.args[1]
-    #     if isexpr(splatted, :(::), 1)
-    #         return Expr(:curly, :Vararg, esc(Meta.reescape(splatted.args[1], original_ex)))
-    #     end
-    #     return :(Any[Core.Typeof(x) for x in $(esc(Meta.reescape(splatted, original_ex)))]...)
-    # end
-    # return :(Core.Typeof($(esc(Meta.reescape(ex, original_ex)))))
 end
 
 function is_broadcasting_call(ex)
@@ -116,14 +115,6 @@ end
 function extract_farg(@nospecialize arg)
     !isexpr(arg, :(::), 1) && return arg
     fT = arg.args[1]
-    # # Always unescape to get the core expression, then reescape and esc
-    # original_arg = arg
-    # arg = Meta.unescape(arg)
-
-    # if !isexpr(arg, :(::), 1)
-    #     return esc(Meta.reescape(arg, original_arg))
-    # end
-    # fT = esc(Meta.reescape(arg.args[1], original_arg))
     :($construct_callable($fT))
 end
 
@@ -160,6 +151,8 @@ function are_kwargs_valid(kwargs::Vector{Any})
         isexpr(kwarg, :kw, 2) && isa(kwarg.args[1], Symbol) && continue
         isexpr(kwarg, :(::), 2) && continue
         isa(kwarg, Symbol) && continue
+        isexpr(kwarg, :escape) && continue
+        isexpr(kwarg, :var"hygienic-scope") && continue
         return false
     end
     return true
@@ -178,12 +171,11 @@ function generate_merged_namedtuple_type(kwargs::Vector{Any})
             end
             push!(nts, Expr(:call, typeof_nt, ex.args[1]))
         elseif isexpr(ex, :kw, 2)
-            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex.args[2]))
+            push!(ntargs, ex.args[1]::Symbol => reescape(get_typeof, ex.args[2]))
         elseif isexpr(ex, :(::), 2)
-            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex))
+            push!(ntargs, ex.args[1]::Symbol => reescape(get_typeof, ex))
         else
-            ex::Symbol
-            push!(ntargs, ex => get_typeof(ex))
+            push!(ntargs, ex => reescape(get_typeof, ex))
         end
     end
     !isempty(ntargs) && push!(nts, generate_namedtuple_type(ntargs))
@@ -222,22 +214,63 @@ function merge_namedtuple_types(nt::Type{<:NamedTuple}, nts::Type{<:NamedTuple}.
     return NamedTuple{Tuple(names), Tuple{types...}}
 end
 
-function gen_call(fcn, args, where_params, kws; use_signature_tuple::Bool)
+function gen_call(fcn, args, where_params, kws; use_signature_tuple::Bool, not_an_opaque_closure::Bool = true)
     f, args... = args
     args = collect(Any, args)
-    !use_signature_tuple && return :($fcn($(esc(extract_farg(f))), $(esc(typesof_expr(args, where_params))); $(kws...)))
+    if !use_signature_tuple
+        f = esc(reescape(extract_farg, f))
+        tt = typesof_expr(args, where_params)
+        return :($fcn($f, $tt; $(kws...)))
+    end
     # We use a signature tuple only if we are sure we won't get an opaque closure as first argument.
     # If we do get one, we have to use the 2-argument form.
-    with_signature_tuple = :($fcn($(esc(typesof_expr(Any[f, args...], where_params))); $(kws...)))
-    isexpr(f, :(::)) && return with_signature_tuple # we have a type, not a value, so not an OpaqueClosure
+    if isexpr(f, :(::)) || not_an_opaque_closure
+        # We have a type, not a value, so not an opaque closure.
+        sigt = typesof_expr(Any[f, args...], where_params)
+        return :($fcn($sigt; $(kws...)))
+    end
+    tt = typesof_expr(args, where_params)
+    sigt = typesof_expr_unescaped(Any[:f, esc.(args)...], where_params)
     return quote
         f = $(esc(f))
         if isa(f, Core.OpaqueClosure)
-            $fcn(f, $(esc(typesof_expr(args, where_params))); $(kws...))
+            $fcn(f, $tt; $(kws...))
         else
-            $with_signature_tuple
+            $fcn($sigt; $(kws...))
         end
     end
+end
+
+function expand_ref_begin_end!(f::Function, ex, __module__::Module)
+    arr = ex.args[1]
+    args = copy(ex.args)
+    new = replace_ref_begin_end!(__module__, ex)
+    modified = ex.args .≠ args
+    if any(modified) && (isexpr(arr, :(::), 1) || isexpr(arr, :(::), 2) || isexpr(arr, :..., 1))
+        return Expr(:call, :error, "`begin` or `end` cannot be used with a type-annotated left-hand side argument for an indexing syntax")
+    end
+    call = f(ex)
+    !any(modified) && return call
+    fixup_hygiene_for_ref_temporary!(new)
+    # We have to mutate `ex`, then return `new` which evaluates `arr` before use.
+    ex.head = call.head
+    ex.args = call.args
+    return new
+end
+
+function fixup_hygiene_for_ref_temporary!(ex)
+    # Match the local variable `##S#...` so we may escape its definition.
+    # We don't want to use `escs = 1` in `replace_ref_begin_end_!` because
+    # then we delegate escaping to this function, whereas we otherwise manage
+    # ourselves the escaping in all other code paths.
+    isexpr(ex, :block) || return
+    decl = ex.args[1]
+    isexpr(decl, :local, 1) || return
+    assignment = decl.args[1]
+    isexpr(assignment, :(=), 2) || return
+    variable = assignment.args[1]
+    startswith(string(variable), "##S#") || return
+    decl.args[1] = esc(assignment)
 end
 
 is_code_macro(fcn) = startswith(string(fcn), "code_")
@@ -336,12 +369,9 @@ To remove the ambiguity, `code_typed` must support an implementation that direct
 is assumed to be the method for `fcn(sigt::Type{<:Tuple})`.
 """
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false, use_signature_tuple = false)
-    # if isexpr(ex0, :ref)
-    #     ex0 = replace_ref_begin_end!(ex0)
-    # end
-    # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
-    if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
-        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection)
+    # Ignore assignments (e.g. `@edit a = f(x)` gets turned into `@edit f(x)`)
+    if isa(ex0, Expr) && ex0.head === :(=) && isa(ex0.args[1], Symbol)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
     end
     where_params = nothing
     if isa(ex0, Expr)
@@ -366,10 +396,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             ex, i = recursive_dotcalls!(copy(ex0), args)
             xargs = [Symbol('x', j) for j in 1:i-1]
             dotfuncname = gensym("dotfunction")
-            dotfuncdef = :(local $dotfuncname($(xargs...)) = $ex)
+            call = gen_call(fcn, Any[dotfuncname, args...], where_params, kws; use_signature_tuple)
             return quote
-                $(esc(dotfuncdef))
-                $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws; is_source_reflection, supports_binding_reflection))
+                let $(esc(:($dotfuncname($(xargs...)) = $ex)))
+                    $call
+                end
             end
         elseif isexpr(ex0, :.) && is_source_reflection
             # If `ex0` has the form A.B (or some chain A.B.C.D) and `fcn` reflects into the source,
@@ -389,7 +420,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             end
             fully_qualified_symbol &= ex1 isa Symbol
             if fully_qualified_symbol || isexpr(ex1, :(::), 1)
-                call_reflection = gen_call(fcn, [:(Base.getproperty); ex0.args], where_params, kws; use_signature_tuple)
+                call_reflection = gen_call(fcn, [getproperty; ex0.args], where_params, kws; use_signature_tuple)
                 isexpr(ex0.args[1], :(::), 1) && return call_reflection
                 if supports_binding_reflection
                     binding_reflection = :($fcn(arg1, $(ex0.args[2]); $(kws...)))
@@ -420,37 +451,23 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             end
             nt = generate_merged_namedtuple_type(kwargs)
             nt = Ref(nt) # ignore `get_typeof` handling
-            return gen_call(fcn, Any[:(Core.kwcall), nt, args...], where_params, kws; use_signature_tuple)
+            return gen_call(fcn, Any[Core.kwcall, nt, args...], where_params, kws; use_signature_tuple)
         elseif ex0.head === :call
             args = copy(ex0.args)
-            # argtypes = Any[get_typeof(ex0.args[i]) for i in 2:length(ex0.args)]
             if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
-                pushfirst!(args, :(Base.literal_pow))
+                pushfirst!(args, Base.literal_pow)
                 args[4] = :(Val($(ex0.args[3])))
             end
-            return gen_call(fcn, args, where_params, kws; use_signature_tuple)
+            return gen_call(fcn, args, where_params, kws; use_signature_tuple, not_an_opaque_closure = false)
         elseif ex0.head === :(=) && length(ex0.args) == 2
             lhs, rhs = ex0.args
             if isa(lhs, Expr)
                 if lhs.head === :(.)
-                    return gen_call(fcn, Any[:(Base.setproperty!), lhs.args..., rhs], where_params, kws; use_signature_tuple)
+                    return gen_call(fcn, Any[Base.setproperty!, lhs.args..., rhs], where_params, kws; use_signature_tuple)
                 elseif lhs.head === :ref
-                    return gen_call(fcn, Any[:(Base.setindex!), lhs.args[1], rhs, lhs.args[2:end]...], where_params, kws; use_signature_tuple)
-                    # arr = lhs.args[1]
-                    # lhs.args = Any[get_typeof(a) for a in lhs.args]
-                    # arrex = lhs.args[1]
-                    # if isexpr(arr, :(::), 1) || isexpr(arr, :(::), 2) || isexpr(arr, :..., 1)
-                    #     lhs.args[1] = Expr(:call, :error, "array expression with begin/end cannot also use ::")
-                    # else
-                    #     lhs.args[1] = esc(arr)
-                    # end
-                    # ex, _ = replace_ref_begin_end_!(__module__, lhs, nothing, false, 1)
-                    # ## since replace_ref_begin_end! mutates lhs in place, we can mutate inplace also then return ex
-                    # lhs.head = :call
-                    # lhs.args[1] = get_typeof(rhs)
-                    # pushfirst!(lhs.args, arrex)
-                    # lhs.args = Any[fcn, Base.setindex!, rewrap_where(:(Tuple{$(lhs.args...)}), where_params), kws...]
-                    # return ex
+                    return expand_ref_begin_end!(lhs, __module__) do ex
+                        gen_call(fcn, Any[setindex!, ex.args[1], rhs, ex.args[2:end]...], where_params, kws; use_signature_tuple)
+                    end
                 end
             end
         elseif ex0.head === :vcat || ex0.head === :typed_vcat
@@ -471,52 +488,33 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 return gen_call(fcn, Any[f, ex0.args...], where_params, kws; use_signature_tuple)
             end
         elseif ex0.head === :ref
-            arr = ex0.args[1]
-            ex0.args = Any[get_typeof(a) for a in ex0.args]
-            arrex = ex0.args[1]
-            if isexpr(arr, :(::), 1) || isexpr(arr, :(::), 2) || isexpr(arr, :..., 1)
-                ex0.args[1] = Expr(:call, :error, "array expression with begin/end cannot also use ::")
-            else
-                ex0.args[1] = esc(arr)
+            return expand_ref_begin_end!(ex0, __module__) do ex
+                gen_call(fcn, Any[getindex, ex.args...], where_params, kws; use_signature_tuple)
             end
-            ex, _ = replace_ref_begin_end_!(__module__, ex0, nothing, false, 1)
-            ## since replace_ref_begin_end! mutates ex0 in place, we can mutate inplace also then return ex
-            ex0.head = :call
-            ex0.args[1] = arrex
-            ex0.args = Any[fcn, Base.getindex, rewrap_where(:(Tuple{$(ex0.args...)}), where_params), kws...]
-            return ex
         else
-            PairSymAny = Pair{Symbol, Any}
-            for (head, f) in (PairSymAny(:hcat, Base.hcat),
-                              PairSymAny(:(.), Base.getproperty),
-                              PairSymAny(:vect, Base.vect),
-                              PairSymAny(Symbol("'"), Base.adjoint),
-                              PairSymAny(:typed_hcat, Base.typed_hcat),
-                              PairSymAny(:string, string))
-                if ex0.head === head
-                    return gen_call(fcn, Any[f, ex0.args...], where_params, kws; use_signature_tuple)
-                end
+            for (head, f) in Any[:hcat => Base.hcat,
+                                 :(.) => Base.getproperty,
+                                 :vect => Base.vect,
+                                 Symbol("'") => Base.adjoint,
+                                 :typed_hcat => Base.typed_hcat,
+                                 :string => string]
+                ex0.head === head || continue
+                return gen_call(fcn, Any[f, ex0.args...], where_params, kws; use_signature_tuple)
             end
         end
     end
     if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         args = [#=__source__::=#LineNumberNode, #=__module__::=#Module, Core.Typeof.(ex0.args[3:end])...]
         return gen_call(fcn, Any[ex0.args[1], Ref.(args)...], where_params, kws; use_signature_tuple)
-        # return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(ex0.args[i]) for i in 3:length(ex0.args) ]...}, kws...)
     end
 
     ex = Meta.lower(__module__, ex0)
-    if !isa(ex, Expr)
-        return Expr(:call, :error, "expression is not a function call or symbol")
-    end
+    isa(ex, Expr) || return Expr(:call, :error, "expression is not a function call or symbol")
 
-    if ex.head === :thunk || exret.head === :none
-        return Expr(:call, :error, "expression is not a function call, \
+    return Expr(:call, :error, "expression is not a function call, \
                                     or is too complex for @$fcn to analyze; \
                                     break it down to simpler parts if possible. \
                                     In some cases, you may want to use Meta.@lower.")
-    end
-    return Expr(:none)
 end
 
 """
