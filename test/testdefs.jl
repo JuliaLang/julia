@@ -5,11 +5,10 @@ using Test, Random
 include("buildkitetestjson.jl")
 
 function runtests(name, path, isolate=true; seed=nothing)
-    @Base.ScopedValues.with Test.TESTSET_PRINT_ENABLE=>false begin
+    @Base.ScopedValues.with Test.TESTSET_PRINT_ENABLE=>false Test.TEST_RECORD_PASSES=>Base.get_bool_env("CI", false) begin
     # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
     # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
     empty!(Base.Experimental._hint_handlers)
-    withenv("JULIA_TEST_RECORD_PASSES" => Base.get_bool_env("CI", false)) do
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
@@ -105,7 +104,6 @@ function runtests(name, path, isolate=true; seed=nothing)
         ex isa TestSetException || rethrow()
         return Any[ex]
     end
-    end # withenv
     end # TESET_PRINT_ENABLE
 end
 
