@@ -1993,6 +1993,11 @@ static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, String
                        ModuleReleasedFunc module_released)
 {
     assert(threads);
+    if (shards <= 1) {
+        add_output_no_partition(outputs, M, TM, name, module_released);
+        return;
+    }
+
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     Timer partition_timer("partition", "Partition module", timer_group);
@@ -2334,7 +2339,7 @@ void jl_dump_native_impl(void *native_code,
             LLVM_DEBUG(dbgs() << "Using " << threads << " to emit aot image\n");
 
             char *weight_s = getenv("JULIA_IMAGE_PARTITION_WEIGHT");
-            size_t weight = 100000;
+            size_t weight = 500000;
             char *end;
             if (weight_s) {
                 size_t x = strtol(weight_s, &end, 10);
