@@ -1472,8 +1472,9 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost_model(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+function inline_cost_model(mi::MethodInstance, ir::IRCode, params::OptimizationParams, cost_threshold::Int)
     bodycost = 0
+    uses_sparams = false
     for i = 1:length(ir.stmts)
         stmt = ir[SSAValue(i)][:stmt]
         thiscost = statement_or_branch_cost(stmt, i, ir, ir.sptypes, params)
@@ -1481,6 +1482,12 @@ function inline_cost_model(ir::IRCode, params::OptimizationParams, cost_threshol
         if bodycost > cost_threshold
             return MAX_INLINE_COST
         end
+        uses_sparams |= isexpr(stmt, :static_parameter)
+    end
+    if uses_sparams && !validate_sparams(mi.sparam_vals)
+        # Inlining this would require the use of `_compute_sparams`,
+        # which is a bit too expensive to reasonably inline.
+        return MAX_INLINE_COST
     end
     return inline_cost_clamp(bodycost)
 end
