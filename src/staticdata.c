@@ -263,7 +263,6 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
     INSERT_TAG(jl_atomicerror_type);
     INSERT_TAG(jl_missingcodeerror_type);
     INSERT_TAG(jl_precompilable_error);
-    INSERT_TAG(jl_trimfailure_type);
 
     // other special values
     INSERT_TAG(jl_emptysvec);
@@ -279,6 +278,7 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
     INSERT_TAG(jl_main_module);
     INSERT_TAG(jl_top_module);
     INSERT_TAG(jl_typeinf_func);
+    INSERT_TAG(jl_compile_and_emit_func);
     INSERT_TAG(jl_opaque_closure_method);
     INSERT_TAG(jl_nulldebuginfo);
     INSERT_TAG(jl_method_table);
@@ -332,7 +332,7 @@ static void *to_seroder_entry(size_t idx) JL_NOTSAFEPOINT
 }
 
 static htable_t new_methtables;
-static size_t precompilation_world;
+//static size_t precompilation_world;
 
 static int ptr_cmp(const void *l, const void *r) JL_NOTSAFEPOINT
 {
@@ -3045,7 +3045,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
-                                           jl_array_t *worklist, jl_array_t *extext_methods,
+                                           jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_ext_cis, jl_array_t *edges,
                                            jl_query_cache *query_cache)
 {
@@ -3202,7 +3202,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         else {
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
-            jl_queue_for_serialization(&s, jl_module_init_order);
+            jl_queue_for_serialization(&s, module_init_order);
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
@@ -3407,14 +3407,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         else {
             jl_write_value(&s, worklist);
             // save module initialization order
-            if (jl_module_init_order != NULL) {
-                size_t i, l = jl_array_len(jl_module_init_order);
-                for (i = 0; i < l; i++) {
-                    // verify that all these modules were saved
-                    assert(ptrhash_get(&serialization_order, jl_array_ptr_ref(jl_module_init_order, i)) != HT_NOTFOUND);
-                }
+            size_t i, l = jl_array_len(module_init_order);
+            for (i = 0; i < l; i++) {
+                // verify that all these modules were saved
+                assert(ptrhash_get(&serialization_order, jl_array_ptr_ref(module_init_order, i)) != HT_NOTFOUND);
             }
-            jl_write_value(&s, jl_module_init_order);
+            jl_write_value(&s, module_init_order);
             jl_write_value(&s, extext_methods);
             jl_write_value(&s, new_ext_cis);
             jl_write_value(&s, s.method_roots_list);
@@ -3478,7 +3476,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 }
 
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
-                                         ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos)
+                                         ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, jl_array_t *module_init_order)
 {
     if (jl_options.strip_ir || jl_options.trim) {
         // make sure this is precompiled for jl_foreach_reachable_mtable
@@ -3515,12 +3513,10 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
 
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     if (worklist) {
-        // Generate _native_data`
         if (_native_data != NULL) {
-            jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_ext_cis, NULL, &query_cache);
-            *_native_data = jl_precompile_worklist(worklist, extext_methods, new_ext_cis);
-            extext_methods = NULL;
-            new_ext_cis = NULL;
+            if (suppress_precompile)
+                newly_inferred = NULL;
+            *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order);
         }
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
         if (emit_split) {
@@ -3533,11 +3529,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         }
     }
     else if (_native_data != NULL) {
-        precompilation_world = jl_atomic_load_acquire(&jl_world_counter);
-        if (jl_options.trim)
-            *_native_data = jl_precompile_trimmed(precompilation_world);
-        else
-            *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, mod_array);
+        *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order);
     }
 
     // Make sure we don't run any Julia code concurrently after this point
@@ -3558,7 +3550,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, edges, &query_cache);
+    jl_save_system_image_to_stream(ff, mod_array, module_init_order, worklist, extext_methods, new_ext_cis, edges, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point

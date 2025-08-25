@@ -948,12 +948,18 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_
 }
 
 jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
+jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     jl_typeinf_func = (jl_value_t*)f;
     jl_typeinf_world = jl_get_tls_world_age();
+}
+
+JL_DLLEXPORT void jl_set_compile_and_emit_func(jl_value_t *f)
+{
+    jl_compile_and_emit_func = (jl_value_t*)f;
 }
 
 static int very_general_type(jl_value_t *t)
@@ -3123,7 +3129,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROP
     // one unspecialized version of a function can be shared among all cached specializations
     if (!jl_is_method(def) || def->source == NULL) {
         // generated functions might instead randomly just never get inferred, sorry
-        return NULL;
+        return (jl_method_instance_t*)jl_nothing;
     }
     jl_method_instance_t *unspec = jl_atomic_load_relaxed(&def->unspecialized);
     if (unspec == NULL) {
@@ -3373,6 +3379,11 @@ JL_DLLEXPORT void jl_add_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_i
     jl_emit_codeinst_to_jit(codeinst, src);
 }
 
+JL_DLLEXPORT int jl_method_is_macro(jl_method_t *m)
+{
+    return jl_symbol_name(m->name)[0] == '@';
+}
+
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
     // quick check if we already have a compiled result
@@ -3506,7 +3517,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     if (!codeinst) {
         // Don't bother inferring toplevel thunks or macros - the performance cost of inference is likely
         // to significantly exceed the actual runtime.
-        int should_skip_inference = !jl_is_method(mi->def.method) || jl_symbol_name(mi->def.method->name)[0] == '@';
+        int should_skip_inference = !jl_is_method(mi->def.method) || jl_method_is_macro(mi->def.method);
 
         if (!should_skip_inference) {
             codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
@@ -3535,7 +3546,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     }
     if (!codeinst) {
         jl_method_instance_t *unspec = jl_get_unspecialized(def);
-        if (unspec == NULL)
+        if ((jl_value_t*)unspec == jl_nothing)
             unspec = mi;
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0, NULL, NULL);
         // ask codegen to make the fptr for unspec
@@ -3697,14 +3708,14 @@ jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_
     return mi;
 }
 
-// return a MethodInstance for a compileable method_match
-JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *match, size_t world, size_t min_valid, size_t max_valid, int mt_cache)
+// return a MethodInstance for a compileable method_match, if valid
+static jl_value_t *jl_method_match_to_mi(jl_method_match_t *match, size_t world, size_t min_valid, size_t max_valid, int mt_cache)
 {
     jl_method_t *m = match->method;
     JL_GC_PROMISE_ROOTED(m);
     jl_svec_t *env = match->sparams;
     jl_tupletype_t *ti = match->spec_types;
-    jl_method_instance_t *mi = NULL;
+    jl_value_t *mi = jl_nothing;
     if (jl_is_datatype(ti)) {
         // get the specialization, possibly also caching it
         if (mt_cache && ((jl_datatype_t*)ti)->isdispatchtuple) {
@@ -3715,7 +3726,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *matc
             jl_methcache_t *mc = jl_method_table->cache;
             assert(mc);
             JL_LOCK(&mc->writelock);
-            mi = cache_method(jl_method_get_table(m), mc, &mc->cache, (jl_value_t*)mc, ti, m, world, min_valid, max_valid, env);
+            mi = (jl_value_t*)cache_method(jl_method_get_table(m), mc, &mc->cache, (jl_value_t*)mc, ti, m, world, min_valid, max_valid, env);
         }
         else {
             jl_value_t *tt = jl_normalize_to_compilable_sig(ti, env, m, 1);
@@ -3725,7 +3736,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *matc
                     jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)m->sig, &env);
                     assert(ti != jl_bottom_type); (void)ti;
                 }
-                mi = jl_specializations_get_linfo(m, (jl_value_t*)tt, env);
+                mi = (jl_value_t*)jl_specializations_get_linfo(m, (jl_value_t*)tt, env);
                 JL_GC_POP();
             }
         }
@@ -3735,12 +3746,12 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *matc
 
 // compile-time method lookup
 // intersect types with the MT, and return a single compileable specialization that covers the intersection.
-jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache)
+jl_value_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache)
 {
     if (jl_has_free_typevars((jl_value_t*)types))
-        return NULL; // don't poison the cache due to a malformed query
+        return jl_nothing; // don't poison the cache due to a malformed query
     if (!jl_has_concrete_subtype((jl_value_t*)types))
-        return NULL;
+        return jl_nothing;
 
     // find if exactly 1 method matches (issue #7302)
     size_t min_valid2 = 1;
@@ -3748,34 +3759,30 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
     int ambig = 0;
     jl_value_t *matches = jl_matching_methods(types, jl_nothing, 1, 1, world, &min_valid2, &max_valid2, &ambig);
     if (matches == jl_nothing || jl_array_nrows(matches) != 1 || ambig)
-        return NULL;
+        return jl_nothing;
     JL_GC_PUSH1(&matches);
     jl_method_match_t *match = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
-    jl_method_instance_t *mi = jl_method_match_to_mi(match, world, min_valid2, max_valid2, mt_cache);
+    jl_value_t *mi = jl_method_match_to_mi(match, world, min_valid2, max_valid2, mt_cache);
     JL_GC_POP();
     return mi;
 }
 
-// Get a MethodInstance for a precompile() call. This uses a special kind of lookup that
+// Try to get a MethodInstance for a precompile() call. This uses a special kind of lookup that
 // tries to find a method for which the requested signature is compileable.
-static jl_method_instance_t *jl_get_compile_hint_specialization(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache)
+JL_DLLEXPORT jl_value_t *jl_get_compile_hint_specialization(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, int mt_cache)
 {
     if (jl_has_free_typevars((jl_value_t*)types))
-        return NULL; // don't poison the cache due to a malformed query
+        return jl_nothing; // don't poison the cache due to a malformed query
     if (!jl_has_concrete_subtype((jl_value_t*)types))
-        return NULL;
+        return jl_nothing;
 
     size_t min_valid2 = 1;
     size_t max_valid2 = ~(size_t)0;
     int ambig = 0;
     jl_value_t *matches = jl_matching_methods(types, jl_nothing, -1, 0, world, &min_valid2, &max_valid2, &ambig);
-    if (*min_valid < min_valid2)
-        *min_valid = min_valid2;
-    if (*max_valid > max_valid2)
-        *max_valid = max_valid2;
     size_t i, n = jl_array_nrows(matches);
     if (n == 0)
-        return NULL;
+        return jl_nothing;
     JL_GC_PUSH1(&matches);
     jl_method_match_t *match = NULL;
     if (n == 1) {
@@ -3816,7 +3823,7 @@ static jl_method_instance_t *jl_get_compile_hint_specialization(jl_tupletype_t *
         if (count == 1)
             match = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
     }
-    jl_method_instance_t *mi = NULL;
+    jl_value_t *mi = jl_nothing;
     if (match != NULL)
         mi = jl_method_match_to_mi(match, world, min_valid2, max_valid2, mt_cache);
     JL_GC_POP();
@@ -3893,39 +3900,21 @@ JL_DLLEXPORT void jl_compile_method_sig(jl_method_t *m, jl_value_t *types, jl_sv
 JL_DLLEXPORT int jl_is_compilable(jl_tupletype_t *types)
 {
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
-    size_t min_valid = 0;
-    size_t max_valid = ~(size_t)0;
-    jl_method_instance_t *mi = jl_get_compile_hint_specialization(types, world, &min_valid, &max_valid, 1);
-    return mi == NULL ? 0 : 1;
+    jl_value_t *mi = jl_get_compile_hint_specialization(types, world, 1);
+    return mi == jl_nothing ? 0 : 1;
 }
 
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
-    size_t min_valid = 0;
-    size_t max_valid = ~(size_t)0;
-    jl_method_instance_t *mi = jl_get_compile_hint_specialization(types, world, &min_valid, &max_valid, 1);
-    if (mi == NULL)
+    jl_value_t *mi = jl_get_compile_hint_specialization(types, world, 1);
+    if (mi == jl_nothing)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
-    jl_compile_method_instance(mi, types, world);
+    jl_compile_method_instance((jl_method_instance_t*)mi, types, world);
     return 1;
 }
 
-JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types)
-{
-    size_t world = jl_atomic_load_acquire(&jl_world_counter);
-    size_t min_valid = 0;
-    size_t max_valid = ~(size_t)0;
-    jl_method_instance_t *mi = jl_get_compile_hint_specialization(types, world, &min_valid, &max_valid, 1);
-    if (mi == NULL)
-        return 0;
-    JL_GC_PROMISE_ROOTED(mi);
-    if (jl_generating_output() && jl_options.trim) {
-        arraylist_push(jl_entrypoint_mis, mi);
-    }
-    return 1;
-}
 
 // add type of `f` to front of argument tuple type
 jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0)
@@ -5010,7 +4999,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
 // see if it might be possible to construct an instance of `typ`
 // if n_uninitialized == 0, but a fieldtype is Union{},
 // that type will not be constructable, for example, tested recursively
-int jl_has_concrete_subtype(jl_value_t *typ)
+JL_DLLEXPORT int jl_has_concrete_subtype(jl_value_t *typ)
 {
     if (typ == jl_bottom_type)
         return 0;

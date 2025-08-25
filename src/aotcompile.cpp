@@ -602,8 +602,8 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
         };
         Module *defM = nullptr;
         StringRef func;
-        jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
-        if (mi) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        if ((jl_value_t*)mi != jl_nothing) {
             auto it = compiled_mi.find(mi);
             if (it != compiled_mi.end()) {
                 codeinst = it->second;
@@ -676,14 +676,17 @@ static bool canPartition(const Function &F)
            !F.hasFnAttribute(Attribute::InlineHint);
 }
 
-// takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world)
+void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
+                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order)
 {
     JL_TIMING(INFERENCE, INFERENCE);
     auto ct = jl_current_task;
+    if (!jl_compile_and_emit_func) {
+        jl_error("inference not available for generating compiled output");
+    }
     bool timed = (ct->reentrant_timing & 1) == 0;
     if (timed)
         ct->reentrant_timing |= 1;
@@ -692,39 +695,37 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
-    jl_cgparams_t cgparams = jl_default_cgparams;
-    size_t compile_for[] = { jl_typeinf_world, world };
-    int compiler_world = 1;
-    if (trim || compile_for[0] == 0)
-        compiler_world = 0;
     jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 4);
-    jl_array_t *codeinfos = NULL;
-    if (jl_typeinf_func) {
-        fargs[0] = (jl_value_t*)jl_typeinf_func;
-        fargs[1] = (jl_value_t*)methods;
+    JL_GC_PUSHARGS(fargs, 8);
 #ifdef _P64
-        jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
+    jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
 #else
-        jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
+    jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
 #endif
-        jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 1 + compiler_world);
-        fargs[2] = (jl_value_t*)worlds;
-        jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
-        jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
-        fargs[3] = jl_box_uint8(trim);
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_typeinf_world;
-        codeinfos = (jl_array_t*)jl_apply(fargs, 4);
-        ct->world_age = last_age;
-        JL_TYPECHK(create_native, array_any, (jl_value_t*)codeinfos);
-    }
-    else {
-        // we could put a very simple generator here, but there is no reason to do that right now
-        jl_error("inference not available for generating compiled output");
-    }
-    fargs[0] = (jl_value_t*)codeinfos;
-    void *data = jl_emit_native(codeinfos, llvmmod, &cgparams, external_linkage);
+    jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 2);
+    fargs[0] = jl_compile_and_emit_func;
+    fargs[1] = (jl_value_t*)worlds;
+    jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
+    int compiler_world = 1;
+    if (trim || jl_array_data(worlds, size_t)[0] == 0)
+        compiler_world = 0;
+    jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
+    worlds->dimsize[0] = 1 + compiler_world;
+    fargs[2] = jl_box_uint8(trim);
+    fargs[3] = jl_box_bool(external_linkage);
+    fargs[4] = worklist ? (jl_value_t*)worklist : jl_nothing; // worklist (or nothing)
+    fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
+    fargs[6] = jl_box_bool(all);
+    fargs[7] = module_init_order ? (jl_value_t*)module_init_order : jl_nothing; // module_init_order (or nothing)
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
+    fargs[0] = jl_apply(fargs, 8);
+    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = NULL;
+    ct->world_age = last_age;
+    jl_value_t *codeinfos = fargs[0];
+    JL_TYPECHK(jl_create_native, array_any, codeinfos);
+    void *data = jl_emit_native((jl_array_t*)codeinfos, llvmmod, NULL, external_linkage ? 1 : 0);
+    JL_GC_POP();
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
@@ -754,7 +755,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         }
     });
 
-    JL_GC_POP();
     if (timed) {
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
@@ -764,6 +764,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     }
     return data;
 }
+
 
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
@@ -2499,10 +2500,10 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             for (cfunc_decl_t &cfunc : output.cfuncs) {
                 jl_value_t *sigt = cfunc.abi.sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
-                jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
-                if (mi == nullptr)
+                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+                if (mi == jl_nothing)
                     continue;
-                jl_code_instance_t *codeinst = jl_type_infer(mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
+                jl_code_instance_t *codeinst = jl_type_infer((jl_method_instance_t*)mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
                 if (codeinst == nullptr || compiled_functions.count(codeinst))
                     continue;
                 orc::ThreadSafeModule decl_m = jl_create_ts_module("extern", ctx, DL, TT);
