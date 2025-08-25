@@ -1208,17 +1208,27 @@ are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
 mutable struct DefaultTestSet <: AbstractTestSet
-    description::String
-    results::Vector{Any}
-    n_passed::Int
-    anynonpass::Bool
-    verbose::Bool
-    showtiming::Bool
-    time_start::Float64
-    time_end::Union{Float64,Nothing}
-    failfast::Bool
-    file::Union{String,Nothing}
+    const description::String
+    const verbose::Bool
+    const showtiming::Bool
+    const failfast::Bool
+    const file::Union{String,Nothing}
+    const time_start::Float64
+
+    # Warning: Not thread-safe
     rng::Union{Nothing,AbstractRNG}
+
+    @atomic n_passed::Int
+    @atomic time_end::Float64
+
+    # Memoized test result state over `results` - Computed only once the test set is finished
+    # 0x0: Unknown
+    # 0x1: All passed
+    # 0x2: Some failed
+    @atomic anynonpass::UInt8
+
+    results_lock::ReentrantLock
+    results::Vector{Any}
 end
 function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
     if isnothing(failfast)
@@ -1230,7 +1240,9 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source), rng)
+    return DefaultTestSet(String(desc)::String,
+        verbose, showtiming, failfast, extract_file(source),
+        time(), rng, 0, 0., 0x00, ReentrantLock(), Any[])
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
 extract_file(file::Symbol) = string(file)
@@ -1239,15 +1251,15 @@ extract_file(::Nothing) = nothing
 struct FailFastError <: Exception end
 
 # For a broken result, simply store the result
-record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
+record(ts::DefaultTestSet, t::Broken) = ((@lock ts.results_lock push!(ts.results, t)); t)
 # For a passed result, do not store the result since it uses a lot of memory, unless
 # `record_passes()` is true. i.e. set env var `JULIA_TEST_RECORD_PASSES=true` before running any testsets
 function record(ts::DefaultTestSet, t::Pass)
-    ts.n_passed += 1
+    @atomic :monotonic ts.n_passed += 1
     if record_passes()
         # throw away the captured data so it can be GC-ed
         t_nodata = Pass(t.test_type, t.orig_expr, nothing, t.value, t.source, t.message_only)
-        push!(ts.results, t_nodata)
+        @lock ts.results_lock push!(ts.results, t_nodata)
         return t_nodata
     end
     return t
@@ -1268,7 +1280,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
             println()
         end
     end
-    push!(ts.results, t)
+    @lock ts.results_lock push!(ts.results, t)
     (FAIL_FAST[] || ts.failfast) && throw(FailFastError())
     return t
 end
@@ -1297,39 +1309,48 @@ results(ts::DefaultTestSet) = ts.results
 # When a DefaultTestSet finishes, it records itself to its parent
 # testset, if there is one. This allows for recursive printing of
 # the results at the end of the tests
-record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
+record(ts::DefaultTestSet, t::AbstractTestSet) = @lock ts.results_lock push!(ts.results, t)
 
 @specialize
 
 """
-    print_test_errors(::AbstractTestSet)
+    print_test_errors([io::IO], ts::AbstractTestSet)
 
 Prints the errors that were recorded by this `AbstractTestSet` after it
-was `finish`ed.
+was `finish`ed. If `io` is not provided, defaults to `stdout`.
 """
 function print_test_errors(ts::AbstractTestSet)
+    print_test_errors(stdout, ts)
+end
+
+function print_test_errors(io::IO, ts::AbstractTestSet)
     for t in results(ts)
         if isa(t, Error) || isa(t, Fail)
-            println("Error in testset $(ts.description):")
-            show(t)
-            println()
+            println(io, "Error in testset $(ts.description):")
+            show(io, t)
+            println(io)
         elseif isa(t, AbstractTestSet)
-            print_test_errors(t)
+            print_test_errors(io, t)
         end
     end
 end
 
 """
-    print_test_results(ts::AbstractTestSet, depth_pad=0)
+    print_test_results([io::IO], ts::AbstractTestSet, depth_pad=0)
 
 Print the results of an `AbstractTestSet` as a formatted table.
 
 `depth_pad` refers to how much padding should be added in front of all output.
+If `io` is not provided, defaults to `stdout`.
 
 Called inside of `Test.finish`, if the `finish`ed testset is the topmost
 testset.
 """
 function print_test_results(ts::AbstractTestSet, depth_pad=0)
+    print_test_results(stdout, ts, depth_pad)
+end
+
+function print_test_results(io::IO, ts::AbstractTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
     tc = get_test_counts(ts)
@@ -1355,34 +1376,34 @@ function print_test_results(ts::AbstractTestSet, depth_pad=0)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, depth_pad), textwidth("Test Summary:"))
     # Print the outer test set header once
-    printstyled(rpad("Test Summary:", align, " "), " |", " "; bold=true)
+    printstyled(io, rpad("Test Summary:", align, " "), " |", " "; bold=true)
     if pass_width > 0
-        printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
+        printstyled(io, lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end
     if fail_width > 0
-        printstyled(lpad("Fail", fail_width, " "), "  "; bold=true, color=Base.error_color())
+        printstyled(io, lpad("Fail", fail_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if error_width > 0
-        printstyled(lpad("Error", error_width, " "), "  "; bold=true, color=Base.error_color())
+        printstyled(io, lpad("Error", error_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if broken_width > 0
-        printstyled(lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
+        printstyled(io, lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
     end
     if total_width > 0 || total == 0
-        printstyled(lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
+        printstyled(io, lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
     end
     timing = isdefined(ts, :showtiming) ? ts.showtiming : false
     if timing
-        printstyled(lpad("Time", duration_width, " "); bold=true)
+        printstyled(io, lpad("Time", duration_width, " "); bold=true)
     end
-    println()
+    println(io)
     # Recursively print a summary at every level
-    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
+    print_counts(io, ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
     # Print the RNG of the outer testset if there are failures
     if total != total_pass + total_broken
         rng = get_rng(ts)
         if !isnothing(rng)
-            println("RNG of the outermost testset: ", rng)
+            println(io, "RNG of the outermost testset: ", rng)
         end
     end
 end
@@ -1393,7 +1414,9 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
 function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
-    ts.time_end = time()
+    if (@atomicswap ts.time_end = time()) !== 0.
+        error("Test set was finished more than once")
+    end
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
     if get_testset_depth() != 0
@@ -1423,24 +1446,6 @@ function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     # return the testset so it is returned from the @testset macro
     return ts
 end
-
-# Recursive function that finds the column that the result counts
-# can begin at by taking into account the width of the descriptions
-# and the amount of indentation. If a test set had no failures, and
-# no failures in child test sets, there is no need to include those
-# in calculating the alignment
-function get_alignment(ts::DefaultTestSet, depth::Int)
-    # The minimum width at this depth is
-    ts_width = 2*depth + length(ts.description)
-    # If not verbose and all passing, no need to look at children
-    !ts.verbose && !ts.anynonpass && return ts_width
-    # Return the maximum of this width and the minimum width
-    # for all children (if they exist)
-    isempty(ts.results) && return ts_width
-    child_widths = map(t->get_alignment(t, depth+1), ts.results)
-    return max(ts_width, maximum(child_widths))
-end
-get_alignment(ts, depth::Int) = 0
 
 # Recursive function that fetches backtraces for any and all errors
 # or failures the testset and its children encountered
@@ -1527,7 +1532,7 @@ function get_test_counts(ts::DefaultTestSet)
     passes, fails, errors, broken = ts.n_passed, 0, 0, 0
     # cumulative results
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
-    for t in ts.results
+    @lock ts.results_lock for t in ts.results
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
@@ -1540,9 +1545,36 @@ function get_test_counts(ts::DefaultTestSet)
         end
     end
     duration = format_duration(ts)
-    ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
-    return TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
+    tc = TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
+    # Memoize for printing convenience
+    @atomic :monotonic ts.anynonpass = (anynonpass(tc) ? 0x02 : 0x01)
+    return tc
 end
+anynonpass(tc::TestCounts) = (tc.fails + tc.errors + tc.cumulative_fails + tc.cumulative_errors > 0)
+function anynonpass(ts::DefaultTestSet)
+    if (@atomic :monotonic ts.anynonpass) == 0x00
+        get_test_counts(ts) # fills in the anynonpass field
+    end
+    return (@atomic :monotonic ts.anynonpass) != 0x01
+end
+
+# Recursive function that finds the column that the result counts
+# can begin at by taking into account the width of the descriptions
+# and the amount of indentation. If a test set had no failures, and
+# no failures in child test sets, there is no need to include those
+# in calculating the alignment
+function get_alignment(ts::DefaultTestSet, depth::Int)
+    # The minimum width at this depth is
+    ts_width = 2*depth + length(ts.description)
+    # If not verbose and all passing, no need to look at children
+    !ts.verbose && !anynonpass(ts) && return ts_width
+    # Return the maximum of this width and the minimum width
+    # for all children (if they exist)
+    isempty(ts.results) && return ts_width
+    child_widths = map(t->get_alignment(t, depth+1), ts.results)
+    return max(ts_width, maximum(child_widths))
+end
+get_alignment(ts, depth::Int) = 0
 
 """
     format_duration(::AbstractTestSet)
@@ -1555,7 +1587,7 @@ format_duration(::AbstractTestSet) = "?s"
 
 function format_duration(ts::DefaultTestSet)
     (; time_start, time_end) = ts
-    isnothing(time_end) && return ""
+    time_end === 0. && return ""
 
     dur_s = time_end - time_start
     if dur_s < 60
@@ -1572,7 +1604,7 @@ results(::AbstractTestSet) = ()
 
 # Recursive function that prints out the results at each level of
 # the tree of test sets
-function print_counts(ts::AbstractTestSet, depth, align,
+function print_counts(io::IO, ts::AbstractTestSet, depth, align,
                       pass_width, fail_width, error_width, broken_width, total_width, duration_width, showtiming)
     # Count results by each type at this level, and recursively
     # through any child test sets
@@ -1582,58 +1614,58 @@ function print_counts(ts::AbstractTestSet, depth, align,
                tc.cumulative_passes + tc.cumulative_fails + tc.cumulative_errors + tc.cumulative_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
-    print(rpad(string("  "^depth, ts.description), align, " "), " | ")
+    print(io, rpad(string("  "^depth, ts.description), align, " "), " | ")
 
     n_passes = tc.passes + tc.cumulative_passes
     if n_passes > 0
-        printstyled(lpad(string(n_passes), pass_width, " "), "  ", color=:green)
+        printstyled(io, lpad(string(n_passes), pass_width, " "), "  ", color=:green)
     elseif pass_width > 0
         # No passes at this level, but some at another level
-        printstyled(lpad(fallbackstr, pass_width, " "), "  ", color=:green)
+        printstyled(io, lpad(fallbackstr, pass_width, " "), "  ", color=:green)
     end
 
     n_fails = tc.fails + tc.cumulative_fails
     if n_fails > 0
-        printstyled(lpad(string(n_fails), fail_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(string(n_fails), fail_width, " "), "  ", color=Base.error_color())
     elseif fail_width > 0
         # No fails at this level, but some at another level
-        printstyled(lpad(fallbackstr, fail_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(fallbackstr, fail_width, " "), "  ", color=Base.error_color())
     end
 
     n_errors = tc.errors + tc.cumulative_errors
     if n_errors > 0
-        printstyled(lpad(string(n_errors), error_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(string(n_errors), error_width, " "), "  ", color=Base.error_color())
     elseif error_width > 0
         # No errors at this level, but some at another level
-        printstyled(lpad(fallbackstr, error_width, " "), "  ", color=Base.error_color())
+        printstyled(io, lpad(fallbackstr, error_width, " "), "  ", color=Base.error_color())
     end
 
     n_broken = tc.broken + tc.cumulative_broken
     if n_broken > 0
-        printstyled(lpad(string(n_broken), broken_width, " "), "  ", color=Base.warn_color())
+        printstyled(io, lpad(string(n_broken), broken_width, " "), "  ", color=Base.warn_color())
     elseif broken_width > 0
         # None broken at this level, but some at another level
-        printstyled(lpad(fallbackstr, broken_width, " "), "  ", color=Base.warn_color())
+        printstyled(io, lpad(fallbackstr, broken_width, " "), "  ", color=Base.warn_color())
     end
 
     if n_passes == 0 && n_fails == 0 && n_errors == 0 && n_broken == 0
         total_str = tc.customized ? string(subtotal) : "?"
-        printstyled(lpad(total_str, total_width, " "), "  ", color=Base.info_color())
+        printstyled(io, lpad(total_str, total_width, " "), "  ", color=Base.info_color())
     else
-        printstyled(lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
+        printstyled(io, lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
     end
 
     if showtiming
-        printstyled(lpad(tc.duration, duration_width, " "))
+        printstyled(io, lpad(tc.duration, duration_width, " "))
     end
-    println()
+    println(io)
 
     # Only print results at lower levels if we had failures or if the user
     # wants. Requires the given `AbstractTestSet` to have a vector of results
     if ((n_passes + n_broken != subtotal) || print_verbose(ts))
         for t in results(ts)
             if isa(t, AbstractTestSet)
-                print_counts(t, depth + 1, align,
+                print_counts(io, t, depth + 1, align,
                     pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
             end
         end
