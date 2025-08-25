@@ -756,6 +756,7 @@ end
         @test (@inferred Base.IteratorSize(pairs([1 2;3 4]))) isa Base.HasShape{2}
         @test (@inferred isempty(d)) || haskey(d, first(keys(d)))
         @test collect(v for (k, v) in d) == collect(A)
+        @test map(last, d) == collect(A)
         if A isa NamedTuple
             K = Symbol
             V = isempty(d) ? Union{} : Float64
