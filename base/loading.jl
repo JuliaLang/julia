@@ -2653,7 +2653,7 @@ function __require_prelocked(pkg::PkgId, env)
             end
             # spawn off a new incremental pre-compile task for recursive `require` calls
             loaded = let path = path, reasons = reasons
-                function maybe_cachefile_lock_closure()
+                maybe_cachefile_lock(pkg, path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                     m isa Module && return m
@@ -2669,7 +2669,6 @@ function __require_prelocked(pkg::PkgId, env)
                     end
                     return compilecache(pkg, path; reasons, loadable_exts)
                 end
-                maybe_cachefile_lock(maybe_cachefile_lock_closure, pkg, path)
             end
             loaded isa Module && return loaded
             if isnothing(loaded) # maybe_cachefile_lock returns nothing if it had to wait for another process
