@@ -188,7 +188,7 @@ if OS_HANDLE !== RawFD
 end
 setup_stdio(stdio::Union{DevNull,OS_HANDLE,RawFD}, ::Bool) = (stdio, false)
 
-const Redirectable = Union{IO, FileRedirect, RawFD, OS_HANDLE}
+const Redirectable = Union{IO, IOServer, FileRedirect, RawFD, OS_HANDLE}
 const StdIOSet = NTuple{3, Redirectable}
 
 struct CmdRedirect <: AbstractCmd

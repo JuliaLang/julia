@@ -24,6 +24,23 @@ function PipeServer()
     return pipe
 end
 
+function PipeServer(handle::OS_HANDLE)
+    pipe = PipeServer()
+    return Base.open_pipe!(pipe, handle)
+end
+
+function Base.open_pipe!(p::PipeServer, handle::OS_HANDLE)
+    iolock_begin()
+    if p.status != StatusInit
+        error("pipe is already in use or has been closed")
+    end
+    err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), p.handle, handle)
+    uv_error("pipe_open", err)
+    p.status = StatusOpen
+    iolock_end()
+    return p
+end
+
 ## server functions ##
 
 accept(server::PipeServer) = accept(server, PipeEndpoint())
