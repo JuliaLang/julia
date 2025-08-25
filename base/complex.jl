@@ -248,12 +248,8 @@ isequal(z::Real, w::Complex) = isequal(z,real(w))::Bool & isequal(zero(z),imag(w
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
-if UInt === UInt64
-    const h_imag = 0x32a7a07f3e7cd1f9
-else
-    const h_imag = 0x3e7cd1f9
-end
-const hash_0_imag = hash(0, h_imag)
+const h_imag = 0x32a7a07f3e7cd1f % UInt
+const hash_0_imag = 0x153e9f914f9b5b92 % UInt
 
 function hash(z::Complex, h::UInt)
     # TODO: with default argument specialization, this would be better:
@@ -1141,3 +1137,9 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+## Machine epsilon for complex ##
+
+eps(z::Complex{<:AbstractFloat}) = hypot(eps(real(z)), eps(imag(z)))
+
+eps(::Type{Complex{T}}) where {T<:AbstractFloat} = sqrt(2*one(T))*eps(T)

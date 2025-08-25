@@ -99,12 +99,6 @@ static inline void msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFE
 static inline void msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT {}
 static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT {}
 #endif
-#ifdef _COMPILER_TSAN_ENABLED_
-JL_DLLIMPORT void *__tsan_create_fiber(unsigned flags);
-JL_DLLIMPORT void *__tsan_get_current_fiber(void);
-JL_DLLIMPORT void __tsan_destroy_fiber(void *fiber);
-JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
-#endif
 
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
@@ -424,20 +418,20 @@ extern arraylist_t eytzinger_image_tree;
 extern arraylist_t eytzinger_idxs;
 
 extern JL_DLLEXPORT size_t jl_page_size;
-extern JL_DLLEXPORT jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT extern int jl_lineno;
-JL_DLLEXPORT extern const char *jl_filename;
+JL_DLLEXPORT extern _Atomic(int) jl_lineno;
+JL_DLLEXPORT extern _Atomic(const char *) jl_filename;
 
 jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
                                    int osize);
 jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
-void gc_sweep_sysimg(void);
+void gc_sweep_sysimg(void) JL_NOTSAFEPOINT;
 
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
@@ -696,8 +690,6 @@ typedef union {
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
-#define METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC 0b1000  // indicates there exists some other method that is not more specific than this one
-#define METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC 0b10000  // precompiled version of METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
@@ -875,8 +867,8 @@ jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *pa
 jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic);
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
-jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world);
-jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world);
+jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world);
+jl_value_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world);
 int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_array_t *mod_array, void *env);
 void jl_init_main_module(void);
 JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
@@ -1514,6 +1506,7 @@ size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
+JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip);
 void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
@@ -1765,6 +1758,7 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
+JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;

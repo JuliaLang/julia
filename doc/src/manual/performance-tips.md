@@ -919,6 +919,40 @@ In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
+#### Use `@__FUNCTION__` for recursive closures
+
+For recursive closures specifically, the [`@__FUNCTION__`](@ref) macro can avoid both type instability and boxing.
+
+First, let's see the unoptimized version:
+
+```julia
+function make_fib_unoptimized()
+    fib(n) = n <= 1 ? 1 : fib(n - 1) + fib(n - 2)  # fib is boxed
+    return fib
+end
+```
+
+The `fib` function is boxed, meaning the return type is inferred as `Any`:
+
+```julia
+@code_warntype make_fib_unoptimized()
+```
+
+Now, to eliminate this type instability, we can instead use `@__FUNCTION__` to refer to the concrete function object:
+
+```julia
+function make_fib_optimized()
+    fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+    return fib
+end
+```
+
+This gives us a concrete return type:
+
+```julia
+@code_warntype make_fib_optimized()
+```
+
 
 ### [Types with values-as-parameters](@id man-performance-value-type)
 

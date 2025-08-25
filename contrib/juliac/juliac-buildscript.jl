@@ -2,12 +2,9 @@
 
 # Script to run in the process that generates juliac's object file output
 
-# Run the verifier in the current world (before modifications), so that error
-# messages and types print in their usual way.
-Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
-
 # Initialize some things not usually initialized when output is requested
 Sys.__init__()
+Base.reinit_stdio()
 Base.init_depot_path()
 Base.init_load_path()
 Base.init_active_project()
@@ -23,10 +20,6 @@ if Base.get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
     Base.JuliaSyntax.enable_in_core!()
 end
 
-if Base.JLOptions().trim != 0
-    include(joinpath(@__DIR__, "juliac-trim-base.jl"))
-end
-
 # Load user code
 
 import Base.Experimental.entrypoint
@@ -34,10 +27,13 @@ import Base.Experimental.entrypoint
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
+    setglobal!(Base, :PROGRAM_FILE, args[1])
+    popfirst!(args)
+    append!(Base.ARGS, args)
     return Main.main(args)
 end
 
-let mod = Base.include(Main, ARGS[1])
+let include_result = Base.include(Main, ARGS[1])
     Core.@latestworld
     if ARGS[2] == "--output-exe"
         have_cmain = false
@@ -49,6 +45,11 @@ let mod = Base.include(Main, ARGS[1])
                     break
                 end
             end
+        elseif include_result isa Module && isdefined(include_result, :main)
+            error("""
+                  The `main` function must be defined in `Main`. If you are defining it inside a
+                  module, try adding `import .$(nameof(include_result)).main` to $(ARGS[1]).
+                  """)
         end
         if !have_cmain
             if Base.should_use_main_entrypoint()
@@ -59,7 +60,7 @@ let mod = Base.include(Main, ARGS[1])
                     error("`@main` must accept a `Vector{String}` argument.")
                 end
             else
-                error("To generate an executable a `@main` function must be defined.")
+                error("To generate an executable a `@main` function must be defined in the `Main` module.")
             end
         end
     end
@@ -75,7 +76,12 @@ let mod = Base.include(Main, ARGS[1])
     end
 end
 
+# Run the verifier in the current world (before build-script modifications),
+# so that error messages and types print in their usual way.
+Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
+
 if Base.JLOptions().trim != 0
+    include(joinpath(@__DIR__, "juliac-trim-base.jl"))
     include(joinpath(@__DIR__, "juliac-trim-stdlib.jl"))
 end
 

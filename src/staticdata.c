@@ -1854,8 +1854,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         int new_dispatch_status = 0;
                         if (!(dispatch_status & METHOD_SIG_LATEST_ONLY))
                             new_dispatch_status |= METHOD_SIG_PRECOMPILE_MANY;
-                        if (dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
-                            new_dispatch_status |= METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC;
                         jl_atomic_store_relaxed(&newm->dispatch_status, new_dispatch_status);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
@@ -2333,7 +2331,7 @@ static void jl_read_arraylist(ios_t *s, arraylist_t *list)
     ios_read(s, (char*)list->items, list_len * sizeof(void*));
 }
 
-void gc_sweep_sysimg(void)
+void gc_sweep_sysimg(void) JL_NOTSAFEPOINT
 {
     size_t nblobs = n_linkage_blobs();
     if (nblobs == 0)

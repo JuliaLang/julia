@@ -78,9 +78,22 @@ end
         end
     end
     show_type_name(io::IO, tn::Core.TypeName) = print(io, tn.name)
+    # this function is not `--trim`-compatible if it resolves to a Varargs{...} specialization
+    # and since it only has 1-argument methods this happens too often by default (just 2-3 args)
+    setfield!(typeof(throw_eachindex_mismatch_indices).name, :max_args, Int32(5), :monotonic)
 end
 @eval Base.Sys begin
     __init_build() = nothing # VersionNumber parsing is not supported yet
+end
+# Used for LinearAlgebre ldiv with SVD
+for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
+    @eval Base.Sort begin
+        # identical to existing Base def. but specializes on `lt` / `by`
+        $s(v::AbstractVector, x, o::Ordering) = $s(v,x,firstindex(v),lastindex(v),o)
+        $s(v::AbstractVector, x;
+            lt::T=isless, by::F=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where {T,F} =
+            $s(v,x,ord(lt,by,rev,order))
+    end
 end
 @eval Base.GMP begin
     function __init__() # VersionNumber parsing is not supported yet
@@ -108,4 +121,10 @@ end
             end
         end
     end
+end
+
+@eval Base.CoreLogging begin
+    # Disable logging (TypedCallable is required to support the existing dynamic
+    # logger interface, but it's not implemented yet)
+    @inline current_logger_for_env(std_level::LogLevel, group, _module) = nothing
 end

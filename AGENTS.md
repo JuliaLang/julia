@@ -19,13 +19,18 @@ will not be reflected, unless you use `Revise`.
 
 ## For all changes
 
-1. Run `make check-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
+1. Run `make fix-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
 
 ## Building Julia
 
 If you made changes to the runtime (any files in `src/`), you will need to rebuild
 julia. Run `make -j` to rebuild julia. This process may take up to 10 minutes
 depending on your changes.
+
+After `make` run these static analysis checks:
+  - `make -C src clang-sa-<filename>` (replace `<filename>` with the basename of the file you modified)
+  - `make -C src clang-sagc-<filename>` which may require adding JL_GC_PUSH arguments, or JL_GC_PROMISE_ROOTED statements., or require fixing locks. Remember arguments are assumed rooted, so check the callers to make sure that is handled. If the value is being temporarily moved around in a struct or arraylist, `JL_GC_PROMISE_ROOTED(struct->field)` may be needed as a statement (it return void) immediately after reloading the struct before any use of struct. Put the promise as early in the code as is legal.
+  - `make -C src clang-tidy-<filename>`
 
 ## Using Revise
 
@@ -76,6 +81,13 @@ When modifying external dependencies (patches in `deps/patches/` or version upda
    - Prefer using the full upstream commit in `git am` format (e.g., `git format-patch`) which includes proper commit metadata
 3. When updating dependency versions, ensure all associated patches still apply
 
+### External JLLs
+
+To update a JLL to the latest version:
+- Update the version number in the appropriate jll folder
+- If the dependencies in the upstream jll changed, update the Project.toml
+- Run `make -f contrib/refresh_checksums.mk <jll>` to update the checksums. This may take a few minutes.
+
 ### Writing code
 After writing code, look up the docstring for each function you used. If there
 are recommendations or additional considerations that apply to these functions,
@@ -85,7 +97,7 @@ make sure to take them into account.
 - Do not `ccall` runtime C functions directly if there are existing wrappers for the function.
 - Do not explicitly add a module prefix if the code you're adding is in the same module. E.g. do not use `Base.` for code in Base unless required.
 
-## Commit message formatting
+## Commit messages and pull requests
 
 When writing commit messages, follow the format "component: Brief summary" for
 the title. In the body of the commit message, provide a brief prose summary
@@ -97,7 +109,7 @@ If your change fixes one or more issues, use the syntax "Fixes #" at the end of 
 When referencing external GitHub PRs or issues, use proper GitHub interlinking format (e.g., `owner/repo#123` for PRs/issues).
 When fixing CI failures, include the link to the specific CI failure in the commit message.
 
-When creating pull requests, if the pull request consists of one commit only,
-use the body of the commit for the body of the pull request. If there are multiple
-commits in the pull request, follow the same guidelines for the pull request
-as for the commit body.
+When creating pull requests:
+1. If the pull request consists of one commit only, use the body of the commit for the body of the pull request.
+2. If there are multiple commits in the pull request, follow the same guidelines for the pull request as for the commit body.
+3. Make sure that the base commit of the pull request is recent (within the past two days) - if not rebase your changes first.

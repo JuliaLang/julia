@@ -336,7 +336,7 @@ function fill!(dest::Array{T}, x) where T
 end
 function _fill!(dest::Array{T}, x::T) where T
     for i in eachindex(dest)
-        @inbounds dest[i] = x
+        dest[i] = x
     end
     return dest
 end
@@ -748,9 +748,16 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
-_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+function _collect_indices(::Tuple{}, A)
+    dest = Array{eltype(A),0}(undef)
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
+function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
+    dest = Array{eltype(A)}(undef, length.(indsA))
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
