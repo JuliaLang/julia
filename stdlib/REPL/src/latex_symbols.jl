@@ -2712,4 +2712,3 @@ const symbols_latex_canonical = Dict(
     "⊽" => "\\nor",
     "≠" => "\\ne",
 )
-
