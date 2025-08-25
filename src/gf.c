@@ -1217,14 +1217,9 @@ static void jl_compilation_sig(
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
                               !jl_has_free_typevars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
-        if (notcalled_func && (type_i == (jl_value_t*)jl_any_type ||
-                               type_i == (jl_value_t*)jl_function_type ||
-                               (jl_is_uniontype(type_i) && // Base.Callable
-                                ((((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_type_type) ||
-                                 (((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_type_type))))) {
-            // and attempt to despecialize types marked Function, Callable, or Any
+        if (notcalled_func && (jl_subtype((jl_value_t*)jl_function_type, type_i))) {
+            // and attempt to despecialize types marked as a supertype of Function (i.e.
+            // Function, Callable, Any, or a Union{Function, T})
             // when called with a subtype of Function but is not called
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             jl_svecset(*newparams, i, (jl_value_t*)jl_function_type);
@@ -1450,15 +1445,9 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
                               !jl_has_free_typevars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
-        if (notcalled_func && (type_i == (jl_value_t*)jl_any_type ||
-                               type_i == (jl_value_t*)jl_function_type ||
-                               (jl_is_uniontype(type_i) && // Base.Callable
-                                ((((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_type_type) ||
-                                 (((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_type_type))))) {
-            // and attempt to despecialize types marked Function, Callable, or Any
-            // when called with a subtype of Function but is not called
+        if (notcalled_func && jl_subtype((jl_value_t*)jl_function_type, type_i)) {
+            // and attempt to despecialize types marked as a supertype of Function (i.e.
+            // Function, Callable, Any, or a Union{Function, T})
             if (elt == (jl_value_t*)jl_function_type)
                 continue;
             JL_GC_POP();

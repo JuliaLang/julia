@@ -82,6 +82,7 @@ end
         try
             run(pipeline(cmd, stdout=io, stderr=io))
         catch
+            closewrite(io)
             @error "cmd failed" cmd read(io, String)
             rethrow()
         end
