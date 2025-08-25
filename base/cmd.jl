@@ -225,6 +225,8 @@ Mark a command object so that running it will not throw an error if the result c
 ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus=true)
 ignorestatus(cmd::Union{OrCmds,AndCmds}) =
     typeof(cmd)(ignorestatus(cmd.a), ignorestatus(cmd.b))
+ignorestatus(cmd::CmdRedirect) =
+    CmdRedirect(ignorestatus(cmd.cmd), cmd.handle, cmd.stream_no, cmd.readable)
 
 """
     detach(command)

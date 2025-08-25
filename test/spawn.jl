@@ -124,6 +124,7 @@ end
 @test !success(ignorestatus(falsecmd) & falsecmd)
 @test_broken  success(ignorestatus(pipeline(falsecmd, falsecmd)))
 @test_broken  success(ignorestatus(falsecmd & falsecmd))
+@test run(ignorestatus(pipeline(falsecmd; stderr=devnull, stdout=devnull))).exitcode != 0
 
 # stdin Redirection
 let file = tempname()

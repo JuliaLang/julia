@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const HASH_SEED = UInt == UInt64 ? 0xbdd89aa982704029 : 0xeabe9406
-const HASH_SECRET = tuple(
+const HASH_SECRET = (
     0x2d358dccaa6c78a5,
     0x8bb84b93962eacc9,
     0x4b33a62ed433d4a3,
@@ -73,7 +73,7 @@ hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(
 hash_integer(x::Integer, h::UInt) = _hash_integer(x, UInt64(h)) % UInt
 function _hash_integer(
         x::Integer,
-        seed::UInt64 = HASH_SEED,
+        seed::UInt64,
         secret::NTuple{4, UInt64} = HASH_SECRET
     )
     seed ⊻= (x < 0)
@@ -342,6 +342,277 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
     b = b ⊻ seed
     b, a = mul_parts(a, b)
     return hash_mix(a ⊻ secret[4], b ⊻ secret[2] ⊻ i)
+end
+
+@inline function load_le_array(::Type{UInt64}, arr::AbstractArray{UInt8}, idx)
+    # n.b. for whatever reason, writing this as a loop ensures LLVM
+    # optimizations (particular SROA) don't make a disaster of this code
+    # early on so it can actually emit the optimal result
+    result = zero(UInt64)
+    for i in 0:7
+        byte = @inbounds arr[idx + i]
+        result |= UInt64(byte) << (8 * i)
+    end
+    return result
+end
+
+@inline function load_le_array(::Type{UInt32}, arr::AbstractArray{UInt8}, idx)
+    result = zero(UInt32)
+    for i in 0:3
+        byte = @inbounds arr[idx + i]
+        result |= UInt32(byte) << (8 * i)
+    end
+    return result
+end
+
+@assume_effects :terminates_globally function hash_bytes(
+        arr::AbstractArray{UInt8},
+        seed::UInt64,
+        secret::NTuple{4, UInt64}
+    )
+    # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
+    n = length(arr)
+    buflen = UInt64(n)
+    seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
+    firstidx = firstindex(arr)
+
+    a = zero(UInt64)
+    b = zero(UInt64)
+    i = buflen
+
+    if buflen ≤ 16
+        if buflen ≥ 4
+            seed ⊻= buflen
+            if buflen ≥ 8
+                a = load_le_array(UInt64, arr, firstidx)
+                b = load_le_array(UInt64, arr, firstidx + n - 8)
+            else
+                a = UInt64(load_le_array(UInt32, arr, firstidx))
+                b = UInt64(load_le_array(UInt32, arr, firstidx + n - 4))
+            end
+        elseif buflen > 0
+            a = (UInt64(@inbounds arr[firstidx]) << 45) | UInt64(@inbounds arr[firstidx + n - 1])
+            b = UInt64(@inbounds arr[firstidx + div(n, 2)])
+        end
+    else
+        pos = 0
+        if i > 48
+            see1 = seed
+            see2 = seed
+            while i > 48
+                seed = hash_mix(
+                    load_le_array(UInt64, arr, firstidx + pos) ⊻ secret[1],
+                    load_le_array(UInt64, arr, firstidx + pos + 8) ⊻ seed
+                )
+                see1 = hash_mix(
+                    load_le_array(UInt64, arr, firstidx + pos + 16) ⊻ secret[2],
+                    load_le_array(UInt64, arr, firstidx + pos + 24) ⊻ see1
+                )
+                see2 = hash_mix(
+                    load_le_array(UInt64, arr, firstidx + pos + 32) ⊻ secret[3],
+                    load_le_array(UInt64, arr, firstidx + pos + 40) ⊻ see2
+                )
+                pos += 48
+                i -= 48
+            end
+            seed ⊻= see1
+            seed ⊻= see2
+        end
+        if i > 16
+            seed = hash_mix(
+                load_le_array(UInt64, arr, firstidx + pos) ⊻ secret[3],
+                load_le_array(UInt64, arr, firstidx + pos + 8) ⊻ seed
+            )
+            if i > 32
+                seed = hash_mix(
+                    load_le_array(UInt64, arr, firstidx + pos + 16) ⊻ secret[3],
+                    load_le_array(UInt64, arr, firstidx + pos + 24) ⊻ seed
+                )
+            end
+        end
+
+        a = load_le_array(UInt64, arr, firstidx + n - 16) ⊻ i
+        b = load_le_array(UInt64, arr, firstidx + n - 8)
+    end
+
+    a = a ⊻ secret[2]
+    b = b ⊻ seed
+    b, a = mul_parts(a, b)
+    return hash_mix(a ⊻ secret[4], b ⊻ secret[2] ⊻ i)
+end
+
+
+# Helper function to concatenate two UInt64 values with a byte shift
+# Returns the result of shifting 'low' right by 'shift_bytes' bytes and
+# filling the high bits with the low bits of 'high'
+@inline function concat_shift(low::UInt64, high::UInt64, shift_bytes::UInt8)
+    shift_bits = (shift_bytes * 0x8) & 0x3f
+    return (low >> shift_bits) | (high << (0x40 - shift_bits))
+end
+
+@inline function read_uint64_from_uint8_iter(iter, state)
+    value = zero(UInt64)
+    @nexprs 8 i -> begin
+        next_result = iterate(iter, state)
+        next_result === nothing && return value, state, UInt8(i - 1)
+        byte, state = next_result
+        value |= UInt64(byte) << ((i - 1) * 8)
+    end
+    return value, state, 0x8
+end
+
+@inline function read_uint64_from_uint8_iter(iter)
+    next_result = iterate(iter)
+    next_result === nothing && return nothing
+    byte, state = next_result
+    value = UInt64(byte)
+    @nexprs 7 i -> begin
+        next_result = iterate(iter, state)
+        next_result === nothing && return value, state, UInt8(i)
+        byte, state = next_result
+        value |= UInt64(byte::UInt8) << (i * 8)
+    end
+    return value, state, 0x8
+end
+
+@assume_effects :terminates_globally function hash_bytes(
+        iter,
+        seed::UInt64,
+        secret::NTuple{4, UInt64}
+    )
+    seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
+
+    a = zero(UInt64)
+    b = zero(UInt64)
+    buflen = zero(UInt64)
+
+    see1 = seed
+    see2 = seed
+    l0 = zero(UInt64)
+    l1 = zero(UInt64)
+    l2 = zero(UInt64)
+    l3 = zero(UInt64)
+    l4 = zero(UInt64)
+    l5 = zero(UInt64)
+    b0 = 0x0
+    b1 = 0x0
+    b2 = 0x0
+    b3 = 0x0
+    b4 = 0x0
+    b5 = 0x0
+    t0 = zero(UInt64)
+    t1 = zero(UInt64)
+
+    # Handle first iteration separately
+    read = read_uint64_from_uint8_iter(iter)
+    if read !== nothing
+        l0, state, b0 = read
+        # Repeat hashing chunks until a short read
+        while true
+            l1, state, b1 = read_uint64_from_uint8_iter(iter, state)
+            if b1 == 0x8
+                l2, state, b2 = read_uint64_from_uint8_iter(iter, state)
+                if b2 == 0x8
+                    l3, state, b3 = read_uint64_from_uint8_iter(iter, state)
+                    if b3 == 0x8
+                        l4, state, b4 = read_uint64_from_uint8_iter(iter, state)
+                        if b4 == 0x8
+                            l5, state, b5 = read_uint64_from_uint8_iter(iter, state)
+                            if b5 == 0x8
+                                # Read start of next chunk
+                                read = read_uint64_from_uint8_iter(iter, state)
+                                if read[3] == 0x0
+                                    # Read exactly 48 bytes
+                                    t0 = l4
+                                    t1 = l5
+                                    break
+                                else
+                                    # Read more than 48 bytes - process and continue to next chunk
+                                    seed = hash_mix(l0 ⊻ secret[1], l1 ⊻ seed)
+                                    see1 = hash_mix(l2 ⊻ secret[2], l3 ⊻ see1)
+                                    see2 = hash_mix(l4 ⊻ secret[3], l5 ⊻ see2)
+                                    buflen += 48
+                                    l0, state, b0 = read
+                                    b1 = 0
+                                    b2 = 0
+                                    b3 = 0
+                                    b4 = 0
+                                    b5 = 0
+                                    if b0 < 8
+                                        t0 = concat_shift(l4, l5, b0)
+                                        t1 = concat_shift(l5, l0, b0)
+                                        break
+                                    end
+                                end
+                            else
+                                # Extract final 16 bytes at the first short read
+                                t0 = concat_shift(l3, l4, b5)
+                                t1 = concat_shift(l4, l5, b5)
+                                break
+                            end
+                        else
+                            t0 = concat_shift(l2, l3, b4)
+                            t1 = concat_shift(l3, l4, b4)
+                            break
+                        end
+                    else
+                        t0 = concat_shift(l1, l2, b3)
+                        t1 = concat_shift(l2, l3, b3)
+                        break
+                    end
+                else
+                    t0 = concat_shift(l0, l1, b2)
+                    t1 = concat_shift(l1, l2, b2)
+                    break
+                end
+            else
+                t0 = concat_shift(l5, l0, b1)
+                t1 = concat_shift(l0, l1, b1)
+                break
+            end
+        end
+    end
+
+    # Partial chunk, handle based on size
+    bytes_chunk = b0 + b1 + b2 + b3 + b4 + b5
+    if buflen > 0
+        # Finalize last full chunk
+        seed ⊻= see1
+        seed ⊻= see2
+    end
+    buflen += bytes_chunk
+    if buflen ≤ 16
+        if bytes_chunk ≥ 0x4
+            seed ⊻= bytes_chunk
+            if bytes_chunk ≥ 0x8
+                a = l0
+                b = t1
+            else
+                a = UInt64(l0 % UInt32)
+                b = UInt64((l0 >>> ((0x8 * (bytes_chunk - 0x4)) % 0x3f)) % UInt32)
+            end
+        elseif bytes_chunk > 0x0
+            b0 = l0 % UInt8
+            b1 = (l0 >>> ((0x8 * div(bytes_chunk, 0x2)) % 0x3f)) % UInt8
+            b2 = (l0 >>> ((0x8 * (bytes_chunk - 0x1)) % 0x3f)) % UInt8
+            a = (UInt64(b0) << 45) | UInt64(b2)
+            b = UInt64(b1)
+        end
+    else
+        if bytes_chunk > 0x10
+            seed = hash_mix(l0 ⊻ secret[3], l1 ⊻ seed)
+            if bytes_chunk > 0x20
+                seed = hash_mix(l2 ⊻ secret[3], l3 ⊻ seed)
+            end
+        end
+        a = t0 ⊻ bytes_chunk
+        b = t1
+    end
+
+    a = a ⊻ secret[2]
+    b = b ⊻ seed
+    b, a = mul_parts(a, b)
+    return hash_mix(a ⊻ secret[4], b ⊻ secret[2] ⊻ bytes_chunk)
 end
 
 @assume_effects :total hash(data::String, h::UInt) =

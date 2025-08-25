@@ -79,7 +79,7 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
-                                   int binding_effects, int eager_resolve)
+                                              int binding_effects)
 {
     if (jl_is_symbol(expr)) {
         jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
@@ -104,10 +104,10 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     }
     // These exprs are not fully linearized
     if (e->head == jl_assign_sym) {
-        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
+        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects));
         return expr;
     } else if (e->head == jl_new_opaque_closure_sym) {
-        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
+        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_edge, binding_effects));
         return expr;
     }
     size_t nargs = jl_array_nrows(e->args);
@@ -251,7 +251,7 @@ JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_modu
     size_t i, l = jl_array_nrows(stmts);
     for (i = 0; i < l; i++) {
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_edge, binding_effects, 0));
+        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_edge, binding_effects));
     }
 }
 
@@ -952,7 +952,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = resolve_definition_effects(st, m->module, sparam_vars, (jl_value_t*)m, 1, 0);
+            st = resolve_definition_effects(st, m->module, sparam_vars, (jl_value_t*)m, 1);
         }
         jl_array_ptr_set(copy, i, st);
     }
