@@ -316,10 +316,16 @@ end
 # It is also mitigated by using a constant string.
 _throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
-copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
+_copyto2arg!(dest, src) = copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+
+copyto!(dest::Array, src::Array) = _copyto2arg!(dest, src)
+copyto!(dest::Array, src::Memory) = _copyto2arg!(dest, src)
+copyto!(dest::Memory, src::Array) = _copyto2arg!(dest, src)
 
 # also to avoid ambiguities in packages
-copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
+copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
 
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
@@ -330,7 +336,7 @@ function fill!(dest::Array{T}, x) where T
 end
 function _fill!(dest::Array{T}, x::T) where T
     for i in eachindex(dest)
-        @inbounds dest[i] = x
+        dest[i] = x
     end
     return dest
 end
@@ -742,9 +748,16 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
-_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+function _collect_indices(::Tuple{}, A)
+    dest = Array{eltype(A),0}(undef)
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
+function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
+    dest = Array{eltype(A)}(undef, length.(indsA))
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
@@ -896,10 +909,6 @@ function grow_to!(dest, itr, st)
     return dest
 end
 
-## Iteration ##
-
-iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
-
 ## Indexing: getindex ##
 
 """
@@ -987,7 +996,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end

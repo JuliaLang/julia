@@ -7,6 +7,14 @@ ifneq ($(USE_BINARYBUILDER_LLVM), 1)
 LLVM_GIT_URL:=https://github.com/JuliaLang/llvm-project.git
 LLVM_TAR_URL=https://api.github.com/repos/JuliaLang/llvm-project/tarball/$1
 $(eval $(call git-external,llvm,LLVM,CMakeLists.txt,,$(SRCCACHE)))
+# LLVM's tarball contains symlinks to non-existent targets. This breaks the
+# the default msys strategy `deepcopy` symlink strategy. To workaround this,
+# switch to `native` which tries native windows symlinks (possible if the
+# machine is in developer mode) - or if not, falls back to cygwin-style
+# symlinks. We don't particularly care either way - we just need to symlinks
+# to succeed. We could guard this by a uname check, but it's harmless elsewhere,
+# so let's not incur the additional overhead.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: export MSYS=$(MSYS_NONEXISTENT_SYMLINK_TARGET_FIX)
 
 LLVM_BUILDDIR := $(BUILDDIR)/$(LLVM_SRC_DIR)
 LLVM_BUILDDIR_withtype := $(LLVM_BUILDDIR)/build_$(LLVM_BUILDTYPE)
@@ -99,7 +107,7 @@ LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYP
 LLVM_CMAKE += -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD:STRING="$(LLVM_EXPERIMENTAL_TARGETS)"
 LLVM_CMAKE += -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=FORCE_ON -DZLIB_ROOT="$(build_prefix)"
-LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=OFF
+LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=FORCE_ON -DZSTD_ROOT="$(build_prefix)"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
@@ -251,6 +259,11 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
+
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
 # declare that all patches must be applied before running ./configure
@@ -279,6 +292,12 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-e
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured
+ifeq ($(OS),WINNT)
+ifeq ($(USEGCC),1)
+	echo "LLVM source build is currently known to fail using GCC due to exceeded export table limits. Try clang."
+	exit 1
+endif
+endif
 	cd $(LLVM_BUILDDIR_withtype) && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
@@ -293,8 +312,10 @@ endif
 	echo 1 > $@
 
 LLVM_INSTALL = \
-	cd $1 && mkdir -p $2$$(build_depsbindir) && \
-	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit $2$$(build_depsbindir)/ && \
+	cd $1 && mkdir -p $2$$(build_depsbindir)/lit && \
+	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.py $2$$(build_depsbindir)/lit/ && \
+	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.toml $2$$(build_depsbindir)/lit/ && \
+	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/lit $2$$(build_depsbindir)/lit/ && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
 LLVM_INSTALL += && cp $2$$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_depsbindir)
@@ -351,6 +372,10 @@ $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
+
+# work-around for Yggdrasil packaging bug (https://github.com/JuliaPackaging/Yggdrasil/pull/11231)
+$(build_prefix)/manifest/llvm-tools uninstall-llvm-tools: \
+	TAR:=$(TAR) --exclude=llvm-config.exe
 
 endif # USE_BINARYBUILDER_LLVM
 

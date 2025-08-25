@@ -179,8 +179,14 @@ end
 @test hash([1,2]) == hash(view([1,2,3,4],1:2))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
-    @test (hash(a)==hash(b)) == (a==b)
+    @test hash(a) == hash(b)
+    @test a != b
 end
+let a = QuoteNode(:(1 + 2)), b = QuoteNode(:(1 + 2))
+    @test hash(a) == hash(b)
+    @test a == b
+end
+
 
 let a = Expr(:block, Core.SlotNumber(1)),
     b = Expr(:block, Core.SlotNumber(1)),
@@ -314,4 +320,23 @@ end
     f(h...) = hash(Char, h...);
     src = only(code_typed(f, Tuple{UInt}))[1]
     @test count(stmt -> Meta.isexpr(stmt, :foreigncall), src.code) == 0
+end
+
+@testset "hash_bytes consistency" begin
+    # Test that hash_bytes(::Array), hash_bytes(Generator(identity, Array)), and hash_bytes(pointer(Array)) return the same values
+
+    for n in 0:1000
+        b = rand(UInt8, n)
+        a = Base.Generator(identity, b)
+
+        # Test hash_bytes(::Array) vs hash_bytes(pointer(Array))
+        hash_array = Base.hash_bytes(b, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        hash_pointer = Base.hash_bytes(pointer(b), length(b), UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_array isa UInt64
+        @test hash_array === hash_pointer
+
+        # Test hash_bytes(Generator(identity, Array)) vs hash_bytes(pointer(Array))
+        hash_generator = Base.hash_bytes(a, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_generator === hash_pointer
+    end
 end

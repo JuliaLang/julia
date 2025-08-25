@@ -2,14 +2,14 @@
 
 # macro wrappers for various reflection functions
 
-using Base: insert!, replace_ref_begin_end!,
+using Base: insert!, replace_ref_begin_end_!,
     infer_return_type, infer_exception_type, infer_effects, code_ircode, isexpr
 
 # defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(get_typeof.(args)...)}), where_params)
+typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[get_typeof(a) for a in args]...)}), where_params)
 
 function extract_where_parameters(ex::Expr)
     isexpr(ex, :where) || return ex, nothing
@@ -22,14 +22,46 @@ function rewrap_where(ex::Expr, where_params::Union{Nothing, Vector{Any}})
 end
 
 function get_typeof(@nospecialize ex)
-    isexpr(ex, :(::), 1) && return esc(ex.args[1])
-    isexpr(ex, :(::), 2) && return esc(ex.args[2])
+    # Always unescape to get the core expression, then reescape and esc
+    original_ex = ex
+    ex = Meta.unescape(ex)
+
+    if isexpr(ex, :(::), 1)
+        return esc(Meta.reescape(ex.args[1], original_ex))
+    end
+    if isexpr(ex, :(::), 2)
+        return esc(Meta.reescape(ex.args[2], original_ex))
+    end
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
-        isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, esc(splatted.args[1]))
-        return :(Any[Core.Typeof(x) for x in $(esc(splatted))]...)
+        if isexpr(splatted, :(::), 1)
+            return Expr(:curly, :Vararg, esc(Meta.reescape(splatted.args[1], original_ex)))
+        end
+        return :(Any[Core.Typeof(x) for x in $(esc(Meta.reescape(splatted, original_ex)))]...)
     end
-    return :(Core.Typeof($(esc(ex))))
+    return :(Core.Typeof($(esc(Meta.reescape(ex, original_ex)))))
+end
+
+function is_broadcasting_call(ex)
+    isa(ex, Expr) || return false
+    # Standard broadcasting: f.(x)
+    isexpr(ex, :.) && length(ex.args) ≥ 2 && isexpr(ex.args[2], :tuple) && return true
+    # Infix broadcasting: x .+ y, x .<< y, etc.
+    if isexpr(ex, :call)
+        f = ex.args[1]
+        f == :.. && return false
+        string(f)[1] == '.' && return true
+    end
+    return false
+end
+is_broadcasting_expr(ex) = is_broadcasting_call(ex) || is_broadcasting_assignment(ex)
+function is_broadcasting_assignment(ex)
+    isa(ex, Expr) || return false
+    isexpr(ex, :.) && return false
+    head = string(ex.head)
+    # x .= y, x .+= y, x .<<= y, etc.
+    head[begin] == '.' && head[end] == '=' && return true
+    return false
 end
 
 """
@@ -38,29 +70,48 @@ variable "xj" (with j an integer from 1 to the returned i).
 The list `args` contains the original arguments that have been replaced.
 """
 function recursive_dotcalls!(ex, args, i=1)
-    if !(ex isa Expr) || ((ex.head !== :. || !(ex.args[2] isa Expr)) &&
-                          (ex.head !== :call || string(ex.args[1])[1] != '.'))
-        newarg = Symbol('x', i)
-        if isexpr(ex, :...)
-            push!(args, only(ex.args))
-            return Expr(:..., newarg), i+1
+    if is_broadcasting_expr(ex)
+        if is_broadcasting_assignment(ex)
+            (start, branches) = (1, ex.args)
+        elseif isexpr(ex, :.)
+            (start, branches) = (1, ex.args[2].args)
         else
-            push!(args, ex)
-            return newarg, i+1
+            (start, branches) = (2, ex.args)
         end
+        for j in start:length(branches)::Int
+            branch, i = recursive_dotcalls!(branches[j], args, i)
+            branches[j] = branch
+        end
+        return ex, i
+    elseif isexpr(ex, :parameters)
+        for j in eachindex(ex.args)
+            param, i = recursive_dotcalls!(ex.args[j], args, i)
+            ex.args[j] = param
+        end
+        return ex, i
     end
-    (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
-    length_branches = length(branches)::Int
-    for j in start:length_branches
-        branch, i = recursive_dotcalls!(branches[j], args, i)
-        branches[j] = branch
+    newarg = Symbol('x', i)
+    if isexpr(ex, :...)
+        newarg = Expr(:..., newarg)
+        push!(args, only(ex.args))
+    elseif isexpr(ex, :kw)
+        newarg = Expr(:kw, ex.args[1], newarg)
+        push!(args, ex.args[end])
+    else
+        push!(args, ex)
     end
-    return ex, i
+    return newarg, i+1
 end
 
 function extract_farg(@nospecialize arg)
-    !isexpr(arg, :(::), 1) && return esc(arg)
-    fT = esc(arg.args[1])
+    # Always unescape to get the core expression, then reescape and esc
+    original_arg = arg
+    arg = Meta.unescape(arg)
+
+    if !isexpr(arg, :(::), 1)
+        return esc(Meta.reescape(arg, original_arg))
+    end
+    fT = esc(Meta.reescape(arg.args[1], original_arg))
     :($construct_callable($fT))
 end
 
@@ -158,13 +209,12 @@ function merge_namedtuple_types(nt::Type{<:NamedTuple}, nts::Type{<:NamedTuple}.
     NamedTuple{Tuple(names), Tuple{types...}}
 end
 
-function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
-    if isexpr(ex0, :ref)
-        ex0 = replace_ref_begin_end!(ex0)
-    end
+is_code_macro(fcn) = startswith(string(fcn), "code_")
+
+function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false)
     # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
     if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
-        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection)
     end
     where_params = nothing
     if isa(ex0, Expr)
@@ -172,6 +222,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     end
     if isa(ex0, Expr)
         if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
+            # Normalize `f(args...) do ... end` calls to `f(do_anonymous_function, args...)`
             if length(ex0.args) != 2
                 return Expr(:call, :error, "ill-formed do call")
             end
@@ -180,52 +231,59 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
-            codemacro = startswith(string(fcn), "code_")
-            if codemacro && (ex0.head === :call || ex0.args[2] isa Expr)
-                # Manually wrap a dot call in a function
-                args = Any[]
-                ex, i = recursive_dotcalls!(copy(ex0), args)
-                xargs = [Symbol('x', j) for j in 1:i-1]
-                dotfuncname = gensym("dotfunction")
-                dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
-                return quote
-                    $(esc(dotfuncdef))
-                    $(fcn)($(esc(dotfuncname)), $(typesof_expr(args, where_params)); $(kws...))
-                end
-            elseif !codemacro
-                fully_qualified_symbol = true # of the form A.B.C.D
-                ex1 = ex0
-                while ex1 isa Expr && ex1.head === :.
-                    fully_qualified_symbol = (length(ex1.args) == 2 &&
-                                              ex1.args[2] isa QuoteNode &&
-                                              ex1.args[2].value isa Symbol)
-                    fully_qualified_symbol || break
-                    ex1 = ex1.args[1]
-                end
-                fully_qualified_symbol &= ex1 isa Symbol
-                if fully_qualified_symbol || isexpr(ex1, :(::), 1)
-                    getproperty_ex = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
-                    isexpr(ex0.args[1], :(::), 1) && return getproperty_ex
-                    return quote
-                        local arg1 = $(esc(ex0.args[1]))
-                        if isa(arg1, Module)
-                            $(if string(fcn) == "which"
-                                  :(which(arg1, $(ex0.args[2])))
-                              else
-                                  :(error("expression is not a function call"))
-                              end)
-                        else
-                            $getproperty_ex
-                        end
-                    end
+        if is_broadcasting_expr(ex0) && !is_source_reflection
+            # Manually wrap top-level broadcasts in a function.
+            # We don't do that if `fcn` reflects into the source,
+            # because that destroys provenance information.
+            args = Any[]
+            ex, i = recursive_dotcalls!(copy(ex0), args)
+            xargs = [Symbol('x', j) for j in 1:i-1]
+            dotfuncname = gensym("dotfunction")
+            dotfuncdef = :(local $dotfuncname($(xargs...)) = $ex)
+            return quote
+                $(esc(dotfuncdef))
+                $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws; is_source_reflection, supports_binding_reflection))
+            end
+        elseif isexpr(ex0, :.) && is_source_reflection
+            # If `ex0` has the form A.B (or some chain A.B.C.D) and `fcn` reflects into the source,
+            # `A` (or `A.B.C`) may be a module, in which case `fcn` is probably more interested in
+            # the binding rather than the `getproperty` call.
+            # If binding reflection is not supported, we generate an error; `getproperty(::Module, field)`
+            # is not going to be interesting to reflect into, so best to allow future non-breaking support
+            # for binding reflection in case the macro may eventually support that.
+            fully_qualified_symbol = true
+            ex1 = ex0
+            while ex1 isa Expr && ex1.head === :.
+                fully_qualified_symbol = (length(ex1.args) == 2 &&
+                                            ex1.args[2] isa QuoteNode &&
+                                            ex1.args[2].value isa Symbol)
+                fully_qualified_symbol || break
+                ex1 = ex1.args[1]
+            end
+            fully_qualified_symbol &= ex1 isa Symbol
+            if fully_qualified_symbol || isexpr(ex1, :(::), 1)
+                call_reflection = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
+                isexpr(ex0.args[1], :(::), 1) && return call_reflection
+                if supports_binding_reflection
+                    binding_reflection = :($fcn(arg1, $(ex0.args[2])))
                 else
-                    return Expr(:call, :error, "dot expressions are not lowered to "
-                                * "a single function call, so @$fcn cannot analyze "
-                                * "them. You may want to use Meta.@lower to identify "
-                                * "which function call to target.")
+                    binding_reflection = :(error("expression is not a function call"))
+                end
+                return quote
+                    local arg1 = $(esc(ex0.args[1]))
+                    if isa(arg1, Module)
+                        $binding_reflection
+                    else
+                        $call_reflection
+                    end
                 end
             end
+        end
+        if is_broadcasting_expr(ex0)
+            return Expr(:call, :error, "dot expressions are not lowered to "
+                * "a single function call, so @$fcn cannot analyze "
+                * "them. You may want to use Meta.@lower to identify "
+                * "which function call to target.")
         end
         if any(@nospecialize(a)->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args)
             args, kwargs = separate_kwargs(ex0.args)
@@ -237,7 +295,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             tt = rewrap_where(:(Tuple{$nt, $(get_typeof.(args)...)}), where_params)
             return :($(fcn)(Core.kwcall, $tt; $(kws...)))
         elseif ex0.head === :call
-            argtypes = Any[get_typeof(arg) for arg in ex0.args[2:end]]
+            argtypes = Any[get_typeof(ex0.args[i]) for i in 2:length(ex0.args)]
             if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
                 farg = :(Base.literal_pow)
                 pushfirst!(argtypes, :(typeof(^)))
@@ -254,8 +312,21 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                     return Expr(:call, fcn, Base.setproperty!,
                                 typesof_expr(Any[lhs.args..., rhs], where_params), kws...)
                 elseif lhs.head === :ref
-                    return Expr(:call, fcn, Base.setindex!,
-                                typesof_expr(Any[lhs.args[1], rhs, lhs.args[2:end]...], where_params), kws...)
+                    arr = lhs.args[1]
+                    lhs.args = Any[get_typeof(a) for a in lhs.args]
+                    arrex = lhs.args[1]
+                    if isexpr(arr, :(::), 1) || isexpr(arr, :(::), 2) || isexpr(arr, :..., 1)
+                        lhs.args[1] = Expr(:call, :error, "array expression with begin/end cannot also use ::")
+                    else
+                        lhs.args[1] = esc(arr)
+                    end
+                    ex, _ = replace_ref_begin_end_!(__module__, lhs, nothing, false, 1)
+                    ## since replace_ref_begin_end! mutates lhs in place, we can mutate inplace also then return ex
+                    lhs.head = :call
+                    lhs.args[1] = get_typeof(rhs)
+                    pushfirst!(lhs.args, arrex)
+                    lhs.args = Any[fcn, Base.setindex!, rewrap_where(:(Tuple{$(lhs.args...)}), where_params), kws...]
+                    return ex
                 end
             end
         elseif ex0.head === :vcat || ex0.head === :typed_vcat
@@ -275,8 +346,29 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             else
                 return Expr(:call, fcn, f, typesof_expr(ex0.args, where_params), kws...)
             end
+        elseif ex0.head === :ref
+            arr = ex0.args[1]
+            ex0.args = Any[get_typeof(a) for a in ex0.args]
+            arrex = ex0.args[1]
+            if isexpr(arr, :(::), 1) || isexpr(arr, :(::), 2) || isexpr(arr, :..., 1)
+                ex0.args[1] = Expr(:call, :error, "array expression with begin/end cannot also use ::")
+            else
+                ex0.args[1] = esc(arr)
+            end
+            ex, _ = replace_ref_begin_end_!(__module__, ex0, nothing, false, 1)
+            ## since replace_ref_begin_end! mutates ex0 in place, we can mutate inplace also then return ex
+            ex0.head = :call
+            ex0.args[1] = arrex
+            ex0.args = Any[fcn, Base.getindex, rewrap_where(:(Tuple{$(ex0.args...)}), where_params), kws...]
+            return ex
         else
-            for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
+            PairSymAny = Pair{Symbol, Any}
+            for (head, f) in (PairSymAny(:hcat, Base.hcat),
+                              PairSymAny(:(.), Base.getproperty),
+                              PairSymAny(:vect, Base.vect),
+                              PairSymAny(Symbol("'"), Base.adjoint),
+                              PairSymAny(:typed_hcat, Base.typed_hcat),
+                              PairSymAny(:string, string))
                 if ex0.head === head
                     return Expr(:call, fcn, f, typesof_expr(ex0.args, where_params), kws...)
                 end
@@ -284,7 +376,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
         end
     end
     if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...}, kws...)
+        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(ex0.args[i]) for i in 3:length(ex0.args) ]...}, kws...)
     end
 
     ex = Meta.lower(__module__, ex0)
@@ -305,10 +397,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
         end
     end
     if ex.head === :thunk || exret.head === :none
-        exret = Expr(:call, :error, "expression is not a function call, "
-                                  * "or is too complex for @$fcn to analyze; "
-                                  * "break it down to simpler parts if possible. "
-                                  * "In some cases, you may want to use Meta.@lower.")
+        exret = Expr(:call, :error, "expression is not a function call, \
+                                    or is too complex for @$fcn to analyze; \
+                                    break it down to simpler parts if possible. \
+                                    In some cases, you may want to use Meta.@lower.")
     end
     return exret
 end
@@ -318,7 +410,7 @@ Same behaviour as `gen_call_with_extracted_types` except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
-function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
+function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false)
     kws = Expr[]
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
@@ -332,13 +424,15 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
     end
-    return gen_call_with_extracted_types(__module__, fcn, arg, kws)
+    return gen_call_with_extracted_types(__module__, fcn, arg, kws; is_source_reflection, supports_binding_reflection)
 end
 
 for fname in [:which, :less, :edit, :functionloc]
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
+            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[];
+                                          is_source_reflection = true,
+                                          supports_binding_reflection = $(fname === :which))
         end
     end
 end
@@ -351,13 +445,13 @@ end
 for fname in [:code_warntype, :code_llvm, :code_native,
               :infer_return_type, :infer_effects, :infer_exception_type]
     @eval macro ($fname)(ex0...)
-        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false)
     end
 end
 
 for fname in [:code_typed, :code_lowered, :code_ircode]
     @eval macro ($fname)(ex0...)
-        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false)
         quote
             local results = $thecall
             length(results) == 1 ? results[1] : results
@@ -601,14 +695,11 @@ macro activate(what)
     if !(Component in allowed_components)
         error("Usage Error: Component $Component is not recognized. Expected one of $allowed_components")
     end
-    s = gensym()
     if Component === :Compiler && isempty(options)
         push!(options, :reflection)
     end
     options = map(options) do opt
         Expr(:kw, opt, true)
     end
-    Expr(:toplevel,
-        esc(:(import $Component as $s)),
-        esc(:($s.activate!(;$(options...)))))
+    return :(Base.require($__module__, $(QuoteNode(Component))).activate!(; $(options...)))
 end

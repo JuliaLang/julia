@@ -25,7 +25,7 @@ busybox_hash_correct(file) = bytes2hex(open(SHA.sha256, file)) == "ed2f95da95552
 
 function _tryonce_download_from_cache(desired_url::AbstractString)
     cache_url = "https://cache.julialang.org/$(desired_url)"
-    cache_output_filename = joinpath(mktempdir(), "busybox")
+    cache_output_filename = joinpath(mktempdir(), "busybox" * (Sys.iswindows() ? ".exe" : ""))
     cache_response = Downloads.request(
         cache_url;
         output = cache_output_filename,
@@ -124,6 +124,7 @@ end
 @test !success(ignorestatus(falsecmd) & falsecmd)
 @test_broken  success(ignorestatus(pipeline(falsecmd, falsecmd)))
 @test_broken  success(ignorestatus(falsecmd & falsecmd))
+@test run(ignorestatus(pipeline(falsecmd; stderr=devnull, stdout=devnull))).exitcode != 0
 
 # stdin Redirection
 let file = tempname()
@@ -620,7 +621,9 @@ end
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # readlines(::Cmd), accidentally broken in #20203
-@test sort(readlines(`$lscmd -A`)) == sort(readdir())
+let str = "foo\nbar"
+    @test readlines(`$echocmd $str`) == split(str)
+end
 
 # issue #19864 (PR #20497)
 let c19864 = readchomp(pipeline(ignorestatus(

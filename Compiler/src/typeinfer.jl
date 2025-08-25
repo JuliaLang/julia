@@ -469,17 +469,11 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState, cycleid::Int)
     return typ
 end
 
-function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
+function adjust_effects(ipo_effects::Effects, def::Method)
     # override the analyzed effects using manually annotated effect settings
     override = decode_effects_override(def.purity)
-    valid_worlds = WorldRange(0, typemax(UInt))
     if is_effect_overridden(override, :consistent)
-        # See note on `typemax(Int)` instead of `deleted_world` in adjust_effects!
-        override_valid_worlds = WorldRange(def.primary_world, typemax(UInt))
-        if world in override_valid_worlds
-            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
-            valid_worlds = override_valid_worlds
-        end
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
     if is_effect_overridden(override, :effect_free)
         ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
@@ -507,7 +501,7 @@ function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
     if is_effect_overridden(override, :nortcall)
         ipo_effects = Effects(ipo_effects; nortcall=true)
     end
-    return (ipo_effects, valid_worlds)
+    return ipo_effects
 end
 
 function adjust_effects(sv::InferenceState)
@@ -561,8 +555,7 @@ function adjust_effects(sv::InferenceState)
     # override the analyzed effects using manually annotated effect settings
     def = sv.linfo.def
     if isa(def, Method)
-        (ipo_effects, valid_worlds) = adjust_effects(ipo_effects, def, sv.world.this)
-        update_valid_age!(sv, valid_worlds)
+        ipo_effects = adjust_effects(ipo_effects, def)
     end
 
     return ipo_effects
@@ -601,9 +594,9 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         end
     end
     result = me.result
+    result.valid_worlds = me.world.valid_worlds
     result.result = bestguess
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
-    result.valid_worlds = me.world.valid_worlds
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     me.src.rettype = widenconst(ignorelimited(bestguess))
     me.src.ssaflags = me.ssaflags
@@ -748,6 +741,13 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
 end
 
 # record the backedges
+
+function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
+    meth = isa(edge, Method) ? edge : get_ci_mi(edge).def
+    ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
+    return nothing
+end
+
 function store_backedges(caller::CodeInstance, edges::SimpleVector)
     isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
 
@@ -767,7 +767,7 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             if item isa Core.Binding
                 maybe_add_binding_backedge!(item, caller)
             elseif item isa MethodTable
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
             else
                 item::MethodInstance
                 ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
@@ -1108,13 +1108,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 update_valid_age!(caller, frame.world.valid_worlds)
                 local isinferred = is_inferred(frame)
                 local edge = isinferred ? edge_ci : nothing
-                local effects, valid_worlds
-                if isinferred
-                    effects = frame.result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
-                else
-                    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
-                    update_valid_age!(caller, valid_worlds)
-                end
+                local effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
+                    adjust_effects(effects_for_cycle(frame.ipo_effects), method)
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
@@ -1137,8 +1132,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.world.valid_worlds)
-    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
-    update_valid_age!(caller, valid_worlds)
+    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
@@ -1493,16 +1487,30 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 # No dynamic dispatch to resolve / enqueue
                 continue
             end
+        elseif isexpr(stmt, :cfunction) && length(stmt.args) == 5
+            (pointer_type, f, rt, at, call_type) = stmt.args
+            linfo = ci.parent
 
-            let workqueue = invokelatest_queue
-                # make a best-effort attempt to enqueue the relevant code for the finalizer
-                mi = compileable_specialization_for_call(workqueue.interp, atype)
-                mi === nothing && continue
+            linfo isa MethodInstance || continue
+            at isa SimpleVector || continue
 
-                push!(workqueue, mi)
+            ft = argextype(f, ci, sptypes)
+            argtypes = Any[ft]
+            for i = 1:length(at)
+                push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
+            atype = argtypes_to_type(argtypes)
+        else
+            # TODO: handle other StmtInfo like OpaqueClosure?
+            continue
         end
-        # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
+        let workqueue = invokelatest_queue
+            # make a best-effort attempt to enqueue the relevant code for the dynamic invokelatest call
+            mi = compileable_specialization_for_call(workqueue.interp, atype)
+            mi === nothing && continue
+
+            push!(workqueue, mi)
+        end
     end
 end
 
@@ -1563,8 +1571,9 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, s
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
-function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
-    interp = NativeInterpreter(world)
+function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8, trim_mode::UInt8)
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    interp = NativeInterpreter(world; inf_params)
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
@@ -1647,11 +1656,11 @@ end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
 # The trim_mode can be any of:
-const TRIM_NO = 0
-const TRIM_SAFE = 1
-const TRIM_UNSAFE = 2
-const TRIM_UNSAFE_WARN = 3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
+const TRIM_NO = 0x0
+const TRIM_SAFE = 0x1
+const TRIM_UNSAFE = 0x2
+const TRIM_UNSAFE_WARN = 0x3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative

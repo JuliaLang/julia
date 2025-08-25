@@ -3,6 +3,10 @@
 #ifndef JL_LOCKS_H
 #define JL_LOCKS_H
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,7 +38,13 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT JL_NOTSA
     // Hide this body from the analyzer, otherwise it complains that we're calling
     // a non-safepoint from this function. The 0 arguments guarantees that we do
     // not reach the safepoint, but the analyzer can't figure that out
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_pre_lock(lock, __tsan_mutex_write_reentrant);
+#endif
     jl_mutex_wait(lock, 0);
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_post_lock(lock, __tsan_mutex_write_reentrant, 1);
+#endif
 #endif
 }
 

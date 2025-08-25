@@ -4,14 +4,10 @@
 baremodule p7zip_jll
 using Base
 
-const PATH_list = String[]
-const LIBPATH_list = String[]
-
 export p7zip
 
 # These get calculated in __init__()
 const PATH = Ref("")
-const LIBPATH = Ref("")
 artifact_dir::String = ""
 p7zip_path::String = ""
 if Sys.iswindows()
@@ -21,71 +17,44 @@ else
 end
 
 if Sys.iswindows()
-    const LIBPATH_env = "PATH"
-    const LIBPATH_default = ""
     const pathsep = ';'
 elseif Sys.isapple()
-    const LIBPATH_env = "DYLD_FALLBACK_LIBRARY_PATH"
-    const LIBPATH_default = "~/lib:/usr/local/lib:/lib:/usr/lib"
     const pathsep = ':'
 else
-    const LIBPATH_env = "LD_LIBRARY_PATH"
-    const LIBPATH_default = ""
     const pathsep = ':'
 end
 
-function adjust_ENV!(env::Dict{keytype(Base.EnvDict),valtype(Base.EnvDict)}, PATH::String, LIBPATH::String, adjust_PATH::Bool, adjust_LIBPATH::Bool)
-    if adjust_LIBPATH
-        LIBPATH_base = get(env, LIBPATH_env, expanduser(LIBPATH_default))
-        if !isempty(LIBPATH_base)
-            env[LIBPATH_env] = string(LIBPATH, pathsep, LIBPATH_base)
-        else
-            env[LIBPATH_env] = LIBPATH
-        end
-    end
-    if adjust_PATH && (LIBPATH_env != "PATH" || !adjust_LIBPATH)
-        if adjust_PATH
-            if !isempty(get(env, "PATH", ""))
-                env["PATH"] = string(PATH, pathsep, env["PATH"])
-            else
-                env["PATH"] = PATH
-            end
-        end
-    end
-    return env
+function adjust_ENV()
+    addPATH = PATH[]
+    oldPATH = get(ENV, "PATH", "")
+    newPATH = isempty(oldPATH) ? addPATH : "$addPATH$pathsep$oldPATH"
+    return ("PATH"=>newPATH,)
 end
 
-function p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
-    env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
-    withenv(env...) do
-        return f(p7zip_path)
+function p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) # deprecated, for compat only
+    withenv((adjust_PATH ? adjust_ENV() : ())...) do
+        return f(p7zip())
     end
 end
-function p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
-    env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
-    return Cmd(Cmd([p7zip_path]); env)
-end
+# the 7z.exe we ship has no dependencies, so it needs no PATH adjustment
+p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) = `$p7zip_path`
 
 function init_p7zip_path()
     # Prefer our own bundled p7zip, but if we don't have one, pick it up off of the PATH
-    # If this is an in-tree build, `7z` will live in `bindir`.  Otherwise, it'll be in `private_libexecdir`
-    for bundled_p7zip_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, p7zip_exe),
-                               joinpath(Sys.BINDIR, p7zip_exe))
-        if isfile(bundled_p7zip_path)
-            global p7zip_path = abspath(bundled_p7zip_path)
-            return
-        end
+    # Our `7z` lives in `private_libexecdir`
+    bundled_p7zip_path = joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, p7zip_exe)
+    if isfile(bundled_p7zip_path)
+        global p7zip_path = abspath(bundled_p7zip_path)
+    else
+        global p7zip_path = something(Sys.which(p7zip_exe), p7zip_exe)
     end
-    global p7zip_path = something(Sys.which(p7zip_exe), p7zip_exe)
 end
 
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     init_p7zip_path()
-    PATH[] = dirname(p7zip_path)
-    push!(PATH_list, PATH[])
-    append!(LIBPATH_list, [joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), joinpath(Sys.BINDIR, Base.LIBDIR)])
-    LIBPATH[] = join(LIBPATH_list, pathsep)
+    PATH[] = path = dirname(p7zip_path)
+    nothing
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

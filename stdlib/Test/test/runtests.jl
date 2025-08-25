@@ -107,6 +107,25 @@ end
     @test_throws "\"" throw("\"")
     @test_throws Returns(false) throw(Returns(false))
 end
+
+@testset "Pass - exception with pattern (3-arg form)" begin
+    # Test 3-argument form: @test_throws ExceptionType pattern expr
+    @test_throws ErrorException "error foo" error("error foo 1")
+    @test_throws DomainError r"sqrt.*negative" sqrt(-1)
+    @test_throws BoundsError "at index [2]" [1][2]
+    @test_throws ErrorException ["error", "foo"] error("error foo bar")
+
+    # Test with function pattern
+    @test_throws ErrorException (s -> occursin("foo", s)) error("error foo bar")
+
+    # Test output format
+    let result = @test_throws ErrorException "error foo" error("error foo 1")
+        output = sprint(show, result)
+        @test occursin("Test Passed", output)
+        @test occursin("Thrown: ErrorException", output)
+    end
+end
+
 # Test printing of Fail results
 include("nothrow_testset.jl")
 
@@ -390,7 +409,7 @@ let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
-        error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
+        error_mock = Test.Error(:test, 1, 2, nothing, LineNumberNode(0, "An Error Mock"), nothing)
         @test Test.record(ts, error_mock; print_result=false) isa Test.Error
         fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
         @test Test.record(ts, fail_mock; print_result=false) isa Test.Fail
@@ -399,6 +418,47 @@ let retval_tests = @testset NoThrowTestSet begin
     end
     for retval_test in retval_tests
         @test retval_test isa Test.Pass
+    end
+end
+
+@testset "Fail - exception with pattern (3-arg form)" begin
+    # Test type mismatch
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ArgumentError "error foo" error("error foo 1")  # Wrong type
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
+        @test occursin("ArgumentError with pattern \"error foo\"", fails[1].data)
+    end
+
+    # Test pattern mismatch
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ErrorException "wrong pattern" error("error foo 1")  # Wrong pattern
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
+        @test occursin("ErrorException with pattern \"wrong pattern\"", fails[1].data)
+    end
+
+    # Test no exception thrown
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ErrorException "error foo" 1 + 1  # No exception
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_nothing
+        @test occursin("ErrorException with pattern \"error foo\"", fails[1].data)
+    end
+
+    # Test first argument must be a type
+    let fails = @testset NoThrowTestSet begin
+        @test_throws "not a type" "error foo" error("error foo 1")  # First arg not a type
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
     end
 end
 
@@ -1394,7 +1454,7 @@ end
             @test occursin(expected, result)
         end
     end
-    @testset "failfast" begin
+    @testset "failfast begin-end" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
         Foo           \|    1      1  \s*\d*\.\ds
@@ -1408,6 +1468,32 @@ end
             @testset "Foo" failfast=true begin
                 @test false
                 @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast for-loop" begin
+        expected = r"""
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
+          1           \|    1      1  \s*\d*\.\ds
+        """
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @testset "\$x" for x in 1:2
+                    @test false
+                end
                 @testset "Bar" begin
                     @test false
                     @test true
@@ -1865,4 +1951,85 @@ end
         @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
     end
+end
+
+@testset "Context display in @testset let blocks" begin
+    # Mock parent testset that just captures results
+    struct MockParentTestSet <: Test.AbstractTestSet
+        results::Vector{Any}
+        MockParentTestSet() = new([])
+    end
+    Test.record(ts::MockParentTestSet, t) = (push!(ts.results, t); t)
+    Test.finish(ts::MockParentTestSet) = ts
+
+    @testset "context shown when a context testset fails" begin
+        mock_parent1 = MockParentTestSet()
+        ctx_ts1 = Test.ContextTestSet(mock_parent1, :x, 42)
+
+        fail_result = Test.Fail(:test, "x == 99", "42 == 99", "42", nothing, LineNumberNode(1, :test), false)
+        Test.record(ctx_ts1, fail_result)
+
+        @test length(mock_parent1.results) == 1
+        recorded_fail = mock_parent1.results[1]
+        @test recorded_fail isa Test.Fail
+        @test recorded_fail.context !== nothing
+        @test occursin("x = 42", recorded_fail.context)
+    end
+
+    @testset "context shown when a context testset errors" begin
+        mock_parent2 = MockParentTestSet()
+        ctx_ts2 = Test.ContextTestSet(mock_parent2, :x, 42)
+
+        # Use internal constructor to create Error with pre-processed values
+        error_result = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts2, error_result)
+
+        @test length(mock_parent2.results) == 1
+        recorded_error = mock_parent2.results[1]
+        @test recorded_error isa Test.Error
+        @test recorded_error.context !== nothing
+        @test occursin("x = 42", recorded_error.context)
+
+        # Context shows up in string representation
+        error_str = sprint(show, recorded_error)
+        @test occursin("Context:", error_str)
+        @test occursin("x = 42", error_str)
+
+        # Multiple variables context
+        mock_parent3 = MockParentTestSet()
+        ctx_ts3 = Test.ContextTestSet(mock_parent3, :(x, y), (42, "hello"))
+
+        error_result2 = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts3, error_result2)
+
+        recorded_error2 = mock_parent3.results[1]
+        @test recorded_error2 isa Test.Error
+        @test recorded_error2.context !== nothing
+        @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
+    end
+end
+
+@testset "io argument for Test output functions" begin
+    # Test print_test_results and print_test_errors with io redirection
+    io = IOBuffer()
+
+    # Create a testset with passing and failing tests
+    ts = Test.DefaultTestSet("IO Test")
+    Test.record(ts, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(1), false))
+    fail = Test.Fail(:test, "1 == 2", nothing, nothing, LineNumberNode(2, Symbol("test.jl")))
+    push!(ts.results, fail)
+
+    # Test print_test_results with io
+    Test.print_test_results(io, ts)
+    output = String(take!(io))
+    @test occursin("Test Summary:", output)
+    @test occursin("IO Test", output)
+    @test occursin("Pass", output)
+    @test occursin("Fail", output)
+
+    # Test print_test_errors with io
+    Test.print_test_errors(io, ts)
+    output = String(take!(io))
+    @test occursin("Error in testset", output)
+    @test occursin("1 == 2", output)
 end

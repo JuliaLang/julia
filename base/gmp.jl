@@ -843,24 +843,29 @@ Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), st
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 
+Base._hash_shl!(x::BigInt, n) = MPZ.mul_2exp!(x, n)
+
 if Limb === UInt64 === UInt
     # On 64 bit systems we can define
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: hash_finalizer
+    using .Base: HASH_SECRET, hash_bytes, hash_finalizer
 
     function hash_integer(n::BigInt, h::UInt)
+        iszero(n) && return hash_integer(0, h)
         GC.@preserve n begin
             s = n.size
-            s == 0 && return hash_integer(0, h)
-            p = convert(Ptr{UInt64}, n.d)
-            b = unsafe_load(p)
-            h ⊻= hash_finalizer(ifelse(s < 0, -b, b) ⊻ h)
-            for k = 2:abs(s)
-                h ⊻= hash_finalizer(unsafe_load(p, k) ⊻ h)
-            end
-            return h
+            h ⊻= (s < 0)
+
+            us = abs(s)
+            leading_zero_bytes = div(leading_zeros(unsafe_load(n.d, us)), 8)
+            hash_bytes(
+                Ptr{UInt8}(n.d),
+                8 * us - leading_zero_bytes,
+                h,
+                HASH_SECRET
+            )
         end
     end
 
@@ -892,23 +897,16 @@ if Limb === UInt64 === UInt
                 return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
             end
             h = hash_integer(pow, h)
-            h ⊻= hash_finalizer(flipsign(limb, sz) ⊻ h)
-            for idx = idx+1:asz
-                if shift == 0
-                    limb = unsafe_load(ptr, idx)
-                else
-                    limb1 = limb2
-                    if idx == asz
-                        limb = limb1 >> shift
-                        limb == 0 && break # don't hash leading zeros
-                    else
-                        limb2 = unsafe_load(ptr, idx+1)
-                        limb = limb2 << upshift | limb1 >> shift
-                    end
-                end
-                h ⊻= hash_finalizer(limb ⊻ h)
-            end
-            return h
+
+            h ⊻= (sz < 0)
+            leading_zero_bytes = div(leading_zeros(unsafe_load(x.d, asz)), 8)
+            trailing_zero_bytes = div(pow, 8)
+            return hash_bytes(
+                Ptr{UInt8}(x.d) + trailing_zero_bytes,
+                8 * asz - (leading_zero_bytes + trailing_zero_bytes),
+                h,
+                HASH_SECRET
+            )
         end
     end
 end
