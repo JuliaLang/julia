@@ -72,6 +72,8 @@ External links:
 #include <stdio.h> // printf
 #include <inttypes.h> // PRIxPTR
 
+#include <zstd.h>
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_gcext.h"
@@ -79,8 +81,11 @@ External links:
 #include "processor.h"
 #include "serialize.h"
 
-#ifndef _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
+#include <memoryapi.h>
+#else
 #include <dlfcn.h>
+#include <sys/mman.h>
 #endif
 
 #include "valgrind.h"
@@ -3630,14 +3635,75 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
     }
 }
 
-// From a shared library handle, verify consistency and return a jl_image_buf_t
-static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
+typedef void jl_image_unpack_func_t(void *handle, jl_image_buf_t *image);
+
+static void jl_prefetch_system_image(const char *data, size_t size)
+{
+    size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
+    void *start = (void *)((uintptr_t)data & ~(page_size - 1));
+    size_t size_aligned = LLT_ALIGN(size, page_size);
+#ifdef _OS_WINDOWS_
+    WIN32_MEMORY_RANGE_ENTRY entry = {start, size_aligned};
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &entry, 0);
+#else
+    madvise(start, size_aligned, MADV_WILLNEED);
+#endif
+}
+
+JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
+{
+    size_t *plen;
+    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1);
+    jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1);
+    image->size = *plen;
+    jl_prefetch_system_image(image->data, image->size);
+}
+
+JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
     const char *data;
-    const void *pointers;
-    uint64_t base;
+    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
+    jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1);
+    jl_prefetch_system_image(data, *plen);
+    image->size = ZSTD_getFrameContentSize(data, *plen);
+    size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
+    size_t aligned_size = LLT_ALIGN(image->size, page_size);
+#if defined(_OS_WINDOWS_)
+    size_t large_page_size = GetLargePageMinimum();
+    if (image->size > 4 * large_page_size) {
+        size_t aligned_size = LLT_ALIGN(image->size, large_page_size);
+        image->data = (char *)VirtualAlloc(
+            NULL, aligned_size, MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
+    }
+    else {
+        image->data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
+                                           PAGE_READWRITE);
+    }
+#else
+    image->data =
+        (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
+    if (!image->data || image->data == (void *)-1) {
+        jl_printf(JL_STDERR, "ERROR: failed to allocate space for system image\n");
+        jl_exit(1);
+    }
 
+    ZSTD_decompress((void *)image->data, image->size, data, *plen);
+    size_t len = (*plen) & ~(page_size - 1);
+#ifdef _OS_WINDOWS_
+    if (len)
+        VirtualFree((void *)data, len, MEM_RELEASE);
+#else
+    munmap((void *)data, len);
+#endif
+}
+
+// From a shared library handle, verify consistency and return a jl_image_buf_t
+static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
+{
     // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
     void** (*get_jl_RTLD_DEFAULT_handle_addr)(void) = NULL;
     if (handle != jl_RTLD_DEFAULT_handle) {
@@ -3646,38 +3712,41 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
             jl_error("Image file failed consistency check: maybe opened the wrong version?");
     }
 
+    jl_image_unpack_func_t **unpack;
+    jl_image_buf_t image = {
+        .kind = JL_IMAGE_KIND_SO,
+        .pointers = NULL,
+        .data = NULL,
+        .size = 0,
+        .base = 0,
+    };
+
     // verification passed, lookup the buffer pointers
     if (jl_system_image_size == 0 || is_pkgimage) {
         // in the usual case, the sysimage was not statically linked to libjulia-internal
         // look up the external sysimage symbols via the dynamic linker
-        jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
-        jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
-        jl_dlsym(handle, "jl_image_pointers", (void**)&pointers, 1);
-    } else {
+        jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1);
+        (*unpack)(handle, &image);
+    }
+    else {
         // the sysimage was statically linked directly against libjulia-internal
         // use the internal symbols
-        plen = &jl_system_image_size;
-        pointers = &jl_image_pointers;
-        data = &jl_system_image_data;
+        image.size = jl_system_image_size;
+        image.pointers = &jl_image_pointers;
+        image.data = &jl_system_image_data;
     }
 
 #ifdef _OS_WINDOWS_
-    base = (intptr_t)handle;
+    image.base = (intptr_t)handle;
 #else
     Dl_info dlinfo;
-    if (dladdr((void*)pointers, &dlinfo) != 0)
-        base = (intptr_t)dlinfo.dli_fbase;
+    if (dladdr((void*)image.pointers, &dlinfo) != 0)
+        image.base = (intptr_t)dlinfo.dli_fbase;
     else
-        base = 0;
+        image.base = 0;
 #endif
 
-    return (jl_image_buf_t) {
-        .kind = JL_IMAGE_KIND_SO,
-        .pointers = pointers,
-        .data = data,
-        .size = *plen,
-        .base = base,
-    };
+    return image;
 }
 
 // Allow passing in a module handle directly, rather than a path
