@@ -1419,36 +1419,41 @@ struct ShardTimers {
     }
 };
 
-// If an AOTOutput is greater than this many bytes, we should write it to a
-// temporary file on Windows, or MADV_DONTNEED/MADV_COLD it on Unix to alleviate
-// memory pressure.  Except in rare cases, this should be triggered only by the
-// output containing the heap image.
+// If an AOTOutput is greater than this many bytes, madvise
+// MADV_DONTNEED/MADV_COLD it on Unix to alleviate memory pressure.  Except in
+// rare cases, this should be triggered only by the output containing the heap
+// image.
 constexpr size_t jl_large_aotoutput = 64 * 1024 * 1024; // 64 MiB
 
 class AOTOutput {
 public:
-    AOTOutput(const Twine &prefix, const char *suffix) : name((prefix + "." + suffix).str())
+    // If large = true and we are on Windows, use a temporary file.
+    AOTOutput(const Twine &prefix, const char *suffix, bool large = false)
+      : name((prefix + "." + suffix).str())
     {
 #ifdef _OS_WINDOWS_
-        SmallString<128> path;
-        SmallVector<wchar_t, 128> path_utf16;
-        auto model = prefix + "-%%%%%%." + suffix;
-        sys::fs::createUniquePath(model, path, true);
-        auto fail = [&]() {
-            jl_errorf("failed to create temporary file: %s", path.c_str());
-        };
-        if (sys::windows::widenPath(path, path_utf16))
-            fail();
-        file = CreateFileW(path_utf16.begin(), GENERIC_READ | GENERIC_WRITE,
-                           FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
-                           FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
-        if (file == INVALID_HANDLE_VALUE)
-            fail();
-        fd = _open_osfhandle((intptr_t)file, 0);
-        state = TMP_OPEN;
-#else
-        state = MEMORY;
+        if (large) {
+            SmallString<128> path;
+            SmallVector<wchar_t, 128> path_utf16;
+            auto model = prefix + "-%%%%%%." + suffix;
+            sys::fs::createUniquePath(model, path, true);
+            auto fail = [&]() {
+                jl_errorf("failed to create temporary file: %s", path.c_str());
+            };
+            if (sys::windows::widenPath(path, path_utf16))
+                fail();
+            file =
+                CreateFileW(path_utf16.begin(), GENERIC_READ | GENERIC_WRITE,
+                            FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+                            FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+            if (file == INVALID_HANDLE_VALUE)
+                fail();
+            fd = _open_osfhandle((intptr_t)file, 0);
+            state = TMP_OPEN;
+            return;
+        }
 #endif
+        state = MEMORY;
     }
     ~AOTOutput() { remove(); }
     AOTOutput(const AOTOutput &) = delete;
@@ -1578,7 +1583,9 @@ struct AOTOutputs {
 };
 
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &SourceTM, ShardTimers *timer = nullptr) {
+static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &SourceTM,
+                            bool large = false, ShardTimers *timer = nullptr)
+{
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple().str(),
@@ -1592,7 +1599,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
     if (outputs.unopt) {
         if (timer)
             timer->unopt.startTimer();
-        AOTOutput out{M.getModuleIdentifier(), "unopt.bc"};
+        AOTOutput out{M.getModuleIdentifier(), "unopt.bc", large};
         auto OS = out.ostream();
         {
             PassBuilder PB;
@@ -1686,7 +1693,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
     if (outputs.opt) {
         if (timer)
             timer->opt.startTimer();
-        AOTOutput out{M.getModuleIdentifier(), "bc"};
+        AOTOutput out{M.getModuleIdentifier(), "bc", large};
         auto OS = out.ostream();
         {
             PassBuilder PB;
@@ -1708,7 +1715,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
     if (outputs.obj) {
         if (timer)
             timer->obj.startTimer();
-        AOTOutput out{M.getModuleIdentifier(), "o"};
+        AOTOutput out{M.getModuleIdentifier(), "o", large};
         auto OS = out.ostream();
         {
             legacy::PassManager emitter;
@@ -1734,7 +1741,7 @@ static void add_output_impl(AOTOutputs &outputs, Module &M, TargetMachine &Sourc
     if (outputs.asm_) {
         if (timer)
             timer->asm_.startTimer();
-        AOTOutput out{M.getModuleIdentifier(), "s"};
+        AOTOutput out{M.getModuleIdentifier(), "s", large};
         auto OS = out.ostream();
         {
             legacy::PassManager emitter;
@@ -1931,8 +1938,9 @@ extern "C" void lambda_trampoline(void* arg) {
 }
 
 template<typename ModuleReleasedFunc>
-static void
-add_output_no_partition(AOTOutputs &outputs, Module &M, TargetMachine &TM, StringRef name, ModuleReleasedFunc module_released)
+static void add_output_no_partition(AOTOutputs &outputs, Module &M, TargetMachine &TM,
+                                    StringRef name, bool large,
+                                    ModuleReleasedFunc module_released)
 {
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Opt);
@@ -1944,7 +1952,7 @@ add_output_no_partition(AOTOutputs &outputs, Module &M, TargetMachine &TM, Strin
                               "_0"); // module flag "julia.mv.suffix"
             M.getGlobalVariable("jl_gvar_idxs")->setName("jl_gvar_idxs_0");
         }
-        add_output_impl(outputs, M, TM);
+        add_output_impl(outputs, M, TM, large);
     }
     // Don't need M anymore
     module_released(M);
@@ -1996,7 +2004,7 @@ static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, String
 {
     assert(threads);
     if (shards <= 1) {
-        add_output_no_partition(outputs, M, TM, name, module_released);
+        add_output_no_partition(outputs, M, TM, name, false, module_released);
         return;
     }
 
@@ -2075,7 +2083,7 @@ static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, String
                         CU->replaceOperandWith(0, topfile);
                     timers[i].construct.stopTimer();
 
-                    add_output_impl(outputs, *M, TM, &timers[i]);
+                    add_output_impl(outputs, *M, TM, false, &timers[i]);
                 }
             };
             auto arg = new std::function<void()>(func);
@@ -2282,7 +2290,8 @@ void jl_dump_native_impl(void *native_code,
         // Note that we don't set z to null, this allows the check in write_archive
         // to function as expected
         // no need to free the module/context, destructor handles that
-        add_output_no_partition(outputs, sysimgM, *SourceTM, "sysimg", [](Module &){});
+        add_output_no_partition(outputs, sysimgM, *SourceTM, "sysimg", true,
+                                [](Module &) {});
     }
 
     const bool imaging_mode = true;
@@ -2496,7 +2505,8 @@ void jl_dump_native_impl(void *native_code,
         }
 
         // no need to free module/context, destructor handles that
-        add_output_no_partition(outputs, metadataM, *SourceTM, "data", [](Module &) {});
+        add_output_no_partition(outputs, metadataM, *SourceTM, "data", false,
+                                [](Module &) {});
     }
 
     {
