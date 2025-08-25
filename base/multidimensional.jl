@@ -2102,7 +2102,7 @@ end
 """
 @inline function union_split(f::F, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Any,N}}, args...) where {F, T, N}
     if x isa T
-        f(x::T, args...)
+        f(x, args...)
     else
         union_split(f, x, Base.tail(ts), args...)
     end
