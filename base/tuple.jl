@@ -267,6 +267,10 @@ end
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
 first(t::Tuple) = t[1]
 
+flatten(::Tuple{}) = ()
+flatten(I::Tuple{Any}) = Tuple(I[1])
+flatten(I::Tuple) = (@inline; (Tuple(I[1])..., flatten(tail(I))...))
+
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
