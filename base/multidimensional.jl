@@ -2100,14 +2100,14 @@ else
 end
 ```
 """
-@inline function union_split(f::F, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Any,N}}, args...) where {F, T, N}
+@inline function union_split(f, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Any,N}}, args...) where {T, N}
     if x isa T
         f(x, args...)
     else
         union_split(f, x, Base.tail(ts), args...)
     end
 end
-@inline union_split(f::F, x, ::Tuple{}, args...) where F = f(x, args...)
+@inline union_split(x, ::Tuple{}, args...) = f(x, args...)
 
 function hash_shaped(A, h0::UInt, eltype_hint=())
     h::UInt = h0
