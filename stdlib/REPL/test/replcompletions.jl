@@ -2752,3 +2752,9 @@ let s = "kwtest6(123; som|) do x; x + 3 end"
     @test "somekwarg=" in c
     @test r == 14:16
 end
+
+# Test that `jl_resolve_definition_effects_in_ir` is called correctly and inference doesn't pass unexpected toplevel code
+let s = "(@ccall strlen(\"foo\"::Cstring)::Csize_t).|"
+    _, _, res  = test_complete_pos(s)
+    @test res
+end

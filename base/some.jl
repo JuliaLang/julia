@@ -150,8 +150,9 @@ macro something(args...)
     which is why we need the last argument first
     when building the final expression.
     =#
-    for arg in reverse(args)
-        val = gensym()
+    for i in reverse(eachindex(args))
+        arg  = args[i]
+        val = Cartesian.inlineanonymous(:val, i)
         expr = quote
             $val = $(esc(arg))
             if !isnothing($val)

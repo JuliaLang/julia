@@ -114,6 +114,19 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
+static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache);
+
+JL_DLLEXPORT jl_array_t* jl_compute_new_ext_cis(void)
+{
+    if (newly_inferred == NULL)
+        return jl_alloc_vec_any(0);
+    jl_query_cache query_cache;
+    init_query_cache(&query_cache);
+    jl_array_t *new_ext_cis = queue_external_cis(newly_inferred, &query_cache);
+    destroy_query_cache(&query_cache);
+    return new_ext_cis;
+}
+
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
     if (!newly_inferred)
@@ -129,6 +142,38 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
     jl_array_grow_end(newly_inferred, 1);
     jl_array_ptr_set(newly_inferred, end, ci);
     JL_UNLOCK(&newly_inferred_mutex);
+}
+
+
+static jl_array_t *inference_entrance_backtraces JL_GLOBALLY_ROOTED /*FIXME*/ = NULL;
+// Mutex for inference_entrance_backtraces
+jl_mutex_t inference_entrance_backtraces_mutex;
+
+// Register array of inference entrance backtraces
+JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t* _inference_entrance_backtraces)
+{
+    assert(_inference_entrance_backtraces == NULL || _inference_entrance_backtraces == jl_nothing || jl_is_array(_inference_entrance_backtraces));
+    if (_inference_entrance_backtraces == jl_nothing)
+        _inference_entrance_backtraces = NULL;
+    JL_LOCK(&inference_entrance_backtraces_mutex);
+    inference_entrance_backtraces = (jl_array_t*) _inference_entrance_backtraces;
+    JL_UNLOCK(&inference_entrance_backtraces_mutex);
+}
+
+
+JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t* ci)
+{
+    JL_LOCK(&inference_entrance_backtraces_mutex);
+    if (inference_entrance_backtraces == NULL) {
+        JL_UNLOCK(&inference_entrance_backtraces_mutex);
+        return;
+    }
+    jl_value_t* backtrace = jl_backtrace_from_here(0, 1);
+    size_t end = jl_array_nrows(inference_entrance_backtraces);
+    jl_array_grow_end(inference_entrance_backtraces, 2);
+    jl_array_ptr_set(inference_entrance_backtraces, end, ci);
+    jl_array_ptr_set(inference_entrance_backtraces, end + 1, backtrace);
+    JL_UNLOCK(&inference_entrance_backtraces_mutex);
 }
 
 // compute whether a type references something internal to worklist
