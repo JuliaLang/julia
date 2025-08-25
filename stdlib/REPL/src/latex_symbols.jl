@@ -765,7 +765,7 @@ const latex_symbols = Dict(
     "\\pitchfork" => "⋔",
     "\\lessdot" => "⋖",
     "\\gtrdot" => "⋗",
-    "\\verymuchless" => "⋘",
+    "\\lll" => "⋘",
     "\\ggg" => "⋙",
     "\\lesseqgtr" => "⋚",
     "\\gtreqless" => "⋛",
@@ -2712,3 +2712,4 @@ const symbols_latex_canonical = Dict(
     "⊽" => "\\nor",
     "≠" => "\\ne",
 )
+
