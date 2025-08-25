@@ -579,12 +579,12 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
 
     jl_init_codegen();
-    jl_init_common_symbols();
 
     if (sysimage.kind != JL_IMAGE_KIND_NONE) {
         // Load the .ji or .so sysimage
         jl_restore_system_image(&parsed_image, sysimage);
-    } else {
+    }
+    else {
         // No sysimage provided, init a minimal environment
         jl_init_types();
         jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
@@ -611,7 +611,8 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_n_gcthreads = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
-    } else {
+    }
+    else {
         post_image_load_hooks();
     }
     jl_start_threads();
@@ -771,6 +772,11 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
         // enable before creating the root task so it gets timings too.
         jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
     }
+    // Initialize constant objects
+    jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
+    jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_OLD_MARKED);
+    jl_init_box_caches();
+    jl_init_common_symbols();
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
 #pragma GCC diagnostic pop
