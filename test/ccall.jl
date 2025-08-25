@@ -1980,6 +1980,30 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     @test occursin("store atomic i8 2", llvm)
 end
 
+@testset "jl_dlfind and dlsym" begin
+    # We shouldn't be able to call libc functions through libccalltest
+    @test_throws ErrorException ccall((:sqrt, libccalltest), Cdouble, (Cdouble,), 2.0)
+    # Test that jl_dlfind finds things in the expected places.
+    @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
+    @static if !Sys.iswindows()
+        @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
+    end
+    @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "malloc") ∉ (1, 2, 3)      # Either 0 or msvcrt.dll on Windows
+    let hdl = Libdl.dlopen(libccalltest, Libdl.RTLD_GLOBAL)
+        try
+            @static if Sys.iswindows()
+                @test_throws ErrorException ccall(:get_c_int, Cint, ())
+            else
+                @test ccall(:get_c_int, Cint, ()) isa Cint
+            end
+        finally
+            Libdl.dlclose(hdl)
+        end
+    end
+end
+
 module Test57749
 using Test, Zstd_jll
 const prefix = "Zstd version: "
