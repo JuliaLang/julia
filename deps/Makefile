@@ -168,6 +168,10 @@ ifeq ($(USE_SYSTEM_P7ZIP), 0)
 DEP_LIBS += p7zip
 endif
 
+ifeq ($(USE_SYSTEM_PICOSAT), 0)
+DEP_LIBS += libpicosat
+endif
+
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 ifeq ($(USE_BINARYBUILDER_LLVM), 0)
 DEP_LIBS += ittapi
@@ -211,7 +215,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
-	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd p7zip csl \
+	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd p7zip libpicosat csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
 	terminfo mmtk_julia
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
@@ -275,6 +279,7 @@ include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
+include $(SRCDIR)/libpicosat.mk
 include $(SRCDIR)/libtracyclient.mk
 include $(SRCDIR)/terminfo.mk
 
