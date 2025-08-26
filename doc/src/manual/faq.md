@@ -74,35 +74,6 @@ If memory usage is your concern, you can always replace objects with ones that c
 with `A = nothing`. The memory will be released the next time the garbage collector runs; you can force
 this to happen with [`GC.gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Nothing`.
 
-### How can I modify the declaration of a type in my session?
-
-Perhaps you've defined a type and then realize you need to add a new field. If you try this at
-the REPL, you get the error:
-
-```
-ERROR: invalid redefinition of constant MyType
-```
-
-Types in module `Main` cannot be redefined.
-
-While this can be inconvenient when you are developing new code, there's an excellent workaround.
- Modules can be replaced by redefining them, and so if you wrap all your new code inside a module
-you can redefine types and constants. You can't import the type names into `Main` and then expect
-to be able to redefine them there, but you can use the module name to resolve the scope. In other
-words, while developing you might use a workflow something like this:
-
-```julia
-include("mynewcode.jl")              # this defines a module MyModule
-obj1 = MyModule.ObjConstructor(a, b)
-obj2 = MyModule.somefunction(obj1)
-# Got an error. Change something in "mynewcode.jl"
-include("mynewcode.jl")              # reload the module
-obj1 = MyModule.ObjConstructor(a, b) # old objects are no longer valid, must reconstruct
-obj2 = MyModule.somefunction(obj1)   # this time it worked!
-obj3 = MyModule.someotherfunction(obj2, c)
-...
-```
-
 ## [Scripting](@id man-scripting)
 
 ### How do I check if the current file is being run as the main script?
