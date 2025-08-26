@@ -373,7 +373,7 @@ end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
     if x.status == StatusUninit || x.status == StatusInit || x.handle === C_NULL
-        throw(ArgumentError("$x is not initialized"))
+        throw(ArgumentError("stream not initialized"))
     end
     return x.status != StatusClosed
 end
