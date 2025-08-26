@@ -89,7 +89,7 @@ function is_argtype_match(𝕃::AbstractLattice,
     end
 end
 
-function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any}, nargs::UInt, isva::Bool)
+function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any}, nargs::UInt, isva::Bool, mi::MethodInstance)
     nargs = Int(nargs)
     if isva || (!isempty(given_argtypes) && isvarargtype(given_argtypes[end]))
         isva_given_argtypes = Vector{Any}(undef, nargs)
@@ -120,7 +120,10 @@ function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any},
         end
         return isva_given_argtypes
     end
-    @assert length(given_argtypes) == nargs "invalid `given_argtypes` for `mi`"
+    if length(given_argtypes) != nargs
+        println(given_argtypes, " != ", nargs, " for ", mi)
+        throw(AssertionError("invalid `given_argtypes` for `mi`"))
+    end
     return given_argtypes
 end
 
@@ -178,8 +181,7 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any},
-                      cache::Vector{InferenceResult})
+function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
     method = mi.def::Method
     nargtypes = length(given_argtypes)
     for cached_result in cache
@@ -187,7 +189,9 @@ function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes:
         cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
-        cache_overridden_by_const = cached_result.overridden_by_const::BitVector
+        cache_overridden_by_const = cached_result.overridden_by_const
+        cache_overridden_by_const === nothing && continue
+        cache_overridden_by_const = cache_overridden_by_const::BitVector
         for i in 1:nargtypes
             if !is_argtype_match(𝕃, given_argtypes[i], cache_argtypes[i], cache_overridden_by_const[i])
                 @goto next_cache
