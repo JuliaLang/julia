@@ -202,12 +202,7 @@ end
 
 function PipeEndpoint(fd::OS_HANDLE)
     pipe = PipeEndpoint()
-    iolock_begin()
-    err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
-    uv_error("pipe_open", err)
-    pipe.status = StatusOpen
-    iolock_end()
-    return pipe
+    return open_pipe!(pipe, fd)
 end
 if OS_HANDLE != RawFD
     PipeEndpoint(fd::RawFD) = PipeEndpoint(Libc._get_osfhandle(fd))
@@ -283,8 +278,8 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
-setup_stdio(stream::LibuvStream, ::Bool) = (stream, false)
-rawhandle(stream::LibuvStream) = stream.handle
+setup_stdio(stream::Union{LibuvStream, LibuvServer}, ::Bool) = (stream, false)
+rawhandle(stream::Union{LibuvStream, LibuvServer}) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
 function init_stdio(handle::Ptr{Cvoid})
