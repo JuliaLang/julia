@@ -1036,17 +1036,17 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     edge_ci = nothing
-    # check cache with SOURCE_MODE_NOT_REQUIRED source_mode
+    # check cache with SOURCE_MODE_NOT_REQUIRED source_mode first,
+    # then with SOURCE_MODE_GET_SOURCE if inlining is needed
     let codeinst = get(code_cache(interp), mi, nothing)
         if codeinst isa CodeInstance # return existing rettype if the code is already inferred
             inferred = @atomic :monotonic codeinst.inferred
-            if inferred === nothing && force_inline
-                # we already inferred this edge before and decided to discard the inferred code,
-                # nevertheless we re-infer it here again in order to propagate the re-inferred
-                # source to the inliner as a volatile result
-                cache_mode = CACHE_MODE_VOLATILE
+            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+            if need_inlineable_code && !ci_meets_requirement(interp, codeinst, SOURCE_MODE_GET_SOURCE)
+                # Re-infer to get the appropriate source representation
+                cache_mode = CACHE_MODE_LOCAL
                 edge_ci = codeinst
-            else
+            else # no reinference needed
                 @assert codeinst.def === mi "MethodInstance for cached edge does not match"
                 return return_cached_result(interp, method, codeinst, caller, edgecycle, edgelimited)
             end
@@ -1075,8 +1075,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 engine_reject(interp, ci_from_engine)
                 ci_from_engine = nothing
                 inferred = @atomic :monotonic codeinst.inferred
-                if inferred === nothing && force_inline
-                    cache_mode = CACHE_MODE_VOLATILE
+                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+                if need_inlineable_code && !ci_meets_requirement(interp, codeinst, SOURCE_MODE_GET_SOURCE)
+                    cache_mode = CACHE_MODE_LOCAL
                     edge_ci = codeinst
                 else
                     @assert codeinst.def === mi "MethodInstance for cached edge does not match"
