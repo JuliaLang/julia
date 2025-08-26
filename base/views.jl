@@ -25,6 +25,81 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
         end
         return ex
     end
+    function handle_refexpr!(__module__::Module, ref_ex::Expr, main_ex::Expr, withex, in_quote_context, escs::Int)
+        @assert !in_quote_context
+        local used_withex
+        ref_ex.args[1], used_withex = replace_ref_begin_end_!(__module__, ref_ex.args[1], withex, in_quote_context, escs)
+        S = gensym(:S) # temp var to cache ex.args[1] if needed. if S is a global or expression, then it has side effects to use
+        assignments = []
+        used_S = false # whether we actually need S
+        # new :ref, so redefine withex
+        nargs = length(ref_ex.args) - 1
+        if nargs == 0
+            return main_ex, used_withex
+        elseif nargs == 1
+            # replace with lastindex(S)
+            ref_ex.args[2], used_S = replace_ref_begin_end_!(__module__, ref_ex.args[2], (:($firstindex($S)),:($lastindex($S))), in_quote_context, escs)
+        else
+            ni = 1
+            nx = 0
+            J = nargs + 1
+            need_temps = false # whether any arg needs temporaries
+
+            # First pass: determine if any argument will needs temporaries
+            for j = 2:J
+                exj = ref_ex.args[j]
+                if isexpr(exj, :...)
+                    need_temps = true
+                    break
+                end
+            end
+
+            # Second pass: if any need temps, create temps for all args
+            temp_vars = Tuple{Int,Symbol}[]
+            for j = 2:J
+                n = nx === 0 ? ni : :($nx + $ni)
+                exj, used = replace_ref_begin_end_!(__module__, ref_ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))), in_quote_context, escs)
+                used_S |= used
+                ref_ex.args[j] = exj
+                ni += 1
+                if need_temps
+                    isva = isexpr(exj, :...) # implied need_temps
+                    if isva
+                        exj = exj.args[1]
+                    end
+                    if isa_ast_node(exj) # create temp to preserve evaluation order and count in case `used` gets set later
+                        exj = gensym(:arg)
+                        push!(temp_vars, (j, exj))
+                    end
+                    if isva
+                        ni -= 1
+                        nx = nx === 0 ? :(length($exj)) : :($nx + length($exj))
+                    end
+                end
+            end
+
+            # Third pass: if `used`, need to actually make those temp assignments now
+            if used_S
+                for (j, temp_var) in temp_vars
+                    exj = ref_ex.args[j]
+                    isva = isexpr(exj, :...) # implied need_temps
+                    if isva
+                        exj = exj.args[1]
+                    end
+                    push!(assignments, :(local $temp_var = $exj))
+                    ref_ex.args[j] = isva ? Expr(:..., temp_var) : temp_var
+                end
+            end
+        end
+
+        if used_S
+            S0 = ref_ex.args[1]
+            S = escapes(S, escs)
+            ref_ex.args[1] = S
+            main_ex = :(local $S = $S0; $(assignments...); $main_ex)
+        end
+        return main_ex, used_withex
+    end
     if ex isa Expr && ex.head === :macrocall
         # Blithly modifying the arguments to another macro is unwise, so call
         # macroexpand first on it.
@@ -46,77 +121,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
         end
     elseif isa(ex,Expr)
         if !in_quote_context && ex.head === :ref # n.b. macroexpand.scm design is incapable of tracking :begin and :end scope, so emulate that here too and ignore escs
-            ex.args[1], used_withex = replace_ref_begin_end_!(__module__, ex.args[1], withex, in_quote_context, escs)
-            S = gensym(:S) # temp var to cache ex.args[1] if needed. if S is a global or expression, then it has side effects to use
-            assignments = []
-            used_S = false # whether we actually need S
-            # new :ref, so redefine withex
-            nargs = length(ex.args)-1
-            if nargs == 0
-                return ex, used_withex
-            elseif nargs == 1
-                # replace with lastindex(S)
-                ex.args[2], used_S = replace_ref_begin_end_!(__module__, ex.args[2], (:($firstindex($S)),:($lastindex($S))), in_quote_context, escs)
-            else
-                ni = 1
-                nx = 0
-                J = lastindex(ex.args)
-                need_temps = false # whether any arg needs temporaries
-
-                # First pass: determine if any argument will needs temporaries
-                for j = 2:J
-                    exj = ex.args[j]
-                    if isexpr(exj, :...)
-                        need_temps = true
-                        break
-                    end
-                end
-
-                # Second pass: if any need temps, create temps for all args
-                temp_vars = Tuple{Int,Symbol}[]
-                for j = 2:J
-                    n = nx === 0 ? ni : :($nx + $ni)
-                    exj, used = replace_ref_begin_end_!(__module__, ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))), in_quote_context, escs)
-                    used_S |= used
-                    ex.args[j] = exj
-                    ni += 1
-                    if need_temps
-                        isva = isexpr(exj, :...) # implied need_temps
-                        if isva
-                            exj = exj.args[1]
-                        end
-                        if isa_ast_node(exj) # create temp to preserve evaluation order and count in case `used` gets set later
-                            exj = gensym(:arg)
-                            push!(temp_vars, (j, exj))
-                        end
-                        if isva
-                            ni -= 1
-                            nx = nx === 0 ? :(length($exj)) : :($nx + length($exj))
-                        end
-                    end
-                end
-
-                # Third pass: if `used`, need to actually make those temp assignments now
-                if used_S
-                    for (j, temp_var) in temp_vars
-                        exj = ex.args[j]
-                        isva = isexpr(exj, :...) # implied need_temps
-                        if isva
-                            exj = exj.args[1]
-                        end
-                        push!(assignments, :(local $temp_var = $exj))
-                        ex.args[j] = isva ? Expr(:..., temp_var) : temp_var
-                    end
-                end
-            end
-
-            if used_S
-                S0 = ex.args[1]
-                S = escapes(S, escs)
-                ex.args[1] = S
-                ex = :(local $S = $S0; $(assignments...); $ex)
-            end
-            return ex, used_withex
+            return handle_refexpr!(__module__, ex, ex, withex, in_quote_context, escs)
         elseif ex.head === :$
             # no longer an executable expression (handle all equivalent forms of :inert, :quote, and QuoteNode the same way)
             in_quote_context = false
@@ -131,6 +136,18 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             escs == 0 && return ex, used_withex
             escs -= 1
         elseif ex.head === :meta || ex.head === :inert
+            return ex, used_withex
+        elseif !in_quote_context && last(string(ex.head)) == '=' && Meta.isexpr(ex.args[1], :ref)
+            for i = eachindex(ex.args)
+                if i == 1
+                    # we'll deal with the ref expression later
+                    continue
+                end
+                ex.args[i], used = replace_ref_begin_end_!(__module__, ex.args[i], withex, in_quote_context, escs)
+                used_withex |= used
+            end
+            ex, used = handle_refexpr!(__module__, ex.args[1]::Expr, ex, withex, in_quote_context, escs)
+            used_withex |= used
             return ex, used_withex
         end
         # recursive search
