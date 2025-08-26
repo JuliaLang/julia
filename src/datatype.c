@@ -1108,6 +1108,10 @@ static inline jl_uint128_t zext_read128(const jl_value_t *x, size_t nb) JL_NOTSA
         memcpy(&y, x, nb);
     return y;
 }
+static void assign_uint128(jl_value_t *v, jl_uint128_t x, size_t nb) JL_NOTSAFEPOINT
+{
+    memcpy(v, &x, nb);
+}
 #endif
 
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, const void *data)
@@ -1173,6 +1177,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *data)
         *(uint64_t*)v = jl_atomic_load((_Atomic(uint64_t)*)data);
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
+    else if (nb <= 12)
+        assign_uint128(v, jl_atomic_load((_Atomic(jl_uint128_t)*)data), 12);
     else if (nb <= 16)
         *(jl_uint128_t*)v = jl_atomic_load((_Atomic(jl_uint128_t)*)data);
 #endif
@@ -1239,6 +1245,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
         *(uint64_t*)v = jl_atomic_exchange((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
+    else if (nb <= 12)
+        assign_uint128(v, jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb)), 12);
     else if (nb <= 16)
         *(jl_uint128_t*)v = jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
 #endif
@@ -1288,7 +1296,7 @@ JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expect
     return success;
 }
 
-JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-allocated output */, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
+JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* NEW pre-allocated output */, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
 {
     // dst must have the required alignment for an atomic of the given size
     // n.b.: this does not spuriously fail if there are padding bits
@@ -1359,18 +1367,19 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
     else if (nb <= 16) {
-        jl_uint128_t *y128 = (jl_uint128_t*)y;
         if (dt == et) {
-            *y128 = zext_read128(expected, nb);
+            jl_uint128_t y128 = zext_read128(expected, nb);
             jl_uint128_t z128 = zext_read128(src, nb);
             while (1) {
-                success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, y128, z128);
-                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
+                success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, &y128, z128);
+                assign_uint128(y, y128, nb);
+                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt)) {
                     break;
+                }
             }
         }
         else {
-            *y128 = jl_atomic_load((_Atomic(jl_uint128_t)*)dst);
+            assign_uint128(y, jl_atomic_load((_Atomic(jl_uint128_t)*)dst), nb);
             success = 0;
         }
     }
