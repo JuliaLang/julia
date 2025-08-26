@@ -6291,3 +6291,10 @@ end <: Bool
 @test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
     Core.get_binding_type(m, n, xs...)
 end <: Type
+
+# issue #59269
+function haskey_inference_test()
+    kwargs = Core.compilerbarrier(:const, Base.pairs((; item = false)))
+    return haskey(kwargs, :item) ? nothing : Any[]
+end
+@inferred haskey_inference_test()
