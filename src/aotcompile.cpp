@@ -42,8 +42,9 @@
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 
-
 using namespace llvm;
+
+#include <zstd.h>
 
 #include "jitlayers.h"
 #include "serialize.h"
@@ -2148,12 +2149,25 @@ void jl_dump_native_impl(void *native_code,
         sysimgM.setDataLayout(DL);
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
-        Constant *data = ConstantDataArray::get(Context,
-            ArrayRef<uint8_t>((const unsigned char*)z->buf, z->size));
+
+        int compression = jl_options.compress_sysimage ? 15 : 0;
+        ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
+        SmallVector<char, 0> compressed_data;
+        if (compression) {
+            compressed_data.resize(ZSTD_compressBound(z->size));
+            size_t comp_size = ZSTD_compress(compressed_data.data(), compressed_data.size(),
+                                             z->buf, z->size, compression);
+            compressed_data.resize(comp_size);
+            sysimg_data = compressed_data;
+            ios_close(z);
+            free(z);
+        }
+
+        Constant *data = ConstantDataArray::get(Context, sysimg_data);
         auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
-        sysdata->setAlignment(Align(64));
+        sysdata->setAlignment(Align(jl_page_size));
 #if JL_LLVM_VERSION >= 180000
         sysdata->setCodeModel(CodeModel::Large);
 #else
@@ -2161,14 +2175,27 @@ void jl_dump_native_impl(void *native_code,
             sysdata->setSection(".ldata");
 #endif
         addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
+        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"), TheTriple);
-        // Free z here, since we've copied out everything into data
-        // Results in serious memory savings
-        ios_close(z);
-        free(z);
+
+        const char *unpack_func = compression ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp";
+        auto unpack = new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,
+                                         GlobalVariable::ExternalLinkage, nullptr,
+                                         unpack_func);
+        addComdat(new GlobalVariable(sysimgM, PointerType::getUnqual(Context), true,
+                                     GlobalVariable::ExternalLinkage, unpack,
+                                     "jl_image_unpack"),
+                  TheTriple);
+
+        if (!compression) {
+            // Free z here, since we've copied out everything into data
+            // Results in serious memory savings
+            ios_close(z);
+            free(z);
+        }
+        compressed_data.clear();
         // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
         // to function as expected
         // no need to free the module/context, destructor handles that
