@@ -187,9 +187,9 @@ function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes:
         cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
-        cache_overridden_by_const = cached_result.overridden_by_const::BitVector
+        cache_overridden_by_const = cached_result.overridden_by_const
         for i in 1:nargtypes
-            if !is_argtype_match(𝕃, given_argtypes[i], cache_argtypes[i], cache_overridden_by_const[i])
+            if !is_argtype_match(𝕃, given_argtypes[i], cache_argtypes[i], cache_overridden_by_const === nothing ? false : (cache_overridden_by_const::BitVector)[i])
                 @goto next_cache
             end
         end
