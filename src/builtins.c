@@ -248,6 +248,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         switch ((enum jl_small_typeof_tags)(dtag >> 4)) {
         case jl_int8_tag:
         case jl_uint8_tag:
+        case jl_addrspacecore_tag:
             return *(uint8_t*)a == *(uint8_t*)b;
         case jl_int16_tag:
         case jl_uint16_tag:
@@ -255,10 +256,14 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_int32_tag:
         case jl_uint32_tag:
         case jl_char_tag:
+        case jl_intrinsic_tag:
             return *(uint32_t*)a == *(uint32_t*)b;
         case jl_int64_tag:
         case jl_uint64_tag:
             return *(uint64_t*)a == *(uint64_t*)b;
+        case jl_ssavalue_tag:
+        case jl_slotnumber_tag:
+            return *(size_t*)a == *(size_t*)b;
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
@@ -270,6 +275,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_symbol_tag:
         case jl_module_tag:
         case jl_bool_tag:
+        case jl_nothing_tag:
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -2470,7 +2476,7 @@ static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pf
 
 static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) JL_GC_DISABLED
 {
-    jl_value_t *i = jl_permbox32(jl_intrinsic_type, 0, (int32_t)f);
+    jl_value_t *i = jl_permbox32(jl_intrinsic_type, jl_intrinsic_tag, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_initial_const(inm, sym, i, 1);
 }

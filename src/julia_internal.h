@@ -600,8 +600,8 @@ STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
-jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x);
-jl_value_t *jl_permbox32(jl_datatype_t *t, uintptr_t tag, uint32_t x);
+jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x) JL_NOTSAFEPOINT;
+jl_value_t *jl_permbox32(jl_datatype_t *t, uintptr_t tag, uint32_t x) JL_NOTSAFEPOINT;
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 // this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
@@ -1198,9 +1198,8 @@ STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t) JL_NOTSAFEPOIN
 // -- init.c -- //
 
 void jl_init_types(void) JL_GC_DISABLED;
-void jl_init_box_caches(void);
 void jl_init_flisp(void);
-void jl_init_common_symbols(void);
+void jl_init_common_symbols(void) JL_NOTSAFEPOINT;
 void jl_init_primitives(void) JL_GC_DISABLED;
 void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
@@ -1211,7 +1210,7 @@ void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOT
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_init_uv(void);
-void jl_init_int32_int64_cache(void);
+void jl_init_box_caches(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void);
 
 void jl_set_base_ctx(char *__stk);
