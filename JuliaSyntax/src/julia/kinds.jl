@@ -88,7 +88,7 @@ function _register_kinds!(kind_modules, int_to_kindstr, kind_str_to_int, mod, mo
             # Ok: known kind module, but not loaded until now
             kind_modules[module_id] = mod
         elseif m == mod
-            existing_kinds = [(i = get(kind_str_to_int, n, nothing);
+            existing_kinds = Union{Nothing, Kind}[(i = get(kind_str_to_int, n, nothing);
                                isnothing(i) ? nothing : Kind(i)) for n in names]
             if any(isnothing, existing_kinds) ||
                     !issorted(existing_kinds) ||
