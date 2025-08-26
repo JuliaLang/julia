@@ -99,14 +99,9 @@ end
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
-# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
-const InlineCostType = UInt16
-const MAX_INLINE_COST = typemax(InlineCostType)
-const MIN_INLINE_COST = InlineCostType(10)
-const MaybeCompressed = Union{CodeInfo, String}
-
-is_inlineable(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+inlining_cost(@nospecialize src) =
+    src isa Union{MaybeCompressed,UInt8} ? ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) : MAX_INLINE_COST
+is_inlineable(@nospecialize src) = inlining_cost(src) != MAX_INLINE_COST
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
