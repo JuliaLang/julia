@@ -197,3 +197,19 @@ nothrow_scope(Core.current_scope())
         push!(ts, 2)
     end
 end
+
+@testset "ScopedFunctor" begin
+    function check_svals()
+        @test sval[] == 8
+        @test sval_float[] == 8.0
+    end
+    sf = nothing
+    @with sval=>8 sval_float=>8.0 begin
+        sf = ScopedFunctor(check_svals)
+    end
+    sf()
+    @with sval=>8 sval_float=>8.0 begin
+        sf2 = ScopedFunctor{Function}(check_svals)
+    end
+    sf2()
+end

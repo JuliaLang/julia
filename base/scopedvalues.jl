@@ -270,4 +270,24 @@ function with(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
 end
 with(@nospecialize(f)) = f()
 
+macro enter_scope(scope, expr)
+    Expr(:tryfinally, esc(expr), nothing, :(Scope($(esc(scope))::Union{Nothing, Scope})))
+end
+
+"""
+    ScopedFunctor(f)
+
+Create a functor that records the current dynamic scope, i.e. all current
+`ScopedValue`s, along with `f`. When the functor is invoked, it runs `f`
+in the recorded dynamic scope.
+"""
+struct ScopedFunctor{F}
+    f::F
+    scope::Union{Nothing, Scope}
+
+    ScopedFunctor{F}(f) where {F} = new{F}(f, current_scope())
+end
+ScopedFunctor(f) = ScopedFunctor{typeof(f)}(f)
+(sf::ScopedFunctor)() = @enter_scope sf.scope sf.f()
+
 end # module ScopedValues
