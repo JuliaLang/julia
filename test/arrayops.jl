@@ -536,6 +536,10 @@ end
     @test_throws BoundsError badpop()
 end
 
+@testset "return type inference of `sizeof(::Array)`" begin
+    @test isconcretetype(Base.infer_return_type(sizeof, Tuple{Array}))
+end
+
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
     @test isequal([fill(1.,2,2); fill(2.,1,2)], [1. 1; 1 1; 2 2])

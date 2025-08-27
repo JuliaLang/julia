@@ -232,7 +232,7 @@ function elsize(::Type{Ptr{T}}) where T
 end
 elsize(::Type{Union{}}, slurp...) = 0
 
-sizeof(a::Array) = length(a) * elsize(typeof(a)) # n.b. this ignores bitsunion bytes, as a historical fact
+sizeof(a::Array) = length(a)::Int * elsize(typeof(a)) # n.b. this ignores bitsunion bytes, as a historical fact
 
 function isassigned(a::Array, i::Int...)
     @inline
