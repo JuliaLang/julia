@@ -3250,7 +3250,11 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
         if (force_trace_compile || jl_options.trace_compile_timing)
             jl_printf(s_precompile, "#= %6.1f ms =# ", compilation_time / 1e6);
         jl_printf(s_precompile, "precompile(");
-        jl_static_show(s_precompile, mi->specTypes);
+        jl_static_show_config_t config = {
+            /* suppress_datatype_names */ 0,
+            /* suppress_field_names */ 1,
+        };
+        jl_static_show_(s_precompile, mi->specTypes, config);
         jl_printf(s_precompile, ")");
         if (is_recompile) {
             jl_printf(s_precompile, " # recompile");
@@ -3310,7 +3314,11 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
     // NOTE: For builtin functions, the specType is just `Tuple`, which is not useful to print.
     if (!jl_has_free_typevars(mi->specTypes) && (jl_datatype_t*)mi->specTypes != jl_tuple_type) {
         jl_printf(s_dispatch, "precompile(");
-        jl_static_show(s_dispatch, mi->specTypes);
+        jl_static_show_config_t config = {
+            /* suppress_datatype_names */ 0,
+            /* suppress_field_names */ 1,
+        };
+        jl_static_show_(s_dispatch, mi->specTypes, config);
         jl_printf(s_dispatch, ")\n");
         if (s_dispatch != JL_STDERR)
             ios_flush(&f_dispatch);
