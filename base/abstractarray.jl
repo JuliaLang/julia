@@ -387,7 +387,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @inline
     eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::IndexLinear, A::Union{Array, Memory}) = unchecked_oneto(length(A))
+eachindex(::IndexLinear, A::Union{Array, Memory}) = unchecked_oneto(length(A)::Int)
 eachindex(::IndexLinear, A::AbstractArray) = (@inline; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@inline; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
