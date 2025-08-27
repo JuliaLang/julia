@@ -2654,6 +2654,13 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
     end
 end
 
+@testset "return type inference of linear `eachindex` for `Array` and `Memory`" begin
+    f = a -> eachindex(IndexLinear(), a)
+    for typ in (Array, Memory, Union{Array, Memory})
+        @test isconcretetype(Base.infer_return_type(f, Tuple{typ}))
+    end
+end
+
 # issue #14482
 @inferred map(Int8, Int[0])
 
