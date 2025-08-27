@@ -221,6 +221,12 @@ end
     end
 end
 
+@testset "return type inference of `getindex(::Array, ::Colon)`" begin
+    f = a -> a[:]
+    @test Vector === Base.infer_return_type(f, Tuple{Array})
+    @test Vector{Float32} === Base.infer_return_type(f, Tuple{Array{Float32}})
+end
+
 struct Z26163 <: AbstractArray{Int,0}; end
 Base.size(::Z26163) = ()
 Base.getindex(::Z26163) = 0

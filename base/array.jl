@@ -954,7 +954,7 @@ end
 getindex(a::Array, r::AbstractUnitRange{Bool}) = getindex(a, to_index(r))
 
 function getindex(A::Array, c::Colon)
-    lI = length(A)
+    lI = length(A)::Int
     X = similar(A, lI)
     if lI > 0
         unsafe_copyto!(X, 1, A, 1, lI)
