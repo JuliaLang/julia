@@ -41,7 +41,7 @@ Return the first byte of `x` in the source text.
 first_byte(x) = first(byte_range(x))
 
 """
-    first_byte(x)
+    last_byte(x)
 
 Return the last byte of `x` in the source text.
 """
