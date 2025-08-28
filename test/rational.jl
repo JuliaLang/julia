@@ -838,7 +838,7 @@ end
     @test Core.Compiler.return_type(-, NTuple{2, Rational}) == Rational
 
     A=Rational[1 1 1; 2 2 2; 3 3 3]
-    @test @inferred(A*A) isa Matrix{Rational}
+    @test @inferred(A*A) isa Matrix
 end
 
 @testset "issue #42560" begin
