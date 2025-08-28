@@ -520,14 +520,17 @@ function triplet(p::AbstractPlatform)
     )
 
     # Tack on optional compiler ABI flags
-    if libgfortran_version(p) !== nothing
-        str = string(str, "-libgfortran", libgfortran_version(p).major)
+    libgfortran_version_ = libgfortran_version(p)
+    if libgfortran_version_ !== nothing
+        str = string(str, "-libgfortran", libgfortran_version_.major)
     end
-    if cxxstring_abi(p) !== nothing
-        str = string(str, "-", cxxstring_abi(p))
+    cxxstring_abi_ = cxxstring_abi(p)
+    if cxxstring_abi_ !== nothing
+        str = string(str, "-", cxxstring_abi_)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
+    libstdcxx_version_ = libstdcxx_version(p)
+    if libstdcxx_version_ !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version_.patch)
     end
 
     # Tack on all extra tags
@@ -796,6 +799,17 @@ function platform_dlext(p::AbstractPlatform = HostPlatform())
     end
 end
 
+# Not general purpose, just for parse_dl_name_version
+function _this_os_name()
+    if Sys.iswindows()
+        return "windows"
+    elseif Sys.isapple()
+        return "macos"
+    else
+        return "other"
+    end
+end
+
 """
     parse_dl_name_version(path::String, platform::AbstractPlatform)
 
@@ -806,12 +820,14 @@ valid dynamic library, this method throws an error.  If no soversion
 can be extracted from the filename, as in "libbar.so" this method
 returns `"libbar", nothing`.
 """
-function parse_dl_name_version(path::String, os::String)
+function parse_dl_name_version(path::String, os::String=_this_os_name())
     # Use an extraction regex that matches the given OS
     local dlregex
+    # Keep this up to date with _this_os_name
     if os == "windows"
-        # On Windows, libraries look like `libnettle-6.dll`
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
+        # On Windows, libraries look like `libnettle-6.dll`.
+        # Stay case-insensitive, the suffix might be `.DLL`.
+        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"isa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
@@ -837,7 +853,7 @@ function parse_dl_name_version(path::String, os::String)
 end
 
 # Adapter for `AbstractString`
-function parse_dl_name_version(path::AbstractString, os::AbstractString)
+function parse_dl_name_version(path::AbstractString, os::AbstractString=_this_os_name())
     return parse_dl_name_version(string(path)::String, string(os)::String)
 end
 

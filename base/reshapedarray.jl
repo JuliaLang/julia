@@ -36,7 +36,7 @@ length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 @noinline throw_dmrsa(dims, len) =
-    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
+    throw(DimensionMismatch(LazyString("new dimensions ", dims, " must be consistent with array length ", len)))
 
 ## reshape(::Array, ::Dims) returns a new Array (to avoid conditionally aliasing the structure, only the data)
 # reshaping to same # of dimensions
@@ -253,6 +253,7 @@ end
 size(A::ReshapedArray) = A.dims
 length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
+similar(::Type{TA}, dims::Dims) where {T,N,P,TA<:ReshapedArray{T,N,P}} = similar(P, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))

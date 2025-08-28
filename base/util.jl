@@ -77,7 +77,7 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
     iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
     finally
-        str = String(take!(buf))
+        str = takestring!(buf)
         if !iscolor
             print(io, str)
         else
@@ -109,7 +109,7 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
                 isempty(line) && continue
                 print(buf, enable_ansi, line, disable_ansi)
             end
-            print(io, String(take!(buf)))
+            print(io, takestring!(buf))
         end
     end
 end
@@ -244,6 +244,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
+    end
+    if opts.compress_sysimage == 1
+        push!(addflags, "--compress-sysimage=yes")
     end
     return `$julia -C $cpu_target -J$image_file $addflags`
 end

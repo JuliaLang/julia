@@ -42,7 +42,6 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
-arraylist_t *jl_entrypoint_mis;
 
 JL_DLLEXPORT size_t jl_page_size;
 
@@ -249,7 +248,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     if (jl_base_module) {
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"), ct->world_age);
         if (f != NULL) {
             jl_value_t **fargs;
             JL_GC_PUSHARGS(fargs, 2);
@@ -355,13 +354,14 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 
     if (jl_base_module) {
         jl_task_t *ct = jl_get_current_task();
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_postoutput"));
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_postoutput"), ct->world_age);
         if (f != NULL) {
             JL_TRY {
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_get_world_counter();
+                JL_GC_PUSH1(&f);
                 jl_apply(&f, 1);
-                ct->world_age = last_age;
+                JL_GC_POP();
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
@@ -370,6 +370,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
                 jlbacktrace(); // written to STDERR_FILENO
             }
         }
+        ct->world_age = last_age;
     }
     return;
 }
@@ -557,6 +558,12 @@ static void restore_fp_env(void)
     if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
         jl_error("Failed to configure floating point environment");
     }
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_OFF && jl_atomic_load_relaxed(&jl_n_threads) > 1) {
+        jl_error("Cannot use `--handle-signals=no` with multiple threads (JULIA_NUM_THREADS > 1).\n"
+        "This will cause segmentation faults due to GC safepoint failures.\n"
+        "Remove `--handle-signals=no` or set JULIA_NUM_THREADS=1.\n"
+        "See: https://github.com/JuliaLang/julia/issues/50278");
+    }
 }
 static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct)
 {
@@ -572,12 +579,12 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
 
     jl_init_codegen();
-    jl_init_common_symbols();
 
     if (sysimage.kind != JL_IMAGE_KIND_NONE) {
         // Load the .ji or .so sysimage
         jl_restore_system_image(&parsed_image, sysimage);
-    } else {
+    }
+    else {
         // No sysimage provided, init a minimal environment
         jl_init_types();
         jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
@@ -593,7 +600,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_init_primitives();
         jl_init_main_module();
         jl_load(jl_core_module, "boot.jl");
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
         post_boot_hooks();
     }
 
@@ -605,8 +611,8 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_n_gcthreads = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
-    } else {
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    }
+    else {
         post_image_load_hooks();
     }
     jl_start_threads();
@@ -628,10 +634,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         JL_GC_POP();
     }
 
-    if (jl_options.trim) {
-        jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
-        arraylist_new(jl_entrypoint_mis, 0);
-    }
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
@@ -770,6 +772,11 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
         // enable before creating the root task so it gets timings too.
         jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
     }
+    // Initialize constant objects
+    jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
+    jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_OLD_MARKED);
+    jl_init_box_caches();
+    jl_init_common_symbols();
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
 #pragma GCC diagnostic pop

@@ -448,13 +448,23 @@ end
 end
 
 @testset "deg2rad/rad2deg" begin
-    @testset "$T" for T in (Int, Float64, BigFloat)
+    @testset "$T" for T in (Int, Float16, Float32, Float64, BigFloat)
         @test deg2rad(T(180)) ≈ 1pi
         @test deg2rad.(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
         @test rad2deg.([pi/T(4), pi/T(3)]) ≈ [45, 60]
         @test rad2deg(T(1)*pi) ≈ 180
         @test rad2deg(T(1)) ≈ rad2deg(true)
         @test deg2rad(T(1)) ≈ deg2rad(true)
+    end
+    @testset "accuracy" begin
+        @testset "$T" for T in (Float16, Float32, Float64)
+            @test rad2deg(T(1)) === setprecision(BigFloat, 500) do
+                T(180 / BigFloat(pi))
+            end
+            @test deg2rad(T(1)) === setprecision(BigFloat, 500) do
+                T(BigFloat(pi) / 180)
+            end
+        end
     end
     @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
@@ -578,6 +588,39 @@ end
     scdm = sincosd(missing)
     @test ismissing(scdm[1])
     @test ismissing(scdm[2])
+end
+
+@testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
+    function rounder(rm::RoundingMode)
+        function closure(::Type{T}, x::AbstractFloat) where {T <: AbstractFloat}
+            round(T, x, rm)
+        end
+    end
+    rounding_modes = (
+        RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundToZero, RoundFromZero, RoundUp, RoundDown,
+    )
+    rounders = map(rounder, rounding_modes)
+    @testset "typ: $typ" for typ in (Float16, Float32, Float64, BigFloat)
+        (n0, n1) = typ.(0:1)
+        rounders_typ = Base.Fix1.(rounders, typ)
+        @testset "f: $f" for f in (
+            # all strictly increasing
+            identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
+            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
+            Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
+            rounders_typ...,
+            Base.Fix1(*, n1), Base.Fix2(*, n1), Base.Fix2(/, n1),
+        )
+            @testset "s: $s" for s in (-1, 1)
+                z = s * n0
+                z::typ
+                @test z == f(z)::typ
+                @test signbit(z) === signbit(f(z))
+                isbitstype(typ) &&
+                @test z === @inferred f(z)
+            end
+        end
+    end
 end
 
 @testset "Integer and Inf args for sinpi/cospi/tanpi/sinc/cosc" begin

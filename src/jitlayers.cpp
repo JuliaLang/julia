@@ -6,6 +6,7 @@
 #include <string>
 
 #include "llvm/IR/Mangler.h"
+#include <llvm/ADT/BitmaskEnum.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -50,6 +51,7 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "julia_assert.h"
 #include "processor.h"
+#include "llvm-julia-task-dispatcher.h"
 
 #if JL_LLVM_VERSION >= 180000
 # include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
@@ -255,12 +257,46 @@ static void finish_params(Module *M, jl_codegen_params_t &params, SmallVector<or
     }
 }
 
+// Return a specptr that is ABI-compatible with `from_abi` which invokes `codeinst`.
+//
+// If `codeinst` is NULL, the returned specptr instead performs a standard `apply_generic`
+// call via a dynamic dispatch.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
-                                jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
+void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
+                                jl_code_instance_t *codeinst)
 {
-    if (codeinst == nullptr && unspecialized != nullptr)
-        return unspecialized;
+    void *target = nullptr;
+    bool target_specsig = false;
+    jl_callptr_t invoke = nullptr;
+    if (codeinst != nullptr) {
+        uint8_t specsigflags;
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+        void *specptr = nullptr;
+        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
+        if (invoke != nullptr) {
+            if (invoke == jl_fptr_const_return_addr) {
+                target = nullptr;
+                target_specsig = false;
+            }
+            else if (invoke == jl_fptr_args_addr) {
+                assert(specptr != nullptr);
+                if (!from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt))
+                    return specptr; // no adapter required
+
+                target = specptr;
+                target_specsig = false;
+            }
+            else if (specsigflags & 0b1) {
+                assert(specptr != nullptr);
+                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
+                    return specptr; // no adapter required
+
+                target = specptr;
+                target_specsig = true;
+            }
+        }
+    }
+
     orc::ThreadSafeModule result_m;
     std::string gf_thunk_name;
     {
@@ -272,14 +308,14 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *
         Module *M = result_m.getModuleUnlocked();
         if (target) {
             Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(M->getContext(), 0));
-            gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+            gf_thunk_name = emit_abi_converter(M, params, from_abi, codeinst, llvmtarget, target_specsig);
         }
         else if (invoke == jl_fptr_const_return_addr) {
-            gf_thunk_name = emit_abi_constreturn(M, params, declrt, sigt, nargs, specsig, codeinst->rettype_const);
+            gf_thunk_name = emit_abi_constreturn(M, params, from_abi, codeinst->rettype_const);
         }
         else {
             Value *llvminvoke = invoke ? literal_static_pointer_val((void*)invoke, PointerType::get(M->getContext(), 0)) : nullptr;
-            gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvminvoke);
+            gf_thunk_name = emit_abi_dispatcher(M, params, from_abi, codeinst, llvminvoke);
         }
         SmallVector<orc::ThreadSafeModule,0> sharedmodules;
         finish_params(M, params, sharedmodules);
@@ -296,8 +332,6 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *
 
   // lock for places where only single threaded behavior is implemented, so we need GC support
 static jl_mutex_t jitlock;
-  // locks for adding external code to the JIT atomically
-static std::mutex extern_c_lock;
   // locks and barriers for this state
 static std::mutex engine_lock;
 static std::condition_variable engine_wait;
@@ -325,7 +359,6 @@ static DenseMap<jl_code_instance_t*, SmallVector<jl_code_instance_t*,0>> incompl
 //   jitlock is outermost, can contain others and allows GC
 //   engine_lock is next
 //   ThreadSafeContext locks are next, they should not be nested (unless engine_lock is also held, but this may make TSAN sad anyways)
-//   extern_c_lock is next
 //   jl_ExecutionEngine internal locks are exclusive to this list, since OrcJIT promises to never hold a lock over a materialization unit:
 //        construct a query object from a query set and query handler
 //        lock the session
@@ -1349,11 +1382,13 @@ namespace {
 #endif
         if (TheTriple.isAArch64())
             codemodel = CodeModel::Small;
+#if JL_LLVM_VERSION < 200000
         else if (TheTriple.isRISCV()) {
-            // RISC-V will support large code model in LLVM 21
+            // RISC-V only supports large code model from LLVM 20
             // https://github.com/llvm/llvm-project/pull/70308
             codemodel = CodeModel::Medium;
         }
+#endif
         // Generate simpler code for JIT
         Reloc::Model relocmodel = Reloc::Static;
         if (TheTriple.isRISCV()) {
@@ -1858,7 +1893,7 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
-    ES(cantFail(orc::SelfExecutorProcessControl::Create())),
+    ES(cantFail(orc::SelfExecutorProcessControl::Create(nullptr, std::make_unique<::JuliaTaskDispatcher>()))),
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ExternalJD(ES.createBareJITDylib("JuliaExternal")),
@@ -2116,7 +2151,7 @@ SmallVector<uint64_t> JuliaOJIT::findSymbols(ArrayRef<StringRef> Names)
         Unmangled[NonOwningSymbolStringPtr(Mangled)] = Unmangled.size();
         Exports.add(std::move(Mangled));
     }
-    SymbolMap Syms = cantFail(ES.lookup(orc::makeJITDylibSearchOrder(ArrayRef(&JD)), std::move(Exports)));
+    SymbolMap Syms = cantFail(::safelookup(ES, orc::makeJITDylibSearchOrder(ArrayRef(&JD)), std::move(Exports)));
     SmallVector<uint64_t> Addrs(Names.size());
     for (auto it : Syms) {
         Addrs[Unmangled.at(orc::NonOwningSymbolStringPtr(it.first))] = it.second.getAddress().getValue();
@@ -2128,7 +2163,7 @@ Expected<ExecutorSymbolDef> JuliaOJIT::findSymbol(StringRef Name, bool ExportedS
 {
     orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
     ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
-    auto Sym = ES.lookup(SearchOrder, Name);
+    auto Sym = ::safelookup(ES, SearchOrder, Name);
     return Sym;
 }
 
@@ -2141,7 +2176,7 @@ Expected<ExecutorSymbolDef> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool
 {
     orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
     ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
-    auto Sym = ES.lookup(SearchOrder, getMangledName(Name));
+    auto Sym = ::safelookup(ES, SearchOrder, getMangledName(Name));
     return Sym;
 }
 

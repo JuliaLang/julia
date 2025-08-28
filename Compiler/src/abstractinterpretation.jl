@@ -363,15 +363,13 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         arg_n = split_argtypes[i]::Vector{Any}
         sig_n = argtypes_to_type(arg_n)
         sig_n === Bottom && continue
-        mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
-        mt === nothing && return FailedMethodMatch("Could not identify method table for call")
-        mt = mt::MethodTable
         thismatches = findall(sig_n, method_table(interp); limit = max_methods)
         if thismatches === nothing
             return FailedMethodMatch("For one of the union split cases, too many methods matched")
         end
         valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
+        mt = Core.methodtable
         thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
         push!(infos, thisinfo)
         for idx = 1:length(thismatches)
@@ -385,11 +383,6 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
 end
 
 function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int)
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
-    if mt === nothing
-        return FailedMethodMatch("Could not identify method table for call")
-    end
-    mt = mt::MethodTable
     matches = findall(atype, method_table(interp); limit = max_methods)
     if matches === nothing
         # this means too many methods matched
@@ -397,6 +390,7 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         return FailedMethodMatch("Too many methods matched")
     end
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
+    mt = Core.methodtable
     info = MethodMatchInfo(matches, mt, atype, fullmatch)
     applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges, idx) for idx = 1:length(matches)]
     return MethodMatches(applicable, info, matches.valid_worlds)
@@ -3261,7 +3255,7 @@ function abstract_eval_copyast(interp::AbstractInterpreter, e::Expr, sstate::Sta
     return RTEffects(rt, Any, effects)
 end
 
-function abstract_eval_isdefined_expr(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
+function abstract_eval_isdefined_expr(::AbstractInterpreter, e::Expr, sstate::StatementState,
                                       sv::AbsIntState)
     sym = e.args[1]
     if isa(sym, SlotNumber) && sstate.vtypes !== nothing
@@ -3491,7 +3485,59 @@ function refine_partial_type(@nospecialize t)
     return t
 end
 
+abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::IRInterpretationState) = nothing
+
+function abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::AbsIntState)
+    if isexpr(e, :call)
+        n = length(e.args)
+        argtypes = Vector{Any}(undef, n)
+        callresult = Future{CallMeta}()
+        i::Int = 1
+        nextstate::UInt8 = 0x0
+        local ai, res
+        function evalargs(interp, sv)
+            if nextstate === 0x1
+                @goto state1
+            elseif nextstate === 0x2
+                @goto state2
+            end
+            while i <= n
+                ai = abstract_eval_nonlinearized_foreigncall_name(interp, e.args[i], sstate, sv)
+                if !isready(ai)
+                    nextstate = 0x1
+                    return false
+                    @label state1
+                end
+                argtypes[i] = ai[].rt
+                i += 1
+            end
+            res = abstract_call(interp, ArgInfo(e.args, argtypes), sstate, sv)
+            if !isready(res)
+                nextstate = 0x2
+                return false
+                @label state2
+            end
+            callresult[] = res[]
+            return true
+        end
+        evalargs(interp, sv) || push!(sv.tasks, evalargs)
+        return callresult
+    else
+        return Future(abstract_eval_basic_statement(interp, e, sstate, sv))
+    end
+end
+
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
+    callee = e.args[1]
+    if isexpr(callee, :call) && length(callee.args) > 1 && callee.args[1] == GlobalRef(Core, :tuple)
+        # NOTE these expressions are not properly linearized
+        abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[2], sstate, sv)
+        if length(callee.args) > 2
+            abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[3], sstate, sv)
+        end
+    else
+        abstract_eval_value(interp, callee, sstate, sv)
+    end
     mi = frame_instance(sv)
     t = sp_type_rewrap(e.args[2], mi, true)
     for i = 3:length(e.args)
@@ -3533,20 +3579,6 @@ function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, 
     # It is possible for arguments (GlobalRef/:static_parameter) to throw,
     # but these will be recomputed during SSA construction later.
     override = decode_statement_effects_override(sv)
-    if override.consistent
-        m = sv.linfo.def
-        if isa(m, Method)
-            # N.B.: We'd like deleted_world here, but we can't add an appropriate edge at this point.
-            # However, in order to reach here in the first place, ordinary method lookup would have
-            # had to add an edge and appropriate invalidation trigger.
-            valid_worlds = WorldRange(m.primary_world, typemax(UInt))
-            if sv.world.this in valid_worlds
-                update_valid_age!(sv, valid_worlds)
-            else
-                override = EffectsOverride(override, consistent=false)
-            end
-        end
-    end
     effects = override_effects(effects, override)
     set_curr_ssaflag!(sv, flags_for_effects(effects), IR_FLAGS_EFFECTS)
     merge_effects!(interp, sv, effects)
@@ -4434,7 +4466,7 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # "causes" since we ignored those in the comparison
         newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
     end
-    # if this `Conditional` is from from `@isdefined condt.slot`, refine its `undef` information
+    # if this `Conditional` is from `@isdefined condt.slot`, refine its `undef` information
     newundef = condt.isdefined ? !then_or_else : vtype.undef
     return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, newundef), #=conditional=#true)
 end

@@ -34,13 +34,21 @@ hardcoded_precompile_statements = """
 precompile(Base.unsafe_string, (Ptr{UInt8},))
 precompile(Base.unsafe_string, (Ptr{Int8},))
 
-# loading.jl
+# loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))
 precompile(Base.__require, (Base.PkgId,))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
 precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
 precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int})
+precompile(Tuple{Type{Pair{A, B} where B where A}, Base.PkgId, UInt128})
+precompile(Tuple{typeof(Base.in!), Tuple{Module, String, UInt64, UInt32, Float64}, Base.Set{Any}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:allow_typevars, :volatile_inf_result), Tuple{Bool, Nothing}}, typeof(Base.Compiler.handle_match!), Array{Base.Compiler.InliningCase, 1}, Core.MethodMatch, Array{Any, 1}, Base.Compiler.CallInfo, UInt32, Base.Compiler.InliningState{Base.Compiler.NativeInterpreter}})
+precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:allow_typevars, :volatile_inf_result), Tuple{Bool, Base.Compiler.VolatileInferenceResult}}, typeof(Base.Compiler.handle_match!), Array{Base.Compiler.InliningCase, 1}, Core.MethodMatch, Array{Any, 1}, Base.Compiler.CallInfo, UInt32, Base.Compiler.InliningState{Base.Compiler.NativeInterpreter}})
+precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Vararg{Pair{Base.PkgId, UInt128}}})
+precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
+precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
 
 # LazyArtifacts (but more generally helpful)
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
@@ -215,6 +223,7 @@ if Artifacts !== nothing
     """
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Artifacts._artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Base.Val{Artifacts}})
+    precompile(Tuple{typeof(Base.tryparse), Type{Base.BinaryPlatforms.Platform}, String})
     """
 end
 
@@ -388,6 +397,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             if precompile(ps...)
                 n_succeeded += 1
             else
+                Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
                 @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
             end
             failed = length(statements) - n_succeeded
@@ -395,6 +405,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
             # See #28808
+            Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
             @warn "Failed to precompile expression" form=statement exception=(ex,catch_backtrace()) _module=nothing _file=nothing _line=0
         end
     end
