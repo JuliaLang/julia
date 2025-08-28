@@ -265,9 +265,14 @@ end
 
 @eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); _split_tuple(t, length(t)-n, Int(i)))
 
-# Use dispatch to avoid a branch in first
-first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
-first(t::Tuple) = t[1]
+function first(t::Tuple)
+    f(t::Tuple) = t[1]
+    function f(::Tuple{})
+        @noinline
+        throw(ArgumentError("tuple must be non-empty"))
+    end
+    f(t)
+end
 
 # eltype
 
@@ -572,46 +577,54 @@ function _eq(t1::Any32, t2::Any32)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::Tuple{}, h::UInt) = h ⊻ tuplehash_seed
-hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
-function hash(t::Any32, h::UInt)
-    out = h ⊻ tuplehash_seed
-    for i = length(t):-1:1
-        out = hash(t[i], out)
+function hash(t::Tuple, h::UInt)
+    f(::Tuple{}, h::UInt) = h ⊻ tuplehash_seed
+    f(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
+    function f(t::Any32, h::UInt)
+        out = h ⊻ tuplehash_seed
+        for i = length(t):-1:1
+            out = hash(t[i], out)
+        end
+        return out
     end
-    return out
+    f(t, h)
 end
 
-<(::Tuple{}, ::Tuple{}) = false
-<(::Tuple{}, ::Tuple) = true
-<(::Tuple, ::Tuple{}) = false
 function <(t1::Tuple, t2::Tuple)
-    a, b = t1[1], t2[1]
-    eq = (a == b)
-    if ismissing(eq)
-        return missing
-    elseif !eq
-        return a < b
-    end
-    return tail(t1) < tail(t2)
-end
-function <(t1::Any32, t2::Any32)
-    n1, n2 = length(t1), length(t2)
-    for i = 1:min(n1, n2)
-        a, b = t1[i], t2[i]
+    f(::Tuple{}, ::Tuple{}) = false
+    f(::Tuple{}, ::Tuple) = true
+    f(::Tuple, ::Tuple{}) = false
+    function f(t1::Tuple, t2::Tuple)
+        a, b = t1[1], t2[1]
         eq = (a == b)
         if ismissing(eq)
             return missing
         elseif !eq
-           return a < b
+            return a < b
         end
+        return tail(t1) < tail(t2)
     end
-    return n1 < n2
+    function f(t1::Any32, t2::Any32)
+        n1, n2 = length(t1), length(t2)
+        for i = 1:min(n1, n2)
+            a, b = t1[i], t2[i]
+            eq = (a == b)
+            if ismissing(eq)
+                return missing
+            elseif !eq
+                return a < b
+            end
+        end
+        return n1 < n2
+    end
+    f(t1, t2)
 end
 
-isless(::Tuple{}, ::Tuple{}) = false
-isless(::Tuple{}, ::Tuple) = true
-isless(::Tuple, ::Tuple{}) = false
+# copy of `BitInteger` defined later during bootstrap in int.jl
+const _BitInteger = Union{
+    Int8, Int16, Int32, Int64, Int128,
+    UInt8, UInt16, UInt32, UInt64, UInt128,
+}
 
 """
     isless(t1::Tuple, t2::Tuple)
@@ -619,24 +632,40 @@ isless(::Tuple, ::Tuple{}) = false
 Return `true` when `t1` is less than `t2` in lexicographic order.
 """
 function isless(t1::Tuple, t2::Tuple)
-    a, b = t1[1], t2[1]
-    isless(a, b) || (isequal(a, b) && isless(tail(t1), tail(t2)))
-end
-function isless(t1::Any32, t2::Any32)
-    n1, n2 = length(t1), length(t2)
-    for i = 1:min(n1, n2)
-        a, b = t1[i], t2[i]
-        if !isequal(a, b)
-            return isless(a, b)
-        end
+    f(::Tuple{}, ::Tuple{}) = false
+    f(::Tuple{}, ::Tuple) = true
+    f(::Tuple, ::Tuple{}) = false
+    function f(t1::Tuple, t2::Tuple)
+        a, b = t1[1], t2[1]
+        isless(a, b) || (isequal(a, b) && isless(tail(t1), tail(t2)))
     end
-    return n1 < n2
+    function f(t1::Any32, t2::Any32)
+        n1, n2 = length(t1), length(t2)
+        for i = 1:min(n1, n2)
+            a, b = t1[i], t2[i]
+            if !isequal(a, b)
+                return isless(a, b)
+            end
+        end
+        return n1 < n2
+    end
+    # Performance optimization to reduce branching
+    # This is useful for sorting tuples of integers
+    # TODO: remove this when the compiler can optimize the generic version better
+    # See #48724 and #48753
+    function f(a::Tuple{_BitInteger, _BitInteger}, b::Tuple{_BitInteger, _BitInteger})
+        isless(a[1], b[1]) | (isequal(a[1], b[1]) & isless(a[2], b[2]))
+    end
+    f(t1, t2)
 end
 
 ## functions ##
 
-isempty(x::Tuple{}) = true
-isempty(@nospecialize x::Tuple) = false
+function isempty(x::Tuple)
+    f(x::Tuple{}) = true
+    f(@nospecialize x::Tuple) = false
+    f(x)
+end
 
 revargs() = ()
 revargs(x, r...) = (revargs(r...)..., x)
@@ -674,11 +703,14 @@ empty(@nospecialize x::Tuple) = ()
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
 
-circshift((@nospecialize t::Union{Tuple{},Tuple{Any}}), @nospecialize _::Integer) = t
-circshift(t::Tuple{Any,Any}, shift::Integer) = iseven(shift) ? t : reverse(t)
-function circshift(x::Tuple{Any,Any,Any,Vararg{Any,N}}, shift::Integer) where {N}
-    @inline
-    len = N + 3
-    j = mod1(shift, len)
-    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
+function circshift(t::Tuple, shift::Integer)
+    f((@nospecialize t::Union{Tuple{},Tuple{Any}}), @nospecialize _::Integer) = t
+    f(t::Tuple{Any,Any}, shift::Integer) = iseven(shift) ? t : reverse(t)
+    function f(x::Tuple{Any,Any,Any,Vararg{Any,N}}, shift::Integer) where {N}
+        @inline
+        len = N + 3
+        j = mod1(shift, len)
+        ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
+    end
+    f(t, shift)
 end
