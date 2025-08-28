@@ -385,9 +385,8 @@ end
 Slice(S::Slice) = S
 Slice{T}(S::Slice) where {T<:AbstractUnitRange} = Slice{T}(T(S.indices))
 
-axes(S::Slice) = (IdentityUnitRange(S.indices),)
+axes(S::Slice) = (axes1(S),)
 axes1(S::Slice) = IdentityUnitRange(S.indices)
-axes(S::Slice{<:AbstractOneTo{<:Integer}}) = (S.indices,)
 axes1(S::Slice{<:AbstractOneTo{<:Integer}}) = S.indices
 
 first(S::Slice) = first(S.indices)
@@ -414,9 +413,8 @@ IdentityUnitRange(S::IdentityUnitRange) = S
 IdentityUnitRange{T}(S::IdentityUnitRange) where {T<:AbstractUnitRange} = IdentityUnitRange{T}(T(S.indices))
 
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
-axes(S::IdentityUnitRange) = (S,)
+axes(S::IdentityUnitRange) = (axes1(S),)
 axes1(S::IdentityUnitRange) = S
-axes(S::IdentityUnitRange{<:AbstractOneTo{<:Integer}}) = (S.indices,)
 axes1(S::IdentityUnitRange{<:AbstractOneTo{<:Integer}}) = S.indices
 
 first(S::IdentityUnitRange) = first(S.indices)
