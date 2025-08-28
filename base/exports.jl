@@ -1028,6 +1028,8 @@ export
     setenv,
     addenv,
     setcpuaffinity,
+    setuid,
+    setgid,
     success,
     withenv,
 

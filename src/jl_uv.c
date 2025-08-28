@@ -506,6 +506,8 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
  * @param cpumask A C string representing the CPU affinity mask for the process.
           See also the `cpumask` field of the `uv_process_options_t` structure in the libuv documentation.
  * @param cpumask_size The size of the cpumask.
+ * @param uid The user ID for the process (only used if UV_PROCESS_SETUID flag is set).
+ * @param gid The group ID for the process (only used if UV_PROCESS_SETGID flag is set).
  * @param cb A function pointer to `uv_exit_cb` which is the callback function to be called upon process exit.
  *
  * @return An integer indicating the success or failure of the spawn operation. A return value of 0 indicates success,
@@ -515,16 +517,15 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, char* cpumask,
-                          size_t cpumask_size, uv_exit_cb cb)
+                          size_t cpumask_size, uint32_t uid, uint32_t gid, uv_exit_cb cb)
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
     opts.file = name;
     opts.env = env;
     opts.flags = flags;
-    // unused fields:
-    //opts.uid = 0;
-    //opts.gid = 0;
+    opts.uid = (uv_uid_t)uid;
+    opts.gid = (uv_gid_t)gid;
     opts.cpumask = cpumask;
     opts.cpumask_size = cpumask_size;
     opts.cwd = cwd;
