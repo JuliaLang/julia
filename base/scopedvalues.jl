@@ -2,7 +2,7 @@
 
 module ScopedValues
 
-export ScopedValue, with, @with
+export ScopedValue, with, @with, ScopedThunk
 public get
 
 """
