@@ -342,7 +342,7 @@ Base.show(io::IO, err::PkgPrecompileError) = print(io, "PkgPrecompileError: ", e
 
 import Base: StaleCacheKey
 
-can_fancyprint(io::IO) = io isa Base.TTY && (get(ENV, "CI", nothing) != "true")
+can_fancyprint(io::IO) = @something(get(io, :force_fancyprint, nothing), (io isa Base.TTY && (get(ENV, "CI", nothing) != "true")))
 
 function printpkgstyle(io, header, msg; color=:light_green)
     printstyled(io, header; color, bold=true)
@@ -892,7 +892,7 @@ function _precompilepkgs(pkgs::Vector{String},
             flags, cacheflags = config
             task = @async begin
                 try
-                    loaded = haskey(Base.loaded_modules, pkg)
+                    loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
                     for dep in deps # wait for deps to finish
                         wait(was_processed[(dep,config)])
                     end
