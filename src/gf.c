@@ -3254,7 +3254,7 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
             }
         }
         if (is_nested) {
-            jl_printf(s_precompile, " # nested_compile");
+            jl_printf(s_precompile, " # nested_const_compilation");
         }
         jl_printf(s_precompile, "\n");
         if (s_precompile != JL_STDERR)
