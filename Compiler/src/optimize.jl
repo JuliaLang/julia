@@ -153,47 +153,40 @@ end
 
 struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
-    world::UInt
     interp::Interp
     opt_cache::IdDict{MethodInstance,CodeInstance}
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter,
                        opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
-    return InliningState(sv.edges, frame_world(sv), interp, opt_cache)
+    return InliningState(sv.edges, interp, opt_cache)
 end
 function InliningState(interp::AbstractInterpreter,
                        opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
-    return InliningState(Any[], get_inference_world(interp), interp, opt_cache)
+    return InliningState(Any[], interp, opt_cache)
 end
 
 struct OptimizerCache{CodeCache}
-    wvc::WorldView{CodeCache}
-    owner
+    cache::CodeCache
     opt_cache::IdDict{MethodInstance,CodeInstance}
     function OptimizerCache(
-        wvc::WorldView{CodeCache},
-        @nospecialize(owner),
+        cache::CodeCache,
         opt_cache::IdDict{MethodInstance,CodeInstance}) where CodeCache
-        new{CodeCache}(wvc, owner, opt_cache)
+        return new{CodeCache}(cache, opt_cache)
     end
 end
-function get((; wvc, owner, opt_cache)::OptimizerCache, mi::MethodInstance, default)
+function get((; cache, opt_cache)::OptimizerCache, mi::MethodInstance, default)
     if haskey(opt_cache, mi)
         codeinst = opt_cache[mi]
-        @assert codeinst.min_world ≤ wvc.worlds.min_world &&
-                wvc.worlds.max_world ≤ codeinst.max_world &&
-                codeinst.owner === owner
         @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
         return codeinst
     end
-    return get(wvc, mi, default)
+    return get(cache, mi, default)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 function code_cache(state::InliningState)
-    cache = WorldView(code_cache(state.interp), state.world)
-    owner = cache_owner(state.interp)
-    return OptimizerCache(cache, owner, state.opt_cache)
+    cache = code_cache(state.interp)
+    return OptimizerCache(cache, state.opt_cache)
 end
 
 mutable struct OptimizationResult

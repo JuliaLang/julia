@@ -217,7 +217,6 @@ end
 const CACHE_MODE_NULL     = 0x00      # not cached, optimization optional
 const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
 const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
-const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization required
 
 abstract type Handler end
 get_enter_idx(handler::Handler) = get_enter_idx_impl(handler)::Int
@@ -262,7 +261,7 @@ intersect(world::WorldWithRange, valid_worlds::WorldRange) =
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
-    world::WorldWithRange
+    valid_worlds::WorldRange
     mod::Module
     sptypes::Vector{VarState}
     slottypes::Vector{Any}
@@ -392,7 +391,7 @@ mutable struct InferenceState
         parentid = frameid = cycleid = 0
 
         this = new(
-            mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
+            mi, valid_worlds, mod, sptypes, slottypes, src, cfg, spec_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
@@ -615,8 +614,6 @@ function convert_cache_mode(cache_mode::Symbol)
         return CACHE_MODE_GLOBAL
     elseif cache_mode === :local
         return CACHE_MODE_LOCAL
-    elseif cache_mode === :volatile
-        return CACHE_MODE_VOLATILE
     elseif cache_mode === :no
         return CACHE_MODE_NULL
     end
@@ -821,7 +818,7 @@ mutable struct IRInterpretationState
     const spec_info::SpecInfo
     const ir::IRCode
     const mi::MethodInstance
-    world::WorldWithRange
+    valid_worlds::WorldRange
     curridx::Int
     time_caches::Float64
     time_paused::UInt64
@@ -836,9 +833,10 @@ mutable struct IRInterpretationState
     frameid::Int
     parentid::Int
 
-    function IRInterpretationState(interp::AbstractInterpreter,
-        spec_info::SpecInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
-        world::UInt, min_world::UInt, max_world::UInt)
+    function IRInterpretationState(
+            interp::AbstractInterpreter, spec_info::SpecInfo, ir::IRCode,
+            mi::MethodInstance, argtypes::Vector{Any}, min_world::UInt, max_world::UInt
+        )
         curridx = 1
         given_argtypes = Vector{Any}(undef, length(argtypes))
         for i = 1:length(given_argtypes)
@@ -859,14 +857,16 @@ mutable struct IRInterpretationState
         tasks = WorkThunk[]
         edges = Any[]
         callstack = AbsIntState[]
-        return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds),
+        return new(spec_info, ir, mi, valid_worlds,
                 curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
                 ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0)
     end
 end
 
-function IRInterpretationState(interp::AbstractInterpreter,
-    codeinst::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
+function IRInterpretationState(
+        interp::AbstractInterpreter, codeinst::CodeInstance, mi::MethodInstance,
+        argtypes::Vector{Any}
+    )
     @assert get_ci_mi(codeinst) === mi "method instance is not synced with code instance"
     src = @atomic :monotonic codeinst.inferred
     if isa(src, String)
@@ -877,7 +877,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     spec_info = SpecInfo(src)
     ir = inflate_ir(src, mi)
     argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva)
-    return IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
+    return IRInterpretationState(interp, spec_info, ir, mi, argtypes,
                                  codeinst.min_world, codeinst.max_world)
 end
 
@@ -900,7 +900,7 @@ function print_callstack(frame::AbsIntState)
         end
         print("] ")
         print(frame_instance(sv))
-        is_cached(sv) || print("  [uncached]")
+        is_cached(sv) || print("  [not globally cached]")
         sv.parentid == idx - 1 || print(" [parent=", sv.parentid, "]")
         isempty(callers_in_cycle(sv)) || print(" [cycle=", sv.cycleid, "]")
         println()
@@ -964,9 +964,6 @@ spec_info(sv::IRInterpretationState) = sv.spec_info
 propagate_inbounds(sv::AbsIntState) = spec_info(sv).propagate_inbounds
 method_for_inference_limit_heuristics(sv::AbsIntState) = spec_info(sv).method_for_inference_limit_heuristics
 
-frame_world(sv::InferenceState) = sv.world.this
-frame_world(sv::IRInterpretationState) = sv.world.this
-
 function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     if is_effect_overridden(frame_instance(sv), effect)
         return true
@@ -987,8 +984,8 @@ has_conditional(::AbstractLattice, ::IRInterpretationState) = false
 
 # work towards converging the valid age range for sv
 function update_valid_age!(sv::AbsIntState, valid_worlds::WorldRange)
-    sv.world = intersect(sv.world, valid_worlds)
-    return sv.world.valid_worlds
+    sv.valid_worlds = intersect(sv.valid_worlds, valid_worlds)
+    return sv.valid_worlds
 end
 
 """
