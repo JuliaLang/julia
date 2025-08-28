@@ -855,6 +855,18 @@ end
 @test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
 @test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}
 
+@testset "avoid method proliferation" begin
+    t = isone ∘ length ∘ methods
+    @test t(circshift, Tuple{Tuple, Integer})
+    @test t(hash, Tuple{Tuple, UInt})
+    for f in (Base.tail, first, isempty)
+        @test t(f, Tuple{Tuple})
+    end
+    for f in (<, isless, ==, isequal)
+        @test t(f, Tuple{Tuple, Tuple})
+    end
+end
+
 @testset "from Pair, issue #52636" begin
     pair = (1 => "2")
     @test (1, "2") == @inferred Tuple(pair)
