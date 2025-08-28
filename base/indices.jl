@@ -469,7 +469,7 @@ iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 # In general such an indexing operation would produce offset ranges
 # This should also ideally return an AbstractUnitRange{eltype(S)}, but currently
 # we're restricted to eltype(::IdentityUnitRange) == Int by definition
-function getindex(S::AbstractOneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+function getindex(S::AbstractOneTo{<:Integer}, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
     @inline
     @boundscheck checkbounds(S, I)
     return I
