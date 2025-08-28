@@ -1546,7 +1546,7 @@ function treshape59278(X::AbstractArray, n, m)
     return X
 end
 
-# a funcion that allocates iff no constprop
+# a function that allocates iff no constprop
 @inline maybealloc59278(n, _) = ntuple(i->rand(), n)
 
 @testset "Base/timing.jl" begin
