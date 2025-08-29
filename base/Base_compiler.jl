@@ -289,6 +289,7 @@ end
 setfield!(typeof(invoke_in_world).name, :max_args, Int32(3), :monotonic) # invoke_in_world, world, f, args...
 
 # core operations & types
+include("constructingfunctions.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
