@@ -74,6 +74,24 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
+if Sys.isunix()
+    @testset "SIGQUIT prints task backtraces" begin
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+        outp = Base.PipeEndpoint()
+        errp = Base.PipeEndpoint()
+        p = run(`$exename -e 'sleep(20)'`, devnull, outp, errp, wait=false)
+        sleep(1.0) # allow Julia to start
+        Base.kill(p, Base.SIGQUIT)
+        wait(p)
+        close(outp.in); close(errp.in)
+        out_s = read(outp, String)
+        err_s = read(errp, String)
+        @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
+        @test occursin("==== Thread ", err_s)
+        @test occursin("==== Done", err_s)
+    end
+end
+
 @testset "julia_cmd" begin
     julia_basic = Base.julia_cmd()
     function get_julia_cmd(arg)
