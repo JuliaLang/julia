@@ -186,8 +186,7 @@ big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
-promote_rule(::Type{Rational{Integer}}, ::Type{S}) where {S<:AbstractFloat} = S
-promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = S
 
 widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
