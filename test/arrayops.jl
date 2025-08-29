@@ -2658,9 +2658,9 @@ end
 @inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
-mutable struct OOB_Functor{T}; a::T; end
-(f::OOB_Functor)(i::Int) = f.a[i]
-let f = OOB_Functor([1,2])
+mutable struct OOB_Callable{T}; a::T; end
+(f::OOB_Callable)(i::Int) = f.a[i]
+let f = OOB_Callable([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
 
@@ -2714,6 +2714,7 @@ function f15894(d)
     s
 end
 @test f15894(fill(1, 100)) == 100
+@test (@nexprs 2 i -> "_i_: $i") == "_i_: 2"
 end
 
 @testset "sign, conj[!], ~" begin

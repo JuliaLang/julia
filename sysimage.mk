@@ -57,7 +57,6 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/int.jl \
 		base/indices.jl \
 		base/iterators.jl \
-		base/invalidation.jl \
 		base/module.jl \
 		base/namedtuple.jl \
 		base/ntuple.jl \

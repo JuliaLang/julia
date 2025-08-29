@@ -878,22 +878,22 @@ end
     @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
     @test occursin("g28442b", output[5])
 
-    @test startswith(lstrip(output[8]), "┌┌ ")
-    @test occursin("h28442b", output[8])
-    @test startswith(lstrip(output[10]), "├├ ")
-    @test occursin("g28442b", output[10])
-
-    @test startswith(lstrip(output[13]), "├┌ ")
-    @test occursin("f28442b", output[13])
-    @test startswith(lstrip(output[15]), "├├ ")
-    @test occursin("g28442b", output[15])
-
-    @test occursin("f28442b", output[19])
-
     is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
     if is_windows_32_bit
         # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
     else
+        @test startswith(lstrip(output[8]), "┌┌ ")
+        @test occursin("h28442b", output[8])
+        @test startswith(lstrip(output[10]), "├├ ")
+        @test occursin("g28442b", output[10])
+
+        @test startswith(lstrip(output[13]), "├┌ ")
+        @test occursin("f28442b", output[13])
+        @test startswith(lstrip(output[15]), "├├ ")
+        @test occursin("g28442b", output[15])
+
+        @test occursin("f28442b", output[19])
+
         @test occursin("repeated 10 times", output[7])
         @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
         @test lstrip(lstrip(output[10])[7:end])[1:4] == "[22]"

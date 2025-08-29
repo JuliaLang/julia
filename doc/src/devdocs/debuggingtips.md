@@ -177,7 +177,7 @@ $2 = void
 
 The most recent `jl_apply` is at frame #3, so we can go back there and look at the AST for the
 function `julia_convert_16886`. This is the uniqued name for some method of `convert`. `f` in
-this frame is a `jl_function_t*`, so we can look at the type signature, if any, from the `specTypes`
+this frame is a `jl_value_t*`, so we can look at the type signature, if any, from the `specTypes`
 field:
 
 ```

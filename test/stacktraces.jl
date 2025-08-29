@@ -262,3 +262,39 @@ end
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end
+
+
+@testset "Dispatch backtraces" begin
+    # Check that it's possible to capture a backtrace upon entrance to inference
+    # This test ensures that SnoopCompile will continue working
+    # See in particular SnoopCompile/SnoopCompileCore/src/snoop_inference.jl
+    # and the "diagnostics" devdoc.
+    @noinline callee(x::Int) = sin(x)
+    caller(x) = invokelatest(callee, x)
+
+    @test sin(0) == 0  # force compilation of sin(::Int)
+    dispatch_backtraces = []
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), dispatch_backtraces)
+    caller(3)
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), nothing)
+    ln = @__LINE__() - 2
+    fl = Symbol(@__FILE__())
+    @test length(dispatch_backtraces) == 4  # 2 ci-backtrace pairs, stored as 4 separate elements
+    mcallee, mcaller = only(methods(callee)), only(methods(caller))
+    # Extract pairs from the flattened array format: ci at odd indices, backtrace at even indices
+    pairs = [(dispatch_backtraces[i], dispatch_backtraces[i+1]) for i in 1:2:length(dispatch_backtraces)]
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcallee && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcaller && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+end
