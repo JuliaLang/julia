@@ -3253,8 +3253,10 @@ end
 
                 if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
                     all(d -> size(_X, d) == size(AI, d), 1:max(ndims(_X), ndims(AI)))
-                    @test any(isone, setindex!(A, _X, I...))
-                    @test any(isone, setindex!(A, _X, I..., 1))
+                    @test any(isone, setindex!(A, _X, I...)) || isempty(_X)
+                    fill!(A, 0)
+                    @test any(isone, setindex!(A, _X, I..., 1)) || isempty(_X)
+                    fill!(A, 0)
                 else
                     @test_throws DimensionMismatch setindex!(A, _X, I...)
                     @test_throws DimensionMismatch setindex!(A, _X, I..., 1)
