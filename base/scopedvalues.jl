@@ -285,7 +285,7 @@ struct ScopedThunk{F}
     f::F
     scope::Union{Nothing, Scope}
 
-    ScopedThunk{F}(f) where {F} = new{F}(f, current_scope())
+    ScopedThunk{F}(f) where {F} = new{F}(f, Core.current_scope())
 end
 ScopedThunk(f) = ScopedThunk{typeof(f)}(f)
 (sf::ScopedThunk)() = @enter_scope sf.scope sf.f()
