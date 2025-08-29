@@ -6,7 +6,7 @@ function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
 end
 
 function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, argtypes::Vector{Any}, parent::IRInterpretationState)
-    world = frame_world(parent)
+    world = get_inference_world(interp)
     effects = decode_effects(ci.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
         (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
@@ -22,7 +22,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
         if is_constprop_edge_recursed(mi, parent)
             return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
         end
-        newirsv = IRInterpretationState(interp, ci, mi, argtypes, world)
+        newirsv = IRInterpretationState(interp, ci, mi, argtypes)
         if newirsv !== nothing
             assign_parentchild!(newirsv, parent)
             return ir_abstract_constant_propagation(interp, newirsv)
@@ -35,8 +35,7 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
     stmt = inst[:stmt]::Expr
     ci = stmt.args[1]
     if ci isa MethodInstance
-        world = frame_world(irsv)
-        mi_cache = WorldView(code_cache(interp), world)
+        mi_cache = code_cache(interp)
         code = get(mi_cache, ci, nothing)
         code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
     else
