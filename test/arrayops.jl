@@ -1246,6 +1246,18 @@ end
         @test setdiff((1, 2), (3, 2)) == [1]
         @test symdiff((1, 2), (3, 2)) == [1, 3]
     end
+
+    @testset "setdiff preserves element type of first argument" begin
+        @test setdiff([1, 2, 3], [1.0, 2.0]) isa Vector{Int}
+        @test setdiff([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test setdiff(['a', 'b', 'c'], [98]) isa Vector{Char}
+        @test setdiff([1, 2], [1.0, 2.0]) isa Vector{Int}
+    end
+    @testset "intersect promotes element types of arguments" begin
+        @test intersect([1, 2, 3], [1.0, 2.0]) isa Vector{Float64}
+        @test intersect([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test intersect(['a', 'b', 'c'], Int[]) isa Vector{Any}
+    end
 end
 
 @testset "mapslices" begin
