@@ -1397,7 +1397,7 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
         max_bt_size = JL_MAX_BT_SIZE;
     } else {
         max_bt_size = 1024; //8kb of stack should be safe
-        bt_data = alloca(max_bt_size * sizeof(jl_bt_element_t));
+        bt_data = (jl_bt_element_t *)alloca(max_bt_size * sizeof(jl_bt_element_t));
     }
     jl_record_backtrace_result_t r = jl_record_backtrace(t, bt_data, max_bt_size, 0);
     size_t bt_size = r.bt_size;
