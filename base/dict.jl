@@ -89,7 +89,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 end
 function Dict{K,V}(kv) where V where K
     h = Dict{K,V}()
-    haslength(kv) && sizehint!(h, Int(length(kv))::Int)
+    haslength(kv) && sizehint!(h, _Int(length(kv)))
     for (k,v) in kv
         h[k] = v
     end
@@ -125,7 +125,7 @@ _shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 #     idx - optimal position in the hash table
 #     sh::UInt8 - short hash (7 highest hash bits)
 function hashindex(key, sz::Integer)
-    sz = Int(sz)::Int
+    sz = _Int(sz)
     hsh = hash(key)::UInt
     idx = ((hsh % Int) & (sz-1)) + 1
     return idx, _shorthash7(hsh)
@@ -192,7 +192,7 @@ end
 end
 
 function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
-    newsz = Int(newsz)::Int
+    newsz = _Int(newsz)
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)

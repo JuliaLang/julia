@@ -91,7 +91,7 @@ function _dropdims(A::AbstractArray, dims::Dims)
     ax = _foldoneto((ds, d) -> d in dims ? ds : (ds..., axes(A,d)), (), Val(ndims(A)))
     reshape(A, ax::typeof(_sub(axes(A), dims)))
 end
-_dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
+_dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (_Int(dim),))
 
 
 """
@@ -153,7 +153,7 @@ function _insertdims(A::AbstractArray{T, N}, dims::NTuple{M, Int}) where {T, N, 
     new_shape = inds[1]
     return reshape(A, new_shape)
 end
-_insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (Int(dim),))
+_insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (_Int(dim),))
 
 
 

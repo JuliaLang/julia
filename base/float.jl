@@ -164,7 +164,7 @@ function exponent_raw_max end
 """
 IEEE 754 definition of the minimum exponent.
 """
-ieee754_exponent_min(::Type{T}) where {T<:IEEEFloat} = Int(1 - exponent_max(T))::Int
+ieee754_exponent_min(::Type{T}) where {T<:IEEEFloat} = _Int(1 - exponent_max(T))
 
 exponent_min(::Type{Float16}) = ieee754_exponent_min(Float16)
 exponent_min(::Type{Float32}) = ieee754_exponent_min(Float32)
@@ -802,7 +802,7 @@ _precision_with_base_2(::Type{Float64}) = 53
 function _precision(x, base::Integer)
     base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
     p = _precision_with_base_2(x)
-    return base == 2 ? Int(p) : floor(Int, p / log2(base))
+    return base == 2 ? _Int(p) : floor(Int, p / log2(base))
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)

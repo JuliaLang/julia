@@ -93,7 +93,7 @@ function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
+        eval_ind = findlast(frame -> !frame.from_c && startswith(_String(frame.func), "__repl_entry"), bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
@@ -200,7 +200,7 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
     end
     return ex
 end
-parse_input_line(s::AbstractString) = parse_input_line(String(s))
+parse_input_line(s::AbstractString) = parse_input_line(_String(s))
 
 # detect the reason which caused an :incomplete expression
 # from the error message

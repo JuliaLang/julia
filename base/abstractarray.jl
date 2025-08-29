@@ -108,8 +108,8 @@ If multiple arguments are passed, equivalent to `has_offset_axes(A) || has_offse
 See also [`require_one_based_indexing`](@ref).
 """
 has_offset_axes() = false
-has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
-has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
+has_offset_axes(A) = _any_tuple(!=(1) ∘ _Int ∘ first, false, axes(A)...)
+has_offset_axes(A::AbstractVector) = _Int(firstindex(A)) != 1 # improve performance of a common case (ranges)
 has_offset_axes(::Colon) = false
 has_offset_axes(::Array) = false
 # note: this could call `any` directly if the compiler can infer it. We don't use _any_tuple
@@ -212,8 +212,8 @@ String
 """
 valtype(A::Type{<:AbstractArray}) = eltype(A)
 
-prevind(::AbstractArray, i::Integer) = Int(i)-1
-nextind(::AbstractArray, i::Integer) = Int(i)+1
+prevind(::AbstractArray, i::Integer) = _Int(i)-1
+nextind(::AbstractArray, i::Integer) = _Int(i)+1
 
 
 """
@@ -838,10 +838,10 @@ to_shape(dims::Dims) = dims
 to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
-to_shape(i::Integer) = Int(i)
+to_shape(i::Integer) = _Int(i)
 to_shape(r::AbstractOneTo) = _to_shape(last(r))
 _to_shape(x::Integer) = to_shape(x)
-_to_shape(x) = Int(x)
+_to_shape(x) = _Int(x)
 to_shape(r::AbstractUnitRange) = r
 
 """
@@ -951,7 +951,7 @@ function copyto!(dest::AbstractArray, src)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src)
-    i = Int(dstart)
+    i = _Int(dstart)
     if haslength(src) && length(dest) > 0
         @boundscheck checkbounds(dest, i:(i + length(src) - 1))
         for x in src
@@ -986,7 +986,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
             "source has fewer elements than required, ",
             "expected at least ",sstart," got ", sstart-1)))
     end
-    i = Int(dstart)
+    i = _Int(dstart)
     while y !== nothing
         val, st = y
         dest[i] = val
@@ -1023,7 +1023,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
             "expected at least ",sstart," got ", sstart-1)))
     end
     val, st = y
-    i = Int(dstart)
+    i = _Int(dstart)
     @inbounds dest[i] = val
     for val in Iterators.take(Iterators.rest(src, st), n-1)
         i += 1
@@ -1269,7 +1269,7 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, cconvert(Ptr{T}, x))
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @inline
-    pointer(x) + Int(_memory_offset(x, i))::Int
+    pointer(x) + _Int(_memory_offset(x, i))
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
@@ -1601,8 +1601,8 @@ parts can specialize this method to return the concatenation of the `dataids` of
 their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
-dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Memory) = (UInt(A.ptr),)
+dataids(A::AbstractArray) = (_UInt(objectid(A)),)
+dataids(A::Memory) = (_UInt(A.ptr),)
 dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
@@ -1702,9 +1702,9 @@ _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
-    for k=1:Int(length(V))::Int
+    for k=1:_Int(length(V))
         Vk = V[k]
-        p1 = pos + Int(length(Vk))::Int - 1
+        p1 = pos + _Int(length(Vk)) - 1
         a[pos:p1] = Vk
         pos = p1+1
     end

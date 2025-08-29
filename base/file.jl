@@ -371,7 +371,7 @@ function cptree(src::String, dst::String; force::Bool=false,
     end
 end
 cptree(src::AbstractString, dst::AbstractString; kwargs...) =
-    cptree(String(src)::String, String(dst)::String; kwargs...)
+    cptree(_String(src), _String(dst); kwargs...)
 
 """
     cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
@@ -1240,7 +1240,7 @@ function sendfile(src::AbstractString, dst::AbstractString)
         dst_open = true
 
         bytes = filesize(stat(src_file))
-        sendfile(dst_file, src_file, Int64(0), Int(bytes))
+        sendfile(dst_file, src_file, Int64(0), _Int(bytes))
     finally
         if src_open && isopen(src_file)
             close(src_file)
@@ -1436,8 +1436,8 @@ struct DiskStat
 end
 
 function Base.getproperty(stats::DiskStat, field::Symbol)
-    total = Int64(getfield(stats, :bsize) * getfield(stats, :blocks))
-    available = Int64(getfield(stats, :bsize) * getfield(stats, :bavail))
+    total = _Int64(getfield(stats, :bsize) * getfield(stats, :blocks))
+    available = _Int64(getfield(stats, :bsize) * getfield(stats, :bavail))
     field === :total && return total
     field === :available && return available
     field === :used && return total - available

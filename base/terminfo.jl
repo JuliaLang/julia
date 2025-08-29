@@ -85,7 +85,7 @@ function read(data::IO, ::Type{TermInfoRaw})
     name_bytes, flag_bytes, numbers_count, string_count, table_bytes =
         @ntuple 5 _->read(data, Int16) |> ltoh
     # Terminal Names
-    term_names = map(String, split(String(read(data, name_bytes - 1)), '|'))
+    term_names = map(String, split(_String(read(data, name_bytes - 1)), '|'))
     0x00 == read(data, UInt8) ||
         throw(ArgumentError("Terminfo data did not contain a null byte after the terminal names section"))
     # Boolean Flags
@@ -131,7 +131,7 @@ function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
     table_indices = map(ltoh, reinterpret(Int16, read(data, table_count * sizeof(Int16))))
     table_data = read(data, table_bytes)
     strings = _terminfo_read_strings(table_data, table_indices[1:string_count])
-    table_halfoffset = Int16(get(table_indices, string_count, 0) +
+    table_halfoffset = _Int16(get(table_indices, string_count, 0) +
         ncodeunits(something(get(strings, length(strings), ""), "")) + 1)
     for index in string_count+1:lastindex(table_indices)
         table_indices[index] += table_halfoffset
@@ -183,7 +183,7 @@ function TermInfo(raw::TermInfoRaw)
         aliases[flag.capname] = flag.name
     end
     for (num, value) in zip(TERM_NUMBERS, raw.numbers)
-        numbers[num.name] = Int(value)
+        numbers[num.name] = _Int(value)
         aliases[num.capname] = num.name
     end
     for (str, value) in zip(TERM_STRINGS, raw.strings)
@@ -250,7 +250,7 @@ taken to be the first entry of `@TERMINFO_DIRS@`.
 """
 function find_terminfo_file(term::String)
     isempty(term) && return
-    chr, chrcode = string(first(term)), string(Int(first(term)), base=16)
+    chr, chrcode = string(first(term)), string(_Int(first(term)), base=16)
     terminfo_dirs = if haskey(ENV, "TERMINFO")
         [ENV["TERMINFO"]]
     elseif isdir(joinpath(homedir(), ".terminfo"))

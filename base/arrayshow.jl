@@ -172,7 +172,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
 end
 
 function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, hdots, vdots, ddots, hmod, vmod, rowsA, colsA)
-    hmod, vmod = Int(hmod)::Int, Int(vmod)::Int
+    hmod, vmod = _Int(hmod), _Int(vmod)
     ncols, idxlast = length(colsA), last(colsA)
     if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)

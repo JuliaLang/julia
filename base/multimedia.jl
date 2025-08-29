@@ -3,6 +3,7 @@
 module Multimedia
 
 import .Base: show, print, convert, repr
+using .._ConstructingFunctions
 
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
     MIME, @MIME_str, istextmime,
@@ -160,9 +161,9 @@ repr(m::MIME, x; context=nothing) = istextmime(m) ? _textrepr(m, x, context) : _
 repr(m::AbstractString, x; context=nothing) = repr(MIME(m), x; context=context)
 
 # strings are shown escaped for text/plain
-_textrepr(m::MIME, x, context) = String(__binrepr(m, x, context))
+_textrepr(m::MIME, x, context) = _String(__binrepr(m, x, context))
 _textrepr(::MIME, x::AbstractString, context) = x
-_textrepr(m::MIME"text/plain", x::AbstractString, context) = String(__binrepr(m, x, context))
+_textrepr(m::MIME"text/plain", x::AbstractString, context) = _String(__binrepr(m, x, context))
 
 
 function __binrepr(m::MIME, x, context)

@@ -55,8 +55,8 @@ See also [`cconvert`](@ref)
 function unsafe_convert end
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
-cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
+cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = _String(s)
+cconvert(::Type{Ptr{Int8}}, s::AbstractString) = _String(s)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
 
@@ -80,7 +80,7 @@ function unsafe_convert(::Type{Ptr{Cvoid}}, a::GenericMemoryRef{<:Any,T,Core.CPU
     elsz = datatype_layoutsize(MemT)
     isboxed = 1; isunion = 2
     if arrayelem == isunion || elsz == 0
-        offset = UInt(offset) * elsz
+        offset = _UInt(offset) * elsz
         offset += unsafe_convert(Ptr{Cvoid}, mem)
     end
     return offset
@@ -148,10 +148,10 @@ memory region allocated as different type may be valid provided that the types a
 
 See also: [`atomic`](@ref)
 """
-unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
+unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, _Int(i), 1)
 unsafe_load(p::Ptr, order::Symbol) = atomic_pointerref(p, order)
 function unsafe_load(p::Ptr, i::Integer, order::Symbol)
-    unsafe_load(p + (elsize(typeof(p)) * (Int(i) - 1)), order)
+    unsafe_load(p + (elsize(typeof(p)) * (_Int(i) - 1)), order)
 end
 
 """
@@ -174,11 +174,11 @@ different type may be valid provided that the types are compatible.
 
 See also: [`atomic`](@ref)
 """
-unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
-unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
+unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, _Int(i), 1)
+unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), _Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, order::Symbol) where {T} = atomic_pointerset(p, x isa T ? x : convert(T,x), order)
 function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
-    unsafe_store!(p + (elsize(typeof(p)) * (Int(i) - 1)), x, order)
+    unsafe_store!(p + (elsize(typeof(p)) * (_Int(i) - 1)), x, order)
 end
 
 """

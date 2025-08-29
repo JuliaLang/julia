@@ -629,7 +629,7 @@ function notify_filled(buffer::IOBuffer, nread::Int)
 end
 
 function alloc_buf_hook(stream::LibuvStream, size::UInt)
-    throttle = UInt(stream.throttle)
+    throttle = _UInt(stream.throttle)
     return alloc_request(stream.buffer, (size > throttle) ? throttle : size)
 end
 
@@ -711,7 +711,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
         end
         nothing
     end
-    readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
+    readcb_specialized(stream_unknown_type, _Int(nread), _UInt(nrequested))
     nothing
 end
 
@@ -913,7 +913,7 @@ end
 
 # bulk read / write
 
-readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, Int(nb))
+readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, _Int(nb))
 function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     iolock_begin()
     sbuf = s.buffer
@@ -980,16 +980,16 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     end
 
     if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
-        wait_locked(s, sbuf, Int(nb))
+        wait_locked(s, sbuf, _Int(nb))
     end
     if bytesavailable(sbuf) >= nb
         unsafe_read(sbuf, p, nb)
     else
-        newbuf = _truncated_pipebuffer(unsafe_wrap(Array, p, nb); maxsize=Int(nb))
+        newbuf = _truncated_pipebuffer(unsafe_wrap(Array, p, nb); maxsize=_Int(nb))
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
-            wait_locked(s, newbuf, Int(nb))
+            wait_locked(s, newbuf, _Int(nb))
         finally
             s.buffer = sbuf
         end

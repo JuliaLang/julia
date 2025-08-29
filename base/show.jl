@@ -1070,7 +1070,7 @@ function check_world_bounded(tn::Core.TypeName)
             if isa(cval, Type) && cval <: tn.wrapper
                 max_world = @atomic partition.max_world
                 max_world == typemax(UInt) && return nothing
-                return Int(partition.min_world):Int(max_world)
+                return _Int(partition.min_world):_Int(max_world)
             end
         end
         isdefined(partition, :next) || return nothing
@@ -2366,7 +2366,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 end
                 print(io, ")")
             else
-                escape_string(io, String(x)::String, "\"\$")
+                escape_string(io, _String(x), "\"\$")
             end
         end
         print(io, '"')

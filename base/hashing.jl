@@ -81,7 +81,7 @@ function _hash_integer(
     u = u0
 
     # always left-pad to full byte
-    buflen = UInt(max(cld(top_set_bit(u), 8), 1))
+    buflen = _UInt(max(cld(top_set_bit(u), 8), 1))
     seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
 
     a = zero(UInt64)
@@ -92,14 +92,14 @@ function _hash_integer(
         if buflen ≥ 4
             seed ⊻= buflen
             if buflen ≥ 8
-                a = UInt64(u % UInt64)
-                b = UInt64((u >>> (8 * (buflen - 8))) % UInt64)
+                a = (u % UInt64)::UInt64
+                b = ((u >>> (8 * (buflen - 8))) % UInt64)::UInt64
             else
-                a = UInt64(u % UInt32)
-                b = UInt64((u >>> (8 * (buflen - 4))) % UInt32)
+                a = UInt64((u % UInt32)::UInt32)
+                b = UInt64(((u >>> (8 * (buflen - 4))) % UInt32)::UInt32)
             end
         else # buflen > 0
-            b0 = u % UInt8
+            b0 = (u % UInt8)::UInt8
             b1 = (u >>> (8 * div(buflen, 2))) % UInt8
             b2 = (u >>> (8 * (buflen - 1))) % UInt8
             a = (UInt64(b0) << 45) | UInt64(b2)
@@ -213,8 +213,8 @@ function hash(x::Real, h::UInt)
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
             if 0 <= pow # if pow is non-negative, it is an integer
-                left <= 63 && return hash(Int64(num) << Int(pow), h)
-                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
+                left <= 63 && return hash(_Int64(num) << _Int(pow), h)
+                left <= 64 && !signbit(num) && return hash(_UInt64(num) << _Int(pow), h)
             end # typemin(Int64) handled by Float64 case
             # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
             # Float64s only have 53 mantisa bits (including implicit bit)
@@ -351,7 +351,7 @@ end
     result = zero(UInt64)
     for i in 0:7
         byte = @inbounds arr[idx + i]
-        result |= UInt64(byte) << (8 * i)
+        result |= _UInt64(byte) << (8 * i)
     end
     return result
 end
@@ -360,7 +360,7 @@ end
     result = zero(UInt32)
     for i in 0:3
         byte = @inbounds arr[idx + i]
-        result |= UInt32(byte) << (8 * i)
+        result |= _UInt32(byte) << (8 * i)
     end
     return result
 end
@@ -372,7 +372,7 @@ end
     )
     # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
     n = length(arr)
-    buflen = UInt64(n)
+    buflen = _UInt64(n)
     seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
     firstidx = firstindex(arr)
 
@@ -387,12 +387,12 @@ end
                 a = load_le_array(UInt64, arr, firstidx)
                 b = load_le_array(UInt64, arr, firstidx + n - 8)
             else
-                a = UInt64(load_le_array(UInt32, arr, firstidx))
-                b = UInt64(load_le_array(UInt32, arr, firstidx + n - 4))
+                a = _UInt64(load_le_array(UInt32, arr, firstidx))
+                b = _UInt64(load_le_array(UInt32, arr, firstidx + n - 4))
             end
         elseif buflen > 0
-            a = (UInt64(@inbounds arr[firstidx]) << 45) | UInt64(@inbounds arr[firstidx + n - 1])
-            b = UInt64(@inbounds arr[firstidx + div(n, 2)])
+            a = (_UInt64(@inbounds arr[firstidx]) << 45) | _UInt64(@inbounds arr[firstidx + n - 1])
+            b = _UInt64(@inbounds arr[firstidx + div(n, 2)])
         end
     else
         pos = 0
@@ -456,7 +456,7 @@ end
         next_result = iterate(iter, state)
         next_result === nothing && return value, state, UInt8(i - 1)
         byte, state = next_result
-        value |= UInt64(byte) << ((i - 1) * 8)
+        value |= _UInt64(byte) << ((i - 1) * 8)
     end
     return value, state, 0x8
 end
@@ -465,7 +465,7 @@ end
     next_result = iterate(iter)
     next_result === nothing && return nothing
     byte, state = next_result
-    value = UInt64(byte)
+    value = _UInt64(byte)
     @nexprs 7 i -> begin
         next_result = iterate(iter, state)
         next_result === nothing && return value, state, UInt8(i)
@@ -588,11 +588,11 @@ end
                 a = l0
                 b = t1
             else
-                a = UInt64(l0 % UInt32)
-                b = UInt64((l0 >>> ((0x8 * (bytes_chunk - 0x4)) % 0x3f)) % UInt32)
+                a = UInt64((l0 % UInt32)::UInt32)
+                b = UInt64(((l0 >>> ((0x8 * (bytes_chunk - 0x4)) % 0x3f)) % UInt32)::UInt32)
             end
         elseif bytes_chunk > 0x0
-            b0 = l0 % UInt8
+            b0 = (l0 % UInt8)::UInt8
             b1 = (l0 >>> ((0x8 * div(bytes_chunk, 0x2)) % 0x3f)) % UInt8
             b2 = (l0 >>> ((0x8 * (bytes_chunk - 0x1)) % 0x3f)) % UInt8
             a = (UInt64(b0) << 45) | UInt64(b2)

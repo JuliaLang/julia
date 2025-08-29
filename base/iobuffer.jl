@@ -102,7 +102,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
             append::Bool,
             maxsize::Int,
         ) where T<:AbstractVector{UInt8}
-        len = Int(length(data))::Int
+        len = _Int(length(data))
         return new{T}(data, false, readable, writable, seekable, append, len, maxsize, 1, 0, -1)
     end
 end
@@ -117,8 +117,8 @@ function GenericIOBuffer{T}(
         truncate::Bool,
     ) where T<:AbstractVector{UInt8}
     require_one_based_indexing(data)
-    mz = Int(maxsize)::Int
-    len = Int(length(data))::Int
+    mz = _Int(maxsize)
+    len = _Int(length(data))
     if !truncate && mz < len
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
@@ -145,7 +145,7 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
     offset = memoryrefoffset(ref) - 1
     # The user may pass a vector of length <= maxsize, but where the underlying memory
     # is larger than maxsize. Don't throw an error in that case.
-    mz = Int(maxsize)::Int
+    mz = _Int(maxsize)
     if !truncate && mz < length(data)
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
@@ -250,13 +250,13 @@ function IOBuffer(;
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing,
     )
-    mz = Int(maxsize)::Int
+    mz = _Int(maxsize)
     if mz < 0
         throw(ArgumentError("negative maxsize"))
     end
     size = if sizehint !== nothing
         # Allow negative sizehint, just like `sizehint!` does
-        min(mz, max(0, Int(sizehint)::Int))
+        min(mz, max(0, _Int(sizehint)))
     else
         min(mz, 32)
     end
@@ -561,7 +561,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     io.seekable || throw(ArgumentError("truncate failed, IOBuffer is not seekable"))
     n < 0 && throw(ArgumentError("truncate failed, n bytes must be ≥ 0, got $n"))
     n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
-    n = Int(n)::Int
+    n = _Int(n)
     offset = get_offset(io)
     current_size = io.size - offset
     if io.reinit
@@ -855,7 +855,7 @@ function takestring!(io::IOBuffer)
 end
 
 # Fallback methods
-takestring!(io::GenericIOBuffer) = String(take!(io))
+takestring!(io::GenericIOBuffer) = _String(take!(io))
 
 """
     _unsafe_take!(io::IOBuffer)
@@ -898,7 +898,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     append = to.append
     ptr = append ? size+1 : to.ptr
     data = to.data
-    to_write = min(nb, (min(Int(length(data))::Int, to.maxsize + get_offset(to)) - ptr + 1) % UInt) % Int
+    to_write = min(nb, (min(_Int(length(data)), to.maxsize + get_offset(to)) - ptr + 1) % UInt) % Int
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
@@ -953,7 +953,7 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, _Int(nb))
 
 function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     io.readable || _throw_not_readable()

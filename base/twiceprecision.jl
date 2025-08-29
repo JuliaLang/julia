@@ -407,7 +407,7 @@ function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
                     rem(den, start_d) == 0 && rem(den, step_d) == 0      # check lcm overflow
                 start_n = round(Int, start*den)
                 step_n = round(Int, step*den)
-                len = max(0, Int(div(den*stop_n - stop_d*start_n + step_n*stop_d, step_n*stop_d)))
+                len = max(0, _Int(div(den*stop_n - stop_d*start_n + step_n*stop_d, step_n*stop_d)))
                 # Integer ops could overflow, so check that this makes sense
                 if isbetween(start, start + (len-1)*step, stop + step/2) &&
                         !isbetween(start, start + len*step, stop)

@@ -45,7 +45,7 @@ elseif Sys.isapple()
     # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
         isaccessiblefile(path) || return false
-        path_basename = String(basename(path))
+        path_basename = _String(basename(path))
         local casepreserved_basename
         header_size = 12
         buf = Vector{UInt8}(undef, length(path_basename) + header_size + 1)
@@ -243,7 +243,7 @@ function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
             f.mtime = s.mtime
             f.size = s.size
             f.hash = new_hash
-            TOML.reinit!(p, String(content); filepath=f.path)
+            TOML.reinit!(p, _String(content); filepath=f.path)
             return f.d = TOML.parse(p)
         end
     end
@@ -1759,9 +1759,9 @@ function parse_image_target(io::IO)
     feature_en = read(io, 4*nfeature)
     feature_dis = read(io, 4*nfeature)
     name_len = read(io, Int32)
-    name = String(read(io, name_len))
+    name = _String(read(io, name_len))
     ext_features_len = read(io, Int32)
-    ext_features = String(read(io, ext_features_len))
+    ext_features = _String(read(io, ext_features_len))
     ImageTarget(name, flags, ext_features, feature_en, feature_dis)
 end
 
@@ -1937,7 +1937,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
         try
             modpath = locate_package(modkey)
             isnothing(modpath) && error("Cannot locate source for $(repr("text/plain", modkey))")
-            modpath = String(modpath)::String
+            modpath = _String(modpath)
             set_pkgorigin_version_path(modkey, modpath)
             loaded = _require_search_from_serialized(modkey, modpath, build_id, true)
         finally
@@ -2263,7 +2263,7 @@ function _include_dependency!(dep_list::Vector{Any}, track_dependencies::Bool,
             if track_content
                 hash = (isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r"))::UInt32
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
-                push!(dep_list, (mod, path, UInt64(filesize(path)), hash, -1.0))
+                push!(dep_list, (mod, path, _UInt64(filesize(path)), hash, -1.0))
             else
                 push!(dep_list, (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
@@ -3409,9 +3409,9 @@ function read_module_list(f::IO, has_buildid_hi::Bool)
     while true
         n = read(f, Int32)
         n == 0 && break
-        sym = String(read(f, n)) # module name
+        sym = _String(read(f, n)) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id_hi = UInt128(has_buildid_hi ? read(f, UInt64) : UInt64(0)) << 64
+        build_id_hi = _UInt128(has_buildid_hi ? read(f, UInt64) : UInt64(0)) << 64
         build_id = (build_id_hi | read(f, UInt64)) # build id (checksum + time - not a UUID)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
@@ -3421,7 +3421,7 @@ end
 function _parse_cache_header(f::IO, cachefile::AbstractString)
     flags = read(f, UInt8)
     modules = read_module_list(f, false)
-    totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
+    totbytes = _Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
     includes = CacheHeaderIncludes[]
@@ -3432,7 +3432,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
         if n2 == 0
             break
         end
-        depname = String(read(f, n2))
+        depname = _String(read(f, n2))
         totbytes -= n2
         fsize = read(f, UInt64)
         totbytes -= 8
@@ -3453,7 +3453,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
                 if n1 == 0
                     break
                 end
-                push!(modpath, String(read(f, n1)))
+                push!(modpath, _String(read(f, n1)))
                 totbytes -= n1
             end
         end
@@ -3470,7 +3470,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
         if n2 == 0
             break
         end
-        push!(prefs, String(read(f, n2)))
+        push!(prefs, _String(read(f, n2)))
         totbytes -= n2
     end
     prefs_hash = read(f, UInt64)
@@ -3617,7 +3617,7 @@ function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector
     while !eof(io)
         filenamelen = read(io, Int32)
         filenamelen == 0 && break
-        depotfn = String(read(io, filenamelen))
+        depotfn = _String(read(io, filenamelen))
         len = read(io, UInt64)
         fn = if !startswith(depotfn, string("@depot", Filesystem.pathsep()))
             depotfn
@@ -3629,7 +3629,7 @@ function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector
             isnothing(idx) ? depotfn : includes[idx].filename
         end
         if fn == filename
-            return String(read(io, len))
+            return _String(read(io, len))
         end
         seek(io, position(io) + len)
     end
@@ -3653,7 +3653,7 @@ function srctext_files(f::IO, srctextpos::Int64, includes::Vector{CacheHeaderInc
     while !eof(f)
         filenamelen = read(f, Int32)
         filenamelen == 0 && break
-        filename = String(read(f, filenamelen))
+        filename = _String(read(f, filenamelen))
         len = read(f, UInt64)
         push!(files, filename)
         seek(f, position(f) + len)
@@ -4023,7 +4023,7 @@ end
             return true
         end
         id_build = id.second
-        id_build = (UInt128(checksum) << 64) | (id_build % UInt64)
+        id_build = (_UInt128(checksum) << 64) | (id_build % UInt64)
         if build_id != UInt128(0)
             if id_build != build_id
                 @debug "Ignoring cache file $cachefile for $modkey ($(UUID(id_build))) since it does not provide desired build_id ($((UUID(build_id))))"
@@ -4079,7 +4079,7 @@ end
             for (req_key, req_build_id) in _concrete_dependencies
                 build_id = get(modules, req_key, UInt64(0))
                 if build_id !== UInt64(0)
-                    build_id |= UInt128(checksum) << 64
+                    build_id |= _UInt128(checksum) << 64
                     if build_id === req_build_id
                         stalecheck = false
                         break

@@ -5,6 +5,7 @@
 module PCRE
 
 import ..RefValue
+using .._ConstructingFunctions
 
 # include($BUILDROOT/base/pcre_h.jl)
 include(string(Base.BUILDROOT, "pcre_h.jl"))
@@ -154,7 +155,7 @@ end
 
 function compile(pattern::AbstractString, options::Integer)
     if !(pattern isa Union{String,SubString{String}})
-        pattern = String(pattern)
+        pattern = _String(pattern)
     end
     errno = RefValue{Cint}(0)
     erroff = RefValue{Csize_t}(0)
@@ -199,7 +200,7 @@ end
 exec(re, subject::Union{String,SubString{String}}, offset, options, match_data) =
     _exec(re, subject, offset, options, match_data)
 exec(re, subject, offset, options, match_data) =
-    _exec(re, String(subject)::String, offset, options, match_data)
+    _exec(re, _String(subject), offset, options, match_data)
 
 function _exec(re, subject, offset, options, match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
@@ -265,8 +266,8 @@ function capture_names(re)
         offset = (i-1)*name_entry_size + 1
         # The capture group index corresponding to name 'i' is stored as a
         # big-endian 16-bit value.
-        high_byte = UInt16(unsafe_load(nametable_ptr, offset))
-        low_byte = UInt16(unsafe_load(nametable_ptr, offset+1))
+        high_byte = _UInt16(unsafe_load(nametable_ptr, offset))
+        low_byte = _UInt16(unsafe_load(nametable_ptr, offset+1))
         idx = (high_byte << 8) | low_byte
         # The capture group name is a null-terminated string located directly
         # after the index.
