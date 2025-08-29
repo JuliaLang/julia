@@ -79,13 +79,11 @@ if Sys.isunix()
         exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         outp = Base.PipeEndpoint()
         errp = Base.PipeEndpoint()
-        p = run(`$exename -e 'sleep(20)'`, devnull, outp, errp, wait=false)
-        sleep(1.0) # allow Julia to start
+        p = run(`$exename -e 'sleep(20)'`, devnull, devnull, errp, wait=false)
+        sleep(5.0) # allow Julia to start
         Base.kill(p, Base.SIGQUIT)
         wait(p)
-        close(outp.in); close(errp.in)
-        out_s = read(outp, String)
-        err_s = read(errp, String)
+        err_s = readchomp(errp)
         @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
         @test occursin("==== Thread ", err_s)
         @test occursin("==== Done", err_s)
