@@ -110,7 +110,7 @@ end
 
 
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
-    sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
+    sgn, base, i = parseint_preamble(T<:Signed, _Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0
         raise && throw(ArgumentError("input string is empty or only contains whitespace"))
         return nothing
@@ -299,7 +299,7 @@ function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
+tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, _String(s))
 tryparse(::Type{Float16}, s::AbstractString) =
     convert(Union{Float16, Nothing}, tryparse(Float32, s))
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
@@ -366,7 +366,7 @@ end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
 tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
-    tryparse_internal(T, String(s), i, e, raise)
+    tryparse_internal(T, _String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =

@@ -28,9 +28,9 @@ mutable struct Regex <: AbstractPattern
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
-        pattern = String(pattern)::String
-        compile_options = UInt32(compile_options)
-        match_options = UInt32(match_options)
+        pattern = _String(pattern)
+        compile_options = _UInt32(compile_options)
+        match_options = _UInt32(match_options)
         if (compile_options & ~PCRE.COMPILE_MASK) != 0
             throw(ArgumentError("invalid regex compile options: $compile_options"))
         end
@@ -305,7 +305,7 @@ Dict(m::RegexMatch) = Dict(pairs(m))
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
-    return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
+    return PCRE.exec_r(r.regex, _String(s), offset, r.match_options)
 end
 
 function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
@@ -337,7 +337,7 @@ true
 """
 function startswith(s::AbstractString, r::Regex)
     compile(r)
-    return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
+    return PCRE.exec_r(r.regex, _String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
 function startswith(s::SubString{String}, r::Regex)
@@ -369,7 +369,7 @@ true
 """
 function endswith(s::AbstractString, r::Regex)
     compile(r)
-    return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
+    return PCRE.exec_r(r.regex, _String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
 function endswith(s::SubString{String}, r::Regex)
@@ -495,7 +495,7 @@ function _findnext_re(re::Regex, str, idx::Integer, match_data::Ptr{Cvoid})
     end
     if matched
         p = PCRE.ovec_ptr(data)
-        ans = (Int(unsafe_load(p,1))+1):prevind(str,Int(unsafe_load(p,2))+1)
+        ans = (_Int(unsafe_load(p,1))+1):prevind(str,_Int(unsafe_load(p,2))+1)
     else
         ans = nothing
     end
@@ -725,9 +725,9 @@ struct RegexMatchIterator{S <: AbstractString}
     overlap::Bool
 
     RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false) =
-        new{String}(regex, String(string), ovr)
+        new{String}(regex, _String(string), ovr)
     RegexMatchIterator(regex::Regex, string::AnnotatedString, ovr::Bool=false) =
-        new{AnnotatedString{String}}(regex, AnnotatedString(String(string.string), string.annotations), ovr)
+        new{AnnotatedString{String}}(regex, AnnotatedString(_String(string.string), string.annotations), ovr)
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{<:RegexMatchIterator}) = RegexMatch

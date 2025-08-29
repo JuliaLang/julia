@@ -488,7 +488,7 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
+read(cmd::AbstractCmd, ::Type{String}) = _String(read(cmd))
 
 """
     run(command, args...; wait::Bool = true)

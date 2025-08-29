@@ -64,10 +64,10 @@ unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 # convert strings to String etc. to pass as pointers
 cconvert(::Type{Cstring}, s::String) = s
 cconvert(::Type{Cstring}, s::AbstractString) =
-    cconvert(Cstring, String(s)::String)
+    cconvert(Cstring, _String(s))
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, String(s))
+    v = transcode(Cwchar_t, _String(s))
     push!(v, 0)
     return cconvert(Cwstring, v)
 end
@@ -117,7 +117,7 @@ same argument.
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = codeunits(String(s))
+    bytes = codeunits(_String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -163,9 +163,9 @@ function transcode end
 transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
 transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
-    transcode(T, String(Vector(src)))
+    transcode(T, _String(Vector(src)))
 transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
-    transcode(T, String(src))
+    transcode(T, _String(src))
 
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
@@ -176,7 +176,7 @@ function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
-transcode(::Type{String}, src) = String(transcode(UInt8, src))
+transcode(::Type{String}, src) = _String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
     require_one_based_indexing(src)
@@ -193,24 +193,24 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, xor(0x3080, UInt16(a) << 6, b))
+                push!(dst, xor(0x3080, _UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
+                    push!(dst, xor(0x2080, _UInt16(a) << 12, _UInt16(b) << 6, c))
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
+                        push!(dst, xor(0x2080, _UInt16(b) << 12, _UInt16(c) << 6, d))
                     else # 4-byte UTF-8
-                        push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
+                        push!(dst, 0xe5b8 + (_UInt16(a) << 8) + (_UInt16(b) << 2) + (c >> 4),
+                                   xor(0xdc80, _UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
                     push!(dst, a, b, c)

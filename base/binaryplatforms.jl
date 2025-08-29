@@ -8,6 +8,7 @@ export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
        detect_libstdcxx_version, detect_cxxstring_abi, call_abi, wordsize, triplet,
        select_platform, platforms_match, platform_name
 import .Libc.Libdl
+using .._ConstructingFunctions
 
 ### Submodule with information about CPU features
 include("cpuid.jl")
@@ -116,7 +117,7 @@ function Platform(arch::String, os::String;
                   validate_strict::Bool = false,
                   compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
                   kwargs...)
-    tags = Dict{String,Any}(String(tag)::String=>tagvalue(value) for (tag, value) in kwargs)
+    tags = Dict{String,Any}(_String(tag)=>tagvalue(value) for (tag, value) in kwargs)
     return Platform(arch, os, tags; validate_strict, compare_strategies)
 end
 
@@ -740,7 +741,7 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
             if isempty(tag_fields)
                 return Pair{String,String}[]
             end
-            return map(v -> String(v[1]) => String(v[2]), split.(tag_fields, "+"))
+            return map(v -> _String(v[1]) => _String(v[2]), split.(tag_fields, "+"))
         end
         merge!(tags, Dict(split_tags(m["tags"])))
 

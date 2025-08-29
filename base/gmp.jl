@@ -15,6 +15,8 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
 
 import Core: Signed, Float16, Float32, Float64
 
+using .._ConstructingFunctions
+
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
     const CulongMax = Union{UInt8, UInt16, UInt32}
@@ -288,9 +290,9 @@ Signed(x::BigInt) = x
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     # don't make a copy in the common case where we are parsing a whole String
-    bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
+    bstr = startpos == firstindex(s) && endpos == lastindex(s) ? _String(s) : _String(SubString(s,startpos,endpos))
 
-    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),lastindex(bstr))
+    sgn, base, i = Base.parseint_preamble(true,_Int(base_),bstr,firstindex(bstr),lastindex(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
@@ -425,7 +427,7 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
             y += n > (precision(Float64) - 32) ? 0 : (unsafe_load(x.d, xsize-2) >> (10+n))
         end
         y = (y + 1) >> 1 # round, ties up
-        y &= ~UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        y &= ~_UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
         d = ((n+1021) % UInt64) << 52
         z = reinterpret(Float64, d+y)
         z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
@@ -447,7 +449,7 @@ function Float32(x::BigInt, ::RoundingMode{:Nearest})
         y = (y1 >> (n - (precision(Float32)+1))) % UInt32
         y += (n > precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
         y = (y + one(UInt32)) >> 1 # round, ties up
-        y &= ~UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        y &= ~_UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
         d = ((n+125) % UInt32) << 23
         z = reinterpret(Float32, d+y)
         z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
@@ -465,7 +467,7 @@ function Float16(x::BigInt, ::RoundingMode{:Nearest})
         # load first 12(1 + 10 bits for fraction + 1 for rounding)
         y = (y1 >> (n - (precision(Float16)+1))) % UInt16
         y = (y + one(UInt16)) >> 1 # round, ties up
-        y &= ~UInt16(trailing_zeros(x) == (n-12)) # fix last bit to round to even
+        y &= ~_UInt16(trailing_zeros(x) == (n-12)) # fix last bit to round to even
         d = ((n+13) % UInt16) << 10
         z = reinterpret(Float16, d+y)
     end
@@ -749,7 +751,7 @@ end
 show(io::IO, x::BigInt) = print(io, string(x))
 
 function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
-    base < 0 && return Base._base(Int(base), n, pad, (base>0) & (n.size<0))
+    base < 0 && return Base._base(_Int(base), n, pad, (base>0) & (n.size<0))
     2 <= base <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $base"))
     iszero(n) && pad < 1 && return ""
     nd1 = ndigits(n, base=base)
@@ -802,7 +804,7 @@ function ndigits0zpb(x::BigInt, b::Integer)
         n = MPZ.sizeinbase(x, 2)
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
-        iq = Int(q)
+        iq = _Int(q)
         maxerr = q*eps(lb) # maximum error in remainder
         if r-1.0 < maxerr
             abs(x) >= big(b)^iq ? iq+1 : iq

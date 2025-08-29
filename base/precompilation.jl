@@ -4,6 +4,8 @@ using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_name
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
             base_project, isdefined
 
+using .._ConstructingFunctions
+
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
 struct ExplicitEnv
@@ -923,7 +925,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             elseif started[pkg_config]
                                 # Offset each spinner animation using the first character in the package name as the seed.
                                 # If not offset, on larger terminal fonts it looks odd that they all sync-up
-                                anim_char = anim_chars[(i + Int(dep.name[1])) % length(anim_chars) + 1]
+                                anim_char = anim_chars[(i + _Int(dep.name[1])) % length(anim_chars) + 1]
                                 anim_char_colored = dep in project_deps ? anim_char : color_string(anim_char, :light_black)
                                 waiting = if haskey(pkgspidlocked, pkg_config)
                                     who_has_lock = pkgspidlocked[pkg_config]
@@ -1043,7 +1045,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                                errmsg = String(take!(get(IOBuffer, std_outputs, pkg_config)))
+                                errmsg = _String(take!(get(IOBuffer, std_outputs, pkg_config)))
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
                                 failed_deps[pkg_config] = (strict || is_project_dep) ? string(sprint(showerror, err), "\n", strip(errmsg)) : ""
                                 !fancyprint && @lock print_lock begin
@@ -1127,7 +1129,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             end
             # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
             # interrupting a hanging precompile job with stderr output. julia#48371
-            let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
+            let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(_String(take!(io)))) for (pkg_config,io) in std_outputs]
                 filter!(kv -> !isempty(last(kv)), std_outputs)
                 if !isempty(std_outputs)
                     local plural1 = length(std_outputs) == 1 ? "y" : "ies"
@@ -1171,7 +1173,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             truncate(err_str, position(err_str))
             pluralde = n_direct_errs == 1 ? "y" : "ies"
             direct = strict ? "" : "direct "
-            err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(String(take!(err_str)))"
+            err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(_String(take!(err_str)))"
             if internal_call # aka. auto-precompilation
                 if isinteractive()
                     plural1 = length(failed_deps) == 1 ? "y" : "ies"

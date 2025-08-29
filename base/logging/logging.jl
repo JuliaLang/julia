@@ -4,6 +4,7 @@ module CoreLogging
 
 import Base: isless, +, -, convert, show
 import Base.ScopedValues: ScopedValue, with, @with
+using .._ConstructingFunctions
 
 export
     AbstractLogger,
@@ -518,7 +519,7 @@ function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
     real_kws = Any[(kwargs[i], kwargs[i+1]) for i in 1:2:length(kwargs)]
     @logmsg(convert(LogLevel, level), message,
             _module=_module, _id=id, _group=group,
-            _file=String(file), _line=line, real_kws...)
+            _file=_String(file), _line=line, real_kws...)
     nothing
 end
 
@@ -696,7 +697,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts
         @lock logger.lock begin
-            remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+            remaining = get!(logger.message_limits, id, _Int(maxlog))
             remaining == 0 && return
             logger.message_limits[id] = remaining - 1
         end

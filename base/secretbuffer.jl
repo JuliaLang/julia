@@ -51,7 +51,7 @@ Instead of starting with a string, either construct the `SecretBuffer`
 incrementally with `SecretBuffer()` and [`write`](@ref), or use a `Vector{UInt8}` with
 the `Base.SecretBuffer!(::AbstractVector{UInt8})` constructor.
 """
-SecretBuffer(str::AbstractString) = SecretBuffer(String(str))
+SecretBuffer(str::AbstractString) = SecretBuffer(_String(str))
 function SecretBuffer(str::String)
     buf = codeunits(str)
     s = SecretBuffer(sizehint=length(buf))
@@ -61,7 +61,7 @@ function SecretBuffer(str::String)
     seek(s, 0)
     s
 end
-convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(String(s))
+convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(_String(s))
 
 """
     SecretBuffer!(data::Vector{UInt8})

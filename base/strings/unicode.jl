@@ -8,6 +8,8 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              AnnotatedString, AnnotatedChar, annotated_chartransform,
              @assume_effects, annotations, is_overlong_enc
 
+using .._ConstructingFunctions
+
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
 """
@@ -149,7 +151,7 @@ utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (C
 
 # static wrapper around user callback function
 utf8proc_custom_func(codepoint::UInt32, callback::Any) =
-    UInt32(callback(codepoint))::UInt32
+    _UInt32(callback(codepoint))
 
 function utf8proc_decompose(str, options, buffer, nwords, chartransform::typeof(identity))
     ret = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
@@ -171,7 +173,7 @@ function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, ch
     nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
     nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
     nbytes < 0 && utf8proc_error(nbytes)
-    return String(resize!(buffer, nbytes))
+    return _String(resize!(buffer, nbytes))
 end
 
 """
@@ -191,7 +193,7 @@ const _julia_charmap = Dict{UInt32,UInt32}(
     0x210F => 0x0127, # hbar -> small letter h with stroke (#48870)
 )
 
-utf8proc_map(s::AbstractString, flags::Integer, chartransform::F = identity) where F = utf8proc_map(String(s), flags, chartransform)
+utf8proc_map(s::AbstractString, flags::Integer, chartransform::F = identity) where F = utf8proc_map(_String(s), flags, chartransform)
 
 # Documented in Unicode module
 function normalize(
@@ -262,12 +264,12 @@ julia> textwidth('⛵')
 2
 ```
 """
-textwidth(c::AbstractChar) = textwidth(Char(c)::Char)
+textwidth(c::AbstractChar) = textwidth(_Char(c))
 
 function textwidth(c::Char)
     u = reinterpret(UInt32, c)
     b = bswap(u) # from isascii(c)
-    b < 0x7f && return Int(b >= 0x20) # ASCII fast path
+    b < 0x7f && return _Int(b >= 0x20) # ASCII fast path
     # We can't know a priori how terminals will render invalid UTF8 chars,
     # so we conservatively decide a width of 1.
     (ismalformed(c) || is_overlong_enc(u)) && return 1
@@ -360,7 +362,7 @@ titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::AbstractChar)
-    !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
+    !ismalformed(c) ? category_code(_UInt32(c)) : Cint(31)
 end
 
 function category_code(x::Integer)

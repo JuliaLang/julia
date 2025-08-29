@@ -14,6 +14,8 @@ import Base:
     sortperm,
     to_indices
 
+using .._ConstructingFunctions
+
 export # also exported by Base
     # order-only:
     issorted,
@@ -1436,7 +1438,7 @@ function radix_chunk_size_heuristic(lo::Integer, hi::Integer, bits::Unsigned)
 
     # We need iterations * chunk size ≥ bits, and these cld's
     # make an effort to get iterations * chunk size ≈ bits
-    UInt8(cld(bits, cld(bits, guess)))
+    _UInt8(cld(bits, cld(bits, guess)))
 end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt

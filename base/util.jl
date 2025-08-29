@@ -496,7 +496,7 @@ if Sys.iswindows()
 
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
-        result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
+        result = (_String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
                   SecretBuffer!(transcode(UInt8, passbuf_)))
         securezero!(passbuf_)
         securezero!(passbuf)
