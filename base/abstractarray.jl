@@ -312,7 +312,7 @@ julia> length([1 2; 3 4])
 4
 ```
 """
-length(t::AbstractArray) = (@inline; prod(size(t)))
+length(t::AbstractArray)
 
 # `eachindex` is mostly an optimization of `keys`
 eachindex(itrs...) = keys(itrs...)
