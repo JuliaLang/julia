@@ -45,7 +45,7 @@ const _pairhash_seed = if UInt === UInt64
     0x94cb2bb20a28ce96
 else
     0x1f60a087
-end::UInt
+end
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, xor(_pairhash_seed, h)))
 
 ==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
