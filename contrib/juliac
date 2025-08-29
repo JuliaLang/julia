@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
+
+JULIA=$SCRIPT_DIR/julia
+
+DEPOT=$($JULIA -e 'print(DEPOT_PATH[1])')
+
+JULIAC=$DEPOT/bin/juliac
+
+if [ ! -f "$JULIAC" ]; then
+    $JULIA -e 'using Pkg; Pkg.Apps.add(url="https://github.com/JuliaLang/JuliaC.jl.git")'
+fi
+
+exec $JULIAC "$@"
