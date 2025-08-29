@@ -3133,7 +3133,7 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function intersect(itr, itrs...) 
+function intersect(itr, itrs...)
     T = promote_eltype(itr, itrs...)
     keep = intersect!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)
