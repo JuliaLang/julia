@@ -174,11 +174,12 @@ function ==(x::DebugInfo, y::DebugInfo)
 end
 
 """
-    macroexpand(m::Module, x; recursive=true)
+    macroexpand(m::Module, x; recursive=true, legacyscope=true)
 
 Take the expression `x` and return an equivalent expression with all macros removed (expanded)
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+The `legacyscope` keyword controls whether legacy macroscope expansion is performed.
 This is demonstrated in the example below:
 ```jldoctest; filter = r"#= .*:6 =#"
 julia> module M
@@ -198,12 +199,28 @@ julia> macroexpand(M, :(@m2()), recursive=false)
 :(#= REPL[1]:6 =# @m1)
 ```
 """
-function macroexpand(m::Module, @nospecialize(x); recursive=true)
-    if recursive
-        ccall(:jl_macroexpand, Any, (Any, Any), x, m)
-    else
-        ccall(:jl_macroexpand1, Any, (Any, Any), x, m)
-    end
+function macroexpand(m::Module, @nospecialize(x); recursive=true, legacyscope=true)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
+end
+
+"""
+    macroexpand!(m::Module, x; recursive=true, legacyscope=false)
+
+Take the expression `x` and return an equivalent expression with all macros removed (expanded)
+for executing in module `m`, modifying `x` in place without copying.
+The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+The `legacyscope` keyword controls whether legacy macroscope expansion is performed.
+
+This function performs macro expansion without the initial copy step, making it more efficient
+when the original expression is no longer needed. By default, macroscope expansion is disabled
+for in-place expansion as it can be called separately if needed.
+
+!!! warning
+    This function modifies the input expression `x` in place. Use `macroexpand` if you need
+    to preserve the original expression.
+"""
+function macroexpand!(m::Module, @nospecialize(x); recursive=true, legacyscope=false)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, true, legacyscope)
 end
 
 """
@@ -250,10 +267,10 @@ With `macroexpand` the expression expands in the module given as the first argum
     The two-argument form requires at least Julia 1.11.
 """
 macro macroexpand(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
+    return :(macroexpand($__module__, $(QuoteNode(code)); recursive=true, legacyscope=true))
 end
 macro macroexpand(mod, code)
-    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=true))
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)); recursive=true, legacyscope=true))
 end
 
 """
@@ -262,10 +279,10 @@ end
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+    return :(macroexpand($__module__, $(QuoteNode(code)); recursive=false, legacyscope=true))
 end
 macro macroexpand1(mod, code)
-    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=false))
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)); recursive=false, legacyscope=true))
 end
 
 ## misc syntax ##
