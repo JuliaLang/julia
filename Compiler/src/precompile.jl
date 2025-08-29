@@ -426,9 +426,6 @@ function compile_and_emit_native(worlds::Vector{UInt},
         invokelatest(exit, 1)
     end
 
-    # Step 5: Always set newly_inferred global for serialization use
-    #ccall(:jl_set_newly_inferred, Cvoid, (Any,), filter(ci -> ci isa CodeInstance, codeinfos))
-
     return codeinfos
 
 end
