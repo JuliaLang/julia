@@ -593,9 +593,9 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
 #endif
 
 #ifdef MEMFENCE
-void gc_verify_tags(void);
+void gc_verify_tags(void) JL_NOTSAFEPOINT;
 #else
-static inline void gc_verify_tags(void)
+static inline void gc_verify_tags(void) JL_NOTSAFEPOINT
 {
 }
 #endif
@@ -652,22 +652,22 @@ void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
-static inline int jl_gc_debug_check_other(void)
+static inline int jl_gc_debug_check_other(void) JL_NOTSAFEPOINT
 {
     return 0;
 }
-static inline int gc_debug_check_pool(void)
+static inline int gc_debug_check_pool(void) JL_NOTSAFEPOINT
 {
     return 0;
 }
-static inline void jl_gc_debug_print(void)
+static inline void jl_gc_debug_print(void) JL_NOTSAFEPOINT
 {
 }
 static inline void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
 {
     (void)ta;
 }
-static inline void gc_scrub(void)
+static inline void gc_scrub(void) JL_NOTSAFEPOINT
 {
 }
 #endif

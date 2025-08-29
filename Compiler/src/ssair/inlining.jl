@@ -865,7 +865,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
         return compileable_specialization(edge, effects, et, info, state)
     end
 
-    src_inlining_policy(state.interp, src, info, flag) ||
+    src_inlining_policy(state.interp, mi, src, info, flag) ||
         return compileable_specialization(edge, effects, et, info, state)
 
     add_inlining_edge!(et, edge)
@@ -897,7 +897,7 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
         return nothing
     end
 
-    src_inlining_policy(state.interp, src, info, flag) || return nothing
+    src_inlining_policy(state.interp, mi, src, info, flag) || return nothing
     ir, spec_info, debuginfo = retrieve_ir_for_inlining(cached_result, src)
     add_inlining_edge!(et, cached_result)
     return InliningTodo(mi, ir, spec_info, debuginfo, effects)
@@ -1448,7 +1448,7 @@ end
 function semiconcrete_result_item(result::SemiConcreteResult,
         @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
     code = result.edge
-    mi = code.def
+    mi = get_ci_mi(code)
     et = InliningEdgeTracker(state)
 
     if (!OptimizationParams(state.interp).inlining || is_stmt_noinline(flag) ||
@@ -1458,7 +1458,7 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         (is_declared_noinline(mi.def::Method) && !is_stmt_inline(flag)))
         return compileable_specialization(code, result.effects, et, info, state)
     end
-    src_inlining_policy(state.interp, result.ir, info, flag) ||
+    src_inlining_policy(state.interp, mi, result.ir, info, flag) ||
         return compileable_specialization(code, result.effects, et, info, state)
 
     add_inlining_edge!(et, result.edge)
@@ -1602,10 +1602,8 @@ end
 
 function handle_invoke_expr!(todo::Vector{Pair{Int,Any}}, ir::IRCode,
     idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature, state::InliningState)
-    mi = stmt.args[1]
-    if !(mi isa MethodInstance)
-        mi = (mi::CodeInstance).def
-    end
+    edge = stmt.args[1]
+    mi = isa(edge, MethodInstance) ? edge : get_ci_mi(edge::CodeInstance)
     case = resolve_todo(mi, info, flag, state)
     handle_single_case!(todo, ir, idx, stmt, case, false)
     return nothing
@@ -1625,13 +1623,13 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
     todo = Pair{Int, Any}[]
 
     for idx in 1:length(ir.stmts)
-        flag = ir.stmts[idx][:flag]
+        inst = ir.stmts[idx]
+        flag = inst[:flag]
 
         simpleres = process_simple!(todo, ir, idx, flag, state)
         simpleres === nothing && continue
         stmt, sig = simpleres
-
-        info = ir.stmts[idx][:info]
+        info = inst[:info]
 
         # `NativeInterpreter` won't need this, but provide a support for `:invoke` exprs here
         # for external `AbstractInterpreter`s that may run the inlining pass multiple times

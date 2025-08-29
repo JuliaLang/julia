@@ -1,6 +1,6 @@
 name = "LibCURL_jll"
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.15.0+0"
+version = "8.15.0+1"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -10,6 +10,7 @@ Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 OpenSSL_jll = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 Zlib_jll = "83775a58-1f1d-513f-b197-d71354ab007a"
 nghttp2_jll = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+Zstd_jll = "3161d3a3-bdf6-5164-811a-617609db77b4"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

@@ -228,6 +228,27 @@ end
     return hi, lo
 end
 
+# generic, but involves double rounding
+function _180_over_pi(z::AbstractFloat)
+    180 / oftype(z, pi)
+end
+function _pi_over_180(z::AbstractFloat)
+    oftype(z, pi) / 180
+end
+
+# rounded to closest representable number where necessary
+function _180_over_pi(z::Union{Float16, Float32})
+    if z isa Float16
+        r = Float16(57.28)
+    elseif z isa Float32
+        r = 57.29578f0
+    end
+    r
+end
+function _pi_over_180(::Float16)
+    Float16(0.01746)
+end
+
 """
     rad2deg(x)
 
@@ -241,7 +262,7 @@ julia> rad2deg(pi)
 180.0
 ```
 """
-rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
+rad2deg(z::AbstractFloat) = z * _180_over_pi(z)
 
 """
     deg2rad(x)
@@ -256,7 +277,7 @@ julia> deg2rad(90)
 1.5707963267948966
 ```
 """
-deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
+deg2rad(z::AbstractFloat) = z * _pi_over_180(z)
 rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
 rad2deg(z::Number) = (z/pi)*180

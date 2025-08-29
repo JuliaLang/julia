@@ -49,14 +49,14 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     if !fully_covering(info)
         exists = false
         for i in 2:length(edges)
-            if edges[i] === Core.GlobalMethods && edges[i-1] == info.atype
+            if edges[i] === Core.methodtable && edges[i-1] == info.atype
                 exists = true
                 break
             end
         end
         if !exists
             push!(edges, info.atype)
-            push!(edges, Core.GlobalMethods)
+            push!(edges, Core.methodtable)
         end
     end
     nmatches = length(info.results)

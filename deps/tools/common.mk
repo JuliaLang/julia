@@ -102,7 +102,7 @@ endif
 # symlinks. We don't particularly care either way - we just need to symlinks
 # to succeed. We could guard this by a uname check, but it's harmless elsewhere,
 # so let's not incur the additional overhead.
-MSYS_NONEXISTENT_SYMLINK_TARGET_FIX := export MSYS=winsymlinks:native
+MSYS_NONEXISTENT_SYMLINK_TARGET_FIX := winsymlinks:native
 
 # If the top-level Makefile is called with environment variables,
 # they will override the values passed above to ./configure

@@ -1238,13 +1238,13 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
 iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
-@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
-@inline function _iterate(A::AbstractArray, state::Tuple)
+@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate_abstractarray(A, state)
+@inline function _iterate_abstractarray(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
 end
-@inline function _iterate(A::AbstractArray, state::Integer)
+@inline function _iterate_abstractarray(A::AbstractArray, state::Integer)
     checkbounds(Bool, A, state) || return nothing
     A[state], state + one(state)
 end

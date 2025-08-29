@@ -84,7 +84,7 @@ function _uv_hook_close(proc::Process)
     nothing
 end
 
-const SpawnIO  = Union{IO, RawFD, OS_HANDLE, SyncCloseFD} # internal copy of Redirectable, removing FileRedirect and adding SyncCloseFD
+const SpawnIO  = Union{IO, IOServer, RawFD, OS_HANDLE, SyncCloseFD} # internal copy of Redirectable, removing FileRedirect and adding SyncCloseFD
 const SpawnIOs = Memory{SpawnIO} # convenience name for readability (used for dispatch also to clearly distinguish from Vector{Redirectable})
 
 function as_cpumask(cpus::Vector{UInt16})
@@ -341,13 +341,13 @@ close_stdio(stdio::SyncCloseFD) = close_stdio(stdio.fd)
 
 spawn_opts_swallow(stdios::StdIOSet) = Redirectable[stdios...]
 spawn_opts_inherit(stdios::StdIOSet) = Redirectable[stdios...]
-spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull) =
-    Redirectable[in, out, err]
+spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull, extra::Redirectable...) =
+    Redirectable[in, out, err, extra...]
 # pass original descriptors to child processes by default, because we might
 # have already exhausted and closed the libuv object for our standard streams.
 # ref issue #8529
-spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2)) =
-    Redirectable[in, out, err]
+spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), extra::Redirectable...) =
+    Redirectable[in, out, err, extra...]
 
 function eachline(cmd::AbstractCmd; keep::Bool=false)
     out = PipeEndpoint()

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random, Serialization, Base64
+using Base.ScopedValues: with
 
 # Check that serializer hasn't gone out-of-frame
 @test Serialization.sertag(Symbol) == 1
@@ -660,4 +661,15 @@ end
     undoc = Docs.undocumented_names(Serialization)
     @test_broken isempty(undoc)
     @test undoc == [:AbstractSerializer, :Serializer]
+end
+
+# test method definitions from v1.11
+if Int === Int64
+    let f_data = "N0pMGgQAAAAWAQEFdGh1bmsbFUbnFgEBBXRodW5rGxVG4DoWAQEGbWV0aG9kAQtmMTExX3RvXzExMhUABuABAAAA4BUAB+AAAAAAThVG4DQQAQxMaW5lSW5mb05vZGUfTptEH04BBE1haW5EAQ90b3AtbGV2ZWwgc2NvcGUBBG5vbmW+vhUAAd8V305GTk4JAQAAAAAAAAAJ//////////9MTExMAwADAAUAAAX//xYBAQZtZXRob2QsBwAWAlYkH06bRAEGVHlwZW9mLAcAFgNWJB9Om0QBBHN2ZWMo4iQfTptETxYBViQfTptEAQRzdmVjFgRWJB9Om0QBBHN2ZWMo4yjkGhfgAQRub25lFgMBBm1ldGhvZCwHACjlGxVG5AEBXhYDViQfTptElyQfTp5EAQNWYWzhFgFWKOEWBFYkH06eRAELbGl0ZXJhbF9wb3co4CXhKOI6KOMVAAbkAQAAAAEAAAABAAAAAQAAAAAAAADkFQAH5AAAAAAAAAAAAAAAAAAAAAAAAAAAThVG4DQsCwAfTgEETWFpbkQBBG5vbmUBBG5vbmW/vhUAAeGifRXhAAhORk5OCQEAAAAAAAAACf//////////TExMTAMAAwAFAAAF//86ThUABucBAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAAAAAOcVAAfnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOFUbgNCwLAB9OAQRNYWluRCwNAAEEbm9uZb6+FQAB3xXfTkZOTgkBAAAAAAAAAAn//////////0xMTEwDAAMABQAABf//"
+        @eval Main function f111_to_112 end
+        Core.eval(Main, with(Serialization.current_module => Main) do
+                 deserialize(IOBuffer(base64decode(f_data)))
+             end)
+        @test @invokelatest(Main.f111_to_112(16)) == 256
+    end
 end

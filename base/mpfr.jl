@@ -392,11 +392,17 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); 
     BigFloat(Float64(x), r; precision=precision)
 
 function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
+    r_den = _opposite_round(r)
     setprecision(BigFloat, precision) do
         setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
+            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x), r_den)::BigFloat
         end
     end
+end
+function _opposite_round(r::MPFRRoundingMode)
+    r == MPFRRoundUp && return MPFRRoundDown
+    r == MPFRRoundDown && return MPFRRoundUp
+    return r
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))

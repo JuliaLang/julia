@@ -343,21 +343,41 @@ end
 
 # PR 57909
 @testset "Support for type annotations as arguments" begin
-    @test (@which (::Vector{Int})[::Int]).name === :getindex
-    @test (@which (::Vector{Int})[::Int] = ::Int).name === :setindex!
-    @test (@which (::Base.RefValue{Int}).x).name === :getproperty
-    @test (@which (::Base.RefValue{Int}).x = ::Int).name === :setproperty!
+    @testset "`getindex`/`setindex!`" begin
+        @test (@which (::Vector{Int})[::Int]).name === :getindex
+        @test (@which [1, 2][::Int]).name === :getindex
+        @test (@which [1 2][begin, ::Int]).name === :getindex
+        @test (@which [1 2][::Int, end]).name === :getindex
+        @test (@which [1 2][begin, end]).name === :getindex
+        @test (@which [1 2][1:end]).name === :getindex
+        @test (@which [1 2][begin:end]).name === :getindex
+        @test_throws "`begin` or `end` cannot be used" (@which (::Vector{Int})[begin])
+        @test_throws "`begin` or `end` cannot be used" (@which (::Vector{Int})[end])
+        @test (@which (::Vector{Int})[::Int] = ::Int).name === :setindex!
+    end
+
+    @testset "`getproperty`/`setproperty!`" begin
+        @test (@which (::Base.RefValue{Int}).x).name === :getproperty
+        @test (@which (::Base.RefValue{Int}).x = ::Int).name === :setproperty!
+    end
+
+    @testset "Array syntax" begin
+        @test (@which [::Int]).name === :vect
+        @test (@which [undef_var::Int]).name === :vect
+        @test (@which [::Int 2]).name === :hcat
+        @test (@which [::Int; 2]).name === :vcat
+        @test (@which Int[::Int 2]).name === :typed_hcat
+        @test (@which Int[::Int; 2]).name === :typed_vcat
+        @test (@which [::Int 2;3 (::Int)]).name === :hvcat
+        @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
+        @test (@which (::Type{Int})[::Int 2;3 (::Int)]).name === :typed_hvcat
+        @test (@which (::Type{T})[::T 2;3 (::T)] where {T<:Real}).name === :typed_hvcat
+    end
+
     @test (@which (::Float64)^2).name === :literal_pow
-    @test (@which [::Int]).name === :vect
-    @test (@which [undef_var::Int]).name === :vect
-    @test (@which [::Int 2]).name === :hcat
-    @test (@which [::Int; 2]).name === :vcat
-    @test (@which Int[::Int 2]).name === :typed_hcat
-    @test (@which Int[::Int; 2]).name === :typed_vcat
-    @test (@which [::Int 2;3 (::Int)]).name === :hvcat
-    @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
     @test (@which (::Vector{Float64})').name === :adjoint
     @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
+    @test (@which (::Int)^4).name === :literal_pow
     @test (@which +(some_x::Int, some_y::Float64)).name === :+
     @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
     @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
@@ -370,28 +390,77 @@ end
     @test (@code_typed .+(::Float64, ::Vector{Float64})) isa Pair
     @test (@code_typed .+(::Float64, .*(::Vector{Float64}, ::Int))) isa Pair
     @test (@which +(::T, ::T) where {T<:Number}).sig === Tuple{typeof(+), T, T} where {T<:Number}
-    @test (@which round(::Float64; digits=3)).name === :round
-    @test (@which round(1.2; digits = ::Int)).name === :round
-    @test (@which round(1.2; digits::Int)).name === :round
-    @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
-    @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
-    base = 10
-    kwargs_1 = (; digits = 3)
-    kwargs_2 = (; sigdigits = 3)
-    @test (@which round(1.2; kwargs_1...)).name === :round
-    @test (@which round(1.2; digits = 1, kwargs_1...)).name === :round
-    @test (@code_typed round(1.2; digits = ::Float64, kwargs_1...))[2] === Float64 # picks `3::Int` from `kwargs_1`
-    @test (@code_typed round(1.2; kwargs_1..., digits = ::Float64))[2] === Union{} # picks `::Float64` from parameters
-    @test (@which round(1.2; digits = ::Float64, kwargs_1...)).name === :round
-    @test (@which round(1.2; sigdigits = ::Int, kwargs_1...)).name === :round
-    @test (@which round(1.2; kwargs_1..., kwargs_2..., base)).name === :round
-    @test (@code_typed optimize=false round.([1.0, 2.0]; digits = ::Int64))[2] == Vector{Float64}
-    @test (@code_typed optimize=false round.(::Vector{Float64}, base = 2; digits = ::Int64))[2] == Vector{Float64}
-    @test (@code_typed optimize=false round.(base = ::Int64, ::Vector{Float64}; digits = ::Int64))[2] == Vector{Float64}
-    @test (@code_typed optimize=false [1, 2] .= ::Int)[2] == Vector{Int}
-    @test (@code_typed optimize=false ::Vector{Int} .= ::Int)[2] == Vector{Int}
-    @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ ::Vector{Int})[2] == Vector{Float64}
-    @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
+
+    @testset "Keyword arguments" begin
+        @test (@which round(::Float64; digits=3)).name === :round
+        @test (@which round(1.2; digits = ::Int)).name === :round
+        @test (@which round(1.2; digits::Int)).name === :round
+        @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
+        @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
+        base = 10
+        kwargs_1 = (; digits = 3)
+        kwargs_2 = (; sigdigits = 3)
+        @test (@which round(1.2; kwargs_1...)).name === :round
+        @test (@which round(1.2; digits = 1, kwargs_1...)).name === :round
+        @test (@code_typed round(1.2; digits = ::Float64, kwargs_1...))[2] === Float64 # picks `3::Int` from `kwargs_1`
+        @test (@code_typed round(1.2; kwargs_1..., digits = ::Float64))[2] === Union{} # picks `::Float64` from parameters
+        @test (@which round(1.2; digits = ::Float64, kwargs_1...)).name === :round
+        @test (@which round(1.2; sigdigits = ::Int, kwargs_1...)).name === :round
+        @test (@which round(1.2; kwargs_1..., kwargs_2..., base)).name === :round
+    end
+
+    @testset "Broadcasting" begin
+        @test (@code_typed optimize=false round.([1.0, 2.0]; digits = ::Int64))[2] == Vector{Float64}
+        @test (@code_typed optimize=false round.(::Vector{Float64}, base = 2; digits = ::Int64))[2] == Vector{Float64}
+        @test (@code_typed optimize=false round.(base = ::Int64, ::Vector{Float64}; digits = ::Int64))[2] == Vector{Float64}
+        @test (@code_typed optimize=false [1, 2] .= ::Int)[2] == Vector{Int}
+        @test (@code_typed optimize=false ::Vector{Int} .= ::Int)[2] == Vector{Int}
+        @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ ::Vector{Int})[2] == Vector{Float64}
+        @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
+    end
+
+    @testset "Callable objects" begin
+        @test (@code_typed (::Base.Fix2{typeof(+), Float64})(3))[2] === Float64
+        @test (@code_typed optimize=false (::Returns{Float64})(::Int64; name::String))[2] === Float64
+        @test (@code_typed (::Returns{T})(3.0) where {T<:Real})[2] === Real
+    end
+
+    @testset "Opaque closures" begin
+        opaque_f(@nospecialize(x::Type), @nospecialize(y::Type)) = sizeof(x) == sizeof(y)
+        src, _ = only(code_typed(opaque_f, (Type, Type)))
+        src.slottypes[1] = Tuple{}
+
+        # from CodeInfo
+        oc = Core.OpaqueClosure(src; sig = Tuple{Type, Type}, rettype = Bool, nargs = 2)
+        ret = @code_typed oc(Int64, Float64)
+        @test [ret] == code_typed(oc)
+        _, rt = ret
+        @test rt === Bool
+
+        # from optimized IR
+        ir = Core.Compiler.inflate_ir(src)
+        oc = Core.OpaqueClosure(ir)
+        ret = @code_typed oc(Int64, Float64)
+        @test [ret] == code_typed(oc)
+        _, rt = ret
+        @test rt === Bool
+    end
+end
+
+module HygieneTest
+const Int = Float64
+using InteractiveUtils: @code_typed
+macro escape_argument(ex) :(@code_typed $(esc(ex)) * 2.0) end
+macro escape_type_annotation(ex) :(@code_typed identity(::(typeof($(esc(ex)))))) end
+macro escape_all(ex) esc(:(@__MODULE__().@code_typed $ex)) end
+end # module
+
+(; var"@escape_argument", var"@escape_type_annotation", var"@escape_all") = HygieneTest
+@testset "Macro hygiene interactions" begin
+    _f = sum
+    @test (@escape_argument _f(Int[]))[2] == Float64
+    @test (@escape_type_annotation _f(Int[]))[2] == Int
+    @test (@escape_all _f(Int[]))[2] == Int
 end
 
 module MacroTest

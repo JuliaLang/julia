@@ -86,6 +86,7 @@ end
 # arguments to forward to julia compilation process
 julia_args = []
 enable_trim::Bool = false
+project::String = "--project=$(Base.active_project())"
 
 let i = 1
     while i <= length(ARGS)
@@ -107,6 +108,8 @@ let i = 1
             push!(julia_args, arg) # forwarded arg
         elseif arg == "--experimental"
             push!(julia_args, arg) # forwarded arg
+        elseif startswith(arg, "--proj")
+            global project = arg
         else
             if arg[1] == '-' || !isnothing(file)
                 println("Unexpected argument `$arg`")
@@ -150,7 +153,7 @@ bc_path = joinpath(tmpdir, "img-bc.a")
 function precompile_env()
     # Pre-compile the environment
     # (otherwise obscure error messages will occur)
-    cmd = addenv(`$julia_cmd --project=$(Base.active_project()) -e "using Pkg; Pkg.precompile()"`)
+    cmd = addenv(`$julia_cmd $project -e "using Pkg; Pkg.precompile()"`)
     verbose && println("Running: $cmd")
     if !success(pipeline(cmd; stdout, stderr))
         println(stderr, "\nError encountered during pre-compilation of environment.")
@@ -168,7 +171,7 @@ function compile_products(enable_trim::Bool)
     end
 
     # Compile the Julia code
-    cmd = addenv(`$julia_cmd_target --project=$(Base.active_project()) --output-o $img_path --output-incremental=no $strip_args $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    cmd = addenv(`$julia_cmd_target $project --output-o $img_path --output-incremental=no $strip_args $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
     verbose && println("Running: $cmd")
     if !success(pipeline(cmd; stdout, stderr))
         println(stderr, "\nFailed to compile $file")

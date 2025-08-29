@@ -80,13 +80,15 @@ import Base.Threads: @spawn
 end
 
 @testset "show" begin
-    @test sprint(show, ScopedValue{Int}()) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
-    @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(1)"
-    @test sprint(show, Core.current_scope()) == "nothing"
+    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
+    @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(1)"
     with(sval => 2.0) do
-        @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(2)"
+        @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(sval))
-        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(Base.ScopedValues.ScopedValue{$Int}@$objid => 2)"
+        let str = sprint(show, Core.current_scope(), context=(:module=>Core,))
+            @test startswith(str, "Base.ScopedValues.Scope")
+            @test contains(str, "Base.ScopedValues.ScopedValue{$Int}@$objid => 2")
+        end
     end
 end
 
@@ -177,11 +179,11 @@ const inlineable_const_sv = ScopedValue(1)
 end
 
 # Handle nothrow scope bodies correctly (#56609)
-@eval function nothrow_scope()
+@eval @noinline function nothrow_scope(@nospecialize(scope_at_entry))
     $(Expr(:tryfinally, :(), nothing, 1))
-    @test Core.current_scope() === nothing
+    @test Core.current_scope() === scope_at_entry
 end
-nothrow_scope()
+nothrow_scope(Core.current_scope())
 
 # https://github.com/JuliaLang/julia/issues/56062
 @testset "issue #56062" begin

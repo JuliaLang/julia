@@ -18,6 +18,8 @@ const LIBPATH_list = String[]
 artifact_dir::String = ""
 
 libzstd_path::String = ""
+zstd_path::String = ""
+zstdmt_path::String = ""
 const libzstd = LazyLibrary(
     if Sys.iswindows()
         BundledLazyLibraryPath("libzstd-1.dll")
@@ -79,8 +81,8 @@ function zstdmt(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = tr
         f(zstdmt())
     end
 end
-zstd() = adjust_ENV(`$(joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstd_exe))`)
-zstdmt() = adjust_ENV(`$(joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstdmt_exe))`)
+zstd() = adjust_ENV(`$zstd_path`)
+zstdmt() = adjust_ENV(`$zstdmt_path`)
 
 # Function to eagerly dlopen our library and thus resolve all dependencies
 function eager_mode()
@@ -94,6 +96,8 @@ is_available() = true
 
 function __init__()
     global libzstd_path = string(libzstd.path)
+    global zstd_path = joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstd_exe)
+    global zstdmt_path = joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstdmt_exe)
     global artifact_dir = dirname(Sys.BINDIR)
 end
 

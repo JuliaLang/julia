@@ -33,13 +33,6 @@ New language features
 Language changes
 ----------------
 
-* Julia now defaults to 1 "interactive" thread, in addition to the 1 default "worker" thread. i.e. `-t1,1`.
-  This means in default configuration the main task and repl (when in interactive mode), which both run on
-  thread 1, now run within the `interactive` threadpool. The libuv IO loop also runs on thread 1,
-  helping efficient utilization of the worker threadpool used by `Threads.@spawn`. Asking for specifically 1 thread
-  (`-t1`/`JULIA_NUM_THREADS=1`) or passing `0` will disable the interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`
-  , or `-tauto,0` etc. Asking for more than 1 thread will enable the interactive thread so
-  `-t2` will set the equivalent of `-t2,1` ([#57087]).
 * When a method is replaced with an exactly equivalent one, the old method is not deleted. Instead, the
   new method takes priority and becomes more specific than the old method. Thus if the new method is deleted
   later, the old method will resume operating. This can be useful in mocking frameworks (as in SparseArrays,
@@ -87,6 +80,14 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+* Julia now defaults to 1 "interactive" thread, in addition to the 1 default "worker" thread. i.e. `-t1,1`.
+  This means in default configuration the main task and repl (when in interactive mode), which both run on
+  thread 1, now run within the `interactive` threadpool. The libuv IO loop also runs on thread 1,
+  helping efficient utilization of the worker threadpool used by `Threads.@spawn`. Asking for specifically 1 thread
+  (`-t1`/`JULIA_NUM_THREADS=1`) or `0` interactive threads will disable the interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`
+  , or `-tauto,0` etc. Asking for more than 1 thread will enable the interactive thread so
+  `-t2` will set the equivalent of `-t2,1`. As a reminder, buffers
+  [should not be managed based on `threadid()`](https://docs.julialang.org/en/v1/manual/multi-threading/#Using-@threads-without-data-races) ([#57087]).
 * New types are defined to handle the pattern of code that must run once per process, called
   a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
   the first time it is called, and then always return the same result value of type `T`

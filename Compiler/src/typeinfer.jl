@@ -741,6 +741,13 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
 end
 
 # record the backedges
+
+function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
+    meth = isa(edge, Method) ? edge : get_ci_mi(edge).def
+    ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
+    return nothing
+end
+
 function store_backedges(caller::CodeInstance, edges::SimpleVector)
     isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
 
@@ -1593,11 +1600,11 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             invokelatest_queue === nothing && continue
             (rt::Type, sig::Type) = item
             # make a best-effort attempt to enqueue the relevant code for the ccallable
-            ptr = ccall(:jl_get_specialization1,
-                        #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
                         sig, world, #= mt_cache =# 0)
-            if ptr !== C_NULL
-                mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+            if mi !== nothing
+                mi = mi::MethodInstance
                 ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
                 ci isa CodeInstance && push!(invokelatest_queue, ci)
             end

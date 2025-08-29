@@ -125,7 +125,6 @@
     XX(jl_symbol_type) \
     XX(jl_task_type) \
     XX(jl_top_module) \
-    XX(jl_trimfailure_type) \
     XX(jl_true) \
     XX(jl_tuple_typename) \
     XX(jl_tvar_type) \

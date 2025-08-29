@@ -520,14 +520,17 @@ function triplet(p::AbstractPlatform)
     )
 
     # Tack on optional compiler ABI flags
-    if libgfortran_version(p) !== nothing
-        str = string(str, "-libgfortran", libgfortran_version(p).major)
+    libgfortran_version_ = libgfortran_version(p)
+    if libgfortran_version_ !== nothing
+        str = string(str, "-libgfortran", libgfortran_version_.major)
     end
-    if cxxstring_abi(p) !== nothing
-        str = string(str, "-", cxxstring_abi(p))
+    cxxstring_abi_ = cxxstring_abi(p)
+    if cxxstring_abi_ !== nothing
+        str = string(str, "-", cxxstring_abi_)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
+    libstdcxx_version_ = libstdcxx_version(p)
+    if libstdcxx_version_ !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version_.patch)
     end
 
     # Tack on all extra tags

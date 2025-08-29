@@ -4,7 +4,7 @@
 ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
 @test ex.args[2] == QuoteNode(:x)
 
-@test Base.Cartesian.lreplace!("val_col", Base.Cartesian.LReplace{String}(:col, "col", 1)) == "val_1"
+@test Base.Cartesian.lreplace_string!("val_col", Base.Cartesian.LReplace{String}(:col, "col", 1)) == "val_1"
 @test Base.setindex(CartesianIndex(1,5,4),3,2) == CartesianIndex(1, 3, 4)
 @testset "Expression Resolve" begin
     @test Base.Cartesian.exprresolve(:(1 + 3)) == 4

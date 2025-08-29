@@ -188,7 +188,7 @@ if OS_HANDLE !== RawFD
 end
 setup_stdio(stdio::Union{DevNull,OS_HANDLE,RawFD}, ::Bool) = (stdio, false)
 
-const Redirectable = Union{IO, FileRedirect, RawFD, OS_HANDLE}
+const Redirectable = Union{IO, IOServer, FileRedirect, RawFD, OS_HANDLE}
 const StdIOSet = NTuple{3, Redirectable}
 
 struct CmdRedirect <: AbstractCmd
@@ -225,6 +225,8 @@ Mark a command object so that running it will not throw an error if the result c
 ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus=true)
 ignorestatus(cmd::Union{OrCmds,AndCmds}) =
     typeof(cmd)(ignorestatus(cmd.a), ignorestatus(cmd.b))
+ignorestatus(cmd::CmdRedirect) =
+    CmdRedirect(ignorestatus(cmd.cmd), cmd.handle, cmd.stream_no, cmd.readable)
 
 """
     detach(command)

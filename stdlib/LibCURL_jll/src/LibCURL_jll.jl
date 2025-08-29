@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl
 
 baremodule LibCURL_jll
-using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll
+using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll, Zstd_jll
 if !Sys.iswindows()
     using OpenSSL_jll
 end
@@ -33,17 +33,18 @@ const libcurl = LazyLibrary(
     end;
     dependencies = if Sys.iswindows()
         if  Sys.WORD_SIZE == 32
-            LazyLibrary[libz, libnghttp2, libssh2, libgcc_s]
+            LazyLibrary[libz, libzstd, libnghttp2, libssh2, libgcc_s]
         else
-            LazyLibrary[libz, libnghttp2, libssh2]
+            LazyLibrary[libz, libzstd, libnghttp2, libssh2]
         end
     else
-        LazyLibrary[libz, libnghttp2, libssh2, libssl, libcrypto]
+        LazyLibrary[libz, libzstd, libnghttp2, libssh2, libssl, libcrypto]
     end
 )
 
 function eager_mode()
     Zlib_jll.eager_mode()
+    Zstd_jll.eager_mode()
     nghttp2_jll.eager_mode()
     LibSSH2_jll.eager_mode()
     @static if @isdefined CompilerSupportLibraries_jll
