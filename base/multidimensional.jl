@@ -2100,7 +2100,7 @@ else
 end
 ```
 """
-@inline function union_split(f, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Any,N}}, args...) where {T, N}
+@inline function union_split(f, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Val,N}}, args...) where {T, N}
     if x isa T
         f(x, args...)
     else
