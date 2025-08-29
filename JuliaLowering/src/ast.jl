@@ -428,27 +428,47 @@ end
 
 
 """
-Copy AST `ex` into `ctx`
+Recursively copy AST `ex` into `ctx`.
+
+Special provenance handling: If `copy_source` is true, treat the `.source`
+attribute as a reference and recurse on its contents.  Otherwise, treat it like
+any other attribute.
 """
-function copy_ast(ctx, ex)
-    # TODO: Do we need to keep a mapping of node IDs to ensure we don't
-    # double-copy here in the case when some tree nodes are pointed to by
-    # multiple parents? (How much does this actually happen in practice?)
-    s = ex.source
-    # TODO: Figure out how to use provenance() here?
-    srcref = s isa NodeId ? copy_ast(ctx, SyntaxTree(ex._graph, s))            :
-             s isa Tuple  ? map(i->copy_ast(ctx, SyntaxTree(ex._graph, i)), s) :
-             s
-    if !is_leaf(ex)
-        cs = SyntaxList(ctx)
-        for e in children(ex)
-            push!(cs, copy_ast(ctx, e))
-        end
-        ex2 = makenode(ctx, srcref, ex, cs)
-    else
-        ex2 = makeleaf(ctx, srcref, ex)
+function copy_ast(ctx, ex::SyntaxTree; copy_source=true)
+    graph1 = syntax_graph(ex)
+    graph2 = syntax_graph(ctx)
+    !copy_source && check_same_graph(graph1, graph2)
+    id2 = _copy_ast(graph2, graph1, ex._id, Dict{NodeId, NodeId}(), copy_source)
+    return SyntaxTree(graph2, id2)
+end
+
+function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
+                   id1::NodeId, seen, copy_source)
+    let copied = get(seen, id1, nothing)
+        isnothing(copied) || return copied
     end
-    return ex2
+    id2 = newnode!(graph2)
+    seen[id1] = id2
+    src1 = get(SyntaxTree(graph1, id1), :source, nothing)
+    src2 = if !copy_source
+        src1
+    elseif src1 isa NodeId
+        _copy_ast(graph2, graph1, src1, seen, copy_source)
+    elseif src1 isa Tuple
+        map(i->_copy_ast(graph2, graph1, i, seen, copy_source), src1)
+    else
+        src1
+    end
+    copy_attrs!(SyntaxTree(graph2, id2), SyntaxTree(graph1, id1), true)
+    setattr!(graph2, id2; source=src2)
+    if !is_leaf(graph1, id1)
+        cs = NodeId[]
+        for cid in children(graph1, id1)
+            push!(cs, _copy_ast(graph2, graph1, cid, seen, copy_source))
+        end
+        setchildren!(graph2, id2, cs)
+    end
+    return id2
 end
 
 #-------------------------------------------------------------------------------
