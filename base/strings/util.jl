@@ -232,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -240,6 +240,9 @@ See also [`chopsuffix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` prefix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -272,8 +275,16 @@ function chopprefix(s::Union{String, SubString{String}},
     end
 end
 
+function chopprefix(s::AbstractString, prefix::AbstractChar)
+    if !isempty(s) && first(s) == prefix
+        return SubString(s, nextind(s, firstindex(s)))
+    else
+        return SubString(s)
+    end
+end
+
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -281,6 +292,9 @@ See also [`chopprefix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` suffix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -315,6 +329,13 @@ function chopsuffix(s::Union{String, SubString{String}},
     end
 end
 
+function chopsuffix(s::AbstractString, suffix::AbstractChar)
+    if !isempty(s) && last(s) == suffix
+        return SubString(s, firstindex(s), prevind(s, lastindex(s)))
+    else
+        return SubString(s)
+    end
+end
 
 """
     chomp(s::AbstractString)::SubString
