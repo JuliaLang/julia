@@ -123,6 +123,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
 
+    # Disable inference when not fully covered (similar to union split limit)
+    if !fully_covering(matches)
+        add_remark!(interp, sv, "Inference disabled for method without full coverage")
+        return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    end
+
     (; valid_worlds, applicable) = matches
     update_valid_age!(sv, valid_worlds) # need to record the negative world now, since even if we don't generate any useful information, inlining might want to add an invoke edge and it won't have this information anymore
     if bail_out_toplevel_call(interp, sv)
