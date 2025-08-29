@@ -448,11 +448,11 @@ This allows the garbage collector to run concurrently with the ccall, which can 
 the `ccall` may block outside of julia.
 
 !!! warning
-	This option should be used with caution, as it can lead to undefined behavior if the ccall
-	calls back into the julia runtime. (`@cfunction`/`@ccallables` are safe however)
+    This option should be used with caution, as it can lead to undefined behavior if the ccall
+    calls back into the julia runtime. (`@cfunction`/`@ccallables` are safe however)
 
 !!! compat "Julia 1.12"
-	The `gc_safe` argument requires Julia 1.12 or higher.
+    The `gc_safe` argument requires Julia 1.12 or higher.
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
