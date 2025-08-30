@@ -16,8 +16,6 @@
 extern "C" {
 #endif
 
-jl_method_t *jl_opaque_closure_method;
-
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
     if (jl_is_svec(rt))

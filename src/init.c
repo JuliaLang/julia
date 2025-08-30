@@ -376,7 +376,6 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 }
 
 void post_boot_hooks(void);
-void post_image_load_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
@@ -612,9 +611,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
     }
-    else {
-        post_image_load_hooks();
-    }
     jl_start_threads();
     jl_start_gc_threads();
     uv_barrier_wait(&thread_init_done);
@@ -724,7 +720,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
     jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1);
-    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_options, /* throw_err */ 1);
 #ifdef _OS_WINDOWS_
     jl_exe_handle = GetModuleHandleA(NULL);
     jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
