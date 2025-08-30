@@ -349,8 +349,9 @@ if bc_opt == bc_default
         m2 = Memory{Int}(undef,n)
         m1 === m2
     end
-    no_alias_prove(1)
-    @test (@allocated no_alias_prove(5)) == 0
+    no_alias_prove5() = no_alias_prove(5)
+    no_alias_prove5()
+    @test (@allocated no_alias_prove5()) == 0
 end
 
 @testset "automatic boundscheck elision for iteration on some important types" begin
