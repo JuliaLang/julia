@@ -41,7 +41,6 @@ julia> size(A, 2)
 """
 size(t::AbstractArray, d) = _size_abstractarray(t, d)
 function _size_abstractarray(t::AbstractArray, d::Integer)
-    d < 1 && error("arraysize: dimension out of range")
     sz = size(t)
     if d <= length(sz)
         sz[d]
