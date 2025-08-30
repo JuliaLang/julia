@@ -263,9 +263,6 @@ function hash(x::DebugInfo, h::UInt)
     return h
 end
 
-hash(x::Symbol) = objectid(x)
-
-
 load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
     unsafe_load(convert(Ptr{T}, ptr + i - 1))
 
