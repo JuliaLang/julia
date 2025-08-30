@@ -188,7 +188,7 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
     @atomic method.did_scan_source |= 0x1
 end
 
-function scan_new_methods!(extext_methods::Vector{Any}, internal_methods::Vector{Any}, image_backedges_only::Bool)
+function scan_new_methods!(internal_methods::Vector{Any}, image_backedges_only::Bool)
     if image_backedges_only && generating_output(true)
         # Replacing image bindings is forbidden during incremental precompilation - skip backedge insertion
         return
@@ -197,8 +197,5 @@ function scan_new_methods!(extext_methods::Vector{Any}, internal_methods::Vector
         if isa(method, Method)
            scan_new_method!(method, image_backedges_only)
         end
-    end
-    for tme::Core.TypeMapEntry in extext_methods
-        scan_new_method!(tme.func::Method, image_backedges_only)
     end
 end
