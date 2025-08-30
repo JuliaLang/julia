@@ -57,7 +57,7 @@ function expand_quote(ctx, ex)
     # the entire expression produced by `quote` expansion. We could, but it
     # seems unnecessary for `quote` because the surface syntax is a transparent
     # representation of the expansion process. However, it's useful to add the
-    # extra srcref in a more targetted way for $ interpolations inside
+    # extra srcref in a more targeted way for $ interpolations inside
     # interpolate_ast, so we do that there.
     #
     # In principle, particular user-defined macros could opt into a similar
@@ -69,7 +69,7 @@ function expand_quote(ctx, ex)
     @ast ctx ex [K"call"
         interpolate_ast::K"Value"
         (ctx.expr_compat_mode ? Expr : SyntaxTree)::K"Value"
-        [K"inert" ex]
+        [K"inert"(meta=CompileHints(:as_Expr, ctx.expr_compat_mode)) ex]
         unquoted...
     ]
 end

@@ -261,7 +261,8 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
     elseif k == K"return"
         Core.ReturnNode(to_lowered_expr(mod, ex[1], ssa_offset))
     elseif k == K"inert"
-        ex[1]
+        e1 = ex[1]
+        getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
     elseif k == K"code_info"
         funcname = ex.is_toplevel_thunk ?
             "top-level scope" :
@@ -391,7 +392,8 @@ end
 
 Like `include`, except reads code from the given string rather than from a file.
 """
-function include_string(mod::Module, code::AbstractString, filename::AbstractString="string")
-    eval(mod, parseall(SyntaxTree, code; filename=filename))
+function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
+                        expr_compat_mode=false)
+    eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
 end
 

@@ -21,46 +21,95 @@ struct InterpolationContext{Graph} <: AbstractLoweringContext
     current_index::Ref{Int}
 end
 
+# Context for `Expr`-based AST interpolation in compat mode
+struct ExprInterpolationContext <: AbstractLoweringContext
+    values::Tuple
+    current_index::Ref{Int}
+end
+
+# Helper functions to make shared interpolation code which works with both
+# SyntaxTree and Expr data structures.
+_interp_kind(ex::SyntaxTree) = kind(ex)
+function _interp_kind(@nospecialize(ex))
+    return (ex isa Expr && ex.head === :quote) ? K"quote" :
+           (ex isa Expr && ex.head === :$)     ? K"$"     :
+           K"None" # Other cases irrelevant to interpolation
+end
+
+_children(ex::SyntaxTree) = children(ex)
+_children(@nospecialize(ex)) = ex isa Expr ? ex.args : ()
+
+_numchildren(ex::SyntaxTree) = numchildren(ex)
+_numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
+
+_syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
+_syntax_list(ctx::ExprInterpolationContext) = Any[]
+
+_interp_makenode(ctx::InterpolationContext, ex, args) = makenode(ctx, ex, ex, args)
+_interp_makenode(ctx::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
+
+_to_syntax_tree(ex::SyntaxTree) = ex
+_to_syntax_tree(@nospecialize(ex)) = expr_to_syntaxtree(ex)
+
+
 function _contains_active_interp(ex, depth)
-    k = kind(ex)
+    k = _interp_kind(ex)
     if k == K"$" && depth == 0
         return true
+    elseif _numchildren(ex) == 0
+        return false
     end
     inner_depth = k == K"quote" ? depth + 1 :
                   k == K"$"     ? depth - 1 :
                   depth
-    return any(_contains_active_interp(c, inner_depth) for c in children(ex))
+    return any(_contains_active_interp(c, inner_depth) for c in _children(ex))
 end
 
 # Produce interpolated node for `$x` syntax
-function _interpolated_value(ctx, srcref, ex)
+function _interpolated_value(ctx::InterpolationContext, srcref, ex)
     if ex isa SyntaxTree
         if !is_compatible_graph(ctx, ex)
             ex = copy_ast(ctx, ex)
         end
         append_sourceref(ctx, ex, srcref)
+    elseif ex isa Symbol
+        # Plain symbols become identifiers. This is an accomodation for
+        # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
+        # be used interchangably in macros.
+        makeleaf(ctx, srcref, K"Identifier", string(ex))
     else
         makeleaf(ctx, srcref, K"Value", ex)
     end
 end
 
-function _interpolate_ast(ctx::InterpolationContext, ex, depth)
+function _interpolated_value(::ExprInterpolationContext, _, ex)
+    ex
+end
+
+function copy_ast(::ExprInterpolationContext, @nospecialize(ex))
+    @ccall(jl_copy_ast(ex::Any)::Any)
+end
+
+function _interpolate_ast(ctx, ex, depth)
     if ctx.current_index[] > length(ctx.values) || !_contains_active_interp(ex, depth)
         return ex
     end
 
     # We have an interpolation deeper in the tree somewhere - expand to an
-    # expression 
-    inner_depth = kind(ex) == K"quote" ? depth + 1 :
-                  kind(ex) == K"$"     ? depth - 1 :
+    # expression which performs the interpolation.
+    k = _interp_kind(ex)
+    inner_depth = k == K"quote" ? depth + 1 :
+                  k == K"$"     ? depth - 1 :
                   depth
-    expanded_children = SyntaxList(ctx)
-    for e in children(ex)
-        if kind(e) == K"$" && inner_depth == 0
+
+    expanded_children = _syntax_list(ctx)
+
+    for e in _children(ex)
+        if _interp_kind(e) == K"$" && inner_depth == 0
             vals = ctx.values[ctx.current_index[]]::Tuple
             ctx.current_index[] += 1
             for (i,v) in enumerate(vals)
-                srcref = numchildren(e) == 1 ? e : e[i]
+                srcref = _numchildren(e) == 1 ? e : _children(e)[i]
                 push!(expanded_children, _interpolated_value(ctx, srcref, v))
             end
         else
@@ -68,10 +117,10 @@ function _interpolate_ast(ctx::InterpolationContext, ex, depth)
         end
     end
 
-    makenode(ctx, ex, head(ex), expanded_children)
+    _interp_makenode(ctx, ex, expanded_children)
 end
 
-function interpolate_ast(::Type{SyntaxTree}, ex, values...)
+function _setup_interpolation(::Type{SyntaxTree}, ex, values)
     # Construct graph for interpolation context. We inherit this from the macro
     # context where possible by detecting it using __macro_ctx__. This feels
     # hacky though.
@@ -92,28 +141,31 @@ function interpolate_ast(::Type{SyntaxTree}, ex, values...)
                                   value=Any, name_val=String, scope_layer=LayerId)
     end
     ctx = InterpolationContext(graph, values, Ref(1))
+    return ctx
+end
+
+function _setup_interpolation(::Type{Expr}, ex, values)
+    return ExprInterpolationContext(values, Ref(1))
+end
+
+function interpolate_ast(::Type{T}, ex, values...) where {T}
+    ctx = _setup_interpolation(T, ex, values)
+
     # We must copy the AST into our context to use it as the source reference
-    # of generated expressions.
+    # of generated expressions (and in the Expr case at least, to avoid mutation)
     ex1 = copy_ast(ctx, ex)
-    if kind(ex1) == K"$"
+    if _interp_kind(ex1) == K"$"
         @assert length(values) == 1
         vs = values[1]
         if length(vs) > 1
             # :($($(xs...))) where xs is more than length 1
-            throw(LoweringError(ex1, "More than one value in bare `\$` expression"))
+            throw(LoweringError(_to_syntax_tree(ex1),
+                                "More than one value in bare `\$` expression"))
         end
         _interpolated_value(ctx, ex1, only(vs))
     else
         _interpolate_ast(ctx, ex1, 0)
     end
-end
-
-function interpolate_ast(::Type{Expr}, ex, values...)
-    # TODO: Adjust `_interpolated_value` to ensure that incoming `Expr` data
-    # structures are treated as AST in Expr compat mode, rather than `K"Value"`?
-    # Or convert `ex` to `Expr` early during lowering and implement
-    # `interpolate_ast` for `Expr`?
-    Expr(interpolate_ast(SyntaxTree, ex, values...))
 end
 
 #--------------------------------------------------
