@@ -583,7 +583,14 @@ function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
             n
         end
     else
-        get(ex, :value, nothing)
+        val = get(ex, :value, nothing)
+        if kind(ex) == K"Value" && val isa Expr || val isa LineNumberNode
+            # Expr AST embedded in a SyntaxTree should be quoted rather than
+            # becoming part of the output AST.
+            QuoteNode(val)
+        else
+            val
+        end
     end
 end
 
@@ -774,6 +781,7 @@ end
 
 function Base.deleteat!(v::SyntaxList, inds)
     deleteat!(v.ids, inds)
+    v
 end
 
 function Base.copy(v::SyntaxList)

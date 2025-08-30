@@ -95,14 +95,14 @@ end
 @test ex[2].name_val == "a"
 
 # interpolations at multiple depths
-ex = JuliaLowering.include_string(test_mod, """
+ex = JuliaLowering.include_string(test_mod, raw"""
 let
     args = (:(x),:(y))
     quote
         x = 1
         y = 2
         quote
-            f(\$\$(args...))
+            f($$(args...))
         end
     end
 end
@@ -140,23 +140,85 @@ ex2 = JuliaLowering.eval(test_mod, ex)
 @test JuliaLowering.include_string(test_mod, ":(x)") isa SyntaxTree
 
 # Double interpolation
-ex = JuliaLowering.include_string(test_mod, """
+double_interp_ex = JuliaLowering.include_string(test_mod, raw"""
 let
     args = (:(xxx),)
-    :(:(\$\$(args...)))
+    :(:($$(args...)))
 end
 """)
 Base.eval(test_mod, :(xxx = 111))
-ex2 = JuliaLowering.eval(test_mod, ex)
-@test kind(ex2) == K"Value"
-@test ex2.value == 111
+dinterp_eval = JuliaLowering.eval(test_mod, double_interp_ex)
+@test kind(dinterp_eval) == K"Value"
+@test dinterp_eval.value == 111
 
-double_interp_ex = JuliaLowering.include_string(test_mod, """
+multi_interp_ex = JuliaLowering.include_string(test_mod, raw"""
 let
     args = (:(x), :(y))
-    :(:(\$\$(args...)))
+    :(:($$(args...)))
 end
 """)
-@test_throws LoweringError JuliaLowering.eval(test_mod, double_interp_ex)
+@test_throws LoweringError JuliaLowering.eval(test_mod, multi_interp_ex)
+
+# Interpolation of SyntaxTree Identifier vs plain Symbol
+symbol_interp = JuliaLowering.include_string(test_mod, raw"""
+let
+    x = :xx    # Plain Symbol
+    y = :(yy)  # SyntaxTree K"Identifier"
+    :(f($x, $y, z))
+end
+""")
+@test symbol_interp ≈ @ast_ [K"call"
+    "f"::K"Identifier"
+    "xx"::K"Identifier"
+    "yy"::K"Identifier"
+    "z"::K"Identifier"
+]
+@test sourcetext(symbol_interp[2]) == "\$x" # No provenance for plain Symbol
+@test sourcetext(symbol_interp[3]) == "yy"
+
+# Mixing Expr into a SyntaxTree doesn't graft it onto the SyntaxTree AST but
+# treats it as a plain old value. (This is the conservative API choice and also
+# encourages ASTs to be written in the new form. However we may choose to
+# change this if necessary for compatibility.)
+expr_interp_is_value = JuliaLowering.include_string(test_mod, raw"""
+let
+    x = Expr(:call, :f, :x)
+    :(g($x))
+end
+""")
+@test expr_interp_is_value ≈ @ast_ [K"call"
+    "g"::K"Identifier"
+    Expr(:call, :f, :x)::K"Value"
+    # ^^ NB not [K"call" "f"::K"Identifier" "x"::K"Identifier"]
+]
+@test Expr(expr_interp_is_value) == Expr(:call, :g, QuoteNode(Expr(:call, :f, :x)))
+
+@testset "Interpolation in Expr compat mode" begin
+    expr_interp = JuliaLowering.include_string(test_mod, raw"""
+    let
+        x = :xx
+        :(f($x, z))
+    end
+    """, expr_compat_mode=true)
+    @test expr_interp == Expr(:call, :f, :xx, :z)
+
+    double_interp_expr = JuliaLowering.include_string(test_mod, raw"""
+    let
+        x = :xx
+        :(:(f($$x, $y)))
+    end
+    """, expr_compat_mode=true)
+    @test double_interp_expr == Expr(:quote, Expr(:call, :f, Expr(:$, :xx), Expr(:$, :y)))
+
+    # Test that ASTs are copied before they're seen by the user
+    @test JuliaLowering.include_string(test_mod, raw"""
+    exs = []
+    for i = 1:2
+        push!(exs, :(f(x,y)))
+        push!(exs[end].args, :z)
+    end
+    exs
+    """, expr_compat_mode=true) == Any[Expr(:call, :f, :x, :y, :z), Expr(:call, :f, :x, :y, :z)]
+end
 
 end
