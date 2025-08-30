@@ -8,8 +8,8 @@ const Bottom = Union{}
 
 # Define minimal array interface here to help code used in macros:
 size(a::Array) = getfield(a, :size)
+size(a::GenericMemory) = (getfield(a, :length),)
 length(t::AbstractArray) = (@inline; prod(size(t)))
-length(a::GenericMemory) = getfield(a, :length)
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
 # multidimensional getindex will be defined later on
