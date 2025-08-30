@@ -8191,6 +8191,29 @@ end
     @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end
 
+@testset "constructing functions should have perfect return type inference" begin
+    for (type, func) in (
+        (Bool, Base._Bool),
+        (Int, Base._Int),
+        (Int8, Base._Int8),
+        (Int16, Base._Int16),
+        (Int32, Base._Int32),
+        (Int64, Base._Int64),
+        (Int128, Base._Int128),
+        (UInt, Base._UInt),
+        (UInt8, Base._UInt8),
+        (UInt16, Base._UInt16),
+        (UInt32, Base._UInt32),
+        (UInt64, Base._UInt64),
+        (UInt128, Base._UInt128),
+        (Char, Base._Char),
+        (String, Base._String),
+    )
+        @test isconcretetype(type)  # meta test
+        @test type === Base.infer_return_type(x -> func(x))
+    end
+end
+
 # Correct isdefined error for isdefined of Module of Int fld
 f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
 @test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
