@@ -453,7 +453,7 @@ function _parse_file_for_testsets(file::AbstractString, follow_includes::Bool, v
 
     # Check if file exists
     if !isfile(abs_file)
-        @warn "File not found: abs_file"
+        @warn "File not found: $abs_file"
         return TestSetNode[]
     end
 
@@ -477,9 +477,11 @@ end
 
 function _walk_syntax_tree(node, file::String, testsets::Vector{TestSetNode},
                           follow_includes::Bool, visited_files::Set{String}, variable_tracker::Dict{String, Any})
-    # Track variable assignments
+    # Track variable assignments and const declarations
     if Base.JuliaSyntax.kind(node) == Base.JuliaSyntax.K"="
-        _track_assignment(node, variable_tracker)
+        _track_assignment(node, variable_tracker, file)
+    elseif Base.JuliaSyntax.kind(node) == Base.JuliaSyntax.K"const"
+        _track_const_declaration(node, variable_tracker, file)
     elseif Base.JuliaSyntax.kind(node) == Base.JuliaSyntax.K"macrocall"
         node_children = Base.JuliaSyntax.children(node)
         if node_children !== nothing
@@ -498,6 +500,11 @@ function _walk_syntax_tree(node, file::String, testsets::Vector{TestSetNode},
         # Check for include() calls
         if follow_includes
             _handle_include_call(node, file, testsets, follow_includes, visited_files, variable_tracker)
+        end
+    elseif Base.JuliaSyntax.kind(node) == Base.JuliaSyntax.K"for"
+        # Handle for loops that might contain include statements
+        if follow_includes
+            _handle_for_loop(node, file, testsets, follow_includes, visited_files, variable_tracker)
         end
     end
 
@@ -582,10 +589,122 @@ function _handle_include_call(node, file::String, testsets::Vector{TestSetNode},
                             _process_include_file(value, file, testsets, follow_includes, visited_files)
                         end
                     end
+                elseif Base.JuliaSyntax.kind(arg_node) == Base.JuliaSyntax.K"call"
+                    # Handle complex expressions like: include(file * ".jl")
+                    call_result = _resolve_include_expression(arg_node, file, variable_tracker)
+                    if call_result !== nothing
+                        if isa(call_result, Vector{String})
+                            for filename in call_result
+                                _process_include_file(filename, file, testsets, follow_includes, visited_files)
+                            end
+                        elseif isa(call_result, String)
+                            _process_include_file(call_result, file, testsets, follow_includes, visited_files)
+                        end
+                    end
                 end
             end
         end
     end
+end
+
+function _handle_for_loop(node, file::String, testsets::Vector{TestSetNode},
+                         follow_includes::Bool, visited_files::Set{String}, variable_tracker::Dict{String, Any})
+    # Handle for loops that might contain include statements with loop variables
+
+    node_children = Base.JuliaSyntax.children(node)
+    if node_children === nothing
+        return
+    end
+    children = collect(node_children)
+
+    # Extract loop information
+    if length(children) >= 1
+        iteration_node = children[1]
+        if Base.JuliaSyntax.kind(iteration_node) == Base.JuliaSyntax.K"iteration"
+            iter_children = Base.JuliaSyntax.children(iteration_node)
+            if iter_children !== nothing
+                iter_parts = collect(iter_children)
+                if length(iter_parts) >= 1
+                    in_node = iter_parts[1]
+                    if Base.JuliaSyntax.kind(in_node) == Base.JuliaSyntax.K"in"
+                        in_children = Base.JuliaSyntax.children(in_node)
+                        if in_children !== nothing
+                            in_parts = collect(in_children)
+                            if length(in_parts) >= 2
+                                var_name = string(in_parts[1])
+                                collection_node = in_parts[2]
+
+                                # Try to resolve the collection
+                                collection_values = nothing
+                                if Base.JuliaSyntax.kind(collection_node) == Base.JuliaSyntax.K"call"
+                                    # Handle readlines(...) calls
+                                    collection_values = _resolve_collection_expression(collection_node, file, variable_tracker)
+                                elseif Base.JuliaSyntax.kind(collection_node) == Base.JuliaSyntax.K"Identifier"
+                                    collection_var = string(collection_node)
+                                    if haskey(variable_tracker, collection_var)
+                                        collection_values = variable_tracker[collection_var]
+                                    end
+                                else
+                                    # Direct collection literal
+                                    collection_values = _extract_literal_value(collection_node, file, variable_tracker)
+                                end
+
+                                if collection_values !== nothing && isa(collection_values, Vector{String})
+                                    # Process the for loop body for each iteration
+                                    if length(children) >= 2
+                                        loop_body = children[2]
+                                        for value in collection_values
+                                            # Create a new variable tracker with the loop variable
+                                            loop_tracker = copy(variable_tracker)
+                                            loop_tracker[var_name] = value
+
+                                            # Process the loop body with this context
+                                            _walk_syntax_tree(loop_body, file, testsets, follow_includes, visited_files, loop_tracker)
+                                        end
+                                        return  # Don't process the body again in normal recursion
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    # If we couldn't resolve the loop, fall back to normal processing
+    for child in children
+        _walk_syntax_tree(child, file, testsets, follow_includes, visited_files, variable_tracker)
+    end
+end
+
+function _resolve_collection_expression(collection_node, base_file::String, variable_tracker::Dict{String, Any}=Dict())
+    # Resolve expressions that return collections, like readlines(...)
+
+    if Base.JuliaSyntax.kind(collection_node) == Base.JuliaSyntax.K"call"
+        coll_children = Base.JuliaSyntax.children(collection_node)
+        if coll_children !== nothing
+            children = collect(coll_children)
+            if length(children) >= 1
+                func_name = children[1]
+                if Base.JuliaSyntax.kind(func_name) == Base.JuliaSyntax.K"Identifier" && string(func_name) == "readlines"
+                    if length(children) >= 2
+                        readlines_arg = children[2]
+                        resolved_path = _resolve_path_expression(readlines_arg, base_file, variable_tracker)
+                        if resolved_path !== nothing && isfile(resolved_path)
+                            try
+                                return readlines(resolved_path)
+                            catch
+                                @debug "Failed to read file: $resolved_path"
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nothing
 end
 
 function _process_include_file(filename::String, base_file::String, testsets::Vector{TestSetNode},
@@ -597,6 +716,173 @@ function _process_include_file(filename::String, base_file::String, testsets::Ve
     # Recursively parse the included file
     included_testsets = _parse_file_for_testsets(include_file, follow_includes, visited_files)
     append!(testsets, included_testsets)
+end
+
+function _resolve_include_expression(expr_node, base_file::String, variable_tracker::Dict{String, Any})
+    # Resolve complex include expressions like:
+    # - include(file * ".jl")
+    # - include(joinpath(@__DIR__, file))
+    # - include(readlines(...))
+
+    # Handle binary operations like file * ".jl"
+    if Base.JuliaSyntax.kind(expr_node) == Base.JuliaSyntax.K"call"
+        expr_children = Base.JuliaSyntax.children(expr_node)
+        if expr_children !== nothing
+            children = collect(expr_children)
+            if length(children) >= 1
+                func_name = children[1]
+
+                # Handle infix operations like file * ".jl" (represented as call-i)
+                if length(children) >= 3
+                    left_arg = children[1]  # First operand
+                    operator = children[2]  # Operator
+                    right_arg = children[3] # Second operand
+
+                    # Check for string concatenation
+                    if Base.JuliaSyntax.kind(operator) == Base.JuliaSyntax.K"Identifier" && string(operator) == "*" &&
+                       Base.JuliaSyntax.kind(left_arg) == Base.JuliaSyntax.K"Identifier" &&
+                       Base.JuliaSyntax.kind(right_arg) == Base.JuliaSyntax.K"string"
+
+                        var_name = string(left_arg)
+                        suffix = _extract_string_literal(right_arg)
+
+                        if haskey(variable_tracker, var_name) && suffix !== nothing
+                            var_value = variable_tracker[var_name]
+                            if isa(var_value, Vector{String})
+                                return [v * suffix for v in var_value]
+                            elseif isa(var_value, String)
+                                return var_value * suffix
+                            end
+                        end
+                    end
+                end
+
+                # Handle readlines function call
+                if Base.JuliaSyntax.kind(func_name) == Base.JuliaSyntax.K"Identifier" && string(func_name) == "readlines"
+                    if length(children) >= 2
+                        readlines_arg = children[2]
+                        resolved_path = _resolve_path_expression(readlines_arg, base_file, variable_tracker)
+                        if resolved_path !== nothing && isfile(resolved_path)
+                            try
+                                return readlines(resolved_path)
+                            catch
+                                @debug "Failed to read file: $resolved_path"
+                            end
+                        end
+                    end
+
+                # Handle joinpath function call
+                elseif Base.JuliaSyntax.kind(func_name) == Base.JuliaSyntax.K"Identifier" && string(func_name) == "joinpath"
+                    path_parts = String[]
+                    for i in 2:length(children)
+                        part = _resolve_path_part(children[i], base_file, variable_tracker)
+                        if part !== nothing
+                            push!(path_parts, part)
+                        end
+                    end
+                    if !isempty(path_parts)
+                        return joinpath(path_parts...)
+                    end
+                end
+            end
+        end
+    end
+
+    return nothing
+end
+
+function _resolve_path_expression(path_node, base_file::String, variable_tracker::Dict{String, Any}=Dict())
+    # Resolve path expressions like joinpath(@__DIR__, "testgroups")
+    if Base.JuliaSyntax.kind(path_node) == Base.JuliaSyntax.K"call"
+        path_children = Base.JuliaSyntax.children(path_node)
+        if path_children !== nothing
+            children = collect(path_children)
+            if length(children) >= 1
+                func_name = children[1]
+                if Base.JuliaSyntax.kind(func_name) == Base.JuliaSyntax.K"Identifier" && string(func_name) == "joinpath"
+                    path_parts = String[]
+                    for i in 2:length(children)
+                        part = _resolve_path_part(children[i], base_file, variable_tracker)
+                        if part !== nothing
+                            push!(path_parts, part)
+                        end
+                    end
+                    if !isempty(path_parts)
+                        return joinpath(path_parts...)
+                    end
+                end
+            end
+        end
+    elseif Base.JuliaSyntax.kind(path_node) == Base.JuliaSyntax.K"string"
+        return _extract_string_literal(path_node)
+    end
+
+    return nothing
+end
+
+function _resolve_path_part(part_node, base_file::String, variable_tracker::Dict{String, Any}=Dict())
+    # Resolve individual parts of a path expression
+    if Base.JuliaSyntax.kind(part_node) == Base.JuliaSyntax.K"string"
+        return _extract_string_literal(part_node)
+    elseif Base.JuliaSyntax.kind(part_node) == Base.JuliaSyntax.K"Identifier"
+        # Look up variable in the tracker
+        var_name = string(part_node)
+        if haskey(variable_tracker, var_name)
+            return variable_tracker[var_name]
+        end
+        return nothing
+    elseif Base.JuliaSyntax.kind(part_node) == Base.JuliaSyntax.K"macrocall"
+        # Handle @__DIR__ macro
+        macro_children = Base.JuliaSyntax.children(part_node)
+        if macro_children !== nothing
+            children = collect(macro_children)
+            if length(children) >= 1
+                macro_name = children[1]
+                if Base.JuliaSyntax.kind(macro_name) == Base.JuliaSyntax.K"MacroName" && string(macro_name) == "@__DIR__"
+                    return dirname(base_file)
+                end
+            end
+        end
+    elseif Base.JuliaSyntax.kind(part_node) == Base.JuliaSyntax.K"."
+        # Handle field access like Sys.BINDIR
+        dot_children = Base.JuliaSyntax.children(part_node)
+        if dot_children !== nothing
+            children = collect(dot_children)
+            if length(children) >= 2
+                obj_name = string(children[1])
+                field_name = string(children[2])
+
+                if obj_name == "Sys" && field_name == "BINDIR"
+                    # Return the current Julia binary directory
+                    return Sys.BINDIR
+                end
+            end
+        end
+    elseif Base.JuliaSyntax.kind(part_node) == Base.JuliaSyntax.K"call"
+        # Handle function calls like joinpath(...)
+        call_children = Base.JuliaSyntax.children(part_node)
+        if call_children !== nothing
+            children = collect(call_children)
+            if length(children) >= 1
+                func_name = children[1]
+                if Base.JuliaSyntax.kind(func_name) == Base.JuliaSyntax.K"Identifier" && string(func_name) == "joinpath"
+                    # Resolve joinpath arguments
+                    path_parts = String[]
+                    for i in 2:length(children)
+                        part = _resolve_path_part(children[i], base_file, variable_tracker)
+                        if part !== nothing
+                            push!(path_parts, string(part))
+                        end
+                    end
+                    if !isempty(path_parts)
+                        return joinpath(path_parts...)
+                    end
+                end
+            end
+        end
+    end
+
+    return nothing
 end
 
 function _parse_testset_args(args, variable_tracker::Dict{String, Any})
@@ -639,7 +925,7 @@ function _parse_testset_args(args, variable_tracker::Dict{String, Any})
     return name, body, is_loop_testset
 end
 
-function _track_assignment(node, variable_tracker::Dict{String, Any})
+function _track_assignment(node, variable_tracker::Dict{String, Any}, base_file::String="")
     # Track simple variable assignments like: var_name = [...]
     node_children = Base.JuliaSyntax.children(node)
     if node_children === nothing
@@ -654,7 +940,7 @@ function _track_assignment(node, variable_tracker::Dict{String, Any})
         # Only track simple identifier assignments
         if Base.JuliaSyntax.kind(lhs) == Base.JuliaSyntax.K"Identifier"
             var_name = string(lhs)
-            value = _extract_literal_value(rhs)
+            value = _extract_literal_value(rhs, base_file, variable_tracker)
             if value !== nothing
                 variable_tracker[var_name] = value
             end
@@ -662,7 +948,24 @@ function _track_assignment(node, variable_tracker::Dict{String, Any})
     end
 end
 
-function _extract_literal_value(node)
+function _track_const_declaration(node, variable_tracker::Dict{String, Any}, base_file::String="")
+    # Track const declarations like: const VAR = value
+    node_children = Base.JuliaSyntax.children(node)
+    if node_children === nothing
+        return
+    end
+
+    children = collect(node_children)
+    if length(children) >= 1
+        assignment_node = children[1]
+        if Base.JuliaSyntax.kind(assignment_node) == Base.JuliaSyntax.K"="
+            # This is a const assignment, delegate to normal assignment tracking
+            _track_assignment(assignment_node, variable_tracker, base_file)
+        end
+    end
+end
+
+function _extract_literal_value(node, base_file::String="", variable_tracker::Dict{String, Any}=Dict())
     # Extract literal values from simple expressions
     if Base.JuliaSyntax.kind(node) == Base.JuliaSyntax.K"vect"
         # Array literal: [item1, item2, ...]
@@ -679,6 +982,11 @@ function _extract_literal_value(node)
             end
         end
         return result
+    elseif Base.JuliaSyntax.kind(node) == Base.JuliaSyntax.K"string"
+        return _extract_string_literal(node)
+    elseif Base.JuliaSyntax.kind(node) == Base.JuliaSyntax.K"call"
+        # Handle function calls like joinpath(...)
+        return _resolve_path_part(node, base_file, variable_tracker)
     end
     return nothing
 end
@@ -700,7 +1008,7 @@ function _expand_loop_testsets(node, file::String, line::Int, args, variable_tra
         elseif Base.JuliaSyntax.kind(arg) == Base.JuliaSyntax.K"for"
             body = arg
             # Extract loop variable and collection
-            loop_var, collection_values = _parse_for_loop(arg, variable_tracker)
+            loop_var, collection_values = _parse_for_loop(arg, variable_tracker, file)
         end
     end
 
@@ -828,7 +1136,7 @@ function _handle_include_call_with_loop_context(node, file::String, testsets::Ve
     end
 end
 
-function _parse_for_loop(for_node, variable_tracker::Dict{String, Any})
+function _parse_for_loop(for_node, variable_tracker::Dict{String, Any}, base_file::String="")
     # Extract loop variable and collection from for node
     node_children = Base.JuliaSyntax.children(for_node)
     if node_children === nothing
@@ -860,7 +1168,7 @@ function _parse_for_loop(for_node, variable_tracker::Dict{String, Any})
                                     end
                                 else
                                     # Direct collection literal
-                                    collection_values = _extract_literal_value(collection_node)
+                                    collection_values = _extract_literal_value(collection_node, base_file, variable_tracker)
                                     if collection_values !== nothing
                                         return var_name, collection_values
                                     end
