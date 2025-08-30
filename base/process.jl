@@ -113,13 +113,20 @@ end
         syncd = Task[io.t for io in stdio if io isa SyncCloseFD]
         handle = Libc.malloc(_sizeof_uv_process)
         disassociate_julia_struct(handle)
-        (; exec, flags, env, dir) = cmd
+        (; exec, flags, env, dir, uid, gid) = cmd
         flags ⊻= UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME # libuv inverts the default for this, so flip this bit now
+        if uid !== nothing
+            flags |= UV_PROCESS_SETUID
+        end
+        if gid !== nothing
+            flags |= UV_PROCESS_SETGID
+        end
         iolock_begin()
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
-                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t,
+                   UInt32, UInt32, Ptr{Cvoid}),
             file, exec, loop, handle,
             iohandles, length(iohandles),
             flags,
@@ -127,6 +134,8 @@ end
             isempty(dir) ? C_NULL : dir,
             cpumask === nothing ? C_NULL : cpumask,
             cpumask === nothing ? 0 : length(cpumask),
+            uid === nothing ? typemax(UInt32) : uid,
+            gid === nothing ? typemax(UInt32) : gid,
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
         if err == 0
             pp = Process(cmd, handle, syncd)

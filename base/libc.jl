@@ -574,6 +574,7 @@ end
 
 getuid() = ccall(:jl_getuid, Culong, ())
 geteuid() = ccall(:jl_geteuid, Culong, ())
+getegid() = Sys.iswindows() ? Culong(-1) : ccall(:getegid, Culong, ())
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")
