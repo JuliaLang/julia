@@ -3140,9 +3140,9 @@ function intersect(itr, itrs...)
 end
 
 function setdiff(itr, itrs...)
-    T = promote_eltype(itr, itrs...)
+    T = eltype(itr)
     keep = setdiff!(Set{T}(itr), itrs...)
-    vectorfilter(eltype(itr), _shrink_filter!(keep), itr)
+    vectorfilter(T, _shrink_filter!(keep), itr)
 end
 
 function intersect(v::AbstractVector, r::AbstractRange)
