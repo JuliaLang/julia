@@ -197,3 +197,15 @@ nothrow_scope(Core.current_scope())
         push!(ts, 2)
     end
 end
+
+# LazyScopedValue
+global lsv_ncalled = 0
+const lsv = LazyScopedValue{Int}(OncePerProcess(() -> (global lsv_ncalled; lsv_ncalled += 1; 1)))
+@testset "LazyScopedValue" begin
+    @test (@with lsv=>2 lsv[]) == 2
+    @test lsv_ncalled == 0
+    @test lsv[] == 1
+    @test lsv_ncalled == 1
+    @test lsv[] == 1
+    @test lsv_ncalled == 1
+end

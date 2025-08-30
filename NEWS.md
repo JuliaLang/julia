@@ -67,6 +67,9 @@ New library features
   migrate now by calling `legacyscope=false` or using `macroexpand!`. This may often require
   fixes to the code calling `macroexpand` with `Meta.unescape` and `Meta.reescape` or by
   updating tests to expect `hygienic-scope` or `escape` markers might appear in the result.
+* `Base.ScopedValues.LazyScopedValue{T}` is introduced for scoped values that compute their default using a
+  `OncePerProcess{T}` callback, allowing for lazy initialization of the default value. `AbstractScopedValue` is
+  now the abstract base type for both `ScopedValue` and `LazyScopedValue`. ([#59372])
 
 Standard library changes
 ------------------------
