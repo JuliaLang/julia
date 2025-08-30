@@ -39,7 +39,15 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+size(t::AbstractArray, d) = _size_abstractarray(t, d)
+function _size_abstractarray(t::AbstractArray, d::Integer)
+    sz = size(t)
+    if d <= length(sz)
+        sz[d]
+    else
+        1
+    end
+end
 
 """
     axes(A, d)
