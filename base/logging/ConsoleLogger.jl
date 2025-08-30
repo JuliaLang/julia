@@ -114,7 +114,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts
         @lock logger.lock begin
-            remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+            remaining = get!(logger.message_limits, id, _Int(maxlog))
             remaining == 0 && return
             logger.message_limits[id] = remaining - 1
         end
@@ -125,7 +125,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # and reduce the risk of resulting method invalidations.
     message = string(message)
     msglines = if Base._isannotated(message) && !isempty(Base.annotations(message))
-        message = Base.AnnotatedString(String(message), Base.annotations(message))
+        message = Base.AnnotatedString(_String(message), Base.annotations(message))
         @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String}}, SubString{String}}}[
             (indent=0, msg=l) for l in split(chomp(message), '\n')]
     else

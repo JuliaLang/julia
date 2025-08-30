@@ -7,7 +7,7 @@ function strip_gensym(sym)
     if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
-    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$"sa => s"\1"))
+    return Symbol(replace(_String(sym), r"^(.*)#(.*#)?\d+$"sa => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
@@ -138,7 +138,7 @@ function fixup_stdlib_path(path::String)
             path = npath == npath′ ? path : npath′
         end
         if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
-            compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
+            compiler_folder = dirname(_String(Base.moduleloc(Core.Compiler).file))
             if dirname(path) == compiler_folder
                 return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
             end
@@ -157,7 +157,7 @@ function updated_methodloc(m::Method)::Tuple{String, Int32}
         end
     end
     file = fixup_stdlib_path(string(file))
-    return file, Int32(line)
+    return file, _Int32(line)
 end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
@@ -202,7 +202,7 @@ function sym_to_string(sym)
     if sym === :var"..."
         return "..."
     end
-    s = String(sym)
+    s = _String(sym)
     if endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
     else

@@ -11,6 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, promote_typejoin_union,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias, negate
 import .Base: copy, copyto!, axes
+using .._ConstructingFunctions
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, BroadcastFunction
 
 ## Computing the result's axes: deprecated name
@@ -593,7 +594,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = to_index(_newindex(I.I, keep, Idefault))
 @inline newindex(I::CartesianIndex{1}, keep, Idefault) = newindex(I.I[1], keep, Idefault)
-@inline newindex(i::Integer, keep::Tuple, idefault) = CartesianIndex(ifelse(keep[1], Int(i), Int(idefault[1])), idefault[2])
+@inline newindex(i::Integer, keep::Tuple, idefault) = CartesianIndex(ifelse(keep[1], _Int(i), _Int(idefault[1])), idefault[2])
 @inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
 @inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex()
 @inline _newindex(I, keep, Idefault) =
@@ -1015,7 +1016,7 @@ end
         if ndims(bc) == 1 || bitst >= 64 - length(ax1)
             if ndims(bc) > 1 && bitst != 0
                 @inbounds @simd for j = bitst:63
-                    remain |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
+                    remain |= _UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
                 end
                 @inbounds destc[indc+=1] = remain
                 bitst, remain = 0, UInt64(0)
@@ -1023,13 +1024,13 @@ end
             while i <= last(ax1) - 64
                 z = UInt64(0)
                 @inbounds @simd for j = 0:63
-                    z |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
+                    z |= _UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
                 end
                 @inbounds destc[indc+=1] = z
             end
         end
         @inbounds @simd for j = i+1:last(ax1)
-            remain |= UInt64(convert(Bool, bc′[j, I])) << (bitst & 63)
+            remain |= _UInt64(convert(Bool, bc′[j, I])) << (bitst & 63)
             bitst += 1
         end
     end
@@ -1291,7 +1292,7 @@ function __dot__(x::Expr)
         tmp = x.head === :(<:) ? :.<: : :.>:
         Expr(:call, tmp, dotargs...)
     else
-        head = String(x.head)::String
+        head = _String(x.head)
         if last(head) == '=' && first(head) != '.' || head == "&&" || head == "||"
             Expr(Symbol('.', head), dotargs...)
         else

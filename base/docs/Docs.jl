@@ -68,6 +68,7 @@ include("bindings.jl")
 import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
 import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
+using .._ConstructingFunctions
 import ..CoreDocs: lazy_iterpolate
 
 export doc, hasdoc, undocumented_names
@@ -337,7 +338,7 @@ Fields that may be included in the returned `Dict`:
 function metadata(__source__, __module__, expr, ismodule)
     args = []
     # Filename and linenumber of the docstring.
-    __file__ = isa(__source__.file, Symbol) ? String(__source__.file) : ""
+    __file__ = isa(__source__.file, Symbol) ? _String(__source__.file) : ""
     push!(args, Pair(:path, __file__))
     push!(args, Pair(:linenumber, __source__.line))
     # Module in which the docstring is defined.

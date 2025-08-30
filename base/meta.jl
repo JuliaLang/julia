@@ -20,6 +20,8 @@ public parse
 
 import Base: isexpr
 
+using .._ConstructingFunctions
+
 ## AST decoding helpers ##
 
 is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
@@ -115,7 +117,7 @@ julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ"
 ```
 """
 function ispostfixoperator(s::Union{Symbol,AbstractString})
-    s = String(s)::String
+    s = _String(s)
     return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
 end
 
@@ -347,7 +349,7 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 """
 function parse(str::AbstractString, pos::Integer;
                filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true)
-    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom)
+    ex, pos = _parse_string(str, _String(filename), 1, pos, greedy ? :statement : :atom)
     if raise && isexpr(ex, :error)
         err = ex.args[1]
         if err isa String
@@ -399,11 +401,11 @@ function parse(str::AbstractString;
 end
 
 function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1)
-    return _parse_string(text, String(filename), lineno, pos, :atom)
+    return _parse_string(text, _String(filename), lineno, pos, :atom)
 end
 
 function parseall(text::AbstractString; filename="none", lineno=1)
-    ex,_ = _parse_string(text, String(filename), lineno, 1, :all)
+    ex,_ = _parse_string(text, _String(filename), lineno, 1, :all)
     return ex
 end
 

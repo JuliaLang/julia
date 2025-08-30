@@ -181,7 +181,7 @@ if Sys.iswindows()
         isempty(s) && return s
         LOCALE_INVARIANT = 0x0000007f
         LCMAP_UPPERCASE  = 0x00000200
-        ws = transcode(UInt16, String(s))
+        ws = transcode(UInt16, _String(s))
         result = ccall(:LCMapStringW, stdcall, Cint, (UInt32, UInt32, Ptr{UInt16}, Cint, Ptr{UInt16}, Cint),
                        LOCALE_INVARIANT, LCMAP_UPPERCASE, ws, length(ws), ws, length(ws))
         systemerror(:LCMapStringW, iszero(result))

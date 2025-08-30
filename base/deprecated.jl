@@ -276,7 +276,7 @@ end
                 Core    # TODO: Is it reasonable to attribute callers without linfo to Core?
             end
         end,
-        _file=String(caller.file),
+        _file=_String(caller.file),
         _line=caller.line,
         _id=(frame,funcsym),
         _group=:depwarn,
