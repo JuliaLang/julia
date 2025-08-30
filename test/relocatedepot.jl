@@ -20,7 +20,7 @@ function test_harness(@nospecialize(fn); empty_load_path=true, empty_depot_path=
 end
 
 # We test relocation with these dummy pkgs:
-# - RelocationTestPkg1 - pkg with no include_dependency
+# - RelocationTestPkg1 - pkg with no include_dependency, also contains a RelocPath()
 # - RelocationTestPkg2 - pkg with include_dependency tracked by `mtime`
 # - RelocationTestPkg3 - pkg with include_dependency tracked by content
 # - RelocationTestPkg4 - pkg with no dependencies; will be compiled such that the pkgimage is
@@ -263,11 +263,18 @@ else
         pkgname = "RelocationTestPkg1"
         test_harness() do
             push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
             push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == true
             @test Base.isrelocatable(pkg) == true
+            pkg = Base.require(pkg)
+            @test String(pkg.relocpath) == joinpath(pkgdir(pkg), "src")
+            pop!(DEPOT_PATH)
+            @test_throws(
+                ErrorException("Failed to relocate @depot/RelocationTestPkg1/src in any of DEPOT_PATH."),
+                String(pkg.relocpath)
+            )
         end
     end
 
