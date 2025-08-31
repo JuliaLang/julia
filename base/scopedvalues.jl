@@ -89,6 +89,8 @@ julia> sval[]
     implementation is available from the package ScopedValues.jl.
 """
 mutable struct ScopedValue{T} <: AbstractScopedValue{T}
+    # NOTE this struct must be defined as mutable one since it's used as a key of
+    #      `ScopeStorage` dictionary and thus needs object identity
     const hasdefault::Bool
     const default::T
     ScopedValue{T}() where T = new{T}(false)
