@@ -86,7 +86,9 @@ function emit_field_info!(ctx::TypeEmitter, @nospecialize(dt::DataType), field::
     print(ctx.io, "{")
     print(ctx.io, " \"name\": ", field_name_json(dt, field), ",")
     print(ctx.io, " \"type_id\": ", type_id, ",")
-    print(ctx.io, " \"offset\": ", desc.offset)
+    print(ctx.io, " \"offset\": ", desc.offset, ",")
+    print(ctx.io, " \"isptr\": ", desc.isptr, ",")
+    print(ctx.io, " \"isfieldatomic\": ", Base.isfieldatomic(dt, field))
     print(ctx.io, " }")
 end
 
