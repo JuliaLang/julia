@@ -15,7 +15,7 @@
   - changed-files:
     - any-glob-to-any-file: 'test/**/*'
 
-# CI/GitHub Actions changes - safe to auto-label  
+# CI/GitHub Actions changes - safe to auto-label
 "ci":
   - changed-files:
     - any-glob-to-any-file:

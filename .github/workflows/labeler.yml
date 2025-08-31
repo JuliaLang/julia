@@ -16,7 +16,7 @@ jobs:
     steps:
       # We intentionally do NOT checkout the source code, for security reasons
       # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
-      
+
       - name: Apply labels based on changed files
         uses: actions/labeler@8558fd74291d67161a8a78ce36a881fa63b766a9 # v5.0.0
         with:
