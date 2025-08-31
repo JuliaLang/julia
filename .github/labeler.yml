@@ -1,6 +1,6 @@
 # Configuration for automatic PR labeling based on file paths
 # See: https://github.com/actions/labeler
-comm#
+#
 # Starting with a very conservative approach - only high-confidence labeling rules
 
 # Documentation changes - very safe to auto-label
