@@ -4,7 +4,7 @@
 # Core system components
 "compiler":
   - changed-files:
-    - any-glob-to-any-file:
+it -m"    - any-glob-to-any-file:
       - 'Compiler/**/*'
       - 'src/julia-parser.scm'
       - 'src/julia-syntax.scm'
