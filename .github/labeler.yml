@@ -1,6 +1,6 @@
 # Configuration for automatic PR labeling based on file paths
 # See: https://github.com/actions/labeler
-#
+comm#
 # Starting with a very conservative approach - only high-confidence labeling rules
 
 # Documentation changes - very safe to auto-label
@@ -10,14 +10,7 @@
       - 'doc/**/*'
       - '**/*.md'
 
-# Test changes - safe to auto-label
-"tests":
-  - changed-files:
-    - any-glob-to-any-file: 'test/**/*'
-
 # CI/GitHub Actions changes - safe to auto-label
 "ci":
   - changed-files:
-    - any-glob-to-any-file:
-      - '.github/**/*'
-      - 'contrib/**/*'
+    - any-glob-to-any-file: '.github/**/*'
