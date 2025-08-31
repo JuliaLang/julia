@@ -5,8 +5,8 @@ permissions:
   pull-requests: write
 
 on:
-  pull_request:
-    types: [opened, reopened]
+  pull_request_target:
+    types: [opened, synchronize]
 
 jobs:
   label:
@@ -14,14 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout the JuliaLang/julia repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-
+      # We intentionally do NOT checkout the source code, for security reasons
+      # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+      
       - name: Apply labels based on changed files
         uses: actions/labeler@8558fd74291d67161a8a78ce36a881fa63b766a9 # v5.0.0
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          # The file doesn't exist locally, but that's fine, because `actions/labeler` will read the
+          # contents from the GitHub API.
+          #
+          # > The path to the label configuration file. If the file doesn't exist at the specified path
+          # > on the runner, action will read from the source repository via the Github API.
+          # Source: https://github.com/actions/labeler/blob/b0a1180683c9f17424de4d71c044bea4c7b9bc7c/README.md?plain=1#L175
           configuration-path: ".github/labeler.yml"
           sync-labels: false # Don't remove labels that don't match
