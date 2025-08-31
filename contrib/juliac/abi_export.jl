@@ -95,7 +95,7 @@ function emit_struct_info!(ctx::TypeEmitter, @nospecialize(dt::DataType); indent
     let indented_println(args...) = println(ctx.io, " " ^ indent, args...)
         indented_println("{")
         indented_println("  \"id\": ", type_id, ",")
-        indented_println("  \"kind\": \"struct\",")
+        indented_println(ismutabletype(dt) ?("  \"kind\": \"mutable struct\",") : "  \"kind\": \"struct\",")
         indented_println("  \"name\": ", type_name_json(dt), ",")
         indented_println("  \"size\": ", Core.sizeof(dt), ",")
         indented_println("  \"alignment\": ", Base.datatype_alignment(dt), ",")
