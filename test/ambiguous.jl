@@ -348,7 +348,7 @@ end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
-        pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
+        pop!(need_to_handle_undef_sparam, which(Base._eltype_ntuple, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
         @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))

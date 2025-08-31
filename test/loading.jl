@@ -1310,6 +1310,9 @@ end
     @test cf.inline
     @test cf.opt_level == 3
     @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
+
+    # Round trip CacheFlags
+    @test parse(Base.CacheFlags, repr(cf)) == cf
 end
 
 empty!(Base.DEPOT_PATH)

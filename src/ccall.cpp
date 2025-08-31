@@ -606,6 +606,9 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
         jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, arg1, (jl_value_t*)jl_voidpointer_type);
     }
+    else if (jl_is_cpointer_type(jl_typeof(ptr))) {
+        fptr = *(void(**)(void))jl_data_ptr(ptr);
+    }
     else {
         out.gcroot = ptr;
         if (jl_is_tuple(ptr) && jl_nfields(ptr) == 1) {
@@ -632,9 +635,6 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                     f_lib = jl_dlfind(f_name);
                 }
             }
-        }
-        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-            fptr = *(void(**)(void))jl_data_ptr(ptr);
         }
         else if (jl_is_tuple(ptr) && jl_nfields(ptr) > 1) {
             jl_value_t *t0 = jl_fieldref(ptr, 0);
@@ -1707,8 +1707,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const int rng_offset = offsetof(jl_tls_states_t, rngseed);
         Value *rng_ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptls_p, ConstantInt::get(ctx.types().T_size, rng_offset / sizeof(int8_t)));
         setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
-        assert(argv[0].V->getType() == getInt64Ty(ctx.builder.getContext()));
-        auto store = ctx.builder.CreateAlignedStore(argv[0].V, rng_ptr, Align(sizeof(void*)));
+        Value *val64 = emit_unbox(ctx, getInt64Ty(ctx.builder.getContext()), argv[0], (jl_value_t*)jl_uint64_type);
+        auto store = ctx.builder.CreateAlignedStore(val64, rng_ptr, Align(sizeof(void*)));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         ai.decorateInst(store);
         return ghostValue(ctx, jl_nothing_type);

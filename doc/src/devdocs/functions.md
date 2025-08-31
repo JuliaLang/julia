@@ -38,7 +38,7 @@ This entry point for the same functionality accepts the function separately, so 
 does not contain the function:
 
 ```c
-jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
+jl_value_t *jl_call(jl_value_t *f, jl_value_t **args, int32_t nargs);
 ```
 
 ## Adding methods
