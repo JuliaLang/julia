@@ -44,7 +44,11 @@ import .Main.FakePTYs: with_fake_pty
             @test has_disable_message
 
             # Send exit command to clean shutdown
-            write(ptm, "exit()\n")
+            if isopen(ptm)
+                write(ptm, "exit()\n")
+            else
+                @warn "PTY master is already closed before sending exit command"
+            end
 
             # Read any remaining output until the process exits
             try
