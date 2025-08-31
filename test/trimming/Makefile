@@ -61,7 +61,7 @@ $(BIN)/capplication$(EXE): $(SRCDIR)/capplication.c $(SRCDIR)/libsimple.h $(BIN)
 	$(CC) -I$(BIN) -I$(SRCDIR) -I$(JULIA_LIBDIR) -o $@ $< -Wl,--whole-archive $(BIN)/libsimple-o.a -Wl,--no-whole-archive $(LDFLAGS_ADD) $(LDFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
 
 check: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
-	$(JULIA) --depwarn=error $(SRCDIR)/trimming.jl $<
+	$(JULIA) --startup-file=no --history-file=no --depwarn=error --project=$(SRCDIR) $(SRCDIR)/trimming.jl $<
 
 clean:
 	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.json
