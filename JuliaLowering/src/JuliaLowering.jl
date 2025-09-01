@@ -7,13 +7,17 @@ using Base
 const _include = Base.IncludeInto(JuliaLowering)
 using Core: eval
 
-using JuliaSyntax
+if parentmodule(JuliaLowering) === Base
+    using Base.JuliaSyntax
+else
+    using JuliaSyntax
+end
 
-using JuliaSyntax: highlight, Kind, @KSet_str
-using JuliaSyntax: is_leaf, children, numchildren, head, kind, flags, has_flags, numeric_flags
-using JuliaSyntax: filename, first_byte, last_byte, byte_range, sourcefile, source_location, span, sourcetext
-
-using JuliaSyntax: is_literal, is_number, is_operator, is_prec_assignment, is_prefix_call, is_infix_op_call, is_postfix_op_call, is_error
+using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
+    head, kind, flags, has_flags, numeric_flags, filename, first_byte,
+    last_byte, byte_range, sourcefile, source_location, span, sourcetext,
+    is_literal, is_number, is_operator, is_prec_assignment, is_prefix_call,
+    is_infix_op_call, is_postfix_op_call, is_error
 
 _include("kinds.jl")
 _register_kinds()
