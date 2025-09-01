@@ -584,7 +584,7 @@ end
         @test total_error  == 6
         @test total_broken == 0
     end
-    ts.anynonpass = false
+    @atomic ts.anynonpass = 0x00
     deleteat!(Test.get_testset().results, 1)
 end
 
@@ -1541,7 +1541,7 @@ end
             write(f,
             """
             using Test
-            ENV["JULIA_TEST_FAILFAST"] = true
+
             @testset "Foo" begin
                 @test false
                 @test error()
@@ -1551,7 +1551,7 @@ end
                 end
             end
             """)
-            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            cmd    = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no $f`, "JULIA_TEST_FAILFAST"=>"true")
             result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
             @test occursin(expected, result)
         end

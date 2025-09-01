@@ -1600,11 +1600,11 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             invokelatest_queue === nothing && continue
             (rt::Type, sig::Type) = item
             # make a best-effort attempt to enqueue the relevant code for the ccallable
-            ptr = ccall(:jl_get_specialization1,
-                        #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
                         sig, world, #= mt_cache =# 0)
-            if ptr !== C_NULL
-                mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+            if mi !== nothing
+                mi = mi::MethodInstance
                 ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
                 ci isa CodeInstance && push!(invokelatest_queue, ci)
             end

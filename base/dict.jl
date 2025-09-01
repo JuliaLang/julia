@@ -698,11 +698,11 @@ function skip_deleted_floor!(h::Dict)
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
+@propagate_inbounds _iterate_dict(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted(t, t.idxfloor))
+    _iterate_dict(t, skip_deleted(t, t.idxfloor))
 end
-@propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
+@propagate_inbounds iterate(t::Dict, i) = _iterate_dict(t, skip_deleted(t, i))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count

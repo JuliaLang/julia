@@ -294,7 +294,6 @@
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
-    XX(jl_macroexpand1) \
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \
@@ -341,8 +340,6 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_method_match_to_mi) \
-    XX(jl_get_unspecialized) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
