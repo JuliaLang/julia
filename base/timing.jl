@@ -202,7 +202,7 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     factor = binary ? 1024 : 1000
     bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
-        return string(_Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
+        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
         return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end
@@ -223,7 +223,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
             if ma == 1
-                print(io, _Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+                print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
             else
                 print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
             end

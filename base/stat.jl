@@ -91,7 +91,7 @@ end
 StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Base.UV_ENOENT)
 StatStruct(buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct("", buf, ioerrno)
 StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct(
-    desc isa OS_HANDLE ? desc : _String(desc),
+    desc isa OS_HANDLE ? desc : String(desc),
     ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
     ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
     ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
@@ -380,7 +380,7 @@ function ispath(path::String)
     end
     return r == 0
 end
-ispath(path::AbstractString) = ispath(_String(path))
+ispath(path::AbstractString) = ispath(String(path))
 
 """
     isfifo(path)::Bool

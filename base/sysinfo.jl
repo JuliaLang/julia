@@ -676,7 +676,7 @@ function which(program_name::String)
     # If we couldn't find anything, don't return anything
     nothing
 end
-which(program_name::AbstractString) = which(_String(program_name))
+which(program_name::AbstractString) = which(String(program_name))
 
 """
     Sys.username()::String

@@ -855,7 +855,7 @@ function takestring!(io::IOBuffer)
 end
 
 # Fallback methods
-takestring!(io::GenericIOBuffer) = _String(take!(io))
+takestring!(io::GenericIOBuffer) = String(take!(io))
 
 """
     _unsafe_take!(io::IOBuffer)
@@ -953,7 +953,7 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, _Int(nb))
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
 
 function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     io.readable || _throw_not_readable()

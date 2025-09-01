@@ -69,7 +69,7 @@ Like [`reverse`](@ref), but operates in-place in `A`.
 """
 reverse!(A::AbstractArray; dims=:) = _reverse!(A, dims)
 _reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))
-_reverse!(A, dim::Integer) = _reverse!(A, (_Int(dim),))
+_reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
 _reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
 function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
     dims === () && return A # nothing to reverse

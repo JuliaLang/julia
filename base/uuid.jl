@@ -40,7 +40,7 @@ _crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 
 let
 @inline function uuid_kernel(s, i, u)
-    _c = _UInt32(@inbounds codeunit(s, i))
+    _c = UInt32(@inbounds codeunit(s, i))
     d = __convert_digit(_c, UInt32(16))
     d >= 16 && return nothing
     u <<= 4

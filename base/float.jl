@@ -802,7 +802,7 @@ _precision_with_base_2(::Type{Float64}) = 53
 function _precision(x, base::Integer)
     base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
     p = _precision_with_base_2(x)
-    return base == 2 ? _Int(p) : floor(Int, p / log2(base))
+    return base == 2 ? Int(p) : floor(Int, p / log2(base))
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)

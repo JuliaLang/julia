@@ -82,8 +82,8 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
         bld::Tuple{Vararg{Union{Integer,AbstractString}}} = ()) =
     VersionNumber(VInt(major), VInt(minor), VInt(patch),
-        map(x->x isa Integer ? _UInt64(x) : _String(x), pre),
-        map(x->x isa Integer ? _UInt64(x) : _String(x), bld))
+        map(x->x isa Integer ? UInt64(x) : String(x), pre),
+        map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
 VersionNumber(v::Tuple) = VersionNumber(v...)
 VersionNumber(v::VersionNumber) = v
@@ -122,7 +122,7 @@ $"ix
 
 function split_idents(s::AbstractString)
     idents = eachsplit(s, '.')
-    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : _String(ident) for ident in idents]
+    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
     return tuple(pidents...)::VerTuple
 end
 

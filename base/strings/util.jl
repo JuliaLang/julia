@@ -96,7 +96,7 @@ function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
     reset(io)
     return s == codeunits(prefix)
 end
-Base.startswith(io::IO, prefix::AbstractString) = startswith(io, _String(prefix))
+Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
@@ -557,7 +557,7 @@ julia> rtruncate("foo", 3)
 See also [`ltruncate`](@ref) and [`ctruncate`](@ref).
 """
 function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
-    ret = string_truncate_boundaries(str, _Int(maxwidth), replacement, Val(:right))
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
     if isnothing(ret)
         return string(str)
     else
@@ -590,7 +590,7 @@ julia> ltruncate("foo", 3)
 See also [`rtruncate`](@ref) and [`ctruncate`](@ref).
 """
 function ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
-    ret = string_truncate_boundaries(str, _Int(maxwidth), replacement, Val(:left))
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
     if isnothing(ret)
         return string(str)
     else
@@ -624,7 +624,7 @@ julia> ctruncate("foo", 3)
 See also [`ltruncate`](@ref) and [`rtruncate`](@ref).
 """
 function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
-    ret = string_truncate_boundaries(str, _Int(maxwidth), replacement, Val(:center), prefer_left)
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
     if isnothing(ret)
         return string(str)
     else
@@ -996,7 +996,7 @@ function _replace_finish(io::IO, str, count::Int,
         j > e1 && break
         if i == a || i <= k
             # copy out preserved portion
-            GC.@preserve str unsafe_write(io, pointer(str, i), _UInt(j-i))
+            GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
             # copy out replacement string
             _replace(io, replaces[p], str, r, patterns[p])
         end
@@ -1044,11 +1044,11 @@ end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
 function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
-    count == 0 && return _String(str)
+    count == 0 && return String(str)
     e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
     if notfound
         foreach(_free_pat_replacer, patterns)
-        return _String(str)
+        return String(str)
     end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     return takestring!(_replace_finish(out, str, count, e1, patterns, replaces, rs))
@@ -1105,10 +1105,10 @@ julia> replace("abcabc", "a" => "b", "b" => "c", r".+" => "a")
 ```
 """
 replace(io::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
-    _replace_(io, _String(s), pat_f, _Int(count))
+    _replace_(io, String(s), pat_f, Int(count))
 
 replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
-    _replace_(_String(s), pat_f, _Int(count))
+    _replace_(String(s), pat_f, Int(count))
 
 
 # TODO: allow transform as the first argument to replace?
@@ -1195,7 +1195,7 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     return dest
 end
 
-@inline number_from_hex(c::AbstractChar) = number_from_hex(_Char(c))
+@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c))
 @inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
 @inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
@@ -1246,7 +1246,7 @@ end
 function bytes2hex(io::IO, itr)
     eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
     for x in itr
-        print(io, _Char(hex_chars[1 + x >> 4]), _Char(hex_chars[1 + x & 0xf]))
+        print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end
 end
 
@@ -1278,7 +1278,7 @@ julia> ascii("abcdefgh")
 "abcdefgh"
 ```
 """
-ascii(x::AbstractString) = ascii(_String(x))
+ascii(x::AbstractString) = ascii(String(x))
 
 Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
 function Base.rest(s::AbstractString, st...)

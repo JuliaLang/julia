@@ -37,7 +37,7 @@ function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:A
     offset = position(io.io)
     eof(io) || _clear_annotations_in_region!(io.annotations, offset+1:offset+ncodeunits(astr))
     _insert_annotations!(io, astr.annotations)
-    write(io.io, _String(astr))
+    write(io.io, String(astr))
 end
 
 write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
@@ -211,7 +211,7 @@ using ..Base: eachregion, invoke_in_world, tls_world_age
 
 # Write
 
-ansi_write(f::Function, io::IO, x::Any) = f(io, _String(x))
+ansi_write(f::Function, io::IO, x::Any) = f(io, String(x))
 
 ansi_write_(f::Function, io::IO, @nospecialize(x::Any)) =
     invoke_in_world(tls_world_age(), ansi_write, f, io, x)

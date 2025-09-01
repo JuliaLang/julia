@@ -1466,7 +1466,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     cind = pos_s
     lastind = pos_d + numbits - 1
     @inbounds while bind ≤ lastind
-        unsafe_bitsetindex!(Bc, _Bool(C[cind]), bind)
+        unsafe_bitsetindex!(Bc, Bool(C[cind]), bind)
         bind += 1
         cind += 1
     end
@@ -1507,7 +1507,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     @inbounds if ld0 > 0
         c = UInt64(0)
         for j = ld0:lt0
-            c |= (_UInt64(unchecked_bool_convert(C[ind])) << j)
+            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
         Bc[kd0] = (Bc[kd0] & msk_d0) | (c & ~msk_d0)
@@ -1518,7 +1518,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     @inbounds for i = 1:nc
         c = UInt64(0)
         for j = 0:63
-            c |= (_UInt64(unchecked_bool_convert(C[ind])) << j)
+            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
         Bc[bind] = c
@@ -1529,7 +1529,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
         @assert bind == kd1
         c = UInt64(0)
         for j = 0:ld1
-            c |= (_UInt64(unchecked_bool_convert(C[ind])) << j)
+            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
             ind += 1
         end
         Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
@@ -1602,7 +1602,7 @@ function fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{In
     I0 = V.indices[1]
     l0 = length(I0)
     l0 == 0 && return V
-    fill_chunks!(B.chunks, _Bool(x), first(I0), l0)
+    fill_chunks!(B.chunks, Bool(x), first(I0), l0)
     return V
 end
 
@@ -1613,7 +1613,7 @@ fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Varar
         I0::AbstractUnitRange{Int}, I::Union{Int,AbstractUnitRange{Int}}...)
     N = length(I)
     quote
-        y = _Bool(x)
+        y = Bool(x)
         idxlens = @ncall $N index_lengths I0 d->I[d]
 
         f0 = indexoffset(I0)+1

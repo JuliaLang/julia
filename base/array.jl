@@ -672,7 +672,7 @@ _similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape, axs) where {T} =
 
 # make a collection appropriate for collecting `itr::Generator`
 _array_for(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
-_array_for(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, _Int(len))
+_array_for(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
 _array_for(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 # used by syntax lowering for simple typed comprehensions
@@ -1112,7 +1112,7 @@ end
 
 function _growbeg!(a::Vector, delta::Integer)
     @_noub_meta
-    delta = _Int(delta)
+    delta = Int(delta)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
@@ -1167,7 +1167,7 @@ end
 
 function _growend!(a::Vector, delta::Integer)
     @_noub_meta
-    delta = _Int(delta)
+    delta = Int(delta)
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
     mem = ref.mem
@@ -1185,8 +1185,8 @@ end
 
 function _growat!(a::Vector, i::Integer, delta::Integer)
     @_terminates_globally_noub_meta
-    delta = _Int(delta)
-    i = _Int(i)
+    delta = Int(delta)
+    i = Int(i)
     i == 1 && return _growbeg!(a, delta)
     len = length(a)
     i == len + 1 && return _growend!(a, delta)
@@ -1230,7 +1230,7 @@ end
 
 # efficiently delete part of an array
 function _deletebeg!(a::Vector, delta::Integer)
-    delta = _Int(delta)
+    delta = Int(delta)
     len = length(a)
     0 <= delta <= len || throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
     for i in 1:delta
@@ -1245,7 +1245,7 @@ function _deletebeg!(a::Vector, delta::Integer)
     return
 end
 function _deleteend!(a::Vector, delta::Integer)
-    delta = _Int(delta)
+    delta = Int(delta)
     len = length(a)
     0 <= delta <= len || throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
     newlen = len - delta
@@ -1256,7 +1256,7 @@ function _deleteend!(a::Vector, delta::Integer)
     return
 end
 function _deleteat!(a::Vector, i::Integer, delta::Integer)
-    i = _Int(i)
+    i = Int(i)
     len = length(a)
     0 <= delta || throw(ArgumentError("_deleteat! requires delta >= 0"))
     1 <= i <= len || throw(BoundsError(a, i))
@@ -1551,7 +1551,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
-    sz = max(_Int(sz), len)
+    sz = max(Int(sz), len)
     inc = sz - len
     if sz <= memlen
         # if we don't save at least 1/8th memlen then its not worth it to shrink
@@ -2185,7 +2185,7 @@ julia> reverse(A, 3, 5)
 ```
 """
 function reverse(A::AbstractVector, start::Integer, stop::Integer=lastindex(A))
-    s, n = _Int(start), _Int(stop)
+    s, n = Int(start), Int(stop)
     B = similar(A)
     for i = firstindex(A):s-1
         B[i] = A[i]
@@ -2249,7 +2249,7 @@ julia> A
 ```
 """
 function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
-    s, n = _Int(start), _Int(stop)
+    s, n = Int(start), Int(stop)
     if n > s # non-empty and non-trivial
         liv = LinearIndices(v)
         if !(first(liv) ≤ s ≤ last(liv))
@@ -3196,12 +3196,12 @@ end
     $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
-    dims = (_Int(l),)
+    dims = (Int(l),)
     ref = _wrap(m, dims)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
-    dims = (_Int(l),)
+    dims = (Int(l),)
     ref = _wrap(memoryref(m), (l,))
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end

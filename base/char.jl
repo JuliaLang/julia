@@ -47,8 +47,8 @@ represents a valid Unicode character.
 """
 Char
 
-@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(_UInt32(x))
-@constprop :aggressive AbstractChar(x::Number) = _Char(x)
+@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
+@constprop :aggressive AbstractChar(x::Number) = Char(x)
 @constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 @constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
 (::Type{T})(x::T) where {T<:AbstractChar} = x
@@ -189,7 +189,7 @@ end
     0 ≤ b ≤ 0x7f ? bitcast(Char, (b % UInt32) << 24) : Char_cold(UInt32(b))
 end
 
-convert(::Type{AbstractChar}, x::Number) = _Char(x) # default to Char
+convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
 convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)::T
 convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)::T
 convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)::T
@@ -225,31 +225,31 @@ hash(x::Char, h::UInt) =
     hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
-isless(x::AbstractChar, y::AbstractChar) = isless(_Char(x), _Char(y))
-==(x::AbstractChar, y::AbstractChar) = _Char(x) == _Char(y)
-hash(x::AbstractChar, h::UInt) = hash(_Char(x), h)
+isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
+==(x::AbstractChar, y::AbstractChar) = Char(x) == Char(y)
+hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
-@inline -(x::AbstractChar, y::AbstractChar) = _Int(x) - _Int(y)
+@inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
 @inline function -(x::T, y::Integer) where {T<:AbstractChar}
     if x isa Char
         u = Int32((bitcast(UInt32, x) >> 24) % Int8)
         if u >= 0 # inline the runtime fast path
             z = u - y
-            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(_UInt32(z))
+            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
         end
     end
-    return T(_Int32(x) - _Int32(y))
+    return T(Int32(x) - Int32(y))
 end
 @inline function +(x::T, y::Integer) where {T<:AbstractChar}
     if x isa Char
         u = Int32((bitcast(UInt32, x) >> 24) % Int8)
         if u >= 0 # inline the runtime fast path
             z = u + y
-            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(_UInt32(z))
+            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
         end
     end
-    return T(_Int32(x) + _Int32(y))
+    return T(Int32(x) + Int32(y))
 end
 @inline +(x::Integer, y::AbstractChar) = y + x
 
@@ -257,7 +257,7 @@ end
 # (Packages may implement other IO subtypes to specify different encodings.)
 # In contrast, `write(io, c)` outputs a `c` in an encoding determined by typeof(c).
 print(io::IO, c::Char) = (write(io, c); nothing)
-print(io::IO, c::AbstractChar) = print(io, _Char(c)) # fallback: convert to output UTF-8
+print(io::IO, c::AbstractChar) = print(io, Char(c)) # fallback: convert to output UTF-8
 
 const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',

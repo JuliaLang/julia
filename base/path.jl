@@ -53,7 +53,7 @@ elseif Sys.iswindows()
 
     function splitdrive(path::String)
         m = match(splitdrive_re, path)::AbstractMatch
-        _String(something(m.captures[1])), _String(something(m.captures[2]))
+        String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
     error("path primitives for this OS need to be defined")
@@ -160,7 +160,7 @@ function _splitdir_nodrive(a::String, b::String)
     getcapture(cs, i) = cs[i]::AbstractString
     c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
     a = string(a, isempty(c1) ? c2[1] : c1)
-    a, _String(c3)
+    a, String(c3)
 end
 
 """
@@ -227,7 +227,7 @@ function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m === nothing && return (path,"")
-    (a*something(m.captures[1])), _String(something(m.captures[2]))
+    (a*something(m.captures[1])), String(something(m.captures[2]))
 end
 
 # NOTE: deprecated in 1.4
@@ -253,7 +253,7 @@ julia> splitpath("/home/myuser/example.jl")
  "example.jl"
 ```
 """
-splitpath(p::AbstractString) = splitpath(_String(p))
+splitpath(p::AbstractString) = splitpath(String(p))
 
 function splitpath(p::String)
     drive, p = splitdrive(p)
@@ -608,10 +608,10 @@ function relpath(path::String, startpath::String = ".")
     return isempty(relpath_) ? curdir :  relpath_
 end
 relpath(path::AbstractString, startpath::AbstractString) =
-    relpath(_String(path), _String(startpath))
+    relpath(String(path), String(startpath))
 
 for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
-    @eval $f(path::AbstractString) = $f(_String(path))
+    @eval $f(path::AbstractString) = $f(String(path))
 end
 
 # RFC3986 Section 2.1
@@ -665,4 +665,4 @@ else
     end
 end
 
-uripath(path::AbstractString) = uripath(_String(path))
+uripath(path::AbstractString) = uripath(String(path))

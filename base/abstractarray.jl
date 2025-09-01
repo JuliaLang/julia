@@ -212,8 +212,8 @@ String
 """
 valtype(A::Type{<:AbstractArray}) = eltype(A)
 
-prevind(::AbstractArray, i::Integer) = _Int(i)-1
-nextind(::AbstractArray, i::Integer) = _Int(i)+1
+prevind(::AbstractArray, i::Integer) = Int(i)-1
+nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 
 """
@@ -838,10 +838,10 @@ to_shape(dims::Dims) = dims
 to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
-to_shape(i::Integer) = _Int(i)
+to_shape(i::Integer) = Int(i)
 to_shape(r::AbstractOneTo) = _to_shape(last(r))
 _to_shape(x::Integer) = to_shape(x)
-_to_shape(x) = _Int(x)
+_to_shape(x) = Int(x)
 to_shape(r::AbstractUnitRange) = r
 
 """
@@ -951,7 +951,7 @@ function copyto!(dest::AbstractArray, src)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src)
-    i = _Int(dstart)
+    i = Int(dstart)
     if haslength(src) && length(dest) > 0
         @boundscheck checkbounds(dest, i:(i + length(src) - 1))
         for x in src
@@ -986,7 +986,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
             "source has fewer elements than required, ",
             "expected at least ",sstart," got ", sstart-1)))
     end
-    i = _Int(dstart)
+    i = Int(dstart)
     while y !== nothing
         val, st = y
         dest[i] = val
@@ -1023,7 +1023,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
             "expected at least ",sstart," got ", sstart-1)))
     end
     val, st = y
-    i = _Int(dstart)
+    i = Int(dstart)
     @inbounds dest[i] = val
     for val in Iterators.take(Iterators.rest(src, st), n-1)
         i += 1
@@ -1601,8 +1601,8 @@ parts can specialize this method to return the concatenation of the `dataids` of
 their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
-dataids(A::AbstractArray) = (_UInt(objectid(A)),)
-dataids(A::Memory) = (_UInt(A.ptr),)
+dataids(A::AbstractArray) = (UInt(objectid(A)),)
+dataids(A::Memory) = (UInt(A.ptr),)
 dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()

@@ -32,9 +32,6 @@ import Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-using Base: _ConstructingFunctions
-using ._ConstructingFunctions
-
 export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
 public accumulate, filter, map, peel, reverse, Stateful
 
@@ -772,8 +769,8 @@ julia> collect(Iterators.take(a,3))
  5
 ```
 """
-take(xs, n::Integer) = Take(xs, _Int(n))
-take(xs::Take, n::Integer) = Take(xs.xs, min(_Int(n), xs.n))
+take(xs, n::Integer) = Take(xs, Int(n))
+take(xs::Take, n::Integer) = Take(xs.xs, min(Int(n), xs.n))
 
 eltype(::Type{Take{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Take{I}}) where {I} = IteratorEltype(I)
@@ -828,9 +825,9 @@ julia> collect(Iterators.drop(a,4))
  11
 ```
 """
-drop(xs, n::Integer) = Drop(xs, _Int(n))
-drop(xs::Take, n::Integer) = Take(drop(xs.xs, _Int(n)), max(0, xs.n - _Int(n)))
-drop(xs::Drop, n::Integer) = Drop(xs.xs, _Int(n) + xs.n)
+drop(xs, n::Integer) = Drop(xs, Int(n))
+drop(xs::Take, n::Integer) = Take(drop(xs.xs, Int(n)), max(0, xs.n - Int(n)))
+drop(xs::Drop, n::Integer) = Drop(xs.xs, Int(n) + xs.n)
 
 eltype(::Type{Drop{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Drop{I}}) where {I} = IteratorEltype(I)
@@ -1068,7 +1065,7 @@ julia> Iterators.cycle([1 2], 4) |> collect |> println
 [1, 2, 1, 2, 1, 2, 1, 2]
 ```
 """
-repeated(x, n::Integer) = take(repeated(x), _Int(n))
+repeated(x, n::Integer) = take(repeated(x), Int(n))
 
 eltype(::Type{Repeated{O}}) where {O} = O
 
@@ -1385,7 +1382,7 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
 ```
 """ function partition(c, n::Integer)
     n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
-    return PartitionIterator(c, _Int(n))
+    return PartitionIterator(c, Int(n))
 end
 
 struct PartitionIterator{T}

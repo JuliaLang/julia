@@ -507,6 +507,6 @@ Process(`echo 1`, ProcessExited(0))
 ```
 """
 macro cmd(str::String)
-    cmd_ex = shell_parse(str, special=shell_special, filename=_String(__source__.file))[1]
+    cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
     return :(cmd_gen($(esc(cmd_ex))))
 end

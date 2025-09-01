@@ -813,7 +813,7 @@ unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p)
 function write(s::IO, x::Ref{T}) where {T}
     x isa Ptr && error("write cannot copy from a Ptr")
     if isbitstype(T)
-        _Int(unsafe_write(s, x, Core.sizeof(T)))
+        Int(unsafe_write(s, x, Core.sizeof(T)))
     else
         write(s, x[])
     end
@@ -1112,7 +1112,7 @@ function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
     end
     # convert String to a utf8-byte-iterator
     if !(target isa String) && !(target isa SubString{String})
-        target = _String(target)
+        target = String(target)
     end
     target = codeunits(target)::AbstractVector
     return copyuntil(out, io, target, keep=keep)
@@ -1304,7 +1304,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         if ichunk == jchunk # common case: current and previous newline in same chunk
             chunk = chunks[ichunk]
-            s = _String(view(chunk, inewline+1:_stripnewline(r.itr.keep, jnewline, chunk)))
+            s = String(view(chunk, inewline+1:_stripnewline(r.itr.keep, jnewline, chunk)))
         else
             buf = IOBuffer(sizehint=max(128, length(chunks[ichunk])-inewline+jnewline))
             write(buf, view(chunks[ichunk], inewline+1:length(chunks[ichunk])))
@@ -1533,7 +1533,7 @@ julia> rm("my_file.txt")
 """
 function countlines(io::IO; eol::AbstractChar='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
-    aeol = _UInt8(eol)
+    aeol = UInt8(eol)
     a = Vector{UInt8}(undef, 8192)
     nl = nb = 0
     while !eof(io)

@@ -155,7 +155,7 @@ end
 
 function compile(pattern::AbstractString, options::Integer)
     if !(pattern isa Union{String,SubString{String}})
-        pattern = _String(pattern)
+        pattern = String(pattern)
     end
     errno = RefValue{Cint}(0)
     erroff = RefValue{Csize_t}(0)
@@ -266,8 +266,8 @@ function capture_names(re)
         offset = (i-1)*name_entry_size + 1
         # The capture group index corresponding to name 'i' is stored as a
         # big-endian 16-bit value.
-        high_byte = _UInt16(unsafe_load(nametable_ptr, offset))
-        low_byte = _UInt16(unsafe_load(nametable_ptr, offset+1))
+        high_byte = UInt16(unsafe_load(nametable_ptr, offset))
+        low_byte = UInt16(unsafe_load(nametable_ptr, offset+1))
         idx = (high_byte << 8) | low_byte
         # The capture group name is a null-terminated string located directly
         # after the index.

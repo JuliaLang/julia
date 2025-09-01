@@ -15,7 +15,7 @@ function fl_parse(text::Union{Core.SimpleVector,String},
 end
 
 function fl_parse(text::AbstractString, filename::AbstractString, lineno, offset, options)
-    fl_parse(_String(text), _String(filename), lineno, offset, options)
+    fl_parse(String(text), String(filename), lineno, offset, options)
 end
 
 function fl_lower(ex, mod::Module, filename::Union{String,Ptr{UInt8}}="none",

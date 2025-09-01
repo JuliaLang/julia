@@ -364,7 +364,7 @@ function _join_preserve_annotations(iterator, args...)
             seekstart(io)
             read(io, AnnotatedString{String})
         else
-            _String(take!(io.io))
+            String(take!(io.io))
         end
     end
 end
@@ -442,14 +442,14 @@ function escape_string(io::IO, s::AbstractString, esc=""; keep = (), ascii::Bool
             c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
             c == '\\'          ? print(io, "\\\\") :
-            '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[_Int(c)-6]) :
+            '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
             isprint(c)         ? print(io, c) :
-                                 print(io, "\\x", string(_UInt32(c), base = 16, pad = 2))
+                                 print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
         elseif !isoverlong(c) && !ismalformed(c)
             !ascii && isprint(c) ? print(io, c) :
-            c <= '\x7f'          ? print(io, "\\x", string(_UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'        ? print(io, "\\u", string(_UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
-                                   print(io, "\\U", string(_UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
+            c <= '\x7f'          ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
+            c <= '\uffff'        ? print(io, "\\u", string(UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
+                                   print(io, "\\U", string(UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
         else # malformed or overlong
             u = bswap(reinterpret(UInt32, c)::UInt32)
             while true
@@ -800,7 +800,7 @@ end
 
 function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
     str = if C <: AnnotatedChar
-        _String(getfield.(chars, :char))
+        String(getfield.(chars, :char))
     else
         sprint(sizehint=length(chars)) do io
             for c in chars

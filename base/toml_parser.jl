@@ -8,7 +8,6 @@ TOML.jl standard library instead (by `import TOML` or `using TOML`).
 module TOML
 
 using Base: IdSet
-using .._ConstructingFunctions
 
 # we parse DateTime into these internal structs,
 # unless a different DateTime library is passed to the Parser constructor
@@ -618,7 +617,7 @@ function _parse_key(l::Parser)
                 c = eat_char(l)
                 return ParserError(ErrInvalidBareKeyCharacter, c)
             end
-            _String(take_substring(l))
+            String(take_substring(l))
         else
             c = eat_char(l)
             return ParserError(ErrInvalidBareKeyCharacter, c)

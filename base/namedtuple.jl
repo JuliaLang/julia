@@ -172,8 +172,8 @@ isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 empty(::NamedTuple) = NamedTuple()
 
-prevind(@nospecialize(t::NamedTuple), i::Integer) = _Int(i)-1
-nextind(@nospecialize(t::NamedTuple), i::Integer) = _Int(i)+1
+prevind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)-1
+nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt

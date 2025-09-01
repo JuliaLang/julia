@@ -144,8 +144,8 @@ CartesianIndex(1, 3)
 """
 function nextind end
 
-prevind(@nospecialize(t::Tuple), i::Integer) = _Int(i)-1
-nextind(@nospecialize(t::Tuple), i::Integer) = _Int(i)+1
+prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
+nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
 function keys(t::Tuple, t2::Tuple...)
     @inline

@@ -456,12 +456,12 @@ function copyto!(dest::BitArray, src::BitArray)
 end
 
 function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
-    copy_to_bitarray_chunks!(dest.chunks, _Int(doffs), src, _Int(soffs), _Int(n))
+    copy_to_bitarray_chunks!(dest.chunks, Int(doffs), src, Int(soffs), Int(n))
     return dest
 end
 
 copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer) =
-    _copyto_int!(dest, _Int(doffs), src, _Int(soffs), _Int(n))
+    _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
 function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
     n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
@@ -811,7 +811,7 @@ function sizehint!(B::BitVector, sz::Integer)
     return B
 end
 
-resize!(B::BitVector, n::Integer) = _resize_int!(B, _Int(n))
+resize!(B::BitVector, n::Integer) = _resize_int!(B, Int(n))
 function _resize_int!(B::BitVector, n::Int)
     n0 = length(B)
     n == n0 && return B
@@ -861,7 +861,7 @@ function pushfirst!(B::BitVector, item)
     for i = length(Bc) : -1 : 2
         Bc[i] = (Bc[i] << 1) | (Bc[i-1] >>> 63)
     end
-    Bc[1] = _UInt64(item) | (Bc[1] << 1)
+    Bc[1] = UInt64(item) | (Bc[1] << 1)
     return B
 end
 
@@ -888,9 +888,9 @@ function popfirst!(B::BitVector)
     return item
 end
 
-insert!(B::BitVector, i::Integer, item) = _insert_int!(B, _Int(i), item)
+insert!(B::BitVector, i::Integer, item) = _insert_int!(B, Int(i), item)
 function _insert_int!(B::BitVector, i::Int, item)
-    i = _Int(i)
+    i = Int(i)
     n = length(B)
     1 <= i <= n+1 || throw(BoundsError(B, i))
     item = convert(Bool, item)
@@ -952,7 +952,7 @@ end
 
 function deleteat!(B::BitVector, i::Integer)
     i isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
-    i = _Int(i)
+    i = Int(i)
     n = length(B)
     1 <= i <= n || throw(BoundsError(B, i))
 
@@ -1005,14 +1005,14 @@ function deleteat!(B::BitVector, inds)
         end
         new_l -= 1
         if i > q
-            copy_chunks!(Bc, _Int(p), Bc, _Int(q), _Int(i-q))
+            copy_chunks!(Bc, Int(p), Bc, Int(q), Int(i-q))
             p += i-q
         end
         q = i+1
         y = iterate(inds, s)
     end
 
-    q <= n && copy_chunks!(Bc, _Int(p), Bc, _Int(q), _Int(n-q+1))
+    q <= n && copy_chunks!(Bc, Int(p), Bc, Int(q), Int(n-q+1))
 
     delta_k = num_bit_chunks(new_l) - length(Bc)
     delta_k < 0 && _deleteend!(Bc, -delta_k)
@@ -1046,14 +1046,14 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
         s = y + 1
         new_l -= 1
         if i > q
-            copy_chunks!(Bc, _Int(p), Bc, _Int(q), _Int(i-q))
+            copy_chunks!(Bc, Int(p), Bc, Int(q), Int(i-q))
             p += i - q
         end
         q = i + 1
         y = findnext(inds, s)
     end
 
-    q <= n && copy_chunks!(Bc, _Int(p), Bc, _Int(q), _Int(n - q + 1))
+    q <= n && copy_chunks!(Bc, Int(p), Bc, Int(q), Int(n - q + 1))
 
     delta_k = num_bit_chunks(new_l) - length(Bc)
     delta_k < 0 && _deleteend!(Bc, -delta_k)
@@ -1075,7 +1075,7 @@ function splice!(B::BitVector, i::Integer)
     #       as v = B[i] is enough to do both bounds checking
     #       and Bool check then just pass Int(i) to _deleteat!
     i isa Bool && depwarn("passing Bool as an index is deprecated", :splice!)
-    i = _Int(i)
+    i = Int(i)
     n = length(B)
     1 <= i <= n || throw(BoundsError(B, i))
 
@@ -1088,7 +1088,7 @@ const _default_bit_splice = BitVector()
 
 function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
     r isa Bool && depwarn("passing Bool as an index is deprecated", :splice!)
-    _splice_int!(B, isa(r, AbstractUnitRange{Int}) ? r : _Int(r), ins)
+    _splice_int!(B, isa(r, AbstractUnitRange{Int}) ? r : Int(r), ins)
 end
 
 function _splice_int!(B::BitVector, r, ins)
@@ -1134,7 +1134,7 @@ function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins)
     Bins = BitVector(undef, length(ins))
     i = 1
     for x in ins
-        Bins[i] = _Bool(x)
+        Bins[i] = Bool(x)
         i += 1
     end
     return splice!(B, r, Bins)
@@ -1325,7 +1325,7 @@ function (<<)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
-    i < n && copy_chunks!(A.chunks, 1, B.chunks, _Int(i+1), _Int(n-i))
+    i < n && copy_chunks!(A.chunks, 1, B.chunks, Int(i+1), Int(n-i))
     return A
 end
 
@@ -1333,7 +1333,7 @@ function (>>>)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
-    i < n && copy_chunks!(A.chunks, _Int(i+1), B.chunks, 1, _Int(n-i))
+    i < n && copy_chunks!(A.chunks, Int(i+1), B.chunks, 1, Int(n-i))
     return A
 end
 
@@ -1420,9 +1420,9 @@ details and examples.
 """
 (>>>)(B::BitVector, i::Int) = (i >=0 ? B >> unsigned(i) : B << unsigned(-i))
 
-circshift!(dest::BitVector, src::BitVector, i::Integer) = _circshift_int!(dest, src, _Int(i))
+circshift!(dest::BitVector, src::BitVector, i::Integer) = _circshift_int!(dest, src, Int(i))
 function _circshift_int!(dest::BitVector, src::BitVector, i::Int)
-    i = _Int(i)
+    i = Int(i)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
     i %= n
@@ -1474,7 +1474,7 @@ end
 
 # returns the index of the next true element, or nothing if all false
 function findnext(B::BitArray, start::Integer)
-    start = _Int(start)
+    start = Int(start)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
     unsafe_bitfindnext(B.chunks, start)
@@ -1518,14 +1518,14 @@ findfirstnot(B::BitArray) = findnextnot(B,1)
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Bool},
                   B::BitArray, start::Integer)
     v = pred.x
-    v == false && return findnextnot(B, _Int(start))
+    v == false && return findnextnot(B, Int(start))
     v == true && return findnext(B, start)
     return nothing
 end
 #findfirst(B::BitArray, v) = findnext(B, 1, v)  ## defined in array.jl
 
 # returns the index of the first element for which the function returns true
-findnext(testf::Function, B::BitArray, start::Integer) = _findnext_int(testf, B, _Int(start))
+findnext(testf::Function, B::BitArray, start::Integer) = _findnext_int(testf, B, Int(start))
 function _findnext_int(testf::Function, B::BitArray, start::Int)
     f0::Bool = testf(false)
     f1::Bool = testf(true)
@@ -1559,14 +1559,14 @@ end
 
 # returns the index of the previous true element, or nothing if all false
 function findprev(B::BitArray, start::Integer)
-    start = _Int(start)
+    start = Int(start)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
     unsafe_bitfindprev(B.chunks, start)
 end
 
 function findprevnot(B::BitArray, start::Int)
-    start = _Int(start)
+    start = Int(start)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
 
@@ -1594,14 +1594,14 @@ findlastnot(B::BitArray) = findprevnot(B, length(B))
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Bool},
                   B::BitArray, start::Integer)
     v = pred.x
-    v == false && return findprevnot(B, _Int(start))
+    v == false && return findprevnot(B, Int(start))
     v == true && return findprev(B, start)
     return nothing
 end
 #findlast(B::BitArray, v) = findprev(B, 1, v)  ## defined in array.jl
 
 # returns the index of the previous element for which the function returns true
-findprev(testf::Function, B::BitArray, start::Integer) = _findprev_int(testf, B, _Int(start))
+findprev(testf::Function, B::BitArray, start::Integer) = _findprev_int(testf, B, Int(start))
 function _findprev_int(testf::Function, B::BitArray, start::Int)
     f0::Bool = testf(false)
     f1::Bool = testf(true)

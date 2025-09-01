@@ -1070,7 +1070,7 @@ function check_world_bounded(tn::Core.TypeName)
             if isa(cval, Type) && cval <: tn.wrapper
                 max_world = @atomic partition.max_world
                 max_world == typemax(UInt) && return nothing
-                return _Int(partition.min_world):_Int(max_world)
+                return Int(partition.min_world):Int(max_world)
             end
         end
         isdefined(partition, :next) || return nothing

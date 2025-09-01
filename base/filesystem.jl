@@ -145,8 +145,6 @@ import .Base:
 
 import .Base.RefValue
 
-using .._ConstructingFunctions
-
 if Sys.iswindows()
     import .Base: cwstring
 end
@@ -392,7 +390,7 @@ function isexecutable(path::String)
     X_OK = 0x01
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
 end
-isexecutable(path::AbstractString) = isexecutable(_String(path))
+isexecutable(path::AbstractString) = isexecutable(String(path))
 
 """
     isreadable(path::String)
@@ -419,7 +417,7 @@ function isreadable(path::String)
     R_OK = 0x04
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
 end
-isreadable(path::AbstractString) = isreadable(_String(path))
+isreadable(path::AbstractString) = isreadable(String(path))
 
 """
     iswritable(path::String)
@@ -446,7 +444,7 @@ function iswritable(path::String)
     W_OK = 0x02
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end
-iswritable(path::AbstractString) = iswritable(_String(path))
+iswritable(path::AbstractString) = iswritable(String(path))
 
 
 end

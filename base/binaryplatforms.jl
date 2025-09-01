@@ -741,7 +741,7 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
             if isempty(tag_fields)
                 return Pair{String,String}[]
             end
-            return map(v -> _String(v[1]) => _String(v[2]), split.(tag_fields, "+"))
+            return map(v -> String(v[1]) => String(v[2]), split.(tag_fields, "+"))
         end
         merge!(tags, Dict(split_tags(m["tags"])))
 

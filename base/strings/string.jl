@@ -10,7 +10,7 @@ struct StringIndexError <: Exception
     index::Int
 end
 @noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
-    throw(StringIndexError(s, _Int(i)))
+    throw(StringIndexError(s, Int(i)))
 function Base.showerror(io::IO, exc::StringIndexError)
     s = exc.string
     print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
@@ -157,7 +157,7 @@ pointer(s::String, i::Integer) = pointer(s) + _Int(i) - 1
 ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
-codeunit(s::String, i::Integer) = codeunit(s, _Int(i))
+codeunit(s::String, i::Integer) = codeunit(s, Int(i))
 @assume_effects :foldable @inline function codeunit(s::String, i::Int)
     @boundscheck checkbounds(s, i)
     b = GC.@preserve s unsafe_load(pointer(s, i))
@@ -359,7 +359,7 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
         row = _UTF8DFAState(0)
         for j in 1:num_states
             #Calculate the shift required for the next state
-            to_shift = _UInt8((state_shifts[state_arrays[i,j]+1]) )
+            to_shift = UInt8((state_shifts[state_arrays[i,j]+1]) )
             #Shift the next state into the position of the current state
             row = row | (_UTF8DFAState(to_shift) << state_shifts[j])
         end
@@ -453,7 +453,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 @inline function iterate(s::String, i::Int=firstindex(s))
     (i % UInt) - 1 < ncodeunits(s) || return nothing
     b = @inbounds codeunit(s, i)
-    u = _UInt32(b) << 24
+    u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
     return @noinline iterate_continued(s, i, u)
 end
@@ -466,24 +466,24 @@ function iterate_continued(s, i::Int, u::UInt32)
     (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
-    u |= _UInt32(b) << 16
+    u |= UInt32(b) << 16
     # second continuation byte
     ((i += 1) > n) | (u < 0xe0000000) && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
-    u |= _UInt32(b) << 8
+    u |= UInt32(b) << 8
     # third continuation byte
     ((i += 1) > n) | (u < 0xf0000000) && @goto ret
     @inbounds b = codeunit(s, i)
     b & 0xc0 == 0x80 || @goto ret
-    u |= _UInt32(b); i += 1
+    u |= UInt32(b); i += 1
 @label ret
     return reinterpret(Char, u), i
 end
 
 @propagate_inbounds function getindex(s::String, i::Int)
     b = codeunit(s, i)
-    u = _UInt32(b) << 24
+    u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u)
     return getindex_continued(s, i, u)
 end
@@ -500,22 +500,22 @@ function getindex_continued(s, i::Int, u::UInt32)
     (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 1
     b & 0xc0 == 0x80 || @goto ret
-    u |= _UInt32(b) << 16
+    u |= UInt32(b) << 16
 
     ((i += 1) > n) | (u < 0xe0000000) && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 2
     b & 0xc0 == 0x80 || @goto ret
-    u |= _UInt32(b) << 8
+    u |= UInt32(b) << 8
 
     ((i += 1) > n) | (u < 0xf0000000) && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 3
     b & 0xc0 == 0x80 || @goto ret
-    u |= _UInt32(b)
+    u |= UInt32(b)
 @label ret
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[_Int(first(r)):_Int(last(r))]
+getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
 @inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""

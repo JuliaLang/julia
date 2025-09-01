@@ -322,7 +322,7 @@ findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
 
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
-    i = _Int(i)
+    i = Int(i)
     z = ncodeunits(s) + 1
     1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
@@ -378,7 +378,7 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
     sentinel = firstindex(s) - 1
     n = length(t)
     m = length(s)
-    i = _Int(_i) - sentinel
+    i = Int(_i) - sentinel
     (i < 1 || i > m+1) && throw(BoundsError(s, _i))
 
     if n == 0
@@ -478,7 +478,7 @@ julia> findnext("Lang", "JuliaLang", 2)
 6:9
 ```
 """
-findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, _Int(start))
+findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, Int(start))
 
 """
     findnext(ch::AbstractChar, string::AbstractString, start::Integer)
@@ -640,7 +640,7 @@ end
 
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
-    i = _Int(i)
+    i = Int(i)
     z = ncodeunits(s) + 1
     0 ≤ i ≤ z || throw(BoundsError(s, i))
     i == z && return nothing
@@ -696,7 +696,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     sentinel = firstindex(s) - 1
     n = length(t)
     m = length(s)
-    k = _Int(_k) - sentinel
+    k = Int(_k) - sentinel
     k < 0 && throw(BoundsError(s, _k))
 
     if n == 0
@@ -792,7 +792,7 @@ julia> findprev("Julia", "JuliaLang", 6)
 1:5
 ```
 """
-findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, _Int(i))
+findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(i))
 
 """
     findprev(ch::AbstractChar, string::AbstractString, start::Integer)
