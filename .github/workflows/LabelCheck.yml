@@ -1,4 +1,4 @@
-name: Label Check
+name: Labels
 
 permissions:
   contents: read
