@@ -287,6 +287,20 @@ end
     """)
     @test only(methods(test_mod.f_slotflags)).called == 0b0100
 
+    # Branching combined with nospecialize meta in CodeInfo
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_branch_meta(@nospecialize(x), cond)
+            if cond
+                x + 1
+            else
+                x + 2
+            end
+        end
+
+        (f_branch_meta(10, false), f_branch_meta(20, true))
+    end
+    """) == (12, 21)
 end
 
 @testset "Keyword functions" begin

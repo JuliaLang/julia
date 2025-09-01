@@ -154,9 +154,9 @@ function to_code_info(ex, mod, funcname, slots)
         end
     end
 
-    ssa_offset = length(stmts)
+    stmt_offset = length(stmts)
     for stmt in children(ex)
-        push!(stmts, to_lowered_expr(mod, stmt, ssa_offset))
+        push!(stmts, to_lowered_expr(mod, stmt, stmt_offset))
         add_ir_debug_info!(current_codelocs_stack, stmt)
     end
 
@@ -223,7 +223,7 @@ function to_code_info(ex, mod, funcname, slots)
     )
 end
 
-function to_lowered_expr(mod, ex, ssa_offset=0)
+function to_lowered_expr(mod, ex, stmt_offset=0)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -257,9 +257,9 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
     elseif k == K"static_parameter"
         Expr(:static_parameter, ex.var_id)
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id + ssa_offset)
+        Core.SSAValue(ex.var_id + stmt_offset)
     elseif k == K"return"
-        Core.ReturnNode(to_lowered_expr(mod, ex[1], ssa_offset))
+        Core.ReturnNode(to_lowered_expr(mod, ex[1], stmt_offset))
     elseif k == K"inert"
         e1 = ex[1]
         getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
@@ -276,38 +276,38 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
     elseif k == K"Value"
         ex.value
     elseif k == K"goto"
-        Core.GotoNode(ex[1].id)
+        Core.GotoNode(ex[1].id + stmt_offset)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(to_lowered_expr(mod, ex[1], ssa_offset), ex[2].id)
+        Core.GotoIfNot(to_lowered_expr(mod, ex[1], stmt_offset), ex[2].id + stmt_offset)
     elseif k == K"enter"
         catch_idx = ex[1].id
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
-            Core.EnterNode(catch_idx, to_lowered_expr(mod, ex[2], ssa_offset))
+            Core.EnterNode(catch_idx, to_lowered_expr(mod, ex[2], stmt_offset))
     elseif k == K"method"
-        cs = map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))
+        cs = map(e->to_lowered_expr(mod, e, stmt_offset), children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
         c1 = cs[1] isa QuoteNode ? cs[1].value : cs[1]
         Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
-        Core.NewvarNode(to_lowered_expr(mod, ex[1], ssa_offset))
+        Core.NewvarNode(to_lowered_expr(mod, ex[1], stmt_offset))
     elseif k == K"opaque_closure_method"
-        args = map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))
+        args = map(e->to_lowered_expr(mod, e, stmt_offset), children(ex))
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         @assert args[4] isa QuoteNode
         args[4] = args[4].value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
-        args = Any[to_lowered_expr(mod, e, ssa_offset) for e in children(ex)]
+        args = Any[to_lowered_expr(mod, e, stmt_offset) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         args[1] = args[1].value
         Expr(:meta, args...)
     elseif k == K"static_eval"
         @assert numchildren(ex) == 1
-        to_lowered_expr(mod, ex[1], ssa_offset)
+        to_lowered_expr(mod, ex[1], stmt_offset)
     elseif k == K"cfunction"
-        args = Any[to_lowered_expr(mod, e, ssa_offset) for e in children(ex)]
+        args = Any[to_lowered_expr(mod, e, stmt_offset) for e in children(ex)]
         if kind(ex[2]) == K"static_eval"
             args[2] = QuoteNode(args[2])
         end
@@ -339,7 +339,7 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         if isnothing(head)
             throw(LoweringError(ex, "Unhandled form for kind $k"))
         end
-        Expr(head, map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))...)
+        Expr(head, map(e->to_lowered_expr(mod, e, stmt_offset), children(ex))...)
     end
 end
 
@@ -355,7 +355,7 @@ function Core.eval(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false)
         return x
     end
     linear_ir = lower(mod, ex, expr_compat_mode)
-    expr_form = to_lowered_expr(mod, linear_ir)
+    expr_form = to_lowered_expr(mod, linear_ir, 0)
     eval(mod, expr_form)
 end
 
