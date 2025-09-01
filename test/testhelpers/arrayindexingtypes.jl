@@ -90,3 +90,4 @@ Base.size(A::HeterogeneousAxisArray) = size(A.data)
 Base.getindex(A::HeterogeneousAxisArray, i::Int...) = A.data[i...]
 Base.setindex!(A::HeterogeneousAxisArray, v, i::Int...) = (A.data[i...] = v)
 Base.axes(A::HeterogeneousAxisArray{T,2}) where T = (TestAxis{1}(size(A.data, 1)), TestAxis{2}(size(A.data, 2)))
+Base.reshape(A::HeterogeneousAxisArray, ax) = reshape(A.data, map(length, ax))

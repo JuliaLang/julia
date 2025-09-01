@@ -95,7 +95,7 @@ function _dropdims(A::AbstractArray, dims::Dims)
         # axes of the result rather than extracting one at each index
         return reshape(A, ax::typeof(_sub(ox, dims)))
     else
-        return reshape(A, map(length, ax))
+        return reshape(A, ax)
     end
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
