@@ -605,10 +605,14 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
+"Assumes `x != 0`. Computes top_set_bit(abs(x))."
+function _top_set_bit(x::BigInt)
+    x.size * BITS_PER_LIMB - GC.@preserve x leading_zeros(unsafe_load(x.d, abs(x.size)))
+end
 function top_set_bit(x::BigInt)
     isnegative(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
     iszero(x) && return 0
-    x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
+    _top_set_bit(x)
 end
 
 divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
@@ -680,24 +684,33 @@ sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
     foldl(MPZ.add!, arr; init=BigInt(0))
 
 function prod(arr::AbstractArray{BigInt})
-    # compute first the needed number of bits for the result,
-    # to avoid re-allocations;
-    # GMP will always request n+m limbs for the result in MPZ.mul!,
-    # if the arguments have n and m limbs; so we add all the bits
-    # taken by the array elements, and add BITS_PER_LIMB to that,
-    # to account for the rounding to limbs in MPZ.mul!
-    # (BITS_PER_LIMB-1 would typically be enough, to which we add
-    # 1 for the initial multiplication by init=1 in foldl)
-    nbits = BITS_PER_LIMB
-    for x in arr
-        iszero(x) && return zero(BigInt)
-        xsize = abs(x.size)
-        lz = GC.@preserve x leading_zeros(unsafe_load(x.d, xsize))
-        nbits += xsize * BITS_PER_LIMB - lz
+    any(iszero, arr) && return zero(BigInt)
+    _prod(arr, firstindex(arr), lastindex(arr))
+end
+function _prod(arr::AbstractArray{BigInt}, lo, hi)
+    if hi - lo + 1 <= 16
+        # compute first the needed number of bits for the result,
+        # to avoid re-allocations;
+        # GMP will always request n+m limbs for the result in MPZ.mul!,
+        # if the arguments have n and m limbs; so we add all the bits
+        # taken by the array elements, and add BITS_PER_LIMB to that,
+        # to account for the rounding to limbs in MPZ.mul!
+        # (BITS_PER_LIMB-1 would typically be enough, to which we add
+        # 1 for the initial multiplication by init)
+        nbits = BITS_PER_LIMB
+        for i in lo:hi
+            nbits += _top_set_bit(arr[i])
+        end
+        init = BigInt(; nbits)
+        MPZ.set_si!(init, 1)
+        for i in lo:hi
+            MPZ.mul!(init, arr[i])
+        end
+        init
+    else
+        mid = (lo + hi) ÷ 2
+        MPZ.mul!(_prod(arr, lo, mid), _prod(arr, mid+1, hi))
     end
-    init = BigInt(; nbits)
-    MPZ.set_si!(init, 1)
-    foldl(MPZ.mul!, arr; init)
 end
 
 factorial(n::BigInt) = !isnegative(n) ? MPZ.fac_ui(n) : throw(DomainError(n, "`n` must not be negative."))
