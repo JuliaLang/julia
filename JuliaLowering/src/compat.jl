@@ -256,7 +256,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             st_k = K"dotcall"
             tuple_exprs = collect_expr_parameters(a2, 1)
             child_exprs = pushfirst!(tuple_exprs, e.args[1])
-        elseif a2 isa QuoteNode && a2.value isa Symbol
+        elseif a2 isa QuoteNode
             child_exprs[2] = a2.value
         end
     elseif e.head === :for
