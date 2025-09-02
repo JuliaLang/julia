@@ -41,6 +41,22 @@ function get_typeof(@nospecialize ex)
     return :(Core.Typeof($ex))
 end
 
+"""
+Normalize `f(args...) do ... end` calls to `f(do_anonymous_function, args...)`
+"""
+function normalize_do_expr(ex::Expr)
+    if Meta.isexpr(ex, :do) && Meta.isexpr(get(ex.args, 1, nothing), :call)
+        if length(ex.args) != 2
+            return Expr(:call, :error, "ill-formed do call")
+        end
+        i = findlast(@nospecialize(a)->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args[1].args)
+        args = copy(ex.args[1].args)
+        insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex.args[2])
+        return Expr(:call, args...)
+    end
+    return ex
+end
+
 function is_broadcasting_call(ex)
     isa(ex, Expr) || return false
     # Standard broadcasting: f.(x)
@@ -368,16 +384,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
         ex0, where_params = extract_where_parameters(ex0)
     end
     if isa(ex0, Expr)
-        if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
-            # Normalize `f(args...) do ... end` calls to `f(do_anonymous_function, args...)`
-            if length(ex0.args) != 2
-                return Expr(:call, :error, "ill-formed do call")
-            end
-            i = findlast(@nospecialize(a)->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args[1].args)
-            args = copy(ex0.args[1].args)
-            insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
-            ex0 = Expr(:call, args...)
-        end
+        ex0 = normalize_do_expr(ex0)
         if is_broadcasting_expr(ex0) && !is_source_reflection
             # Manually wrap top-level broadcasts in a function.
             # We don't do that if `fcn` reflects into the source,
