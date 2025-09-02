@@ -39,7 +39,17 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+function size(t::AbstractArray, dim)
+    function integer_to_int(d::Integer)  # throw for non-`Integer` without abstract `typeassert`
+        Int(d)::Int
+    end
+    function f(s::Tuple, d::Int)  # throw for non-`Tuple` without abstract `typeassert`
+        d <= length(s) ? s[d] : 1
+    end
+    d = @inline integer_to_int(dim)
+    s = size(t)
+    @inline f(s, d)
+end
 
 """
     axes(A, d)
