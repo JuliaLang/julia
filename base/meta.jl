@@ -636,8 +636,11 @@ This is the inverse operation of [`unescape`](@ref) - if the original expression
 was escaped, the unescaped expression is wrapped in `:escape` again.
 """
 function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
-    if isexpr(original_expr, :escape) || isexpr(original_expr, :var"hygienic-scope")
+    if isexpr(original_expr, :escape)
         return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+    elseif isexpr(original_expr, :var"hygienic-scope")
+        next, ctx... = original_expr.args
+        return reescape(Expr(:var"hygienic-scope", unescaped_expr, ctx...), next)
     else
         return unescaped_expr
     end

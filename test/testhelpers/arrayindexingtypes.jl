@@ -51,6 +51,8 @@ end
 
 Base.size(A::TSlow) = A.dims
 Base.similar(A::TSlow, ::Type{T}, dims::Dims) where {T} = TSlow(T, dims)
+Base.similar(::Type{TSlow{T,N}}, dims::Dims) where {T,N} = TSlow(T, dims)
+
 Base.IndexStyle(::Type{A}) where {A<:TSlow} = IndexCartesian()
 Base.getindex(A::TSlow{T,N}, i::Vararg{Int,N}) where {T,N} = get(A.data, i, zero(T))
 Base.setindex!(A::TSlow{T,N}, v, i::Vararg{Int,N}) where {T,N} = (A.data[i] = v)

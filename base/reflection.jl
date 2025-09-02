@@ -260,7 +260,9 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs
     return code_typed_by_type(tt; kwargs...)
 end
 
-# support 'functor'-like queries, such as `(::Foo)(::Int, ::Int)` via `code_typed((Foo, Int, Int))`
+# support queries with signatures rather than objects to better support
+# non-singleton function objects such as `(::Foo)(::Int, ::Int)`
+# via `code_typed((Foo, Int, Int))` or `code_typed(Tuple{Foo, Int, Int})`.
 function code_typed(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...)
     tt = to_tuple_type(argtypes)
     return code_typed_by_type(tt; kwargs...)

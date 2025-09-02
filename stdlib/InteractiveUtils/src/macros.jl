@@ -26,17 +26,7 @@ function reescape(f::Function, @nospecialize ex)
     isa(ex, Expr) || return f(ex)
     unescaped = Meta.unescape(ex)
     new = f(unescaped)
-    return reescape(new, ex)
-end
-
-function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
-    if isexpr(original_expr, :escape)
-        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
-    elseif isexpr(original_expr, :var"hygienic-scope")
-        return reescape(Expr(:var"hygienic-scope", unescaped_expr, original_expr.args[2]), original_expr.args[1])
-    else
-        return unescaped_expr
-    end
+    return Meta.reescape(new, ex)
 end
 
 get_typeof(ex::Ref) = ex[]
