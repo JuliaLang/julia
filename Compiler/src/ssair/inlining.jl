@@ -891,7 +891,7 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
         add_inlining_edge!(et, cached_result.edge)
         return cached_result
     elseif cached_result isa CodeInstance
-        src = ci_get_source(state.interp, inferred_result)
+        src = ci_get_source(state.interp, cached_result)
         effects = decode_effects(cached_result.ipo_purity_bits)
     else # there is no cached source available, bail out
         return nothing
