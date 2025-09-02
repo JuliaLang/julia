@@ -818,7 +818,7 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
 
 JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
-    static char buf[1000];
+    char buf[1000];
     buf[0] = '\0';
     int last_errno = errno;
 #ifdef _OS_WINDOWS_

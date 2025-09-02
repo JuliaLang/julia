@@ -191,7 +191,6 @@ function size(a::Array, d::Int)
     sz = getfield(a, :size)
     return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
 end
-size(a::Array) = getfield(a, :size)
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
@@ -382,6 +381,7 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1)
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
+similar(::Type{Array{T,N}}, dims::Dims) where {T,N} = similar(Array{T}, dims)
 
 # T[x...] constructs Array{T,1}
 """
@@ -3133,14 +3133,17 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function _shrink(shrinker!::F, itr, itrs) where F
+function intersect(itr, itrs...)
     T = promote_eltype(itr, itrs...)
-    keep = shrinker!(Set{T}(itr), itrs...)
+    keep = intersect!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)
 end
 
-intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
-setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)
+function setdiff(itr, itrs...)
+    T = eltype(itr)
+    keep = setdiff!(Set{T}(itr), itrs...)
+    vectorfilter(T, _shrink_filter!(keep), itr)
+end
 
 function intersect(v::AbstractVector, r::AbstractRange)
     T = promote_eltype(v, r)

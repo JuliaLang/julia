@@ -1627,8 +1627,8 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
 
 void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *invalidated_bpart, jl_binding_partition_t *new_bpart, size_t new_world)
 {
-    static jl_value_t *invalidate_code_for_globalref = NULL;
-    if (invalidate_code_for_globalref == NULL && jl_base_module != NULL)
+    jl_value_t *invalidate_code_for_globalref = NULL;
+    if (jl_base_module != NULL)
         invalidate_code_for_globalref = jl_get_global(jl_base_module, jl_symbol("invalidate_code_for_globalref!"));
     if (!invalidate_code_for_globalref)
         jl_error("Binding invalidation is not permitted during bootstrap.");

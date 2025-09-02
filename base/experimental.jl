@@ -491,7 +491,10 @@ function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
 end
 
 function entrypoint(@nospecialize(argt::Type))
-    ccall(:jl_add_entrypoint, Int32, (Any,), argt)
+    # Only add to entrypoint list if we're generating output and in trim mode
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        Base.Compiler.add_entrypoint(argt)
+    end
     nothing
 end
 
