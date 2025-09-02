@@ -300,6 +300,8 @@ const JL = JuliaLowering
             "module A end",
             "baremodule A end",
             "import A",
+            "A.x",
+            "A.\$x",
         ]
 
         for p in programs

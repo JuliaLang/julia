@@ -88,7 +88,7 @@ end
 ex = JuliaLowering.include_string(test_mod, """
 let
     field_name = :(a)
-    :(a.\$field_name)
+    :(x.\$field_name)
 end
 """)
 @test kind(ex[2]) == K"Identifier"
