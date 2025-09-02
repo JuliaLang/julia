@@ -605,14 +605,10 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
-"Assumes `x != 0`. Computes top_set_bit(abs(x))."
-function _top_set_bit(x::BigInt)
-    abs(x.size) * BITS_PER_LIMB - GC.@preserve x leading_zeros(unsafe_load(x.d, abs(x.size)))
-end
 function top_set_bit(x::BigInt)
     isnegative(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
     iszero(x) && return 0
-    _top_set_bit(x)
+    x.size * BITS_PER_LIMB - GC.@preserve x leading_zeros(unsafe_load(x.d, abs(x.size)))
 end
 
 divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
@@ -690,18 +686,12 @@ end
 function _prod(arr::AbstractArray{BigInt}, lo, hi)
     if hi - lo + 1 <= 16
         # compute first the needed number of bits for the result,
-        # to avoid re-allocations;
-        # GMP will always request n+m limbs for the result in MPZ.mul!,
-        # if the arguments have n and m limbs; so we add all the bits
-        # taken by the array elements, and add BITS_PER_LIMB to that,
-        # to account for the rounding to limbs in MPZ.mul!
-        # (BITS_PER_LIMB-1 would typically be enough, to which we add
-        # 1 for the initial multiplication by init)
-        nbits = BITS_PER_LIMB
+        # to avoid re-allocations
+        nlimbs = 0
         for i in lo:hi
-            nbits += _top_set_bit(arr[i])
+            nlimbs += arr[i].size
         end
-        init = BigInt(; nbits)
+        init = BigInt(; nlimbs*BITS_PER_LIMB)
         MPZ.set_si!(init, 1)
         for i in lo:hi
             MPZ.mul!(init, arr[i])
