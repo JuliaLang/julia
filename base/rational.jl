@@ -421,8 +421,8 @@ function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Rational
     return ifelse(x, y, copysign(zero(y), y))
 end
 *(y::Rational, x::Bool) = x * y
-/(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y
-/(x::Union{Integer, Complex{<:Union{Integer,Rational}}}, y::Rational) = x//y
+/(x::Rational, y::Union{Rational, Integer}) = x//y
+/(x::Integer, y::Rational) = x//y
 inv(x::Rational{T}) where {T} = checked_den(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
