@@ -48,6 +48,9 @@ New library functions
 ---------------------
 
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
+  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
+  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 * `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
