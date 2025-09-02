@@ -607,7 +607,7 @@ count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 "Assumes `x != 0`. Computes top_set_bit(abs(x))."
 function _top_set_bit(x::BigInt)
-    x.size * BITS_PER_LIMB - GC.@preserve x leading_zeros(unsafe_load(x.d, abs(x.size)))
+    abs(x.size) * BITS_PER_LIMB - GC.@preserve x leading_zeros(unsafe_load(x.d, abs(x.size)))
 end
 function top_set_bit(x::BigInt)
     isnegative(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
