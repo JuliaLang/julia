@@ -401,7 +401,7 @@ perhaps range-types `Ind` of your own design. For more information, see
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                                    |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
 | `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                                             |
-| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride between consecutive elements in the array.                                       |
+| `Base.elsize(::Type{<:A})`                      |                                        | Return the multiplication factor for converting `strides(A)` from elements to bytes.               |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                              |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
 
