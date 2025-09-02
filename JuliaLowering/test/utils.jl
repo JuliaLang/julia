@@ -18,7 +18,7 @@ using JuliaLowering:
     makenode, makeleaf, setattr!, sethead!,
     is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
-    syntax_graph, Bindings, ScopeLayer
+    syntax_graph, Bindings, ScopeLayer, mapchildren
 
 function _ast_test_graph()
     graph = SyntaxGraph()
@@ -284,4 +284,103 @@ function docstrings_equal(d1, d2; debug=true)
     return s1 == s2
 end
 docstrings_equal(d1::Docs.DocStr, d2) = docstrings_equal(Docs.parsedoc(d1), d2)
+
+#-------------------------------------------------------------------------------
+# Tools for test case reduction
+
+function block_reduction_1(is_lowering_error::Function, orig_ex::ST, ex::ST,
+                           curr_path = Int[]) where {ST <: SyntaxTree}
+    if !is_leaf(ex)
+        if kind(ex) == K"block"
+            for i in 1:numchildren(ex)
+                trial_ex = delete_block_child(orig_ex, orig_ex, curr_path, i)
+                if is_lowering_error(trial_ex)
+                    # @info "Reduced expression" curr_path i
+                    return trial_ex
+                end
+            end
+        end
+        for (i,e) in enumerate(children(ex))
+            push!(curr_path, i)
+            res = block_reduction_1(is_lowering_error, orig_ex, e, curr_path)
+            if !isnothing(res)
+                return res
+            end
+            pop!(curr_path)
+        end
+    end
+    return nothing
+end
+
+# Find children of all `K"block"`s in an expression and try deleting them while
+# preserving the invariant `is_lowering_error(reduced) == true`.
+function block_reduction(is_lowering_error, ex)
+    reduced = ex
+    was_reduced = false
+    while true
+        r = block_reduction_1(is_lowering_error, reduced, reduced)
+        if isnothing(r)
+            return (reduced, was_reduced)
+        end
+        reduced = r
+        was_reduced = true
+    end
+end
+
+function delete_block_child(ctx, ex, block_path, child_idx, depth=1)
+    if depth > length(block_path)
+        cs = copy(children(ex))
+        deleteat!(cs, child_idx)
+        @ast ctx ex [ex cs...]
+    else
+        j = block_path[depth]
+        mapchildren(ctx, ex, j:j) do e
+            delete_block_child(ctx, e, block_path, child_idx, depth+1)
+        end
+    end
+end
+
+function throws_lowering_exc(mod, ex)
+    try
+        debug_lower(mod, ex)
+        return false
+    catch exc
+        if exc isa LoweringError
+            return true
+        else
+            rethrow()
+        end
+    end
+end
+
+# Parse a file and lower the top level expression one child at a time, finding
+# any top level statement that fails lowering and producing a partially reduced
+# test case.
+function reduce_any_failing_toplevel(mod, filename; do_eval=false)
+    text = read(filename, String)
+    ex0 = parseall(SyntaxTree, text; filename)
+    for ex in children(ex0)
+        try
+            ex_compiled = JuliaLowering.lower(mod, ex)
+            ex_expr = JuliaLowering.to_lowered_expr(mod, ex_compiled)
+            if do_eval
+                Base.eval(mod, ex_expr)
+            end
+        catch exc
+            @error "Failure lowering code" ex
+            if !(exc isa LoweringError)
+                rethrow()
+            end
+            (reduced,was_reduced) = block_reduction(e->throws_lowering_exc(mod,e), ex)
+            if !was_reduced
+                @info "No reduction possible" 
+                return ex
+            else
+                @info "Reduced code" reduced
+                return reduced
+            end
+        end
+    end
+    nothing
+end
 
