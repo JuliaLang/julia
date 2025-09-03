@@ -63,6 +63,7 @@ New library features
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 * `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
+* `chopprefix` and `chopsuffix` can now also accept an `AbstractChar` as the prefix/suffix to remove.
 * The `macroexpand` (with default true) and the new `macroexpand!` (with default false)
   functions now support a `legacyscope` boolean keyword argument to control whether to run
   the legacy scope resolution pass over the result. The legacy scope resolution code has
