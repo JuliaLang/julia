@@ -3,6 +3,10 @@
 # Make a copy of the original environment
 original_env = copy(ENV)
 
+using Test
+
+Test.print_testset_name = true
+
 module PrecompilationTests
     include("precompilation.jl")
 end
@@ -22,6 +26,8 @@ end
 module TerminalMenusTest
     include("TerminalMenus/runtests.jl")
 end
+
+Test.print_testset_name = false
 
 # Restore the original environment
 for k in keys(ENV)

@@ -1729,6 +1729,7 @@ function insert_toplevel_latestworld(@nospecialize(tests))
     return ret
 end
 
+print_testset_name::Bool = false
 """
 Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
@@ -1754,6 +1755,9 @@ function testset_beginend_call(args, tests, source)
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
     ex = quote
+        if print_testset_name
+            println("STARTED TESTSET ", $desc)
+        end
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret
         local ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
@@ -1790,6 +1794,9 @@ function testset_beginend_call(args, tests, source)
             copy!(Random.get_tls_seed(), tls_seed_orig)
             pop_testset()
             ret = finish(ts)
+        end
+        if print_testset_name
+            println("FINISHED TESTSET ", $desc)
         end
         ret
     end
