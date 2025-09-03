@@ -3075,7 +3075,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_nothing_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
                                       jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     jl_void_type = jl_nothing_type; // deprecated alias
-    jl_astaggedvalue(jl_nothing)->header = ((uintptr_t)jl_nothing_type) | GC_OLD_MARKED;
+    XX(nothing);
     jl_nothing_type->instance = jl_nothing;
 
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"), core, jl_any_type, jl_emptysvec,
@@ -3166,18 +3166,18 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_perm_symsvec(1, "id"),
                                        jl_svec1(jl_long_type),
                                        jl_emptysvec, 0, 0, 1);
+    XX(ssavalue);
 
     jl_slotnumber_type = jl_new_datatype(jl_symbol("SlotNumber"), core, jl_any_type, jl_emptysvec,
                                          jl_perm_symsvec(1, "id"),
                                          jl_svec1(jl_long_type),
                                          jl_emptysvec, 0, 0, 1);
+    XX(slotnumber);
 
     jl_argument_type = jl_new_datatype(jl_symbol("Argument"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "n"),
                                        jl_svec1(jl_long_type),
                                        jl_emptysvec, 0, 0, 1);
-
-    jl_init_int32_int64_cache();
 
     jl_bool_type = NULL;
     jl_bool_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Bool"), core,
@@ -3295,7 +3295,8 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_new_primitivetype((jl_value_t*)jl_symbol("AddrSpace"), core, jl_any_type, tv, 8)->name;
     jl_addrspace_type = (jl_unionall_t*)jl_addrspace_typename->wrapper;
     jl_addrspacecore_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_addrspace_type, (jl_value_t*)jl_core_module);
-    jl_value_t *cpumem = jl_permbox8(jl_addrspacecore_type, 0, 0);
+    XX(addrspacecore);
+    jl_value_t *cpumem = jl_permbox8(jl_addrspacecore_type, jl_addrspacecore_tag, 0);
 
     tv = jl_svec1(tvar("T"));
     jl_ref_type = (jl_unionall_t*)
@@ -3721,6 +3722,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_intrinsic_type = jl_new_primitivetype((jl_value_t*)jl_symbol("IntrinsicFunction"), core,
                                              jl_builtin_type, jl_emptysvec, 32);
+    XX(intrinsic);
 
     // LLVMPtr{T, AS} where {T, AS}
     jl_tvar_t *elvar = tvar("T");
@@ -3955,7 +3957,6 @@ void post_boot_hooks(void)
     jl_loaderror_type        = (jl_datatype_t*)core("LoadError");
     jl_initerror_type        = (jl_datatype_t*)core("InitError");
     jl_missingcodeerror_type = (jl_datatype_t*)core("MissingCodeError");
-    jl_trimfailure_type      = (jl_datatype_t*)core("TrimFailure");
 
     jl_pair_type             = core("Pair");
     jl_value_t *kwcall_func  = core("kwcall");
@@ -3967,7 +3968,6 @@ void post_boot_hooks(void)
     jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
-    jl_init_box_caches();
     export_jl_small_typeof();
 }
 

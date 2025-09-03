@@ -7,10 +7,8 @@ const Callable = Union{Function,Type}
 const Bottom = Union{}
 
 # Define minimal array interface here to help code used in macros:
-length(a::Array{T, 0}) where {T} = 1
-length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
-length(a::Array{T, 2}) where {T} = (sz = getfield(a, :size); sz[1] * sz[2])
-# other sizes are handled by generic prod definition for AbstractArray
+size(a::Array) = getfield(a, :size)
+length(t::AbstractArray) = (@inline; prod(size(t)))
 length(a::GenericMemory) = getfield(a, :length)
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
@@ -503,9 +501,9 @@ end
     Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(data isa A ? data : convert(A, data)), :(itr isa I ? itr : convert(I, itr))))
     Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
     Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
-    Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
+    Pairs(data::A, itr::I) where {I, A} = $(Expr(:new, :(Pairs{I !== Nothing ? eltype(I) : keytype(A), eltype(A), I, A}), :data, :itr))
 end
-pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
+pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedTuple}
 
 """
     Base.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}

@@ -358,6 +358,11 @@ libfoo = LazyLibrary(BundledLazyLibraryPath("libfoo.so.1.2.3"))
 """
 BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpath)
 
+# Small helper struct to initialize a LazyLibrary with its initial set of dependencies
+struct InitialDependencies
+    dependencies::Vector{Any}
+end
+(init::InitialDependencies)() = convert(Vector{LazyLibrary}, init.dependencies)
 
 """
     LazyLibrary(name, flags = <default dlopen flags>,
@@ -377,7 +382,11 @@ mutable struct LazyLibrary
     const flags::UInt32
 
     # Dependencies that must be loaded before we can load
-    dependencies::Vector{LazyLibrary}
+    #
+    # The OncePerProcess is introduced here so that any registered dependencies are
+    # always ephemeral to a given process (instead of, e.g., persisting depending
+    # on whether they were added in the process where this LazyLibrary was created)
+    dependencies::Base.OncePerProcess{Vector{LazyLibrary}, InitialDependencies}
 
     # Function that get called once upon initial load
     on_load_callback
@@ -390,7 +399,9 @@ mutable struct LazyLibrary
         return new(
             path,
             UInt32(flags),
-            collect(dependencies),
+            Base.OncePerProcess{Vector{LazyLibrary}}(
+                InitialDependencies(collect(dependencies))
+            ),
             on_load_callback,
             Base.ReentrantLock(),
             C_NULL,
@@ -402,7 +413,7 @@ end
 # such as LBT needing to have OpenBLAS_jll added as a dependency dynamically.
 function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
     @lock ll.lock begin
-        push!(ll.dependencies, dep)
+        push!(ll.dependencies(), dep)
     end
 end
 
@@ -418,7 +429,7 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
             # Check to see if another thread has already run this
             if ll.handle == C_NULL
                 # Ensure that all dependencies are loaded
-                for dep in ll.dependencies
+                for dep in ll.dependencies()
                     dlopen(dep; kwargs...)
                 end
 

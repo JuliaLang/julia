@@ -2,12 +2,9 @@
 
 # Script to run in the process that generates juliac's object file output
 
-# Run the verifier in the current world (before modifications), so that error
-# messages and types print in their usual way.
-Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
-
 # Initialize some things not usually initialized when output is requested
 Sys.__init__()
+Base.reinit_stdio()
 Base.init_depot_path()
 Base.init_load_path()
 Base.init_active_project()
@@ -23,10 +20,6 @@ if Base.get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
     Base.JuliaSyntax.enable_in_core!()
 end
 
-if Base.JLOptions().trim != 0
-    include(joinpath(@__DIR__, "juliac-trim-base.jl"))
-end
-
 # Load user code
 
 import Base.Experimental.entrypoint
@@ -34,6 +27,9 @@ import Base.Experimental.entrypoint
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
+    setglobal!(Base, :PROGRAM_FILE, args[1])
+    popfirst!(args)
+    append!(Base.ARGS, args)
     return Main.main(args)
 end
 
@@ -76,11 +72,16 @@ let include_result = Base.include(Main, ARGS[1])
     entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
     entrypoint(Base.checktaskempty, ())
     if ARGS[3] == "true"
-        ccall(:jl_add_ccallable_entrypoints, Cvoid, ())
+        Base.Compiler.add_ccallable_entrypoints!()
     end
 end
 
+# Run the verifier in the current world (before build-script modifications),
+# so that error messages and types print in their usual way.
+Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
+
 if Base.JLOptions().trim != 0
+    include(joinpath(@__DIR__, "juliac-trim-base.jl"))
     include(joinpath(@__DIR__, "juliac-trim-stdlib.jl"))
 end
 
