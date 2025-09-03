@@ -29,7 +29,7 @@ function expr_to_syntaxtree(@nospecialize(e), lnn::Union{LineNumberNode, Nothing
     expr_to_syntaxtree(graph, e, lnn)
 end
 
-function expr_to_syntaxtree(ctx, @nospecialize(e), lnn::Union{LineNumberNode, Nothing})
+@fzone "JL: expr_to_syntaxtree" function expr_to_syntaxtree(ctx, @nospecialize(e), lnn::Union{LineNumberNode, Nothing})
     graph = syntax_graph(ctx)
     toplevel_src = if isnothing(lnn)
         # Provenance sinkhole for all nodes until we hit a linenode

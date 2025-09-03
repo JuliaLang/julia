@@ -580,7 +580,7 @@ Invariants:
 * This pass must not introduce new K"Identifier" - only K"BindingId".
 * Any new binding IDs must be added to the enclosing lambda locals
 """
-function convert_closures(ctx::VariableAnalysisContext, ex)
+@fzone "JL: closures" function convert_closures(ctx::VariableAnalysisContext, ex)
     ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                ctx.closure_bindings, ex.lambda_bindings)
     ex1 = closure_convert_lambda(ctx, ex)
