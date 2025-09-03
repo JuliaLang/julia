@@ -48,6 +48,9 @@ New library functions
 ---------------------
 
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
+  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
+  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 * `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
@@ -67,6 +70,9 @@ New library features
   migrate now by calling `legacyscope=false` or using `macroexpand!`. This may often require
   fixes to the code calling `macroexpand` with `Meta.unescape` and `Meta.reescape` or by
   updating tests to expect `hygienic-scope` or `escape` markers might appear in the result.
+* `Base.ScopedValues.LazyScopedValue{T}` is introduced for scoped values that compute their default using a
+  `OncePerProcess{T}` callback, allowing for lazy initialization of the default value. `AbstractScopedValue` is
+  now the abstract base type for both `ScopedValue` and `LazyScopedValue`. ([#59372])
 
 Standard library changes
 ------------------------

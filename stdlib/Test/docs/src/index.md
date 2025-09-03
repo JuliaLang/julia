@@ -177,6 +177,39 @@ Foo Tests     |    8      8  0.0s
   Arrays 3    |    2      2  0.0s
 ```
 
+### Environment Variable Support
+
+The `Test` module supports the `JULIA_TEST_VERBOSE` environment variable for controlling
+verbose behavior globally:
+
+- When `JULIA_TEST_VERBOSE=true`, testsets will automatically use `verbose=true` by default,
+  and additionally print "Starting testset" and "Finished testset" messages with timing
+  information as testsets are entered and exited.
+- When `JULIA_TEST_VERBOSE=false` or unset, testsets use `verbose=false` by default and
+  no entry/exit messages are printed.
+
+This environment variable provides a convenient way to enable comprehensive verbose output
+for debugging test suites without modifying the test code itself.
+
+```julia
+$ JULIA_TEST_VERBOSE=true julia -e '
+using Test
+@testset "Example" begin
+    @test 1 + 1 == 2
+    @testset "Nested" begin
+        @test 2 * 2 == 4
+    end
+end'
+
+Starting testset: Example
+  Starting testset: Nested
+  Finished testset: Nested (0.0s)
+Finished testset: Example (0.0s)
+Test Summary: | Pass  Total  Time
+Example       |    2      2  0.0s
+  Nested      |    1      1  0.0s
+```
+
 If we do have a test failure, only the details for the failed test sets will be shown:
 
 ```julia-repl; filter = r"[0-9\.]+s"
