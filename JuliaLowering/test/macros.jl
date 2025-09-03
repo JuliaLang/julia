@@ -1,8 +1,6 @@
-module macros
+@testset "macro tests" begin
 
-using JuliaLowering, Test
-
-module test_mod end
+test_mod = Module(:macro_test)
 
 JuliaLowering.include_string(test_mod, raw"""
 module M
@@ -110,12 +108,33 @@ M.@recursive 3
 """) == (3, (2, (1, 0)))
 
 ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
-ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false)
+ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world_counter())
 @test JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"
     "y"
 ]
+
+# World age support for macro expansion
+JuliaLowering.include_string(test_mod, raw"""
+macro world_age_test()
+    :(world1)
+end
+""")
+world1 = Base.get_world_counter()
+JuliaLowering.include_string(test_mod, raw"""
+macro world_age_test()
+    :(world2)
+end
+""")
+world2 = Base.get_world_counter()
+
+call_world_arg_test = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()")
+@test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world1)[2] ≈
+    @ast_ "world1"::K"Identifier"
+@test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world2)[2] ≈
+    @ast_ "world2"::K"Identifier"
+
 # Layer parenting
 @test expanded[1].scope_layer == 2
 @test expanded[2].scope_layer == 3
@@ -233,7 +252,7 @@ end
 catch exc
     sprint(showerror, exc)
 end == """
-MacroExpansionError while expanding @oldstyle_error in module Main.macros.test_mod:
+MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
 @oldstyle_error
 └─────────────┘ ── Error expanding macro
 Caused by:
@@ -290,10 +309,10 @@ end
     err = try
         JuliaLowering.include_string(test_mod, "@sig_mismatch(1, 2, 3, 4)") === 1
     catch exc
-        sprint(showerror, exc, context=:module=>@__MODULE__)
+        sprint(showerror, exc, context=:module=>test_mod)
     end
     @test startswith(err, """
-    MacroExpansionError while expanding @sig_mismatch in module Main.macros.test_mod:
+    MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
     Caused by:
@@ -329,4 +348,4 @@ end
     """) === (false, false, false, false)
 end
 
-end # module macros
+end
