@@ -34,7 +34,7 @@ function expr_to_syntaxtree(ctx, @nospecialize(e), lnn::Union{LineNumberNode, No
     toplevel_src = if isnothing(lnn)
         # Provenance sinkhole for all nodes until we hit a linenode
         dummy_src = SourceRef(
-            SourceFile("No source for expression: $e"),
+            SourceFile("No source for expression"),
             1, JS.GreenNode(K"None", 0))
         _insert_tree_node(graph, K"None", dummy_src)
     else
@@ -91,21 +91,23 @@ function collect_expr_parameters(e::Expr, pos::Int)
     args = Any[e.args[1:pos-1]..., e.args[pos+1:end]...]
     return _flatten_params!(args, params)
 end
-function _flatten_params!(out::Vector{Any}, p::Expr)
+function _flatten_params!(out::Vector{Any}, params::Expr)
+    p,p_esc = unwrap_esc(params)
     p1 = expr_parameters(p, 1)
     if !isnothing(p1)
-        push!(out, Expr(:parameters, p.args[2:end]...))
-        _flatten_params!(out, p1)
+        push!(out, p_esc(Expr(:parameters, p.args[2:end]...)))
+        _flatten_params!(out, p_esc(p1))
     else
-        push!(out, p::Any)
+        push!(out, params::Any)
     end
     return out
 end
 function expr_parameters(p::Expr, pos::Int)
-    if length(p.args) >= pos &&
-        p.args[pos] isa Expr &&
-        p.args[pos].head === :parameters
-        return p.args[pos]
+    if pos <= length(p.args)
+        e,_ = unwrap_esc(p.args[pos])
+        if e isa Expr && e.head === :parameters
+            return p.args[pos]
+        end
     end
     return nothing
 end
@@ -113,7 +115,10 @@ end
 """
 If `b` (usually a block) has exactly one non-LineNumberNode argument, unwrap it.
 """
-function maybe_unwrap_arg(b::Expr)
+function maybe_unwrap_arg(b)
+    if !(b isa Expr)
+        return b
+    end
     e1 = findfirst(c -> !isa(c, LineNumberNode), b.args)
     isnothing(e1) && return b
     e2 = findfirst(c -> !isa(c, LineNumberNode), b.args[e1+1:end])
@@ -122,7 +127,7 @@ function maybe_unwrap_arg(b::Expr)
 end
 
 function maybe_extract_lnn(b, default)
-    !(b isa Expr) && return b
+    !(b isa Expr) && return default
     lnn_i = findfirst(a->isa(a, LineNumberNode), b.args)
     return isnothing(lnn_i) ? default : b.args[lnn_i]
 end
@@ -141,7 +146,33 @@ end
 
 function is_eventually_call(e)
     return e isa Expr && (e.head === :call ||
-        e.head in (:where, :(::)) && is_eventually_call(e.args[1]))
+        e.head in (:escape, :where, :(::)) && is_eventually_call(e.args[1]))
+end
+
+function rewrap_escapes(hyg, ex)
+    if hyg isa Expr && hyg.head in (:escape, :var"hygienic-scope")
+        ex = Expr(hyg.head, rewrap_escapes(hyg.args[1], ex))
+        if hyg.head === :var"hygienic-scope"
+            append!(ex.args, @view hyg.args[2:end])
+        end
+    end
+    return ex
+end
+
+# Unwrap Expr(:escape) and Expr(:hygienic-scope). Return the unwrapped
+# expression and a function which will rewrap a derived expression in the
+# correct hygiene wrapper.
+function unwrap_esc(ex)
+    orig_ex = ex
+    while ex isa Expr && ex.head in (:escape, :var"hygienic-scope")
+        @assert length(ex.args) >= 1
+        ex = ex.args[1]
+    end
+    return ex, e->rewrap_escapes(orig_ex, e)
+end
+
+function unwrap_esc_(e)
+    unwrap_esc(e)[1]
 end
 
 """
@@ -212,59 +243,61 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         child_exprs = Any[e.args[1], Symbol(op), e.args[2]]
     elseif e.head === :comparison
         for i = 2:2:length(child_exprs)
-            op = child_exprs[i]
+            op,op_esc = unwrap_esc(child_exprs[i])
             @assert op isa Symbol
             op_s = string(op)
             if is_dotted_operator(op_s)
-                child_exprs[i] = Expr(:., Symbol(op_s[2:end]))
+                child_exprs[i] = Expr(:., op_esc(Symbol(op_s[2:end])))
             end
         end
     elseif e.head === :macrocall
         @assert nargs >= 2
-        a1 = e.args[1]
+        a1,a1_esc = unwrap_esc(e.args[1])
         child_exprs = collect_expr_parameters(e, 3)
         if child_exprs[2] isa LineNumberNode
             src = child_exprs[2]
         end
         deleteat!(child_exprs, 2)
         if a1 isa Symbol
-            child_exprs[1] = Expr(:MacroName, a1)
-        elseif a1 isa Expr && a1.head === :(.) && a1.args[2] isa QuoteNode
-            child_exprs[1] = Expr(:(.), a1.args[1], Expr(:MacroName, a1.args[2].value))
-        elseif a1 isa GlobalRef
+            child_exprs[1] = a1_esc(Expr(:MacroName, a1))
+        elseif a1 isa Expr && a1.head === :(.)
+            a12,a12_esc = unwrap_esc(a1.args[2])
+            if a12 isa QuoteNode
+                child_exprs[1] = a1_esc(Expr(:(.), a1.args[1],
+                                             Expr(:MacroName, a12_esc(a12.value))))
+            end
+        elseif a1 isa GlobalRef && a1.mod === Core
             # TODO (maybe): syntax-introduced macrocalls are listed here for
             # reference.  We probably don't need to convert these.
             if a1.name === Symbol("@cmd")
             elseif a1.name === Symbol("@doc")
+                st_k = K"doc"
+                child_exprs = child_exprs[2:end]
             elseif a1.name === Symbol("@int128_str")
             elseif a1.name === Symbol("@int128_str")
             elseif a1.name === Symbol("@big_str")
             end
-        elseif a1 isa Function
-            # pass
-        else
-            error("Unknown macrocall form at $src: $(sprint(dump, e))")
-            @assert false
         end
     elseif e.head === Symbol("'")
         @assert nargs === 1
         st_k = K"call"
         child_exprs = Any[e.head, e.args[1]]
     elseif e.head === :. && nargs === 2
-        a2 = e.args[2]
+        a2, a2_esc = unwrap_esc(e.args[2])
         if a2 isa Expr && a2.head === :tuple
             st_k = K"dotcall"
-            tuple_exprs = collect_expr_parameters(a2, 1)
+            tuple_exprs = collect_expr_parameters(a2_esc(a2), 1)
             child_exprs = pushfirst!(tuple_exprs, e.args[1])
         elseif a2 isa QuoteNode
-            child_exprs[2] = a2.value
+            child_exprs[2] = a2_esc(a2.value)
         end
     elseif e.head === :for
         @assert nargs === 2
         child_exprs = Any[_to_iterspec(Any[e.args[1]], false), e.args[2]]
     elseif e.head === :where
         @assert nargs >= 2
-        if !(e.args[2] isa Expr && e.args[2].head === :braces)
+        e2,_ = unwrap_esc(e.args[2])
+        if !(e2 isa Expr && e2.head === :braces)
             child_exprs = Any[e.args[1], Expr(:braces, e.args[2:end]...)]
         end
     elseif e.head in (:tuple, :vect, :braces)
@@ -281,18 +314,19 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         #        [catch var (block ...)]
         #        [else (block ...)]
         #        [finally (block ...)])
-        if e.args[2] != false || e.args[3] != false
+        e2 = unwrap_esc_(e.args[2])
+        e3 = unwrap_esc_(e.args[3])
+        if e2 !== false || e3 !== false
             push!(child_exprs,
                   Expr(:catch,
-                       e.args[2] === false ? Expr(:catch_var_placeholder) : e.args[2],
-                       e.args[3] === false ? nothing : e.args[3]))
+                       e2 === false ? Expr(:catch_var_placeholder) : e.args[2],
+                       e3 === false ? nothing : e.args[3]))
         end
         if nargs >= 5
             push!(child_exprs, Expr(:else, e.args[5]))
         end
-        if nargs >= 4
-            push!(child_exprs,
-                  Expr(:finally, e.args[4] === false ? nothing : e.args[4]))
+        if nargs >= 4 && unwrap_esc_(e.args[4]) !== false
+            push!(child_exprs, Expr(:finally, e.args[4]))
         end
     elseif e.head === :flatten || e.head === :generator
         st_k = K"generator"
@@ -307,36 +341,37 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         push!(child_exprs, _to_iterspec(next.args[2:end], true))
         pushfirst!(child_exprs, next.args[1])
     elseif e.head === :ncat || e.head === :nrow
-        dim = popfirst!(child_exprs)
+        dim = unwrap_esc_(popfirst!(child_exprs))
         st_flags |= JS.set_numeric_flags(dim)
     elseif e.head === :typed_ncat
-        st_flags |= JS.set_numeric_flags(e.args[2])
+        st_flags |= JS.set_numeric_flags(unwrap_esc_(e.args[2]))
         deleteat!(child_exprs, 2)
     elseif e.head === :(->)
         @assert nargs === 2
-        if e.args[1] isa Expr && e.args[1].head === :block
+        a1, a1_esc = unwrap_esc(e.args[1])
+        if a1 isa Expr && a1.head === :block
             # Expr parsing fails to make :parameters here...
             lam_args = Any[]
             lam_eqs = Any[]
-            for a in e.args[1].args
+            for a in a1.args
                 a isa Expr && a.head === :(=) ? push!(lam_eqs, a) : push!(lam_args, a)
             end
             !isempty(lam_eqs) && push!(lam_args, Expr(:parameters, lam_eqs...))
-            child_exprs[1] = Expr(:tuple, lam_args...)
-        elseif !(e.args[1] isa Expr && (e.args[1].head in (:tuple, :where)))
-            child_exprs[1] = Expr(:tuple, e.args[1])
+            child_exprs[1] = a1_esc(Expr(:tuple, lam_args...))
+        elseif !(a1 isa Expr && (a1.head in (:tuple, :where)))
+            child_exprs[1] = a1_esc(Expr(:tuple, a1))
         end
         src = maybe_extract_lnn(e.args[2], src)
         child_exprs[2] = maybe_unwrap_arg(e.args[2])
     elseif e.head === :call
         child_exprs = collect_expr_parameters(e, 2)
-        a1 = child_exprs[1]
+        a1,a1_esc = unwrap_esc(child_exprs[1])
         if a1 isa Symbol
             a1s = string(a1)
             if is_dotted_operator(a1s)
                 # non-assigning dotop like .+ or .==
                 st_k = K"dotcall"
-                child_exprs[1] = Symbol(a1s[2:end])
+                child_exprs[1] = a1_esc(Symbol(a1s[2:end]))
             end
         end
     elseif e.head === :function
@@ -362,17 +397,20 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         # SyntaxTree:
         # (call f args... (do (tuple lam_args...) (block ...)))
         callargs = collect_expr_parameters(e.args[1], 2)
-        fname = string(callargs[1])
         if e.args[1].head === :macrocall
             st_k = K"macrocall"
-            callargs[1] = Expr(:MacroName, callargs[1])
+            c1,c1_esc = unwrap_esc(callargs[1])
+            callargs[1] = c1_esc(Expr(:MacroName, c1))
         else
             st_k = K"call"
         end
         child_exprs = Any[callargs..., Expr(:do_lambda, e.args[2].args...)]
     elseif e.head === :let
-        if nargs >= 1 && !(e.args[1] isa Expr && e.args[1].head === :block)
-            child_exprs[1] = Expr(:block, e.args[1])
+        if nargs >= 1
+            a1,_ = unwrap_esc(e.args[1])
+            if !(a1 isa Expr && a1.head === :block)
+                child_exprs[1] = Expr(:block, e.args[1])
+            end
         end
     elseif e.head === :struct
         e.args[1] && (st_flags |= JS.MUTABLE_FLAG)
@@ -404,6 +442,12 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         st_k = K"latestworld_if_toplevel"
     elseif e.head === Symbol("hygienic-scope")
         st_k = K"hygienic_scope"
+    elseif e.head === :escape
+        if length(e.args) == 1 && unwrap_esc_(e.args[1]) isa LineNumberNode
+            # escape containing only a LineNumberNode will become empty and
+            # thus must be removed before lowering sees it.
+            st_k = K"TOMBSTONE"
+        end
     elseif e.head === :meta
         # Messy and undocumented.  Only sometimes we want a K"meta".
         @assert e.args[1] isa Symbol
@@ -490,10 +534,12 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     end
 
     #---------------------------------------------------------------------------
-    # Throw if this script isn't complete.  Finally, insert a new node into the
+    # Throw if this function isn't complete.  Finally, insert a new node into the
     # graph and recurse on child_exprs
     if st_k === K"None"
         error("Unknown expr head at $src: `$(e.head)`\n$(sprint(dump, e))")
+    elseif st_k === K"TOMBSTONE"
+        return nothing, src
     end
 
     st_id = _insert_tree_node(graph, st_k, src, st_flags; st_attrs...)
@@ -503,7 +549,6 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     if isnothing(child_exprs)
         return st_id, src
     else
-        setflags!(graph, st_id, st_flags)
         st_child_ids, last_src = _insert_child_exprs(child_exprs, graph, src)
         setchildren!(graph, st_id, st_child_ids)
         return st_id, last_src
@@ -519,7 +564,9 @@ function _insert_child_exprs(child_exprs::Vector{Any}, graph::SyntaxGraph,
             last_src = c
         else
             (c_id, c_src) = _insert_convert_expr(c, graph, last_src)
-            push!(st_child_ids, c_id)
+            if !isnothing(c_id)
+                push!(st_child_ids, c_id)
+            end
             last_src = something(c_src, src)
         end
     end

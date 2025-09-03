@@ -302,11 +302,29 @@ const JL = JuliaLowering
             "import A",
             "A.x",
             "A.\$x",
+            "try x catch e; y end",
+            "try x finally y end",
+            "try x catch e; y finally z end",
+            "try x catch e; y else z end",
+            "try x catch e; y else z finally w end",
         ]
 
         for p in programs
-            @testset "`$p`" begin
+            @testset "`$(repr(p))`" begin
                 st_good = JS.parsestmt(JL.SyntaxTree, p; ignore_errors=true)
+                st_test = JL.expr_to_syntaxtree(Expr(st_good))
+                @test st_roughly_equal(;st_good, st_test)
+            end
+        end
+
+        # toplevel has a special parsing mode where docstrings and a couple of
+        # other things are enabled
+        toplevel_programs = [
+            "\"docstr\"\nthing_to_be_documented",
+        ]
+        for p in toplevel_programs
+            @testset "`$(repr(p))`" begin
+                st_good = JS.parseall(JL.SyntaxTree, p; ignore_errors=true)
                 st_test = JL.expr_to_syntaxtree(Expr(st_good))
                 @test st_roughly_equal(;st_good, st_test)
             end
@@ -364,17 +382,22 @@ const JL = JuliaLowering
         st = JuliaLowering.expr_to_syntaxtree(ex, LineNumberNode(1))
 
         # sanity: ensure we're testing the tree we expect
-        @test kind(st) === K"block"
-        @test kind(st[1]) === K"try"
-        @test kind(st[1][1]) === K"block"
-        @test kind(st[1][1][1]) === K"Identifier" && st[1][1][1].name_val === "maybe"
-        @test kind(st[1][1][2]) === K"Identifier" && st[1][1][2].name_val === "lots"
-        @test kind(st[1][1][3]) === K"Identifier" && st[1][1][3].name_val === "of"
-        @test kind(st[1][1][4]) === K"Identifier" && st[1][1][4].name_val === "lines"
-        @test kind(st[1][2]) === K"catch"
-        @test kind(st[1][2][1]) === K"Identifier" && st[1][2][1].name_val === "exc"
-        @test kind(st[1][2][2]) === K"block"
-        @test kind(st[1][2][2][1]) === K"Identifier" && st[1][2][2][1].name_val === "y"
+        @test st ≈ @ast_ [K"block"
+            [K"try"
+                [K"block"
+                    "maybe"::K"Identifier"
+                    "lots"::K"Identifier"
+                    "of"::K"Identifier"
+                    "lines"::K"Identifier"
+                ]
+                [K"catch"
+                    "exc"::K"Identifier"
+                    [K"block"
+                        "y"::K"Identifier"
+                    ]
+                ]
+            ]
+        ]
 
         @test let lnn = st.source;             lnn isa LineNumberNode && lnn.line === 1; end
         @test let lnn = st[1].source;          lnn isa LineNumberNode && lnn.line === 2; end
@@ -387,6 +410,205 @@ const JL = JuliaLowering
         @test let lnn = st[1][2][1].source;    lnn isa LineNumberNode && lnn.line === 6; end
         @test let lnn = st[1][2][2].source;    lnn isa LineNumberNode && lnn.line === 6; end
         @test let lnn = st[1][2][2][1].source; lnn isa LineNumberNode && lnn.line === 8; end
+
+        st_shortfunc = JuliaLowering.expr_to_syntaxtree(
+            Expr(:block,
+                 LineNumberNode(11),
+                 Expr(:(=),
+                      Expr(:call, :f),
+                      :body))
+        )
+        @test st_shortfunc ≈ @ast_ [K"block"
+            [K"function"
+                [K"call" "f"::K"Identifier"]
+                "body"::K"Identifier"
+            ]
+        ]
+        @test let lnn = st_shortfunc[1][1].source; lnn isa LineNumberNode && lnn.line === 11; end
+
+        st_shortfunc_2 = JuliaLowering.expr_to_syntaxtree(
+            Expr(:block,
+                 LineNumberNode(11),
+                 Expr(:(=),
+                      Expr(:call, :f),
+                      Expr(:block,
+                         LineNumberNode(22),
+                         :body)))
+        )
+        @test st_shortfunc_2 ≈ @ast_ [K"block"
+            [K"function"
+                [K"call" "f"::K"Identifier"]
+                "body"::K"Identifier"
+            ]
+        ]
+        @test let lnn = st_shortfunc_2[1][1].source; lnn isa LineNumberNode && lnn.line === 22; end
+    end
+
+    @testset "`Expr(:escape)` handling" begin
+        # `x.y` with quoted y escaped (this esc does nothing, but is permitted by
+        # the existing expander)
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:(.), :x, esc(QuoteNode(:y)))) ≈
+            @ast_ [K"."
+                "x"::K"Identifier"
+                [K"escape"
+                    "y"::K"Identifier"
+                ]
+            ]
+
+        # `f(x; y)` with parameters escaped
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:call, :f, esc(Expr(:parameters, :y)), :x)) ≈
+            @ast_ [K"call"
+                "f"::K"Identifier"
+                "x"::K"Identifier"
+                [K"escape"
+                    [K"parameters"
+                        "y"::K"Identifier"
+                    ]
+                ]
+            ]
+
+        # `.+(x)` with operator escaped
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:call, esc(Symbol(".+")), :x)) ≈
+            @ast_ [K"dotcall"
+                [K"escape" "+"::K"Identifier"]
+                "x"::K"Identifier"
+            ]
+
+        # `let x \n end` with binding escaped
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:let, esc(:x), Expr(:block))) ≈
+            @ast_ [K"let"
+                [K"block" [K"escape" "x"::K"Identifier"]]
+                [K"block"]
+            ]
+
+        # `x .+ y` with .+ escaped
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:comparison, :x, esc(Symbol(".+")), :y)) ≈
+            @ast_ [K"comparison"
+                "x"::K"Identifier"
+                [K"." 
+                    [K"escape" "+"::K"Identifier"]
+                ]
+                "y"::K"Identifier"
+            ]
+
+        # `@mac x` with macro name escaped
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:macrocall, esc(Symbol("@mac")), nothing, :x)) ≈
+            @ast_ [K"macrocall"
+                [K"escape" "@mac"::K"MacroName"]
+                "x"::K"Identifier"
+            ]
+
+        # `@mac x` with macro name escaped
+        @test JuliaLowering.expr_to_syntaxtree(
+            Expr(:macrocall, esc(Expr(:(.), :A, QuoteNode(Symbol("@mac")))), nothing, :x)
+        ) ≈ @ast_ [K"macrocall"
+            [K"escape"
+                [K"."
+                    "A"::K"Identifier"
+                    "@mac"::K"MacroName"
+                ]
+            ]
+            "x"::K"Identifier"
+        ]
+
+        # `x where y`
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:where, :x, esc(:y))) ≈
+            @ast_ [K"where"
+                "x"::K"Identifier"
+                [K"braces"
+                    [K"escape" "y"::K"Identifier"]
+                ]
+            ]
+
+        # Some weirdly placed esc's in try-catch
+        # `try body1 catch exc \n end`
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:try, :body1, :exc, esc(false))) ≈
+            @ast_ [K"try"
+                "body1"::K"Identifier"
+                [K"catch"
+                    "exc"::K"Identifier"
+                    "nothing"::K"core"
+                ]
+            ]
+        # `try body1 catch \n body2 \n end`
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:try, :body1, esc(false), :body2)) ≈
+            @ast_ [K"try"
+                "body1"::K"Identifier"
+                [K"catch"
+                    ""::K"Placeholder"
+                    "body2"::K"Identifier"
+                ]
+            ]
+        # `try body1 finally body2 end`
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:try, :body1, esc(false), esc(false), :body2)) ≈
+            @ast_ [K"try"
+                "body1"::K"Identifier"
+                [K"finally"
+                    "body2"::K"Identifier"
+                ]
+            ]
+
+        # `try body1 finally body2 end`
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:try, :body1, esc(false), esc(false), esc(false), :body2)) ≈
+            @ast_ [K"try"
+                "body1"::K"Identifier"
+                [K"else"
+                    "body2"::K"Identifier"
+                ]
+            ]
+
+        # [x ;;; y] with dim escaped
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:ncat, esc(3), :x, :y)) ≈
+            @ast_ [K"ncat"(syntax_flags=JuliaSyntax.set_numeric_flags(3))
+                "x"::K"Identifier"
+                "y"::K"Identifier"
+            ]
+
+        # T[x ;;; y] with dim escaped
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:typed_ncat, :T, esc(3), :x, :y)) ≈
+            @ast_ [K"typed_ncat"(syntax_flags=JuliaSyntax.set_numeric_flags(3))
+                "T"::K"Identifier"
+                "x"::K"Identifier"
+                "y"::K"Identifier"
+            ]
+
+        # One example of hygienic-scope (handled with the same mechanism as escape)
+        @test JuliaLowering.expr_to_syntaxtree(
+            Expr(:macrocall, Expr(:var"hygienic-scope", Symbol("@mac"), :other, :args), nothing, :x)) ≈
+            @ast_ [K"macrocall"
+                [K"hygienic_scope"
+                    "@mac"::K"MacroName"
+                    "other"::K"Identifier" # (<- normally a Module)
+                    "args"::K"Identifier" # (<- normally a LineNumberNode)
+                ]
+                "x"::K"Identifier"
+            ]
+
+        # One example of double escaping
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:macrocall, esc(esc(Symbol("@mac"))), nothing, :x)) ≈
+            @ast_ [K"macrocall"
+                [K"escape" [K"escape" "@mac"::K"MacroName"]]
+                "x"::K"Identifier"
+            ]
+
+        # One example of nested escape and hygienic-scope
+        @test JuliaLowering.expr_to_syntaxtree(
+            Expr(:macrocall,
+                 Expr(:var"hygienic-scope", esc(Symbol("@mac")), :other, :args),
+                 nothing,
+                 :x)) ≈
+            @ast_ [K"macrocall"
+                [K"hygienic_scope"
+                    [K"escape"
+                        "@mac"::K"MacroName"
+                    ]
+                    "other"::K"Identifier" # (<- normally a Module)
+                    "args"::K"Identifier" # (<- normally a LineNumberNode)
+                ]
+                "x"::K"Identifier"
+            ]
+
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:block, esc(LineNumberNode(1)))) ≈ @ast_ [K"block"]
 
     end
 end
