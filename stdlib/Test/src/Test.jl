@@ -1929,36 +1929,43 @@ function testset_beginend_call(args, tests, source)
             $(testsettype)($desc; $options...)
         end
 
-        # we reproduce the logic of guardseed, but this function
-        # cannot be used as it changes slightly the semantic of @testset,
-        # by wrapping the body in a function
-        local default_rng_orig = copy(default_rng())
-        local tls_seed_orig = copy(Random.get_tls_seed())
-        local ts_rng = get_rng(ts)
-        local tls_seed = isnothing(ts_rng) ? set_rng!(ts, tls_seed_orig) : ts_rng
-        try
-            @with_testset ts begin
-                # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
-                copy!(Random.default_rng(), tls_seed)
-                copy!(Random.get_tls_seed(), Random.default_rng())
-                let
-                    $(esc(tests))
+        # Check if this testset should run based on filtering
+        local testset_id = generate_deterministic_testset_id($(string(source.file)), $(source.line), $desc)
+        if should_run_testset_by_id(testset_id)
+            # we reproduce the logic of guardseed, but this function
+            # cannot be used as it changes slightly the semantic of @testset,
+            # by wrapping the body in a function
+            local default_rng_orig = copy(default_rng())
+            local tls_seed_orig = copy(Random.get_tls_seed())
+            local ts_rng = get_rng(ts)
+            local tls_seed = isnothing(ts_rng) ? set_rng!(ts, tls_seed_orig) : ts_rng
+            try
+                @with_testset ts begin
+                    # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+                    copy!(Random.default_rng(), tls_seed)
+                    copy!(Random.get_tls_seed(), Random.default_rng())
+                    let
+                        $(esc(tests))
+                    end
                 end
+            catch err
+                err isa InterruptException && rethrow()
+                # something in the test block threw an error. Count that as an
+                # error in this test set
+                trigger_test_failure_break(err)
+                if is_failfast_error(err)
+                    get_testset_depth() > 0 ? rethrow() : failfast_print()
+                else
+                    record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
+                end
+            finally
+                copy!(default_rng(), default_rng_orig)
+                copy!(Random.get_tls_seed(), tls_seed_orig)
+                ret = finish(ts)
             end
-        catch err
-            err isa InterruptException && rethrow()
-            # something in the test block threw an error. Count that as an
-            # error in this test set
-            trigger_test_failure_break(err)
-            if is_failfast_error(err)
-                get_testset_depth() > 0 ? rethrow() : failfast_print()
-            else
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
-            end
-        finally
-            copy!(default_rng(), default_rng_orig)
-            copy!(Random.get_tls_seed(), tls_seed_orig)
-            ret = finish(ts)
+        else
+            # Skip this testset entirely - don't even create it
+            ret = nothing
         end
         ret
     end
@@ -2019,26 +2026,32 @@ function testset_forloop(args, testloop, source)
         else
             $(testsettype)($desc; $options...)
         end
-        try
-            @with_testset ts begin
-                # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
-                copy!(Random.default_rng(), tls_seed)
-                $(esc(tests))
+
+        # Check if this testset should run based on filtering
+        local testset_id = generate_deterministic_testset_id($(string(source.file)), $(source.line), $desc)
+        if should_run_testset_by_id(testset_id)
+            try
+                @with_testset ts begin
+                    # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+                    copy!(Random.default_rng(), tls_seed)
+                    $(esc(tests))
+                end
+            catch err
+                err isa InterruptException && rethrow()
+                # Something in the test block threw an error. Count that as an
+                # error in this test set
+                trigger_test_failure_break(err)
+                if is_failfast_error(err)
+                    get_testset_depth() > 0 ? rethrow() : failfast_print()
+                else
+                    record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
+                end
+            finally
+                push!(arr, finish(ts))
             end
-        catch err
-            err isa InterruptException && rethrow()
-            # Something in the test block threw an error. Count that as an
-            # error in this test set
-            trigger_test_failure_break(err)
-            if is_failfast_error(err)
-                get_testset_depth() > 0 ? rethrow() : failfast_print()
-            else
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
-            end
-        finally
-            copy!(default_rng(), default_rng_orig)
-            copy!(Random.get_tls_seed(), tls_seed_orig)
-            push!(arr, finish(ts))
+        else
+            # Skip this testset entirely - don't add it to results
+            # Do nothing instead of pushing a finished empty testset
         end
     end
     quote
@@ -2474,6 +2487,7 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     return true
 end
 
+include("testset_filtering.jl")
 include("logging.jl")
 include("precompile.jl")
 

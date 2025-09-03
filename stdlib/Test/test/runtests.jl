@@ -2033,3 +2033,6 @@ end
     @test occursin("Error in testset", output)
     @test occursin("1 == 2", output)
 end
+
+# Test testset filtering functionality
+include("testset_filtering.jl")
