@@ -53,8 +53,8 @@ $(BUILDDIR)/host/Makefile:
 	@printf "%s\n" 'BUILDING_HOST_TOOLS=1' >> $@
 	@printf "%s\n" 'include $(SRCDIR)/Makefile' >> $@
 
-release: $(BUILDDIR)/libsupport.a
-debug: $(BUILDDIR)/libsupport-debug.a
+release: $(BUILDDIR)/libsupport.a $(BUILDDIR)/compile_commands.json
+debug: $(BUILDDIR)/libsupport-debug.a $(BUILDDIR)/compile_commands.json
 
 $(BUILDDIR)/libsupport.a: $(OBJS) | $(BUILDIR)
 	rm -rf $@
@@ -70,6 +70,46 @@ $(BUILDDIR)/host/libsupport.a: $(BUILDDIR)/host/Makefile
 $(BUILDDIR)/host/libsupport-debug.a: $(BUILDDIR)/host/Makefile
 	$(MAKE) -C $(BUILDDIR)/host libsupport-debug.a
 
+# Included files in support
+INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
+
+# Compilation database generation
+$(BUILDDIR)/compile_commands.json:
+	@{ \
+		CLANG_TOOLING_S_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
+		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS))"; \
+		echo "["; \
+		first=true; \
+		for src in $(SRCS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			if [ -f $(SRCDIR)/$$src.S ]; then \
+				cmd="$${CLANG_TOOLING_S_FLAGS}, \"$$src.S\""; \
+				file_path="$$src.S"; \
+			else \
+				cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$src.c\""; \
+				file_path="$$src.c"; \
+			fi; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+		done; \
+		for included_pair in $(INCLUDED_SUPPORT_FILES); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			including_file=$${included_pair%%:*}; \
+			included_file=$${included_pair##*:}; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$including_file\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
+		done; \
+		echo "]"; \
+	} > $@.tmp
+	@# This ensures we replace the file atomically, and avoid spurious rewrites
+	@if ! cmp -s $@.tmp $@; then \
+		mv $@.tmp $@; \
+	else \
+		rm -f $@.tmp; \
+	fi
+
+compile-database: $(BUILDDIR)/compile_commands.json
+	@echo "Compilation database created in support: $<"
+
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
@@ -78,4 +118,7 @@ clean:
 	rm -f $(BUILDDIR)/core*
 	rm -f $(BUILDDIR)/libsupport.a
 	rm -f $(BUILDDIR)/libsupport-debug.a
+	rm -f $(BUILDDIR)/compile_commands.json
 	rm -f $(BUILDDIR)/host/*
+
+.PHONY: compile-database $(BUILDDIR)/compile_commands.json

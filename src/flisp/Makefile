@@ -61,9 +61,9 @@ SHIPFLAGS += $(FLAGS)
 
 default: release
 
-release: $(BUILDDIR)/$(EXENAME)$(EXE)
+release: $(BUILDDIR)/$(EXENAME)$(EXE) $(BUILDDIR)/compile_commands.json
 
-debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE)
+debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) $(BUILDDIR)/compile_commands.json
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -133,12 +133,46 @@ endif
 test:
 	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
 
+# Included files in flisp
+INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.c:read.c flisp.c:equal.c
+
+# Compilation database generation
+$(BUILDDIR)/compile_commands.json:
+	@{ \
+		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
+		echo "["; \
+		first=true; \
+		for src in $(SRCS) flmain.c; do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$src\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$src" "$$cmd"; \
+		done; \
+		for included_pair in $(INCLUDED_FLISP_FILES); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			including_file=$${included_pair%%:*}; \
+			included_file=$${included_pair##*:}; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$including_file\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
+		done; \
+		echo "]"; \
+	} > $@.tmp
+	@# This ensures we replace the file atomically, and avoid spurious rewrites
+	@if ! cmp -s $@.tmp $@; then \
+		mv $@.tmp $@; \
+	else \
+		rm -f $@.tmp; \
+	fi
+
+compile-database: $(BUILDDIR)/compile_commands.json
+	@echo "Compilation database created for flisp: $<"
+
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
 	rm -f $(BUILDDIR)/*.a
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
+	rm -f $(BUILDDIR)/compile_commands.json
 	rm -f $(BUILDDIR)/host/*
 
-.PHONY: flisp-deps
+.PHONY: flisp-deps compile-database $(BUILDDIR)/compile_commands.json

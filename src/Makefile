@@ -262,7 +262,7 @@ endif
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
-release debug: %: libjulia-internal-% libjulia-codegen-%
+release debug: %: libjulia-internal-% libjulia-codegen-% $(BUILDDIR)/compile_commands.json
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -500,6 +500,52 @@ $(OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
 $(DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
 $(CODEGEN_OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
 $(CODEGEN_DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
+# set the exports for the source files based on where they are getting linked
+$(addprefix clang-sa-,$(SRCS)):      DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sagc-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-tidy-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sa-,$(CODEGEN_SRCS)):   DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-sagc-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-tidy-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
+# Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database) using lazy expansion
+CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG)
+CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG)
+
+# Additional headers from dependency links, categorized by usage
+ADDITIONAL_C_HEADERS := builtin_proto.h common_symbols1.inc common_symbols2.inc gc-alloc-profiler.h \
+	gc-common.h gc-heap-snapshot.h gc-page-profiler.h gc-stock.h serialize.h \
+	support/htable.h support/htable.inc
+ADDITIONAL_CXX_HEADERS := debug-registry.h debuginfo.h intrinsics.h jitlayers.h llvm-alloc-helpers.h \
+	llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-julia-passes.inc \
+	llvm-julia-task-dispatcher.h llvm-pass-helpers.h passes.h processor.h
+
+# Included files that should be compiled using their including file's compiler settings
+INCLUDED_C_FILES := \
+	builtins.c:iddict.c \
+	builtins.c:idset.c \
+	crc32c.c:crc32c-tables.c \
+	signal-handling.c:signals-win.c \
+	signal-handling.c:signals-unix.c \
+	signal-handling.c:mach_excServer.c \
+	signal-handling.c:signals-mach.c \
+	staticdata.c:staticdata_utils.c \
+	staticdata.c:precompile_utils.c
+INCLUDED_CXX_FILES := \
+	codegen.cpp:abi_llvm.cpp \
+	codegen.cpp:abi_arm.cpp \
+	codegen.cpp:abi_aarch64.cpp \
+	codegen.cpp:abi_riscv.cpp \
+	codegen.cpp:abi_ppc64le.cpp \
+	codegen.cpp:abi_win32.cpp \
+	codegen.cpp:abi_win64.cpp \
+	codegen.cpp:abi_x86_64.cpp \
+	codegen.cpp:abi_x86.cpp \
+	codegen.cpp:cgutils.cpp \
+	codegen.cpp:intrinsics.cpp \
+	codegen.cpp:ccall.cpp \
+	processor.cpp:processor_x86.cpp \
+	processor.cpp:processor_arm.cpp \
+	processor.cpp:processor_fallback.cpp
 
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
@@ -560,41 +606,33 @@ clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .F
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -x c $<)
+		$(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -x c $<)
 clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -x c++ $<)
+		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -x c++ $<)
 
 clang-sa-%: JL_CXXFLAGS += -UNDEBUG
 clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -Werror -x c $<)
+		$(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -Werror -x c $<)
 clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -Werror -x c++ $<)
+		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -Werror -x c++ $<)
 
 clang-tidy-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
-		-- $(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -fno-caret-diagnostics -x c)
+		-- $(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -fno-caret-diagnostics -x c)
 clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
-		-- $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
-
-# set the exports for the source files based on where they are getting linked
-$(addprefix clang-sa-,$(SRCS)):      DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sagc-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-tidy-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sa-,$(CODEGEN_SRCS)):   DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-sagc-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-tidy-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
+		-- $(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
@@ -610,5 +648,76 @@ clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 
+# Compilation database generation using existing clang infrastructure
+$(BUILDDIR)/compile_commands.json:
+	@{ \
+		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
+		CLANG_TOOLING_CXX_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_CXX_FLAGS))"; \
+		echo "["; \
+		first=true; \
+		for src in $(SRCS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			if [ -f $(SRCDIR)/$$src.cpp ]; then \
+				cmd="$${CLANG_TOOLING_CXX_FLAGS}, \"-DJL_LIBRARY_EXPORTS_INTERNAL\", \"$$src.cpp\""; \
+				file_path="$$src.cpp"; \
+			else \
+				cmd="$${CLANG_TOOLING_C_FLAGS}, \"-DJL_LIBRARY_EXPORTS_INTERNAL\", \"$$src.c\""; \
+				file_path="$$src.c"; \
+			fi; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+		done; \
+		for src in $(CODEGEN_SRCS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			if [ -f $(SRCDIR)/$$src.cpp ]; then \
+				cmd="$${CLANG_TOOLING_CXX_FLAGS}, \"-DJL_LIBRARY_EXPORTS_CODEGEN\", \"$$src.cpp\""; \
+				file_path="$$src.cpp"; \
+			else \
+				cmd="$${CLANG_TOOLING_C_FLAGS}, \"-DJL_LIBRARY_EXPORTS_CODEGEN\", \"$$src.c\""; \
+				file_path="$$src.c"; \
+			fi; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+		done; \
+		for header in $(HEADERS) $(ADDITIONAL_C_HEADERS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			file_path="$$header"; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"-DJL_LIBRARY_EXPORTS_INTERNAL\", \"-x\", \"c-header\", \"$$file_path\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+		done; \
+		for header in $(ADDITIONAL_CXX_HEADERS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			file_path="$$header"; \
+			cmd="$${CLANG_TOOLING_CXX_FLAGS}, \"-DJL_LIBRARY_EXPORTS_CODEGEN\", \"-x\", \"c++-header\", \"$$file_path\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+		done; \
+		for included_pair in $(INCLUDED_C_FILES); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			including_file=$${included_pair%%:*}; \
+			included_file=$${included_pair##*:}; \
+			case " $(CODEGEN_SRCS) " in *" $${including_file%.c} "*) export_flag="-DJL_LIBRARY_EXPORTS_CODEGEN";; *) export_flag="-DJL_LIBRARY_EXPORTS_INTERNAL";; esac; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$export_flag\", \"$$including_file\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
+		done; \
+		for included_pair in $(INCLUDED_CXX_FILES); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			including_file=$${included_pair%%:*}; \
+			included_file=$${included_pair##*:}; \
+			case " $(CODEGEN_SRCS) " in *" $${including_file%.cpp} "*) export_flag="-DJL_LIBRARY_EXPORTS_CODEGEN";; *) export_flag="-DJL_LIBRARY_EXPORTS_INTERNAL";; esac; \
+			cmd="$${CLANG_TOOLING_CXX_FLAGS}, \"$$export_flag\", \"$$including_file\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
+		done; \
+		echo "]"; \
+	} > $@.tmp
+	@# This ensures we replace the file atomically, and avoid spurious rewrites
+	@if ! cmp -s $@.tmp $@; then \
+		mv $@.tmp $@; \
+	else \
+		rm -f $@.tmp; \
+	fi
+
+compile-database: $(BUILDDIR)/compile_commands.json
+	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
+	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
+	@echo "Compilation database created: $<"
+
 .FORCE:
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc .FORCE
+.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database $(BUILDDIR)/compile_commands.json .FORCE
