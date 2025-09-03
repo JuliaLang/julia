@@ -823,7 +823,8 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 void trigger_profile_peek(void)
 {
     jl_safe_printf("\n======================================================================================\n");
-    jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile\n", profile_peek_duration);
+    jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile.\n", profile_peek_duration);
+    jl_safe_printf("--trace-compile is enabled during profile collection.\n");
     jl_safe_printf("======================================================================================\n");
     if (profile_bt_size_max == 0) {
         // If the buffer hasn't been initialized, initialize with default size
@@ -1113,6 +1114,9 @@ static void *signal_listener(void *arg)
             for (i = 0; i < signal_bt_size; i += jl_bt_entry_size(signal_bt_data + i)) {
                 jl_print_bt_entry_codeloc(signal_bt_data + i);
             }
+            jl_safe_printf("\n");
+            // Enable trace compilation to stderr with timing during profile collection
+            jl_force_trace_compile_timing_enable();
         }
     }
     return NULL;

@@ -72,7 +72,7 @@ let include_result = Base.include(Main, ARGS[1])
     entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
     entrypoint(Base.checktaskempty, ())
     if ARGS[3] == "true"
-        ccall(:jl_add_ccallable_entrypoints, Cvoid, ())
+        Base.Compiler.add_ccallable_entrypoints!()
     end
 end
 

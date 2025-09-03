@@ -950,10 +950,12 @@ typedef struct {
     XX(task) \
     /* bits types with special allocators */ \
     XX(bool) \
+    XX(nothing) \
     XX(char) \
     /*XX(float16)*/ \
     /*XX(float32)*/ \
     /*XX(float64)*/ \
+    /*XX(bfloat16)*/ \
     XX(int16) \
     XX(int32) \
     XX(int64) \
@@ -962,11 +964,13 @@ typedef struct {
     XX(uint32) \
     XX(uint64) \
     XX(uint8) \
+    XX(addrspacecore) \
+    XX(intrinsic) \
     /* AST objects */ \
     /* XX(argument) */ \
     /* XX(newvarnode) */ \
-    /* XX(slotnumber) */ \
-    /* XX(ssavalue) */ \
+    XX(slotnumber) \
+    XX(ssavalue) \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1060,7 +1064,6 @@ extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_fielderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_datatype_t *jl_trimfailure_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_abioverride_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
@@ -1659,8 +1662,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_uint64(v)      jl_typetagis(v,jl_uint64_tag<<4)
 #define jl_is_bool(v)        jl_typetagis(v,jl_bool_tag<<4)
 #define jl_is_symbol(v)      jl_typetagis(v,jl_symbol_tag<<4)
-#define jl_is_ssavalue(v)    jl_typetagis(v,jl_ssavalue_type)
-#define jl_is_slotnumber(v)  jl_typetagis(v,jl_slotnumber_type)
+#define jl_is_ssavalue(v)    jl_typetagis(v,jl_ssavalue_tag<<4)
+#define jl_is_slotnumber(v)  jl_typetagis(v,jl_slotnumber_tag<<4)
 #define jl_is_expr(v)        jl_typetagis(v,jl_expr_type)
 #define jl_is_binding(v)     jl_typetagis(v,jl_binding_type)
 #define jl_is_binding_partition(v) jl_typetagis(v,jl_binding_partition_type)
@@ -1691,8 +1694,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_uint8pointer(v)jl_typetagis(v,jl_uint8pointer_type)
 #define jl_is_llvmpointer(v) (((jl_datatype_t*)jl_typeof(v))->name == jl_llvmpointer_typename)
-#define jl_is_intrinsic(v)   jl_typetagis(v,jl_intrinsic_type)
-#define jl_is_addrspacecore(v) jl_typetagis(v,jl_addrspacecore_type)
+#define jl_is_intrinsic(v)   jl_typetagis(v,jl_intrinsic_tag<<4)
+#define jl_is_addrspacecore(v) jl_typetagis(v,jl_addrspacecore_tag<<4)
 #define jl_is_abioverride(v) jl_typetagis(v,jl_abioverride_type)
 #define jl_genericmemory_isbitsunion(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isunion)
 #define jl_genericmemory_isatomic(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isatomic)
@@ -1867,7 +1870,7 @@ JL_DLLEXPORT uintptr_t jl_type_hash(jl_value_t *v) JL_NOTSAFEPOINT;
 STATIC_INLINE int jl_egal__unboxed_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT
 {
     if (dtag < jl_max_tags << 4) {
-        if (dtag == jl_symbol_tag << 4 || dtag == jl_bool_tag << 4)
+        if (dtag == jl_symbol_tag << 4 || dtag == jl_bool_tag << 4 || dtag == jl_nothing_tag << 4)
             return 0;
     }
     else if (((jl_datatype_t*)dtag)->name->mutabl)
@@ -2269,12 +2272,13 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname);
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle);
-JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos);
+JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, jl_array_t *module_init_order);
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage);
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
+JL_DLLEXPORT jl_array_t* jl_compute_new_ext_cis(void);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);
 JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t *inference_entrance_backtraces);
 JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t *ci);

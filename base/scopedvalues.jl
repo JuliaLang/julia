@@ -2,8 +2,56 @@
 
 module ScopedValues
 
-export ScopedValue, with, @with
+export ScopedValue, LazyScopedValue, with, @with
 public get
+
+"""
+    AbstractScopedValue{T}
+
+Abstract base type for scoped values that propagate values across
+dynamic scopes. All scoped value types must extend this abstract type.
+
+See also: [`ScopedValue`](@ref), [`LazyScopedValue`](@ref)
+
+!!! compat "Julia 1.13"
+    AbstractScopedValue requires Julia 1.13+.
+"""
+abstract type AbstractScopedValue{T} end
+
+
+"""
+    LazyScopedValue{T}(f::OncePerProcess{T})
+
+A scoped value that uses an `OncePerProcess{T}` to lazily compute its default value
+when none has been set in the current scope. Unlike `ScopedValue`, the default is
+not evaluated at construction time but only when first accessed.
+
+# Examples
+
+```julia-repl
+julia> using Base.ScopedValues;
+
+julia> const editor = LazyScopedValue(OncePerProcess(() -> ENV["JULIA_EDITOR"]));
+
+julia> editor[]
+"vim"
+
+julia> with(editor => "emacs") do
+           sval[]
+       end
+"emacs"
+
+julia> editor[]
+"vim"
+```
+
+!!! compat "Julia 1.13"
+    LazyScopedValue requires Julia 1.13+.
+"""
+mutable struct LazyScopedValue{T} <: AbstractScopedValue{T}
+    const getdefault::OncePerProcess{T}
+end
+
 
 """
     ScopedValue(x)
@@ -40,17 +88,23 @@ julia> sval[]
     Scoped values were introduced in Julia 1.11. In Julia 1.8+ a compatible
     implementation is available from the package ScopedValues.jl.
 """
-mutable struct ScopedValue{T}
+mutable struct ScopedValue{T} <: AbstractScopedValue{T}
     # NOTE this struct must be defined as mutable one since it's used as a key of
     #      `ScopeStorage` dictionary and thus needs object identity
-    const has_default::Bool # this field is necessary since isbitstype `default` field may be initialized with undefined value
+    const hasdefault::Bool # this field is necessary since isbitstype `default` field may be initialized with undefined value
     const default::T
-    ScopedValue{T}() where T = new(false)
+    ScopedValue{T}() where T = new{T}(false)
     ScopedValue{T}(val) where T = new{T}(true, val)
     ScopedValue(val::T) where T = new{T}(true, val)
 end
 
-Base.eltype(::ScopedValue{T}) where {T} = T
+Base.eltype(::AbstractScopedValue{T}) where {T} = T
+
+hasdefault(val::ScopedValue) = val.hasdefault
+hasdefault(val::LazyScopedValue) = true
+
+getdefault(val::ScopedValue) = val.hasdefault ? val.default : throw(KeyError(val))
+getdefault(val::LazyScopedValue) = val.getdefault()
 
 """
     isassigned(val::ScopedValue)
@@ -72,14 +126,14 @@ julia> isassigned(b)
 false
 ```
 """
-function Base.isassigned(val::ScopedValue)
-    val.has_default && return true
+function Base.isassigned(val::AbstractScopedValue)
+    hasdefault(val) && return true
     scope = Core.current_scope()::Union{Scope, Nothing}
     scope === nothing && return false
     return haskey((scope::Scope).values, val)
 end
 
-const ScopeStorage = Base.PersistentDict{ScopedValue, Any}
+const ScopeStorage = Base.PersistentDict{AbstractScopedValue, Any}
 
 struct Scope
     values::ScopeStorage
@@ -87,7 +141,7 @@ end
 
 Scope(scope::Scope) = scope
 
-function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
+function Scope(parent::Union{Nothing, Scope}, key::AbstractScopedValue{T}, value) where T
     val = convert(T, value)
     if parent === nothing
         return Scope(ScopeStorage(key=>val))
@@ -95,11 +149,11 @@ function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where 
     return Scope(ScopeStorage(parent.values, key=>val))
 end
 
-function Scope(scope, pair::Pair{<:ScopedValue})
+function Scope(scope, pair::Pair{<:AbstractScopedValue})
     return Scope(scope, pair...)
 end
 
-function Scope(scope, pair1::Pair{<:ScopedValue}, pair2::Pair{<:ScopedValue}, pairs::Pair{<:ScopedValue}...)
+function Scope(scope, pair1::Pair{<:AbstractScopedValue}, pair2::Pair{<:AbstractScopedValue}, pairs::Pair{<:AbstractScopedValue}...)
     # Unroll this loop through recursion to make sure that
     # our compiler optimization support works
     return Scope(Scope(scope, pair1...), pair2, pairs...)
@@ -115,7 +169,7 @@ function Base.show(io::IO, scope::Scope)
         else
             print(io, ", ")
         end
-        print(io, typeof(key), "@")
+        print(io, isa(key, ScopedValue) ? ScopedValue{eltype(key)} : typeof(key), "@")
         show(io, Base.objectid(key))
         print(io, " => ")
         show(IOContext(io, :typeinfo => eltype(key)), value)
@@ -123,11 +177,9 @@ function Base.show(io::IO, scope::Scope)
     print(io, ")")
 end
 
-struct NoValue end
-const novalue = NoValue()
-
 """
     get(val::ScopedValue{T})::Union{Nothing, Some{T}}
+    get(val::LazyScopedValue{T})::Union{Nothing, Some{T}}
 
 If the scoped value isn't set and doesn't have a default value,
 return `nothing`. Otherwise returns `Some{T}` with the current
@@ -148,31 +200,36 @@ julia> isnothing(ScopedValues.get(b))
 true
 ```
 """
-function get(val::ScopedValue{T}) where {T}
+function get(val::AbstractScopedValue{T}) where {T}
     scope = Core.current_scope()::Union{Scope, Nothing}
     if scope === nothing
-        val.has_default && return Some{T}(val.default)
-        return nothing
+        !hasdefault(val) && return nothing
+        return Some{T}(getdefault(val))
     end
     scope = scope::Scope
-    if val.has_default
-        return Some{T}(Base.get(scope.values, val, val.default)::T)
+    if hasdefault(val)
+        return Some{T}(Base.get(Base.Fix1(getdefault, val), scope.values, val)::T)
     else
-        v = Base.get(scope.values, val, novalue)
-        v === novalue || return Some{T}(v::T)
+        v = Base.KeyValue.get(scope.values, val)
+        v === nothing && return nothing
+        return Some{T}(only(v)::T)
     end
     return nothing
 end
 
-function Base.getindex(val::ScopedValue{T})::T where T
+function Base.getindex(val::AbstractScopedValue{T})::T where T
     maybe = get(val)
     maybe === nothing && throw(KeyError(val))
     return something(maybe)::T
 end
 
-function Base.show(io::IO, val::ScopedValue)
-    print(io, ScopedValue)
-    print(io, '{', eltype(val), '}')
+function Base.show(io::IO, val::AbstractScopedValue)
+    if isa(val, ScopedValue)
+        print(io, ScopedValue)
+        print(io, '{', eltype(val), '}')
+    else
+        print(io, typeof(val))
+    end
     print(io, '(')
     v = get(val)
     if v === nothing
@@ -265,7 +322,7 @@ julia> with(() -> a[] * b[], a=>3, b=>4)
 12
 ```
 """
-function with(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
+function with(f, pair::Pair{<:AbstractScopedValue}, rest::Pair{<:AbstractScopedValue}...)
     @with(pair, rest..., f())
 end
 with(@nospecialize(f)) = f()

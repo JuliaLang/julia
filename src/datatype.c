@@ -1108,6 +1108,10 @@ static inline jl_uint128_t zext_read128(const jl_value_t *x, size_t nb) JL_NOTSA
         memcpy(&y, x, nb);
     return y;
 }
+static void assign_uint128(jl_value_t *v, jl_uint128_t x, size_t nb) JL_NOTSAFEPOINT
+{
+    memcpy(v, &x, nb);
+}
 #endif
 
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, const void *data)
@@ -1116,23 +1120,29 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, const void *data)
     // but will always have the alignment required by the datatype
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
-    size_t nb = jl_datatype_size(bt);
     // some types have special pools to minimize allocations
-    if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
-    if (bt == jl_bool_type)    return (1 & *(int8_t*)data) ? jl_true : jl_false;
-    if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
-    if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
-    if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
-    if (bt == jl_int8_type)    return jl_box_int8(*(int8_t*)data);
-    if (bt == jl_int16_type)   return jl_box_int16(*(int16_t*)data);
-    if (bt == jl_uint64_type)  return jl_box_uint64(*(uint64_t*)data);
-    if (bt == jl_uint32_type)  return jl_box_uint32(*(uint32_t*)data);
-    if (bt == jl_uint16_type)  return jl_box_uint16(*(uint16_t*)data);
-    if (bt == jl_char_type)    return jl_box_char(*(uint32_t*)data);
+    switch(bt->smalltag) {
+    case jl_bool_tag: return (1 & *(int8_t*)data) ? jl_true : jl_false;
+    case jl_uint8_tag: return jl_box_uint8(*(uint8_t*)data);
+    case jl_int64_tag: return jl_box_int64(*(int64_t*)data);
+    case jl_int32_tag: return jl_box_int32(*(int32_t*)data);
+    case jl_int8_tag: return jl_box_int8(*(int8_t*)data);
+    case jl_int16_tag: return jl_box_int16(*(int16_t*)data);
+    case jl_uint64_tag: return jl_box_uint64(*(uint64_t*)data);
+    case jl_uint32_tag: return jl_box_uint32(*(uint32_t*)data);
+    case jl_uint16_tag: return jl_box_uint16(*(uint16_t*)data);
+    case jl_char_tag: return jl_box_char(*(uint32_t*)data);
+    case jl_ssavalue_tag: return jl_box_ssavalue(*(size_t*)data);
+    case jl_slotnumber_tag: return jl_box_slotnumber(*(size_t*)data);
+   }
 
-    assert(!bt->smalltag);
+    size_t nb = jl_datatype_size(bt);
+    if (nb == 0)
+        return jl_new_struct_uninit(bt); // returns bt->instance
     jl_task_t *ct = jl_current_task;
     jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt);
+    if (bt->smalltag)
+        jl_set_typetagof(v, bt->smalltag, 0);
     // TODO: make this a memmove_refs if relevant
     memcpy(jl_assume_aligned(v, sizeof(void*)), data, nb);
     return v;
@@ -1143,23 +1153,30 @@ JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *data)
     // data must have the required alignment for an atomic of the given size
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
-    size_t nb = jl_datatype_size(bt);
     // some types have special pools to minimize allocations
-    if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
-    if (bt == jl_bool_type)    return (1 & jl_atomic_load((_Atomic(int8_t)*)data)) ? jl_true : jl_false;
-    if (bt == jl_uint8_type)   return jl_box_uint8(jl_atomic_load((_Atomic(uint8_t)*)data));
-    if (bt == jl_int64_type)   return jl_box_int64(jl_atomic_load((_Atomic(int64_t)*)data));
-    if (bt == jl_int32_type)   return jl_box_int32(jl_atomic_load((_Atomic(int32_t)*)data));
-    if (bt == jl_int8_type)    return jl_box_int8(jl_atomic_load((_Atomic(int8_t)*)data));
-    if (bt == jl_int16_type)   return jl_box_int16(jl_atomic_load((_Atomic(int16_t)*)data));
-    if (bt == jl_uint64_type)  return jl_box_uint64(jl_atomic_load((_Atomic(uint64_t)*)data));
-    if (bt == jl_uint32_type)  return jl_box_uint32(jl_atomic_load((_Atomic(uint32_t)*)data));
-    if (bt == jl_uint16_type)  return jl_box_uint16(jl_atomic_load((_Atomic(uint16_t)*)data));
-    if (bt == jl_char_type)    return jl_box_char(jl_atomic_load((_Atomic(uint32_t)*)data));
+    switch(bt->smalltag) {
+    case 0: break;
+    case jl_bool_tag:           return (1 & jl_atomic_load((_Atomic(int8_t)*)data)) ? jl_true : jl_false;
+    case jl_uint8_tag:          return jl_box_uint8(jl_atomic_load((_Atomic(uint8_t)*)data));
+    case jl_int64_tag:          return jl_box_int64(jl_atomic_load((_Atomic(int64_t)*)data));
+    case jl_int32_tag:          return jl_box_int32(jl_atomic_load((_Atomic(int32_t)*)data));
+    case jl_int8_tag:           return jl_box_int8(jl_atomic_load((_Atomic(int8_t)*)data));
+    case jl_int16_tag:          return jl_box_int16(jl_atomic_load((_Atomic(int16_t)*)data));
+    case jl_uint64_tag:         return jl_box_uint64(jl_atomic_load((_Atomic(uint64_t)*)data));
+    case jl_uint32_tag:         return jl_box_uint32(jl_atomic_load((_Atomic(uint32_t)*)data));
+    case jl_uint16_tag:         return jl_box_uint16(jl_atomic_load((_Atomic(uint16_t)*)data));
+    case jl_char_tag:           return jl_box_char(jl_atomic_load((_Atomic(uint32_t)*)data));
+    case jl_ssavalue_tag:       return jl_box_ssavalue(jl_atomic_load((_Atomic(size_t)*)data));
+    case jl_slotnumber_tag:     return jl_box_slotnumber(jl_atomic_load((_Atomic(size_t)*)data));
+    }
 
-    assert(!bt->smalltag);
+    size_t nb = jl_datatype_size(bt);
+    if (nb == 0)
+        return jl_new_struct_uninit(bt); // returns bt->instance
     jl_task_t *ct = jl_current_task;
     jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt);
+    if (bt->smalltag)
+        jl_set_typetagof(v, bt->smalltag, 0);
     // data is aligned to the power of two,
     // we will write too much of v, but the padding should exist
     if (nb == 1)
@@ -1173,6 +1190,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *data)
         *(uint64_t*)v = jl_atomic_load((_Atomic(uint64_t)*)data);
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
+    else if (nb <= 12)
+        assign_uint128(v, jl_atomic_load((_Atomic(jl_uint128_t)*)data), 12);
     else if (nb <= 16)
         *(jl_uint128_t*)v = jl_atomic_load((_Atomic(jl_uint128_t)*)data);
 #endif
@@ -1212,22 +1231,28 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
     // dst must have the required alignment for an atomic of the given size
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
+    if (nb == 0)
+        return jl_new_struct_uninit(bt); // returns bt->instance
     // some types have special pools to minimize allocations
-    if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
-    if (bt == jl_bool_type)    return (1 & jl_atomic_exchange((_Atomic(int8_t)*)dst, 1 & *(int8_t*)src)) ? jl_true : jl_false;
-    if (bt == jl_uint8_type)   return jl_box_uint8(jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(int8_t*)src));
-    if (bt == jl_int64_type)   return jl_box_int64(jl_atomic_exchange((_Atomic(int64_t)*)dst, *(int64_t*)src));
-    if (bt == jl_int32_type)   return jl_box_int32(jl_atomic_exchange((_Atomic(int32_t)*)dst, *(int32_t*)src));
-    if (bt == jl_int8_type)    return jl_box_int8(jl_atomic_exchange((_Atomic(int8_t)*)dst, *(int8_t*)src));
-    if (bt == jl_int16_type)   return jl_box_int16(jl_atomic_exchange((_Atomic(int16_t)*)dst, *(int16_t*)src));
-    if (bt == jl_uint64_type)  return jl_box_uint64(jl_atomic_exchange((_Atomic(uint64_t)*)dst, *(uint64_t*)src));
-    if (bt == jl_uint32_type)  return jl_box_uint32(jl_atomic_exchange((_Atomic(uint32_t)*)dst, *(uint32_t*)src));
-    if (bt == jl_uint16_type)  return jl_box_uint16(jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src));
-    if (bt == jl_char_type)    return jl_box_char(jl_atomic_exchange((_Atomic(uint32_t)*)dst, *(uint32_t*)src));
+    switch(bt->smalltag) {
+    case jl_bool_tag:           return (1 & jl_atomic_exchange((_Atomic(int8_t)*)dst, 1 & *(int8_t*)src)) ? jl_true : jl_false;
+    case jl_uint8_tag:          return jl_box_uint8(jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(int8_t*)src));
+    case jl_int64_tag:          return jl_box_int64(jl_atomic_exchange((_Atomic(int64_t)*)dst, *(int64_t*)src));
+    case jl_int32_tag:          return jl_box_int32(jl_atomic_exchange((_Atomic(int32_t)*)dst, *(int32_t*)src));
+    case jl_int8_tag:           return jl_box_int8(jl_atomic_exchange((_Atomic(int8_t)*)dst, *(int8_t*)src));
+    case jl_int16_tag:          return jl_box_int16(jl_atomic_exchange((_Atomic(int16_t)*)dst, *(int16_t*)src));
+    case jl_uint64_tag:         return jl_box_uint64(jl_atomic_exchange((_Atomic(uint64_t)*)dst, *(uint64_t*)src));
+    case jl_uint32_tag:         return jl_box_uint32(jl_atomic_exchange((_Atomic(uint32_t)*)dst, *(uint32_t*)src));
+    case jl_uint16_tag:         return jl_box_uint16(jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src));
+    case jl_char_tag:           return jl_box_char(jl_atomic_exchange((_Atomic(uint32_t)*)dst, *(uint32_t*)src));
+    case jl_ssavalue_tag:       return jl_box_ssavalue(jl_atomic_exchange((_Atomic(size_t)*)dst, *(size_t*)src));
+    case jl_slotnumber_tag:     return jl_box_slotnumber(jl_atomic_exchange((_Atomic(size_t)*)dst, *(size_t*)src));
+    }
 
-    assert(!bt->smalltag);
     jl_task_t *ct = jl_current_task;
     jl_value_t *v = jl_gc_alloc(ct->ptls, jl_datatype_size(bt), bt);
+    if (bt->smalltag)
+        jl_set_typetagof(v, bt->smalltag, 0);
     if (nb == 1)
         *(uint8_t*)v = jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
     else if (nb == 2)
@@ -1239,6 +1264,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
         *(uint64_t*)v = jl_atomic_exchange((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
+    else if (nb <= 12)
+        assign_uint128(v, jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb)), 12);
     else if (nb <= 16)
         *(jl_uint128_t*)v = jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
 #endif
@@ -1288,7 +1315,7 @@ JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expect
     return success;
 }
 
-JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-allocated output */, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
+JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* NEW pre-allocated output */, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
 {
     // dst must have the required alignment for an atomic of the given size
     // n.b.: this does not spuriously fail if there are padding bits
@@ -1359,18 +1386,19 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
     else if (nb <= 16) {
-        jl_uint128_t *y128 = (jl_uint128_t*)y;
         if (dt == et) {
-            *y128 = zext_read128(expected, nb);
+            jl_uint128_t y128 = zext_read128(expected, nb);
             jl_uint128_t z128 = zext_read128(src, nb);
             while (1) {
-                success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, y128, z128);
-                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
+                success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, &y128, z128);
+                assign_uint128(y, y128, nb);
+                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt)) {
                     break;
+                }
             }
         }
         else {
-            *y128 = jl_atomic_load((_Atomic(jl_uint128_t)*)dst);
+            assign_uint128(y, jl_atomic_load((_Atomic(jl_uint128_t)*)dst), nb);
             success = 0;
         }
     }
@@ -1429,10 +1457,11 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
 }
 
 #define PERMBOXN_FUNC(nb)                                                  \
-    jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) \
+    jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
     {   /* n.b. t must be a concrete isbits datatype of the right size */  \
         jl_value_t *v = jl_gc_permobj(LLT_ALIGN(nb, sizeof(void*)), t, 0); \
-        if (tag) jl_set_typetagof(v, tag, GC_OLD_MARKED);                  \
+        assert(tag);                                                       \
+        jl_set_typetagof(v, tag, GC_OLD_MARKED);                           \
         *(uint##nb##_t*)jl_data_ptr(v) = x;                                \
         return v;                                                          \
     }
@@ -1442,7 +1471,7 @@ PERMBOXN_FUNC(32)
 PERMBOXN_FUNC(64)
 
 #define UNBOX_FUNC(j_type,c_type)                                       \
-    JL_DLLEXPORT c_type jl_unbox_##j_type(jl_value_t *v)                \
+    JL_DLLEXPORT c_type jl_unbox_##j_type(jl_value_t *v) JL_NOTSAFEPOINT\
     {                                                                   \
         assert(jl_is_primitivetype(jl_typeof(v)));                      \
         assert(jl_datatype_size(jl_typeof(v)) == sizeof(c_type));       \
@@ -1478,9 +1507,6 @@ BOX_FUNC(uint8pointer, uint8_t*,  jl_box)
 
 #define NBOX_C 1024
 
-// some shims to support UIBOX_FUNC definition
-#define jl_ssavalue_tag (((uintptr_t)jl_ssavalue_type) >> 4)
-#define jl_slotnumber_tag (((uintptr_t)jl_slotnumber_type) >> 4)
 
 #define SIBOX_FUNC(typ,c_type)                                          \
     static jl_value_t *boxed_##typ##_cache[NBOX_C];                     \
@@ -1542,39 +1568,30 @@ JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x)
     return jl_boxed_uint8_cache[x];
 }
 
-void jl_init_int32_int64_cache(void)
+void jl_init_box_caches(void)
 {
     int64_t i;
-    for(i=0; i < NBOX_C; i++) {
+    for (i = 0; i < NBOX_C; i++) {
         boxed_int32_cache[i]  = jl_permbox32(jl_int32_type, jl_int32_tag, i-NBOX_C/2);
         boxed_int64_cache[i]  = jl_permbox64(jl_int64_type, jl_int64_tag, i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_permbox16(jl_uint16_type, jl_uint16_tag, i);
         boxed_uint64_cache[i] = jl_permbox64(jl_uint64_type, jl_uint64_tag, i);
         boxed_uint32_cache[i] = jl_permbox32(jl_uint32_type, jl_uint32_tag, i);
+        boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, jl_int16_tag, i-NBOX_C/2);
 #ifdef _P64
-        boxed_ssavalue_cache[i] = jl_permbox64(jl_ssavalue_type, 0, i);
-        boxed_slotnumber_cache[i] = jl_permbox64(jl_slotnumber_type, 0, i);
+        boxed_ssavalue_cache[i] = jl_permbox64(jl_ssavalue_type, jl_ssavalue_tag, i);
+        boxed_slotnumber_cache[i] = jl_permbox64(jl_slotnumber_type, jl_slotnumber_tag, i);
 #else
-        boxed_ssavalue_cache[i] = jl_permbox32(jl_ssavalue_type, 0, i);
-        boxed_slotnumber_cache[i] = jl_permbox32(jl_slotnumber_type, 0, i);
+        boxed_ssavalue_cache[i] = jl_permbox32(jl_ssavalue_type, jl_ssavalue_tag, i);
+        boxed_slotnumber_cache[i] = jl_permbox32(jl_slotnumber_type, jl_slotnumber_tag, i);
 #endif
     }
-    for(i=0; i < 256; i++) {
-        jl_boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, jl_uint8_tag, i);
-    }
-}
-
-void jl_init_box_caches(void)
-{
-    uint32_t i;
     for (i = 0; i < 128; i++) {
         boxed_char_cache[i] = jl_permbox32(jl_char_type, jl_char_tag, i << 24);
     }
     for (i = 0; i < 256; i++) {
+        jl_boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, jl_uint8_tag, i);
         jl_boxed_int8_cache[i] = jl_permbox8(jl_int8_type, jl_int8_tag, i);
-    }
-    for (i = 0; i < NBOX_C; i++) {
-        boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, jl_int16_tag, i-NBOX_C/2);
     }
 }
 
