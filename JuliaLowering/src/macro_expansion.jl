@@ -334,7 +334,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             layerid = get(ex, :scope_layer, current_layer_id(ctx))
             makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
         end
-    elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName"
+    elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName" || k == K"CmdMacroName"
         layerid = get(ex, :scope_layer, current_layer_id(ctx))
         makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
     elseif k == K"var" || k == K"char" || k == K"parens"
