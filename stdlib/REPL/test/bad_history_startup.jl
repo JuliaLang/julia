@@ -28,9 +28,9 @@ import .Main.FakePTYs: with_fake_pty
 
             # Read output until we get the prompt, which indicates successful startup
             output = readuntil(ptm, "julia> ", keep=true)
-            println("====== subprocess output ======")
-            println(output)
-            println("====== end subprocess output ======")
+            # println("====== subprocess output ======")
+            # println(output)
+            # println("====== end subprocess output ======")
 
             # Test conditions:
             # 1. We should see the invalid history file error
