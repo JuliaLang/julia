@@ -15,6 +15,22 @@ module MacroMethods
     end
 end
 
+macro strmac_str(ex, suff=nothing)
+    s = "$(ex[1].value) from strmac"
+    if !isnothing(suff)
+        s = "$s with suffix $(suff.value)"
+    end
+    s
+end
+
+macro cmdmac_cmd(ex, suff=nothing)
+    s = "$(ex[1].value) from cmdmac"
+    if !isnothing(suff)
+        s = "$s with suffix $(suff.value)"
+    end
+    s
+end
+
 #*******************************************************************************
 ########################################
 # Simple macro
@@ -146,4 +162,28 @@ Suggestion: check for spelling errors or missing imports.
 4   (call core.tuple %₂ %₃)
 5   (call %₁ %₄)
 6   (return %₅)
+
+########################################
+# Simple string macro
+strmac"hello"
+#---------------------
+1   (return "hello from strmac")
+
+########################################
+# String macro with suffix
+strmac"hello"blah
+#---------------------
+1   (return "hello from strmac with suffix blah")
+
+########################################
+# Simple cmd macro
+cmdmac`hello`
+#---------------------
+1   (return "hello from cmdmac")
+
+########################################
+# Cmd macro with suffix
+cmdmac`hello`12345
+#---------------------
+1   (return "hello from cmdmac with suffix 12345")
 
