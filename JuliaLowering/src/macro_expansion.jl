@@ -460,7 +460,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     end
 end
 
-function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
+@fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     graph = ensure_attributes(syntax_graph(ex),
                               var_id=IdTag,
                               scope_layer=LayerId,

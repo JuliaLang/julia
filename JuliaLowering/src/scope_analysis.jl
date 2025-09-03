@@ -802,7 +802,7 @@ metadata about each binding.
 This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
-function resolve_scopes(ctx::DesugaringContext, ex)
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex)
     ctx2 = ScopeResolutionContext(ctx)
     ex2 = resolve_scopes(ctx2, reparent(ctx2, ex))
     ctx3 = VariableAnalysisContext(ctx2.graph, ctx2.bindings, ctx2.mod, ex2.lambda_bindings)

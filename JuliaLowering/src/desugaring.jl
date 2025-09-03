@@ -4586,7 +4586,7 @@ function expand_forms_2(ctx::StatementListCtx, args...)
     expand_forms_2(ctx.ctx, args...)
 end
 
-function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
+@fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
     ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
     ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
     ctx1, ex1

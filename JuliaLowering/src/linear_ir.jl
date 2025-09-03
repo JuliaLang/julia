@@ -1109,7 +1109,7 @@ Most of the compliexty of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into K"slot", `K"globalref"` or `K"SSAValue` as appropriate.
 """
-function linearize_ir(ctx, ex)
+@fzone "JL: linearize" function linearize_ir(ctx, ex)
     graph = ensure_attributes(ctx.graph,
                               slots=Vector{Slot},
                               mod=Module,
@@ -1127,4 +1127,3 @@ function linearize_ir(ctx, ex)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     _ctx, res
 end
-
