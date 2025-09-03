@@ -338,12 +338,9 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     #
     # TODO: Reduce duplication where possible.
 
-    mod = parentmodule(g.gen)
-
     # Attributes from parsing
     graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
                               value=Any, name_val=String)
-
     # Attributes for macro expansion
     graph = ensure_attributes(graph,
                               var_id=IdTag,
@@ -355,8 +352,11 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
                               is_toplevel_thunk=Bool
                               )
 
-    # Macro expansion
-    ctx1 = MacroExpansionContext(graph, mod, false)
+    # Macro expansion. Looking at Core.GeneratedFunctionStub, it seems that
+    # macros emitted by the generator are currently expanded in the latest
+    # world, so do that for compatibility.
+    macro_world = typemax(UInt)
+    ctx1 = MacroExpansionContext(graph, source.module, false, macro_world)
 
     # Run code generator - this acts like a macro expander and like a macro
     # expander it gets a MacroContext.
@@ -375,7 +375,8 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Expand any macros emitted by the generator
     ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
     ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
-                                 ctx1.bindings, ctx1.scope_layers, LayerId[], false)
+                                 ctx1.bindings, ctx1.scope_layers,
+                                 LayerId[], false, macro_world)
     ex1 = reparent(ctx1, ex1)
 
     # Desugaring
@@ -398,6 +399,21 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(mod, ex5)
     @assert ci isa Core.CodeInfo
+
+    # See GeneratedFunctionStub code in base/expr.jl
+    ci.isva = source.isva
+    code = ci.code
+    bindings = IdSet{Core.Binding}()
+    for i = 1:length(code)
+        stmt = code[i]
+        if isa(stmt, GlobalRef)
+            push!(bindings, convert(Core.Binding, stmt))
+        end
+    end
+    if !isempty(bindings)
+        ci.edges = Core.svec(bindings...)
+    end
+
     return ci
 end
 

@@ -444,19 +444,32 @@ end
         function f_partially_gen(x::NTuple{N,T}) where {N,T}
             shared = :shared_stuff
             if @generated
+                if N == 2
+                    error("intentionally broken codegen (will trigger nongen branch)")
+                end
                 quote
-                    unshared = ($x, $N, $T)
+                    unshared = (:gen, ($x, $N, $T))
                 end
             else
-                # Uuuum. How do we actually test both sides of this branch???
-                unshared = :nongen # (typeof(x), N, T)
+                unshared = (:nongen, (typeof(x), N, T))
             end
             (shared, unshared)
         end
 
-        f_partially_gen((1,2,3,4,5))
+        (f_partially_gen((1,2)), f_partially_gen((1,2,3,4,5)))
     end
-    """) == (:shared_stuff, (NTuple{5,Int}, 5, Int))
+    """) == ((:shared_stuff, (:nongen, (NTuple{2,Int}, 2, Int))),
+             (:shared_stuff, (:gen, (NTuple{5,Int}, 5, Int))))
+
+    # Test generated function edges to bindings
+    # (see also https://github.com/JuliaLang/julia/pull/57230)
+    JuliaLowering.include_string(test_mod, raw"""
+    const delete_me = 4
+    @generated f_generated_return_delete_me() = return :(delete_me)
+    """)
+    @test test_mod.f_generated_return_delete_me() == 4
+    Base.delete_binding(test_mod, :delete_me)
+    @test_throws UndefVarError test_mod.f_generated_return_delete_me()
 end
 
 @testset "Broadcast" begin

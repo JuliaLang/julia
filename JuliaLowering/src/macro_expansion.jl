@@ -21,11 +21,12 @@ struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
     scope_layers::Vector{ScopeLayer}
     scope_layer_stack::Vector{LayerId}
     expr_compat_mode::Bool
+    macro_world::UInt
 end
 
-function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode::Bool)
+function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode::Bool, world::UInt)
     layers = ScopeLayer[ScopeLayer(1, mod, 0, false)]
-    MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode)
+    MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode, world)
 end
 
 current_layer(ctx::MacroExpansionContext) = ctx.scope_layers[last(ctx.scope_layer_stack)]
@@ -217,11 +218,10 @@ function expand_macro(ctx, ex)
     # age changes concurrently.
     # 
     # TODO: Allow this to be passed in
-    macro_world = Base.get_world_counter()
-    if hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=macro_world)
+    if hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=ctx.macro_world)
         macro_args = prepare_macro_args(ctx, mctx, raw_args)
         expanded = try
-            Base.invoke_in_world(macro_world, macfunc, macro_args...)
+            Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
         catch exc
             newexc = exc isa MacroExpansionError ?
                 MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err) :
@@ -260,14 +260,14 @@ function expand_macro(ctx, ex)
             push!(macro_args, Expr(arg))
         end
         expanded = try
-            Base.invoke_in_world(macro_world, macfunc, macro_args...)
+            Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc
-                if !isempty(methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, macro_world))
+                if !isempty(methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.macro_world))
                     # If the macro has at least some methods implemented in the
                     # new style, assume the user meant to call one of those
                     # rather than any old-style macro methods which might exist
-                    exc = MethodError(macfunc, (prepare_macro_args(ctx, mctx, raw_args)..., ), macro_world)
+                    exc = MethodError(macfunc, (prepare_macro_args(ctx, mctx, raw_args)..., ), ctx.macro_world)
                 end
             end
             rethrow(MacroExpansionError(mctx, ex, "Error expanding macro", :all, exc))
@@ -280,7 +280,7 @@ function expand_macro(ctx, ex)
         # Module scope for the returned AST is the module where this particular
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
-                                             macro_world).def.module
+                                             ctx.macro_world).def.module
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
                                current_layer_id(ctx), true)
         push!(ctx.scope_layers, new_layer)
@@ -460,18 +460,18 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     end
 end
 
-function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool)
+function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     graph = ensure_attributes(syntax_graph(ex),
                               var_id=IdTag,
                               scope_layer=LayerId,
                               __macro_ctx__=Nothing,
                               meta=CompileHints)
-    ctx = MacroExpansionContext(graph, mod, expr_compat_mode)
+    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
     ex2 = expand_forms_1(ctx, reparent(ctx, ex))
     graph2 = delete_attributes(graph, :__macro_ctx__)
     # TODO: Returning the context with pass-specific mutable data is a bad way
     # to carry state into the next pass. We might fix this by attaching such
     # data to the graph itself as global attributes?
-    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, LayerId[], expr_compat_mode)
+    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, LayerId[], expr_compat_mode, macro_world)
     return ctx2, reparent(ctx2, ex2)
 end
