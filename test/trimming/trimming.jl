@@ -1,5 +1,6 @@
 import Pkg
 
+Pkg.activate(".")
 Pkg.add(["JSON"])
 
 using Test
@@ -41,7 +42,6 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test any(Bool[func["symbol"] == "copyto_and_sum" for func in abi["functions"]])
 
     # `CVector{Float32}` should have been exported with the correct info
-    @show abi["types"]
     @test any(Bool[type["name"] == "CVector{Float32}" for type in abi["types"]])
     CVector_Float32 = abi["types"][findfirst(type["name"] == "CVector{Float32}" for type in abi["types"])]
     @test length(CVector_Float32["fields"]) == 2

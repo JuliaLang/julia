@@ -58,10 +58,8 @@ function escape_string_json(s::AbstractString)
     return String(take!(iob))
 end
 
-dequalify(str::AbstractString) = last(split(str, '.'))
-
 function type_name_json(@nospecialize(dt::DataType))
-    return escape_string_json(dequalify(repr(dt)))
+    return escape_string_json(repr(dt; context=:compact=>true))
 end
 
 function field_name_json(@nospecialize(dt::DataType), field::Int)

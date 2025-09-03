@@ -42,7 +42,6 @@ $(BIN)/trimmability-o.a: $(SRCDIR)/trimmability.jl $(JULIAC_BUILDSCRIPT)
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
 
 $(BIN)/basic_jll-o.a: $(SRCDIR)/basic_jll.jl $(JULIAC_BUILDSCRIPT)
-	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) -e "using Pkg; Pkg.instantiate()"
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
 
 $(BIN)/libsimple-o.a: $(SRCDIR)/libsimple.jl $(JULIAC_BUILDSCRIPT)
