@@ -2816,6 +2816,13 @@ const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
 
+@testset "invoke with builtins" begin
+    @test_throws ErrorException invoke(getfield, Tuple{Any, Symbol}, (a = 42,), :a)
+    @test_throws ErrorException invoke(setfield!, Tuple{Any, Symbol, Any}, Base.RefValue(1), :x, 2)
+    @test_throws ErrorException invoke(isdefined, Tuple{Any, Symbol}, (a = 1,), :a)
+    @test_throws ErrorException invoke(invoke, Tuple{Any, Type, Any}, sin, Tuple{Float64}, 0.0)
+end
+
 # issue #30679
 @noinline function f30679(::DataType)
     b = IOBuffer()
