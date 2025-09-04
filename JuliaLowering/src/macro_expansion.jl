@@ -149,7 +149,7 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::Syn
     mod = current_layer(ctx).mod
     expr_form = to_lowered_expr(mod, ex5)
     try
-        eval(mod, expr_form)
+        Core.eval(mod, expr_form)
     catch err
         throw(MacroExpansionError(mctx, ex, "Macro not found", :all, err))
     end

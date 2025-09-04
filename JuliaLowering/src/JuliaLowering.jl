@@ -1,11 +1,10 @@
+# Use a baremodule because we're implementing `include` and `eval`
 baremodule JuliaLowering
 
-# ^ Use baremodule because we're implementing `Base.include` and `Core.eval`.
 using Base
 # We define a separate _include() for use in this module to avoid mixing method
 # tables with the public `JuliaLowering.include()` API
 const _include = Base.IncludeInto(JuliaLowering)
-using Core: eval
 
 if parentmodule(JuliaLowering) === Base
     using Base.JuliaSyntax

@@ -229,7 +229,7 @@ function eval_module(parentmod, modname, expr_compat_mode, body)
     # mod = @ccall jl_new_module(Symbol(modname)::Symbol, parentmod::Module)::Any
     # ...
     name = Symbol(modname)
-    eval(parentmod, :(
+    Core.eval(parentmod, :(
         baremodule $name
             $eval($name, $body; expr_compat_mode=$expr_compat_mode)
         end
@@ -246,7 +246,7 @@ function eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, pat
         ex = isnothing(from) ?
             Expr(head, paths...) :
             Expr(head, Expr(Symbol(":"), from, paths...))
-        Base.eval(to, ex)
+        Core.eval(to, ex)
     end
 end
 
@@ -254,13 +254,13 @@ function eval_using(to::Module, path::Expr)
     if _Base_has_eval_import
         Base._eval_using(to, path)
     else
-        Base.eval(to, Expr(:using, path))
+        Core.eval(to, Expr(:using, path))
     end
 end
 
 function eval_public(mod::Module, is_exported::Bool, identifiers)
     # symbol jl_module_public is no longer exported as of #57765
-    eval(mod, Expr((is_exported ? :export : :public), map(Symbol, identifiers)...))
+    Core.eval(mod, Expr((is_exported ? :export : :public), map(Symbol, identifiers)...))
 end
 
 #--------------------------------------------------
