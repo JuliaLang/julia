@@ -5,6 +5,8 @@ permissions:
   pull-requests: write # Needed in order to be able to add labels to PRs
 
 on:
+  # This makes the action run using the version of the action on master, not on the branch. This
+  # also makes the code run by the action "trusted" (i.e. it can access secrets) so be careful what we run!
   pull_request_target:
     types: [opened]
 
