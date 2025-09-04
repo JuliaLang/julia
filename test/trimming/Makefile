@@ -35,6 +35,7 @@ JULIAC_BUILDSCRIPT := $(shell $(JULIA) --startup-file=no -e 'print(joinpath(Sys.
 
 release: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
 
+# Complete any needed Pkg operations before trimming (some Pkg code may not be trimmable)
 Manifest.toml: $(SRCDIR)/Project.toml
 	$(JULIA) --startup-file=no --history-file=no -e 'using Pkg; Pkg.activate("$(SRCDIR)"); Pkg.instantiate()'
 
