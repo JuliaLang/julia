@@ -89,7 +89,7 @@ julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia
 julia-stdlib: | $(DIRS) julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/stdlib
 
-julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl $(build_datarootdir)/julia/juliac/juliac.jl $(build_datarootdir)/julia/juliac/juliac-buildscript.jl $(build_datarootdir)/julia/juliac/juliac-trim-base.jl $(build_datarootdir)/julia/juliac/juliac-trim-stdlib.jl $(build_datarootdir)/julia/juliac/Artifacts.toml
+julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -123,13 +123,18 @@ julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink j
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk $*
 
-debug release : % : julia-% stdlibs-cache-%
+debug release : % : julia-% stdlibs-cache-% juliac
 
 docs: julia-sysimg-$(JULIA_BUILD_MODE) stdlibs-cache-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no'
 
 docs-revise:
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no' revise=true
+
+juliac: $(build_bindir)/juliac
+
+$(build_bindir)/juliac:
+	@$(INSTALL_M) $(JULIAHOME)/contrib/juliac $@
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
@@ -335,6 +340,8 @@ install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index
 	done
 
 	$(INSTALL_M) $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE)) $(DESTDIR)$(bindir)/
+	# Install juliac script
+	$(INSTALL_M) $(JULIAHOME)/contrib/juliac $(DESTDIR)$(bindir)/
 ifeq ($(OS),WINNT)
 	$(INSTALL_M) $(wildcard $(build_bindir)/*.dll) $(DESTDIR)$(bindir)/
 ifeq ($(JULIA_BUILD_MODE),release)
