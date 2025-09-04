@@ -3,10 +3,10 @@ JULIAHOME := $(abspath $(SRCDIR)/../..)
 BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
-JCFLAGS += $(CFLAGS)
-JCXXFLAGS += $(CXXFLAGS)
-JCPPFLAGS += $(CPPFLAGS)
-JLDFLAGS += $(LDFLAGS)
+JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
+JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
+JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
+JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
 
 NAME := flisp
 EXENAME := $(NAME)
@@ -47,17 +47,17 @@ LIBS += $(LIBUTF8PROC)
 endif
 
 
-FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
-        -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
+FLAGS_COMMON := -I$(LLTSRCDIR) $(HFILEDIRS:%=-I%) \
+        -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) \
         -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
 ifneq ($(OS), emscripten)
-FLAGS += -DUSE_COMPUTED_GOTO
+FLAGS_COMMON += -DUSE_COMPUTED_GOTO
 endif
-FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
-FLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
+FLAGS_COMMON += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
+FLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
-DEBUGFLAGS += $(FLAGS)
-SHIPFLAGS += $(FLAGS)
+SHIPFLAGS_COMMON  += $(FLAGS_COMMON)
+DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
 
 default: release
 
@@ -69,9 +69,9 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 FLISP_SRCS := $(addprefix $(SRCDIR)/,flisp.c cvalues.c types.c flisp.h print.c read.c equal.c)
 FLMAIN_SRCS := $(addprefix $(SRCDIR)/,flmain.c flisp.h)
@@ -133,13 +133,16 @@ endif
 test:
 	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
 
+# Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
+CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
+
 # Included files in flisp
 INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.c:read.c flisp.c:equal.c
 
 # Compilation database generation
 $(BUILDDIR)/compile_commands.json:
 	@{ \
-		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
+		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		echo "["; \
 		first=true; \
 		for src in $(SRCS) flmain.c; do \

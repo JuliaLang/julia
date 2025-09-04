@@ -4,47 +4,51 @@ BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
-JCFLAGS += $(CFLAGS)
-JCXXFLAGS += $(CXXFLAGS)
-JCPPFLAGS += $(CPPFLAGS)
-JLDFLAGS += $(LDFLAGS)
+# Users may set CFLAGS (affects dependencies) or JL_CFLAGS (does not affect dependencies) for customizations to the build
+JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
+JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
+JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
+JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
 #  for gcc/clang, suggested content is:
 #  #include_next <options.h>
 #  #define ARGUMENT_TO_OVERRIDE 1
-FLAGS := \
+FLAGS_COMMON := \
 	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
-FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
+FLAGS_COMMON += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
 		 -Wno-comment -Wpointer-arith -Wundef
-ifeq ($(USEGCC),1) # GCC bug #25509 (void)__attribute__((warn_unused_result))
-FLAGS += -Wno-unused-result
+
+# GCC-specific flags
+FLAGS_GCC  :=
+# GCC bug #25509 (void)__attribute__((warn_unused_result))
+FLAGS_GCC += -Wno-unused-result
 # GCC is throwing warnings like `warning: 'int __builtin_memcmp_eq(const void*, const void*, long unsigned int)' specified bound 18446744073709551615 exceeds maximum object size 9223372036854775807` in llvm's StringRef.h == seemingly because it doesn't realise the size can't be 0.
-FLAGS += -Wno-stringop-overflow
-FLAGS += -Wno-stringop-overread
-endif
-JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
+FLAGS_GCC += -Wno-stringop-overflow
+FLAGS_GCC += -Wno-stringop-overread
 
-ifeq ($(USECLANG),1)
-FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
-endif
+# Required to be allowed to use nullability extension and not be required to annotate all of everything
+JCFLAGS_CLANG += -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness
+JCXXFLAGS_CLANG += -Wno-return-type-c-linkage -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness
+JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
+# Add common flags that apply to both compilers
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS += -I$(MMTK_API_INC)
+FLAGS_COMMON += -I$(MMTK_API_INC)
 endif
 
-FLAGS += -DJL_BUILD_ARCH='"$(ARCH)"'
+FLAGS_COMMON += -DJL_BUILD_ARCH='"$(ARCH)"'
 ifeq ($(OS),WINNT)
-FLAGS += -DJL_BUILD_UNAME='"NT"'
+FLAGS_COMMON += -DJL_BUILD_UNAME='"NT"'
 else
-FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
+FLAGS_COMMON += -DJL_BUILD_UNAME='"$(OS)"'
 endif
 
 ifeq ($(OS),FreeBSD)
-FLAGS += -I$(LOCALBASE)/include
+FLAGS_COMMON += -I$(LOCALBASE)/include
 endif
 
 # GC source code. It depends on which GC implementation to use.
@@ -71,7 +75,7 @@ ifeq ($(JULIACODEGEN),LLVM)
 # Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS += -I$(MMTK_API_INC)
+FLAGS_COMMON += -I$(MMTK_API_INC)
 GC_CODEGEN_SRCS += llvm-late-gc-lowering-mmtk
 else
 GC_CODEGEN_SRCS += llvm-late-gc-lowering-stock
@@ -82,20 +86,20 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
 	pipeline llvm_api \
 	$(GC_CODEGEN_SRCS)
-FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
+FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
 CG_LLVMLINK += -lPolly -lPollyISL
-FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/include
-FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --obj-root)/tools/polly/include
-FLAGS += -DUSE_POLLY
+FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/include
+FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --obj-root)/tools/polly/include
+FLAGS_COMMON += -DUSE_POLLY
 ifeq ($(USE_POLLY_OPENMP),1)
-FLAGS += -fopenmp
+FLAGS_COMMON += -fopenmp
 endif
 ifeq ($(USE_POLLY_ACC),1)
 CG_LLVMLINK += -lPollyPPCG -lGPURuntime
-FLAGS += -DUSE_POLLY_ACC
-FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
+FLAGS_COMMON += -DUSE_POLLY_ACC
+FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
 endif
 endif
 else
@@ -176,7 +180,7 @@ endif # USE_LLVM_SHLIB
 endif # USE_SYSTEM_LLVM
 
 ifeq ($(USE_LLVM_SHLIB),1)
-FLAGS += -DLLVM_SHLIB
+FLAGS_COMMON += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 endif # JULIACODEGEN == LLVM
 
@@ -226,23 +230,15 @@ CODEGEN_DOBJS += $(BUILDDIR)/llvm-Compression.dbg.obj
 endif
 
 # Add SONAME defines so we can embed proper `dlopen()` calls.
-ADDL_SHIPFLAGS  := -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys.$(SHLIB_EXT)))) \
-                   -DJL_LIBJULIA_SONAME=$(call shell_escape,$(call c_escape,$(LIBJULIA_PATH_REL).$(JL_MAJOR_SHLIB_EXT)))
-ADDL_DEBUGFLAGS := -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)))) \
-                   -DJL_LIBJULIA_SONAME=$(call shell_escape,$(call c_escape,$(LIBJULIA_PATH_REL)-debug.$(JL_MAJOR_SHLIB_EXT)))
+SHIPFLAGS_COMMON  += -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys.$(SHLIB_EXT)))) \
+                     -DJL_LIBJULIA_SONAME=$(call shell_escape,$(call c_escape,$(LIBJULIA_PATH_REL).$(JL_MAJOR_SHLIB_EXT)))
+DEBUGFLAGS_COMMON += -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)))) \
+                     -DJL_LIBJULIA_SONAME=$(call shell_escape,$(call c_escape,$(LIBJULIA_PATH_REL)-debug.$(JL_MAJOR_SHLIB_EXT)))
 
-SHIPFLAGS         += $(FLAGS) $(ADDL_SHIPFLAGS)
-DEBUGFLAGS        += $(FLAGS) $(ADDL_DEBUGFLAGS)
-SHIPFLAGS_GCC     += $(FLAGS) $(ADDL_SHIPFLAGS)
-DEBUGFLAGS_GCC    += $(FLAGS) $(ADDL_DEBUGFLAGS)
-SHIPFLAGS_CLANG   += $(FLAGS) $(ADDL_SHIPFLAGS)
-DEBUGFLAGS_CLANG  += $(FLAGS) $(ADDL_DEBUGFLAGS)
-
-DEBUGFLAGS_CLANG  += -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
-ifeq ($(USEGCC),1) # TODO: we currently set flags incorrectly for clang analyze, but mostly it works out okay
-DEBUGFLAGS_CLANG  += -Wno-unknown-warning-option
-endif
-DEBUGFLAGS_CLANG  += -Wno-return-type-c-linkage # TODO: do we care about fixing this instead? (it is not a bug, just a nuisance)
+SHIPFLAGS_COMMON  += $(FLAGS_COMMON)
+DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
+SHIPFLAGS_GCC  += $(FLAGS_GCC)
+DEBUGFLAGS_GCC += $(FLAGS_GCC)
 
 ifeq ($(USE_CROSS_FLISP), 1)
 FLISPDIR := $(BUILDDIR)/flisp/host
@@ -285,13 +281,13 @@ $(BUILDDIR)/jl_internal_funcs.inc: $(SRCDIR)/jl_exported_funcs.inc
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(SHIPFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
 $(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%.d
@@ -320,7 +316,7 @@ else
 JULIA_SPLITDEBUG := 0
 endif
 $(build_shlibdir)/libccalltest.$(SHLIB_EXT): $(SRCDIR)/ccalltest.c
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@.tmp $(LDFLAGS))
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -shared -o $@.tmp $(LDFLAGS))
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@.tmp
 ifeq ($(JULIA_SPLITDEBUG),1)
 	@# Create split debug info file for libccalltest stacktraces test
@@ -337,13 +333,13 @@ endif
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT): $(SRCDIR)/ccalllazyfoo.c
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)))
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)))
 
 $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
-	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JL_CFLAGS) $(JCPPFLAGS) $(FLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)) -lccalllazyfoo)
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)) -lccalllazyfoo)
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
-	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(FLAGS) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(NO_WHOLE_ARCHIVE) $(CG_LLVMLINK)) -lpthread
+	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(NO_WHOLE_ARCHIVE) $(CG_LLVMLINK)) -lpthread
 
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
@@ -442,13 +438,13 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION $(LLVM_
 		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"
 
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
 $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ \
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
@@ -470,13 +466,13 @@ libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MI
 libjulia-internal-debug libjulia-internal-release: $(PUBLIC_HEADER_TARGETS)
 
 $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(CODEGEN_OBJS) $(BUILDDIR)/support/libsupport.a $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(CODEGEN_OBJS) $(RPATH_LIB) -o $@ \
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(CODEGEN_OBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-codegen.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-codegen.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
 $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(CODEGEN_DOBJS) $(BUILDDIR)/support/libsupport-debug.a $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(CODEGEN_DOBJS) $(RPATH_LIB) -o $@ \
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(CODEGEN_DOBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-codegen-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
@@ -496,22 +492,22 @@ libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINO
 libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
 # set the exports for the source files based on where they are getting linked
-$(OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
-$(DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
-$(CODEGEN_OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
-$(CODEGEN_DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
+$(OBJS) $(DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
+$(CODEGEN_OBJS) $(CODEGEN_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
 # set the exports for the source files based on where they are getting linked
-$(addprefix clang-sa-,$(SRCS)):      DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sagc-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-tidy-,$(SRCS)):    DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sa-,$(CODEGEN_SRCS)):   DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-sagc-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-tidy-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
-# Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database) using lazy expansion
-CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG)
-CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG)
+$(addprefix clang-sa-,$(SRCS)):      FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sagc-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-tidy-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sa-,$(CODEGEN_SRCS)):   FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-sagc-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-tidy-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
 
-# Additional headers from dependency links, categorized by usage
+# Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
+CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(LLVM_CFLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
+CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(DEBUGFLAGS_CLANG) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG)
+
+# Additional headers from dependency links, categorized by usage, for adding as fake compiler targets.
+# Adding these as compiler inputs doesn't always work (due to missing includes), but if we don't add them, they won't work at all.
 ADDITIONAL_C_HEADERS := builtin_proto.h common_symbols1.inc common_symbols2.inc gc-alloc-profiler.h \
 	gc-common.h gc-heap-snapshot.h gc-page-profiler.h gc-stock.h serialize.h \
 	support/htable.h support/htable.inc
@@ -548,7 +544,8 @@ INCLUDED_CXX_FILES := \
 	processor.cpp:processor_fallback.cpp
 
 clean:
-	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
+	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen*
+	-rm -rf $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest* $(build_shlibdir)/libccalllazyfoo* $(build_shlibdir)/libccalllazybar*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
@@ -601,7 +598,7 @@ SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xana
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
-clang-sagc-%: JL_CXXFLAGS += -UNDEBUG
+clang-sagc-%: JCXXFLAGS_COMMON += -UNDEBUG
 clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
@@ -613,7 +610,7 @@ clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) 
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -x c++ $<)
 
-clang-sa-%: JL_CXXFLAGS += -UNDEBUG
+clang-sa-%: JCXXFLAGS_COMMON += -UNDEBUG
 clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
