@@ -35,13 +35,16 @@ JULIAC_BUILDSCRIPT := $(shell $(JULIA) --startup-file=no -e 'print(joinpath(Sys.
 
 release: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
 
-$(BIN)/hello-o.a: $(SRCDIR)/hello.jl $(JULIAC_BUILDSCRIPT)
+Manifest.toml: $(SRCDIR)/Project.toml
+	$(JULIA) --startup-file=no --history-file=no -e 'using Pkg; Pkg.activate("$(SRCDIR)"); Pkg.instantiate()'
+
+$(BIN)/hello-o.a: $(SRCDIR)/hello.jl $(JULIAC_BUILDSCRIPT) Manifest.toml
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
 
-$(BIN)/trimmability-o.a: $(SRCDIR)/trimmability.jl $(JULIAC_BUILDSCRIPT)
+$(BIN)/trimmability-o.a: $(SRCDIR)/trimmability.jl $(JULIAC_BUILDSCRIPT) Manifest.toml
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
 
-$(BIN)/basic_jll-o.a: $(SRCDIR)/basic_jll.jl $(JULIAC_BUILDSCRIPT)
+$(BIN)/basic_jll-o.a: $(SRCDIR)/basic_jll.jl $(JULIAC_BUILDSCRIPT) Manifest.toml
 	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
 
 $(BIN)/libsimple-o.a: $(SRCDIR)/libsimple.jl $(JULIAC_BUILDSCRIPT)
@@ -63,7 +66,7 @@ check: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN
 	$(JULIA) --startup-file=no --history-file=no --depwarn=error $(SRCDIR)/trimming.jl $<
 
 clean:
-	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.json
+	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.json $(BIN)/Manifest.toml
 
 .PHONY: release clean check
 
