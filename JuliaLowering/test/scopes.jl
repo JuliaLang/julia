@@ -66,7 +66,7 @@ function wrapscope(ex, scope_type)
 end
 
 assign_z_2 = parsestmt(SyntaxTree, "begin z = 2 end", filename="foo.jl")
-JuliaLowering.eval(test_mod, :(z=1))
+Base.eval(test_mod, :(z=1))
 @test test_mod.z == 1
 # neutral (eg, for loops) and hard (eg, let) scopes create a new binding for z
 JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :neutral))

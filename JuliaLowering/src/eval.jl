@@ -59,7 +59,7 @@ else
             end)
         end
 
-        eval(@__MODULE__, code)
+        Core.eval(@__MODULE__, code)
     end
 end
 
@@ -349,7 +349,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Our version of eval takes our own data structures
-@fzone "JL: eval" function Core.eval(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false)
+@fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false)
     k = kind(ex)
     if k == K"toplevel"
         x = nothing
@@ -359,8 +359,8 @@ end
         return x
     end
     linear_ir = lower(mod, ex; expr_compat_mode)
-    expr_form = to_lowered_expr(mod, linear_ir)
-    eval(mod, expr_form)
+    thunk = to_lowered_expr(mod, linear_ir)
+    Core.eval(mod, thunk)
 end
 
 """

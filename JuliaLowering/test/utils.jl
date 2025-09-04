@@ -163,7 +163,7 @@ function format_ir_for_test(mod, case)
         if kind(ex) == K"macrocall" && kind(ex[1]) == K"MacroName" && ex[1].name_val == "@ast_"
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
-            ex = JuliaLowering.eval(mod, Expr(ex))
+            ex = Base.eval(mod, Expr(ex))
         end
         x = JuliaLowering.lower(mod, ex)
         if case.expect_error
