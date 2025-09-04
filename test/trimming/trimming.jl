@@ -1,7 +1,6 @@
 import Pkg
 
 Pkg.activate(".")
-Pkg.add(["JSON"])
 
 using Test
 using JSON
