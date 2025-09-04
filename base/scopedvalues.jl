@@ -232,9 +232,7 @@ function Base.show(io::IO, val::AbstractScopedValue)
     end
     print(io, '(')
     v = get(val)
-    if v === nothing
-        print(io, "undefined")
-    else
+    if v !== nothing
         show(IOContext(io, :typeinfo => eltype(val)), something(v))
     end
     print(io, ')')
