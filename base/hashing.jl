@@ -34,6 +34,15 @@ See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 hash(data::Any) = hash(data, HASH_SEED)
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
+function hash(x::Symbol, h::UInt)
+    oid = objectid(x)
+    if h === HASH_SEED  # perf optimization for `Dict`, supposed to get constpropped
+        oid
+    else
+        hash(oid, h)
+    end
+end
+
 # Types can't be deleted, so marking as total allows the compiler to look up the hash
 @noinline _jl_type_hash(T::Type) = @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)
 hash(T::Type, h::UInt) = hash(_jl_type_hash(T), h)
@@ -262,9 +271,6 @@ function hash(x::DebugInfo, h::UInt)
     end
     return h
 end
-
-hash(x::Symbol) = objectid(x)
-
 
 load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
     unsafe_load(convert(Ptr{T}, ptr + i - 1))
