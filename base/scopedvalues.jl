@@ -334,8 +334,8 @@ end
 """
     ScopedThunk(f)
 
-Create a functor that records the current dynamic scope, i.e. all current
-`ScopedValue`s, along with `f`. When the functor is invoked, it runs `f`
+Create a callable that records the current dynamic scope, i.e. all current
+`ScopedValue`s, along with `f`. When the callable is invoked, it runs `f`
 in the recorded dynamic scope.
 """
 struct ScopedThunk{F}
