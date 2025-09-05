@@ -103,12 +103,12 @@ end
 
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
-    #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
+    edges = result_edges(interp, caller)
+    #@assert last(result.valid_worlds) <= get_world_counter() || isempty(edges)
     if caller.cache_mode === CACHE_MODE_LOCAL
         @assert !isdefined(result, :ci)
-        result.src = transform_result_for_local_cache(interp, result)
+        result.src = transform_result_for_local_cache(interp, result, edges)
     elseif isdefined(result, :ci)
-        edges = result_edges(interp, caller)
         ci = result.ci
         mi = result.linfo
         # if we aren't cached, we don't need this edge
@@ -400,7 +400,7 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
     end
 end
 
-function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
+function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
     if is_result_constabi_eligible(result)
         return nothing
     end
@@ -1166,14 +1166,14 @@ end
 #### entry points for inferring a MethodInstance given a type signature ####
 
 """
-    codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, @nospecialize(val))
+    codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
 
 Return a fake CodeInfo that just contains `return \$val`. This function is used in various reflection APIs when asking
 for the code of a function that inference has found to just return a constant. For such functions, no code is actually
 stored - the constant is used directly. However, because this is an ABI implementation detail, it is nice to maintain
 consistency and just synthesize a CodeInfo when the reflection APIs ask for them - this function does that.
 """
-function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @nospecialize(val))
+function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
     method = mi.def::Method
     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     tree.code = Any[ ReturnNode(quoted(val)) ]
@@ -1184,7 +1184,9 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = [IR_FLAG_NULL]
     tree.rettype = Core.Typeof(val)
-    tree.edges = Core.svec()
+    tree.min_world = first(worlds)
+    tree.max_world = last(worlds)
+    tree.edges = edges
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree
@@ -1250,7 +1252,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
     if run_optimizer
         if result_is_constabi(interp, frame.result)
             rt = frame.result.result::Const
-            src = codeinfo_for_const(interp, frame.linfo, rt.val)
+            src = codeinfo_for_const(interp, frame.linfo, frame.world.valid_worlds, Core.svec(frame.edges...), rt.val)
         else
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
@@ -1288,8 +1290,6 @@ prepared interp to be able to provide source code for it.
 """
 const SOURCE_MODE_GET_SOURCE = 0xf
 
-ci_has_abi(code::CodeInstance) = (@atomic :acquire code.invoke) !== C_NULL
-
 """
     ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
 
@@ -1298,7 +1298,7 @@ interp gave it to the runtime system (either because it already has an ->invoke
 ptr, or because interp has source that could be compiled).
 """
 function ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
-    ci_has_abi(code) && return true
+    (@atomic :acquire code.invoke) !== C_NULL && return true
     return ci_has_source(interp, code)
 end
 
@@ -1619,7 +1619,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             mi = get_ci_mi(callee)
             # now make sure everything has source code, if desired
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, mi, callee.rettype_const)
+                src = codeinfo_for_const(interp, mi, WorldRange(callee.min_world, callee.max_world), callee.edges, callee.rettype_const)
             else
                 src = get(interp.codegen, callee, nothing)
                 if src === nothing

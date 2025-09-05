@@ -1283,10 +1283,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         end
 
         sv = sv::SimpleVector
-        ext_edges = sv[3]::Union{Nothing,Vector{Any}}
-        internal_methods = sv[4]::Vector{Any}
+        internal_methods = sv[3]::Vector{Any}
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
-            ReinferUtils.insert_backedges_typeinf(ext_edges, internal_methods)
+            ReinferUtils.insert_backedges_typeinf(internal_methods)
         end
         restored = register_restored_modules(sv, pkg, path)
 

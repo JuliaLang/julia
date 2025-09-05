@@ -897,7 +897,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 jl_callptr_t invoke;
                 void *fptr;
                 jl_read_codeinst_invoke(this_code, &specsigflags, &invoke, &fptr, 0);
-                if (invoke != NULL && (specsigflags & 0b100)) {
+                if (invoke != NULL && (specsigflags & JL_CI_FLAGS_FROM_IMAGE)) {
                     // this codeinst is already available externally: keep it only if canPartition demands it for local use
                     // TODO: for performance, avoid generating the src code when we know it would reach here anyways?
                     if (M.withModuleDo([&](Module &M) { return !canPartition(*cast<Function>(M.getNamedValue(cfunc))); })) {

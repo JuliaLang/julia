@@ -499,11 +499,14 @@ static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_ca
         assert(jl_is_code_instance(ci));
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
         jl_method_t *m = mi->def.method;
+        int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
+        if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
+            continue; // ignore replaced methods
         if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
             int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
-            if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
+            if (found == 1) {
                 jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
             }
         }

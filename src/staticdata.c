@@ -101,12 +101,12 @@ typedef struct {
     htable_t type_in_worklist;
 } jl_query_cache;
 
-static void init_query_cache(jl_query_cache *cache)
+static void init_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
 {
     htable_new(&cache->type_in_worklist, 0);
 }
 
-static void destroy_query_cache(jl_query_cache *cache)
+static void destroy_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
 {
     htable_free(&cache->type_in_worklist);
 }
@@ -1485,7 +1485,7 @@ static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fn
 #ifndef JL_NDEBUG
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
-        assert(jl_atomic_load_relaxed(&ci->specsigflags) & 0b100);
+        assert(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE);
     }
 #endif
 }
@@ -1884,12 +1884,10 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
-                        if (jl_atomic_load_relaxed(&newci->min_world) > 1) {
-                            //assert(jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec); // some code (such as !==) might add a method lookup restriction but not keep the edges
-                            jl_atomic_store_release(&newci->min_world, ~(size_t)0);
-                            jl_atomic_store_release(&newci->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
-                            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
-                        }
+                        //assert(jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec); // some code (such as !==) might add a method lookup restriction but not keep the edges
+                        jl_atomic_store_release(&newci->min_world, ~(size_t)0);
+                        jl_atomic_store_release(&newci->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
+                        arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                     else {
                         // garbage object - delete it :(
@@ -1899,7 +1897,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 }
                 jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
-                jl_atomic_store_relaxed(&newci->specsigflags, 0);
+                // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID bits
+                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID);
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
                 int8_t fptr_id = JL_API_NULL;
                 int8_t builtin_id = 0;
@@ -2467,10 +2466,11 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
             }
             if (specfunc) {
                 jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
-                jl_atomic_store_relaxed(&codeinst->specsigflags, 0b111); // TODO: set only if confirmed to be true
+                // TODO: set JL_CI_FLAGS_SPECPTR_SPECIALIZED only if confirmed to be true
+                jl_atomic_store_relaxed(&codeinst->flags, jl_atomic_load_relaxed(&codeinst->flags) | JL_CI_FLAGS_SPECPTR_SPECIALIZED | JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR | JL_CI_FLAGS_FROM_IMAGE);
             }
             else {
-                jl_atomic_store_relaxed(&codeinst->invoke,(jl_callptr_t)fptr);
+                jl_atomic_store_relaxed(&codeinst->invoke, (jl_callptr_t)fptr);
             }
         }
     }
@@ -2491,7 +2491,7 @@ static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arrayl
     }
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
-        assert(ci && (jl_atomic_load_relaxed(&ci->specsigflags) & 0b001));
+        assert(ci && (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_SPECPTR_SPECIALIZED));
         uintptr_t item = backref_id(s, (void*)ci, s->link_ids_external_fnvars);
         uintptr_t reloc = get_reloc_for_item(item, 0);
         write_reloc_t(s->gvar_record, reloc);
@@ -2542,7 +2542,7 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
         }
         else {
             jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
-            assert(codeinst && (jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b01) && jl_atomic_load_relaxed(&codeinst->specptr.fptr));
+            assert(codeinst && (jl_atomic_load_relaxed(&codeinst->flags) & JL_CI_FLAGS_SPECPTR_SPECIALIZED) && jl_atomic_load_relaxed(&codeinst->specptr.fptr));
             v = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         }
         *gv = v;
@@ -3430,18 +3430,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     jl_gc_enable(en);
 }
 
-static int ci_in_ext_cache(jl_code_instance_t *ci)
+static int ci_not_internal_cache(jl_code_instance_t *ci)
 {
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
-    if (!jl_object_in_image(mi->def.value))
-        return 0;
-    jl_code_instance_t *cache = mi->cache;
-    while (cache) {
-        if (ci == cache)
-            return 1;
-        cache = cache->next;
-    }
-    return 0;
+    return !(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID) || jl_object_in_image(mi->def.value);
 }
 
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
@@ -3534,12 +3526,12 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
             arraylist_grow(&CIs, num_cis);
             jl_get_llvm_cis(native_functions, &num_cis, (jl_code_instance_t**)CIs.items);
             // Create a filtered list of the compiled code instances that are
-            // referenced via the Method cache field of an external method
-            // for possible, optional re-insertion at runtime
+            // possibly not referenced via any other way but valid for the
+            // Method cache field of an external method
             new_ext_cis = jl_alloc_vec_any(0);
             for (size_t i = 0; i < num_cis; i++) {
                 jl_code_instance_t *ci = (jl_code_instance_t*)CIs.items[i];
-                if (ci_in_ext_cache(ci))
+                if (ci_not_internal_cache(ci))
                     jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
             }
             arraylist_free(&CIs);
@@ -4512,14 +4504,12 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             if (new_methods)
                 world += 1;
             jl_activate_methods(extext_methods, internal_methods, world, pkgname);
-            // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
+            // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
             if (new_methods)
                 jl_atomic_store_release(&jl_world_counter, world);
             // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
-
-            jl_value_t *ext_edges = new_ext_cis ? (jl_value_t*)new_ext_cis : jl_nothing;
 
             if (completeinfo) {
                 cachesizes_sv = jl_alloc_svec(7);
@@ -4530,11 +4520,10 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 jl_svecset(cachesizes_sv, 4, jl_box_long(cachesizes.reloclist));
                 jl_svecset(cachesizes_sv, 5, jl_box_long(cachesizes.gvarlist));
                 jl_svecset(cachesizes_sv, 6, jl_box_long(cachesizes.fptrlist));
-                restored = (jl_value_t*)jl_svec(5, restored, init_order, ext_edges,
-                                                   method_roots_list, cachesizes_sv);
+                restored = (jl_value_t*)jl_svec(5, restored, init_order, internal_methods, method_roots_list, cachesizes_sv);
             }
             else {
-                restored = (jl_value_t*)jl_svec(4, restored, init_order, ext_edges, internal_methods);
+                restored = (jl_value_t*)jl_svec(3, restored, init_order, internal_methods);
             }
         }
     }
