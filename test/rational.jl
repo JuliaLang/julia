@@ -837,3 +837,10 @@ end
         @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
     end
 end
+
+@testset "issue #58923 float arithmetic with Integer" begin
+    r = Rational{Integer}(4//3)
+    for fptype in (Float16, Float32, Float64, AbstractFloat)
+        @test r * fptype(5.1) ≈ 6.8
+    end
+end
