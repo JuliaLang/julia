@@ -461,6 +461,11 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
 end
 
 @fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
+    if kind(ex) == K"local"
+        # This error assumes we're expanding the body of a top level thunk but
+        # we might want to make that more explicit in the pass system.
+        throw(LoweringError(ex, "local declarations have no effect outside a scope"))
+    end
     graph = ensure_attributes(syntax_graph(ex),
                               var_id=IdTag,
                               scope_layer=LayerId,

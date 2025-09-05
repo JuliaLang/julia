@@ -427,7 +427,10 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
     # elseif k == K"global"
     #     ex
     elseif k == K"local"
-        makeleaf(ctx, ex, K"TOMBSTONE")
+        # Local declarations have a value of `nothing` according to flisp
+        # lowering.
+        # TODO: Should local decls be disallowed in value position?
+        @ast ctx ex "nothing"::K"core"
     elseif k == K"decl"
         ex_out = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
         name = ex_out[1]

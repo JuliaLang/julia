@@ -11,8 +11,13 @@ end
 
 # In value position, yield the right hand side, not `x`
 @test JuliaLowering.include_string(test_mod, """
-local x::Int = 1.0
+begin
+    local x::Int = 1.0
+end
 """) === 1.0
+
+# Global decl in value position without assignment returns nothing
+@test JuliaLowering.include_string(test_mod, "global x_no_assign") === nothing
 
 # Unadorned declarations
 @test JuliaLowering.include_string(test_mod, """

@@ -1,6 +1,8 @@
 ########################################
 # Local declaration with type
-local x::T = 1
+begin
+    local x::T = 1
+end
 #---------------------
 1   (newvar slot₁/x)
 2   1
@@ -16,6 +18,74 @@ local x::T = 1
 12  slot₂/tmp
 13  (= slot₁/x %₁₂)
 14  (return %₂)
+
+########################################
+# Error: Local declarations outside a scope are disallowed
+# See https://github.com/JuliaLang/julia/issues/57483
+local x
+#---------------------
+LoweringError:
+local x
+└─────┘ ── local declarations have no effect outside a scope
+
+########################################
+# Local declaration allowed in tail position
+begin
+    local x
+end
+#---------------------
+1   (newvar slot₁/x)
+2   (return core.nothing)
+
+########################################
+# Local declaration allowed in value position
+# TODO: This may be a bug in flisp lowering - should we reconsider this?
+let
+    y = local x
+end
+#---------------------
+1   (newvar slot₁/x)
+2   core.nothing
+3   (= slot₂/y %₂)
+4   (return %₂)
+
+########################################
+# Global declaration allowed in tail position
+global x
+#---------------------
+1   (global TestMod.x)
+2   latestworld
+3   (return core.nothing)
+
+########################################
+# Global declaration allowed in tail position, nested
+begin
+    global x
+end
+#---------------------
+1   (global TestMod.x)
+2   latestworld
+3   (return core.nothing)
+
+########################################
+# Error: Global declaration not allowed in tail position in functions
+function f()
+    global x
+end
+#---------------------
+LoweringError:
+function f()
+    global x
+#          ╙ ── global declaration doesn't read the variable and can't return a value
+end
+
+########################################
+# Error: Global declaration not allowed in value position
+y = global x
+#---------------------
+LoweringError:
+y = global x
+#          ╙ ── global declaration doesn't read the variable and can't return a value
 
 ########################################
 # const
