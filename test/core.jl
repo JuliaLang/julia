@@ -243,6 +243,62 @@ k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
 @test k11840(Tuple{Union{Int32, Int64}}) == '2'
 @test k11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
 
+# issue #59327
+@noinline f59327(f, x) = Any[f, x]
+g59327(x) = f59327(+, Any[x][1])
+g59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(f59327), Function, Int},
+    methods(f59327)[1].specializations)
+
+@noinline h59327(f::Union{Function, Nothing}, x) = Any[f, x]
+i59327(x) = h59327(+, Any[x][1])
+i59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(h59327), Function, Int},
+    methods(h59327)[1].specializations)
+
+@noinline j59327(f::Function, x) = Any[f, x]
+k59327(x) = j59327(+, Any[x][1])
+k59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(j59327), Function, Int},
+    methods(j59327)[1].specializations
+)
+
+@noinline l59327(f::Base.Callable, x) = Any[f, x]
+m59327(x) = l59327(+, Any[x][1])
+m59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(l59327), Function, Int},
+    methods(l59327)[1].specializations
+)
+
+# _do_ specialize if the signature has a `where`
+@noinline n59327(f::F, x) where F = Any[f, x]
+o59327(x) = n59327(+, Any[x][1])
+o59327(1)
+@test !any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
+    methods(n59327)[1].specializations
+)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), typeof(+), Int},
+    methods(n59327)[1].specializations
+)
+
+# _do_ specialize if the signature is specific
+@noinline n59327(f::typeof(+), x) = Any[f, x]
+o59327(x) = n59327(+, Any[x][1])
+o59327(1)
+@test !any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
+    methods(n59327)[1].specializations
+)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), typeof(+), Int},
+    methods(n59327)[1].specializations
+)
 
 # issue #20511
 f20511(x::DataType) = 0

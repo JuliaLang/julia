@@ -1267,17 +1267,21 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = try
             if ocachepath !== nothing
                 @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_package_image_from_file, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring, Cint),
+                ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint),
                     ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
             else
                 @debug "Loading cache file $path for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_incremental, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring),
+                ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring),
                     path, depmods, #=completeinfo=#false, pkg.name)
             end
         finally
             lock(require_lock)
         end
+        if isa(sv, Exception)
+            return sv
+        end
 
+        sv = sv::SimpleVector
         edges = sv[3]::Vector{Any}
         ext_edges = sv[4]::Union{Nothing,Vector{Any}}
         extext_methods = sv[5]::Vector{Any}
@@ -2630,21 +2634,23 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache
             end
             # spawn off a new incremental pre-compile task for recursive `require` calls
-            loaded = maybe_cachefile_lock(pkg, path) do
-                # double-check the search now that we have lock
-                m = _require_search_from_serialized(pkg, path, UInt128(0), true)
-                m isa Module && return m
-                triggers = get(EXT_PRIMED, pkg, nothing)
-                loadable_exts = nothing
-                if triggers !== nothing # extension
-                    loadable_exts = PkgId[]
-                    for (ext′, triggers′) in EXT_PRIMED
-                        if triggers′ ⊊ triggers
-                            push!(loadable_exts, ext′)
+            loaded = let path = path, reasons = reasons
+                maybe_cachefile_lock(pkg, path) do
+                    # double-check the search now that we have lock
+                    m = _require_search_from_serialized(pkg, path, UInt128(0), true)
+                    m isa Module && return m
+                    triggers = get(EXT_PRIMED, pkg, nothing)
+                    loadable_exts = nothing
+                    if triggers !== nothing # extension
+                        loadable_exts = PkgId[]
+                        for (ext′, triggers′) in EXT_PRIMED
+                            if triggers′ ⊊ triggers
+                                push!(loadable_exts, ext′)
+                            end
                         end
                     end
+                    return compilecache(pkg, path; reasons, loadable_exts)
                 end
-                return compilecache(pkg, path; reasons, loadable_exts)
             end
             loaded isa Module && return loaded
             if isnothing(loaded) # maybe_cachefile_lock returns nothing if it had to wait for another process

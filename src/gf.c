@@ -492,6 +492,14 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     if (ci && !jl_is_code_instance(ci)) {
         ci = NULL;
     }
+
+    // Record inference entrance backtrace if enabled
+    if (ci) {
+        JL_GC_PUSH1(&ci);
+        jl_push_inference_entrance_backtraces((jl_value_t*)ci);
+        JL_GC_POP();
+    }
+
     JL_GC_POP();
 #endif
 
@@ -1209,14 +1217,9 @@ static void jl_compilation_sig(
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
                               !jl_has_free_typevars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
-        if (notcalled_func && (type_i == (jl_value_t*)jl_any_type ||
-                               type_i == (jl_value_t*)jl_function_type ||
-                               (jl_is_uniontype(type_i) && // Base.Callable
-                                ((((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_type_type) ||
-                                 (((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_type_type))))) {
-            // and attempt to despecialize types marked Function, Callable, or Any
+        if (notcalled_func && (jl_subtype((jl_value_t*)jl_function_type, type_i))) {
+            // and attempt to despecialize types marked as a supertype of Function (i.e.
+            // Function, Callable, Any, or a Union{Function, T})
             // when called with a subtype of Function but is not called
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             jl_svecset(*newparams, i, (jl_value_t*)jl_function_type);
@@ -1442,15 +1445,9 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
                               !jl_has_free_typevars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
-        if (notcalled_func && (type_i == (jl_value_t*)jl_any_type ||
-                               type_i == (jl_value_t*)jl_function_type ||
-                               (jl_is_uniontype(type_i) && // Base.Callable
-                                ((((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_type_type) ||
-                                 (((jl_uniontype_t*)type_i)->b == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)type_i)->a == (jl_value_t*)jl_type_type))))) {
-            // and attempt to despecialize types marked Function, Callable, or Any
-            // when called with a subtype of Function but is not called
+        if (notcalled_func && jl_subtype((jl_value_t*)jl_function_type, type_i)) {
+            // and attempt to despecialize types marked as a supertype of Function (i.e.
+            // Function, Callable, Any, or a Union{Function, T})
             if (elt == (jl_value_t*)jl_function_type)
                 continue;
             JL_GC_POP();
@@ -3486,7 +3483,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     // Ok, compilation is enabled. We'll need to try to compile something (probably).
 
     // Everything from here on is considered (user facing) compile time
-    uint64_t start = jl_typeinf_timing_begin();
+    uint64_t compilation_start = jl_hrtime();
+    uint64_t inference_start = jl_typeinf_timing_begin(); // Special-handling for reentrancy
 
     // Is a recompile if there is cached code, and it was compiled (not only inferred) before
     int is_recompile = 0;
@@ -3513,15 +3511,14 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     if (codeinst) {
         if (jl_is_compiled_codeinst(codeinst)) {
-            jl_typeinf_timing_end(start, is_recompile);
+            jl_typeinf_timing_end(inference_start, is_recompile);
             // Already compiled - e.g. constabi, or compiled by a different thread while we were waiting.
             return codeinst;
         }
 
         JL_GC_PUSH1(&codeinst);
-        double compile_time = jl_hrtime();
         int did_compile = jl_compile_codeinst(codeinst);
-        compile_time = jl_hrtime() - compile_time;
+        double compile_time = jl_hrtime() - compilation_start;
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
@@ -3551,7 +3548,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         if (ucache_invoke != jl_fptr_sparam &&
             ucache_invoke != jl_fptr_interpret_call) {
             // only these care about the exact specTypes, otherwise we can use it directly
-            jl_typeinf_timing_end(start, is_recompile);
+            jl_typeinf_timing_end(inference_start, is_recompile);
             return ucache;
         }
         uint8_t specsigflags;
@@ -3569,7 +3566,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_mi_cache_insert(mi, codeinst);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
-    jl_typeinf_timing_end(start, is_recompile);
+    jl_typeinf_timing_end(inference_start, is_recompile);
     return codeinst;
 }
 

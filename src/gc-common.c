@@ -126,7 +126,7 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
 // but with several fixes to improve the correctness of the computation and remove unnecessary parameters
 #define SAVED_PTR(x) ((void *)((DWORD_PTR)((char *)x - sizeof(void *)) & \
                                ~(sizeof(void *) - 1)))
-static size_t _aligned_msize(void *p)
+static size_t _jl_aligned_msize(void *p)
 {
     void *alloc_ptr = *(void**)SAVED_PTR(p);
     return _msize(alloc_ptr) - ((char*)p - (char*)alloc_ptr);
@@ -138,7 +138,7 @@ size_t memory_block_usable_size(void *p, int isaligned) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_)
     if (isaligned)
-        return _aligned_msize(p);
+        return _jl_aligned_msize(p);
     else
         return _msize(p);
 #elif defined(_OS_DARWIN_)
