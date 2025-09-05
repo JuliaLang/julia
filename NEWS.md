@@ -48,6 +48,9 @@ New library functions
 ---------------------
 
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
+  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
+  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 * `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
@@ -60,6 +63,7 @@ New library features
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 * `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
+* `chopprefix` and `chopsuffix` can now also accept an `AbstractChar` as the prefix/suffix to remove.
 * The `macroexpand` (with default true) and the new `macroexpand!` (with default false)
   functions now support a `legacyscope` boolean keyword argument to control whether to run
   the legacy scope resolution pass over the result. The legacy scope resolution code has
