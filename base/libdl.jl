@@ -418,8 +418,7 @@ function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
 end
 
 # Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
-# how to call `dlopen()`, during bootstrap.
-# See  `post_image_load_hooks` for non-bootstrapping.
+# how to call `dlopen()`.
 Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
 
 function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)

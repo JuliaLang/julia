@@ -22,6 +22,7 @@
 using namespace llvm;
 
 // --- library symbol lookup ---
+jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
