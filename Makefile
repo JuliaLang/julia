@@ -707,7 +707,12 @@ distcleanall: cleanall
 	clean distcleanall cleanall $(CLEAN_TARGETS) \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \
-	dist full-source-dist source-dist
+	dist full-source-dist source-dist \
+	compile-database
+
+# Generate compilation database (leverages existing clang tooling setup)
+compile-database:
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database-src
 
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
