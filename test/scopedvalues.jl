@@ -80,7 +80,7 @@ import Base.Threads: @spawn
 end
 
 @testset "show" begin
-    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
+    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}()"
     @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(1)"
     with(sval => 2.0) do
         @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(2)"
