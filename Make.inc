@@ -1559,7 +1559,7 @@ endif
 
 exec = $(shell $(call spawn,$(1)))
 
-JULIA_BUILD_MODE := release
+JULIA_BUILD_MODE := debug
 ifeq (,$(findstring release,$(MAKECMDGOALS)))
 ifneq (,$(findstring debug,$(MAKECMDGOALS)))
 JULIA_BUILD_MODE := debug
