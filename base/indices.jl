@@ -215,6 +215,7 @@ end
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
 function setindex_shape_check(X::AbstractArray, I::Integer...)
+    @inline
     li = ndims(X)
     lj = length(I)
     i = j = 1
