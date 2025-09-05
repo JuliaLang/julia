@@ -1246,6 +1246,18 @@ end
         @test setdiff((1, 2), (3, 2)) == [1]
         @test symdiff((1, 2), (3, 2)) == [1, 3]
     end
+
+    @testset "setdiff preserves element type of first argument" begin
+        @test setdiff([1, 2, 3], [1.0, 2.0]) isa Vector{Int}
+        @test setdiff([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test setdiff(['a', 'b', 'c'], [98]) isa Vector{Char}
+        @test setdiff([1, 2], [1.0, 2.0]) isa Vector{Int}
+    end
+    @testset "intersect promotes element types of arguments" begin
+        @test intersect([1, 2, 3], [1.0, 2.0]) isa Vector{Float64}
+        @test intersect([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test intersect(['a', 'b', 'c'], Int[]) isa Vector{Any}
+    end
 end
 
 @testset "mapslices" begin
@@ -3318,6 +3330,28 @@ end
     showerror(b, err)
     @test String(take!(b)) ==
         "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
+end
+
+@testset "return type inference of function that calls `length(::Array)`" begin
+    f(x) = length(x)
+    @test Int === Base.infer_return_type(f, Tuple{Array})
+end
+
+@testset "return type inference of `sizeof(::Array)`" begin
+    @test isconcretetype(Base.infer_return_type(sizeof, Tuple{Array}))
+end
+
+@testset "return type inference of `getindex(::Array, ::Colon)`" begin
+    f = a -> a[:]
+    @test Vector == Base.infer_return_type(f, Tuple{Array})
+    @test Vector{Float32} === Base.infer_return_type(f, Tuple{Array{Float32}})
+end
+
+@testset "return type inference of linear `eachindex` for `Array` and `Memory`" begin
+    f = a -> eachindex(IndexLinear(), a)
+    for typ in (Array, Memory, Union{Array, Memory})
+        @test isconcretetype(Base.infer_return_type(f, Tuple{typ}))
+    end
 end
 
 @testset "inference of Union{T,Nothing} arrays 26771" begin

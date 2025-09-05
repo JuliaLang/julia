@@ -3,6 +3,9 @@
 include("testhelpers/EvenIntegers.jl")
 using .EvenIntegers
 
+include("testhelpers/ULPError.jl")
+using .ULPError
+
 using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
@@ -24,6 +27,55 @@ has_fma = Dict(
     Float64 => has_fma_Float64(),
     BigFloat => true,
 )
+
+@testset "meta test: ULPError" begin
+    examples_f64 = (-3e0, -2e0, -1e0, -1e-1, -1e-10, -0e0, 0e0, 1e-10, 1e-1, 1e0, 2e0, 3e0)::Tuple{Vararg{Float64}}
+    examples_f16 = Float16.(examples_f64)
+    examples_f32 = Float32.(examples_f64)
+    examples = (examples_f16..., examples_f32..., examples_f64...)
+    @testset "edge cases" begin
+        @testset "zero error - two equivalent values" begin
+            @test 0 == @inferred ulp_error(NaN, NaN)
+            @test 0 == @inferred ulp_error(-NaN, -NaN)
+            @test 0 == @inferred ulp_error(-NaN, NaN)
+            @test 0 == @inferred ulp_error(NaN, -NaN)
+            @test 0 == @inferred ulp_error(Inf, Inf)
+            @test 0 == @inferred ulp_error(-Inf, -Inf)
+            @test 0 == @inferred ulp_error(0.0, 0.0)
+            @test 0 == @inferred ulp_error(-0.0, -0.0)
+            @test 0 == @inferred ulp_error(-0.0, 0.0)
+            @test 0 == @inferred ulp_error(0.0, -0.0)
+            @test 0 == @inferred ulp_error(3.0, 3.0)
+            @test 0 == @inferred ulp_error(-3.0, -3.0)
+        end
+        @testset "infinite error" begin
+            @test Inf == @inferred ulp_error(NaN, 0.0)
+            @test Inf == @inferred ulp_error(0.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, 3.0)
+            @test Inf == @inferred ulp_error(3.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, Inf)
+            @test Inf == @inferred ulp_error(Inf, NaN)
+            @test Inf == @inferred ulp_error(Inf, -Inf)
+            @test Inf == @inferred ulp_error(-Inf, Inf)
+            @test Inf == @inferred ulp_error(0.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 0.0)
+            @test Inf == @inferred ulp_error(3.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 3.0)
+        end
+    end
+    @testset "faithful" begin
+        for x in examples
+            @test 1 == @inferred ulp_error(x, nextfloat(x, 1))
+            @test 1 == @inferred ulp_error(x, nextfloat(x, -1))
+        end
+    end
+    @testset "midpoint" begin
+        for x in examples
+            a = abs(x)
+            @test 1 == 2 * @inferred ulp_error(copysign((widen(a) + nextfloat(a, 1))/2, x), x)
+        end
+    end
+end
 
 @testset "clamp" begin
     let
@@ -684,6 +736,12 @@ end
     setprecision(256) do
         @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
         @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
+
+    @testset "accuracy of `cosc` around the origin" begin
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(cosc, range(start = t(-1), stop = t(1), length = 5000)) < 4
+        end
     end
 end
 

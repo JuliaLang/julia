@@ -1104,6 +1104,10 @@ Return a `T(NaN)` if `isnan(x)`.
 See also [`sinc`](@ref).
 """
 cosc(x::Number) = _cosc(float(x))
+function _cosc_generic(x)
+    pi_x = pi * x
+    (pi_x*cospi(x)-sinpi(x))/(pi_x*x)
+end
 function _cosc(x::Number)
     # naive cosc formula is susceptible to catastrophic
     # cancellation error near x=0, so we use the Taylor series
@@ -1124,17 +1128,128 @@ function _cosc(x::Number)
         end
         return π*s
     else
-        return isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+        return isinf_real(x) ? zero(x) : _cosc_generic(x)
     end
 end
+
+#=
+
+## `cosc(x)` for `x` around the first zero, at `x = 0`
+
+`Float32`:
+
+```sollya
+prec = 500!;
+accurate = ((pi * x) * cos(pi * x) - sin(pi * x)) / (pi * x * x);
+b1 = 0.27001953125;
+b2 = 0.449951171875;
+domain_0 = [-b1/2, b1];
+domain_1 = [b1, b2];
+machinePrecision = 24;
+freeMonomials = [|1, 3, 5, 7|];
+freeMonomialPrecisions = [|machinePrecision, machinePrecision, machinePrecision, machinePrecision|];
+polynomial_0 = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, domain_0);
+polynomial_1 = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, domain_1);
+polynomial_0;
+polynomial_1;
+```
+
+`Float64`:
+
+```sollya
+prec = 500!;
+accurate = ((pi * x) * cos(pi * x) - sin(pi * x)) / (pi * x * x);
+b1 = 0.1700439453125;
+b2 = 0.27001953125;
+b3 = 0.340087890625;
+b4 = 0.39990234375;
+domain_0 = [-b1/2, b1];
+domain_1 = [b1, b2];
+domain_2 = [b2, b3];
+domain_3 = [b3, b4];
+machinePrecision = 53;
+freeMonomials = [|1, 3, 5, 7, 9, 11|];
+freeMonomialPrecisions = [|machinePrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision|];
+polynomial_0 = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, domain_0);
+polynomial_1 = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, domain_1);
+polynomial_2 = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, domain_2);
+polynomial_3 = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, domain_3);
+polynomial_0;
+polynomial_1;
+polynomial_2;
+polynomial_3;
+```
+
+=#
+
+function _cos_cardinal_eval(x::AbstractFloat, polynomials_close_to_origin::NTuple)
+    function choose_poly(a::AbstractFloat, polynomials_close_to_origin::NTuple{2})
+        ((b1, p0), (_, p1)) = polynomials_close_to_origin
+        if a ≤ b1
+            p0
+        else
+            p1
+        end
+    end
+    function choose_poly(a::AbstractFloat, polynomials_close_to_origin::NTuple{4})
+        ((b1, p0), (b2, p1), (b3, p2), (_, p3)) = polynomials_close_to_origin
+        if a ≤ b2  # hardcoded binary search
+            if a ≤ b1
+                p0
+            else
+                p1
+            end
+        else
+            if a ≤ b3
+                p2
+            else
+                p3
+            end
+        end
+    end
+    a = abs(x)
+    if (polynomials_close_to_origin !== ()) && (a ≤ polynomials_close_to_origin[end][1])
+        x * evalpoly(x * x, choose_poly(a, polynomials_close_to_origin))
+    elseif isinf(x)
+        typeof(x)(0)
+    else
+        _cosc_generic(x)
+    end
+end
+
+const _cosc_f32 = let b = Float32 ∘ Float16
+    (
+        (b(0.27), (-3.289868f0, 3.246966f0, -1.1443111f0, 0.20542027f0)),
+        (b(0.45), (-3.2898617f0, 3.2467577f0, -1.1420113f0, 0.1965574f0)),
+    )
+end
+
+const _cosc_f64 = let b = Float64 ∘ Float16
+    (
+        (b(0.17), (-3.289868133696453, 3.2469697011333203, -1.1445109446992934, 0.20918277797812262, -0.023460519561502552, 0.001772485141534688)),
+        (b(0.27), (-3.289868133695205, 3.246969700970421, -1.1445109360543062, 0.20918254132488637, -0.023457115021035743, 0.0017515112964895303)),
+        (b(0.34), (-3.289868133634355, 3.246969697075094, -1.1445108347839286, 0.209181201609773, -0.023448079433318045, 0.001726628430505518)),
+        (b(0.4),  (-3.289868133074254, 3.2469696736659346, -1.1445104406286049, 0.20917785794416457, -0.02343378376047161, 0.0017019796223768677)),
+    )
+end
+
+function _cosc(x::Union{Float32, Float64})
+    if x isa Float32
+        pols = _cosc_f32
+    elseif x isa Float64
+        pols = _cosc_f64
+    end
+    _cos_cardinal_eval(x, pols)
+end
+
 # hard-code Float64/Float32 Taylor series, with coefficients
 #  Float64.([(-1)^n*big(pi)^(2n)/((2n+1)*factorial(2n-1)) for n = 1:6])
-_cosc(x::Union{Float64,ComplexF64}) =
+_cosc(x::ComplexF64) =
     fastabs(x) < 0.14 ? x*evalpoly(x^2, (-3.289868133696453, 3.2469697011334144, -1.1445109447325053, 0.2091827825412384, -0.023460810354558236, 0.001781145516372852)) :
-    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
-_cosc(x::Union{Float32,ComplexF32}) =
+    isinf_real(x) ? zero(x) : _cosc_generic(x)
+_cosc(x::ComplexF32) =
     fastabs(x) < 0.26f0 ? x*evalpoly(x^2, (-3.289868f0, 3.2469697f0, -1.144511f0, 0.20918278f0)) :
-    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+    isinf_real(x) ? zero(x) : _cosc_generic(x)
 _cosc(x::Float16) = Float16(_cosc(Float32(x)))
 _cosc(x::ComplexF16) = ComplexF16(_cosc(ComplexF32(x)))
 

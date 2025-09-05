@@ -553,26 +553,29 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
-JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
-JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
-JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
+# These are lazy expansion variables, so that arguments can be added to them later and they'll affect all of these uses too
+JCFLAGS_COMMON     = -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
+JCFLAGS_CLANG      = $(JCFLAGS_COMMON)
+JCFLAGS_GCC        = $(JCFLAGS_COMMON) -fno-gnu-unique
+
 
 # These flags are needed to generate decent debug info
-JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
-JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
-JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
+JCPPFLAGS_COMMON   = -fasynchronous-unwind-tables
+JCPPFLAGS_CLANG    = $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
+JCPPFLAGS_GCC      = $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security -fno-strict-aliasing
-JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
-JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
+JCXXFLAGS_COMMON   = -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security -fno-strict-aliasing
+JCXXFLAGS_CLANG    = $(JCXXFLAGS_COMMON) -pedantic
+JCXXFLAGS_GCC      = $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
-DEBUGFLAGS_COMMON := -O0 -DJL_DEBUG_BUILD -fstack-protector
-DEBUGFLAGS_CLANG  := $(DEBUGFLAGS_COMMON) -g
-DEBUGFLAGS_GCC    := $(DEBUGFLAGS_COMMON) -ggdb2
+DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
+DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
+DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
 
-SHIPFLAGS_COMMON  := -O3
-SHIPFLAGS_CLANG   := $(SHIPFLAGS_COMMON) -g
-SHIPFLAGS_GCC     := $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+SHIPFLAGS_COMMON   = -O3
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -g
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+
 
 BOLT_LDFLAGS :=
 
@@ -591,22 +594,22 @@ endif
 ifeq ($(USEGCC),1)
 CC         := $(CROSS_COMPILE)gcc
 CXX        := $(CROSS_COMPILE)g++
-JCFLAGS    := $(JCFLAGS_GCC)
-JCPPFLAGS  := $(JCPPFLAGS_GCC)
-JCXXFLAGS  := $(JCXXFLAGS_GCC)
-DEBUGFLAGS := $(DEBUGFLAGS_GCC)
-SHIPFLAGS  := $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
+JCFLAGS     = $(JCFLAGS_GCC)
+JCPPFLAGS   = $(JCPPFLAGS_GCC)
+JCXXFLAGS   = $(JCXXFLAGS_GCC)
+DEBUGFLAGS  = $(DEBUGFLAGS_GCC)
+SHIPFLAGS   = $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
 BOLT_CFLAGS  := $(BOLT_CFLAGS_GCC)
 endif
 
 ifeq ($(USECLANG),1)
 CC         := $(CROSS_COMPILE)clang
 CXX        := $(CROSS_COMPILE)clang++
-JCFLAGS    := $(JCFLAGS_CLANG)
-JCPPFLAGS  := $(JCPPFLAGS_CLANG)
-JCXXFLAGS  := $(JCXXFLAGS_CLANG)
-DEBUGFLAGS := $(DEBUGFLAGS_CLANG)
-SHIPFLAGS  := $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
+JCFLAGS     = $(JCFLAGS_CLANG)
+JCPPFLAGS   = $(JCPPFLAGS_CLANG)
+JCXXFLAGS   = $(JCXXFLAGS_CLANG)
+DEBUGFLAGS  = $(DEBUGFLAGS_CLANG)
+SHIPFLAGS   = $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
 BOLT_CFLAGS  := $(BOLT_CFLAGS_CLANG)
 
 ifeq ($(OS), Darwin)
@@ -1084,18 +1087,23 @@ BINARY:=64
 MARCH=
 endif
 
-# Allow Clang to use CRC instructions (only applicable on AArch64)
-ifneq (,$(findstring aarch64,$(ARCH)))
-ifeq ($(USECLANG),1)
-ifeq (,$(MARCH))
-JCFLAGS += -mcrc
-endif
-endif
-endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
 ifneq (,$(filter $(ARCH), powerpc64 ppc64))
 $(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
+endif
+
+# Architecture and platform-specific compiler flags
+# Allow Clang to use CRC instructions (only applicable on AArch64) when no specific march is set
+ifneq (,$(findstring aarch64,$(ARCH)))
+ifeq (,$(MARCH))
+JCFLAGS_CLANG += -mcrc
+endif
+endif
+
+# Add platform-specific GCC flags
+ifeq ($(ISX86),1)
+SHIPFLAGS_GCC += -momit-leaf-frame-pointer
 endif
 
 # File name of make binary-dist result
@@ -1224,11 +1232,6 @@ endif
 endif
 endif
 
-ifeq ($(USEGCC),1)
-ifeq ($(ISX86),1)
-  SHIPFLAGS += -momit-leaf-frame-pointer
-endif
-endif
 
 ifeq ($(OS),WINNT)
 LIBUNWIND:=

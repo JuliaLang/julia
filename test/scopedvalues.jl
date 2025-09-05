@@ -80,7 +80,7 @@ import Base.Threads: @spawn
 end
 
 @testset "show" begin
-    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
+    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}()"
     @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(1)"
     with(sval => 2.0) do
         @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(2)"
@@ -196,4 +196,16 @@ nothrow_scope(Core.current_scope())
     finally
         push!(ts, 2)
     end
+end
+
+# LazyScopedValue
+global lsv_ncalled = 0
+const lsv = LazyScopedValue{Int}(OncePerProcess(() -> (global lsv_ncalled; lsv_ncalled += 1; 1)))
+@testset "LazyScopedValue" begin
+    @test (@with lsv=>2 lsv[]) == 2
+    @test lsv_ncalled == 0
+    @test lsv[] == 1
+    @test lsv_ncalled == 1
+    @test lsv[] == 1
+    @test lsv_ncalled == 1
 end

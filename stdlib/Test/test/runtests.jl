@@ -2033,3 +2033,60 @@ end
     @test occursin("Error in testset", output)
     @test occursin("1 == 2", output)
 end
+
+@testset "JULIA_TEST_VERBOSE" begin
+    # Test the verbose testset entry/exit functionality
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => true begin
+        # Capture output
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Verbose Test" begin
+                    @test true
+                    @testset "Nested Verbose Test" begin
+                        sleep(0.01)  # Add some duration
+                        @test 1 + 1 == 2
+                    end
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Check that verbose messages are present
+        @test occursin("Starting testset: Verbose Test", output)
+        @test occursin("Finished testset: Verbose Test", output)
+        @test occursin("Starting testset: Nested Verbose Test", output)
+        @test occursin("Finished testset: Nested Verbose Test", output)
+
+        # Check that timing information is included in exit messages
+        @test occursin(r"Finished testset: Nested Verbose Test \([0-9\.]+s\)", output)
+
+        # Check indentation for nested testsets
+        lines = split(output, '\n')
+        entering_nested = findfirst(line -> occursin("Starting testset: Nested Verbose Test", line), lines)
+        exiting_nested = findfirst(line -> occursin("Finished testset: Nested Verbose Test", line), lines)
+
+        if entering_nested !== nothing && exiting_nested !== nothing
+            # Both nested messages should have more indentation than outer messages
+            @test startswith(lines[entering_nested], "  ")
+            @test startswith(lines[exiting_nested], "  ")
+        end
+    end
+
+    # Test that verbose output is disabled by default
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => false begin
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Non-Verbose Test" begin
+                    @test true
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Should not contain verbose messages
+        @test !occursin("Starting testset:", output)
+        @test !occursin("Finished testset:", output)
+    end
+end

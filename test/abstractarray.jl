@@ -2293,6 +2293,21 @@ end
     end
 end
 
+@testset "AbstractOneTo" begin
+    s = SizedArrays.SizedArray{(2,2)}(ones(2,2))
+    v = view(s, :, 1)
+    @test axes(v,1) isa SizedArrays.SOneTo{2}
+    @test eachindex(v) isa SizedArrays.SOneTo{2}
+
+    ax = axes(v,1)
+    @test ax[Base.IdentityUnitRange(ax)] == ax
+    @test ax[Base.IdentityUnitRange(2:2)] == Base.IdentityUnitRange(2:2)
+
+    # check that IdentityUnitRange behaves like Slice
+    @test axes(Base.IdentityUnitRange(ax), 1) === ax
+    @test eachindex(Base.IdentityUnitRange(ax)) === ax
+end
+
 @testset "effect inference for `iterate` for `Array` and for `Memory`" begin
     for El ∈ (Float32, Real, Any)
         for Arr ∈ (Memory{El}, Array{El, 0}, Vector{El}, Matrix{El}, Array{El, 3})

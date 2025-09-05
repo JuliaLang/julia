@@ -42,6 +42,15 @@ u7 = uuid7()
     @test uuid_version(u7) == 7
 end
 
+@testset "Extraction of variant bits" begin
+    # RFC 4122, section 4.1.1
+    uuid_variant(u::UUID) = Int((u.value >> 62) & 0x3)
+    @test uuid_variant(u1) == 2
+    @test uuid_variant(u4) == 2
+    @test uuid_variant(u5) == 2
+    @test uuid_variant(u7) == 2
+end
+
 @testset "Parsing from string" begin
     @test u1 == UUID(string(u1)) == UUID(GenericString(string(u1)))
     @test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))

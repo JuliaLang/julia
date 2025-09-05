@@ -75,6 +75,7 @@ gcext:
 
 trimming:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(TRIMMING_ARGS)
+	@$(MAKE) -C $(SRCDIR)/$@ clean $(TRIMMING_ARGS)
 
 clangsa:
 	@$(MAKE) -C $(SRCDIR)/$@

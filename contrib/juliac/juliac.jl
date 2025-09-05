@@ -13,6 +13,7 @@ julia_cmd = `$(Base.julia_cmd()) --startup-file=no --history-file=no`
 cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
 julia_cmd_target =  `$(Base.julia_cmd(;cpu_target)) --startup-file=no --history-file=no`
 output_type = nothing  # exe, sharedlib, sysimage
+abi_export_file = nothing
 outname = nothing
 file = nothing
 add_ccallables = false
@@ -25,6 +26,7 @@ if help !== nothing
         """
         Usage: julia juliac.jl [--output-exe | --output-lib | --output-sysimage] <name> [options] <file.jl>
         --experimental --trim=<no,safe,unsafe,unsafe-warn>  Only output code statically determined to be reachable
+        --export-abi <file>  Emit type / function information for the ABI (in JSON format)
         --compile-ccallable  Include all methods marked `@ccallable` in output
         --relative-rpath     Configure the library / executable to lookup all required libraries in an adjacent "julia/" folder
         --verbose            Request verbose output
@@ -96,6 +98,10 @@ let i = 1
             global output_type = arg
             i == length(ARGS) && error("Output specifier requires an argument")
             global outname = ARGS[i+1]
+            i += 1
+        elseif arg == "--export-abi"
+            i == length(ARGS) && error("Output specifier requires an argument")
+            global abi_export_file = ARGS[i+1]
             i += 1
         elseif arg == "--compile-ccallable"
             global add_ccallables = true
@@ -171,7 +177,11 @@ function compile_products(enable_trim::Bool)
     end
 
     # Compile the Julia code
-    cmd = addenv(`$julia_cmd_target $project --output-o $img_path --output-incremental=no $strip_args $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    args = String[absfile, output_type, string(add_ccallables)]
+    if abi_export_file !== nothing
+        push!(args, abi_export_file)
+    end
+    cmd = addenv(`$julia_cmd_target $project --output-o $img_path --output-incremental=no $strip_args $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $(args)`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
     verbose && println("Running: $cmd")
     if !success(pipeline(cmd; stdout, stderr))
         println(stderr, "\nFailed to compile $file")

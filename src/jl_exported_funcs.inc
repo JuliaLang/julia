@@ -294,7 +294,6 @@
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
-    XX(jl_macroexpand1) \
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \

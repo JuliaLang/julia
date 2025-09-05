@@ -301,7 +301,7 @@ function compute_ir_line_annotations(code::Union{IRCode,CodeInfo})
             x = min(length(last_stack), length(stack))
             depth = length(stack) - 1
             # Compute the last depth that was in common
-            first_mismatch = let last_stack=last_stack
+            first_mismatch = let last_stack=last_stack, stack=stack
                 findfirst(i->last_stack[i] != stack[i], 1:x)
             end
             # If the first mismatch is the last stack frame, that might just

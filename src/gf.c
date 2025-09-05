@@ -799,63 +799,87 @@ enum top_typename_facts {
 
 static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*), jl_value_t *a JL_PROPAGATES_ROOT, int n, unsigned *facts, void *env)
 {
-    if (jl_is_datatype(a)) {
-        if (n <= 0) {
-            jl_datatype_t *dt = ((jl_datatype_t*)a);
-            if (dt->name == jl_type_typename) { // key Type{T} on T instead of Type
-                *facts |= HAVE_TYPE;
-                foreach_top_nth_typename(f, jl_tparam0(a), -1, facts, env);
-            }
-            else if (dt == jl_function_type) {
-                if (n == -1) // key Type{>:Function} as Type instead of Function
-                    *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
-                else
-                    *facts |= HAVE_FUNCTION | EXACTLY_FUNCTION;
-            }
-            else if (dt == jl_any_type) {
-                if (n == -1) // key Type{>:Any} and kinds as Type instead of Any
-                    *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
-                else
-                    *facts |= EXACTLY_ANY;
-            }
-            else if (dt == jl_kwcall_type) {
-                if (n == -1) // key Type{>:typeof(kwcall)} as exactly kwcall
-                    *facts |= EXACTLY_KWCALL;
-                else
-                    *facts |= HAVE_KWCALL;
-            }
-            else {
-                while (1) {
-                    jl_datatype_t *super = dt->super;
-                    if (super == jl_function_type) {
-                        *facts |= HAVE_FUNCTION;
-                        break;
-                    }
-                    if (super == jl_any_type || super->super == dt)
-                        break;
-                    dt = super;
+    arraylist_t workqueue;
+    arraylist_new(&workqueue, 0);
+
+    // Push initial work item as jl_value_t* then int (cast to void*)
+    arraylist_push(&workqueue, a);
+    arraylist_push(&workqueue, (void*)(uintptr_t)n);
+
+    while (workqueue.len > 0) {
+        // Pop int n then jl_value_t* a (reverse order)
+        int current_n = (int)(uintptr_t)arraylist_pop(&workqueue);
+        jl_value_t *current_a = (jl_value_t*)arraylist_pop(&workqueue);
+        JL_GC_PROMISE_ROOTED(current_a);
+
+        if (jl_is_datatype(current_a)) {
+            if (current_n <= 0) {
+                jl_datatype_t *dt = ((jl_datatype_t*)current_a);
+                if (dt->name == jl_type_typename) { // key Type{T} on T instead of Type
+                    *facts |= HAVE_TYPE;
+                    arraylist_push(&workqueue, jl_tparam0(current_a));
+                    arraylist_push(&workqueue, (void*)(uintptr_t)-1);
                 }
-                f(dt->name, 1, env);
+                else if (dt == jl_function_type) {
+                    if (current_n == -1) // key Type{>:Function} as Type instead of Function
+                        *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
+                    else
+                        *facts |= HAVE_FUNCTION | EXACTLY_FUNCTION;
+                }
+                else if (dt == jl_any_type) {
+                    if (current_n == -1) // key Type{>:Any} and kinds as Type instead of Any
+                        *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
+                    else
+                        *facts |= EXACTLY_ANY;
+                }
+                else if (dt == jl_kwcall_type) {
+                    if (current_n == -1) // key Type{>:typeof(kwcall)} as exactly kwcall
+                        *facts |= EXACTLY_KWCALL;
+                    else
+                        *facts |= HAVE_KWCALL;
+                }
+                else {
+                    while (1) {
+                        jl_datatype_t *super = dt->super;
+                        if (super == jl_function_type) {
+                            *facts |= HAVE_FUNCTION;
+                            break;
+                        }
+                        if (super == jl_any_type || super->super == dt)
+                            break;
+                        dt = super;
+                    }
+                    f(dt->name, 1, env);
+                }
+            }
+            else if (jl_is_tuple_type(current_a)) {
+                if (jl_nparams(current_a) >= current_n) {
+                    arraylist_push(&workqueue, jl_tparam(current_a, current_n - 1));
+                    arraylist_push(&workqueue, (void*)(uintptr_t)0);
+                }
+                else
+                    *facts |= SHORT_TUPLE;
             }
         }
-        else if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) >= n)
-                foreach_top_nth_typename(f, jl_tparam(a, n - 1), 0, facts, env);
-            else
-                *facts |= SHORT_TUPLE;
+        else if (jl_is_typevar(current_a)) {
+            arraylist_push(&workqueue, ((jl_tvar_t*)current_a)->ub);
+            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
+        }
+        else if (jl_is_unionall(current_a)) {
+            arraylist_push(&workqueue, ((jl_unionall_t*)current_a)->body);
+            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
+        }
+        else if (jl_is_uniontype(current_a)) {
+            jl_uniontype_t *u = (jl_uniontype_t*)current_a;
+            // Add both union branches to workqueue (push a second to visit first)
+            arraylist_push(&workqueue, u->b);
+            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
+            arraylist_push(&workqueue, u->a);
+            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
         }
     }
-    else if (jl_is_typevar(a)) {
-        foreach_top_nth_typename(f, ((jl_tvar_t*)a)->ub, n, facts, env);
-    }
-    else if (jl_is_unionall(a)) {
-        foreach_top_nth_typename(f, ((jl_unionall_t*)a)->body, n, facts, env);
-    }
-    else if (jl_is_uniontype(a)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)a;
-        foreach_top_nth_typename(f, u->a, n, facts, env);
-        foreach_top_nth_typename(f, u->b, n, facts, env);
-    }
+
+    arraylist_free(&workqueue);
 }
 
 // Inspect type `argtypes` for all backedge keys that might be relevant to it, splitting it
@@ -896,55 +920,63 @@ static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*), jl
 }
 
 
-static int foreach_mtable_in_module(
-        jl_module_t *m,
-        int (*visit)(jl_methtable_t *mt, void *env),
-        void *env)
-{
-    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
-    for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
-        if ((void*)b == jl_nothing)
-            break;
-        jl_sym_t *name = b->globalref->name;
-        jl_value_t *v = jl_get_latest_binding_value_if_const(b);
-        if (v) {
-            if (jl_is_module(v)) {
-                jl_module_t *child = (jl_module_t*)v;
-                if (child != m && child->parent == m && child->name == name) {
-                    // this is the original/primary binding for the submodule
-                    if (!foreach_mtable_in_module(child, visit, env))
-                        return 0;
-                }
-            }
-            else if (jl_is_mtable(v)) {
-                jl_methtable_t *mt = (jl_methtable_t*)v;
-                if (mt && mt != jl_method_table) {
-                    if (!visit(mt, env))
-                        return 0;
-                }
-            }
-        }
-        table = jl_atomic_load_relaxed(&m->bindings);
-    }
-    return 1;
-}
-
-
 int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_array_t *mod_array, void *env)
 {
     if (!visit(jl_method_table, env))
         return 0;
-    if (mod_array) {
-        for (size_t i = 0; i < jl_array_nrows(mod_array); i++) {
-            jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
-            assert(jl_is_module(m));
-            if (m->parent == m) // some toplevel modules (really just Base) aren't actually
-                if (!foreach_mtable_in_module(m, visit, env))
-                    return 0;
+
+    if (!mod_array)
+        return 1;
+
+    arraylist_t workqueue;
+    arraylist_new(&workqueue, 0);
+
+    // Add initial toplevel modules to workqueue
+    for (size_t i = 0; i < jl_array_nrows(mod_array); i++) {
+        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
+        assert(jl_is_module(m));
+        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
+            arraylist_push(&workqueue, m);
+    }
+
+    int result = 1;
+
+    while (workqueue.len > 0) {
+        jl_module_t *current_m = (jl_module_t*)arraylist_pop(&workqueue);
+        JL_GC_PROMISE_ROOTED(current_m);
+
+        jl_svec_t *table = jl_atomic_load_relaxed(&current_m->bindings);
+        for (size_t i = 0; i < jl_svec_len(table); i++) {
+            jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
+            if ((void*)b == jl_nothing)
+                break;
+            jl_sym_t *name = b->globalref->name;
+            jl_value_t *v = jl_get_latest_binding_value_if_const(b);
+            if (v) {
+                if (jl_is_module(v)) {
+                    jl_module_t *child = (jl_module_t*)v;
+                    if (child != current_m && child->parent == current_m && child->name == name) {
+                        // this is the original/primary binding for the submodule
+                        arraylist_push(&workqueue, child);
+                    }
+                }
+                else if (jl_is_mtable(v)) {
+                    jl_methtable_t *mt = (jl_methtable_t*)v;
+                    if (mt && mt != jl_method_table) {
+                        if (!visit(mt, env)) {
+                            result = 0;
+                            goto cleanup;
+                        }
+                    }
+                }
+            }
+            table = jl_atomic_load_relaxed(&current_m->bindings);
         }
     }
-    return 1;
+
+cleanup:
+    arraylist_free(&workqueue);
+    return result;
 }
 
 jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
@@ -1771,20 +1803,6 @@ jl_method_instance_t *cache_method(
     return newmeth;
 }
 
-static void _jl_promote_ci_to_current(jl_code_instance_t *ci, size_t validated_world) JL_NOTSAFEPOINT
-{
-    if (jl_atomic_load_relaxed(&ci->max_world) != validated_world)
-        return;
-    jl_atomic_store_relaxed(&ci->max_world, ~(size_t)0);
-    jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
-    for (size_t i = 0; i < jl_svec_len(edges); i++) {
-        jl_value_t *edge = jl_svecref(edges, i);
-        if (!jl_is_code_instance(edge))
-            continue;
-        _jl_promote_ci_to_current((jl_code_instance_t *)edge, validated_world);
-    }
-}
-
 JL_DLLEXPORT void jl_promote_cis_to_current(jl_code_instance_t **cis, size_t n, size_t validated_world)
 {
     size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
@@ -1794,9 +1812,24 @@ JL_DLLEXPORT void jl_promote_cis_to_current(jl_code_instance_t **cis, size_t n, 
     JL_LOCK(&world_counter_lock);
     current_world = jl_atomic_load_relaxed(&jl_world_counter);
     if (current_world == validated_world) {
-        for (size_t i = 0; i < n; i++) {
-            _jl_promote_ci_to_current(cis[i], validated_world);
+        arraylist_t workqueue;
+        arraylist_new(&workqueue, 0);
+        for (size_t i = 0; i < n; i++)
+            arraylist_push(&workqueue, cis[i]);
+        while (workqueue.len > 0) {
+            jl_code_instance_t *current_ci = (jl_code_instance_t *)arraylist_pop(&workqueue);
+            if (jl_atomic_load_relaxed(&current_ci->max_world) != validated_world)
+                continue;
+            jl_atomic_store_relaxed(&current_ci->max_world, ~(size_t)0);
+            jl_svec_t *edges = jl_atomic_load_relaxed(&current_ci->edges);
+            for (size_t i = 0; i < jl_svec_len(edges); i++) {
+                jl_value_t *edge = jl_svecref(edges, i);
+                if (!jl_is_code_instance(edge))
+                    continue;
+                arraylist_push(&workqueue, edge);
+            }
         }
+        arraylist_free(&workqueue);
     }
     JL_UNLOCK(&world_counter_lock);
 }
@@ -2657,36 +2690,51 @@ static int find_method_in_matches(jl_array_t *t, jl_method_t *method)
 }
 
 // Recursively check if any method in interferences covers the given type signature
-static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, arraylist_t *recursion_stack)
+static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, arraylist_t *seen)
 {
-    // Check if we're already visiting this method (cycle detection and memoization)
-    for (size_t i = 0; i < recursion_stack->len; i++)
-        if (recursion_stack->items[i] == (void*)m)
-            return 0;
-
-    // Add this method to the recursion stack
-    arraylist_push(recursion_stack, (void*)m);
-
-    jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
-    for (size_t i = 0; i < interferences->length; i++) {
-        jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
-        if (m2 == NULL)
-            continue;
-        int idx = find_method_in_matches(t, m2);
-        if (idx < 0)
-            continue;
-        if (method_in_interferences(m, m2))
-            continue; // ambiguous
-        assert(visited->items[idx] != (void*)0);
-        if (visited->items[idx] != (void*)1)
-            continue; // part of the same SCC cycle (handled by ambiguity later)
-        if (jl_subtype(ti, m2->sig))
-            return 1;
-        // Recursively check m2's interferences since m2 is more specific
-        if (check_interferences_covers(m2, ti, t, visited, recursion_stack))
-            return 1;
+    arraylist_t workqueue;
+    arraylist_new(&workqueue, 0);
+    arraylist_push(&workqueue, m);
+    arraylist_push(seen, (void*)m);
+    int result = 0;
+    while (workqueue.len > 0) {
+        jl_method_t *current_m = (jl_method_t*)arraylist_pop(&workqueue);
+        JL_GC_PROMISE_ROOTED(current_m);
+        jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&current_m->interferences);
+        for (size_t i = 0; i < interferences->length; i++) {
+            jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
+            if (m2 == NULL)
+                continue;
+            // Check if we already visited this method
+            int in_seen = 0;
+            for (size_t i = 0; i < seen->len; i++) {
+                if (seen->items[i] == (void*)m2) {
+                    in_seen = 1;
+                    break;
+                }
+            }
+            if (in_seen)
+                continue;
+            arraylist_push(seen, (void*)m2);
+            int idx = find_method_in_matches(t, m2);
+            if (idx < 0)
+                continue;
+            if (method_in_interferences(current_m, m2))
+                continue; // ambiguous
+            assert(visited->items[idx] != (void*)0);
+            if (visited->items[idx] != (void*)1)
+                continue; // part of the same SCC cycle (handled by ambiguity later)
+            if (jl_subtype(ti, m2->sig)) {
+                result = 1;
+                goto cleanup;
+            }
+            arraylist_push(&workqueue, m2);
+        }
     }
-    return 0;
+cleanup:
+    seen->len = 0;
+    arraylist_free(&workqueue);
+    return result;
 }
 
 static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, int include_ambiguous, int *has_ambiguity)
@@ -2709,43 +2757,55 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
 }
 
 // Recursively check if target_method is in the interferences of (morespecific than) start_method, but not the reverse
-static int method_in_interferences_recursive(jl_method_t *target_method, jl_method_t *start_method, arraylist_t *seen)
+static int method_morespecific_via_interferences(jl_method_t *target_method, jl_method_t *start_method)
 {
+    if (target_method == start_method)
+        return 0;
     // Check direct interferences first
     if (method_in_interferences(start_method, target_method))
         return 0;
     if (method_in_interferences(target_method, start_method))
         return 1;
-
-    // Check if we're already visiting this method (cycle prevention and memoization)
-    for (size_t i = 0; i < seen->len; i++) {
-        if (seen->items[i] == (void*)start_method)
-            return 0;
-    }
-    arraylist_push(seen, (void*)start_method);
-
-    // Recursively check interferences
-    jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&start_method->interferences);
-    for (size_t i = 0; i < interferences->length; i++) {
-        jl_method_t *interference_method = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
-        if (interference_method == NULL)
-            continue;
-        if (method_in_interferences(start_method, interference_method))
-            continue; // only follow edges to morespecific methods in search of morespecific target (skip ambiguities)
-        if (method_in_interferences_recursive(target_method, interference_method, seen))
-            return 1;
-    }
-
-    return 0;
-}
-
-static int method_morespecific_via_interferences(jl_method_t *target_method, jl_method_t *start_method)
-{
-    if (target_method == start_method)
-        return 0;
     arraylist_t seen;
+    arraylist_t workqueue;
     arraylist_new(&seen, 0);
-    int result = method_in_interferences_recursive(target_method, start_method, &seen);
+    arraylist_push(&seen, (void*)start_method);
+    arraylist_new(&workqueue, 0);
+    arraylist_push(&workqueue, start_method);
+    int result = 0;
+    while (workqueue.len > 0) {
+        jl_method_t *current = (jl_method_t*)arraylist_pop(&workqueue);
+        JL_GC_PROMISE_ROOTED(current);
+        jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&current->interferences);
+        for (size_t i = 0; i < interferences->length; i++) {
+            jl_method_t *interference_method = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
+            if (interference_method == NULL)
+                continue;
+            // Check if we're already visiting this interference method (cycle prevention)
+            int already_seen = 0;
+            for (size_t j = 0; j < seen.len; j++) {
+                if (seen.items[j] == (void*)interference_method) {
+                    already_seen = 1;
+                    break;
+                }
+            }
+            if (already_seen)
+                continue;
+            arraylist_push(&seen, interference_method);
+            if (method_in_interferences(current, interference_method))
+                continue; // only follow edges to morespecific methods in search of morespecific target (skip ambiguities)
+            // Check direct interferences for this interference method
+            if (method_in_interferences(interference_method, target_method))
+                continue; // return 0 for this path
+            if (method_in_interferences(target_method, interference_method)) {
+                result = 1;
+                goto cleanup;
+            }
+            arraylist_push(&workqueue, interference_method);
+        }
+    }
+cleanup:
+    arraylist_free(&workqueue);
     arraylist_free(&seen);
     //assert(result == jl_method_morespecific(target_method, start_method) || jl_has_empty_intersection(target_method->sig, start_method->sig) || jl_has_empty_intersection(start_method->sig, target_method->sig));
     return result;

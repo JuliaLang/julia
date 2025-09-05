@@ -74,8 +74,8 @@ function _build_uuid1(rng::AbstractRNG, timestamp::UInt64)
     # mask off clock sequence and node
     u &= 0x00000000000000003fffffffffffffff
 
-    # set the unicast/multicast bit and version
-    u |= 0x00000000000010000000010000000000
+    # set the version, variant, and unicast/multicast bit
+    u |= 0x00000000000010008000010000000000
 
     ts_low = timestamp & typemax(UInt32)
     ts_mid = (timestamp >> 32) & typemax(UInt16)
