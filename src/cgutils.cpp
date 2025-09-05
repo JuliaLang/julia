@@ -1398,7 +1398,7 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, 
 
 static bool has_known_null_nullptr(Type *T)
 {
-    if (auto PT = cast<PointerType>(T)) {
+    if (auto PT = dyn_cast<PointerType>(T)) {
         auto addrspace = PT->getAddressSpace();
         if (addrspace == AddressSpace::Generic || (AddressSpace::FirstSpecial <= addrspace && addrspace <= AddressSpace::LastSpecial)) {
             return true;
@@ -1414,7 +1414,7 @@ static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 {
     ++EmittedNullchecks;
     Type *T = v->getType();
-    if (has_known_null_nullptr(T))
+    if (has_known_null_nullptr(T) || !isa<PointerType>(T)) // i64/i32 are considered pointer like here
         return ctx.builder.CreateIsNotNull(v);
     else
         return ctx.builder.CreateICmpNE(v, ctx.builder.CreateAddrSpaceCast(
