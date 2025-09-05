@@ -245,6 +245,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
+    if opts.compress_sysimage == 1
+        push!(addflags, "--compress-sysimage=yes")
+    end
     if opts.target_sanitize_memory == 1
         push!(addflags, "--target-sanitize=memory")
     end

@@ -83,10 +83,9 @@ void jl_module_run_initializer(jl_module_t *m)
 
 static void jl_register_root_module(jl_module_t *m)
 {
-    static jl_value_t *register_module_func = NULL;
+    jl_value_t *register_module_func = NULL;
     assert(jl_base_module);
-    if (register_module_func == NULL)
-        register_module_func = jl_get_global(jl_base_module, jl_symbol("register_root_module"));
+    register_module_func = jl_get_global(jl_base_module, jl_symbol("register_root_module"));
     assert(register_module_func);
     jl_value_t *args[2];
     args[0] = register_module_func;
@@ -96,8 +95,8 @@ static void jl_register_root_module(jl_module_t *m)
 
 jl_array_t *jl_get_loaded_modules(void)
 {
-    static jl_value_t *loaded_modules_array = NULL;
-    if (loaded_modules_array == NULL && jl_base_module != NULL)
+    jl_value_t *loaded_modules_array = NULL;
+    if (jl_base_module != NULL)
         loaded_modules_array = jl_get_global(jl_base_module, jl_symbol("loaded_modules_array"));
     if (loaded_modules_array != NULL)
         return (jl_array_t*)jl_call0((jl_value_t*)loaded_modules_array);

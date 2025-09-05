@@ -160,6 +160,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
                         0, // gc_sweep_always_full
+                        0, // compress_sysimage
                         0, // target_sanitize_memory
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
@@ -314,7 +315,10 @@ static const char opts_hidden[] =
     " --strip-metadata                              Remove docstrings and source location info from\n"
     "                                               system image\n"
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
-    "                                               functions\n\n"
+    "                                               functions\n"
+    " --compress-sysimage={yes|no*}                 Compress the sys/pkgimage heap at the expense of\n"
+    "                                               slightly increased load time.\n"
+    "\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
     " --experimental                                Enable the use of experimental (alpha) features\n"
@@ -417,6 +421,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_permalloc_pkgimg,
            opt_trim,
            opt_experimental_features,
+           opt_compress_sysimage,
            opt_target_sanitize,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
@@ -489,6 +494,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
         { "gc-sweep-always-full", no_argument, 0, opt_gc_sweep_always_full },
         { "trim",  optional_argument, 0, opt_trim },
+        { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
         { "target-sanitize", required_argument, 0, opt_target_sanitize },
         { 0, 0, 0, 0 }
     };
@@ -1071,6 +1077,12 @@ restart_switch:
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+            break;
+        case opt_compress_sysimage:
+            if (!strcmp(optarg,"yes"))
+                jl_options.compress_sysimage = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.compress_sysimage = 0;
             break;
         case opt_target_sanitize:
             if (!strcmp(optarg, "memory"))
