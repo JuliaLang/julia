@@ -542,6 +542,11 @@ end
 
     @test Tuple == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Any})
     @test Tuple{Vararg{Int}} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Any})
+
+    for n in 0:15
+        @test NTuple{n, Any} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Val{n}})
+        @test NTuple{n, Int} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Val{n}})
+    end
 end
 
 struct A_15703{N}
