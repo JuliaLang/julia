@@ -262,7 +262,7 @@ function watch_ir_tests(dir, delay=0.5)
     end
 end
 
-function lower_str(mod, s)
+function lower_str(mod::Module, s::AbstractString)
     ex = parsestmt(JuliaLowering.SyntaxTree, s)
     return JuliaLowering.to_lowered_expr(mod, JuliaLowering.lower(mod, ex))
 end
@@ -356,7 +356,7 @@ end
 # Parse a file and lower the top level expression one child at a time, finding
 # any top level statement that fails lowering and producing a partially reduced
 # test case.
-function reduce_any_failing_toplevel(mod, filename; do_eval=false)
+function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_eval::Bool=false)
     text = read(filename, String)
     ex0 = parseall(SyntaxTree, text; filename)
     for ex in children(ex0)
@@ -373,7 +373,7 @@ function reduce_any_failing_toplevel(mod, filename; do_eval=false)
             end
             (reduced,was_reduced) = block_reduction(e->throws_lowering_exc(mod,e), ex)
             if !was_reduced
-                @info "No reduction possible" 
+                @info "No reduction possible"
                 return ex
             else
                 @info "Reduced code" reduced
@@ -383,4 +383,3 @@ function reduce_any_failing_toplevel(mod, filename; do_eval=false)
     end
     nothing
 end
-

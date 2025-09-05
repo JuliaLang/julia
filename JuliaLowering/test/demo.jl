@@ -32,7 +32,7 @@ function formatsrc(ex; kws...)
     Text(JuliaSyntaxFormatter.formatsrc(ex; kws...))
 end
 
-function debug_lower(mod, ex; expr_compat_mode=false, verbose=false, do_eval=false)
+function debug_lower(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, verbose::Bool=false, do_eval::Bool=false)
     ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex, expr_compat_mode, Base.get_world_counter())
 
     verbose && @info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
@@ -502,7 +502,7 @@ end
 
 src = """
 function f(y)
-    x = 
+    x =
     try
         try
             error("hi")
@@ -908,4 +908,3 @@ ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 # for e in Meta.parseall(text).args
 #     Meta.lower(JuliaLowering, e)
 # end
-
