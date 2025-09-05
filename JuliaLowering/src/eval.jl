@@ -120,8 +120,7 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-function to_code_info(ex, mod, funcname, slots)
-    input_code = children(ex)
+function to_code_info(ex::SyntaxTree, mod::Module, slots::Vector{Slot})
     stmts = Any[]
 
     current_codelocs_stack = ir_debug_info_state(ex)
@@ -223,11 +222,11 @@ function to_code_info(ex, mod, funcname, slots)
     )
 end
 
-@fzone "JL: to_lowered_expr" function to_lowered_expr(mod, ex)
+@fzone "JL: to_lowered_expr" function to_lowered_expr(mod::Module, ex::SyntaxTree)
     _to_lowered_expr(mod, ex, 0)
 end
 
-function _to_lowered_expr(mod, ex, stmt_offset)
+function _to_lowered_expr(mod::Module, ex::SyntaxTree, stmt_offset::Int)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -268,10 +267,7 @@ function _to_lowered_expr(mod, ex, stmt_offset)
         e1 = ex[1]
         getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
     elseif k == K"code_info"
-        funcname = ex.is_toplevel_thunk ?
-            "top-level scope" :
-            "none"              # FIXME
-        ir = to_code_info(ex[1], mod, funcname, ex.slots)
+        ir = to_code_info(ex[1], mod, ex.slots)
         if ex.is_toplevel_thunk
             Expr(:thunk, ir)
         else
@@ -400,4 +396,3 @@ function include_string(mod::Module, code::AbstractString, filename::AbstractStr
                         expr_compat_mode=false)
     eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
 end
-
