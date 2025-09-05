@@ -792,12 +792,20 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, ex)
         nothing
     elseif k == K"global"
-        if needs_value
-            throw(LoweringError(ex, "misplaced global declaration in value position"))
-        end
         emit(ctx, ex)
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
-        nothing
+        if needs_value
+            if in_tail_pos && ctx.is_toplevel_thunk
+                # Permit "statement-like" globals at top level but potentially
+                # inside blocks.
+                compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
+            else
+                throw(LoweringError(ex,
+                    "global declaration doesn't read the variable and can't return a value"))
+            end
+        else
+            nothing
+        end
     elseif k == K"meta"
         emit(ctx, ex)
         if needs_value
