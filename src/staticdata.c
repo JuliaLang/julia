@@ -3085,7 +3085,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
     }
 }
 
-typedef void jl_image_unpack_func_t(void *handle, jl_image_buf_t *image);
 
 static void jl_prefetch_system_image(const char *data, size_t size)
 {
@@ -3173,19 +3172,17 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
     };
 
     // verification passed, lookup the buffer pointers
-    if (jl_system_image_size == 0 || is_pkgimage) {
+    if (jl_image_unpack == NULL || is_pkgimage) {
         // in the usual case, the sysimage was not statically linked to libjulia-internal
         // look up the external sysimage symbols via the dynamic linker
         jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1);
-        (*unpack)(handle, &image);
     }
     else {
         // the sysimage was statically linked directly against libjulia-internal
         // use the internal symbols
-        image.size = jl_system_image_size;
-        image.pointers = &jl_image_pointers;
-        image.data = &jl_system_image_data;
+        unpack = &jl_image_unpack;
     }
+    (*unpack)(handle, &image);
 
 #ifdef _OS_WINDOWS_
     image.base = (intptr_t)handle;
