@@ -50,6 +50,7 @@ export
     Iterators,
     Broadcast,
     MathConstants,
+    Signals,
 
 # Types
     AbstractChannel,
