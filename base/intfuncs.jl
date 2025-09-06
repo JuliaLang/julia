@@ -228,8 +228,8 @@ Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a && s1*a0 + t1*b0 == b
-    x = a % T
-    y = b % T
+    x = convert(T, a)
+    y = convert(T, b)
     while y != 0
         q, r = divrem(x, y)
         x, y = y, r
@@ -238,6 +238,7 @@ Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     end
     x < 0 ? (-x, -s0, -t0) : (x, s0, t0)
 end
+
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 gcdx(a::Real) = (gcd(a), signbit(a) ? -one(a) : one(a))
