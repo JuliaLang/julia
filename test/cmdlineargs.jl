@@ -891,6 +891,64 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
     end
 
+    # --trace-eval
+    let
+        # Test --trace-eval=loc (location only)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)
+            @test success
+            @test occursin("eval: #=", err)
+            @test !occursin("eval: \$(Expr(:toplevel", err)  # Should not show full expressions
+        end
+    end
+
+    let
+        # Test --trace-eval=full (full expressions)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=full $testfile`)
+            @test success
+            @test occursin("eval: \$(Expr(:toplevel", err)  # Should show full expressions
+            @test occursin("x = 1 + 1", err)
+        end
+    end
+
+    let
+        # Test --trace-eval=no (disabled)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=no $testfile`)
+            @test success
+            @test !occursin("eval:", err)  # Should not show any eval traces
+        end
+    end
+
+    let
+        # Test Base.TRACE_EVAL global control takes priority
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, """
+                Base.TRACE_EVAL = :full
+                x = 1 + 1
+                Base.TRACE_EVAL = :no
+                y = x * 2
+                """)
+            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)  # Command line says :loc, but code overrides
+            @test success
+            # Should show full expression for x = 1 + 1 (Base.TRACE_EVAL = :full)
+            @test occursin("eval: \$(Expr(:toplevel", err)
+            @test occursin("x = 1 + 1", err)
+            # Should not show trace for y = x * 2 (Base.TRACE_EVAL = :no)
+            lines = split(err, '\n')
+            y_lines = filter(line -> occursin("y = x * 2", line), lines)
+            @test length(y_lines) == 0  # No eval trace for y assignment
+        end
+    end
+
     # test passing arguments
     mktempdir() do dir
         testfile, io = mktemp(dir)
