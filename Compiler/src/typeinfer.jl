@@ -1288,6 +1288,8 @@ prepared interp to be able to provide source code for it.
 """
 const SOURCE_MODE_GET_SOURCE = 0xf
 
+ci_has_abi(code::CodeInstance) = (@atomic :acquire code.invoke) !== C_NULL
+
 """
     ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
 
@@ -1296,7 +1298,7 @@ interp gave it to the runtime system (either because it already has an ->invoke
 ptr, or because interp has source that could be compiled).
 """
 function ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
-    (@atomic :acquire code.invoke) !== C_NULL && return true
+    ci_has_abi(code) && return true
     return ci_has_source(interp, code)
 end
 
