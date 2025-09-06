@@ -476,6 +476,42 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String and AnnotatedString types; use String(s) to convert"
 ))
 
+"""
+    match(r::Regex, s::Union{SubString{String}, String}, idx::Ref{Int}[, addopts])
+
+If `idx` is a reference (of type `Ref{Int}`), then the dereferenced
+value `idx[]` is used as the start index for the search. If a match is
+found, then `idx[]` is updated to the index of the first character
+after that match. If the match extends to the end of `s`, then
+`idx[] == firstindex(str) + ncodeunits(str)`.
+
+# Example
+```jldoctest
+julia> s = "10+2"; i = Ref{Int}(firstindex(s));
+
+julia> match(r"\\G\\d+", s, i)
+RegexMatch("10")
+
+julia> match(r"\\G\\d+", s, i)
+
+julia> match(r"\\G\\+\\d+", s, i)
+RegexMatch("+2")
+
+julia> match(r"\\G\\+\\d+", s, i)
+
+julia> i[]
+5
+```
+"""
+function match(re::Regex, str::Union{SubString{String}, String},
+               idx::Ref{Int}, add_opts::UInt32=UInt32(0))
+    m = match(re, str, idx[], add_opts)
+    if m !== nothing
+        idx[] = m.offset + ncodeunits(m.match)
+    end
+    return m
+end
+
 findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
 
 # TODO: return only start index and update deprecation
