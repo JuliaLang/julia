@@ -20,6 +20,8 @@ if Base.get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
     Base.JuliaSyntax.enable_in_core!()
 end
 
+include(joinpath(@__DIR__, "abi_export.jl"))
+
 # Load user code
 
 import Base.Experimental.entrypoint
@@ -72,7 +74,15 @@ let include_result = Base.include(Main, ARGS[1])
     entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
     entrypoint(Base.checktaskempty, ())
     if ARGS[3] == "true"
-        ccall(:jl_add_ccallable_entrypoints, Cvoid, ())
+        Base.Compiler.add_ccallable_entrypoints!()
+    end
+
+    # Export info about entrypoints and structs needed to create header files
+    if length(ARGS) >= 4
+        abi_export = ARGS[4]
+        open(abi_export, "w") do io
+            write_abi_metadata(io)
+        end
     end
 end
 

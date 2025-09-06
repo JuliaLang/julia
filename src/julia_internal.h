@@ -419,6 +419,7 @@ extern arraylist_t eytzinger_idxs;
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
@@ -599,8 +600,8 @@ STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
-jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x);
-jl_value_t *jl_permbox32(jl_datatype_t *t, uintptr_t tag, uint32_t x);
+jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x) JL_NOTSAFEPOINT;
+jl_value_t *jl_permbox32(jl_datatype_t *t, uintptr_t tag, uint32_t x) JL_NOTSAFEPOINT;
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 // this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
@@ -702,9 +703,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world, jl_debuginfo_t *di, jl_svec_t *edges);
-JL_DLLEXPORT jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
 JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile);
-JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *match, size_t world, size_t min_valid, size_t max_valid, int mt_cache);
 JL_DLLEXPORT void jl_add_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_info_t *src);
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner);
@@ -735,7 +734,6 @@ JL_DLLEXPORT int jl_is_compiled_codeinst(jl_code_instance_t *codeinst) JL_NOTSAF
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT void jl_compile_method_sig(jl_method_t *m, jl_value_t *types, jl_svec_t *sparams, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
-JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world);
 jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world);
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile);
@@ -813,7 +811,7 @@ enum atomic_kind {
 
 JL_DLLEXPORT int jl_has_intersect_type_not_kind(jl_value_t *t);
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
-int jl_has_concrete_subtype(jl_value_t *typ);
+JL_DLLEXPORT int jl_has_concrete_subtype(jl_value_t *typ);
 jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size_t nargs, int leaf);
 jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs, int leaf);
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
@@ -833,7 +831,7 @@ int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
 // specificity comparison assuming !(a <: b) and !(b <: a)
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
-jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
+JL_DLLEXPORT jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow);
@@ -968,7 +966,6 @@ extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 extern jl_genericmemory_t *jl_global_roots_list JL_GLOBALLY_ROOTED;
 extern jl_genericmemory_t *jl_global_roots_keyset JL_GLOBALLY_ROOTED;
-extern arraylist_t *jl_entrypoint_mis;
 JL_DLLEXPORT extern size_t jl_require_world;
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert) JL_GLOBALLY_ROOTED;
@@ -1201,9 +1198,8 @@ STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t) JL_NOTSAFEPOIN
 // -- init.c -- //
 
 void jl_init_types(void) JL_GC_DISABLED;
-void jl_init_box_caches(void);
 void jl_init_flisp(void);
-void jl_init_common_symbols(void);
+void jl_init_common_symbols(void) JL_NOTSAFEPOINT;
 void jl_init_primitives(void) JL_GC_DISABLED;
 void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
@@ -1214,7 +1210,7 @@ void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOT
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_init_uv(void);
-void jl_init_int32_int64_cache(void);
+void jl_init_box_caches(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void);
 
 void jl_set_base_ctx(char *__stk);
@@ -1307,7 +1303,7 @@ jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default
 jl_module_t *jl_add_standard_imports(jl_module_t *m);
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void);
-JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, int mt_cache);
+JL_DLLEXPORT jl_value_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, int mt_cache);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp) JL_PROPAGATES_ROOT;
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
@@ -2058,7 +2054,7 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_i
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw);
 
 typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
-JL_DLLIMPORT void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world);
+JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array JL_MAYBE_UNROOTED, jl_array_t *worklist JL_MAYBE_UNROOTED, int all, jl_array_t *module_init_order JL_MAYBE_UNROOTED);
 JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,

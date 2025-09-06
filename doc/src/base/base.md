@@ -379,6 +379,7 @@ Base.@elapsed
 Base.@allocated
 Base.@allocations
 Base.@lock_conflicts
+Base.TRACE_EVAL
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -538,6 +539,7 @@ Meta.parse(::AbstractString)
 Meta.ParseError
 Core.QuoteNode
 Base.macroexpand
+Base.macroexpand!
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered
