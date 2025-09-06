@@ -183,6 +183,26 @@ LoweringError:
 #       └─┘ ── Invalid named tuple element
 
 ########################################
+# Module lowering
+module Mod
+    body
+    stmts
+end
+#---------------------
+1   (call JuliaLowering.eval_module TestMod "Mod" true false (inert (toplevel body stmts)))
+2   (return %₁)
+
+########################################
+# Bare module lowering
+baremodule BareMod
+    body
+    stmts
+end
+#---------------------
+1   (call JuliaLowering.eval_module TestMod "BareMod" false false (inert (toplevel body stmts)))
+2   (return %₁)
+
+########################################
 # Error: Modules not allowed in local scope
 let
     module C

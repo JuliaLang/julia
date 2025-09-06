@@ -214,7 +214,8 @@ end
 #     public modname
 #
 # And run statments in the toplevel expression `body`
-function eval_module(parentmod, modname, expr_compat_mode, body)
+function eval_module(parentmod::Module, modname::AbstractString, std_defs::Bool,
+                     expr_compat_mode::Bool, body::SyntaxTree)
     # Here we just use `eval()` with an Expr.
     # If we wanted to avoid this we'd need to reproduce a lot of machinery from
     # jl_eval_module_expr()
@@ -229,11 +230,10 @@ function eval_module(parentmod, modname, expr_compat_mode, body)
     # mod = @ccall jl_new_module(Symbol(modname)::Symbol, parentmod::Module)::Any
     # ...
     name = Symbol(modname)
-    Core.eval(parentmod, :(
-        baremodule $name
-            $eval($name, $body; expr_compat_mode=$expr_compat_mode)
-        end
-    ))
+    eval_module_body(mod) = eval(mod, body; expr_compat_mode=expr_compat_mode)
+    Core.eval(parentmod,
+        Expr(:module, std_defs, name,
+             Expr(:block, Expr(:call, eval_module_body, name))))
 end
 
 const _Base_has_eval_import = isdefined(Base, :_eval_import)
