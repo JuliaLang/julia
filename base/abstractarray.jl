@@ -3016,6 +3016,8 @@ function isequal(A::AbstractArray, B::AbstractArray)
 end
 
 function cmp(A::AbstractVector, B::AbstractVector)
+    firstindex(A) == firstindex(B) ||
+        throw(ArgumentError("axes must match in vector comparison"))
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return isless(a, b) ? -1 : 1
