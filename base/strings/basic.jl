@@ -221,7 +221,7 @@ Vector{UInt8}(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
 Array{UInt8}(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
 Vector{T}(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
-Symbol(s::AbstractString) = Symbol(String(s))
+Symbol(s::AbstractString) = Symbol(String(s)::String)
 Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
@@ -364,7 +364,7 @@ isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
 # hashing
 
-hash(s::AbstractString, h::UInt) = hash(String(s), h)
+hash(s::AbstractString, h::UInt) = hash(String(s)::String, h)
 
 ## character index arithmetic ##
 
@@ -412,7 +412,7 @@ function length(s::AbstractString, i::Int, j::Int)
 end
 
 @propagate_inbounds length(s::AbstractString, i::Integer, j::Integer) =
-    length(s, Int(i), Int(j))
+    length(s, Int(i)::Int, Int(j)::Int)
 
 """
     thisind(s::AbstractString, i::Integer)::Int
@@ -446,7 +446,7 @@ ERROR: BoundsError: attempt to access 2-codeunit String at index [-1]
 [...]
 ```
 """
-thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
+thisind(s::AbstractString, i::Integer) = thisind(s, Int(i)::Int)
 
 function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s)::Int + 1
@@ -502,8 +502,8 @@ julia> prevind("α", 2, 3)
 -1
 ```
 """
-prevind(s::AbstractString, i::Integer, n::Integer) = prevind(s, Int(i), Int(n))
-prevind(s::AbstractString, i::Integer)             = prevind(s, Int(i))
+prevind(s::AbstractString, i::Integer, n::Integer) = prevind(s, Int(i)::Int, Int(n)::Int)
+prevind(s::AbstractString, i::Integer)             = prevind(s, Int(i)::Int)
 prevind(s::AbstractString, i::Int)                 = prevind(s, i, 1)
 
 function prevind(s::AbstractString, i::Int, n::Int)
@@ -561,8 +561,8 @@ julia> nextind("α", 1, 2)
 4
 ```
 """
-nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i), Int(n))
-nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i))
+nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i)::Int, Int(n)::Int)
+nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i)::Int)
 nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
 
 function nextind(s::AbstractString, i::Int, n::Int)
@@ -757,7 +757,7 @@ julia> repeat("ha", 3)
 "hahaha"
 ```
 """
-repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
+repeat(s::AbstractString, r::Integer) = repeat(String(s)::String, r)
 
 """
     ^(s::Union{AbstractString,AbstractChar}, n::Integer)::AbstractString
