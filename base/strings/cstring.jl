@@ -184,10 +184,10 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
     i, n = 1, length(src)
     n > 0 || return dst
     sizehint!(dst, 2n)
-    a = src[1]
+    a = src[1]::UInt8
     while true
         if i < n && -64 <= a % Int8 <= -12 # multi-byte character
-            b = src[i += 1]
+            b = src[i += 1]::UInt8
             if -64 <= (b % Int8) || a == 0xf4 && 0x8f < b
                 # invalid UTF-8 (non-continuation or too-high code point)
                 push!(dst, a)
@@ -195,14 +195,14 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
             elseif a < 0xe0 # 2-byte UTF-8
                 push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
-                c = src[i += 1]
+                c = src[i += 1]::UInt8
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
                     push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
-                    d = src[i += 1]
+                    d = src[i += 1]::UInt8
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
@@ -224,7 +224,7 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
             push!(dst, a)
         end
         i < n || break
-        a = src[i += 1]
+        a = src[i += 1]::UInt8
     end
     return dst
 end
@@ -240,7 +240,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
     # dst dynamically, because Base.winprompt uses this function to
     # convert passwords to UTF-8 and we don't want to make unintentional
     # copies of the password data.
-    a = src[1]
+    a = src[1]::UInt16
     i, m = 1, 0
     while true
         if a < 0x80
@@ -248,7 +248,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
         elseif a < 0x800 # 2-byte UTF-8
             m += 2
         elseif a & 0xfc00 == 0xd800 && i < length(src)
-            b = src[i += 1]
+            b = src[i += 1]::UInt16
             if (b & 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
                 m += 4
             else
@@ -261,11 +261,11 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
             m += 3
         end
         i < n || break
-        a = src[i += 1]
+        a = src[i += 1]::UInt16
     end
 
     dst = StringVector(m)
-    a = src[1]
+    a = src[1]::UInt16
     i, j = 1, 0
     while true
         if a < 0x80 # ASCII
@@ -274,7 +274,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
             dst[j += 1] = 0xc0 | ((a >> 6) % UInt8)
             dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
         elseif a & 0xfc00 == 0xd800 && i < n
-            b = src[i += 1]
+            b = src[i += 1]::UInt16
             if (b & 0xfc00) == 0xdc00
                 # 2-unit UTF-16 sequence => 4-byte UTF-8
                 a += 0x2840
@@ -296,7 +296,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
             dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
         end
         i < n || break
-        a = src[i += 1]
+        a = src[i += 1]::UInt16
     end
     return dst
 end
