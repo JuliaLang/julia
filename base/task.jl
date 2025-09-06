@@ -2,7 +2,11 @@
 
 ## basic task functions and TLS
 
-Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
+Core.Task(@nospecialize(f), reserved_stack::Int=0) = begin
+    task = Core._task(f, reserved_stack)
+    task.donenotify = ThreadSynchronizer()
+    return task
+end
 
 # Container for a captured exception and its backtrace. Can be serialized.
 struct CapturedException <: Exception

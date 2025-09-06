@@ -105,6 +105,7 @@
     XX(jl_opaque_closure_typename) \
     XX(jl_pair_type) \
     XX(jl_partial_opaque_type) \
+    XX(jl_partial_task_type) \
     XX(jl_partial_struct_type) \
     XX(jl_phicnode_type) \
     XX(jl_phinode_type) \

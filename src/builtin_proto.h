@@ -21,6 +21,7 @@ extern "C" {
     XX(_setsuper,"_setsuper!") \
     XX(_structtype,"_structtype") \
     XX(_svec_ref,"_svec_ref") \
+    XX(_task,"_task") \
     XX(_typebody,"_typebody!") \
     XX(_typevar,"_typevar") \
     XX(_using, "_using") \

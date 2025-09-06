@@ -1846,6 +1846,27 @@ let src = code_typed1((AtomicMemoryRef{Int},)) do a
     @test count(isinvokemodify(:+), src.code) == 1
 end
 
+# Core._task handling
+# ===================
+# Test that _task inlines properly with const prop
+f_task_invoke() = 42
+
+let src = code_typed1(()) do
+        return Task(f_task_invoke)
+    end
+    m = which(f_task_invoke, ())
+    @show src
+    @test count(e -> begin
+            if iscall((src, Core._task), e) && e isa Expr && e.head === :call && length(e.args) == 4
+                ci = e.args[4]
+                if ci isa CodeInstance && ci.def.def === m
+                    return true
+                end
+            end
+            return false
+        end, src.code) == 1
+end
+
 # apply `ssa_inlining_pass` multiple times
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
 multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
