@@ -209,3 +209,19 @@ const lsv = LazyScopedValue{Int}(OncePerProcess(() -> (global lsv_ncalled; lsv_n
     @test lsv[] == 1
     @test lsv_ncalled == 1
 end
+
+@testset "ScopedThunk" begin
+    function check_svals()
+        @test sval[] == 8
+        @test sval_float[] == 8.0
+    end
+    sf = nothing
+    @with sval=>8 sval_float=>8.0 begin
+        sf = ScopedThunk(check_svals)
+    end
+    sf()
+    @with sval=>8 sval_float=>8.0 begin
+        sf2 = ScopedThunk{Function}(check_svals)
+    end
+    sf2()
+end
