@@ -1646,7 +1646,9 @@ JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
     jl_value_t *argtypes = args[1];
-    if (jl_is_method(argtypes)) {
+    if (jl_isa(args[0], (jl_value_t*)jl_builtin_type)) {
+        jl_error("cannot invoke builtin functions");
+    } else if (jl_is_method(argtypes)) {
         jl_method_t *m = (jl_method_t*)argtypes;
         if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)m->sig))
             jl_type_error("invoke: argument type error", argtypes, arg_tuple(args[0], &args[2], nargs - 1));

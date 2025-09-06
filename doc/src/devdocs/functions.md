@@ -5,10 +5,11 @@ This document will explain how functions, method definitions, and method tables 
 
 ## Method Tables
 
-Every function in Julia is a generic function. A generic function is conceptually a single function,
-but consists of many definitions, or methods. The methods of a generic function are stored in a
-method table. There is one global method table (type `MethodTable`) named `Core.GlobalMethods`. Any
-default operation on methods (such as calls) uses that table.
+Every function in Julia, excluding a small set of [builtins](@ref Builtin), is a generic function.
+A generic function is conceptually a single function, but consists of potentially many definitions
+(methods). The methods of a generic function are stored in a method table. There is one global
+method table (type `MethodTable`) named `Core.GlobalMethods`. Any default operation on methods
+(such as calls) uses that table.
 
 ## [Function calls](@id Function-calls)
 
@@ -83,7 +84,7 @@ end
 
 A constructor call is just a call to a type, to a method defined on `Type{T}`.
 
-## Builtins
+## [Builtins](@id Builtin)
 
 The "builtin" functions, defined in the `Core` module, are:
 
