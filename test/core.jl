@@ -8615,6 +8615,11 @@ module M57638_3
 end
 @test M57638_3.x === 1
 
+@testset "no unnecessary methods for comparison functions with generically correct and performant fallback methods" begin
+    @test (isone ∘ length ∘ methods)(>, Tuple{Any, Any})
+    @test (isone ∘ length ∘ methods)(>=, Tuple{Any, Any})
+end
+
 module GlobalBindingMulti
     module M
         export S
