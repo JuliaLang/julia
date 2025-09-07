@@ -2107,7 +2107,7 @@ end
         union_split(f, x, Base.tail(ts), args...)
     end
 end
-@inline union_split(f, x, ::Tuple{}, args...) = f(x, args...)
+@inline union_split(f, x, ::Tuple{}, args::Vararg{Any, N}) where {N} = f(x, args...)
 
 function hash_shaped(A, h0::UInt, eltype_hint=())
     h::UInt = h0
