@@ -9,7 +9,7 @@
 
 # Return the current exception. In JuliaLowering we use this rather than the
 # special form `K"the_exception"` to reduces the number of special forms.
-Base.@assume_effects :removable :nothrow function current_exception()
+Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
 
