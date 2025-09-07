@@ -32,7 +32,7 @@ function formatsrc(ex; kws...)
     Text(JuliaSyntaxFormatter.formatsrc(ex; kws...))
 end
 
-function debug_lower(mod, ex; expr_compat_mode=false, verbose=false, do_eval=false)
+function debug_lower(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, verbose::Bool=false, do_eval::Bool=false)
     ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex, expr_compat_mode, Base.get_world_counter())
 
     verbose && @info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
@@ -49,7 +49,7 @@ function debug_lower(mod, ex; expr_compat_mode=false, verbose=false, do_eval=fal
     ctx5, ex_compiled = JuliaLowering.linearize_ir(ctx4, ex_converted)
     verbose && @info "Linear IR" formatsrc(ex_compiled, color_by=:var_id) Text(sprint(JuliaLowering.print_ir, ex_compiled))
 
-    ex_expr = JuliaLowering.to_lowered_expr(mod, ex_compiled)
+    ex_expr = JuliaLowering.to_lowered_expr(ex_compiled)
     verbose && @info "CodeInfo" ex_expr
 
     if do_eval
@@ -502,7 +502,7 @@ end
 
 src = """
 function f(y)
-    x = 
+    x =
     try
         try
             error("hi")
@@ -908,4 +908,3 @@ ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 # for e in Meta.parseall(text).args
 #     Meta.lower(JuliaLowering, e)
 # end
-
