@@ -120,7 +120,7 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-function to_code_info(ex::SyntaxTree, mod::Module, slots::Vector{Slot})
+function to_code_info(ex::SyntaxTree, slots::Vector{Slot})
     stmts = Any[]
 
     current_codelocs_stack = ir_debug_info_state(ex)
@@ -155,7 +155,7 @@ function to_code_info(ex::SyntaxTree, mod::Module, slots::Vector{Slot})
 
     stmt_offset = length(stmts)
     for stmt in children(ex)
-        push!(stmts, _to_lowered_expr(mod, stmt, stmt_offset))
+        push!(stmts, _to_lowered_expr(stmt, stmt_offset))
         add_ir_debug_info!(current_codelocs_stack, stmt)
     end
 
@@ -222,11 +222,11 @@ function to_code_info(ex::SyntaxTree, mod::Module, slots::Vector{Slot})
     )
 end
 
-@fzone "JL: to_lowered_expr" function to_lowered_expr(mod::Module, ex::SyntaxTree)
-    _to_lowered_expr(mod, ex, 0)
+@fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
+    _to_lowered_expr(ex, 0)
 end
 
-function _to_lowered_expr(mod::Module, ex::SyntaxTree, stmt_offset::Int)
+function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -262,12 +262,12 @@ function _to_lowered_expr(mod::Module, ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"SSAValue"
         Core.SSAValue(ex.var_id + stmt_offset)
     elseif k == K"return"
-        Core.ReturnNode(_to_lowered_expr(mod, ex[1], stmt_offset))
+        Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"
         e1 = ex[1]
         getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
     elseif k == K"code_info"
-        ir = to_code_info(ex[1], mod, ex.slots)
+        ir = to_code_info(ex[1], ex.slots)
         if ex.is_toplevel_thunk
             Expr(:thunk, ir)
         else
@@ -278,36 +278,36 @@ function _to_lowered_expr(mod::Module, ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"goto"
         Core.GotoNode(ex[1].id + stmt_offset)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(mod, ex[1], stmt_offset), ex[2].id + stmt_offset)
+        Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
     elseif k == K"enter"
         catch_idx = ex[1].id
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
-            Core.EnterNode(catch_idx, _to_lowered_expr(mod, ex[2], stmt_offset))
+            Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
     elseif k == K"method"
-        cs = map(e->_to_lowered_expr(mod, e, stmt_offset), children(ex))
+        cs = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
         c1 = cs[1] isa QuoteNode ? cs[1].value : cs[1]
         Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
-        Core.NewvarNode(_to_lowered_expr(mod, ex[1], stmt_offset))
+        Core.NewvarNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"opaque_closure_method"
-        args = map(e->_to_lowered_expr(mod, e, stmt_offset), children(ex))
+        args = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         @assert args[4] isa QuoteNode
         args[4] = args[4].value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
-        args = Any[_to_lowered_expr(mod, e, stmt_offset) for e in children(ex)]
+        args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         args[1] = args[1].value
         Expr(:meta, args...)
     elseif k == K"static_eval"
         @assert numchildren(ex) == 1
-        _to_lowered_expr(mod, ex[1], stmt_offset)
+        _to_lowered_expr(ex[1], stmt_offset)
     elseif k == K"cfunction"
-        args = Any[_to_lowered_expr(mod, e, stmt_offset) for e in children(ex)]
+        args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
         if kind(ex[2]) == K"static_eval"
             args[2] = QuoteNode(args[2])
         end
@@ -339,7 +339,7 @@ function _to_lowered_expr(mod::Module, ex::SyntaxTree, stmt_offset::Int)
         if isnothing(head)
             throw(LoweringError(ex, "Unhandled form for kind $k"))
         end
-        Expr(head, map(e->_to_lowered_expr(mod, e, stmt_offset), children(ex))...)
+        Expr(head, map(e->_to_lowered_expr(e, stmt_offset), children(ex))...)
     end
 end
 
@@ -355,7 +355,7 @@ end
         return x
     end
     linear_ir = lower(mod, ex; expr_compat_mode)
-    thunk = to_lowered_expr(mod, linear_ir)
+    thunk = to_lowered_expr(linear_ir)
     Core.eval(mod, thunk)
 end
 

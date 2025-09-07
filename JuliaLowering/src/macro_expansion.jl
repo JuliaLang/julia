@@ -147,7 +147,7 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::Syn
     ctx4, ex4 = convert_closures(ctx3, ex3)
     ctx5, ex5 = linearize_ir(ctx4, ex4)
     mod = current_layer(ctx).mod
-    expr_form = to_lowered_expr(mod, ex5)
+    expr_form = to_lowered_expr(ex5)
     try
         Core.eval(mod, expr_form)
     catch err

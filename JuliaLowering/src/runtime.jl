@@ -399,7 +399,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
     ctx5, ex5 = linearize_ir(ctx4, ex4)
-    ci = to_lowered_expr(__module__, ex5)
+    ci = to_lowered_expr(ex5)
     @assert ci isa Core.CodeInfo
 
     # See GeneratedFunctionStub code in base/expr.jl

@@ -49,7 +49,7 @@ function debug_lower(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, 
     ctx5, ex_compiled = JuliaLowering.linearize_ir(ctx4, ex_converted)
     verbose && @info "Linear IR" formatsrc(ex_compiled, color_by=:var_id) Text(sprint(JuliaLowering.print_ir, ex_compiled))
 
-    ex_expr = JuliaLowering.to_lowered_expr(mod, ex_compiled)
+    ex_expr = JuliaLowering.to_lowered_expr(ex_compiled)
     verbose && @info "CodeInfo" ex_expr
 
     if do_eval
