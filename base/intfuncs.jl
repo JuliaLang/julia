@@ -760,7 +760,8 @@ function ndigits0z(x::Integer, b::Integer)
 end
 
 # Extends the definition in base/int.jl
-top_set_bit(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+# assume x >= 0. result is implementation-defined for negative values
+top_set_bit(x::Integer) = iszero(x) ? 0 : exponent(x) + one(x)
 
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)
