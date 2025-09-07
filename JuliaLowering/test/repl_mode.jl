@@ -19,7 +19,7 @@ function is_incomplete(prompt_state)
     end
 end
 
-function eval_ish(mod, ex, do_eval, do_print_ir)
+function eval_ish(mod::Module, ex::SyntaxTree, do_eval::Bool, do_print_ir::Bool)
     k = kind(ex)
     if k == K"toplevel"
         x = nothing
@@ -34,7 +34,7 @@ function eval_ish(mod, ex, do_eval, do_print_ir)
     end
     if do_eval
         println(stdout, "#----------------------")
-        expr_form = JuliaLowering.to_lowered_expr(mod, linear_ir)
+        expr_form = JuliaLowering.to_lowered_expr(linear_ir)
         Base.eval(mod, expr_form)
     end
 end
@@ -79,4 +79,3 @@ function __init__()
 end
 
 end
-

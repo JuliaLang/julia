@@ -195,10 +195,10 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, 
 end
 
 # Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals!(codeinfo, locals)
+function replace_captured_locals!(codeinfo::Core.CodeInfo, locals::Core.SimpleVector)
     for (i, ex) in enumerate(codeinfo.code)
         if Meta.isexpr(ex, :captured_local)
-            codeinfo.code[i] = locals[ex.args[1]]
+            codeinfo.code[i] = locals[ex.args[1]::Int]
         end
     end
     codeinfo
@@ -352,11 +352,13 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
                               is_toplevel_thunk=Bool
                               )
 
+    __module__ = source.module
+
     # Macro expansion. Looking at Core.GeneratedFunctionStub, it seems that
     # macros emitted by the generator are currently expanded in the latest
     # world, so do that for compatibility.
     macro_world = typemax(UInt)
-    ctx1 = MacroExpansionContext(graph, source.module, false, macro_world)
+    ctx1 = MacroExpansionContext(graph, __module__, false, macro_world)
 
     # Run code generator - this acts like a macro expander and like a macro
     # expander it gets a MacroContext.
@@ -397,7 +399,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
     ctx5, ex5 = linearize_ir(ctx4, ex4)
-    ci = to_lowered_expr(mod, ex5)
+    ci = to_lowered_expr(ex5)
     @assert ci isa Core.CodeInfo
 
     # See GeneratedFunctionStub code in base/expr.jl
