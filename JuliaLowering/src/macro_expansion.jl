@@ -216,7 +216,7 @@ function expand_macro(ctx, ex)
     # We use a specific well defined world age for the next checks and macro
     # expansion invocations. This avoids inconsistencies if the latest world
     # age changes concurrently.
-    # 
+    #
     # TODO: Allow this to be passed in
     if hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=ctx.macro_world)
         macro_args = prepare_macro_args(ctx, mctx, raw_args)
