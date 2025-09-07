@@ -53,7 +53,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     _array_for, _bits_findnext, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
     argument_datatype, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
-    datatype_pointerfree, decode_effects_override, diff_names, fieldindex,
+    datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars,
     hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
     is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
@@ -187,6 +187,7 @@ include("typeinfer.jl")
 include("optimize.jl")
 
 include("bootstrap.jl")
+include("precompile.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
 
