@@ -21,7 +21,7 @@ if Base.get_bool_env("JULIA_LOWERING_PRECOMPILE", true)
         JuliaSyntax.parse!(stream; rule=:all)
         st0 = JuliaSyntax.build_tree(SyntaxTree, stream; filename=@__FILE__)
         lwrst = lower(@__MODULE__, st0[1])
-        lwr = to_lowered_expr(@__MODULE__, lwrst)
+        lwr = to_lowered_expr(lwrst)
         @assert Meta.isexpr(lwr, :thunk) && only(lwr.args) isa Core.CodeInfo
     end
 end

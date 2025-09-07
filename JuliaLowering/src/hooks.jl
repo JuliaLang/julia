@@ -22,7 +22,7 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
         ctx3, st3 = resolve_scopes(  ctx2, st2)
         ctx4, st4 = convert_closures(ctx3, st3)
         ctx5, st5 = linearize_ir(    ctx4, st4)
-        ex = to_lowered_expr(mod, st5)
+        ex = to_lowered_expr(st5)
         return Core.svec(ex, st5, ctx5)
     catch exc
         @info("JuliaLowering threw given input:", code=code, st0=st0, file=file, line=line, mod=mod)

@@ -34,7 +34,7 @@ function eval_ish(mod::Module, ex::SyntaxTree, do_eval::Bool, do_print_ir::Bool)
     end
     if do_eval
         println(stdout, "#----------------------")
-        expr_form = JuliaLowering.to_lowered_expr(mod, linear_ir)
+        expr_form = JuliaLowering.to_lowered_expr(linear_ir)
         Base.eval(mod, expr_form)
     end
 end

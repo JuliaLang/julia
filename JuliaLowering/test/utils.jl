@@ -264,7 +264,7 @@ end
 
 function lower_str(mod::Module, s::AbstractString)
     ex = parsestmt(JuliaLowering.SyntaxTree, s)
-    return JuliaLowering.to_lowered_expr(mod, JuliaLowering.lower(mod, ex))
+    return JuliaLowering.to_lowered_expr(JuliaLowering.lower(mod, ex))
 end
 
 # See Julia Base tests in "test/docs.jl"
@@ -362,7 +362,7 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
     for ex in children(ex0)
         try
             ex_compiled = JuliaLowering.lower(mod, ex)
-            ex_expr = JuliaLowering.to_lowered_expr(mod, ex_compiled)
+            ex_expr = JuliaLowering.to_lowered_expr(ex_compiled)
             if do_eval
                 Base.eval(mod, ex_expr)
             end
