@@ -287,7 +287,8 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"method"
         cs = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
-        c1 = cs[1] isa QuoteNode ? cs[1].value : cs[1]
+        cs1 = cs[1]
+        c1 = cs1 isa QuoteNode ? cs1.value : cs1
         Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
         Core.NewvarNode(_to_lowered_expr(ex[1], stmt_offset))
@@ -295,13 +296,16 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         args = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
-        @assert args[4] isa QuoteNode
-        args[4] = args[4].value
+        arg4 = args[4]
+        @assert arg4 isa QuoteNode
+        args[4] = arg4.value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
         args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
-        args[1] = args[1].value
+        arg1 = args[1]
+        @assert arg1 isa QuoteNode
+        args[1] = arg1.value
         Expr(:meta, args...)
     elseif k == K"static_eval"
         @assert numchildren(ex) == 1
@@ -339,7 +343,11 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         if isnothing(head)
             throw(LoweringError(ex, "Unhandled form for kind $k"))
         end
-        Expr(head, map(e->_to_lowered_expr(e, stmt_offset), children(ex))...)
+        ret = Expr(head)
+        for e in children(ex)
+            push!(ret.args, _to_lowered_expr(e, stmt_offset))
+        end
+        return ret
     end
 end
 
