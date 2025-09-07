@@ -984,7 +984,7 @@ function _ilog2_step(y::T, d::T, s) where {T<:Integer}
     if fld(y, d) ≥ d
         y, n = _ilog2_step(y, d*d, s+s)
     else
-        n = zero(s)
+        n = 0
     end
     if y ≥ d
         y = fld(y, d)
@@ -996,7 +996,7 @@ end
 function exponent(x::Integer)
     iszero(x) && throw(DomainError(x, "cannot be zero"))
     ux = Base.uabs(x)
-    _, n = _ilog2_step(ux, one(ux) + one(ux), one(x))
+    _, n = _ilog2_step(ux, one(ux) + one(ux), 1)
     return n
 end
 

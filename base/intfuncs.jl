@@ -761,7 +761,7 @@ end
 
 # Extends the definition in base/int.jl
 # assume x >= 0. result is implementation-defined for negative values
-top_set_bit(x::Integer) = iszero(x) ? 0 : exponent(x) + one(x)
+top_set_bit(x::Integer) = iszero(x) ? 0 : exponent(x) + 1
 
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)
