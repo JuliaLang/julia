@@ -2043,7 +2043,34 @@ function _hash_fib(A, h::UInt)
     return hash_uint(h)
 end
 
-function hash_shaped(A, h::UInt)
+"""
+    union_split(f, x, ts::Tuple{Vararg{Val}}, args...)
+
+call `f(x, args...)`, union-splitting on all the types specified by `ts`
+
+`union_split(f, x, (Val{T1}(), Val{T2}()), y, z)` is equivalent to
+
+```
+if x isa T1
+    f(x, y, z)
+elseif x isa T2
+    f(x, y, z)
+else
+    f(x, y, z)
+end
+```
+"""
+@inline function union_split(f, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Val,N}}, args...) where {T, N}
+    if x isa T
+        f(x, args...)
+    else
+        union_split(f, x, Base.tail(ts), args...)
+    end
+end
+@inline union_split(f, x, ::Tuple{}, args::Vararg{Any, N}) where {N} = f(x, args...)
+
+function hash_shaped(A, h0::UInt, eltype_hint=())
+    h::UInt = h0
     # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
@@ -2053,20 +2080,20 @@ function hash_shaped(A, h::UInt)
     if len < 8
         # for the shortest arrays we chain directly
         for elt in A
-            h = hash(elt, h)
+            h = union_split(hash, elt, eltype_hint, h)
         end
         return h
     elseif len < 32768
         # separate accumulator streams, unrolled
-        @nexprs 8 i -> p_i = h
+        @nexprs 8 i -> p_i::UInt = h
         n  = 1
         limit = len - 7
         while n <= limit
-            @nexprs 8 i -> p_i = hash(A[n + i - 1], p_i)
+            @nexprs 8 i -> p_i = union_split(hash, A[n + i - 1], eltype_hint, p_i)
             n += 8
         end
         while n <= len
-            p_1 = hash(A[n], p_1)
+            p_1 = union_split(hash, A[n], eltype_hint, p_1)
             n += 1
         end
         # fold all streams back together
