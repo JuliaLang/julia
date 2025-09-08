@@ -709,7 +709,7 @@ extern int gc_first_tid;
 // interface to Julia; sets up to make the runtime thread-safe
 void jl_init_threading(void)
 {
-    char *cp;
+    char *cp = NULL;
 
     uv_mutex_init(&tls_lock);
     uv_cond_init(&cond);
@@ -768,7 +768,7 @@ void jl_init_threading(void)
             jl_safe_printf("WARNING: code coverage is not thread-safe, ignoring threads setting and running with 1 thread.\n");
         }
         // Default threads so just disable the interactive one
-        if (jl_options.nthreads == 0) {
+        if (jl_options.nthreads == 0 && cp == NULL) {
             nthreads = 1;
             nthreadsi = 0;
         }
