@@ -18,7 +18,7 @@ convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}
 convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)::AbstractArray{T,N}
 
 """
-    size(A::AbstractArray, [dim])
+    size(A, [dim])
 
 Return a tuple containing the dimensions of `A`. Optionally you can specify a
 dimension to just get the length of that dimension.
@@ -39,7 +39,7 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+size(A, d) where {T,N} = d::Integer <= ndims(A) ? size(A)[d] : 1
 
 """
     axes(A, d)
@@ -72,9 +72,9 @@ ix[2:end]          # will work for eg Vector, but may fail in general
 ix[(begin+1):end]  # works for generalized indexes
 ```
 """
-function axes(A::AbstractArray{T,N}, d) where {T,N}
+function axes(A, d)
     @inline
-    d::Integer <= N ? axes(A)[d] : OneTo(1)
+    d::Integer <= ndims(A) ? axes(A)[d] : OneTo(1)
 end
 
 """
