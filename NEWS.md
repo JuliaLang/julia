@@ -29,6 +29,7 @@ Command-line option changes
 * The option `--sysimage-native-code=no` has been deprecated.
 * The `JULIA_CPU_TARGET` environment variable now supports a `sysimage` keyword to match (or extend) the CPU target used to build the current system image ([#58970]).
 * The `--code-coverage=all` option now automatically throws away sysimage caches so that code coverage can be accurately measured on methods within the sysimage. It is thrown away after startup (and after startup.jl), before any user code is executed ([#59234])
+* New `--trace-eval` command-line option to show expressions being evaluated during top-level evaluation. Supports `--trace-eval=loc` or just `--trace-eval` (show location only), `--trace-eval=full` (show full expressions), and `--trace-eval=no` (disable tracing). Also adds `Base.TRACE_EVAL` global control that takes priority over the command-line option and can be set to `:no`, `:loc`, `:full`, or `nothing` (to use command-line setting). ([#57137])
 
 Multi-threading changes
 -----------------------
@@ -63,6 +64,7 @@ New library features
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 * `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
+* `chopprefix` and `chopsuffix` can now also accept an `AbstractChar` as the prefix/suffix to remove.
 * The `macroexpand` (with default true) and the new `macroexpand!` (with default false)
   functions now support a `legacyscope` boolean keyword argument to control whether to run
   the legacy scope resolution pass over the result. The legacy scope resolution code has

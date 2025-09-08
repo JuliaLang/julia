@@ -80,7 +80,7 @@ import Base.Threads: @spawn
 end
 
 @testset "show" begin
-    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
+    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}()"
     @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(1)"
     with(sval => 2.0) do
         @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(2)"
@@ -208,4 +208,20 @@ const lsv = LazyScopedValue{Int}(OncePerProcess(() -> (global lsv_ncalled; lsv_n
     @test lsv_ncalled == 1
     @test lsv[] == 1
     @test lsv_ncalled == 1
+end
+
+@testset "ScopedThunk" begin
+    function check_svals()
+        @test sval[] == 8
+        @test sval_float[] == 8.0
+    end
+    sf = nothing
+    @with sval=>8 sval_float=>8.0 begin
+        sf = ScopedThunk(check_svals)
+    end
+    sf()
+    @with sval=>8 sval_float=>8.0 begin
+        sf2 = ScopedThunk{Function}(check_svals)
+    end
+    sf2()
 end
