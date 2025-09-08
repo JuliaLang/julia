@@ -763,14 +763,14 @@ void jl_init_threading(void)
         }
     }
     if (jl_options.code_coverage) {
-        // Code coverage is not currently thread-safe
-        if (nthreadsi != 0 || nthreads != 1) {
-            jl_safe_printf("WARNING: code coverage is not thread-safe, ignoring threads setting and running with 1 thread.\n");
-        }
         // Default threads so just disable the interactive one
         if (jl_options.nthreads == 0 && cp == NULL) {
             nthreads = 1;
             nthreadsi = 0;
+        }
+        // Code coverage is not currently thread-safe
+        if (nthreadsi != 0 || nthreads != 1) {
+            jl_safe_printf("WARNING: code coverage is not thread-safe, ignoring threads setting and running with 1 thread.\n");
         }
     }
     int cpu = jl_cpu_threads();
