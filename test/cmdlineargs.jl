@@ -79,7 +79,8 @@ if Sys.isunix()
         exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         outp = Base.PipeEndpoint()
         errp = Base.PipeEndpoint()
-        p = run(`$exename -e 'sleep(20)'`, devnull, devnull, errp, wait=false)
+        # disable coredumps for this process
+        p = run(`sh -c "ulimit -c 0; "$(Base.shell_escape(exename)) -e 'sleep(20)'"`, devnull, devnull, errp, wait=false)
         sleep(5.0) # allow Julia to start
         Base.kill(p, Base.SIGQUIT)
         wait(p)
