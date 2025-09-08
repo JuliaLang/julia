@@ -981,13 +981,13 @@ function _exponent_finite_nonzero(x::T) where T<:IEEEFloat
 end
 
 function _ilog2_step(y::T, d::T, s) where {T<:Integer}
-    if fld(y, d) ≥ d
+    if (y >> s) >= d
         y, n = _ilog2_step(y, d*d, s+s)
     else
         n = 0
     end
-    if y ≥ d
-        y = fld(y, d)
+    if y >= d
+        y >>= s
         n = Base.checked_add(n, s)
     end
     return y, n
@@ -998,6 +998,12 @@ function exponent(x::Integer)
     ux = Base.uabs(x)
     _, n = _ilog2_step(ux, one(ux) + one(ux), 1)
     return n
+end
+
+function exponent(x::Base.BitInteger)
+    iszero(x) && throw(DomainError(x, "cannot be zero"))
+    ux = Base.uabs(x)
+    return 8sizeof(ux) - leading_zeros(ux) - 1
 end
 
 """
