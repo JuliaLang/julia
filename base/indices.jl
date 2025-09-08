@@ -522,8 +522,8 @@ julia> linear[1,2]
 """
 struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
     indices::R
-    @propagate_inbounds function LinearIndices{N,R}(indices::R) where {N,R<:NTuple{N,AbstractUnitRange{Int}}}
-        @boundscheck if N > 0
+    function LinearIndices{N,R}(indices::R) where {N,R<:NTuple{N,AbstractUnitRange{Int}}}
+        if N > 0
             indexcount = 1 # == one(eltype(LinearIndices{N,R}))
             for r in indices
                 indexcount = Base.checked_mul(indexcount, length(r))
