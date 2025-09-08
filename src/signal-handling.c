@@ -239,26 +239,28 @@ void jl_profile_task(void)
     if (uv_mutex_trylock(&live_tasks_lock) != 0) {
         goto collect_backtrace;
     }
-    got_mutex = 1;
+    {
+        got_mutex = 1;
 
-    arraylist_t *tasks = jl_get_all_tasks_arraylist();
-    uint64_t seed = jl_rand();
-    const int n_max_random_attempts = 4;
-    // randomly select a task that is not done
-    for (int i = 0; i < n_max_random_attempts; i++) {
-        t = (jl_task_t*)tasks->items[cong(tasks->len, &seed)];
-        assert(t == NULL || jl_is_task(t));
-        if (t == NULL) {
-            continue;
+        arraylist_t *tasks = jl_get_all_tasks_arraylist();
+        uint64_t seed = jl_rand();
+        const int n_max_random_attempts = 4;
+        // randomly select a task that is not done
+        for (int i = 0; i < n_max_random_attempts; i++) {
+            t = (jl_task_t*)tasks->items[cong(tasks->len, &seed)];
+            assert(t == NULL || jl_is_task(t));
+            if (t == NULL) {
+                continue;
+            }
+            int t_state = jl_atomic_load_relaxed(&t->_state);
+            if (t_state == JL_TASK_STATE_DONE) {
+                continue;
+            }
+            break;
         }
-        int t_state = jl_atomic_load_relaxed(&t->_state);
-        if (t_state == JL_TASK_STATE_DONE) {
-            continue;
-        }
-        break;
+        arraylist_free(tasks);
+        free(tasks);
     }
-    arraylist_free(tasks);
-    free(tasks);
 
 collect_backtrace:
 

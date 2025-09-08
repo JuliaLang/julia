@@ -599,42 +599,44 @@ static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion
 STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
 {
     for (size_t i = nt-1; i > 0; i--) {
-        // match types of form Tuple{T, ..., Vararg{T}}
-        jl_value_t *tt = temp[i];
-        if (!(tt && jl_is_tuple_type(tt))) continue;
-        size_t nfields = jl_nparams(tt);
-        if (nfields <= 1) continue;
-        jl_value_t *va = jl_tparam(tt, nfields-1);
-        if (jl_vararg_kind(va) != JL_VARARG_UNBOUND) continue;
-        jl_value_t *t = jl_unwrap_vararg(va);
-        for (size_t j = 0; j < nfields-1; j++)
-            if (!jl_egal(jl_tparam(tt, j), t)) goto outer_loop;
+        {
+            // match types of form Tuple{T, ..., Vararg{T}}
+            jl_value_t *tt = temp[i];
+            if (!(tt && jl_is_tuple_type(tt))) continue;
+            size_t nfields = jl_nparams(tt);
+            if (nfields <= 1) continue;
+            jl_value_t *va = jl_tparam(tt, nfields-1);
+            if (jl_vararg_kind(va) != JL_VARARG_UNBOUND) continue;
+            jl_value_t *t = jl_unwrap_vararg(va);
+            for (size_t j = 0; j < nfields-1; j++)
+                if (!jl_egal(jl_tparam(tt, j), t)) goto outer_loop;
 
-        // look for Tuple{T, T, ...} then Tuple{T, ...}, etc
-        size_t min_elements = nfields-1;
-        for (long j = i-1; j >= 0; j--) {
-            jl_value_t *ttj = temp[j];
-            if (!jl_is_tuple_type(ttj)) break;
-            size_t nfieldsj = jl_nparams(ttj);
-            if (nfieldsj >= min_elements) continue;
-            if (nfieldsj != min_elements-1) break;
-            for (size_t k = 0; k < nfieldsj; k++)
-                if (!jl_egal(jl_tparam(ttj, k), t)) goto inner_loop;
+            // look for Tuple{T, T, ...} then Tuple{T, ...}, etc
+            size_t min_elements = nfields-1;
+            for (long j = i-1; j >= 0; j--) {
+                jl_value_t *ttj = temp[j];
+                if (!jl_is_tuple_type(ttj)) break;
+                size_t nfieldsj = jl_nparams(ttj);
+                if (nfieldsj >= min_elements) continue;
+                if (nfieldsj != min_elements-1) break;
+                for (size_t k = 0; k < nfieldsj; k++)
+                    if (!jl_egal(jl_tparam(ttj, k), t)) goto inner_loop;
 
-            temp[j] = NULL;
-            min_elements--;
+                temp[j] = NULL;
+                min_elements--;
  inner_loop:
             continue;
-        }
+            }
 
-        if (min_elements == nfields-1) continue;
-        jl_value_t** params;
-        JL_GC_PUSHARGS(params, min_elements+1);
-        for (size_t j = 0; j < min_elements; j++)
-            params[j] = t;
-        params[min_elements] = va;
-        temp[i] = jl_apply_type((jl_value_t*)jl_tuple_type, params, min_elements+1);
-        JL_GC_POP();
+            if (min_elements == nfields-1) continue;
+            jl_value_t** params;
+            JL_GC_PUSHARGS(params, min_elements+1);
+            for (size_t j = 0; j < min_elements; j++)
+                params[j] = t;
+            params[min_elements] = va;
+            temp[i] = jl_apply_type((jl_value_t*)jl_tuple_type, params, min_elements+1);
+            JL_GC_POP();
+        }
  outer_loop:
         continue;
     }

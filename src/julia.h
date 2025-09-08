@@ -2503,7 +2503,7 @@ extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
 #endif
 
 
-#ifdef __clang_gcanalyzer__
+#if defined(__clang_gcanalyzer__) || defined(__clang_analyzer__)
 
 extern int had_exception;
 
@@ -2525,19 +2525,30 @@ extern int had_exception;
 
 #else
 
-#define JL_TRY                                                      \
-    int i__try, i__catch; jl_handler_t __eh; jl_task_t *__eh_ct;    \
-    __eh_ct = jl_current_task;                                      \
-    size_t __excstack_state = jl_excstack_state(__eh_ct);           \
-    jl_enter_handler(__eh_ct, &__eh);                               \
-    if (!jl_setjmp(__eh.eh_ctx, 0))                                 \
-        for (i__try=1, __eh_ct->eh = &__eh; i__try; i__try=0, /* TRY BLOCK; */ jl_eh_restore_state_noexcept(__eh_ct, &__eh))
+struct jl_trystate {
+    int i_try;
+    int i_catch;
+    size_t excstack_state;
+    jl_task_t *eh_ct;
+    jl_handler_t eh;
+};
 
-#define JL_CATCH                                                    \
-    else                                                            \
-        for (i__catch=1, jl_eh_restore_state(__eh_ct, &__eh); i__catch; i__catch=0, /* CATCH BLOCK; */ jl_restore_excstack(__eh_ct, __excstack_state))
+#define JL_TRY                                                                                \
+    for (struct jl_trystate __jltry = {1, 1, 0, jl_current_task}; __jltry.i_try && __jltry.i_catch; ) \
+    for (__jltry.excstack_state = jl_excstack_state(__jltry.eh_ct),                           \
+         jl_enter_handler(__jltry.eh_ct, &__jltry.eh); __jltry.i_try && __jltry.i_catch; )    \
+    if (!jl_setjmp(__jltry.eh.eh_ctx, 0))                                                     \
+        for (__jltry.eh_ct->eh = &__jltry.eh; __jltry.i_try; __jltry.i_try=0,\
+             /* TRY BLOCK; */ jl_eh_restore_state_noexcept(__jltry.eh_ct, &__jltry.eh))
+
+#define JL_CATCH                                                                     \
+    else                                                                             \
+        for (jl_eh_restore_state(__jltry.eh_ct, &__jltry.eh);     \
+             __jltry.i_catch; __jltry.i_catch=0, /* CATCH BLOCK; */                  \
+             jl_restore_excstack(__jltry.eh_ct, __jltry.excstack_state))
 
 #endif
+
 
 // I/O system -----------------------------------------------------------------
 
