@@ -223,21 +223,44 @@ julia> gcdx(15, 12, 20)
 """
 Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     T = promote_type(typeof(a), typeof(b))
-    a == b == 0 && return (zero(T), zero(T), zero(T))
-    # a0, b0 = a, b
-    s0, s1 = oneunit(T), zero(T)
-    t0, t1 = s1, s0
-    # The loop invariant is: s0*a0 + t0*b0 == a && s1*a0 + t1*b0 == b
-    x = a % T
-    y = b % T
+
+    # Handle typemin(Signed) to avoid overflow in abs
+    a_abs = (a isa Signed && a == typemin(typeof(a))) ? BigInt(a) : abs(a)
+    b_abs = (b isa Signed && b == typemin(typeof(b))) ? BigInt(b) : abs(b)
+
+    # Handle the (0, 0) case
+    if a_abs == 0 && b_abs == 0
+        return (zero(T), zero(T), zero(T))
+    end
+
+    # Use BigInt for large unsigned types, Int128 for others
+    U = (T <: Union{UInt128, Int128}) ? BigInt : promote_type(T, Int128)
+
+    # Initialize Bézout coefficients
+    s0, s1 = oneunit(U), zero(U)
+    t0, t1 = zero(U), oneunit(U)
+
+    # Extended Euclidean algorithm on absolute values
+    x, y = convert(U, a_abs), convert(U, b_abs)
     while y != 0
         q, r = divrem(x, y)
         x, y = y, r
-        s0, s1 = s1, s0 - q*s1
-        t0, t1 = t1, t0 - q*t1
+        s0, s1 = s1, s0 - q * s1
+        t0, t1 = t1, t0 - q * t1
     end
-    x < 0 ? (-x, -s0, -t0) : (x, s0, t0)
+
+    # Adjust signs of coefficients based on original inputs
+    if a < 0
+        s0 = -s0
+    end
+    if b < 0
+        t0 = -t0
+    end
+
+    # Return gcd in T, coefficients in safe type U
+    return (convert(T, x), s0, t0)
 end
+
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 gcdx(a::Real) = (gcd(a), signbit(a) ? -one(a) : one(a))
