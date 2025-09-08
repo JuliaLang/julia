@@ -307,7 +307,7 @@ end
         end
 
         big_index = isqrt(typemax(Int))
-        @test_throws ArgumentError LinearIndices((big_index, big_index, 2))
+        @test_throws OverflowError LinearIndices((big_index, big_index, 2))
     end
 
     @testset "IdentityUnitRange" begin
