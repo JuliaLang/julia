@@ -256,6 +256,7 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL
             jl_error("could not load base module");
         return NULL;
     }
+    dlerror();
     handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
 #if defined(_OS_FREEBSD_)
     // FreeBSD will not give you a handle for the executable if you dlopen() it
@@ -292,7 +293,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 
     // modname == NULL is a sentinel value requesting the handle of libjulia-internal
     if (modname == NULL)
-        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, throw_err, 1);
+        return jl_libjulia_internal_handle;
 
     abspath = jl_isabspath(modname);
     is_atpath = 0;
