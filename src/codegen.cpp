@@ -2827,10 +2827,9 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
         getPointerTy(ctx.builder.getContext()));
-    Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
-    v = ctx.builder.CreateAdd(v, addend);
-    ctx.builder.CreateStore(v, pv, true); // volatile, not atomic, so this might be an underestimate,
-                                          // but it's faster this way
+    ctx.builder.CreateAtomicRMW(AtomicRMWInst::Add, pv,
+                                           addend, MaybeAlign(),
+                                           AtomicOrdering::Monotonic);
 }
 
 // Code coverage
