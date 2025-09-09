@@ -83,13 +83,14 @@ if Sys.isunix()
             end
             const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
             ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
-            sleep(20.0) # allow Julia to start
+            write(stdout, "r")
+            eof(stdout)
         """
         exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
-        errp = Base.PipeEndpoint()
+        errp = IOBuffer()
         # disable coredumps for this process
-        p = run(`$exename -e $script`, devnull, devnull, errp, wait=false)
-        sleep(5.0) # allow Julia to start
+        p = open(pipeline(`$exename -e $script`, "r"), stderr=errp)
+        @test read(p, UInt8) = UInt8('r')
         Base.kill(p, Base.SIGQUIT)
         wait(p)
         err_s = readchomp(errp)
