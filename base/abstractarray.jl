@@ -40,7 +40,7 @@ julia> size(A, 2)
 ```
 """
 function size(t::AbstractArray, dim)
-    d = Int(d)::Int
+    d = Int(dim)::Int
     s = size(t)
     d <= length(s) ? s[d] : 1
 end
