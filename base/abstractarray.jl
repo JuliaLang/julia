@@ -20,11 +20,17 @@ convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = Abs
 """
     size(A, [dim])
 
-Return a tuple containing the dimensions of `A`. Optionally you can specify a
-dimension to just get the length of that dimension.
+Return a tuple containing the dimensions of an `AbstractArray` (or a multidimensional iterator) `A`.
+Optionally you may specify a dimension to just get the length of that dimension.
+
+Non-`AbstractArray` arguments `A` to the two-argument `size` must satisfy
+`Base.IteratorSize(A) isa Base.HasShape`.
 
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
+
+!!! compat "Julia 1.13"
+    `size(A, d)` where `A` is not an `AbstractArray` requires at least Julia 1.13.
 
 See also: [`length`](@ref), [`ndims`](@ref), [`eachindex`](@ref), [`sizeof`](@ref).
 
@@ -39,12 +45,24 @@ julia> size(A, 2)
 3
 ```
 """
-size(A, d) where {T,N} = d::Integer <= ndims(A) ? size(A)[d] : 1
+function size(A, d)
+    @inline
+    _size(IteratorSize(A), size(A), d)
+end
+function _size(::HasShape, s::Tuple, d::Integer)
+    @inline
+    d_Int = convert(Int, d)
+    d_Int <= length(s) ? s[d_Int] : 1
+end
 
 """
     axes(A, d)
 
-Return the valid range of indices for array `A` along dimension `d`.
+Return the valid range of indices for an `AbstractArray` (or a mutidimensional iterator)
+`A` along dimension `d`.
+
+Non-`AbstractArray` arguments `A` to the two-argument `axes` must satisfy
+`Base.IteratorSize(A) isa Base.HasShape`.
 
 See also [`size`](@ref), and the manual chapter on [arrays with custom indices](@ref man-custom-indices).
 
@@ -66,6 +84,9 @@ Each of the indices has to be an `AbstractUnitRange{<:Integer}`, but at the same
 a type that uses custom indices. So, for example, if you need a subset, use generalized
 indexing constructs like `begin`/`end` or [`firstindex`](@ref)/[`lastindex`](@ref):
 
+!!! compat "Julia 1.13"
+    `axes(A, d)` where `A` is not an `AbstractArray` requires at least Julia 1.13.
+
 ```julia
 ix = axes(v, 1)
 ix[2:end]          # will work for eg Vector, but may fail in general
@@ -73,8 +94,13 @@ ix[(begin+1):end]  # works for generalized indexes
 ```
 """
 function axes(A, d)
+   @inline
+   _axes(IteratorSize(A), axes(A), d) 
+end
+function _axes(::HasShape, ax::Tuple, d::Integer)
     @inline
-    d::Integer <= ndims(A) ? axes(A)[d] : OneTo(1)
+    d_Int = convert(Int, d)
+    d_Int <= length(ax) ? ax[d_Int] : OneTo(1)
 end
 
 """
