@@ -428,8 +428,11 @@ static void jl_check_profile_autostop(void)
     if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
         jl_profile_stop_timer();
+        // Disable trace compilation when profile collection ends
+        jl_force_trace_compile_timing_disable();
         jl_safe_printf("\n==============================================================\n");
-        jl_safe_printf("Profile collected. A report will print at the next yield point\n");
+        jl_safe_printf("Profile collected. A report will print at the next yield point.\n");
+        jl_safe_printf("Disabling --trace-compile\n");
         jl_safe_printf("==============================================================\n\n");
         JL_LOCK_NOGC(&profile_show_peek_cond_lock);
         if (profile_show_peek_cond_loc != NULL)
@@ -637,7 +640,7 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         else
             jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
-    jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
+    jl_safe_printf("in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
     if (context && ct) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.

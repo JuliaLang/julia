@@ -116,6 +116,8 @@ Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
 
+For more information about memory management and garbage collection in Julia, see [Memory Management and Garbage Collection](@ref man-memory-management).
+
 In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
 (the remaining allocation reported below is due to running the `@time` macro in global scope)
 and is significantly faster after the first call:
@@ -917,6 +919,40 @@ In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
+#### Use `@__FUNCTION__` for recursive closures
+
+For recursive closures specifically, the [`@__FUNCTION__`](@ref) macro can avoid both type instability and boxing.
+
+First, let's see the unoptimized version:
+
+```julia
+function make_fib_unoptimized()
+    fib(n) = n <= 1 ? 1 : fib(n - 1) + fib(n - 2)  # fib is boxed
+    return fib
+end
+```
+
+The `fib` function is boxed, meaning the return type is inferred as `Any`:
+
+```julia
+@code_warntype make_fib_unoptimized()
+```
+
+Now, to eliminate this type instability, we can instead use `@__FUNCTION__` to refer to the concrete function object:
+
+```julia
+function make_fib_optimized()
+    fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+    return fib
+end
+```
+
+This gives us a concrete return type:
+
+```julia
+@code_warntype make_fib_optimized()
+```
+
 
 ### [Types with values-as-parameters](@id man-performance-value-type)
 
@@ -1507,6 +1543,36 @@ Note the `--startup-file=no` which helps isolate the test from packages you may 
 
 More analysis of the reasons for recompilation can be achieved with the
 [`SnoopCompile`](https://github.com/timholy/SnoopCompile.jl) package.
+
+### Tracing expression evaluation
+
+If you need to understand what code is being evaluated during test or script execution,
+you can use the `--trace-eval` command-line option or the [`Base.TRACE_EVAL`](@ref) global control to trace the outermost expressions being evaluated (top-level statements). Note this does not individually report the contents of function calls or code blocks:
+
+```bash
+# Show only location information during evaluation
+julia --trace-eval=loc script.jl
+
+# Show full expressions being evaluated
+julia --trace-eval=full script.jl
+```
+
+You can also control this programmatically:
+
+```julia
+# Enable full expression tracing
+Base.TRACE_EVAL = :full
+
+# Show only locations
+Base.TRACE_EVAL = :loc
+
+# Disable tracing
+Base.TRACE_EVAL = :no
+
+# Reset to use command-line setting
+Base.TRACE_EVAL = nothing
+```
+
 
 ### Reducing precompilation time
 

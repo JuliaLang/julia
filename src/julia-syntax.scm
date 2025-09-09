@@ -3,11 +3,16 @@
 
 ;; pass 1: syntax desugaring
 
-;; allow (:: T) => (:: #gensym T) in formal argument lists
+;; unnamed or all-underscore arguments may still be read from internally, so
+;; convert (:: T) => (:: #gensym T) and _ => #gensym in formal argument lists
 (define (fill-missing-argname a unused)
-  (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
-      `(|::| ,(if unused UNUSED (gensy)) ,(cadr a))
-      a))
+  (define (replace-if-underscore u)
+    (if (underscore-symbol? u) (if unused UNUSED (gensy)) u))
+  (if (and (pair? a) (eq? (car a) '|::|))
+      (cond ((null? (cddr a))  `(|::| ,(if unused UNUSED (gensy)) ,(cadr a)))
+            ((null? (cdddr a)) `(|::| ,(replace-if-underscore (cadr a)) ,(caddr a)))
+            (else a))
+      (replace-if-underscore a)))
 (define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
       (error "invalid \"...\" on non-final argument"))
@@ -165,10 +170,7 @@
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
-  (let ((argl (map (lambda (x)
-                     (let ((n (arg-name x)))
-                       (if (underscore-symbol? n) UNUSED n)))
-                   argl))
+  (let ((argl (map arg-name argl))
         (body (blockify body)))
     `(lambda ,argl ()
              (scope-block
@@ -374,7 +376,7 @@
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
-          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
+          (anames (llist-vars argl))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
           (ename (if (nodot-sym-ref? name) name
                     (if (overlay? name) (cadr name) `(null)))))
@@ -543,14 +545,13 @@
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
           mangled sparams
-          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
-            ;; strip type off function self argument if not needed for a static param.
-            ;; then it is ok for cl-convert to move this definition above the original def.
-            ,@not-optional ,@vararg)
+          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw ,@not-optional ,@vararg)
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
-                                   annotations))
+                                   (if (has-thisfunction? `(block ,@stmts))
+                                       (cons `(meta thisfunction-original ,(arg-name (car not-optional))) annotations)
+                                       annotations)))
           rett)
 
         ;; call with no keyword args
@@ -683,28 +684,27 @@
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
                        (if (any vararg? (butlast vals))
-                         ;; Forbid splat in all but the final default value
-                         (error "invalid \"...\" in non-final positional argument default value")
-                         (if (any (lambda (defaultv)
-                                  ;; does any default val expression...
-                                  (contains (lambda (e)
-                                              ;; contain "e" such that...
-                                              (any (lambda (a)
-                                                     ;; "e" is in an absent arg
-                                                     (contains (lambda (u)
-                                                                 (eq? u e))
-                                                               a))
-                                                   absent))
-                                            defaultv))
-                                vals)
-                           ;; then add only one next argument
-                           `(block
-                             ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
-                           ;; otherwise add all
-                           `(block
-                             ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
+                           ;; Forbid splat in all but the final default value
+                           (error "invalid \"...\" in non-final positional argument default value")
+                           (if (any (lambda (defaultv)
+                                      ;; does any default val expression...
+                                      (expr-contains-p
+                                       (lambda (e)
+                                         ;; contain "e" such that...
+                                         (any (lambda (a)
+                                                ;; "e" is in an absent arg
+                                                (expr-contains-eq e a))
+                                              absent))
+                                       defaultv))
+                                    vals)
+                               ;; then add only one next argument
+                               `(block
+                                 ,@prologue
+                                 (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
+                               ;; otherwise add all
+                               `(block
+                                 ,@prologue
+                                 (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))
@@ -1644,9 +1644,9 @@
                (expand-forms
                 ;; TODO: This behaviour (`const _:T = ...` does not call convert,
                 ;; but still evaluates RHS) should be documented.
-                `(const ,(car e) ,(if (underscore-symbol? (car e))
-                                rhs
-                                (convert-for-type-decl rhs T #t #f))))
+                `(const (= ,(car e) ,(if (underscore-symbol? (car e))
+                                         rhs
+                                         (convert-for-type-decl rhs T #t #f)))))
                (expand-forms
                 `(block ,@(cdr e)
                         ;; TODO: When x is a complex expression, this acts as a
@@ -2912,6 +2912,7 @@
    'generator
    (lambda (e)
      (check-no-return e)
+     (check-no-thisfunction e)
      (expand-generator e #f '()))
 
    'flatten
@@ -2996,6 +2997,13 @@
   (if (has-return? e)
       (error "\"return\" not allowed inside comprehension or generator")))
 
+(define (has-thisfunction? e)
+  (expr-contains-p thisfunction? e (lambda (x) (not (function-def? x)))))
+
+(define (check-no-thisfunction e)
+  (if (has-thisfunction? e)
+      (error "\"@__FUNCTION__\" not allowed inside comprehension or generator")))
+
 (define (has-break-or-continue? e)
   (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
                    e
@@ -3004,6 +3012,7 @@
 
 (define (lower-comprehension ty expr itrs)
   (check-no-return expr)
+  (check-no-thisfunction expr)
   (if (has-break-or-continue? expr)
       (error "break or continue outside loop"))
   (let ((result    (make-ssavalue))
@@ -3435,7 +3444,7 @@
               vi)
     tab))
 
-;; env:      list of vinfo (includes any closure #self#; should not include globals)
+;; env:      list of vinfo (should not include globals)
 ;; captvars: list of vinfo
 ;; sp:       list of symbol
 ;; new-sp:   list of symbol (static params declared here)
@@ -3856,7 +3865,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref global-if-global assign-const-if-global isglobal thismodule
+         global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
@@ -4094,7 +4103,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core global globalref thismodule lineinfo line break inert module toplevel null true false meta) e)
+          ((quote top core global globalref thismodule thisfunction lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -5134,6 +5143,30 @@ f(x) = yt(x)
 
             ((error)
              (error (cadr e)))
+
+            ;; thisfunction replaced with first argument name
+            ((thisfunction)
+             (let ((first-arg (and (pair? (lam:args lam)) (car (lam:args lam)))))
+               (if first-arg
+                   (let* ((arg-name (arg-name first-arg))
+                          ;; Check for thisfunction-original metadata in keyword wrapper functions
+                          (original-name (let ((body (lam:body lam)))
+                                          (and (pair? body) (pair? (cdr body))
+                                               (let loop ((stmts (cdr body)))
+                                                 (if (pair? stmts)
+                                                     (let ((stmt (car stmts)))
+                                                       (if (and (pair? stmt) (eq? (car stmt) 'meta)
+                                                                (pair? (cdr stmt)) (eq? (cadr stmt) 'thisfunction-original)
+                                                                (pair? (cddr stmt)))
+                                                           (caddr stmt)
+                                                           (loop (cdr stmts))))
+                                                     #f)))))
+                          (final-name (or original-name arg-name)))
+                     (cond (tail  (emit-return tail final-name))
+                           (value final-name)
+                           (else (emit final-name) #f)))
+                    (error "\"@__FUNCTION__\" can only be used inside a function"))))
+
             (else
              (error (string "invalid syntax " (deparse e)))))))
     ;; introduce new slots for assigned arguments

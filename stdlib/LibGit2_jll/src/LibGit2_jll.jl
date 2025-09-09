@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl
 
 baremodule LibGit2_jll
-using Base, Libdl, LibSSH2_jll
+using Base, Libdl, LibSSH2_jll, PCRE2_jll, Zlib_jll
 if !(Sys.iswindows() || Sys.isapple())
     using OpenSSL_jll
 end
@@ -33,14 +33,14 @@ const libgit2 = LazyLibrary(
     end;
     dependencies = if Sys.iswindows()
         if Sys.WORD_SIZE == 32
-            LazyLibrary[libssh2, libgcc_s]
+            LazyLibrary[libssh2, libgcc_s, libpcre2_8, libz]
         else
-            LazyLibrary[libssh2]
+            LazyLibrary[libssh2, libpcre2_8, libz]
         end
     elseif Sys.isfreebsd() || Sys.islinux()
-        LazyLibrary[libssh2, libssl, libcrypto]
+        LazyLibrary[libssh2, libssl, libcrypto, libpcre2_8, libz]
     else
-        LazyLibrary[libssh2]
+        LazyLibrary[libssh2, libpcre2_8, libz]
     end
 )
 

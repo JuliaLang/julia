@@ -138,10 +138,13 @@ function sqrmod!(f::GF2X, m::GF2X)::GF2X
         sqrs = GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for i=1:d]
         @lock _squares get!(_squares[], m, sqrs)
     end
-    foldl(filter(i->coeff(f, i), 0:degree(f)); init=GF2X(0)) do g, i
-        i <= d÷2 ? # optimization for "simple" squares
-            setcoeff!(g, 2i) :
-            xor!(g, sqrs[i])
+    let sqrs = sqrs  # work around the closure capture boxing issue, #15276
+        function sqrmod_closure(g, i)
+            i <= d÷2 ? # optimization for "simple" squares
+                setcoeff!(g, 2i) :
+                xor!(g, sqrs[i])
+        end
+        foldl(sqrmod_closure, filter(Base.Fix1(coeff, f), 0:degree(f)); init=GF2X(0))
     end
 end
 

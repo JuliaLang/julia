@@ -7,10 +7,8 @@ const Callable = Union{Function,Type}
 const Bottom = Union{}
 
 # Define minimal array interface here to help code used in macros:
-length(a::Array{T, 0}) where {T} = 1
-length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
-length(a::Array{T, 2}) where {T} = (sz = getfield(a, :size); sz[1] * sz[2])
-# other sizes are handled by generic prod definition for AbstractArray
+size(a::Array) = getfield(a, :size)
+length(t::AbstractArray) = (@inline; prod(size(t)))
 length(a::GenericMemory) = getfield(a, :length)
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
@@ -377,13 +375,14 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-function _checkbounds_array(::Type{Bool}, A::Union{Array, GenericMemory}, i::Int)
+# These special checkbounds methods are defined early for bootstrapping
+function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
     @inline
     ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
 end
-function _checkbounds_array(A::Union{Array, GenericMemory}, i::Int)
+function checkbounds(A::Union{Array, GenericMemory}, i::Int)
     @inline
-    _checkbounds_array(Bool, A, i) || throw_boundserror(A, (i,))
+    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
 end
 
 default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
@@ -393,8 +392,8 @@ default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
-    (@_boundscheck) && _checkbounds_array(A, i)
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+    (@_boundscheck) && checkbounds(A, i)
+    memoryrefget(memoryrefnew(A, i, false), default_access_order(A), false)
 end
 
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
@@ -434,7 +433,7 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) type, then it will return the
+If `T` is an [`AbstractFloat`](@ref) type, then it will return the
 closest value to `x` representable by `T`. Inf is treated as one
 ulp greater than `floatmax(T)` for purposes of determining nearest.
 
@@ -502,9 +501,9 @@ end
     Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(data isa A ? data : convert(A, data)), :(itr isa I ? itr : convert(I, itr))))
     Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
     Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
-    Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
+    Pairs(data::A, itr::I) where {I, A} = $(Expr(:new, :(Pairs{I !== Nothing ? eltype(I) : keytype(A), eltype(A), I, A}), :data, :itr))
 end
-pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
+pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedTuple}
 
 """
     Base.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
@@ -730,7 +729,7 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+cconvert(::Type{T}, x) where {T} = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
@@ -962,17 +961,17 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck _checkbounds_array(A, i)
+    @boundscheck checkbounds(A, i)
     memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck _checkbounds_array(A, i)
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(memoryrefnew(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
@@ -1224,8 +1223,9 @@ Stateful iterators that want to opt into this feature should define an `isdone`
 method that returns true/false depending on whether the iterator is done or
 not. Stateless iterators need not implement this function.
 
-If the result is `missing`, callers may go ahead and compute
-`iterate(x, state) === nothing` to compute a definite answer.
+If the result is `missing`, then `isdone` cannot determine whether the iterator
+state is terminal, and callers must compute `iterate(itr, state) === nothing`
+to obtain a definitive answer.
 
 See also [`iterate`](@ref), [`isempty`](@ref)
 """

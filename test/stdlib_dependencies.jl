@@ -178,6 +178,7 @@ try
             "bcrypt",
             "winhttp",
             "secur32",
+            "iphlpapi",
         ]
         return any(syslib -> lowercase(lib) == syslib, system_libs)
     end
@@ -213,12 +214,33 @@ try
                 prop = getproperty(m, prop_name)
                 if isa(prop, Libdl.LazyLibrary)
                     lib_path = dlpath(prop)
-                    lazy_lib_deps = strip_soversion.(basename.(dlpath.(prop.dependencies)))
+                    lazy_lib_deps = strip_soversion.(basename.(dlpath.(prop.dependencies())))
                     real_lib_deps = filter(!is_system_lib, get_deps_objectfile(lib_path))
 
                     # See if there are missing dependencies in the lazy library deps
                     missing_deps = setdiff(real_lib_deps, lazy_lib_deps)
                     extraneous_deps = setdiff(lazy_lib_deps, real_lib_deps)
+
+                    # The library name is `libpcre2-8`, with a dash in
+                    # its name. That works fine on Unix. On Windows, a
+                    # suffix starting with a dash denotes the
+                    # library's soversion. So we think (on Windows)
+                    # that this is the library `libpcre2`, soversion
+                    # 8, and things don't match.
+                    if Sys.iswindows()
+                        if "libpcre2-8" in missing_deps && "libpcre2" in extraneous_deps
+                            missing_deps = setdiff(missing_deps, ["libpcre2-8"])
+                            extraneous_deps = setdiff(extraneous_deps, ["libpcre2"])
+                        end
+                    end
+
+                    if prop_name == :libspqr
+                        # Allow libstdc++ to not be linked - spqr only uses std::complex,
+                        # which may be header-only, so doesn't get linked on as-needed distributions.
+                        # However, in general, we can't assume that, so we need to take the dependency
+                        # and just allow this here.
+                        extraneous_deps = setdiff(extraneous_deps, ["libstdc++"])
+                    end
 
                     # We expect there to be no missing or extraneous deps
                     deps_mismatch = !isempty(missing_deps) || !isempty(extraneous_deps)
@@ -247,6 +269,47 @@ try
             if isdefined(m, :eager_mode)
                 # If the JLL has an eager_mode function, call it
                 Base.invokelatest(getproperty(m, :eager_mode))
+            end
+        end
+    end
+
+    # Check that any JLL stdlib that defines executables also provides corresponding *_path variables
+    @testset "Stdlib JLL executable path variables" begin
+        for (_, (stdlib_name, _)) in Pkg.Types.stdlibs()
+            if !endswith(stdlib_name, "_jll")
+                continue
+            end
+
+            # Import the stdlib, skip it if it's not available on this platform
+            m = eval(Meta.parse("import $(stdlib_name); $(stdlib_name)"))
+            if !Base.invokelatest(getproperty(m, :is_available))
+                continue
+            end
+
+            # Look for *_exe constants that indicate executable definitions
+            exe_constants = Symbol[]
+            for name in names(m, all=true)
+                name_str = string(name)
+                if endswith(name_str, "_exe") && isdefined(m, name)
+                    push!(exe_constants, name)
+                end
+            end
+
+            # For each *_exe constant, check if there's a corresponding *_path variable
+            for exe_const in exe_constants
+                exe_name_str = string(exe_const)
+                # Convert from *_exe to *_path (e.g., zstd_exe -> zstd_path)
+                expected_path_var = Symbol(replace(exe_name_str, "_exe" => "_path"))
+
+                @test isdefined(m, expected_path_var)
+
+                if !isdefined(m, expected_path_var)
+                    @warn("Missing path variable",
+                        jll = stdlib_name,
+                        exe_constant = exe_const,
+                        expected_path_var = expected_path_var
+                    )
+                end
             end
         end
     end

@@ -157,9 +157,11 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-target-increment
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // trace-eval
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
                         0, // gc_sweep_always_full
+                        0, // compress_sysimage
     };
     jl_options_initialized = 1;
 }
@@ -179,8 +181,9 @@ static const char opts[]  =
     "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
-    "                                               file is found. @script is similar, but searches up from\n"
-    "                                               the programfile or a path relative to programfile.\n"
+    "                                               file is found. @script is similar, but searches up\n"
+    "                                               from the programfile or a path relative to\n"
+    "                                               programfile.\n"
     " -J, --sysimage <file>                         Start up with the given system image file\n"
     " -H, --home <dir>                              Set location of `julia` executable\n"
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
@@ -291,9 +294,9 @@ static const char opts[]  =
     "                                               information, see --bug-report=help.\n\n"
     " --heap-size-hint=<size>[<unit>]               Forces garbage collection if memory usage is higher\n"
     "                                               than the given value. The value may be specified as a\n"
-    "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
-    "                                               M (mebibytes), G (gibibytes), T (tebibytes), or % (percentage\n"
-    "                                               of physical memory).\n\n"
+    "                                               number of bytes, optionally in units of: B,\n"
+    "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
+    "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -310,7 +313,10 @@ static const char opts_hidden[]  =
     " --strip-metadata                              Remove docstrings and source location info from\n"
     "                                               system image\n"
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
-    "                                               functions\n\n"
+    "                                               functions\n"
+    " --compress-sysimage={yes|no*}                 Compress the sys/pkgimage heap at the expense of\n"
+    "                                               slightly increased load time.\n"
+    "\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
     " --experimental                                Enable the use of experimental (alpha) features\n"
@@ -319,24 +325,27 @@ static const char opts_hidden[]  =
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
     "                                               complete)\n"
-    " --timeout-for-safepoint-straggler <seconds>   If this value is set, then we will dump the backtrace for a thread\n"
-    "                                               that fails to reach a safepoint within the specified time\n"
+    " --timeout-for-safepoint-straggler <seconds>   If this value is set, then we will dump the backtrace\n"
+    "                                               for a thread that fails to reach a safepoint within\n"
+    "                                               the specified time\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
-    "                                               during execution or save to stderr or a path. Methods that\n"
-    "                                               were recompiled are printed in yellow or with a trailing\n"
-    "                                               comment if color is not supported\n"
-    " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
-    "                                               compile in ms\n"
+    "                                               during execution or save to stderr or a path. Methods\n"
+    "                                               that were recompiled are printed in yellow or with\n"
+    "                                               a trailing comment if color is not supported\n"
+    " --trace-compile-timing                        If --trace-compile is enabled show how long each took\n"
+    "                                               to compile in ms\n"
     " --task-metrics={yes|no*}                      Enable collection of per-task timing data.\n"
     " --image-codegen                               Force generate code in imaging mode\n"
-    " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
-    " --trim={no*|safe|unsafe|unsafe-warn}\n"
-    "                                               Build a sysimage including only code provably reachable\n"
-    "                                               from methods marked by calling `entrypoint`. In unsafe\n"
-    "                                               mode, the resulting binary might be missing needed code\n"
-    "                                               and can throw errors. With unsafe-warn warnings will be\n"
-    "                                               printed for dynamic call sites that might lead to such\n"
-    "                                               errors. In safe mode compile-time errors are given instead.\n"
+    " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n\n"
+
+    " --trim={no*|safe|unsafe|unsafe-warn}          Build a sysimage including only code provably\n"
+    "                                               reachable from methods marked by calling\n"
+    "                                               `entrypoint`. In unsafe mode, the resulting binary\n"
+    "                                               might be missing needed code and can throw errors.\n"
+    "                                               With unsafe-warn warnings will be printed for\n"
+    "                                               dynamic call sites that might lead to such errors.\n"
+    "                                               In safe mode compile-time errors are given instead.\n"
+    " --trace-eval={loc|full|no*}                   Show the expression being evaluated before eval.\n"
     " --hard-heap-limit=<size>[<unit>]              Set a hard limit on the heap size: if we ever\n"
     "                                               go above this limit, we will abort. The value\n"
     "                                               may be specified as a number of bytes,\n"
@@ -403,7 +412,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
+           opt_trace_eval,
            opt_experimental_features,
+           opt_compress_sysimage,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -475,6 +486,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
         { "gc-sweep-always-full", no_argument, 0, opt_gc_sweep_always_full },
         { "trim",  optional_argument, 0, opt_trim },
+        { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
+        { "trace-eval",       optional_argument, 0, opt_trace_eval },
         { 0, 0, 0, 0 }
     };
 
@@ -1049,6 +1062,16 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
             break;
+        case opt_trace_eval:
+            if (optarg == NULL || !strcmp(optarg,"loc"))
+                jl_options.trace_eval = 1;
+            else if (!strcmp(optarg,"full"))
+                jl_options.trace_eval = 2;
+            else if (!strcmp(optarg,"no"))
+                jl_options.trace_eval = 0;
+            else
+                jl_errorf("julia: invalid argument to --trace-eval={yes|no} (%s)", optarg);
+            break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_OFF;
@@ -1056,6 +1079,12 @@ restart_switch:
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+            break;
+        case opt_compress_sysimage:
+            if (!strcmp(optarg,"yes"))
+                jl_options.compress_sysimage = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.compress_sysimage = 0;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

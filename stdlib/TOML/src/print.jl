@@ -33,7 +33,6 @@ function print_toml_escaped(io::IO, s::AbstractString)
     end
 end
 
-const MbyFunc = Union{Function, Nothing}
 const TOMLValue = Union{AbstractVector, AbstractDict, Bool, Integer, AbstractFloat, AbstractString,
                         Dates.DateTime, Dates.Time, Dates.Date, Base.TOML.DateTime, Base.TOML.Time, Base.TOML.Date}
 
@@ -59,8 +58,8 @@ function printkey(io::IO, keys::Vector{String})
     end
 end
 
-function to_toml_value(f::MbyFunc, value)
-    if f === nothing
+function to_toml_value(@nospecialize(f::Function), value)
+    if f === identity
         error("type `$(typeof(value))` is not a valid TOML type, pass a conversion function to `TOML.print`")
     end
     toml_value = f(value)
@@ -75,12 +74,12 @@ end
 ##########
 
 # Fallback
-function printvalue(f::MbyFunc, io::IO, value, sorted::Bool)
+function printvalue(f::Function, io::IO, value, sorted::Bool)
     toml_value = to_toml_value(f, value)
     @invokelatest printvalue(f, io, toml_value, sorted)
 end
 
-function printvalue(f::MbyFunc, io::IO, value::AbstractVector, sorted::Bool)
+function printvalue(f::Function, io::IO, value::AbstractVector, sorted::Bool)
     Base.print(io, "[")
     for (i, x) in enumerate(value)
         i != 1 && Base.print(io, ", ")
@@ -89,7 +88,7 @@ function printvalue(f::MbyFunc, io::IO, value::AbstractVector, sorted::Bool)
     Base.print(io, "]")
 end
 
-function printvalue(f::MbyFunc, io::IO, value::TOMLValue, sorted::Bool)
+function printvalue(f::Function, io::IO, value::TOMLValue, sorted::Bool)
     value isa Base.TOML.DateTime && (value = Dates.DateTime(value))
     value isa Base.TOML.Time && (value = Dates.Time(value))
     value isa Base.TOML.Date && (value = Dates.Date(value))
@@ -117,7 +116,7 @@ function print_integer(io::IO, value::Integer)
     return
 end
 
-function print_inline_table(f::MbyFunc, io::IO, value::AbstractDict, sorted::Bool)
+function print_inline_table(f::Function, io::IO, value::AbstractDict, sorted::Bool)
     vkeys = collect(keys(value))
     if sorted
         sort!(vkeys)
@@ -138,15 +137,14 @@ end
 # Tables #
 ##########
 
-is_table(value)           = isa(value, AbstractDict)
-is_array_of_tables(value) = isa(value, AbstractArray) &&
-                            length(value) > 0 && (
-                                isa(value, AbstractArray{<:AbstractDict}) ||
-                                all(v -> isa(v, AbstractDict), value)
-                            )
-is_tabular(value)         = is_table(value) || @invokelatest(is_array_of_tables(value))
+is_table(@nospecialize(value)) = isa(value, AbstractDict)
+is_array_of_tables(@nospecialize(value)) =
+    isa(value, AbstractArray) &&
+    length(value) > 0 && (isa(value, AbstractArray{<:AbstractDict}) ||
+                          all(v -> isa(v, AbstractDict), value))
+is_tabular(@nospecialize(value)) = is_table(value) || @invokelatest(is_array_of_tables(value))
 
-function print_table(f::MbyFunc, io::IO, a::AbstractDict,
+function print_table(f::Function, io::IO, a::AbstractDict,
     ks::Vector{String} = String[];
     indent::Int = 0,
     first_block::Bool = true,
@@ -228,7 +226,11 @@ end
 # API #
 #######
 
-print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print_table(f, io, a; sorted, by, inline_tables)
-print(f::MbyFunc,         a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print(f, stdout, a; sorted, by, inline_tables)
-print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print_table(nothing, io, a; sorted, by, inline_tables)
-print(        a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print(nothing, stdout, a; sorted, by, inline_tables)
+print(f::Function, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
+    print_table(f, io, a; sorted, by, inline_tables)
+print(f::Function, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
+    print(f, stdout, a; sorted, by, inline_tables)
+print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
+    print_table(identity, io, a; sorted, by, inline_tables)
+print(a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
+    print(identity, stdout, a; sorted, by, inline_tables)

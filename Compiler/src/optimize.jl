@@ -132,6 +132,17 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 #####################
 
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
+
+function src_inlining_policy(interp::AbstractInterpreter, mi::MethodInstance,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    # If we have a generator, but we can't invoke it (because argument type information is lacking),
+    # don't inline so we defer its invocation to runtime where we'll have precise type information.
+    if isa(mi.def, Method) && hasgenerator(mi)
+        may_invoke_generator(mi) || return false
+    end
+    return src_inlining_policy(interp, src, info, stmt_flag)
+end
+
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     isa(src, OptimizationState) && (src = src.src)
@@ -720,7 +731,9 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
     f === nothing && return false
     if f === getfield
         nargs = 4
-    elseif f === memoryrefnew || f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefnew
+        nargs= 3
+    elseif f === memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5

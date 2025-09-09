@@ -135,8 +135,8 @@ function catch_backtrace()
     return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
-struct ExceptionStack <: AbstractArray{Any,1}
-    stack::Array{Any,1}
+struct ExceptionStack <: AbstractArray{NamedTuple{(:exception, :backtrace)},1}
+    stack::Array{NamedTuple{(:exception, :backtrace)},1}
 end
 
 """
@@ -159,7 +159,7 @@ uncaught exceptions.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
-    formatted = Any[]
+    formatted = NamedTuple{(:exception, :backtrace)}[]
     stride = backtrace ? 3 : 1
     for i = reverse(1:stride:length(raw))
         exc = raw[i]
@@ -233,14 +233,12 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        # N.B. To reduce the risk of invalidation caused by the complex callstack involved
-        # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
-        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
+        msg = :($_assert_tostring($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(_assert_tostring($(Expr(:quote,msg))))
+        msg = :($_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end

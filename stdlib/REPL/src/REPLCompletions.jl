@@ -186,7 +186,7 @@ function complete_symbol!(suggestions::Vector{Completion},
                           complete_modules_only::Bool=false,
                           shift::Bool=false)
     local mod, t, val
-    complete_internal_only = false
+    complete_internal_only = isempty(name)
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -334,19 +334,25 @@ PATH_cache_task::Union{Task,Nothing} = nothing
 PATH_cache_condition::Union{Threads.Condition, Nothing} = nothing # used for sync in tests
 next_cache_update::Float64 = 0.0
 function maybe_spawn_cache_PATH()
-    global PATH_cache_task, next_cache_update
+    global PATH_cache_task, PATH_cache_condition, next_cache_update
     @lock PATH_cache_lock begin
-        PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+        # Extract to local variables to enable flow-sensitive type inference for these global variables
+        PATH_cache_task_local = PATH_cache_task
+        PATH_cache_task_local isa Task && !istaskdone(PATH_cache_task_local) && return
         time() < next_cache_update && return
-        PATH_cache_task = Threads.@spawn begin
-            REPLCompletions.cache_PATH()
-            @lock PATH_cache_lock begin
-                next_cache_update = time() + 10 # earliest next update can run is 10s after
-                PATH_cache_task = nothing # release memory when done
-                PATH_cache_condition !== nothing && notify(PATH_cache_condition)
+        PATH_cache_task = PATH_cache_task_local = Threads.@spawn begin
+            try
+                REPLCompletions.cache_PATH()
+            finally
+                @lock PATH_cache_lock begin
+                    next_cache_update = time() + 10 # earliest next update can run is 10s after
+                    PATH_cache_task = nothing # release memory when done
+                    PATH_cache_condition_local = PATH_cache_condition
+                    PATH_cache_condition_local !== nothing && notify(PATH_cache_condition_local)
+                end
             end
         end
-        Base.errormonitor(PATH_cache_task)
+        Base.errormonitor(PATH_cache_task_local)
     end
 end
 
@@ -592,14 +598,6 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
                                               sv::CC.InferenceState)
 end
 
-function is_repl_frame_getproperty(sv::CC.InferenceState)
-    def = sv.linfo.def
-    def isa Method || return false
-    def.name === :getproperty || return false
-    CC.is_cached(sv) && return false
-    return is_repl_frame(CC.frame_parent(sv))
-end
-
 # aggressive concrete evaluation for `:inconsistent` frames within `repl_frame`
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
@@ -629,6 +627,8 @@ function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.A
     return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
 end
 
+# Perform some post-hoc mutation on lowered code, as expected by some abstract interpretation
+# routines, especially for `:foreigncall` and `:cglobal`.
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     @ccall jl_resolve_definition_effects_in_ir(
         #=jl_array_t *stmts=# src.code::Any,
@@ -637,6 +637,11 @@ function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
         #=jl_value_t *binding_edge=# C_NULL::Ptr{Cvoid},
         #=int binding_effects=# 0::Int)::Cvoid
     return src
+end
+
+function construct_toplevel_mi(src::Core.CodeInfo, context_module::Module)
+    resolve_toplevel_symbols!(src, context_module)
+    return @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
 end
 
 # lower `ex` and run type inference on the resulting top-level expression
@@ -658,10 +663,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
     src = lwr.args[1]::Core.CodeInfo
 
-    resolve_toplevel_symbols!(src, context_module)
-    # construct top-level `MethodInstance`
-    mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, context_module)
-
+    mi = construct_toplevel_mi(src, context_module)
     interp = REPLInterpreter(limit_aggressive_inference)
     result = CC.InferenceResult(mi)
     frame = CC.InferenceState(result, src, #=cache=#:no, interp)
@@ -692,6 +694,15 @@ code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
 MAX_METHOD_COMPLETIONS::Int = 40
 function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     isempty(ex_org.args) && return 2, nothing, [], Set{Symbol}()
+    # Desugar do block call into call with lambda
+    if ex_org.head === :do && length(ex_org.args) >= 2
+        ex_call = ex_org.args[1]
+        ex_args = [x for x in ex_call.args if !(x isa Expr && x.head === :parameters)]
+        ex_params = findfirst(x -> x isa Expr && x.head === :parameters, ex_call.args)
+        new_args = [ex_args[1], ex_org.args[end], ex_args[2:end]...]
+        ex_params !== nothing && push!(new_args, ex_call.args[ex_params])
+        ex_org = Expr(:call, new_args...)
+    end
     funct = repl_eval_ex(ex_org.args[1], context_module)
     funct === nothing && return 2, nothing, [], Set{Symbol}()
     funct = CC.widenconst(funct)
@@ -1095,17 +1106,18 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     # Symbol completion
     # TODO: Should completions replace the identifier at the cursor?
+    looks_like_ident = Base.isidentifier(@view string[intersect(char_range(cur), 1:pos)])
     if cur.parent !== nothing && kind(cur.parent) == K"var"
         # Replace the entire var"foo", but search using only "foo".
         r = intersect(char_range(cur.parent), 1:pos)
         r2 = char_range(children_nt(cur.parent)[1])
         s = string[intersect(r2, 1:pos)]
-    elseif kind(cur) in KSet"Identifier @"
-        r = intersect(char_range(cur), 1:pos)
-        s = string[r]
     elseif kind(cur) == K"MacroName"
         # Include the `@`
         r = intersect(prevind(string, cur.position):char_last(cur), 1:pos)
+        s = string[r]
+    elseif looks_like_ident || kind(cur) in KSet"Bool Identifier @"
+        r = intersect(char_range(cur), 1:pos)
         s = string[r]
     else
         r = nextind(string, pos):pos
@@ -1114,7 +1126,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     complete_modules_only = false
     prefix = node_prefix(cur, context_module)
-    comp_keywords = prefix === nothing
+    comp_keywords = prefix === nothing && !isempty(s)
 
     # Complete loadable module names:
     #   import Mod TAB

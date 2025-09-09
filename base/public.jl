@@ -80,6 +80,9 @@ public
     isoperator,
     isunaryoperator,
 
+# scalar math
+    uabs,
+
 # C interface
     cconvert,
     unsafe_convert,
@@ -125,4 +128,5 @@ public
     notnothing,
     runtests,
     text_colors,
-    depwarn
+    depwarn,
+    donotdelete

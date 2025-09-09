@@ -3,7 +3,7 @@
 ## Introduction
 
 Julia Base contains a range of functions and macros appropriate for performing
-scientific and numerical computing, but is also as broad as those of many general purpose programming
+scientific and numerical computing, but is also as broad as those of many general-purpose programming
 languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
@@ -379,6 +379,7 @@ Base.@elapsed
 Base.@allocated
 Base.@allocations
 Base.@lock_conflicts
+Base.TRACE_EVAL
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -397,6 +398,7 @@ Base.Sys.total_memory
 Base.Sys.free_physical_memory
 Base.Sys.total_physical_memory
 Base.Sys.uptime
+Base.Sys.sysimage_target
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
@@ -480,6 +482,7 @@ Base.moduleroot
 __module__
 __source__
 Base.@__MODULE__
+Base.@__FUNCTION__
 Base.@__FILE__
 Base.@__DIR__
 Base.@__LINE__
@@ -536,6 +539,7 @@ Meta.parse(::AbstractString)
 Meta.ParseError
 Core.QuoteNode
 Base.macroexpand
+Base.macroexpand!
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered

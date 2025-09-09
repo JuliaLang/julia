@@ -198,7 +198,7 @@ z26506 = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z26506) # Places an entry for f26506(::String) in MethodTable cache
 w26506 = Base.get_world_counter()
-cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.GlobalMethods.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
+cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.methodtable.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
 @test cache26506.max_world === typemax(UInt)
 w26506 = Base.get_world_counter()
 f26506(x::String) = 3
@@ -557,7 +557,13 @@ struct FooBackdated
 
     FooBackdated() = new(FooBackdated[])
 end
-@test Base.invoke_in_world(before_backdate_age, isdefined, @__MODULE__, :FooBackdated)
+# For depwarn == 1, this throws a warning on access, for depwarn == 2, it throws an error.
+# `isdefinedglobal` changes with that, but doesn't error.
+if Base.JLOptions().depwarn <= 1
+    @test Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
+else
+    @test !Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
+end
 
 # Test that ambiguous binding intersect the using'd binding's world ranges
 module AmbigWorldTest
@@ -591,4 +597,4 @@ function f()
     Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
 end
 end
-@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()

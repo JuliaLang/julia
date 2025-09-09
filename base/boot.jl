@@ -592,7 +592,7 @@ const undef = UndefInitializer()
 
 # memoryref is simply convenience wrapper function around memoryrefnew
 memoryref(mem::GenericMemory) = memoryrefnew(mem)
-memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(mem, Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
@@ -746,7 +746,7 @@ end
 
 # module providing the IR object model
 # excluding types already exported by Core (GlobalRef, QuoteNode, Expr, LineNumberNode)
-# any type beyond these is self-quoting (see also Base.is_ast_node)
+# any type beyond these is self-quoting (see also Base.isa_ast_node)
 module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
