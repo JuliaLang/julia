@@ -3093,6 +3093,7 @@ static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tb
 static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v, MDNode *tbaa)
 {
     // newv should already be tagged
+    newv = maybe_decay_tracked(ctx, newv);
     if (v.ispointer()) {
         emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), sizeof(void*));
     }
