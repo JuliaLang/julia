@@ -67,6 +67,7 @@ Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
 Base.isfull(::Channel)
 Base.isready(::Channel)
+Base.isopen(::Channel)
 Base.fetch(::Channel)
 Base.close(::Channel)
 Base.bind(c::Channel, task::Task)
@@ -138,7 +139,7 @@ end
 
 ev = OneWayEvent()
 @sync begin
-    @async begin
+    Threads.@spawn begin
         wait(ev)
         println("done")
     end
@@ -158,5 +159,5 @@ non-atomic assignment of `ev.task`)
 In this example, `notify(ev::OneWayEvent)` is allowed to call `schedule(ev.task)` if and
 only if *it* modifies the state from `OWE_WAITING` to `OWE_NOTIFYING`. This lets us know that
 the task executing `wait(ev::OneWayEvent)` is now in the `ok` branch and that there cannot be
-other tasks that tries to `schedule(ev.task)` since their
+other tasks that try to `schedule(ev.task)` since their
 `@atomicreplace(ev.state, state => OWE_NOTIFYING)` will fail.

@@ -10,11 +10,11 @@ ZLIB_BUILD_OPTS += -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
-	cd $(dir $@) && $(CMAKE) $(ZLIB_BUILD_OPTS) $(dir $<)
+	cd $(dir $@) && $(CMAKE) -G"Unix Makefiles" $(ZLIB_BUILD_OPTS) $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<) $(MAKE_COMMON)
 	echo 1 > $@
 
 $(eval $(call staged-install, \

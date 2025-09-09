@@ -207,7 +207,7 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);
-        if (output_pattern.endswith(".info"))
+        if (output_pattern.ends_with(".info"))
             write_lcov_data(coverageData, jl_format_filename(output_pattern.str().c_str()));
     }
     else {

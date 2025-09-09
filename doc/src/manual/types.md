@@ -31,8 +31,11 @@ each other: all concrete types are final and may only have abstract types as the
 While this might at first seem unduly restrictive, it has many beneficial consequences with surprisingly
 few drawbacks. It turns out that being able to inherit behavior is much more important than being
 able to inherit structure, and inheriting both causes significant difficulties in traditional
-object-oriented languages. Other high-level aspects of Julia's type system that should be mentioned
-up front are:
+object-oriented languages. While concrete types do have abstract subtypes, there are only two examples of this
+([`Union{}`](@ref man-abstract-types) and [`Type{T}`](@ref man-typet-type))) and additional subtypes
+of concrete types cannot be declared.
+
+Other high-level aspects of Julia's type system that should be mentioned up front are:
 
   * There is no division between object and non-object values: all values in Julia are true objects
     having a type that belongs to a single, fully connected type graph, all nodes of which are equally
@@ -182,7 +185,7 @@ When no supertype is given, the default supertype is `Any` -- a predefined abstr
 all objects are instances of and all types are subtypes of. In type theory, `Any` is commonly
 called "top" because it is at the apex of the type graph. Julia also has a predefined abstract
 "bottom" type, at the nadir of the type graph, which is written as `Union{}`. It is the exact
-opposite of `Any`: no object is an instance of `Union{}` and all types are supertypes of `Union{}`.
+opposite of `Any`: no object is an instance of `Union{}` and all types (including concrete types) are supertypes of `Union{}`.
 
 Let's consider some of the abstract types that make up Julia's numerical hierarchy:
 
@@ -298,7 +301,7 @@ a name. A primitive type can optionally be declared to be a subtype of some supe
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
 of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
 [`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
-8 bits are supported and you are likely to experience LLVM bugs with sizes other than those used above.
+8 bits are supported.
 Therefore, boolean values, although they really need just a single bit, cannot be declared to be any
 smaller than eight bits.
 
@@ -1306,6 +1309,9 @@ julia> WrapType(Float64) # sharpened constructor, note more precise Type{Float64
 WrapType{Type{Float64}}(Float64)
 ```
 
+This behavior of `Type{Float64}` is an example of an abstract type subtyping a
+concrete type (here `DataType`).
+
 ## Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already expressible type.
@@ -1595,7 +1601,7 @@ Most new types should only need to define `show` methods, if anything.
 * [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. (This might even be a graphical display in something like a Jupyter or Pluto notebook.) By default (e.g. in scripts or in the text REPL), it calls `show(io, "text/plain", x)`, or equivalently `show(io, MIME"text/plain"(), x)`, for an appropriate `io` stream. (In the REPL, `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref).) The REPL uses `display` to output the result of an evaluated expression.
 * The 3-argument [`show(io, ::MIME"text/plain", x)`](@ref) method performs verbose pretty-printing of `x`. By default (if no 3-argument method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`. It is called by the 2-argument `repr("text/plain", x)`. Other 3-argument `show` methods can be defined for additional MIME types as discussed above, to enable richer display of `x` in some interactive environments.
 * The 2-argument [`show(io, x)`](@ref) is the default simple text representation of `x`. It is called by the 1-argument [`repr(x)`](@ref), and is typically the format you might employ to input `x` into Julia. The 1-argument `show(x)` calls `show(stdout, x)`.
-* [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks. The 1-argument `print(x)` calls `print(stdout, x)`. `print` is also called by [`string(x)`](@ref).
+* [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks. The 1-argument `print(x)` calls `print(stdout, x)`. `print` is also called by [`string(x)`](@ref).  See also [`println`](@ref) (to append a newline) and [`printstyled`](@ref) (to add colors etc.), both of which call `print`.
 * [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
 
 It is also helpful to be familiar with the metadata that can be attached to an `io` stream by an [`IOContext`](@ref) wrapper. For example, the REPL sets the `:limit => true` flag from `display` for an evaluated expression, in order to limit the output to fit in the terminal; you can query this flag with `get(io, :limit, false)`. And when displaying an object contained within, for example, a multi-column matrix, the `:compact => true` flag could be set, which you can query with `get(io, :compact, false)`.

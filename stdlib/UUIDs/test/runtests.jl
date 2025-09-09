@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, UUIDs, Random
-
+using UUIDs: _build_uuid1, _build_uuid7
 
 # results similar to Python builtin uuid
 # To reproduce the sequence
@@ -42,6 +42,15 @@ u7 = uuid7()
     @test uuid_version(u7) == 7
 end
 
+@testset "Extraction of variant bits" begin
+    # RFC 4122, section 4.1.1
+    uuid_variant(u::UUID) = Int((u.value >> 62) & 0x3)
+    @test uuid_variant(u1) == 2
+    @test uuid_variant(u4) == 2
+    @test uuid_variant(u5) == 2
+    @test uuid_variant(u7) == 2
+end
+
 @testset "Parsing from string" begin
     @test u1 == UUID(string(u1)) == UUID(GenericString(string(u1)))
     @test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
@@ -56,9 +65,22 @@ end
     @test u7 == UUID(UInt128(u7))
 end
 
-@testset "uuid4 & uuid7 RNG stability" begin
+@testset "Passing an RNG" begin
+    rng = Xoshiro(0)
+    @test uuid1(rng) isa UUID
+    @test uuid4(rng) isa UUID
+    @test uuid7(rng) isa UUID
+end
+
+@testset "uuid1, uuid4 & uuid7 RNG stability" begin
     @test uuid4(Xoshiro(0)) == uuid4(Xoshiro(0))
-    @test uuid7(Xoshiro(0)) == uuid7(Xoshiro(0))
+
+    time_uuid1 = rand(UInt64)
+    time_uuid7 = rand(UInt128)
+
+    # we need to go through the internal function to test RNG stability
+    @test _build_uuid1(Xoshiro(0), time_uuid1) == _build_uuid1(Xoshiro(0), time_uuid1)
+    @test _build_uuid7(Xoshiro(0), time_uuid7) == _build_uuid7(Xoshiro(0), time_uuid7)
 end
 
 @testset "Rejection of invalid UUID strings" begin
