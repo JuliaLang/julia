@@ -51,7 +51,7 @@ function size(A, d)
 end
 function _size(::HasShape, s::Tuple, d::Integer)
     @inline
-    d_Int = convert(Int, d)
+    d_Int = Int(d)::Int
     d_Int <= length(s) ? s[d_Int] : 1
 end
 
