@@ -2646,49 +2646,64 @@ static void jl_prune_binding_backedges(jl_array_t *backedges)
     jl_array_del_end(backedges, n - ins);
 }
 
-
 uint_t bindingkey_hash(size_t idx, jl_value_t *data);
+uint_t speccache_hash(size_t idx, jl_value_t *data);
 
-static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
+static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_t*) *pkeyset, uint_t (*key_hash)(size_t, jl_value_t*), jl_value_t *parent) JL_GC_DISABLED
 {
-    jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
-    size_t l = jl_svec_len(bindings), i;
-    arraylist_t bindings_list;
-    arraylist_new(&bindings_list, 0);
+    jl_svec_t *keys = jl_atomic_load_relaxed(pkeys);
+    size_t l = jl_svec_len(keys), i;
     if (l == 0)
         return;
+    arraylist_t keys_list;
+    arraylist_new(&keys_list, 0);
     for (i = 0; i < l; i++) {
-        jl_value_t *ti = jl_svecref(bindings, i);
-        if (ti == jl_nothing)
+        jl_value_t *k = jl_svecref(keys, i);
+        if (k == jl_nothing)
             continue;
-        jl_binding_t *ref = ((jl_binding_t*)ti);
-        if (ptrhash_get(&serialization_order, ref) != HT_NOTFOUND)
-            arraylist_push(&bindings_list, ref);
+        if (ptrhash_get(&serialization_order, k) != HT_NOTFOUND)
+            arraylist_push(&keys_list, k);
     }
-    jl_genericmemory_t *bindingkeyset = jl_atomic_load_relaxed(&m->bindingkeyset);
-    _Atomic(jl_genericmemory_t*)bindingkeyset2;
-    jl_atomic_store_relaxed(&bindingkeyset2, (jl_genericmemory_t*)jl_an_empty_memory_any);
-    jl_svec_t *bindings2 = jl_alloc_svec_uninit(bindings_list.len);
-    for (i = 0; i < bindings_list.len; i++) {
-        jl_binding_t *ref = (jl_binding_t*)bindings_list.items[i];
-        jl_svecset(bindings2, i, ref);
-        jl_smallintset_insert(&bindingkeyset2, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings2);
+    jl_genericmemory_t *keyset = jl_atomic_load_relaxed(pkeyset);
+    _Atomic(jl_genericmemory_t*)keyset2;
+    jl_atomic_store_relaxed(&keyset2, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_svec_t *keys2 = jl_alloc_svec_uninit(keys_list.len);
+    for (i = 0; i < keys_list.len; i++) {
+        jl_binding_t *ref = (jl_binding_t*)keys_list.items[i];
+        jl_svecset(keys2, i, ref);
+        jl_smallintset_insert(&keyset2, parent, key_hash, i, (jl_value_t*)keys2);
     }
-    void *idx = ptrhash_get(&serialization_order, bindings);
+    void *idx = ptrhash_get(&serialization_order, keys);
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
-    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == bindings);
-    ptrhash_put(&serialization_order, bindings2, idx);
-    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = bindings2;
+    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keys);
+    ptrhash_put(&serialization_order, keys2, idx);
+    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = keys2;
 
-    idx = ptrhash_get(&serialization_order, bindingkeyset);
+    idx = ptrhash_get(&serialization_order, keyset);
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
-    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == bindingkeyset);
-    ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&bindingkeyset2), idx);
-    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&bindingkeyset2);
-    jl_atomic_store_relaxed(&m->bindings, bindings2);
-    jl_atomic_store_relaxed(&m->bindingkeyset, jl_atomic_load_relaxed(&bindingkeyset2));
-    jl_gc_wb(m, bindings2);
-    jl_gc_wb(m, jl_atomic_load_relaxed(&bindingkeyset2));
+    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keyset);
+    ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), idx);
+    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&keyset2);
+    jl_atomic_store_relaxed(pkeys, keys2);
+    jl_gc_wb(parent, keys2);
+    jl_atomic_store_relaxed(pkeyset, jl_atomic_load_relaxed(&keyset2));
+    jl_gc_wb(parent, jl_atomic_load_relaxed(&keyset2));
+}
+
+static void jl_prune_method_specializations(jl_method_t *m) JL_GC_DISABLED
+{
+    jl_value_t *specializations_ = jl_atomic_load_relaxed(&m->specializations);
+    if (!jl_is_svec(specializations_)) {
+        if (ptrhash_get(&serialization_order, specializations_) == HT_NOTFOUND)
+            record_field_change((jl_value_t **)&m->specializations, (jl_value_t*)jl_emptysvec);
+        return;
+    }
+    jl_prune_idset((_Atomic(jl_svec_t*)*)&m->specializations, &m->speckeyset, speccache_hash, (jl_value_t*)m);
+}
+
+static void jl_prune_module_bindings(jl_module_t *m) JL_GC_DISABLED
+{
+    jl_prune_idset(&m->bindings, &m->bindingkeyset, bindingkey_hash, (jl_value_t*)m);
 }
 
 static void strip_slotnames(jl_array_t *slotnames, int n)
@@ -3253,32 +3268,15 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         // step 1.5: prune (garbage collect) some special weak references known caches
         for (i = 0; i < serialization_queue.len; i++) {
             jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
-            if (jl_options.trim) {
-                if (jl_is_method(v)) {
-                    jl_method_t *m = (jl_method_t*)v;
-                    jl_value_t *specializations_ = jl_atomic_load_relaxed(&m->specializations);
-                    if (!jl_is_svec(specializations_)) {
-                        if (ptrhash_get(&serialization_order, specializations_) == HT_NOTFOUND)
-                            record_field_change((jl_value_t **)&m->specializations, (jl_value_t*)jl_emptysvec);
-                        continue;
-                    }
-
-                    jl_svec_t *specializations = (jl_svec_t *)specializations_;
-                    size_t l = jl_svec_len(specializations), i;
-                    for (i = 0; i < l; i++) {
-                        jl_value_t *mi = jl_svecref(specializations, i);
-                        if (mi == jl_nothing)
-                            continue;
-                        if (ptrhash_get(&serialization_order, mi) == HT_NOTFOUND)
-                            jl_svecset(specializations, i, jl_nothing);
-                    }
-                }
-                else if (jl_is_module(v)) {
-                    jl_prune_module_bindings((jl_module_t*)v);
-                }
+            if (jl_is_method(v)) {
+                if (jl_options.trim)
+                    jl_prune_method_specializations((jl_method_t*)v);
             }
-            // Not else
-            if (jl_is_typename(v)) {
+            else if (jl_is_module(v)) {
+                if (jl_options.trim)
+                    jl_prune_module_bindings((jl_module_t*)v);
+            }
+            else if (jl_is_typename(v)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
                 jl_atomic_store_relaxed(&tn->cache,
                     jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)));
