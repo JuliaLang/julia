@@ -95,7 +95,7 @@ ix[(begin+1):end]  # works for generalized indexes
 """
 function axes(A, d)
    @inline
-   _axes(IteratorSize(A), axes(A), d) 
+   _axes(IteratorSize(A), axes(A), d)
 end
 function _axes(::HasShape, ax::Tuple, d::Integer)
     @inline
