@@ -258,6 +258,17 @@ function tailjoin(A::SimpleVector, i::Int)
     return t
 end
 
+## type equality
+
+function _types_are_equal(A::Type, B::Type)
+    @_total_meta
+    ccall(:jl_types_equal, Cint, (Any, Any), A, B) !== Cint(0)
+end
+
+function _type_is_bottom(X::Type)
+    X === Bottom
+end
+
 ## promotion mechanism ##
 
 """
@@ -307,19 +318,149 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
+"""
+    TypePromotionError <: Exception
+
+Exception type thrown by [`promote_type`](@ref) when giving up for either of two reasons:
+
+* Because bugs in the [`promote_rule`](@ref) logic which would have caused infinite recursion were detected.
+
+* Because a threshold on the recursion depth was reached.
+
+Check for bugs in the [`promote_rule`](@ref) logic if this exception gets thrown.
+"""
+struct TypePromotionError <: Exception
+    T_initial::Type
+    S_initial::Type
+    T::Type
+    S::Type
+    ts::Type
+    st::Type
+    threshold_reached::Bool
+end
+
+function showerror(io::IO, e::TypePromotionError)
+    print(io, "TypePromotionError: `promote_type(T, S)` failed: ")
+
+    desc = if e.threshold_reached
+        "giving up because the recursion depth limit was reached: check for faulty/conflicting/missing `promote_rule` methods\n"
+    else
+        "detected unbounded recursion caused by faulty `promote_rule` logic\n"
+    end
+
+    print(io, desc)
+
+    print(io, "    initial `T`: ")
+    show(io, e.T_initial)
+    print(io, '\n')
+
+    print(io, "    initial `S`: ")
+    show(io, e.S_initial)
+    print(io, '\n')
+
+    print(io, "    next-to-last `T`: ")
+    show(io, e.T)
+    print(io, '\n')
+
+    print(io, "    next-to-last `S`: ")
+    show(io, e.S)
+    print(io, '\n')
+
+    print(io, "    last `T`: ")
+    show(io, e.ts)
+    print(io, '\n')
+
+    print(io, "    last `S`: ")
+    show(io, e.st)
+    print(io, '\n')
+
+    nothing
+end
+
+function _promote_type_binary_err_giving_up(@nospecialize(T_initial::Type), @nospecialize(S_initial::Type), @nospecialize(T::Type), @nospecialize(S::Type), @nospecialize(ts::Type), @nospecialize(st::Type))
+    @noinline
+    @_nospecializeinfer_meta
+    throw(TypePromotionError(T_initial, S_initial, T, S, ts, st, true))
+end
+function _promote_type_binary_err_detected_infinite_recursion(@nospecialize(T_initial::Type), @nospecialize(S_initial::Type), @nospecialize(T::Type), @nospecialize(S::Type), @nospecialize(ts::Type), @nospecialize(st::Type))
+    @noinline
+    @_nospecializeinfer_meta
+    throw(TypePromotionError(T_initial, S_initial, T, S, ts, st, false))
+end
+
+function _promote_type_binary_detect_loop(T::Type, S::Type, A::Type, B::Type)
+    onesided(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
+    onesided(T, S, A, B) || onesided(T, S, B, A)
+end
+
+macro _promote_type_binary_step1()
+    e = quote
+        # Try promote_rule in both orders.
+        ts = promote_rule(T, S)
+        st = promote_rule(S, T)
+        # If no promote_rule is defined, both directions give Bottom. In that
+        # case use typejoin on the original types instead.
+        st_is_bottom = _type_is_bottom(st)
+        ts_is_bottom = _type_is_bottom(ts)
+        if st_is_bottom && ts_is_bottom
+            return typejoin(T, S)
+        end
+        if ts_is_bottom
+            return st
+        end
+        if st_is_bottom || _types_are_equal(st, ts)
+            return ts
+        end
+        if _promote_type_binary_detect_loop(T, S, ts, st)
+            # This is not strictly necessary, as we already limit the recursion depth, but
+            # makes for nicer UX.
+            _promote_type_binary_err_detected_infinite_recursion(T_initial, S_initial, T, S, ts, st)
+        end
+    end
+    esc(e)
+end
+
+macro _promote_type_binary_step2()
+    e = quote
+        T = ts
+        S = st
+    end
+    esc(e)
+end
+
+macro _promote_type_binary_step()
+    e = quote
+        @_promote_type_binary_step1
+        @_promote_type_binary_step2
+    end
+    esc(e)
+end
+
+function _promote_type_binary(::Type{T_initial}, ::Type{S_initial}) where {T_initial, S_initial}
+    T = T_initial
+    S = S_initial
+
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+
+    @_promote_type_binary_step1
+
+    _promote_type_binary_err_giving_up(T_initial, S_initial, T, S, ts, st)
+end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @inline
-    # Try promote_rule in both orders. Typically only one is defined,
-    # and there is a fallback returning Bottom below, so the common case is
-    #   promote_type(T, S) =>
-    #   promote_result(T, S, result, Bottom) =>
-    #   typejoin(result, Bottom) => result
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+    if _type_is_bottom(T)
+        return S
+    end
+    if _type_is_bottom(S) || _types_are_equal(S, T)
+        return T
+    end
+    _promote_type_binary(T, S)
 end
 
 """
@@ -338,11 +479,6 @@ promote_rule(::Type{Bottom}, slurp...) = Bottom
 promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
-
-promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
-# If no promote_rule is defined, both directions give Bottom. In that
-# case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)

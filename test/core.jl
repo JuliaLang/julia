@@ -2075,6 +2075,29 @@ g4731() = f4731()
 @test f4731() == ""
 @test g4731() == ""
 
+@testset "issue #13193" begin
+    struct Issue13193_SIQuantity{T<:Number} <: Number end
+    Base.promote_rule(::Type{Issue13193_SIQuantity{T}}, ::Type{Issue13193_SIQuantity{S}}) where {T, S} = Issue13193_SIQuantity{promote_type(T,S)}
+    Base.promote_rule(::Type{Issue13193_SIQuantity{T}}, ::Type{S}) where {T, S<:Number} = Issue13193_SIQuantity{promote_type(T,S)}
+    struct Issue13193_Interval{T<:Number} <: Number end
+    Base.promote_rule(::Type{Issue13193_Interval{T}}, ::Type{Issue13193_Interval{S}}) where {T, S} = Issue13193_Interval{promote_type(T,S)}
+    Base.promote_rule(::Type{Issue13193_Interval{T}}, ::Type{S}) where {T, S<:Number} = Issue13193_Interval{promote_type(T,S)}
+    @test_throws Base.TypePromotionError promote_type(Issue13193_Interval{Int}, Issue13193_SIQuantity{Int})
+    @test_throws Base.TypePromotionError promote_type(Issue13193_SIQuantity{Int}, Issue13193_Interval{Int})
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{Issue13193_Interval{Int}}, Type{Issue13193_SIQuantity{Int}}}))
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{Issue13193_SIQuantity{Int}}, Type{Issue13193_Interval{Int}}}))
+end
+@testset "straightforward conflict in `promote_rule` definitions" begin
+    struct ConflictingPromoteRuleDefinitionsA end
+    struct ConflictingPromoteRuleDefinitionsB end
+    Base.promote_rule(::Type{ConflictingPromoteRuleDefinitionsA}, ::Type{ConflictingPromoteRuleDefinitionsB}) = ConflictingPromoteRuleDefinitionsA
+    Base.promote_rule(::Type{ConflictingPromoteRuleDefinitionsB}, ::Type{ConflictingPromoteRuleDefinitionsA}) = ConflictingPromoteRuleDefinitionsB
+    @test_throws Base.TypePromotionError promote_type(ConflictingPromoteRuleDefinitionsA, ConflictingPromoteRuleDefinitionsB)
+    @test_throws Base.TypePromotionError promote_type(ConflictingPromoteRuleDefinitionsB, ConflictingPromoteRuleDefinitionsA)
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{ConflictingPromoteRuleDefinitionsA}, Type{ConflictingPromoteRuleDefinitionsB}}))
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{ConflictingPromoteRuleDefinitionsB}, Type{ConflictingPromoteRuleDefinitionsA}}))
+end
+
 # issue #4675
 f4675(x::StridedArray...) = 1
 f4675(x::StridedArray{T}...) where {T} = 2
