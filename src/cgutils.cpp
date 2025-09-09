@@ -1395,10 +1395,30 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, 
     ctx.builder.SetInsertPoint(ifok);
 }
 
+
+static bool has_known_null_nullptr(Type *T)
+{
+    if (auto PT = dyn_cast<PointerType>(T)) {
+        auto addrspace = PT->getAddressSpace();
+        if (addrspace == AddressSpace::Generic || (AddressSpace::FirstSpecial <= addrspace && addrspace <= AddressSpace::LastSpecial)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ctx.builder.CreateIsNotNull(v) lowers incorrectly in non-standard
+// address spaces where null is not zero
+// TODO: adapt to https://github.com/llvm/llvm-project/pull/131557 once merged
 static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 {
     ++EmittedNullchecks;
-    return ctx.builder.CreateIsNotNull(v);
+    Type *T = v->getType();
+    if (has_known_null_nullptr(T) || !isa<PointerType>(T)) // i64/i32 are considered pointer like here
+        return ctx.builder.CreateIsNotNull(v);
+    else
+        return ctx.builder.CreateICmpNE(v, ctx.builder.CreateAddrSpaceCast(
+            Constant::getNullValue(ctx.builder.getPtrTy(0)), T));
 }
 
 
