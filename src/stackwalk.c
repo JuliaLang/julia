@@ -1388,9 +1388,9 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
 {
     jl_bt_element_t *bt_data;
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = jl_get_current_task();
     size_t max_bt_size;
-    if (ct->ptls != NULL) {
+    if (ct && ct->ptls != NULL) {
         jl_ptls_t ptls = ct->ptls;
         ptls->bt_size = 0;
         bt_data = ptls->bt_data;
