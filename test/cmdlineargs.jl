@@ -75,12 +75,16 @@ let
 end
 
 if Sys.isunix()
+    mutable struct RLimit
+        cur::Int64
+        max::Int64
+    end
+    const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
     @testset "SIGQUIT prints task backtraces" begin
         exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
-        outp = Base.PipeEndpoint()
         errp = Base.PipeEndpoint()
         # disable coredumps for this process
-        p = run(`sh -c "ulimit -c 0; "$(Base.shell_escape(exename)) -e 'sleep(20)'"`, devnull, devnull, errp, wait=false)
+        p = run(`$exename -e 'ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), $RLIMIT_CORE, Ref(RLimit(0, 0)))'`, devnull, devnull, errp, wait=false)
         sleep(5.0) # allow Julia to start
         Base.kill(p, Base.SIGQUIT)
         wait(p)
