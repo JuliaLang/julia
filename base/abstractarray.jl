@@ -99,7 +99,7 @@ function axes(A, d)
 end
 function _axes(::HasShape, ax::Tuple, d::Integer)
     @inline
-    d_Int = convert(Int, d)
+    d_Int = Int(d)::Int
     d_Int <= length(ax) ? ax[d_Int] : OneTo(1)
 end
 
