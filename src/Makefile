@@ -46,7 +46,8 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler gc-page-profiler method \
 	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall \
+	null_sysimage
 
 RT_LLVMLINK :=
 CG_LLVMLINK :=
@@ -56,7 +57,8 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop llvm
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering llvm-ptls \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline llvm_api
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline llvm_api \
+	null_sysimage
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -160,7 +162,7 @@ endif
 CLANG_LDFLAGS := $(LLVM_LDFLAGS)
 ifeq ($(OS), Darwin)
 CLANG_LDFLAGS += -Wl,-undefined,dynamic_lookup
-OSLIBS += -Wl,-U,__dyld_atfork_parent -Wl,-U,__dyld_atfork_prepare -Wl,-U,__dyld_dlopen_atfork_parent -Wl,-U,__dyld_dlopen_atfork_prepare -Wl,-U,_jl_image_pointers -Wl,-U,_jl_system_image_data -Wl,-U,_jl_system_image_size
+OSLIBS += -Wl,-U,__dyld_atfork_parent -Wl,-U,__dyld_atfork_prepare -Wl,-U,__dyld_dlopen_atfork_parent -Wl,-U,__dyld_dlopen_atfork_prepare
 LIBJULIA_PATH_REL := @rpath/libjulia
 else
 LIBJULIA_PATH_REL := libjulia

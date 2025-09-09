@@ -7,9 +7,9 @@ An error occurred when trying to access `str` at index `i` that is not valid.
 """
 struct StringIndexError <: Exception
     string::AbstractString
-    index::Integer
+    index::Int
 end
-@noinline string_index_err(s::AbstractString, i::Integer) =
+@noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
 function Base.showerror(io::IO, exc::StringIndexError)
     s = exc.string
