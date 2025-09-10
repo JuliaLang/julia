@@ -7249,4 +7249,13 @@ end == Type{<:Real}
     Compiler.return_type(oc, Tuple{String})
 end == Type{Union{}}
 
+@test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
+task_returner() = Task(() -> "hello")
+@test Base.infer_return_type((typeof(task_returner),)) do f
+    Core.task_result_type(f())
+end === Core.TypeEgal{String}
+@test Base.infer_return_type((typeof(task_returner),)) do f
+    fetch(f())
+end === String
+
 end # module inference

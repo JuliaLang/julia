@@ -1858,12 +1858,10 @@ end
 # ===================
 # Test that _task inlines properly with const prop
 f_task_invoke() = 42
-
 let src = code_typed1(()) do
         return Task(f_task_invoke)
     end
     m = which(f_task_invoke, ())
-    @show src
     @test count(e -> begin
             if iscall((src, Core._task), e) && e isa Expr && e.head === :call && length(e.args) == 4
                 ci = e.args[4]
@@ -2433,6 +2431,13 @@ let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
     @test codeinst.inferred === nothing
     interp = Compiler.NativeInterpreter()
     @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
+end
+
+# Test that task_result_type gets inlined to its constant value
+let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
+    # Should be inlined to the `Any` constant, with no call to task_result_type
+    @test count(iscall((src, Core.task_result_type)), src.code) == 0
+    @test src.code[end] == ReturnNode(Any)
 end
 
 end # module inline_tests

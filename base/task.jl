@@ -2,7 +2,7 @@
 
 ## basic task functions and TLS
 
-Core.Task(@nospecialize(f), reserved_stack::Int=0) = begin
+function Core.Task(@nospecialize(f), reserved_stack::Int=0)
     task = Core._task(f, reserved_stack)
     task.donenotify = ThreadSynchronizer()
     return task
@@ -366,7 +366,7 @@ in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed ta
 
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-function wait(t::Task; throw=true)
+@noinline function wait(t::Task; throw=true)
     _wait(t)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
@@ -565,9 +565,9 @@ Wait for a [`Task`](@ref) to finish, then return its result value.
 If the task fails with an exception, a [`TaskFailedException`](@ref) (which wraps the failed task)
 is thrown.
 """
-function fetch(t::Task)
+@inline function fetch(t::Task)
     wait(t)
-    return task_result(t)
+    return task_result(t)::Core.task_result_type(t)
 end
 
 
@@ -1146,7 +1146,7 @@ function yield(t::Task, @nospecialize(x=nothing))
     record_running_time!(ct)
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
-    t.result = x
+    setfield!(t, :result, x)
     enq_work(ct)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
@@ -1173,7 +1173,7 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     record_running_time!(ct)
     # [task] created -scheduled-unfairly-> wait_time
     maybe_record_enqueued!(t)
-    t.result = x
+    setfield!(t, :result, x)
     set_next_task(t)
     return try_yieldto(identity)
 end
@@ -1192,12 +1192,12 @@ function try_yieldto(undo)
     end
     if ct._isexception
         exc = ct.result
-        ct.result = nothing
+        setfield!(ct, :result, nothing)
         ct._isexception = false
         throw(exc)
     end
     result = ct.result
-    ct.result = nothing
+    setfield!(ct, :result, nothing)
     return result
 end
 
@@ -1208,7 +1208,7 @@ function throwto(t::Task, @nospecialize exc)
     record_running_time!(ct)
     # [task] created -scheduled-unfairly-> wait_time
     maybe_record_enqueued!(t)
-    t.result = exc
+    setfield!(t, :result, exc)
     t._isexception = true
     set_next_task(t)
     return try_yieldto(identity)

@@ -118,6 +118,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = const_flag ? 0x3 : 0x2
+        elseif isa(result_type, PartialTask)
+            rettype_const = result_type
+            const_flags = 0x2
         elseif isa(result_type, PartialOpaque)
             rettype_const = result_type
             const_flags = 0x2
@@ -703,6 +706,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
 
     # check global cache again for :invoke use, and put in the opt_cache if it wasn't there at this time
     if isdefined(result, :ci)
+
         ci = result.ci
         ipo_effects = encode_effects(result.ipo_effects)
         # populate a few fields that won't change again (and are inspected by optimization)
@@ -1275,6 +1279,8 @@ function cached_return_type(code::CodeInstance)
         undefs, fields = rettype_const
         return PartialStruct(fallback_lattice, rettype, undefs, fields)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
+        return rettype_const
+    elseif isa(rettype_const, PartialTask) && rettype !== PartialTask
         return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
         return rettype_const
