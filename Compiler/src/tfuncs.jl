@@ -282,7 +282,6 @@ add_tfunc(ult_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(sle_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(ule_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(eq_float, 2, 2, cmp_tfunc, 2)
-add_tfunc(ne_float, 2, 2, cmp_tfunc, 2)
 add_tfunc(lt_float, 2, 2, cmp_tfunc, 2)
 add_tfunc(le_float, 2, 2, cmp_tfunc, 2)
 add_tfunc(fpiseq, 2, 2, cmp_tfunc, 1)
@@ -2469,7 +2468,6 @@ const _FLOAT_INTRINSICS = Any[
     Intrinsics.min_float_fast,
     Intrinsics.max_float_fast,
     Intrinsics.eq_float,
-    Intrinsics.ne_float,
     Intrinsics.lt_float,
     Intrinsics.le_float,
     Intrinsics.eq_float_fast,

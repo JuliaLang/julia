@@ -37,11 +37,9 @@
     ADD_I(sle_int, 2) \
     ADD_I(ule_int, 2) \
     ADD_I(eq_float, 2) \
-    ADD_I(ne_float, 2) \
     ADD_I(lt_float, 2) \
     ADD_I(le_float, 2) \
     ALIAS(eq_float_fast, eq_float) \
-    ALIAS(ne_float_fast, ne_float) \
     ALIAS(lt_float_fast, lt_float) \
     ALIAS(le_float_fast, le_float) \
     ADD_I(fpiseq, 2) \

@@ -1701,7 +1701,6 @@ JL_DLLEXPORT jl_value_t *jl_sle_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_ule_int(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_eq_float(jl_value_t *a, jl_value_t *b);
-JL_DLLEXPORT jl_value_t *jl_ne_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_lt_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_le_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_fpiseq(jl_value_t *a, jl_value_t *b);

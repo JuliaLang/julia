@@ -94,7 +94,6 @@ const auto &float_func() {
             float_func[fma_float] = true;
             float_func[muladd_float] = true;
             float_func[eq_float] = true;
-            float_func[ne_float] = true;
             float_func[lt_float] = true;
             float_func[le_float] = true;
             float_func[eq_float_fast] = true;
@@ -1650,7 +1649,6 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     case ule_int: *newtyp = jl_bool_type; return ctx.builder.CreateICmpULE(x, y);
 
     case eq_float: *newtyp = jl_bool_type; return math_builder(ctx)().CreateFCmpOEQ(x, y);
-    case ne_float: *newtyp = jl_bool_type; return math_builder(ctx)().CreateFCmpUNE(x, y);
     case lt_float: *newtyp = jl_bool_type; return math_builder(ctx)().CreateFCmpOLT(x, y);
     case le_float: *newtyp = jl_bool_type; return math_builder(ctx)().CreateFCmpOLE(x, y);
 

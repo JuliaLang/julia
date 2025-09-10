@@ -1554,7 +1554,6 @@ fpiseq_n(double, 64)
     sizeof(a) <= sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
 bool_fintrinsic(eq,eq_float)
-bool_fintrinsic(ne,ne_float)
 bool_fintrinsic(lt,lt_float)
 bool_fintrinsic(le,le_float)
 bool_fintrinsic(fpiseq,fpiseq)

@@ -239,8 +239,6 @@ end
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(3.3) true
     @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(2) false
-    @test_intrinsic Core.Intrinsics.ne_float Float64(3.3) Float64(3.3) false
-    @test_intrinsic Core.Intrinsics.ne_float Float64(3.3) Float64(2) true
     @test_intrinsic Core.Intrinsics.le_float Float64(3.3) Float64(3.3) true
     @test_intrinsic Core.Intrinsics.le_float Float64(3.3) Float64(2) false
 
@@ -280,8 +278,6 @@ end
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(3.3) true
     @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(2) false
-    @test_intrinsic Core.Intrinsics.ne_float Float32(3.3) Float32(3.3) false
-    @test_intrinsic Core.Intrinsics.ne_float Float32(3.3) Float32(2) true
     @test_intrinsic Core.Intrinsics.le_float Float32(3.3) Float32(3.3) true
     @test_intrinsic Core.Intrinsics.le_float Float32(3.3) Float32(2) false
 
@@ -374,8 +370,6 @@ end
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(2) false
-    @test_intrinsic Core.Intrinsics.ne_float Float16(3.3) Float16(3.3) false
-    @test_intrinsic Core.Intrinsics.ne_float Float16(3.3) Float16(2) true
     @test_intrinsic Core.Intrinsics.le_float Float16(3.3) Float16(3.3) true
     @test_intrinsic Core.Intrinsics.le_float Float16(3.3) Float16(2) false
 
