@@ -340,7 +340,7 @@ to indicate that the "primary" location of the source is the location where
            "x"          ::K"Identifier"
        ]
        [K"call"
-           "eval"       ::K"core"      
+           "eval"       ::K"core"
            mn           =>K"Identifier"
            "x"          ::K"Identifier"
        ]
@@ -567,19 +567,9 @@ function is_sym_decl(x)
     k == K"Identifier" || k == K"::"
 end
 
-function is_identifier(x)
-    k = kind(x)
-    k == K"Identifier" || k == K"var" || is_operator(k) || is_macro_name(k)
-end
-
 function is_eventually_call(ex::SyntaxTree)
     k = kind(ex)
     return k == K"call" || ((k == K"where" || k == K"::") && is_eventually_call(ex[1]))
-end
-
-function is_function_def(ex)
-    k = kind(ex)
-    return k == K"function" || k == K"->"
 end
 
 function find_parameters_ind(exs)
