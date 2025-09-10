@@ -2619,7 +2619,7 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
-JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
+JL_DLLEXPORT char *jl_format_filename(const char *output_pattern) JL_NOTSAFEPOINT;
 
 uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct);
 

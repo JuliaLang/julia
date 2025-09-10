@@ -614,7 +614,7 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
         size_t min_elements = nfields-1;
         for (long j = i-1; j >= 0; j--) {
             jl_value_t *ttj = temp[j];
-            if (!jl_is_tuple_type(ttj)) break;
+            if (!(ttj && jl_is_tuple_type(ttj))) break;
             size_t nfieldsj = jl_nparams(ttj);
             if (nfieldsj >= min_elements) continue;
             if (nfieldsj != min_elements-1) break;
