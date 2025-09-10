@@ -106,7 +106,7 @@ jl_value_t *jl_get_JIT(void)
 //           %L    The local hostname.
 //           %l    The local hostname, including the domain name.
 //           %u    The local username.
-std::string jl_format_filename(StringRef output_pattern)
+std::string jl_format_filename(StringRef output_pattern) JL_NOTSAFEPOINT
 {
     std::string buf;
     raw_string_ostream outfile(buf);
@@ -168,7 +168,7 @@ std::string jl_format_filename(StringRef output_pattern)
     return outfile.str();
 }
 
-extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
+extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern) JL_NOTSAFEPOINT
 {
     return strdup(jl_format_filename(StringRef(output_pattern)).c_str());
 }
