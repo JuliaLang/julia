@@ -3214,26 +3214,27 @@ function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInf
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
-    # Check argument count: _task(func, size) or _task(func, size, ci)
-    if la < 3 || la > 4
+    if !isempty(argtypes) && !isvarargtype(argtypes[end])
+        if !(3 <= la <= 4)
+            return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+        end
+    elseif isempty(argtypes) || la > 5
         return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
     end
-    # Check that size argument is an Int
     size_arg = argtypes[3]
-    if !(widenconst(size_arg) ⊑ Int)
+    if !hasintersect(widenconst(size_arg), Int)
         return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
     end
-
     func_arg = argtypes[2]
 
-    # Handle optional Method/CodeInstance/Type argument (4th parameter)
+    # Handle optional Method/CodeInstance/Type argument (4th parameter) as invoke
     if la == 4
         invoke_args = Any[Const(Core.invoke), func_arg, argtypes[4]]
         invoke_arginfo = ArgInfo(nothing, invoke_args)
         invoke_future = abstract_invoke(interp, invoke_arginfo, si, sv)
         return Future{CallMeta}(invoke_future, interp, sv) do invoke_result, interp, sv
-            fetch_type = invoke_result.rt
-            fetch_error = invoke_result.exct
+            fetch_type = widenconst(invoke_result.rt)
+            fetch_error = widenconst(invoke_result.exct)
             task_effects = invoke_result.effects
             if fetch_type === Any && fetch_error === Any
                 rt_result = Task
@@ -3245,11 +3246,11 @@ function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInf
         end
     end
 
-    # Fallback to abstract_call for function analysis
+    # Otherwise use abstract_call for function analysis
     callinfo_future = abstract_call(interp, ArgInfo(nothing, Any[func_arg]), StmtInfo(true, si.saw_latestworld), sv, #=max_methods=#1)
     return Future{CallMeta}(callinfo_future, interp, sv) do callinfo, interp, sv
-        fetch_type = callinfo.rt
-        fetch_error = callinfo.exct
+        fetch_type = widenconst(callinfo.rt)
+        fetch_error = widenconst(callinfo.exct)
         task_effects = callinfo.effects
         if fetch_type === Any && fetch_error === Any
             rt_result = Task
@@ -4083,6 +4084,8 @@ end
             fields[i] = a
         end
         anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, _getundefs(rt), fields)
+    elseif isa(rt, PartialTask)
+        return rt # already widened, by construction
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512

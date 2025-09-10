@@ -1145,10 +1145,6 @@ end
         end
         s00 = s
     elseif isa(s00, PartialTask)
-        # Special case: accessing the 'result' field of a PartialTask returns the fetch_type or error_type or some other value set by the user
-        #if isa(name, Const) && name.val === :result
-        #    return s00.fetch_type
-        #end
         s00 = Task
     end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
@@ -2353,6 +2349,7 @@ const _PURE_BUILTINS = Any[
     tuple,
     svec,
     ===,
+    Core.task_result_type,
     typeof,
     nfields,
 ]
@@ -2414,6 +2411,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     fieldtype,
     isa,
     nfields,
+    Core.task_result_type,
     throw,
     Core.throw_methoderror,
     tuple,
@@ -2622,6 +2620,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # setglobalonce!,
     swapfield!,
     # swapglobal!,
+    Core.task_result_type,
     throw,
     tuple,
     typeassert,
@@ -3268,6 +3267,15 @@ add_tfunc(modifyglobal!, 4, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 
 add_tfunc(replaceglobal!, 4, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(setglobalonce!, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
+
+@nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)
+    hasintersect(widenconst(T), Task) || return Union{}
+    if T isa PartialTask
+        return Type{widenconst(T.fetch_type)}
+    end
+    return Type
+end
+add_tfunc(Core.task_result_type, 1, 1, task_result_type_tfunc, 0)
 
 # foreigncall
 # ===========

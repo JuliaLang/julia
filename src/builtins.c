@@ -2178,6 +2178,14 @@ JL_CALLABLE(jl_f__task)
     return (jl_value_t*)jl_new_task(start, jl_nothing, ssize, invoke_arg);
 }
 
+JL_CALLABLE(jl_f_task_result_type)
+{
+    JL_NARGS(task_result_type, 1, 1);
+    JL_TYPECHK(task_result_type, task, args[0]);
+    // Without inference, this returns Any, but inference can inject other Types here
+    return (jl_value_t*)jl_any_type;
+}
+
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
     size_t nf = jl_svec_len(ft);

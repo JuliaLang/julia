@@ -1850,12 +1850,10 @@ end
 # ===================
 # Test that _task inlines properly with const prop
 f_task_invoke() = 42
-
 let src = code_typed1(()) do
         return Task(f_task_invoke)
     end
     m = which(f_task_invoke, ())
-    @show src
     @test count(e -> begin
             if iscall((src, Core._task), e) && e isa Expr && e.head === :call && length(e.args) == 4
                 ci = e.args[4]
@@ -2372,6 +2370,13 @@ end
 let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
     @test count(isinvoke(:merge_fallback), src.code) == 0
     @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
+# Test that task_result_type gets inlined to its constant value
+let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
+    # Should be inlined to Type{Any} constant, no call to task_result_type
+    @test count(iscall((src, Core.task_result_type)), src.code) == 0
+    @test src.code[end] == ReturnNode(Any)
 end
 
 end # module inline_tests
