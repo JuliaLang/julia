@@ -3184,52 +3184,32 @@ end
 end
 
 
-
-
 """
+    append(a, b)
 
-```
-append(x::T, y::T) where T<: AbstractVector
-```
+Append sequences. 
 
-Concatenate `AbstractVector`s.
+This function is generic and may be implemented for types satisfying its specification.
 
-```jldoctest
-julia> append([:a, :b], [:c, :d])
-4-element Vector{Symbol}:
- :a
- :b
- :c
- :d
-```
+    - `(x in a) || (x in b)` if and only `if x in append(a, b)`
+    - `all(i -> append(a,b)[i] == a[i], eachindex(a))``
+    - `all(i -> append(a,b)[nelements(a) + i] == b[i], eachindex(b))` where `nelements(a)+1` is the first index after the end of `a`.
 """
-(append(x::T, y::T) where T<: AbstractVector) = append!(copy(x), y)
+function append end
 
 
-"""
-append(::T, ::T) where T<: AbstractString
+append(a::AbstractVector, b::AbstractVector) = append!(Base.copymutable(a), b)
 
-Concatenate `AbstractString`s.
+append(a::AbstractMatrix, b::AbstractMatrix) = hcat(a, b)
 
+append(a::AbstractString, b::AbstractString) = a * b
 
-```jldoctest
-julia> append("ab", "cd")
-"abcd"
-```
-"""
-(append(x::T, y::T) where T<:AbstractString)= join([x, y])
+append(a::Tuple, b::Tuple) = (a..., b...)
 
+append(a::NamedTuple, b::NamedTuple) = let
+    shared = intersect(propertynames(a), propertynames(b))
+    isempty(shared) ?
+        (;a..., b...) :
+        throw(ArgumentError(lazy"Arguments share properties: $shared"))
+end
 
-"""
-
-Concatenate tuples.
-
-```jldoctest
-julia> append((1,2), (3,4))
-(1, 2, 3, 4)
-```
-"""
-append(x::Tuple, y::Tuple) = tuple(x..., y...)
-
-
-const ++ = append

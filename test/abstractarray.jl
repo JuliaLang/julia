@@ -2227,3 +2227,80 @@ end
         @test_throws MethodError isreal(G)
     end
 end
+
+
+@testset "append" begin
+    in_append(a, b) = let
+        app = append(a,b)
+        all(∈(app), a) && all(∈(app), b)
+    end
+
+    append_in(a, b) = let
+        app = append(a, b)
+        all(∈(a), app) && all(∈(b), app)
+    end
+
+    append_in_iff(a, b) = in_append(a,b) && in_append(a,b)
+
+    append_first(a, b) =
+        all(eachindex(a)) do i
+            append(a,b)[i] == a[i]
+        end
+
+
+    nelements(x) = length(x)
+    nelements(x::AbstractString) = ncodeunits(x)
+    append_second(a, b) =
+        all(eachindex(b)) do i
+            ix = nelements(a) + i
+            append(a,b)[ix] == b[i]
+        end
+
+    append_spec(a,b) =
+        (&)(
+            append_in_iff(a,b),
+            append_first(a,b),
+            append_second(a,b),
+        )
+
+    @test append([], []) == []
+    @test append([1], []) == [1]
+    @test append([1], [2.0]) == [1.0, 2.0]
+    @test append_spec([], [])
+    @test append_spec([1], [])
+    @test append_spec([1], [2.0])
+
+    @test append("", "") == ""
+    @test append("a", "") == "a"
+    @test append("a", "b") == "ab"
+    @test append_spec("", "")
+    @test append_spec("a", "a")
+    @test append_spec("a", "b")
+
+    @test append((), ()) == ()
+    @test append((1,), ()) == (1,)
+    @test append((1,), (2,)) == (1,2)
+    @test append_spec((), ())
+    @test append_spec((1,), ())
+    @test append_spec((1,), (2,))
+
+    @test append((;), (;)) == (;)
+    @test append((;a=1), (;)) == (;a=1)
+    @test append((;a=1, b=2), (;c=3, d=4)) == (;a=1, b=2, c=3, d=4)
+    # Throw if NamedTuple propertynames overlap.
+    @test_throws ArgumentError append((;a=1, b=2), (;b=3, c=3))
+    @test append_spec((;), (;))
+    @test append_spec((;a=1), (;))
+    @test append_spec((;a=1, b=2), (;c=3, d=4)) # XXX Throws because eachindex(::NamedTuple)::Tuple{Symbol...}
+
+
+    @test append(reshape(Int[], 0, 0), reshape(Int[], 0, 0)) == reshape(Int[], 0, 0)
+    @test append(reshape(Int[], 1, 0), reshape(Int[], 1, 0)) == reshape(Int[], 1, 0)
+    @test append([1;;], [2;;]) == [1 2]
+    @test append([1 2; 3 4], [5 6; 7 8]) == [1 2 5 6; 3 4 7 8]
+    @test_throws MethodError append([1], [2 3])
+    @test append_spec(reshape(Int[], 0, 0), reshape(Int[], 0, 0))
+    @test append_spec(reshape(Int[], 1, 0), reshape(Int[], 1, 0))
+    @test append_spec([1;;], [2;;])
+    @test append_spec([1 2; 3 4], [5 6; 7 8])
+end
