@@ -235,7 +235,7 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 function __reshape(p::Tuple{AbstractArray,IndexStyle}, dims::Dims)
     parent = p[1]
     szs = front(size(parent))
-    szs1 = map(s->max(1,Int(s)), szs)  # for resizing empty arrays
+    szs1 = map(s -> max(1, Int(s)), szs) # for resizing empty arrays
     mi = map(SignedMultiplicativeInverse, szs1)
     ReshapedArray(parent, dims, mi)
 end
