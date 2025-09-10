@@ -127,6 +127,9 @@ Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted`
 sort tables according to the function given by the keyword argument `by`. If the keyword argument
 `inline_tables` is given, it should be a set of tables that should be printed "inline".
 
+!!! compat "Julia 1.11"
+    The `inline_tables` keyword argument is supported by Julia 1.11 or later.
+
 The following data types are supported: `AbstractDict`, `AbstractVector`, `AbstractString`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
 need to be convertible to `Float64` and `Int64` respectively. For other data types,

@@ -1081,7 +1081,7 @@ JIT-compilation machinery to basically execute the equivalent of a switch statem
 lookup in your own code.
 
 Some run-time benchmarks comparing (1) type dispatch, (2) dictionary lookup, and (3) a "switch"
-statement can be found [on the mailing list](https://groups.google.com/forum/#!msg/julia-users/jUMu9A3QKQQ/qjgVWr7vAwAJ).
+statement can be found [on discourse](https://discourse.julialang.org/t/suggestion-updating-the-dispatch-vs-dict-switch-benchmark-link-in-the-manual/132159).
 
 Perhaps even worse than the run-time impact is the compile-time impact: Julia will compile specialized
 functions for each different `Car{Make, Model}`; if you have hundreds or thousands of such types,
