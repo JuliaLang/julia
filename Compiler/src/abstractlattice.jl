@@ -191,7 +191,7 @@ information that would not be available from the type itself.
 @nospecializeinfer function has_nontrivial_extended_info(𝕃::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
-    #isa(t, PartialTask) && return true
+    isa(t, PartialTask) && return true
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end
 @nospecializeinfer function has_nontrivial_extended_info(𝕃::ConstsLattice, @nospecialize t)
@@ -224,7 +224,7 @@ that should be forwarded along with constant propagation.
         # return false
     end
     isa(t, PartialOpaque) && return true
-    #isa(t, PartialTask) && return true
+    isa(t, PartialTask) && return true
     return is_const_prop_profitable_arg(widenlattice(𝕃), t)
 end
 @nospecializeinfer function is_const_prop_profitable_arg(𝕃::ConstsLattice, @nospecialize t)
@@ -248,6 +248,7 @@ end
 @nospecializeinfer function is_forwardable_argtype(𝕃::PartialsLattice, @nospecialize x)
     isa(x, PartialStruct) && return true
     isa(x, PartialOpaque) && return true
+    isa(x, PartialTask) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
 @nospecializeinfer function is_forwardable_argtype(𝕃::ConstsLattice, @nospecialize x)

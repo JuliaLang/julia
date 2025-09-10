@@ -69,6 +69,7 @@ extern "C" {
     XX(svec,"svec") \
     XX(swapfield,"swapfield!") \
     XX(swapglobal,"swapglobal!") \
+    XX(task_result_type,"task_result_type") \
     XX(throw,"throw") \
     XX(throw_methoderror,"throw_methoderror") \
     XX(tuple,"tuple") \

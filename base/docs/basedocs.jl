@@ -3977,6 +3977,15 @@ performed by the public `Task` constructor.
 Core._task
 
 """
+    Core.task_result_type(task) -> Type
+
+The builtin function returns a conservative upper bound for the return type of the closure
+provided when the Task was created.
+Always return the type `Any`. However inference may replace it with any other Type.
+"""
+Core.task_result_type
+
+"""
     ConcurrencyViolationError(msg) <: Exception
 
 An error thrown when a detectable violation of concurrent semantics has occurred.

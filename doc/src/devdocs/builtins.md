@@ -50,6 +50,7 @@ Core.IntrinsicFunction
 Core.Intrinsics
 Core.IR
 Core._task
+Core.task_result_type
 ```
 
 ## Adding New Builtin Functions
@@ -63,7 +64,7 @@ Adding a new builtin function requires changes across multiple subsystems in Jul
 2. Julia inference integration
 3. Complex inference integration (if required)
 4. Optimization passes (if applicable)
-4. Codegen changes (if applicable)
+5. Codegen changes (if applicable)
 
 ### Step-by-Step Process
 
@@ -81,16 +82,11 @@ Adding a new builtin function requires changes across multiple subsystems in Jul
 **File: `src/builtins.c`**
 ```c
 // Implement the C function
-BUILTIN(_task, 2, 3) {
+JL_CALLABLE(jl_f__task)
+{
     JL_NARGS(_task, 2, 3);
     JL_TYPECHK(_task, long, args[1]);
     return jl_new_task_impl(args, nargs);
-}
-
-// Add to jl_init_primitives()
-void jl_init_primitives(void) {
-    // ... existing code
-    add_builtin_func("_task", jl_builtin__task);
 }
 ```
 
@@ -169,4 +165,21 @@ Core._your_builtin
 ```julia
 # Add to the @docs block in the appropriate section
 Core._your_builtin
+```
+
+#### 6. Testing
+
+**File: `Compiler/test/effects.jl`**
+```julia
+# Add test for effects modeling (if your builtin has specific effects)
+let effects = Base.infer_effects(Core._your_builtin, (ArgType,))
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_nothrow(effects)
+end
+```
+
+**File: `Compiler/test/inference.jl`**
+```julia
+# Add test for return type inference
+@test Base.infer_return_type(Core._your_builtin, (ArgType,)) === ExpectedReturnType
 ```
