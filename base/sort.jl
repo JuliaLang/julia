@@ -62,7 +62,7 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    issorted(itr, lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward)
 
 Test whether a collection is in sorted order. The keywords modify what
 order is considered sorted, as described in the [`sort!`](@ref) documentation.
@@ -113,7 +113,7 @@ maybeview(v, k) = view(v, k)
 maybeview(v, k::Integer) = v[k]
 
 """
-    partialsort!(v, k; by=identity, lt=isless, rev=false)
+    partialsort!(v, k; by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward)
 
 Mutate the vector `v` so that the value at index `k` (or
 range of adjacent values if `k` is a range) occurs
@@ -170,7 +170,7 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order); kws...)
 
 """
-    partialsort(v, k, by=identity, lt=isless, rev=false)
+    partialsort(v, k, by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing)
 
 Variant of [`partialsort!`](@ref) that copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
@@ -313,7 +313,7 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
 end
 
 """
-    searchsorted(v, x; by=identity, lt=isless, rev=false)
+    searchsorted(v, x; by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing)
 
 Return the range of indices in `v` where values are equivalent to `x`, or an
 empty range located at the insertion point if `v` does not contain values
@@ -350,7 +350,7 @@ julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=firs
 """ searchsorted
 
 """
-    searchsortedfirst(v, x; by=identity, lt=isless, rev=false)
+    searchsortedfirst(v, x; by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing)
 
 Return the index of the first value in `v` that is not ordered before `x`.
 If all values in `v` are ordered before `x`, return `lastindex(v) + 1`.
@@ -389,7 +389,7 @@ julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) 
 """ searchsortedfirst
 
 """
-    searchsortedlast(v, x; by=identity, lt=isless, rev=false)
+    searchsortedlast(v, x; by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing)
 
 Return the index of the last value in `v` that is not ordered after `x`.
 If all values in `v` are ordered after `x`, return `firstindex(v) - 1`.
@@ -426,7 +426,7 @@ julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) #
 """ searchsortedlast
 
 """
-    insorted(x, v; by=identity, lt=isless, rev=false)::Bool
+    insorted(x, v; by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing)::Bool
 
 Determine whether a vector `v` contains any value equivalent to `x`.
 The vector `v` must be sorted according to the order defined by the keywords.
@@ -1623,7 +1623,7 @@ defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 defalg(v) = DEFAULT_STABLE
 
 """
-    sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward)
 
 Mutate the vector `v` so that it is sorted.
 
@@ -1740,7 +1740,7 @@ function sort!(v::AbstractVector{T};
 end
 
 """
-    sort(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    sort(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward)
     sort(v::NTuple; kws...)::NTuple
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
@@ -1819,7 +1819,7 @@ merge(x::NTuple, y::NTuple, o::Ordering) =
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; by=identity, lt=isless, rev=false)
+    partialsortperm(v, k; by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing)
 
 Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
 sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
@@ -1853,7 +1853,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs...)
 
 """
-    partialsortperm!(ix, v, k; by=identity, lt=isless, rev=false)
+    partialsortperm!(ix, v, k; by=identity, lt=isless, rev::Union{Bool,Nothing}=nothing)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
 `v`, which is used to store (a permutation of) the indices of `v`.
@@ -1916,7 +1916,7 @@ end
 ## sortperm: the permutation to sort an array ##
 
 """
-    sortperm(A; alg::Base.Sort.Algorithm=Base.Sort.DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward, [dims::Integer])
+    sortperm(A; alg::Base.Sort.Algorithm=Base.Sort.DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward, [dims::Integer])
 
 Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension.
 If `A` has more than one dimension, then the `dims` keyword argument must be specified. The order is specified
@@ -1994,7 +1994,7 @@ end
 
 
 """
-    sortperm!(ix, A; alg::Base.Sort.Algorithm=Base.Sort.DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward, [dims::Integer])
+    sortperm!(ix, A; alg::Base.Sort.Algorithm=Base.Sort.DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward, [dims::Integer])
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.
 `ix` is initialized to contain the values `LinearIndices(A)`.
@@ -2082,7 +2082,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A; dims::Integer, alg::Base.Sort.Algorithm=Base.Sort.defalg(A), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    sort(A; dims::Integer, alg::Base.Sort.Algorithm=Base.Sort.defalg(A), lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -2154,7 +2154,7 @@ end
 
 
 """
-    sort!(A; dims::Integer, alg::Base.Sort.Algorithm=Base.Sort.defalg(A), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    sort!(A; dims::Integer, alg::Base.Sort.Algorithm=Base.Sort.defalg(A), lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Base.Order.Ordering=Base.Order.Forward)
 
 Sort the multidimensional array `A` along dimension `dims`.
 See the one-dimensional version of [`sort!`](@ref) for a description of
