@@ -427,8 +427,14 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
     int symbol_found = 0;
 
     /* First, get the symbol value */
-#ifdef _OS_WINDOWS_
+#if defined(_OS_WINDOWS_)
     *value = GetProcAddress((HMODULE) handle, symbol);
+#elif defined(_OS_DARWIN_)
+    /* When !search_deps and the handle isn't special, force RTLD_FIRST. */
+    if (!search_deps && handle != RTLD_NEXT && handle != RTLD_DEFAULT &&
+        handle != RTLD_SELF && handle != RTLD_MAIN_ONLY)
+        handle = (void *)((uintptr_t)handle | 1);
+    *value = dlsym(handle, symbol);
 #else
     *value = dlsym(handle, symbol);
 #endif
@@ -452,18 +458,12 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
     }
 #endif
 
-    int rtld_first_handle = 0;
-#ifdef _OS_DARWIN_
-    rtld_first_handle = (uintptr_t)handle & 1;
-#endif
-
-#ifndef _OS_WINDOWS_
+#if !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
     /*
      * Unlike GetProcAddress, dlsym will search the dependencies of the given
      * library, so we must check where the symbol came from.
      */
-    if (symbol_found && !search_deps && handle != jl_RTLD_DEFAULT_handle &&
-        !rtld_first_handle) {
+    if (symbol_found && !search_deps && handle != jl_RTLD_DEFAULT_handle) {
         void *symbol_handle = jl_find_dynamic_library_by_addr(*value, 0, 1);
         symbol_found = handle == symbol_handle;
     }
