@@ -380,7 +380,6 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 }
 
 void post_boot_hooks(void);
-void post_image_load_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
@@ -616,9 +615,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
     }
-    else {
-        post_image_load_hooks();
-    }
     jl_start_threads();
     jl_start_gc_threads();
     uv_barrier_wait(&thread_init_done);
@@ -730,7 +726,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // Note that if we ever want to be able to unload Julia entirely, we will
     // have to dlclose() these handles.
     jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1, 0);
-    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1, 0);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_options, /* throw_err */ 1, 0);
 #ifdef _OS_WINDOWS_
     /* If this parameter is NULL, GetModuleHandle returns a handle to the file
        used to create the calling process (.exe file). */
