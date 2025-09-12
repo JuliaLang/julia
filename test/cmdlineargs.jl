@@ -89,7 +89,7 @@ if Sys.isunix()
         exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         errp = IOBuffer()
         # disable coredumps for this process
-        p = open(pipeline(`$exename -e $script`, "r"), stderr=errp)
+        p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
         @test read(p, UInt8) = UInt8('r')
         Base.kill(p, Base.SIGQUIT)
         wait(p)
