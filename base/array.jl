@@ -2119,7 +2119,12 @@ end
 splice!(a::Vector, inds) = (dltds = eltype(a)[]; _deleteat!(a, inds, dltds); dltds)
 
 function empty!(a::Vector)
-    _deleteend!(a, length(a))
+    T = eltype(a)
+    if isconcretetype(T) && datatype_pointerfree(T)
+        setfield!(a, :size, (0,))
+    else
+        _deleteend!(a, length(a))
+    end
     return a
 end
 
