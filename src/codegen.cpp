@@ -5259,11 +5259,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                             jl_callptr_t invoke;
                             void *fptr;
                             jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
-                            if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr) {
+                            if (specsig ? specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED : invoke == jl_fptr_args_addr) {
                                 if (ctx.external_linkage) {
                                     // TODO: Add !specsig support to aotcompile.cpp
                                     // Check that the codeinst is containing native code
-                                    if (specsig && (specsigflags & 0b100)) {
+                                    if (specsig && (specsigflags & JL_CI_FLAGS_FROM_IMAGE)) {
                                         external = !always_inline;
                                         need_to_emit = false;
                                     }

@@ -203,6 +203,7 @@ end
 let
     if Base.generating_output() && Base.JLOptions().use_pkgimages != 0
         repl_workload()
+        precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
         precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
         precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
         precompile(Tuple{typeof(Base.:(==)), Char, String})

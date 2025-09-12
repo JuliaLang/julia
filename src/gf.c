@@ -326,9 +326,11 @@ jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args
     jl_atomic_store_relaxed(&m->unspecialized, mi);
     jl_gc_wb(m, mi);
 
+    jl_debuginfo_t *di = NULL;
+    jl_svec_t *edges = jl_emptysvec;
     jl_code_instance_t *codeinst = jl_new_codeinst(mi, jl_nothing,
         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing, jl_nothing,
-        0, 1, ~(size_t)0, 0, jl_nothing, NULL, NULL);
+        0, 1, ~(size_t)0, 0, jl_nothing, di, edges);
     jl_atomic_store_relaxed(&codeinst->specptr.fptr1, fptr);
     jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_args);
     jl_mi_cache_insert(mi, codeinst);
@@ -662,7 +664,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     codeinst->time_infer_total = 0;
     codeinst->time_infer_self = 0;
     jl_atomic_store_relaxed(&codeinst->time_compile, 0);
-    jl_atomic_store_relaxed(&codeinst->specsigflags, 0);
+    jl_atomic_store_relaxed(&codeinst->flags, 0);
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
@@ -750,12 +752,57 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
         JL_LOCK(&mi->def.method->writelock);
-    jl_code_instance_t *oldci = jl_atomic_load_relaxed(&mi->cache);
-    jl_atomic_store_relaxed(&ci->next, oldci);
-    if (oldci)
-        jl_gc_wb(ci, oldci);
-    jl_atomic_store_release(&mi->cache, ci);
-    jl_gc_wb(mi, ci);
+    // Set native_cache_valid bit when inserting into cache
+    jl_atomic_fetch_or_relaxed(&ci->flags, JL_CI_FLAGS_NATIVE_CACHE_VALID);
+    // find the preferred location for insertion of ci now:
+    //   - invoke+inferred group
+    //   - inferred group
+    //   - others group
+    //   - unmoved
+    //   - after existing entries with same applicable range
+    jl_value_t *parent = (jl_value_t*)mi;
+    _Atomic(jl_code_instance_t*) *slot = &mi->cache;
+    jl_code_instance_t *oldci = jl_atomic_load_relaxed(slot);
+    int hasinvoke = jl_atomic_load_relaxed(&ci->invoke) != NULL;
+    int hasinferred = jl_atomic_load_relaxed(&ci->inferred) != NULL;
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    jl_code_instance_t *next = jl_atomic_load_relaxed(&ci->next);
+    while (oldci) {
+        if (oldci == ci)
+            break;
+        int old_hasinvoke = jl_atomic_load_relaxed(&oldci->invoke) != NULL;
+        int old_hasinferred = jl_atomic_load_relaxed(&oldci->inferred) != NULL;
+        size_t old_max_world = jl_atomic_load_relaxed(&oldci->max_world);
+        if (hasinvoke && !old_hasinvoke)
+            break;
+        if (hasinferred && !old_hasinferred)
+            break;
+        if (next == NULL && old_max_world < max_world)
+            break;
+        parent = (jl_value_t*)oldci;
+        slot = &oldci->next;
+        oldci = jl_atomic_load_relaxed(slot);
+    }
+    if (oldci != ci) {
+        jl_atomic_store_relaxed(&ci->next, oldci);
+        if (oldci)
+            jl_gc_wb(ci, oldci);
+        jl_atomic_store_release(slot, ci);
+        jl_gc_wb(parent, ci);
+        if (oldci != NULL) {
+            // list is now potentially circular, need to go find old pointer to ci starting from oldci and insert next there
+            do {
+                parent = (jl_value_t*)oldci;
+                slot = &oldci->next;
+                oldci = jl_atomic_load_relaxed(slot);
+            } while (oldci && oldci != ci);
+            if (oldci) {
+                jl_atomic_store_release(slot, next);
+                if (next)
+                    jl_gc_wb(parent, next);
+            }
+        }
+    }
     if (jl_is_method(mi->def.method))
         JL_UNLOCK(&mi->def.method->writelock);
     JL_GC_POP();
@@ -3395,7 +3442,7 @@ static void record_dispatch_statement_on_first_dispatch(jl_method_instance_t *mf
 // but merely causes it to look into the current JIT worklist.
 void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile)
 {
-    uint8_t flags = jl_atomic_load_acquire(&ci->specsigflags); // happens-before for subsequent read of fptr
+    uint8_t flags = jl_atomic_load_acquire(&ci->flags); // happens-before for subsequent read of fptr
     while (1) {
         jl_callptr_t initial_invoke = jl_atomic_load_acquire(&ci->invoke); // happens-before for subsequent read of fptr
         if (initial_invoke == jl_fptr_wait_for_compiled_addr) {
@@ -3416,9 +3463,9 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
             *specsigflags = 0b00;
             return;
         }
-        while (!(flags & 0b10)) {
+        while (!(flags & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR)) {
             jl_cpu_pause();
-            flags = jl_atomic_load_acquire(&ci->specsigflags);
+            flags = jl_atomic_load_acquire(&ci->flags);
         }
         jl_callptr_t final_invoke = jl_atomic_load_relaxed(&ci->invoke);
         if (final_invoke == initial_invoke) {
@@ -3472,14 +3519,13 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 void *prev_fptr = NULL;
                 // see jitlayers.cpp for the ordering restrictions here
                 if (jl_atomic_cmpswap_acqrel(&codeinst->specptr.fptr, &prev_fptr, fptr)) {
-                    jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & 0b1);
                     jl_atomic_store_release(&codeinst->invoke, invoke);
                     // unspec is probably not specsig, but might be using specptr
-                    jl_atomic_store_release(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
+                    jl_atomic_fetch_or_relaxed(&codeinst->flags, JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR);
                 }
                 else {
                     // someone else already compiled it
-                    while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                    while (!(jl_atomic_load_acquire(&codeinst->flags) & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR)) {
                         jl_cpu_pause();
                     }
                     // codeinst is now set up fully, safe to return
@@ -3518,14 +3564,16 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     jl_callptr_t invoke;
                     void *fptr;
                     jl_read_codeinst_invoke(unspec, &specsigflags, &invoke, &fptr, 1);
+                    jl_debuginfo_t *di = NULL;
+                    jl_svec_t *edges = jl_emptysvec;
                     jl_code_instance_t *codeinst = jl_new_codeinst(mi, jl_nothing,
                         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, NULL, NULL,
-                        0, 1, ~(size_t)0, 0, jl_nothing, NULL, NULL);
+                        0, 1, ~(size_t)0, 0, jl_nothing, di, edges);
                     codeinst->rettype_const = unspec->rettype_const;
                     jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
                     jl_atomic_store_relaxed(&codeinst->invoke, invoke);
                     // unspec is probably not specsig, but might be using specptr
-                    jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
+                    jl_atomic_store_relaxed(&codeinst->flags, specsigflags & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR);
                     jl_mi_cache_insert(mi, codeinst);
                     record_precompile_statement(mi, 0, 0);
                     return codeinst;
@@ -3539,9 +3587,11 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         compile_option == JL_OPTIONS_COMPILE_MIN) {
         jl_code_info_t *src = jl_code_for_interpreter(mi, world);
         if (!jl_code_requires_compiler(src, 0)) {
+            jl_debuginfo_t *di = NULL;
+            jl_svec_t *edges = jl_emptysvec;
             jl_code_instance_t *codeinst = jl_new_codeinst(mi, jl_nothing,
                 (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, NULL, NULL,
-                0, 1, ~(size_t)0, 0, jl_nothing, NULL, NULL);
+                0, 1, ~(size_t)0, 0, jl_nothing, di, edges);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
             record_precompile_statement(mi, 0, 0);
@@ -3629,14 +3679,16 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_callptr_t invoke;
         void *fptr;
         jl_read_codeinst_invoke(ucache, &specsigflags, &invoke, &fptr, 1);
+        jl_debuginfo_t *di = NULL;
+        jl_svec_t *edges = jl_emptysvec;
         codeinst = jl_new_codeinst(mi, jl_nothing,
             (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, NULL, NULL,
-            0, 1, ~(size_t)0, 0, jl_nothing, NULL, NULL);
+            0, 1, ~(size_t)0, 0, jl_nothing, di, edges);
         codeinst->rettype_const = ucache->rettype_const;
         // unspec is always not specsig, but might use specptr
         jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
         jl_atomic_store_relaxed(&codeinst->invoke, invoke);
-        jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
+        jl_atomic_store_relaxed(&codeinst->flags, specsigflags & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR);
         jl_mi_cache_insert(mi, codeinst);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);

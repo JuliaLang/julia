@@ -286,7 +286,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
                 target = specptr;
                 target_specsig = false;
             }
-            else if (specsigflags & 0b1) {
+            else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
                 assert(specptr != nullptr);
                 if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
                     return specptr; // no adapter required
@@ -392,11 +392,11 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
             void *fptr;
             void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_NOTSAFEPOINT; // declare it is not a safepoint (or deadlock) in this file due to 0 parameter
             jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
-            //if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr)
+            //if (specsig ? specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED : invoke == jl_fptr_args_addr)
             if (invoke == jl_fptr_args_addr) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
             }
-            else if (specsigflags & 0b1) {
+            else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
                 preal_specsig = true;
             }
@@ -426,11 +426,11 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                     uint8_t specsigflags;
                     void *fptr;
                     jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
-                    //if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr)
+                    //if (specsig ? specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED : invoke == jl_fptr_args_addr)
                     if (invoke == jl_fptr_args_addr) {
                         preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
                     }
-                    else if (specsigflags & 0b1) {
+                    else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
                         preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
                         preal_specsig = true;
                     }
@@ -753,16 +753,19 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
                 assert(spec);
                 if (jl_atomic_cmpswap_acqrel(&this_code->specptr.fptr, &prev_specptr, spec)) {
                     // only set specsig and invoke if we were the first to set specptr
-                    jl_atomic_store_relaxed(&this_code->specsigflags, (uint8_t) isspecsig);
+                    // Clear compilation state bits, then set SPECPTR_SPECIALIZED if needed
+                    if (isspecsig)
+                        jl_atomic_fetch_or_relaxed(&this_code->flags, JL_CI_FLAGS_SPECPTR_SPECIALIZED);
                     // we might overwrite invokeptr here; that's ok, anybody who relied on the identity of invokeptr
                     // either assumes that specptr was null, doesn't care about specptr,
-                    // or will wait until specsigflags has 0b10 set before reloading invoke
+                    // or will wait until flags has 0b10 set before reloading invoke
                     jl_atomic_store_release(&this_code->invoke, addr);
-                    jl_atomic_store_release(&this_code->specsigflags, (uint8_t) (0b10 | isspecsig));
+                    // Set INVOKE_MATCHES_SPECPTR to signal completion
+                    jl_atomic_fetch_or_relaxed(&this_code->flags, JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR);
                 }
                 else {
                     //someone else beat us, don't commit any results
-                    while (!(jl_atomic_load_acquire(&this_code->specsigflags) & 0b10)) {
+                    while (!(jl_atomic_load_acquire(&this_code->flags) & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR)) {
                         jl_cpu_pause();
                     }
                     addr = jl_atomic_load_relaxed(&this_code->invoke);
