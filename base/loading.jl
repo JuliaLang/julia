@@ -1032,7 +1032,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
     # Only reach here if deps was not a dict which mean we have a unique name for the dep
     name_deps = get(d, name, nothing)::Union{Nothing, Vector{Any}}
     if name_deps === nothing || length(name_deps) != 1
-        error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+        error("expected a single entry for $(repr(name)) in $(repr(manifest_file))")
     end
     entry = first(name_deps::Vector{Any})::Dict{String, Any}
     uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
