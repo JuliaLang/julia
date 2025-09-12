@@ -245,7 +245,6 @@ const PARTITION_KIND_FAILED             = 0x7
 const PARTITION_KIND_DECLARED           = 0x8
 const PARTITION_KIND_GUARD              = 0x9
 const PARTITION_KIND_UNDEF_CONST        = 0xa
-const PARTITION_KIND_BACKDATED_CONST    = 0xb
 
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
@@ -254,9 +253,9 @@ const PARTITION_FLAG_DEPWARN      = 0x40
 const PARTITION_MASK_KIND         = 0x0f
 const PARTITION_MASK_FLAG         = 0xf0
 
-const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
+const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x4
 
-is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
+is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
 is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED)

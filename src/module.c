@@ -301,7 +301,7 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.debug_only_ultimate_binding = (jl_binding_t*)tempbpart->restriction;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_GLOBAL;
-            } else if (kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_BACKDATED_CONST) {
+            } else if (kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_DECLARED) {
                 imp_resolution.binding_or_const = (jl_value_t *)tempb;
                 imp_resolution.debug_only_ultimate_binding = tempb;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_GLOBAL;
@@ -595,50 +595,6 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
         } else {
             new_bpart = jl_replace_binding_locked(b, bpart, val, constant_kind, new_world);
         }
-        int need_backdate = new_world && val;
-        if (need_backdate) {
-            // We will backdate as long as this partition was never explicitly
-            // declared const, global, or imported.
-            jl_binding_partition_t *prev_bpart = bpart;
-            for (;;) {
-                enum jl_partition_kind prev_kind = jl_binding_kind(prev_bpart);
-                if (jl_bkind_is_some_constant(prev_kind) || prev_kind == PARTITION_KIND_GLOBAL ||
-                    jl_bkind_is_some_import(prev_kind)) {
-                    need_backdate = 0;
-                    break;
-                }
-                size_t prev_bpart_min_world = jl_atomic_load_relaxed(&prev_bpart->min_world);
-                if (prev_bpart_min_world == 0)
-                    break;
-                prev_bpart = jl_get_binding_partition(b, prev_bpart_min_world - 1);
-            }
-        }
-        // If backdate is required, replace each existing partition by a new one.
-        // We can't use one binding to cover the entire range, because we need to
-        // keep the flags partitioned.
-        if (need_backdate) {
-            jl_binding_partition_t *prev_bpart = bpart;
-            jl_binding_partition_t *backdate_bpart = new_binding_partition();
-            new_prev_bpart = backdate_bpart;
-            while (1) {
-                backdate_bpart->kind = (size_t)PARTITION_KIND_BACKDATED_CONST | (prev_bpart->kind & 0xf0);
-                backdate_bpart->restriction = val;
-                jl_atomic_store_relaxed(&backdate_bpart->min_world,
-                    jl_atomic_load_relaxed(&prev_bpart->min_world));
-                jl_gc_wb_fresh(backdate_bpart, val);
-                jl_atomic_store_relaxed(&backdate_bpart->max_world,
-                    jl_atomic_load_relaxed(&prev_bpart->max_world));
-                prev_bpart = jl_atomic_load_relaxed(&prev_bpart->next);
-                if (!prev_bpart)
-                    break;
-                jl_binding_partition_t *next_prev_bpart = new_binding_partition();
-                jl_atomic_store_relaxed(&backdate_bpart->next, next_prev_bpart);
-                jl_gc_wb(backdate_bpart, next_prev_bpart);
-                backdate_bpart = next_prev_bpart;
-            }
-            jl_atomic_store_release(&new_bpart->next, new_prev_bpart);
-            jl_gc_wb(new_bpart, new_prev_bpart);
-        }
     }
     JL_GC_POP();
     return new_bpart;
@@ -866,29 +822,6 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
     return b ? b->globalref->mod : m;
 }
 
-static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
-{
-    jl_safe_printf(
-        "WARNING: Detected access to binding `%s.%s` in a world prior to its definition world.\n"
-        "  Julia 1.12 has introduced more strict world age semantics for global bindings.\n"
-        "  !!! This code may malfunction under Revise.\n"
-        "  !!! This code will error in future versions of Julia.\n"
-        "Hint: Add an appropriate `invokelatest` around the access to this binding.\n"
-        "To make this warning an error, and hence obtain a stack trace, use `julia --depwarn=error`.\n",
-        jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
-}
-
-static inline void check_backdated_binding(jl_binding_t *b, enum jl_partition_kind kind) JL_NOTSAFEPOINT
-{
-    if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST)) {
-        // We don't want functions that inference executes speculatively to print this warning, so turn those into
-        // an error for inference purposes.
-        if (jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
-            jl_undefined_var_error(b->globalref->name, (jl_value_t*)b->globalref->mod);
-        if (!(jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION) & BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION))
-            print_backdate_admonition(b);
-    }
-}
 
 JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b)
 {
@@ -900,10 +833,19 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t w
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     jl_walk_binding_inplace(&b, &bpart, world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind == PARTITION_KIND_GUARD) {
+        // Retry lookup in current world counter for guard partitions (unless in pure callback)
+        if (!jl_current_task->ptls->in_pure_callback) {
+            size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
+            if (current_world != world) {
+                return jl_get_binding_value_in_world(b, current_world);
+            }
+        }
+        return NULL;
+    }
     if (jl_bkind_is_some_guard(kind))
         return NULL;
     if (jl_bkind_is_some_constant(kind)) {
-        check_backdated_binding(b, kind);
         return bpart->restriction;
     }
     assert(!jl_bkind_is_some_import(kind));
@@ -923,10 +865,19 @@ static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world)
         jl_walk_binding_inplace(&b, &bpart, world);
     }
     enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind == PARTITION_KIND_GUARD) {
+        // Retry lookup in current world counter for guard partitions (unless in pure callback)
+        if (!jl_current_task->ptls->in_pure_callback) {
+            size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
+            if (current_world != world) {
+                return jl_get_binding_value_depwarn(b, current_world);
+            }
+        }
+        return NULL;
+    }
     if (jl_bkind_is_some_guard(kind))
         return NULL;
     if (jl_bkind_is_some_constant(kind)) {
-        check_backdated_binding(b, kind);
         return bpart->restriction;
     }
     assert(!jl_bkind_is_some_import(kind));
@@ -939,10 +890,19 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_seqcst(jl_binding_t *b)
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     jl_walk_binding_inplace(&b, &bpart, world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind == PARTITION_KIND_GUARD) {
+        // Retry lookup in current world counter for guard partitions (unless in pure callback)
+        if (!jl_current_task->ptls->in_pure_callback) {
+            size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
+            if (current_world != world) {
+                return jl_get_binding_value_in_world(b, current_world);
+            }
+        }
+        return NULL;
+    }
     if (jl_bkind_is_some_guard(kind))
         return NULL;
     if (jl_bkind_is_some_constant(kind)) {
-        check_backdated_binding(b, kind);
         return bpart->restriction;
     }
     assert(!jl_bkind_is_some_import(kind));
@@ -1478,13 +1438,34 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // u
         jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
     }
     enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind == PARTITION_KIND_GUARD) {
+        // Retry lookup in current world counter for guard partitions (unless in pure callback)
+        if (!jl_current_task->ptls->in_pure_callback) {
+            size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
+            if (current_world != jl_current_task->world_age) {
+                jl_binding_partition_t *current_bpart = jl_get_binding_partition(b, current_world);
+                if (!current_bpart)
+                    return 0;
+                if (!allow_import) {
+                    if (!current_bpart || jl_bkind_is_some_import(jl_binding_kind(current_bpart)))
+                        return 0;
+                } else {
+                    jl_walk_binding_inplace(&b, &current_bpart, current_world);
+                }
+                enum jl_partition_kind current_kind = jl_binding_kind(current_bpart);
+                if (jl_bkind_is_some_guard(current_kind))
+                    return 0;
+                if (jl_bkind_is_defined_constant(current_kind)) {
+                    return 1;
+                }
+                return jl_atomic_load(&b->value) != NULL;
+            }
+        }
+        return 0;
+    }
     if (jl_bkind_is_some_guard(kind))
         return 0;
     if (jl_bkind_is_defined_constant(kind)) {
-        if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST)) {
-            return !(jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR);
-        }
-        // N.B.: No backdated admonition for isdefined
         return 1;
     }
     return jl_atomic_load(&b->value) != NULL;

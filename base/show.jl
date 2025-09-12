@@ -3306,10 +3306,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     end
     print(io, " - ")
     kind = binding_kind(partition)
-    if kind == PARTITION_KIND_BACKDATED_CONST
-        print(io, "backdated constant binding to ")
-        print(io, partition_restriction(partition))
-    elseif kind == PARTITION_KIND_CONST
+    if kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_CONST_IMPORT

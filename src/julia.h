@@ -694,14 +694,6 @@ typedef struct _jl_weakref_t {
 //
 // We may make this list more permissive in the future.
 //
-// Finally, PARTITION_KIND_BACKDATED_CONST is a special case, and the only case where we may replace an
-// existing partition by a different partition kind in the same world age. As such, it needs special
-// support in inference. Any partition kind that may be replaced by a PARTITION_KIND_BACKDATED_CONST
-// must be inferred accordingly. PARTITION_KIND_BACKDATED_CONST is intended as a temporary compatibility
-// measure. The following kinds may be replaced by PARTITION_KIND_BACKDATED_CONST:
-//  - PARTITION_KIND_GUARD
-//  - PARTITION_KIND_FAILED
-//  - PARTITION_KIND_DECLARED
 enum jl_partition_kind {
     // Constant: This binding partition is a constant declared using `const _ = ...`
     //  ->restriction holds the constant value
@@ -740,9 +732,6 @@ enum jl_partition_kind {
     // without a value.
     //  ->restriction is NULL
     PARTITION_KIND_UNDEF_CONST  = 0xa,
-    // Backated constant. A constant that was backdated for compatibility. In all other
-    // ways equivalent to PARTITION_KIND_CONST, but prints a warning on access
-    PARTITION_KIND_BACKDATED_CONST = 0xb,
 
     // This is not a real binding kind, but can be used to ask for a re-resolution
     // of the implicit binding kind
@@ -798,13 +787,12 @@ STATIC_INLINE enum jl_partition_kind jl_binding_kind(jl_binding_partition_t *bpa
 }
 
 enum jl_binding_flags {
-    BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION        = 0x1,
-    BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION = 0x2,
+    BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION = 0x1,
     // `export` is tracked in partitions, but sets this as well
-    BINDING_FLAG_PUBLICP                              = 0x4,
+    BINDING_FLAG_PUBLICP                              = 0x2,
     // Set if any methods defined in this module implicitly reference
     // this binding. If not, invalidation is optimized.
-    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x8
+    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x4
 };
 
 typedef struct _jl_binding_t {

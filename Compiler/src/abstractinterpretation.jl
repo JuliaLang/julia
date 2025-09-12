@@ -3644,18 +3644,12 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}
         if interp !== nothing && InferenceParams(interp).assume_bindings_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
-            # We do not currently assume an invalidation for guard -> defined transitions
-            # return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
+            # this will get the invokelatest binding at runtime
             return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
     end
 
     if is_defined_const_binding(kind)
-        if kind == PARTITION_KIND_BACKDATED_CONST
-            # Infer this as guard. We do not want a later const definition to retroactively improve
-            # inference results in an earlier world.
-            return RTEffects(Any, UndefVarError, local_getglobal_effects)
-        end
         rt = Const(partition_restriction(partition))
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL,
             inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE,
@@ -3663,7 +3657,7 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}
     end
 
     if kind == PARTITION_KIND_DECLARED
-        # Could be replaced by a backdated const which has an effect, so we can't assume it won't.
+        # Could be replaced by a const which has an effect, so we can't assume it won't.
         # Besides, we would prefer not to merge the world range for this into the world range for
         # _GLOBAL, because that would pessimize codegen.
         effects = Effects(local_getglobal_effects, effect_free=ALWAYS_FALSE)
