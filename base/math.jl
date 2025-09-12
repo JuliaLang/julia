@@ -1271,8 +1271,10 @@ include("special/exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
 include("special/rem_pio2.jl")
+include("special/rem2pi.jl")
 include("special/log.jl")
 include("special/pow.jl")
+
 
 
 # Float16 definitions
