@@ -1271,8 +1271,6 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 "with the module it should come from.")
             elseif is_some_explicit_imported(kind)
                 print(io, "\nSuggestion: this global was defined as `$(partition_restriction(bpart).globalref)` but not assigned a value.")
-            elseif kind === PARTITION_KIND_BACKDATED_CONST
-                print(io, "\nSuggestion: define the const at top-level before running function that uses it (stricter Julia v1.12+ rule).")
             end
 
             # Check if binding kind changed between the error's world and current world
