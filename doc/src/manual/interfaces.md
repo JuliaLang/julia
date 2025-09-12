@@ -413,7 +413,7 @@ that wraps a standard `Array` with additional structure.
 Warning: do not implement these methods if the underlying storage is not actually strided, as it
 may lead to incorrect results or segmentation faults.
 
-The following function demonstraits how an element at indices `I` in a strided array `A` can be accessed.
+The following function demonstrates how an element at indices `I` in a strided array `A` can be accessed.
 This function assumes the element type `isbitstype` and the indices are inbounds.
 ```julia
 function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
