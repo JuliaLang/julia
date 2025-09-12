@@ -328,6 +328,7 @@ Stacktrace:
 """
 log(b::Number, x::Number) = log(promote(b,x)...)
 
+const libm = Base.libm_name
 # functions with no domain error
 """
     sinh(x)
