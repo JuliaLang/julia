@@ -1468,10 +1468,10 @@ end
 
     x = [1, 2, 3]
     y = OffsetVector(x, -1)
-    @test_throws ArgumentError cmp(x, y)
-    @test_throws ArgumentError cmp(y, x)
-    @test_throws ArgumentError isless(x, y)
-    @test_throws ArgumentError isless(y, x)
+    @test cmp(x, y) == 1
+    @test cmp(y, x) == -1
+    @test !isless(x, y)
+    @test isless(y, x)
 
     y2 = OffsetVector([1, 2, 3], 0)
     @test cmp(x, y2) == 0
