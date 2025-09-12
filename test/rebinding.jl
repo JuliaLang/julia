@@ -43,32 +43,44 @@ module Rebinding
     # Test invalidation (const -> undefined)
     const delete_me = 1
     f_return_delete_me() = delete_me
+    f_isdefined_delete_me() = @isdefined(delete_me)
     @test f_return_delete_me() == 1
+    @test f_isdefined_delete_me()
     Base.delete_binding(@__MODULE__, :delete_me)
     @test_throws UndefVarError f_return_delete_me()
+    @test !f_isdefined_delete_me()
 
     # + foreign module
     module NotTheDefinitionModule
         const delete_me_other = 2
     end
     @eval f_return_delete_me_foreign_module() = $(GlobalRef(NotTheDefinitionModule, :delete_me_other))
+    f_isdefined_foreign() = isdefined(NotTheDefinitionModule, :delete_me_other)
     @test f_return_delete_me_foreign_module() == 2
+    @test f_isdefined_foreign()
     Base.delete_binding(NotTheDefinitionModule, :delete_me_other)
     @test_throws UndefVarError f_return_delete_me_foreign_module()
+    @test !f_isdefined_foreign()
 
     ## + via indirect access
     const delete_me = 3
     f_return_delete_me_indirect() = getglobal(@__MODULE__, :delete_me)
+    f_isdefined_indirect() = isdefined(@__MODULE__, :delete_me)
     @test f_return_delete_me_indirect() == 3
+    @test f_isdefined_indirect()
     Base.delete_binding(@__MODULE__, :delete_me)
     @test_throws UndefVarError f_return_delete_me_indirect()
+    @test !f_isdefined_indirect()
 
     # + via generated function
     const delete_me = 4
     @generated f_generated_return_delete_me() = return :(delete_me)
+    @generated f_isdefined_generated() = return :(@isdefined(delete_me))
     @test f_generated_return_delete_me() == 4
+    @test f_isdefined_generated()
     Base.delete_binding(@__MODULE__, :delete_me)
     @test_throws UndefVarError f_generated_return_delete_me()
+    @test !f_isdefined_generated()
 
     module DeleteMeModule
         export delete_me_implicit
@@ -79,16 +91,70 @@ module Rebinding
     # + via import
     using .DeleteMeModule: delete_me_explicit
     f_return_delete_me_explicit() = delete_me_explicit
+    f_isdefined_explicit() = @isdefined(delete_me_explicit)
     @test f_return_delete_me_explicit() == 5
+    @test f_isdefined_explicit()
     Base.delete_binding(DeleteMeModule, :delete_me_explicit)
     @test_throws UndefVarError f_return_delete_me_explicit()
+    @test !f_isdefined_explicit()
 
     # + via using
     using .DeleteMeModule
     f_return_delete_me_implicit() = delete_me_implicit
+    f_isdefined_implicit() = @isdefined(delete_me_implicit)
     @test f_return_delete_me_implicit() == 6
+    @test f_isdefined_implicit()
     Base.delete_binding(DeleteMeModule, :delete_me_implicit)
     @test_throws UndefVarError f_return_delete_me_implicit()
+    @test !f_isdefined_implicit()
+
+    # Test world counter retry for newly defined bindings
+    @testset "invokelatest for guard bindings" begin
+        test_func_1 = (x) -> (@eval const new_binding_1 = $x; @isdefined(new_binding_1))
+        @test Base.invokelatest(test_func_1, 1)
+        @test Base.invokelatest(test_func_1, 2)
+        Base.delete_binding(Rebinding, :new_binding_1)
+        @test Base.invokelatest(test_func_1, 3)
+
+        test_func_2 = (x) -> (@eval const new_binding_2 = $x; new_binding_2)
+        @test Base.invokelatest(test_func_2, 3) === 3
+        @test Base.invokelatest(test_func_2, 4) === 3
+        @test Base.invokelatest(test_func_2, 5) === 4
+        Base.delete_binding(Rebinding, :new_binding_2)
+        @test Base.invokelatest(test_func_2, 6) === 6
+
+        test_func_3 = (x) -> (@eval new_binding_3 = $x; @isdefined(new_binding_3))
+        @test Base.invokelatest(test_func_3, 5)
+        @test Base.invokelatest(test_func_3, 6)
+        Base.delete_binding(Rebinding, :new_binding_3)
+        @test Base.invokelatest(test_func_3, 7)
+
+        test_func_4 = (x) -> (@eval new_binding_4 = $x; new_binding_4)
+        @test Base.invokelatest(test_func_4, 7) === 7
+        @test Base.invokelatest(test_func_4, 8) === 8
+        @test Base.invokelatest(test_func_4, 9) === 9
+        Base.delete_binding(Rebinding, :new_binding_4)
+        @test Base.invokelatest(test_func_4, 10) === 10
+
+        test_func_5 = (x) -> (@eval using Base: $x as new_import_1; @isdefined(new_import_1))
+        @test Base.invokelatest(test_func_5, :sin)
+        Base.delete_binding(Rebinding, :new_import_1)
+        @test Base.invokelatest(test_func_5, :cos)
+
+        test_func_6 = (x) -> (@eval using Base: $x as new_import_2; new_import_2)
+        @test Base.invokelatest(test_func_6, :sin) === Base.sin
+        Base.delete_binding(Rebinding, :new_import_2)
+        @test Base.invokelatest(test_func_6, :cos) === Base.cos
+        Base.delete_binding(Rebinding, :new_import_2)
+        @test Base.invokelatest(test_func_6, :tan) === Base.tan
+
+        @generated function test_generated_future(x)
+            return future_generated_binding
+        end
+        @eval const future_generated_binding = "too new"
+        @test_throws UndefVarError Base.invokelatest(test_generated_future, 13)
+        @test_throws UndefVarError Base.invokelatest(test_generated_future, 14)
+    end
 end
 
 module RebindingPrecompile
