@@ -619,7 +619,6 @@ end
 
 ## floating point comparisons ##
 ==(x::T, y::T) where {T<:IEEEFloat} = eq_float(x, y)
-!=(x::T, y::T) where {T<:IEEEFloat} = ne_float(x, y)
 <( x::T, y::T) where {T<:IEEEFloat} = lt_float(x, y)
 <=(x::T, y::T) where {T<:IEEEFloat} = le_float(x, y)
 
