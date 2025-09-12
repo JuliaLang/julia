@@ -701,9 +701,15 @@ JL_CALLABLE(jl_f__apply_iterate)
                 return (jl_value_t*)t;
             }
         }
-        else if (f == BUILTIN(tuple) && jl_is_tuple(args[1])) {
-            return args[1];
+        else if (f == BUILTIN(tuple)) {
+            if (jl_is_tuple(args[1]))
+                return args[1];
+            if (jl_is_svec(args[1]))
+                return jl_f_tuple(NULL, jl_svec_data(args[1]), jl_svec_len(args[1]));
         }
+        // optimization for `f(svec...)`
+        if (jl_is_svec(args[1]))
+            return jl_apply_generic(f, jl_svec_data(args[1]), jl_svec_len(args[1]));
     }
     // estimate how many real arguments we appear to have
     size_t precount = 1;
@@ -2149,6 +2155,14 @@ JL_CALLABLE(jl_f__compute_sparams)
     jl_type_intersection_env((jl_value_t*)tt, m->sig, &env);
     JL_GC_POP();
     return (jl_value_t*)env;
+}
+
+JL_CALLABLE(jl_f__svec_len)
+{
+    JL_NARGS(_svec_len, 1, 1);
+    jl_svec_t *s = (jl_svec_t*)args[0];
+    JL_TYPECHK(_svec_len, simplevector, (jl_value_t*)s);
+    return jl_box_long(jl_svec_len(s));
 }
 
 JL_CALLABLE(jl_f__svec_ref)
