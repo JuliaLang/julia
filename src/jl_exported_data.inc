@@ -116,6 +116,7 @@
     XX(jl_readonlymemory_exception) \
     XX(jl_ref_type) \
     XX(jl_returnnode_type) \
+    XX(jl_signal_router_condition) \
     XX(jl_signed_type) \
     XX(jl_simplevector_type) \
     XX(jl_slotnumber_type) \

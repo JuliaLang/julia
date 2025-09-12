@@ -205,6 +205,7 @@ JL_DLLEXPORT void jl_raise(int signo)
     fflush(NULL);
 #ifdef _OS_WINDOWS_
     if (signo == SIGABRT) {
+        // TODO: Look into adding user-defined signal handlers here
         signal(signo, SIG_DFL);
         abort();
     }
@@ -213,7 +214,10 @@ JL_DLLEXPORT void jl_raise(int signo)
     TerminateProcess(GetCurrentProcess(), 3); // aka _exit
     abort(); // prior call does not return, because we passed GetCurrentProcess()
 #else
+    // TODO: Why set the default signal handler when we unblock this signal for the current
+    // thread right away?
     signal(signo, SIG_DFL);
+
     sigset_t sset;
     sigemptyset(&sset);
     sigaddset(&sset, signo);
@@ -710,6 +714,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_init_uv();
     init_stdio();
     restore_fp_env();
+    init_signal_router();
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         restore_signals();
 

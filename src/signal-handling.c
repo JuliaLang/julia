@@ -31,6 +31,16 @@ static const uint64_t GIGA = 1000000000ULL;
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
 
+JL_DLLIMPORT _Atomic(uv_async_t *) jl_signal_router_condition JL_GLOBALLY_ROOTED;
+
+// POSIX standard signals are not queued when a single is pending. As our user signal
+// handler must wait for the libuv event loop we'll record the signals delivered to handler
+// from the kernel to ensure user callbacks have the chance to process all received signals.
+#define SIGNAL_QUEUE_SIZE 16
+static _Atomic(int) signal_queue[SIGNAL_QUEUE_SIZE];
+static _Atomic(size_t) signal_queue_head = 0;
+static _Atomic(size_t) signal_queue_tail = 0;
+
 ///////////////////////
 // Utility functions //
 ///////////////////////
@@ -634,6 +644,8 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         if (sig != SIGINT)
             sigaddset(&sset, sig);
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+
+        // TODO: Need to hook in here as well
 #endif
         if (si_code)
             jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
@@ -651,6 +663,57 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
     }
     jl_gc_debug_print_status();
     jl_gc_debug_critical_error();
+}
+
+void init_signal_router(void)
+{
+#ifndef _OS_WINDOWS_
+    sigemptyset(&signal_router_sset);
+    if (pthread_mutex_init(&signal_router_sset_lock, NULL) != 0)
+        jl_error("phread_mutex_init failed for: signal_router_sset_lock");
+#endif
+}
+
+void enqueue_user_signal(int sig) {
+    size_t head = jl_atomic_load_relaxed(&signal_queue_head);
+    size_t tail = jl_atomic_load_acquire(&signal_queue_tail);
+
+    size_t next_head = (head + 1) % SIGNAL_QUEUE_SIZE;
+    if (next_head == tail)
+        return; // queue full
+
+    jl_atomic_store_release(&signal_queue[head], sig);
+    jl_atomic_store_release(&signal_queue_head, next_head);
+}
+
+int dequeue_user_signal(void) {
+    size_t head = jl_atomic_load_acquire(&signal_queue_head);
+    size_t tail = jl_atomic_load_relaxed(&signal_queue_tail);
+
+    size_t next_tail = (tail + 1) % SIGNAL_QUEUE_SIZE;
+    if (tail == head)
+        return -1; // queue empty
+
+    int sig = jl_atomic_load_acquire(&signal_queue[tail]);
+    jl_atomic_store_release(&signal_queue_tail, next_tail);
+    return sig;
+}
+
+void notify_signal_router(int sig)
+{
+    enqueue_user_signal(sig);
+    uv_async_t *handle = jl_atomic_load_relaxed(&jl_signal_router_condition);
+    if (handle)
+        uv_async_send(handle);
+}
+
+JL_DLLEXPORT void jl_set_signal_router_condition(void *condition)
+{
+    jl_atomic_store_release(&jl_signal_router_condition, condition);
+}
+
+JL_DLLEXPORT int jl_consume_user_signal(void) {
+    return dequeue_user_signal();
 }
 
 #ifdef __cplusplus

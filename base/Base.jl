@@ -181,6 +181,7 @@ include("cmd.jl")
 include("process.jl")
 include("terminfo.jl")
 include("secretbuffer.jl")
+include("signals.jl")
 
 # core math functions
 include("floatfuncs.jl")

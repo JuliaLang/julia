@@ -44,7 +44,86 @@
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
 
+// The set of unblocked signals utilized by user-defined signal handlers.
+static sigset_t signal_router_sset;  // protected by `signal_router_sset_lock`
+pthread_mutex_t signal_router_sset_lock;
+
 #include "julia_assert.h"
+
+JL_DLLEXPORT const char *jl_sigabbrev(int sig)
+{
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 32))
+    return sigabbrev_np(sig);
+#elif defined(__GLIBC__)
+    extern const char *const sys_sigabbrev[];
+    if (sig < NSIG && sig > 0)
+        return sys_sigabbrev[sig];
+    else
+        return NULL;
+#elif defined(_OS_DARWIN_) || defined(_OS_FREEBSD_)
+    // The GNU C library version limits results to the list of standard signals
+    if (sig < NSIG && sig > 0 && sig < 32)
+        // Array contains lowercase abbreviations which deviates from `sigabbrev_np`
+        return sys_signame[sig];
+    else
+        return NULL;
+#else
+    switch (sig) {
+    case SIGHUP:    return "HUP";
+    case SIGINT:    return "INT";
+    case SIGQUIT:   return "QUIT";
+    case SIGILL:    return "ILL";
+    case SIGTRAP:   return "TRAP";
+    case SIGABRT:   return "ABRT";
+    case SIGIOT:    return "IOT";
+    case SIGBUS:    return "BUS";
+#ifdef SIGEMT
+    case SIGEMT:    return "EMT";
+#endif
+    case SIGFPE:    return "FPE";
+    case SIGKILL:   return "KILL";
+    case SIGUSR1:   return "USR1";
+    case SIGSEGV:   return "SEGV";
+    case SIGUSR2:   return "USR2";
+    case SIGPIPE:   return "PIPE";
+    case SIGALRM:   return "ALRM";
+    case SIGTERM:   return "TERM";
+#ifdef SIGTKFLT
+    case SIGSTKFLT: return "STKFLT";
+#endif
+    case SIGCHLD:   return "CHLD";
+#ifdef SIGCLD
+    case SIGCLD:    return "CLD";
+#endif
+    case SIGCONT:   return "CONT";
+    case SIGSTOP:   return "STOP";
+    case SIGTSTP:   return "TSTP";
+    case SIGTTIN:   return "TTIN";
+    case SIGTTOU:   return "TTOU";
+    case SIGURG:    return "URG";
+    case SIGXCPU:   return "XCPU";
+    case SIGXFSZ:   return "XFSZ";
+    case SIGVTALRM: return "VTALRM";
+    case SIGPROF:   return "PROF";
+    case SIGWINCH:  return "WINCH";
+    case SIGIO:     return "IO";
+#ifdef SIGPWR
+    case SIGPWR:    return "PWR";
+#endif
+#ifdef SIGINFO
+    case SIGINFO:   return "INFO";
+#endif
+#ifdef SIGLOST
+    case SIGLOST:   return "LOST";
+#endif
+    case SIGSYS:    return "SYS";
+#ifdef SIGUNUSED
+    case SIGUNUSED: return "UNUSED";
+#endif
+    default:        return NULL;
+    }
+#endif
+}
 
 // helper function for returning the unw_context_t inside a ucontext_t
 // (also used by stackwalk.c)
@@ -729,22 +808,6 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 #endif
 #endif // HAVE_MACH
 
-static void allocate_segv_handler(void)
-{
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = segv_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
-    if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    // On AArch64, stack overflow triggers a SIGBUS
-    if (sigaction(SIGBUS, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-}
-
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
 #ifdef HAVE_MACH
@@ -926,10 +989,11 @@ static void do_profile(void *ctx)
 }
 #endif
 
+// Handle signals in a separate `signals_thread` to avoid interrupting other threads
 static void *signal_listener(void *arg)
 {
     sigset_t sset;
-    int sig, critical, profile;
+    int sig, critical, profile, ismember;
     jl_sigsetset(&sset);
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
     siginfo_t info;
@@ -983,6 +1047,15 @@ static void *signal_listener(void *arg)
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+
+        pthread_mutex_lock(&signal_router_sset_lock);
+        ismember = sigismember(&signal_router_sset, sig);
+        pthread_mutex_unlock(&signal_router_sset_lock);
+        if (ismember == 1) {
+            notify_signal_router(sig);
+            continue;
+        }
+
         profile = 0;
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
@@ -1194,81 +1267,86 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context)
 }
 #endif
 
-void jl_install_default_signal_handlers(void)
+int jl_install_default_signal_handler(int sig)
 {
-    struct sigaction actf;
-    memset(&actf, 0, sizeof(struct sigaction));
-    sigemptyset(&actf.sa_mask);
-    actf.sa_sigaction = fpe_handler;
-    actf.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
-    struct sigaction acttrap;
-    memset(&acttrap, 0, sizeof(struct sigaction));
-    sigemptyset(&acttrap.sa_mask);
-    acttrap.sa_sigaction = sigtrap_handler;
-    acttrap.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#else
-    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTRAP");
-    }
-#endif
-    struct sigaction actint;
-    memset(&actint, 0, sizeof(struct sigaction));
-    sigemptyset(&actint.sa_mask);
-    actint.sa_handler = sigint_handler;
-    actint.sa_flags = 0;
-    if (sigaction(SIGINT, &actint, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGPIPE");
-    }
-
-#if defined(HAVE_MACH)
-    allocate_mach_handler();
-#else
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
-    act.sa_sigaction = usr2_handler;
-    act.sa_flags = SA_SIGINFO | SA_RESTART;
-    if (sigaction(SIGUSR2, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#endif
 
-    allocate_segv_handler();
-
-    struct sigaction act_die;
-    memset(&act_die, 0, sizeof(struct sigaction));
-    sigemptyset(&act_die.sa_mask);
-    act_die.sa_sigaction = sigdie_handler;
-    act_die.sa_flags = SA_SIGINFO | SA_RESETHAND;
-    if (sigaction(SIGILL, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGABRT, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGSYS, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    // need to ensure the following signals are not SIG_IGN, even though they will be blocked
-    act_die.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
-#ifdef SIGINFO
-    if (sigaction(SIGINFO, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
+    switch (sig) {
+    case SIGFPE:
+        act.sa_flags = SA_SIGINFO;
+        act.sa_sigaction = fpe_handler;
+        break;
+    case SIGTRAP:
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+        act.sa_flags = SA_SIGINFO;
+        act.sa_sigaction = sigtrap_handler;
 #else
-    if (sigaction(SIGUSR1, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        act.sa_handler = SIG_IGN;
+#endif
+        break;
+    case SIGINT:
+        act.sa_handler = sigint_handler;
+        break;
+    case SIGPIPE:
+        act.sa_handler = SIG_IGN;
+        break;
+#if !defined(HAVE_MACH)
+    case SIGUSR2:
+        act.sa_flags = SA_SIGINFO | SA_RESTART;
+        act.sa_sigaction = usr2_handler;
+        break;
+#endif
+    case SIGSEGV:
+    case SIGBUS:  // On AArch64, stack overflow triggers a SIGBUS
+        act.sa_flags = SA_ONSTACK | SA_SIGINFO;
+        act.sa_sigaction = segv_handler;
+        break;
+    case SIGILL:
+    case SIGABRT:
+    case SIGSYS:
+        act.sa_flags = SA_SIGINFO | SA_RESETHAND;
+        act.sa_sigaction = sigdie_handler;
+        break;
+#ifdef SIGINFO
+    case SIGINFO:
+#else
+    case SIGUSR1:
+#endif
+        // need to ensure the this signal is not SIG_IGN, even though they will be blocked
+        act.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
+        act.sa_sigaction = sigdie_handler;
+        break;
+    default:
+        return 0; // No default signal handler installed
     }
+
+    if (sigaction(sig, &act, NULL) < 0)
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    return 1; // A default signal handler was installed
+}
+
+void jl_install_default_signal_handlers(void)
+{
+    jl_install_default_signal_handler(SIGFPE);
+    jl_install_default_signal_handler(SIGTRAP);
+    jl_install_default_signal_handler(SIGINT);
+    jl_install_default_signal_handler(SIGPIPE);
+#if defined(HAVE_MACH)
+    allocate_mach_handler();
+#else
+    jl_install_default_signal_handler(SIGUSR2);
+#endif
+    jl_install_default_signal_handler(SIGSEGV);
+    jl_install_default_signal_handler(SIGBUS);
+    jl_install_default_signal_handler(SIGILL);
+    jl_install_default_signal_handler(SIGABRT);
+    jl_install_default_signal_handler(SIGSYS);
+#ifdef SIGINFO
+    jl_install_default_signal_handler(SIGINFO);
+#else
+    jl_install_default_signal_handler(SIGUSR1);
 #endif
 }
 
@@ -1280,4 +1358,49 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
 JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
+}
+
+JL_DLLEXPORT void jl_register_user_signal(int sig)
+{
+    uv_async_t *handle = jl_atomic_load_relaxed(&jl_signal_router_condition);
+    if (!handle)
+        jl_errorf("fatal error: jl_signal_router_condition unset");
+
+    pthread_mutex_lock(&signal_router_sset_lock);
+    int err = sigaddset(&signal_router_sset, sig);
+    pthread_mutex_unlock(&signal_router_sset_lock);
+    if (err < 0)
+        jl_errorf("fatal error: sigaddset: %s", strerror(errno));
+
+    // Overwrite the existing signal handler, if any.
+    // We avoid overwriting the handling of signals within the `sigwait_sigs` set as those
+    // cannot easily be restored. Instead, we have hooks in `signal_listener`.
+    sigset_t sset;
+    jl_sigsetset(&sset);
+    int ismember = sigismember(&sset, sig);
+    if (ismember == 0) {  // Signal is not in the `sigwait_sigs` set
+        struct sigaction act;
+        memset(&act, 0, sizeof(struct sigaction));
+        sigemptyset(&act.sa_mask);
+        act.sa_handler = notify_signal_router;
+        if (sigaction(sig, &act, NULL) < 0)
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+    else if (ismember < 0)
+        jl_errorf("fatal error: sigismember: %s", strerror(errno));
+}
+
+JL_DLLEXPORT void jl_deregister_user_signal(int sig)
+{
+    pthread_mutex_lock(&signal_router_sset_lock);
+    int err = sigdelset(&signal_router_sset, sig);
+    pthread_mutex_unlock(&signal_router_sset_lock);
+    if (err < 0)
+        jl_errorf("fatal error: sigdelset: %s", strerror(errno));
+
+    // Restore the default Julia signal handler, if one was set for this signal. Will not
+    // interfere with the `sigwait_sigs` set used by `signal_listener` since we do not
+    // define default signal handlers for those signals.
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_default_signal_handler(sig);
 }
