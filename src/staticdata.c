@@ -3650,9 +3650,9 @@ static void jl_prefetch_system_image(const char *data, size_t size)
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
-    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
-    jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1);
-    jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1);
+    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
+    jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1, 0);
+    jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1, 0);
     image->size = *plen;
     jl_prefetch_system_image(image->data, image->size);
 }
@@ -3661,9 +3661,9 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
     const char *data;
-    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
-    jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
-    jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1);
+    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
+    jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1, 0);
+    jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1, 0);
     jl_prefetch_system_image(data, *plen);
     image->size = ZSTD_getFrameContentSize(data, *plen);
     size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
@@ -3704,7 +3704,7 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
     // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
     void** (*get_jl_RTLD_DEFAULT_handle_addr)(void) = NULL;
     if (handle != jl_RTLD_DEFAULT_handle) {
-        int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0);
+        int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0, 0);
         if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != (get_jl_RTLD_DEFAULT_handle_addr()))
             jl_error("Image file failed consistency check: maybe opened the wrong version?");
     }
@@ -3722,7 +3722,7 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
     if (jl_image_unpack == NULL || is_pkgimage) {
         // in the usual case, the sysimage was not statically linked to libjulia-internal
         // look up the external sysimage symbols via the dynamic linker
-        jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1);
+        jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1, 0);
     }
     else {
         // the sysimage was statically linked directly against libjulia-internal

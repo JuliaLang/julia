@@ -401,7 +401,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     // ensures libunwind TLS space for this thread is allocated eagerly
     // to make unwinding async-signal-safe even when using thread local caches.
     unw_tls_ensure_func jl_unw_ensure_tls = NULL;
-    jl_dlsym(jl_exe_handle, "unw_ensure_tls", (void**)&jl_unw_ensure_tls, 0);
+    jl_dlsym(jl_RTLD_DEFAULT_handle, "unw_ensure_tls", (void**)&jl_unw_ensure_tls, 0, 1);
     if (jl_unw_ensure_tls)
         jl_unw_ensure_tls();
 #endif
@@ -461,7 +461,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
 {
     if (!jl_is_initialized()) {
         void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
-        void *handle = jl_find_dynamic_library_by_addr(retaddr, 0);
+        void *handle = jl_find_dynamic_library_by_addr(retaddr, 0, 0);
         if (handle == NULL) {
             fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
                             "       (this should not happen, please file a bug report)\n");
