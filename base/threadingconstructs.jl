@@ -222,7 +222,7 @@ end
 
 function greedy_func(itr, lidx, lbody)
     quote
-        let c = Channel{eltype($itr)}(0,spawn=true) do ch
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
             for item in $itr
                 put!(ch, item)
             end
