@@ -579,6 +579,7 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
+
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
 @nospecs function _svec_ref_tfunc(𝕃::AbstractLattice, s, i)
     if isa(s, Const) && isa(i, Const)
@@ -1143,6 +1144,8 @@ end
             end
         end
         s00 = s
+    elseif isa(s00, PartialTask)
+        s00 = Task
     end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
 end
@@ -1436,7 +1439,7 @@ end
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
                 RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
             end
-            info = ModifyOpInfo(callinfo.info)
+            info = IndirectCallInfo(callinfo.info, callinfo.effects, true)
             return CallMeta(RT, Any, Effects(), info)
         end
     end
@@ -2346,6 +2349,7 @@ const _PURE_BUILTINS = Any[
     tuple,
     svec,
     ===,
+    Core.task_result_type,
     typeof,
     nfields,
 ]
@@ -2407,6 +2411,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     fieldtype,
     isa,
     nfields,
+    Core.task_result_type,
     throw,
     Core.throw_methoderror,
     tuple,
@@ -2615,6 +2620,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # setglobalonce!,
     swapfield!,
     # swapglobal!,
+    Core.task_result_type,
     throw,
     tuple,
     typeassert,
@@ -3050,7 +3056,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         # llvmcall can do arbitrary things
         return Effects()
     elseif f === atomic_pointermodify
-        # atomic_pointermodify has memory effects, plus any effects from the ModifyOpInfo
+        # atomic_pointermodify has memory effects, plus any effects from the IndirectCallInfo
         return Effects()
     end
     is_effect_free = _is_effect_free_infer(f)
@@ -3261,6 +3267,15 @@ add_tfunc(modifyglobal!, 4, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 
 add_tfunc(replaceglobal!, 4, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(setglobalonce!, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
+
+@nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)
+    hasintersect(widenconst(T), Task) || return Union{}
+    if T isa PartialTask
+        return Type{widenconst(T.fetch_type)}
+    end
+    return Type
+end
+add_tfunc(Core.task_result_type, 1, 1, task_result_type_tfunc, 0)
 
 # foreigncall
 # ===========
