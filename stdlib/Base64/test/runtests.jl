@@ -40,6 +40,7 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     buf = IOBuffer()
     pipe = Base64EncodePipe(buf)
     @test !isreadable(pipe) && iswritable(pipe)
+    @test isopen(pipe)
     for char in inputText
         write(pipe, UInt8(char))
     end
