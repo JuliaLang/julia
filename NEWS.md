@@ -10,6 +10,7 @@ New language features
   - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
     is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
     ([JuliaLang/JuliaSyntax.jl#525], [#57143])
+  - Support for Unicode 17 ([#59534]).
 
 Language changes
 ----------------
