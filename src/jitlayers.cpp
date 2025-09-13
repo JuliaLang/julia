@@ -1609,10 +1609,33 @@ namespace {
                 PoolIdx = jl_options.opt_level;
             }
             assert(PoolIdx < N && "Invalid optimization level for compiler!");
-            return orc::SimpleCompiler(****TMs[PoolIdx])(M);
+
+            auto TM = **TMs[PoolIdx];
+            if (M.getDataLayout().isDefault())
+                M.setDataLayout((*TM)->createDataLayout());
+
+            SmallVector<char, 0> ObjBufferSV;
+            {
+                raw_svector_ostream ObjStream(ObjBufferSV);
+                legacy::PassManager PM;
+                MCContext *Ctx;
+                if ((*TM)->addPassesToEmitMC(PM, Ctx, ObjStream))
+                    return make_error<StringError>("Target does not support MC emission",
+                                                   inconvertibleErrorCode());
+                PM.run(M);
+            }
+
+            // OrcJIT requires that all modules / files have unique names:
+            // https://llvm.org/doxygen/namespacellvm_1_1orc.html#a1f5a1bc60c220cdccbab0f26b2a425e1
+            auto name = (M.getModuleIdentifier() + "-jitted-" +
+                         Twine(jl_atomic_fetch_add_relaxed(&bufcounter, 1)))
+                            .str();
+            return std::make_unique<SmallVectorMemoryBuffer>(std::move(ObjBufferSV), name,
+                                                             false);
         }
 
         std::array<std::unique_ptr<JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>>>, N> TMs;
+        _Atomic(size_t) bufcounter{0};
     };
 }
 
@@ -1722,7 +1745,7 @@ struct JuliaOJIT::DLSymOptimizer {
 
     void *lookup_symbol(void *libhandle, const char *fname) JL_NOTSAFEPOINT {
         void *addr;
-        jl_dlsym(libhandle, fname, &addr, 0);
+        jl_dlsym(libhandle, fname, &addr, 0, 0);
         return addr;
     }
 
@@ -2133,11 +2156,6 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
 
 Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> Obj) {
     assert(Obj && "Can not add null object");
-    // OrcJIT requires that all modules / files have unique names:
-    // https://llvm.org/doxygen/namespacellvm_1_1orc.html#a1f5a1bc60c220cdccbab0f26b2a425e1
-    // so we have to force a copy here
-    std::string Name = ("jitted-" + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str();
-    Obj = Obj->getMemBufferCopy(Obj->getBuffer(), Name);
     return ObjectLayer.add(JD.getDefaultResourceTracker(), std::move(Obj));
 }
 

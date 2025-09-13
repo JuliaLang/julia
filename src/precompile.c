@@ -108,12 +108,12 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     jl_gc_enable_finalizers(ct, 0); // now disable finalizers, as they could schedule more work or make other unexpected changes to reachability
     jl_task_wait_empty(); // then make sure we are the only thread alive that could be running user code past here
 
-    if (!jl_module_init_order) {
+    jl_array_t *worklist = jl_module_init_order;
+    if (!worklist) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
         return;
     }
 
-    jl_array_t *worklist = jl_module_init_order;
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);
@@ -123,19 +123,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
-            int setting = jl_get_module_compile((jl_module_t*)m);
-            if ((setting != JL_OPTIONS_COMPILE_OFF && (jl_options.trim ||
-                (setting != JL_OPTIONS_COMPILE_MIN)))) {
-                // TODO: this would be better handled if moved entirely to jl_precompile
-                // since it's a slightly duplication of effort
-                jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
-                JL_GC_PUSH1(&tt);
-                tt = jl_apply_tuple_type_v(&tt, 1);
-                jl_compile_hint((jl_tupletype_t*)tt);
-                if (jl_options.trim)
-                    jl_add_entrypoint((jl_tupletype_t*)tt);
-                JL_GC_POP();
-            }
         }
     }
 
@@ -152,7 +139,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     int64_t srctextpos = 0 ;
     jl_create_system_image(emit_native ? &native_code : NULL,
                            jl_options.incremental ? worklist : NULL,
-                           emit_split, &s, &z, &udeps, &srctextpos);
+                           emit_split, &s, &z, &udeps, &srctextpos, jl_module_init_order);
 
     if (!emit_split)
         z = s;

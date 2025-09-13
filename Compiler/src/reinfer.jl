@@ -426,13 +426,8 @@ function method_morespecific_via_interferences(method1::Method, method2::Method)
     if method1 === method2
         return false
     end
-    ms = method_in_interferences_recursive(method1, method2, IdSet{Method}())
-    # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
-    return ms
-end
 
-# Returns true if method1 is in method2's interferences (meaning !morespecific(method2, method1))
-function method_in_interferences_recursive(method1::Method, method2::Method, visited::IdSet{Method})
+    # Check direct interferences first
     if method_in_interferences(method2, method1)
         return false
     end
@@ -440,21 +435,38 @@ function method_in_interferences_recursive(method1::Method, method2::Method, vis
         return true
     end
 
-    # Recursively check through interference graph
-    method2 in visited && return false
+    visited = Method[]
     push!(visited, method2)
-    interferences = method2.interferences
-    for k = 1:length(interferences)
-        isassigned(interferences, k) || break
-        method3 = interferences[k]::Method
-        if method_in_interferences(method2, method3)
-            continue # only follow edges to morespecific methods in search of the morespecific target (skip ambiguities)
-        end
-        if method_in_interferences_recursive(method1, method3, visited)
-            return true # found method1 in the interference graph
+
+    workqueue = Method[method2]
+    while !isempty(workqueue)
+        current = pop!(workqueue)
+        interferences = current.interferences
+        for k = 1:length(interferences)
+            isassigned(interferences, k) || break
+            method3 = interferences[k]::Method
+
+            # Check if we're already visiting this interference method (cycle prevention and memoization)
+            method3 in visited && continue
+            push!(visited, method3)
+
+            if method_in_interferences(current, method3)
+                continue # only follow edges to morespecific methods in search of the morespecific target (skip ambiguities)
+            end
+
+            # Check direct interferences for this interference method
+            if method_in_interferences(method3, method1)
+                continue # return false for this path
+            end
+            if method_in_interferences(method1, method3)
+                return true # found method1 in the interference graph
+            end
+
+            push!(workqueue, method3)
         end
     end
 
+    # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
     return false
 end
 

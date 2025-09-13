@@ -627,7 +627,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                 void *symaddr;
                 std::string iname("i");
                 iname += f_name;
-                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
+                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0, 0)) {
                     f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
                     f_name = jl_symbol_name(jl_symbol(iname.c_str()));
                 }
@@ -1707,8 +1707,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const int rng_offset = offsetof(jl_tls_states_t, rngseed);
         Value *rng_ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptls_p, ConstantInt::get(ctx.types().T_size, rng_offset / sizeof(int8_t)));
         setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
-        assert(argv[0].V->getType() == getInt64Ty(ctx.builder.getContext()));
-        auto store = ctx.builder.CreateAlignedStore(argv[0].V, rng_ptr, Align(sizeof(void*)));
+        Value *val64 = emit_unbox(ctx, getInt64Ty(ctx.builder.getContext()), argv[0], (jl_value_t*)jl_uint64_type);
+        auto store = ctx.builder.CreateAlignedStore(val64, rng_ptr, Align(sizeof(void*)));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         ai.decorateInst(store);
         return ghostValue(ctx, jl_nothing_type);
