@@ -967,7 +967,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src)
     return dest
 end
 
-# copy from an some iterable object into an AbstractArray
+# copy from an iterable object into an AbstractArray
 function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
     if (sstart < 1)
         throw(ArgumentError(LazyString("source start offset (",sstart,") is < 1")))
