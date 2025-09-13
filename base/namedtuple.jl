@@ -159,7 +159,7 @@ end
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
 rest(t::NamedTuple) = t
-@inline rest(t::NamedTuple{names}, i::Int) where {names} = NamedTuple{rest(names,i)}(t)
+@inline rest(t::NamedTuple{names}, i) where {names} = NamedTuple{rest(names,i::Int)}(t)
 firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
@@ -167,7 +167,10 @@ getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
 getindex(t::NamedTuple, ::Colon) = t
 @inline getindex(t::NamedTuple, idxs::Tuple{Vararg{Symbol}}) = NamedTuple{idxs}(t)
 @inline getindex(t::NamedTuple, idxs::AbstractVector{Symbol}) = NamedTuple{Tuple(idxs)}(t)
-indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
+function indexed_iterate(t::NamedTuple, i, state=1)
+    i = i::Int
+    (getfield(t, i), i+1)
+end
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 empty(::NamedTuple) = NamedTuple()
