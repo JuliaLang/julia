@@ -5,7 +5,6 @@
   . non-moving, precise mark and sweep collector
   . pool-allocates small objects, keeps big objects on a simple list
 */
-
 #ifndef JL_GC_H
 #define JL_GC_H
 
@@ -20,6 +19,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "threading.h"
+#include "gc-common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,7 +44,6 @@ typedef struct {
 } jl_alloc_num_t;
 
 typedef struct {
-    int always_full;
     int wait_for_debugger;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
@@ -84,33 +83,6 @@ typedef struct _jl_gc_chunk_t {
 // layout for big (>2k) objects
 
 extern uintptr_t gc_bigval_sentinel_tag;
-
-JL_EXTENSION typedef struct _bigval_t {
-    struct _bigval_t *next;
-    struct _bigval_t *prev;
-    size_t sz;
-#ifdef _P64 // Add padding so that the value is 64-byte aligned
-    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
-    void *_padding[8 - 4];
-#else
-    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
-    void *_padding[16 - 4];
-#endif
-    //struct jl_taggedvalue_t <>;
-    union {
-        uintptr_t header;
-        struct {
-            uintptr_t gc:2;
-        } bits;
-    };
-    // must be 64-byte aligned here, in 32 & 64 bit modes
-} bigval_t;
-
-// data structure for tracking malloc'd genericmemory.
-typedef struct _mallocmemory_t {
-    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
-    struct _mallocmemory_t *next;
-} mallocmemory_t;
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
@@ -392,15 +364,6 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_page_metadata_back(jl_gc_pagemeta_t **ppg) J
     return v;
 }
 
-#ifdef __clang_gcanalyzer__ /* clang may not have __builtin_ffs */
-unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
-#else
-STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
-{
-    return __builtin_ffs(bitvec) - 1;
-}
-#endif
-
 extern bigval_t *oldest_generation_of_bigvals;
 extern int64_t buffered_pages;
 extern int gc_first_tid;
@@ -446,7 +409,7 @@ STATIC_INLINE int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
 STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     assert(jl_n_markthreads > 0);
-    int v = gc_first_tid + (int)cong(jl_n_markthreads - 1, &ptls->rngseed);
+    int v = gc_first_tid + (int)cong(jl_n_markthreads, &ptls->rngseed); // cong is [0, n)
     assert(v >= gc_first_tid && v <= gc_last_parallel_collector_thread_id());
     return v;
 }
@@ -505,12 +468,26 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
     sentinel_node->next = node;
 }
 
+// Must be kept in sync with `base/timing.jl`
+#define FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL (0)
+#define FULL_SWEEP_REASON_FORCED_FULL_SWEEP (1)
+#define FULL_SWEEP_REASON_USER_MAX_EXCEEDED (2)
+#define FULL_SWEEP_REASON_LARGE_PROMOTION_RATE (3)
+#define FULL_SWEEP_NUM_REASONS (4)
+
+extern JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
+STATIC_INLINE void gc_count_full_sweep_reason(int reason) JL_NOTSAFEPOINT
+{
+    assert(reason >= 0 && reason < FULL_SWEEP_NUM_REASONS);
+    jl_full_sweep_reasons[reason]++;
+}
+
 extern uv_mutex_t gc_perm_lock;
 extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
-extern _Atomic(int) gc_n_threads_sweeping;
+extern _Atomic(int) gc_n_threads_sweeping_pools;
 extern _Atomic(int) n_threads_running;
 extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
@@ -521,7 +498,7 @@ void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);
-void sweep_stack_pools(void) JL_NOTSAFEPOINT;
+void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT;
 void jl_gc_debug_init(void);
 
 // GC pages
@@ -616,9 +593,9 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
 #endif
 
 #ifdef MEMFENCE
-void gc_verify_tags(void);
+void gc_verify_tags(void) JL_NOTSAFEPOINT;
 #else
-static inline void gc_verify_tags(void)
+static inline void gc_verify_tags(void) JL_NOTSAFEPOINT
 {
 }
 #endif
@@ -669,30 +646,28 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
-#define gc_sweep_always_full jl_gc_debug_env.always_full
 int jl_gc_debug_check_other(void);
 int gc_debug_check_pool(void);
 void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
-#define gc_sweep_always_full 0
-static inline int jl_gc_debug_check_other(void)
+static inline int jl_gc_debug_check_other(void) JL_NOTSAFEPOINT
 {
     return 0;
 }
-static inline int gc_debug_check_pool(void)
+static inline int gc_debug_check_pool(void) JL_NOTSAFEPOINT
 {
     return 0;
 }
-static inline void jl_gc_debug_print(void)
+static inline void jl_gc_debug_print(void) JL_NOTSAFEPOINT
 {
 }
 static inline void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
 {
     (void)ta;
 }
-static inline void gc_scrub(void)
+static inline void gc_scrub(void) JL_NOTSAFEPOINT
 {
 }
 #endif
