@@ -39,29 +39,36 @@ isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
 
 copy(e::Expr) = exprarray(e.head, copy_exprargs(e.args))
+function copy(x::PhiNode)
+    values = x.values
+    nvalues = length(values)
+    new_values = Vector{Any}(undef, nvalues)
+    @inbounds for i = 1:nvalues
+        isassigned(values, i) || continue
+        new_values[i] = copy_exprs(values[i])
+    end
+    return PhiNode(copy(x.edges), new_values)
+end
+function copy(x::PhiCNode)
+    values = x.values
+    nvalues = length(values)
+    new_values = Vector{Any}(undef, nvalues)
+    @inbounds for i = 1:nvalues
+        isassigned(values, i) || continue
+        new_values[i] = copy_exprs(values[i])
+    end
+    return PhiCNode(new_values)
+end
 
-# copy parts of an AST that the compiler mutates
+# copy parts of an IR that the compiler mutates
+# (this is not a general-purpose copy for an Expr AST)
 function copy_exprs(@nospecialize(x))
     if isa(x, Expr)
         return copy(x)
     elseif isa(x, PhiNode)
-        values = x.values
-        nvalues = length(values)
-        new_values = Vector{Any}(undef, nvalues)
-        @inbounds for i = 1:nvalues
-            isassigned(values, i) || continue
-            new_values[i] = copy_exprs(values[i])
-        end
-        return PhiNode(copy(x.edges), new_values)
+        return copy(x)
     elseif isa(x, PhiCNode)
-        values = x.values
-        nvalues = length(values)
-        new_values = Vector{Any}(undef, nvalues)
-        @inbounds for i = 1:nvalues
-            isassigned(values, i) || continue
-            new_values[i] = copy_exprs(values[i])
-        end
-        return PhiCNode(new_values)
+        return copy(x)
     end
     return x
 end
@@ -79,25 +86,102 @@ function copy(c::CodeInfo)
         cnew.slottypes = copy(cnew.slottypes::Vector{Any})
     end
     cnew.ssaflags  = copy(cnew.ssaflags)
-    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
+    cnew.edges     = cnew.edges === nothing || cnew.edges isa Core.SimpleVector ? cnew.edges : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
     ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
     return cnew
 end
 
+function isequal_exprarg(@nospecialize(x), @nospecialize(y))
+    x isa typeof(y) || return false
+    x === y && return true
+    # c.f. list of types in copy_expr also
+    if x isa Expr
+        x == (y::Expr) && return true
+    elseif x isa QuoteNode
+        x == (y::QuoteNode) && return true
+    elseif x isa PhiNode
+        x == (y::PhiNode) && return true
+    elseif x isa PhiCNode
+        x == (y::PhiCNode) && return true
+    elseif x isa CodeInfo
+        x == (y::CodeInfo) && return true
+    end
+    return false
+end
 
-==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
-==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
-==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = stmt1.edges == stmt2.edges && stmt1.values == stmt2.values
+
+function isequal_exprargs(x::Array{Any,1}, y::Array{Any,1})
+    l = length(x)
+    l == length(y) || return false
+    for i = 1:l
+        if !isassigned(x, i)
+            # phi and phic values are permitted to be undef
+            isassigned(y, i) && return false
+        else
+            isassigned(y, i) || return false
+            isequal_exprarg(x[i], y[i]) || return false
+        end
+    end
+    return true
+end
+
+# define == such that == inputs to parsing (including line numbers) yield == outputs from lowering (including all metadata)
+# (aside from cases where parsing just returns a number, which are ambiguous here)
+==(x::Expr, y::Expr) = x.head === y.head && isequal_exprargs(x.args, y.args)
+
+==(x::QuoteNode, y::QuoteNode) = isequal_exprarg(x.value, y.value)
+
+==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = isequal(stmt1.edges, stmt2.edges) && isequal_exprargs(stmt1.values, stmt2.values)
+
+==(stmt1::Core.PhiCNode, stmt2::Core.PhiCNode) = isequal_exprargs(stmt1.values, stmt2.values)
+
+function ==(stmt1::CodeInfo, stmt2::CodeInfo)
+    for i in 1:nfields(stmt1)
+        if !isdefined(stmt1, i)
+            isdefined(stmt2, i) && return false
+        else
+            isdefined(stmt2, i) || return false
+            f1 = getfield(stmt1, i)
+            f2 = getfield(stmt2, i)
+            f1 isa typeof(f2) || return false
+            if f1 isa Vector{Any}
+                # code or types vectors
+                isequal_exprargs(f1, f2::Vector{Any}) || return false
+            elseif f1 isa DebugInfo
+                f1 == f2::DebugInfo || return false
+            elseif f1 isa Vector
+                # misc data
+                l = length(f1)
+                l == length(f2::Vector) || return false
+                for i = 1:l
+                    f1[i] === f2[i] || return false
+                end
+            else
+                # misc fields
+                f1 === f2 || return false
+            end
+        end
+    end
+    return true
+end
+
+function ==(x::DebugInfo, y::DebugInfo)
+    for i in 1:nfields(x)
+        getfield(x, i) == getfield(y, i) || return false
+    end
+    return true
+end
 
 """
-    macroexpand(m::Module, x; recursive=true)
+    macroexpand(m::Module, x; recursive=true, legacyscope=true)
 
 Take the expression `x` and return an equivalent expression with all macros removed (expanded)
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+The `legacyscope` keyword controls whether legacy macroscope expansion is performed.
 This is demonstrated in the example below:
-```julia-repl
+```jldoctest; filter = r"#= .*:6 =#"
 julia> module M
            macro m1()
                42
@@ -112,15 +196,31 @@ julia> macroexpand(M, :(@m2()), recursive=true)
 42
 
 julia> macroexpand(M, :(@m2()), recursive=false)
-:(#= REPL[16]:6 =# M.@m1)
+:(#= REPL[1]:6 =# @m1)
 ```
 """
-function macroexpand(m::Module, @nospecialize(x); recursive=true)
-    if recursive
-        ccall(:jl_macroexpand, Any, (Any, Any), x, m)
-    else
-        ccall(:jl_macroexpand1, Any, (Any, Any), x, m)
-    end
+function macroexpand(m::Module, @nospecialize(x); recursive=true, legacyscope=true)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
+end
+
+"""
+    macroexpand!(m::Module, x; recursive=true, legacyscope=false)
+
+Take the expression `x` and return an equivalent expression with all macros removed (expanded)
+for executing in module `m`, modifying `x` in place without copying.
+The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+The `legacyscope` keyword controls whether legacy macroscope expansion is performed.
+
+This function performs macro expansion without the initial copy step, making it more efficient
+when the original expression is no longer needed. By default, macroscope expansion is disabled
+for in-place expansion as it can be called separately if needed.
+
+!!! warning
+    This function modifies the input expression `x` in place. Use `macroexpand` if you need
+    to preserve the original expression.
+"""
+function macroexpand!(m::Module, @nospecialize(x); recursive=true, legacyscope=false)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, true, legacyscope)
 end
 
 """
@@ -138,7 +238,7 @@ There are differences between `@macroexpand` and [`macroexpand`](@ref).
   expands with respect to the module in which it is called.
 
 This is best seen in the following example:
-```julia-repl
+```jldoctest
 julia> module M
            macro m()
                1
@@ -146,7 +246,7 @@ julia> module M
            function f()
                (@macroexpand(@m),
                 macroexpand(M, :(@m)),
-                macroexpand(Main, :(@m))
+                macroexpand(parentmodule(M), :(@m))
                )
            end
        end
@@ -167,10 +267,10 @@ With `macroexpand` the expression expands in the module given as the first argum
     The two-argument form requires at least Julia 1.11.
 """
 macro macroexpand(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
+    return :(macroexpand($__module__, $(QuoteNode(code)); recursive=true, legacyscope=true))
 end
 macro macroexpand(mod, code)
-    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=true))
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)); recursive=true, legacyscope=true))
 end
 
 """
@@ -179,10 +279,10 @@ end
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
-    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+    return :(macroexpand($__module__, $(QuoteNode(code)); recursive=false, legacyscope=true))
 end
 macro macroexpand1(mod, code)
-    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=false))
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)); recursive=false, legacyscope=true))
 end
 
 ## misc syntax ##
@@ -248,6 +348,14 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     let
         @inline explicit_noinline(args...) # will be inlined
     end
+    ```
+
+!!! note
+    The callsite annotation applies to all calls in the block, including function arguments
+    that are themselves calls:
+    ```julia
+    # The compiler will not inline `getproperty`, `g` or `f`
+    @noinline f(x.inner, g(y))
     ```
 
 !!! note
@@ -395,13 +503,14 @@ macro constprop(setting)
 end
 
 function constprop_setting(@nospecialize setting)
+    s = setting
     isa(setting, QuoteNode) && (setting = setting.value)
     if setting === :aggressive
         return :aggressive_constprop
     elseif setting === :none
         return :no_constprop
     end
-    throw(ArgumentError(LazyString("@constprop "), setting, "not supported"))
+    throw(ArgumentError(LazyString("`Base.@constprop ", s, "` not supported")))
 end
 
 """
@@ -505,6 +614,7 @@ The following `setting`s are supported.
 - `:inaccessiblememonly`
 - `:noub`
 - `:noub_if_noinbounds`
+- `:nortcall`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -524,16 +634,20 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     contents) are not egal.
 
 !!! note
-    The `:consistent`-cy assertion is made world-age wise. More formally, write
-    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
+    The `:consistent`-cy assertion is made with respect to a particular world range `R`.
+    More formally, write ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
     ```math
-    ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
+    ∀ i ∈ R, j ∈ R, x, y: x ≡ y → fᵢ(x) ≡ fⱼ(y)
     ```
-    However, for two world ages ``i``, ``j`` s.t. ``i ≠ j``, we may have ``fᵢ(x) ≢ fⱼ(y)``.
+
+    For `@assume_effects`, the range `R` is `m.primary_world:m.deleted_world` of
+    the annotated or containing method.
+
+    For ordinary code instances, `R` is `ci.min_world:ci.max_world`.
 
     A further implication is that `:consistent` functions may not make their
     return value dependent on the state of the heap or any other global state
-    that is not constant for a given world age.
+    that is not constant over the given world age range.
 
 !!! note
     The `:consistent`-cy includes all legal rewrites performed by the optimizer.
@@ -674,6 +788,20 @@ any other effect assertions (such as `:consistent` or `:effect_free`) as well, b
 not model this, and they assume the absence of undefined behavior.
 
 ---
+## `:nortcall`
+
+The `:nortcall` setting asserts that the method does not call `Core.Compiler.return_type`,
+and that any other methods this method might call also do not call `Core.Compiler.return_type`.
+
+!!! note
+    To be precise, this assertion can be used when a call to `Core.Compiler.return_type` is
+    not made at runtime; that is, when the result of `Core.Compiler.return_type` is known
+    exactly at compile time and the call is eliminated by the optimizer. However, since
+    whether the result of `Core.Compiler.return_type` is folded at compile time depends
+    heavily on the compiler's implementation, it is generally risky to assert this if
+    the method in question uses `Core.Compiler.return_type` in any form.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -683,6 +811,7 @@ currently equivalent to the following `setting`s:
 - `:effect_free`
 - `:terminates_globally`
 - `:noub`
+- `:nortcall`
 
 !!! note
     This list in particular does not include `:nothrow`. The compiler will still
@@ -716,6 +845,7 @@ the following other `setting`s:
 - `:notaskstate`
 - `:inaccessiblememonly`
 - `:noub`
+- `:nortcall`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -740,7 +870,7 @@ macro assume_effects(args...)
         return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
         lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(lastex.args, 3, Core.Compiler.encode_effects_override(override))
+        insert!(lastex.args, 3, encode_effects_override(override))
         return esc(lastex)
     end
     override′ = compute_assumed_setting(override, lastex)
@@ -767,7 +897,49 @@ function compute_assumed_settings(settings)
     return override
 end
 
-using Core.Compiler: EffectsOverride
+struct EffectsOverride
+    consistent::Bool
+    effect_free::Bool
+    nothrow::Bool
+    terminates_globally::Bool
+    terminates_locally::Bool
+    notaskstate::Bool
+    inaccessiblememonly::Bool
+    noub::Bool
+    noub_if_noinbounds::Bool
+    consistent_overlay::Bool
+    nortcall::Bool
+end
+
+function EffectsOverride(
+    override::EffectsOverride =
+        EffectsOverride(false, false, false, false, false, false, false, false, false, false, false);
+    consistent::Bool = override.consistent,
+    effect_free::Bool = override.effect_free,
+    nothrow::Bool = override.nothrow,
+    terminates_globally::Bool = override.terminates_globally,
+    terminates_locally::Bool = override.terminates_locally,
+    notaskstate::Bool = override.notaskstate,
+    inaccessiblememonly::Bool = override.inaccessiblememonly,
+    noub::Bool = override.noub,
+    noub_if_noinbounds::Bool = override.noub_if_noinbounds,
+    consistent_overlay::Bool = override.consistent_overlay,
+    nortcall::Bool = override.nortcall)
+    return EffectsOverride(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates_globally,
+        terminates_locally,
+        notaskstate,
+        inaccessiblememonly,
+        noub,
+        noub_if_noinbounds,
+        consistent_overlay,
+        nortcall)
+end
+
+const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
 
 function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
@@ -794,24 +966,55 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
     elseif setting === :noub_if_noinbounds
         return EffectsOverride(override; noub_if_noinbounds = val)
     elseif setting === :foldable
-        consistent = effect_free = terminates_globally = noub = val
-        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub)
+        consistent = effect_free = terminates_globally = noub = nortcall = val
+        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub, nortcall)
     elseif setting === :removable
         effect_free = nothrow = terminates_globally = val
         return EffectsOverride(override; effect_free, nothrow, terminates_globally)
     elseif setting === :total
         consistent = effect_free = nothrow = terminates_globally = notaskstate =
-            inaccessiblememonly = noub = val
+            inaccessiblememonly = noub = nortcall = val
         return EffectsOverride(override;
             consistent, effect_free, nothrow, terminates_globally, notaskstate,
-            inaccessiblememonly, noub)
+            inaccessiblememonly, noub, nortcall)
     end
     return nothing
 end
 
+function encode_effects_override(eo::EffectsOverride)
+    e = 0x0000
+    eo.consistent          && (e |= (0x0001 << 0))
+    eo.effect_free         && (e |= (0x0001 << 1))
+    eo.nothrow             && (e |= (0x0001 << 2))
+    eo.terminates_globally && (e |= (0x0001 << 3))
+    eo.terminates_locally  && (e |= (0x0001 << 4))
+    eo.notaskstate         && (e |= (0x0001 << 5))
+    eo.inaccessiblememonly && (e |= (0x0001 << 6))
+    eo.noub                && (e |= (0x0001 << 7))
+    eo.noub_if_noinbounds  && (e |= (0x0001 << 8))
+    eo.consistent_overlay  && (e |= (0x0001 << 9))
+    eo.nortcall            && (e |= (0x0001 << 10))
+    return e
+end
+
+function decode_effects_override(e::UInt16)
+    return EffectsOverride(
+        !iszero(e & (0x0001 << 0)),
+        !iszero(e & (0x0001 << 1)),
+        !iszero(e & (0x0001 << 2)),
+        !iszero(e & (0x0001 << 3)),
+        !iszero(e & (0x0001 << 4)),
+        !iszero(e & (0x0001 << 5)),
+        !iszero(e & (0x0001 << 6)),
+        !iszero(e & (0x0001 << 7)),
+        !iszero(e & (0x0001 << 8)),
+        !iszero(e & (0x0001 << 9)),
+        !iszero(e & (0x0001 << 10)))
+end
+
 function form_purity_expr(override::EffectsOverride)
     ex = Expr(:purity)
-    for i = 1:Core.Compiler.NUM_EFFECTS_OVERRIDES
+    for i = 1:NUM_EFFECTS_OVERRIDES
         push!(ex.args, getfield(override, i))
     end
     return ex
@@ -829,7 +1032,7 @@ This can be used to limit the number of compiler-generated specializations durin
 
 # Examples
 
-```julia
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -838,7 +1041,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Any
+1 ─ %1 =    invoke g(A::AbstractArray)::Any
 └──      return %1
 ) => Any
 ```
@@ -885,8 +1088,8 @@ end
 unwrap_macrocalls(@nospecialize(x)) = x
 function unwrap_macrocalls(ex::Expr)
     inner = ex
-    while inner.head === :macrocall
-        inner = inner.args[end]::Expr
+    while isexpr(inner, :macrocall)
+        inner = inner.args[end]
     end
     return inner
 end
@@ -1247,6 +1450,10 @@ function make_atomic(order, ex)
                 op = :+
             elseif ex.head === :(-=)
                 op = :-
+            elseif ex.head === :(|=)
+                op = :|
+            elseif ex.head === :(&=)
+                op = :&
             elseif @isdefined string
                 shead = string(ex.head)
                 if endswith(shead, '=')
@@ -1542,4 +1749,94 @@ function make_atomiconce(success_order, fail_order, ex)
         return :(setindexonce_atomic!($x, $success_order, $fail_order, $val, $(idcs...)))
     end
     error("@atomiconce expression missing field access or indexing")
+end
+
+# Meta expression head, these generally can't be deleted even when they are
+# in a dead branch but can be ignored when analyzing uses/liveness.
+is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
+
+"""
+    isa_ast_node(x)
+
+Return false if `x` is not interpreted specially by any of inference, lowering,
+or codegen as either an AST or IR special form.
+"""
+function isa_ast_node(@nospecialize x)
+    # c.f. Core.IR module, augmented with AST types
+    return x isa NewvarNode ||
+           x isa CodeInfo ||
+           x isa LineNumberNode ||
+           x isa GotoNode ||
+           x isa GotoIfNot ||
+           x isa EnterNode ||
+           x isa ReturnNode ||
+           x isa SSAValue ||
+           x isa SlotNumber ||
+           x isa Argument ||
+           x isa QuoteNode ||
+           x isa GlobalRef ||
+           x isa Symbol ||
+           x isa PiNode ||
+           x isa PhiNode ||
+           x isa PhiCNode ||
+           x isa UpsilonNode ||
+           x isa Expr
+end
+
+is_self_quoting(@nospecialize(x)) = !isa_ast_node(x)
+
+"""
+    quoted(x)
+
+Return `x` made safe for inserting as a constant into IR. Note that this does
+not make it safe for inserting into an AST, since eval will sometimes copy some
+types of AST object inside, and even may sometimes evaluate and interpolate any
+`\$` inside, depending on the context.
+"""
+quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
+
+# Implementation of generated functions
+function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
+    ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
+               ex, defmod, "none", 0, typemax(Csize_t), 0)[1]
+    if !isa(ci, CodeInfo)
+        if isa(ci, Expr) && ci.head === :error
+            msg = ci.args[1]
+            error(msg isa String ? strcat("syntax: ", msg) : msg)
+        end
+        error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
+    end
+    ci.isva = isva
+    code = ci.code
+    bindings = IdSet{Core.Binding}()
+    for i = 1:length(code)
+        stmt = code[i]
+        if isa(stmt, GlobalRef)
+            push!(bindings, convert(Core.Binding, stmt))
+        end
+    end
+    if !isempty(bindings)
+        ci.edges = Core.svec(bindings...)
+    end
+    return ci
+end
+
+# invoke and wrap the results of @generated expression
+function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
+    # args is (spvals..., argtypes...)
+    body = g.gen(args...)
+    file = source.file
+    file isa Symbol || (file = :none)
+    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
+               Expr(:var"scope-block",
+                    Expr(:block,
+                         LineNumberNode(Int(source.line), source.file),
+                         Expr(:meta, :push_loc, file, :var"@generated body"),
+                         Expr(:return, body),
+                         Expr(:meta, :pop_loc))))
+    spnames = g.spnames
+    return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
+        source.module,
+        source.isva)
 end

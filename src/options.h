@@ -110,7 +110,7 @@
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_STACK_SIZE (64*1024*1024)
 #elif defined(_P64)
-#define JL_STACK_SIZE (4*1024*1024)
+#define JL_STACK_SIZE (8*1024*1024)
 #else
 #define JL_STACK_SIZE (2*1024*1024)
 #endif
@@ -136,6 +136,9 @@
 
 // GC threads
 #define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
+
+// heap size hint
+#define HEAP_SIZE_HINT                  "JULIA_HEAP_SIZE_HINT"
 
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"

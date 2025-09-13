@@ -81,7 +81,8 @@ function formatdoc(d::DocStr)
     for part in d.text
         formatdoc(buffer, d, part)
     end
-    Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    md = Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    assume_julia_code!(md)
 end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
@@ -93,6 +94,27 @@ function parsedoc(d::DocStr)
         d.object = md
     end
     d.object
+end
+
+"""
+    assume_julia_code!(doc::Markdown.MD) -> doc
+
+Assume that code blocks with no language specified are Julia code.
+"""
+function assume_julia_code!(doc::Markdown.MD)
+    assume_julia_code!(doc.content)
+    doc
+end
+
+function assume_julia_code!(blocks::Vector)
+    for (i, block) in enumerate(blocks)
+        if block isa Markdown.Code && block.language == ""
+            blocks[i] = Markdown.Code("julia", block.code)
+        elseif block isa Vector || block isa Markdown.MD
+            assume_julia_code!(block)
+        end
+    end
+    blocks
 end
 
 ## Trimming long help ("# Extended help")
@@ -279,20 +301,22 @@ function summarize(binding::Binding, sig)
     if defined(binding)
         binding_res = resolve(binding)
         if !isa(binding_res, Module)
+            varstr = "$(binding.mod).$(binding.var)"
             if Base.ispublic(binding.mod, binding.var)
-                println(io, "No documentation found for public symbol.\n")
+                println(io, "No documentation found for public binding `$varstr`.\n")
             else
-                println(io, "No documentation found for private symbol.\n")
+                println(io, "No documentation found for private binding `$varstr`.\n")
             end
         end
         summarize(io, binding_res, binding)
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
-        if Base.isbindingresolved(binding.mod, binding.var)
-            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
-        else
+        bpart = Base.lookup_binding_partition(Base.tls_world_age(), convert(Core.Binding, GlobalRef(binding.mod, binding.var)))
+        if Base.binding_kind(bpart) === Base.PARTITION_KIND_GUARD
             println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        else
+            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
         end
     end
     md = Markdown.parse(seekstart(io))
@@ -394,7 +418,9 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     if !isnothing(readme_path)
         readme_lines = readlines(readme_path)
         isempty(readme_lines) && return  # don't say we are going to print empty file
-        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        println(io)
+        println(io, "---")
+        println(io, "_Package description from `$(basename(readme_path))`:_")
         for line in first(readme_lines, nlines)
             println(io, line)
         end
@@ -451,7 +477,12 @@ function repl_corrections(io::IO, s, mod::Module)
     quot = any(isspace, s) ? "'" : ""
     print(io, quot)
     printstyled(io, s, color=:cyan)
-    print(io, quot, '\n')
+    print(io, quot)
+    if Base.identify_package(s) === nothing
+        print(io, '\n')
+    else
+        print(io, ", but a loadable package with that name exists. If you are looking for the package docs load the package first.\n")
+    end
     print_correction(io, s, mod)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
@@ -537,8 +568,7 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_ac
     quote
         repl_latex($io, $str)
         repl_search($io, $str, $mod)
-        $(if !isdefined(mod, s) && !Base.isbindingresolved(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
-               # n.b. we call isdefined for the side-effect of resolving the binding, if possible
+        $(if !isdefined(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str, $mod))
           end)
         $(_repl(s, brief, mod, internal_accesses))
@@ -632,13 +662,17 @@ function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
         dict = meta(mod; autoinit=false)
         isnothing(dict) && continue
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            if haskey(multidoc.docs, Union{})
-                fields = multidoc.docs[Union{}].data[:fields]
-                if haskey(fields, field)
-                    doc = fields[field]
-                    return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
+        multidoc = get(dict, binding, nothing)
+        if multidoc !== nothing
+            structdoc = get(multidoc.docs, Union{}, nothing)
+            if structdoc !== nothing
+                fieldsdoc = get(structdoc.data, :fields, nothing)
+                if fieldsdoc !== nothing
+                    fielddoc = get(fieldsdoc, field, nothing)
+                    if fielddoc !== nothing
+                        return isa(fielddoc, Markdown.MD) ?
+                            fielddoc : Markdown.parse(fielddoc)
+                    end
                 end
             end
         end

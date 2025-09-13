@@ -99,7 +99,7 @@ top:
   ret half %13
 }
 
-define bfloat @demote_bfloat_test(bfloat %a, bfloat %b) {
+define bfloat @demote_bfloat_test(bfloat %a, bfloat %b) #2 {
 top:
 ; CHECK-LABEL: @demote_bfloat_test(
 ; CHECK-NEXT:  top:
@@ -160,5 +160,70 @@ top:
   ret bfloat %13
 }
 
-attributes #0 = { "target-features"="-avx512fp16" }
-attributes #1 = { "target-features"="+avx512fp16" }
+define bfloat @native_bfloat_test(bfloat %a, bfloat %b) #3 {
+top:
+; CHECK-LABEL: @native_bfloat_test(
+; CHECK-NEXT:  top:
+; CHECK-NEXT:    %0 = fadd bfloat %a, %b
+; CHECK-NEXT:    %1 = fadd bfloat %0, %b
+; CHECK-NEXT:    %2 = fadd bfloat %1, %b
+; CHECK-NEXT:    %3 = fmul bfloat %2, %b
+; CHECK-NEXT:    %4 = fdiv bfloat %3, %b
+; CHECK-NEXT:    %5 = insertelement <2 x bfloat> undef, bfloat %a, i32 0
+; CHECK-NEXT:    %6 = insertelement <2 x bfloat> %5, bfloat %b, i32 1
+; CHECK-NEXT:    %7 = insertelement <2 x bfloat> undef, bfloat %b, i32 0
+; CHECK-NEXT:    %8 = insertelement <2 x bfloat> %7, bfloat %b, i32 1
+; CHECK-NEXT:    %9 = fadd <2 x bfloat> %6, %8
+; CHECK-NEXT:    %10 = extractelement <2 x bfloat> %9, i32 0
+; CHECK-NEXT:    %11 = extractelement <2 x bfloat> %9, i32 1
+; CHECK-NEXT:    %12 = fadd bfloat %10, %11
+; CHECK-NEXT:    %13 = fadd bfloat %12, %4
+; CHECK-NEXT:    ret bfloat %13
+;
+  %0 = fadd bfloat %a, %b
+  %1 = fadd bfloat %0, %b
+  %2 = fadd bfloat %1, %b
+  %3 = fmul bfloat %2, %b
+  %4 = fdiv bfloat %3, %b
+  %5 = insertelement <2 x bfloat> undef, bfloat %a, i32 0
+  %6 = insertelement <2 x bfloat> %5, bfloat %b, i32 1
+  %7 = insertelement <2 x bfloat> undef, bfloat %b, i32 0
+  %8 = insertelement <2 x bfloat> %7, bfloat %b, i32 1
+  %9 = fadd <2 x bfloat> %6, %8
+  %10 = extractelement <2 x bfloat> %9, i32 0
+  %11 = extractelement <2 x bfloat> %9, i32 1
+  %12 = fadd bfloat %10, %11
+  %13 = fadd bfloat %12, %4
+  ret bfloat %13
+}
+
+define i1 @fast_half_test(half %0, half %1) #0 {
+top:
+; CHECK-LABEL: @fast_half_test(
+; CHECK-NEXT:  top:
+; CHECK-NEXT:    %2 = fsub fast half %0, %1
+; CHECK-NEXT:    %3 = fcmp fast oeq half %2, 0xH0000
+; CHECK-NEXT:    ret i1 %3
+;
+  %2 = fsub fast half %0, %1
+  %3 = fcmp fast oeq half %2, 0xH0000
+  ret i1 %3
+}
+
+define i1 @fast_bfloat_test(bfloat %0, bfloat %1) #2 {
+top:
+; CHECK-LABEL: @fast_bfloat_test(
+; CHECK-NEXT:  top:
+; CHECK-NEXT:    %2 = fsub fast bfloat %0, %1
+; CHECK-NEXT:    %3 = fcmp fast oeq bfloat %2, 0xR0000
+; CHECK-NEXT:    ret i1 %3
+;
+  %2 = fsub fast bfloat %0, %1
+  %3 = fcmp fast oeq bfloat %2, 0xR0000
+  ret i1 %3
+}
+
+attributes #0 = { "julia.hasfp16"="false" }
+attributes #1 = { "julia.hasfp16"="true" }
+attributes #2 = { "julia.hasbf16"="false" }
+attributes #3 = { "julia.hasbf16"="true" }

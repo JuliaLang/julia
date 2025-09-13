@@ -47,18 +47,6 @@ julia> 3*2/12
 operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
 and then `2` is added to that result.)
 
-When used in multiplication, `false` acts as a *strong zero*:
-
-```jldoctest
-julia> NaN * false
-0.0
-
-julia> false * Inf
-0.0
-```
-
-This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
-
 ## Boolean Operators
 
 The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
@@ -71,7 +59,29 @@ The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 
 Negation changes `true` to `false` and vice versa. The short-circuiting operations are explained on the linked page.
 
-Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
+## Arithmetic operations with `Bool` values
+
+Note that `Bool` is an integer type, such that `false` is numerically equal to `0` and `true` is numerically equal to `1`. All the usual promotion rules and numeric operators are also defined on it, with a special behavior of arithmetic (non-Boolean) operations when all the arguments are `Bool`: in those cases, the arguments are promoted to `Int` instead of keeping their type. Compare e.g. the following equivalent operations with `Bool` and with a different numeric type (`UInt8`):
+
+```jldoctest
+julia> true - true
+0
+
+julia> 0x01 - 0x01
+0x00
+```
+
+Also, when used in multiplication, `false` acts as a *strong zero*:
+
+```jldoctest
+julia> NaN * false
+0.0
+
+julia> false * Inf
+0.0
+```
+
+This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
 
 ## Bitwise Operators
 
@@ -551,21 +561,22 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Powers, logs and roots
 
-| Function                 | Description                                                                |
-|:------------------------ |:-------------------------------------------------------------------------- |
-| [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
-| [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
-| [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
-| [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                    |
-| [`ldexp(x, n)`](@ref)    | `x * 2^n` computed efficiently for integer values of `n`                   |
-| [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
-| [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
-| [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
-| [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
-| [`log1p(x)`](@ref)       | accurate `log(1 + x)` for `x` near zero                                    |
-| [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
-| [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
+| Function                      | Description                                                                |
+|:----------------------------- |:-------------------------------------------------------------------------- |
+| [`sqrt(x)`](@ref), `√x`       | square root of `x`                                                         |
+| [`cbrt(x)`](@ref), `∛x`       | cube root of `x`                                                           |
+| [`fourthroot(x)`](@ref), `∜x` | fourth root of `x`                                                         |
+| [`hypot(x, y)`](@ref)         | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`exp(x)`](@ref)              | natural exponential function at `x`                                        |
+| [`expm1(x)`](@ref)            | accurate `exp(x) - 1` for `x` near zero                                    |
+| [`ldexp(x, n)`](@ref)         | `x * 2^n` computed efficiently for integer values of `n`                   |
+| [`log(x)`](@ref)              | natural logarithm of `x`                                                   |
+| [`log(b, x)`](@ref)           | base `b` logarithm of `x`                                                  |
+| [`log2(x)`](@ref)             | base 2 logarithm of `x`                                                    |
+| [`log10(x)`](@ref)            | base 10 logarithm of `x`                                                   |
+| [`log1p(x)`](@ref)            | accurate `log(1 + x)` for `x` near zero                                    |
+| [`exponent(x)`](@ref)         | binary exponent of `x`                                                     |
+| [`significand(x)`](@ref)      | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
 For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
