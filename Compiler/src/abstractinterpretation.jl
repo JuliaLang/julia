@@ -1243,7 +1243,7 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         # all the way through and learn something new.
         code = get(code_cache(interp), mi, nothing)
         if isa(code, CodeInstance)
-            inferred = @atomic :monotonic code.inferred
+            inferred = ci_get_source(interp, code)
             # TODO propagate a specific `CallInfo` that conveys information about this call
             if src_inlining_policy(interp, mi, inferred, NoCallInfo(), IR_FLAG_NULL)
                 return true
@@ -1255,11 +1255,10 @@ end
 
 function semi_concrete_eval_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
-    world = frame_world(sv)
-    mi_cache = WorldView(code_cache(interp), world)
+    mi_cache = code_cache(interp)
     codeinst = get(mi_cache, mi, nothing)
     if codeinst !== nothing
-        irsv = IRInterpretationState(interp, codeinst, mi, arginfo.argtypes, world)
+        irsv = IRInterpretationState(interp, codeinst, mi, arginfo.argtypes)
         if irsv !== nothing
             assign_parentchild!(irsv, sv)
             rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
@@ -1317,7 +1316,7 @@ function const_prop_call(interp::AbstractInterpreter,
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
-    inf_result = cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
+    inf_result = const_cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
     if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
@@ -2224,7 +2223,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     if types isa Const && types.val isa Union{Method, CodeInstance}
         method_or_ci = types.val
         if isa(method_or_ci, CodeInstance)
-            our_world = sv.world.this
+            our_world = get_inference_world(interp)
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
             specsig = get_ci_abi(method_or_ci)
             defdef = get_ci_mi(method_or_ci).def
@@ -2237,9 +2236,9 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
             if !(our_world in callee_valid_range)
                 if our_world < first(callee_valid_range)
-                    update_valid_age!(sv, WorldRange(first(sv.world.valid_worlds), first(callee_valid_range)-1))
+                    update_valid_age!(sv, WorldRange(first(sv.valid_worlds), first(callee_valid_range)-1))
                 else
-                    update_valid_age!(sv, WorldRange(last(callee_valid_range)+1, last(sv.world.valid_worlds)))
+                    update_valid_age!(sv, WorldRange(last(callee_valid_range)+1, last(sv.valid_worlds)))
                 end
                 return Future(CallMeta(Bottom, ErrorException, EFFECTS_THROWS, NoCallInfo()))
             end
@@ -2429,6 +2428,9 @@ function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, s
     end
 end
 
+# The binding lookup code needs some hints to be able to compute its result. This is not correct, since hints derived from incomplete work should not be affecting the final result, but it is sound.
+binding_world_hints(interp::AbstractInterpreter, sv::AbsIntState) = WorldWithRange(get_inference_world(interp), sv.valid_worlds)
+
 @nospecs function abstract_eval_get_binding_type(interp::AbstractInterpreter, sv::AbsIntState, M, s)
     @nospecialize M s
     ⊑ = partialorder(typeinf_lattice(interp))
@@ -2438,7 +2440,7 @@ end
             return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
         end
         gr = GlobalRef(M, s)
-        (valid_worlds, rt) = scan_leaf_partitions(interp, gr, sv.world) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
+        (valid_worlds, rt) = scan_leaf_partitions(interp, gr, binding_world_hints(interp, sv)) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
             local rt
             kind = binding_kind(partition)
             if is_some_guard(kind) || kind == PARTITION_KIND_DECLARED
@@ -2587,7 +2589,7 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
                 s isa Symbol || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
                 gr = GlobalRef(M, s)
                 v′ = RefValue{Any}(v)
-                (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, sv.world) do interp::AbstractInterpreter, binding::Core.Binding, partition::Core.BindingPartition
+                (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, binding_world_hints(interp, sv)) do interp::AbstractInterpreter, binding::Core.Binding, partition::Core.BindingPartition
                     partition_T = nothing
                     partition_rte = abstract_eval_partition_load(interp, binding, partition)
                     if binding_kind(partition) == PARTITION_KIND_GLOBAL
@@ -3311,7 +3313,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
         end
     end
 
-    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(interp, gr, sv.world)
+    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(interp, gr, binding_world_hints(interp, sv))
     if rte.exct == Union{}
         rt = Const(true)
     elseif rte.rt === Union{} && rte.exct === UndefVarError
@@ -3748,7 +3750,7 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_
     # For inference purposes, we don't particularly care which global binding we end up loading, we only
     # care about its type. However, we would still like to terminate the world range for the particular
     # binding we end up reaching such that codegen can emit a simpler pointer load.
-    (valid_worlds, ret) = scan_leaf_partitions(abstract_eval_partition_load, interp, g, sv.world)
+    (valid_worlds, ret) = scan_leaf_partitions(abstract_eval_partition_load, interp, g, binding_world_hints(interp, sv))
     update_valid_age!(sv, valid_worlds)
     return ret
 end
@@ -3758,7 +3760,7 @@ function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState,
         return Pair{Any,Any}(newty, ErrorException)
     end
     newty′ = RefValue{Any}(newty)
-    (valid_worlds, ret) = scan_partitions(interp, g, sv.world) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
+    (valid_worlds, ret) = scan_partitions(interp, g, binding_world_hints(interp, sv)) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
         global_assignment_binding_rt_exct(interp, partition, newty′[])
     end
     update_valid_age!(sv, valid_worlds)
