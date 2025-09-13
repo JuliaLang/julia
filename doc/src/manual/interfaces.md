@@ -415,8 +415,9 @@ may lead to incorrect results or segmentation faults.
 
 The following function demonstrates how an element at indices `I` in a strided array `A` can be accessed.
 This function assumes the element type `isbitstype` and the indices are inbounds.
-```julia
-function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+
+```jldoctest
+julia> function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
     A_cconv = Base.cconvert(Ptr{T}, A)
     GC.@preserve A_cconv begin
         A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
@@ -427,7 +428,17 @@ function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T wh
         end
         unsafe_load(A_ptr)
     end
-end
+end;
+
+julia> A = [1 5; 2 6; 3 7; 4 8];
+
+julia> unsafe_strided_getindex(A, 3, 2)
+7
+
+julia> V = view(A, 1:2:3, 1:2);
+
+julia> unsafe_strided_getindex(V, 2, 2)
+7
 ```
 
 Here are some examples to demonstrate which type of arrays are strided and which are not:
