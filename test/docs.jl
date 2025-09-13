@@ -1346,31 +1346,35 @@ end
 
 let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
-    @test dt1.args[1] isa Expr
-    @test dt1.args[1].head === :call
-    @test dt1.args[1].args[1] === Base.Docs.doc
-    @test dt1.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
+    arg1 = dt1.args[1]
+    @test arg1 isa Expr
+    @test arg1.head === :call
+    @test arg1.args[1] === Base.Docs.doc
+    @test arg1.args[4] == :(Union{Tuple{typeof(1.0)}})
 end
 let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
-    @test dt2.args[1] isa Expr
-    @test dt2.args[1].head === :call
-    @test dt2.args[1].args[1] === Base.Docs.doc
-    @test dt2.args[1].args[3] == :(Union{Tuple{String}})
+    arg1 = dt2.args[1]
+    @test arg1 isa Expr
+    @test arg1.head === :call
+    @test arg1.args[1] === Base.Docs.doc
+    @test arg1.args[4] == :(Union{Tuple{String}})
 end
 let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
-    @test dt3.args[1] isa Expr
-    @test dt3.args[1].head === :call
-    @test dt3.args[1].args[1] === Base.Docs.doc
-    @test dt3.args[1].args[3].args[2].head === :curly # can't test equality due to line numbers
+    arg1 = dt3.args[1]
+    @test arg1 isa Expr
+    @test arg1.head === :call
+    @test arg1.args[1] === Base.Docs.doc
+    @test arg1.args[4].args[2].head === :curly # can't test equality due to line numbers
 end
 let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
-    @test dt4.args[1] isa Expr
-    @test dt4.args[1].head === :call
-    @test dt4.args[1].args[1] === Base.Docs.doc
-    @test dt4.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
+    arg1 = dt4.args[1]
+    @test arg1 isa Expr
+    @test arg1.head === :call
+    @test arg1.args[1] === Base.Docs.doc
+    @test arg1.args[4] == :(Union{Tuple{typeof(1.0)}})
 end
 
 # Equality testing
