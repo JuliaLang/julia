@@ -224,7 +224,7 @@ function ieee754_representation(
 end
 
 """
-    uabs(x::Integer)
+    Base.uabs(x::Integer)
 
 Return the absolute value of `x`, possibly returning a different type should the
 operation be susceptible to overflow. This typically arises when `x` is a two's complement
@@ -619,7 +619,6 @@ end
 
 ## floating point comparisons ##
 ==(x::T, y::T) where {T<:IEEEFloat} = eq_float(x, y)
-!=(x::T, y::T) where {T<:IEEEFloat} = ne_float(x, y)
 <( x::T, y::T) where {T<:IEEEFloat} = lt_float(x, y)
 <=(x::T, y::T) where {T<:IEEEFloat} = le_float(x, y)
 

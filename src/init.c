@@ -21,6 +21,10 @@
 #include <pthread_np.h>
 #endif
 
+#if !defined(_OS_WINDOWS_)
+#include <dlfcn.h>
+#endif
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
@@ -376,7 +380,6 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 }
 
 void post_boot_hooks(void);
-void post_image_load_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
@@ -612,9 +615,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
     }
-    else {
-        post_image_load_hooks();
-    }
     jl_start_threads();
     jl_start_gc_threads();
     uv_barrier_wait(&thread_init_done);
@@ -723,11 +723,15 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1);
-    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1);
+    // Note that if we ever want to be able to unload Julia entirely, we will
+    // have to dlclose() these handles.
+    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1, 0);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_options, /* throw_err */ 1, 0);
 #ifdef _OS_WINDOWS_
+    /* If this parameter is NULL, GetModuleHandle returns a handle to the file
+       used to create the calling process (.exe file). */
     jl_exe_handle = GetModuleHandleA(NULL);
-    jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
+    jl_RTLD_DEFAULT_handle = NULL;
     jl_ntdll_handle = jl_dlopen("ntdll.dll", JL_RTLD_NOLOAD); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", JL_RTLD_NOLOAD);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, JL_RTLD_NOLOAD);
@@ -735,14 +739,13 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     HMODULE jl_dbghelp = (HMODULE) jl_dlopen("dbghelp.dll", JL_RTLD_NOLOAD);
     needsSymRefreshModuleList = 0;
     if (jl_dbghelp)
-        jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1);
+        jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1, 0);
 #else
-    jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW);
-#ifdef RTLD_DEFAULT
+    /* macOS dlopen(3): If path is NULL and the option RTLD_FIRST is used, the
+       handle returned will only search the main executable. */
+    jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW | JL_RTLD_NOLOAD | JL_RTLD_LOCAL | JL_RTLD_FIRST);
+    // RTLD_DEFAULT is mandatory on POSIX
     jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
-#else
-    jl_RTLD_DEFAULT_handle = jl_exe_handle;
-#endif
 #endif
 
     jl_init_rand();

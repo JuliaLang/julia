@@ -900,7 +900,7 @@ end
 """
     PersistentDict
 
-`PersistentDict` is a dictionary implemented as an hash array mapped trie,
+`PersistentDict` is a dictionary implemented as a hash array mapped trie,
 which is optimal for situations where you need persistence, each operation
 returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple

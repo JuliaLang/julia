@@ -423,7 +423,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
         isa(exc, Core.TrimFailure) || rethrow()
         # The verification check failed. The error message should already have
         # been printed, so give up here and exit (w/o a stack trace).
-        exit(1)
+        invokelatest(exit, 1)
     end
 
     # Step 5: Always set newly_inferred global for serialization use

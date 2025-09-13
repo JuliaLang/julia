@@ -22,6 +22,7 @@
 using namespace llvm;
 
 // --- library symbol lookup ---
+jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
@@ -58,7 +59,7 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
     void * ptr;
-    jl_dlsym(handle, f_name, &ptr, 1);
+    jl_dlsym(handle, f_name, &ptr, 1, 0);
     return ptr;
 }
 
@@ -79,7 +80,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name)
     } else
         jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
     void *ptr;
-    jl_dlsym(lib_ptr, f_name, &ptr, 1);
+    jl_dlsym(lib_ptr, f_name, &ptr, 1, 0);
     return ptr;
 }
 
@@ -106,7 +107,7 @@ jl_value_t *jl_get_JIT(void)
 //           %L    The local hostname.
 //           %l    The local hostname, including the domain name.
 //           %u    The local username.
-std::string jl_format_filename(StringRef output_pattern)
+std::string jl_format_filename(StringRef output_pattern) JL_NOTSAFEPOINT
 {
     std::string buf;
     raw_string_ostream outfile(buf);
@@ -168,7 +169,7 @@ std::string jl_format_filename(StringRef output_pattern)
     return outfile.str();
 }
 
-extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
+extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern) JL_NOTSAFEPOINT
 {
     return strdup(jl_format_filename(StringRef(output_pattern)).c_str());
 }

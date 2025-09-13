@@ -62,7 +62,7 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    issorted(itr, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Test whether a collection is in sorted order. The keywords modify what
 order is considered sorted, as described in the [`sort!`](@ref) documentation.
@@ -113,7 +113,7 @@ maybeview(v, k) = view(v, k)
 maybeview(v, k::Integer) = v[k]
 
 """
-    partialsort!(v, k; by=identity, lt=isless, rev=false)
+    partialsort!(v, k; by=identity, lt=isless, rev=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Mutate the vector `v` so that the value at index `k` (or
 range of adjacent values if `k` is a range) occurs
@@ -170,7 +170,7 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order); kws...)
 
 """
-    partialsort(v, k, by=identity, lt=isless, rev=false)
+    partialsort(v, k, by=identity, lt=isless, rev=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Variant of [`partialsort!`](@ref) that copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.

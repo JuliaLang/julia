@@ -194,6 +194,29 @@ static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
+
+// Global data structures for accessing symbols and other globals
+#include "jl_internal_data.inc"
+
+#if defined(__clang_analyzer__)
+#define XX(name, type) extern JL_HIDDEN type jl_##name JL_GLOBALLY_ROOTED;
+JL_INTERNAL_DATA(XX)
+#undef XX
+#else
+// Struct definition for internal data access
+struct jl_internal_global {
+#define XX(name, type) type name JL_GLOBALLY_ROOTED;
+JL_INTERNAL_DATA(XX)
+#undef XX
+};
+
+extern JL_HIDDEN struct jl_internal_global internal_global;
+
+// Define accessor macros for internal data
+#define jl_method_table (internal_global.method_table)
+#endif
+
+// Generated macros to access globals
 void JL_UV_LOCK(void);
 #define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
 extern _Atomic(unsigned) _threadedregion;
@@ -318,8 +341,8 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 
 #include "timing.h"
 
-extern JL_DLLEXPORT uint64_t jl_typeinf_timing_begin(void) JL_NOTSAFEPOINT;
-extern JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start, int is_recompile) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_typeinf_timing_begin(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start, int is_recompile) JL_NOTSAFEPOINT;
 
 // Global *atomic* integers controlling *process-wide* measurement of compilation time.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
@@ -401,10 +424,7 @@ typedef struct _jl_abi_t {
 } jl_abi_t;
 
 // useful constants
-extern jl_methtable_t *jl_method_table JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_method_t *jl_opaque_closure_method JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
-extern jl_debuginfo_t *jl_nulldebuginfo JL_GLOBALLY_ROOTED;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
 extern tracer_cb jl_newmeth_tracer;
@@ -421,6 +441,7 @@ extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
+extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
@@ -1630,7 +1651,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
-void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err);
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
@@ -1885,104 +1906,109 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
 
 JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
 
-extern JL_DLLEXPORT jl_sym_t *jl_call_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_invoke_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_invoke_modify_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_empty_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_top_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_module_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_slot_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_export_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_public_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_quote_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_line_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_incomplete_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_goto_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_goto_ifnot_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_return_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_lineinfo_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_lambda_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_assign_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_binding_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_globalref_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_do_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_method_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_core_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_enter_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_leave_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_pop_exception_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_exc_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_error_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_new_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_splatnew_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_block_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_new_opaque_closure_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_opaque_closure_method_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_const_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_thunk_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_foreigncall_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_as_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_global_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_globaldecl_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_local_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_list_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_dot_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_newvar_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_boundscheck_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_inbounds_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_meta_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_inert_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_polly_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_unused_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_static_parameter_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_inline_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_noinline_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_generated_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_generated_only_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_isdefined_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_propagate_inbounds_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_specialize_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_purity_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_nospecializeinfer_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_colon_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_hygienicscope_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_throw_undef_if_not_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_getfield_undefref_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_gc_preserve_begin_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_gc_preserve_end_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_coverageeffect_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_escape_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_aliasscope_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_popaliasscope_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_eval_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_include_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_atom_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_statement_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_all_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_compile_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_infer_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_unordered_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_monotonic_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_acquire_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_release_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_latestworld_sym;
+// Commonly used symbols (jl_sym_t* values)
+#define JL_COMMON_SYMBOLS(XX) \
+    XX(acquire_release_sym) \
+    XX(acquire_sym) \
+    XX(aggressive_constprop_sym) \
+    XX(aliasscope_sym) \
+    XX(all_sym) \
+    XX(as_sym) \
+    XX(assign_sym) \
+    XX(atom_sym) \
+    XX(atomic_sym) \
+    XX(block_sym) \
+    XX(boundscheck_sym) \
+    XX(call_sym) \
+    XX(cfunction_sym) \
+    XX(colon_sym) \
+    XX(compile_sym) \
+    XX(const_sym) \
+    XX(copyast_sym) \
+    XX(core_sym) \
+    XX(coverageeffect_sym) \
+    XX(do_sym) \
+    XX(dot_sym) \
+    XX(empty_sym) \
+    XX(enter_sym) \
+    XX(error_sym) \
+    XX(escape_sym) \
+    XX(eval_sym) \
+    XX(exc_sym) \
+    XX(export_sym) \
+    XX(force_compile_sym) \
+    XX(foreigncall_sym) \
+    XX(gc_preserve_begin_sym) \
+    XX(gc_preserve_end_sym) \
+    XX(generated_only_sym) \
+    XX(generated_sym) \
+    XX(getfield_undefref_sym) \
+    XX(global_sym) \
+    XX(globaldecl_sym) \
+    XX(globalref_sym) \
+    XX(goto_ifnot_sym) \
+    XX(goto_sym) \
+    XX(hygienicscope_sym) \
+    XX(inbounds_sym) \
+    XX(include_sym) \
+    XX(incomplete_sym) \
+    XX(inert_sym) \
+    XX(infer_sym) \
+    XX(inline_sym) \
+    XX(invoke_modify_sym) \
+    XX(invoke_sym) \
+    XX(isdefined_sym) \
+    XX(lambda_sym) \
+    XX(latestworld_sym) \
+    XX(leave_sym) \
+    XX(line_sym) \
+    XX(lineinfo_sym) \
+    XX(list_sym) \
+    XX(local_sym) \
+    XX(loopinfo_sym) \
+    XX(macrocall_sym) \
+    XX(max_methods_sym) \
+    XX(meta_sym) \
+    XX(method_sym) \
+    XX(module_sym) \
+    XX(monotonic_sym) \
+    XX(new_opaque_closure_sym) \
+    XX(new_sym) \
+    XX(newvar_sym) \
+    XX(no_constprop_sym) \
+    XX(noinline_sym) \
+    XX(nospecialize_sym) \
+    XX(nospecializeinfer_sym) \
+    XX(not_atomic_sym) \
+    XX(opaque_closure_method_sym) \
+    XX(optlevel_sym) \
+    XX(polly_sym) \
+    XX(pop_exception_sym) \
+    XX(popaliasscope_sym) \
+    XX(propagate_inbounds_sym) \
+    XX(public_sym) \
+    XX(purity_sym) \
+    XX(quote_sym) \
+    XX(release_sym) \
+    XX(return_sym) \
+    XX(sequentially_consistent_sym) \
+    XX(slot_sym) \
+    XX(specialize_sym) \
+    XX(splatnew_sym) \
+    XX(statement_sym) \
+    XX(static_parameter_sym) \
+    XX(thismodule_sym) \
+    XX(throw_undef_if_not_sym) \
+    XX(thunk_sym) \
+    XX(top_sym) \
+    XX(toplevel_sym) \
+    XX(uninferred_sym) \
+    XX(unordered_sym) \
+    XX(unused_sym) \
+
+#define XX(name) extern JL_DLLEXPORT jl_sym_t *jl_##name;
+JL_COMMON_SYMBOLS(XX)
+#undef XX
 
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing);
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, char storing);
