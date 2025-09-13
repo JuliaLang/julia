@@ -328,10 +328,7 @@ Stacktrace:
 """
 log(b::Number, x::Number) = log(promote(b,x)...)
 
-# type specific math functions
-
 const libm = Base.libm_name
-
 # functions with no domain error
 """
     sinh(x)
@@ -1149,148 +1146,7 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
-@inline function use_power_by_squaring(n::Integer)
-    -2^12 <= n <= 3 * 2^13
-end
 
-# @constprop aggressive to help the compiler see the switch between the integer and float
-# variants for callers with constant `y`
-@constprop :aggressive function ^(x::Float64, y::Float64)
-    xu = reinterpret(UInt64, x)
-    xu == reinterpret(UInt64, 1.0) && return 1.0
-    # Exponents greater than this will always overflow or underflow.
-    # Note that NaN can pass through this, but that will end up fine.
-    if !(abs(y)<0x1.8p62)
-        isnan(y) && return y
-        y = sign(y)*0x1.8p62
-    end
-    yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
-    yisint = y == yint
-    if yisint
-        yint == 0 && return 1.0
-        use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
-    end
-    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x === +0.0 or -0.0 (Inf * false === 0.0)
-    s = 1
-    if x < 0
-        !yisint && throw_exp_domainerror(x) # y isn't an integer
-        s = ifelse(isodd(yint), -1, 1)
-    end
-    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x))           # x is inf or NaN
-    return copysign(pow_body(abs(x), y), s)
-end
-
-@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
-    xu = reinterpret(UInt64, x)
-    if xu < (UInt64(1)<<52) # x is subnormal
-        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
-        xu &= ~sign_mask(Float64)
-        xu -= UInt64(52) << 52 # mess with the exponent
-    end
-    logxhi,logxlo = _log_ext(xu)
-    xyhi, xylo = two_mul(logxhi,y)
-    xylo = muladd(logxlo, y, xylo)
-    hi = xyhi+xylo
-    return @inline Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
-end
-
-# @constprop aggressive to help the compiler see the switch between the integer and float
-# variants for callers with constant `y`
-@constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
-    x == 1 && return one(T)
-    # Exponents greater than this will always overflow or underflow.
-    # Note that NaN can pass through this, but that will end up fine.
-    max_exp = T == Float16 ? T(3<<14) : T(0x1.Ap30)
-    if !(abs(y)<max_exp)
-        isnan(y) && return y
-        y = sign(y)*max_exp
-    end
-    yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
-    yisint = y == yint
-    if yisint
-        yint == 0 && return one(T)
-        use_power_by_squaring(yint) && return pow_body(x, yint)
-    end
-    s = 1
-    if x < 0
-        !yisint && throw_exp_domainerror(x) # y isn't an integer
-        s = ifelse(isodd(yint), -1, 1)
-    end
-    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x)) # x is inf or NaN
-    return copysign(pow_body(abs(x), y), s)
-end
-
-@inline function pow_body(x::T, y) where T <: Union{Float16, Float32}
-    return T(exp2(log2(abs(widen(x))) * y))
-end
-
-@inline function pow_body(x::Union{Float16, Float32}, n::Int32)
-    n == -2 && return (i=inv(x); i*i)
-    n == 3 && return x*x*x #keep compatibility with literal_pow
-    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)), -n))
-    return oftype(x, Base.power_by_squaring(widen(x), n))
-end
-
-@constprop :aggressive @inline function ^(x::Float64, n::Integer)
-    n = clamp(n, Int64)
-    n == 0 && return one(x)
-    if use_power_by_squaring(n)
-        return pow_body(x, n)
-    else
-        s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
-        x = abs(x)
-        y = float(n)
-        if y == n
-            return copysign(pow_body(x, y), s)
-        else
-            n2 = n % 1024
-            y = float(n - n2)
-            return pow_body(x, y) * copysign(pow_body(x, n2), s)
-        end
-    end
-end
-
-# compensated power by squaring
-# this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
-@assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
-    y = 1.0
-    xnlo = -0.0
-    ynlo = 0.0
-    n == 3 && return x*x*x # keep compatibility with literal_pow
-    if n < 0
-        rx = inv(x)
-        n==-2 && return rx*rx #keep compatibility with literal_pow
-        isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
-        x = rx
-        n = -n
-    end
-    while n > 1
-        if n&1 > 0
-            err = muladd(y, xnlo, x*ynlo)
-            y, ynlo = two_mul(x,y)
-            ynlo += err
-        end
-        err = x*2*xnlo
-        x, xnlo = two_mul(x, x)
-        xnlo += err
-        n >>>= 1
-    end
-    err = muladd(y, xnlo, x*ynlo)
-    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
-end
-
-# @constprop aggressive to help the compiler see the switch between the integer and float
-# variants for callers with constant `y`
-@constprop :aggressive @inline function ^(x::T, n::Integer) where T <: Union{Float16, Float32}
-    n = clamp(n, Int32)
-    # Exponents greater than this will always overflow or underflow.
-    # Note that NaN can pass through this, but that will end up fine.
-    n == 0 && return one(x)
-    use_power_by_squaring(n) && return pow_body(x, n)
-    s = ifelse(x < 0 && isodd(n), -one(T), one(T))
-    x = abs(x)
-    return pow_body(x, widen(T)(n))
-end
 
 ## rem2pi-related calculations ##
 
@@ -1304,19 +1160,6 @@ function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     zh = r+s
     return zh
 end
-
-# multiples of pi/2, as double-double (ie with "tail")
-const pi1o2_h  = 1.5707963267948966     # convert(Float64, pi * BigFloat(1/2))
-const pi1o2_l  = 6.123233995736766e-17  # convert(Float64, pi * BigFloat(1/2) - pi1o2_h)
-
-const pi2o2_h  = 3.141592653589793      # convert(Float64, pi * BigFloat(1))
-const pi2o2_l  = 1.2246467991473532e-16 # convert(Float64, pi * BigFloat(1) - pi2o2_h)
-
-const pi3o2_h  = 4.71238898038469       # convert(Float64, pi * BigFloat(3/2))
-const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - pi3o2_h)
-
-const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
-const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
 
 """
     rem2pi(x, r::RoundingMode)
@@ -1350,135 +1193,6 @@ julia> rem2pi(7pi/4, RoundDown)
 ```
 """
 function rem2pi end
-function rem2pi(x::Float64, ::RoundingMode{:Nearest})
-    isnan(x) && return x
-    isinf(x) && return NaN
-
-    abs(x) < pi && return x
-
-    n,y = rem_pio2_kernel(x)
-
-    if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: add/subtract pi
-            if y.hi <= 0
-                return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
-            else
-                return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
-            end
-        else          # n % 4 == 0: add 0
-            return y.hi+y.lo
-        end
-    else
-        if n & 2 == 2 # n % 4 == 3: subtract pi/2
-            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
-        else          # n % 4 == 1: add pi/2
-            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
-        end
-    end
-end
-function rem2pi(x::Float64, ::RoundingMode{:ToZero})
-    isnan(x) && return x
-    isinf(x) && return NaN
-
-    ax = abs(x)
-    ax <= 2*Float64(pi,RoundDown) && return x
-
-    n,y = rem_pio2_kernel(ax)
-
-    if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: add pi
-            z = add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
-        else          # n % 4 == 0: add 0 or 2pi
-            if y.hi > 0
-                z = y.hi+y.lo
-            else      # negative: add 2pi
-                z = add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l)
-            end
-        end
-    else
-        if n & 2 == 2 # n % 4 == 3: add 3pi/2
-            z = add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
-        else          # n % 4 == 1: add pi/2
-            z = add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
-        end
-    end
-    copysign(z,x)
-end
-function rem2pi(x::Float64, ::RoundingMode{:Down})
-    isnan(x) && return x
-    isinf(x) && return NaN
-
-    if x < pi4o2_h
-        if x >= 0
-            return x
-        elseif x > -pi4o2_h
-            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
-        end
-    end
-
-    n,y = rem_pio2_kernel(x)
-
-    if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: add pi
-            return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
-        else          # n % 4 == 0: add 0 or 2pi
-            if y.hi > 0
-                return y.hi+y.lo
-            else      # negative: add 2pi
-                return add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l)
-            end
-        end
-    else
-        if n & 2 == 2 # n % 4 == 3: add 3pi/2
-            return add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
-        else          # n % 4 == 1: add pi/2
-            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
-        end
-    end
-end
-function rem2pi(x::Float64, ::RoundingMode{:Up})
-    isnan(x) && return x
-    isinf(x) && return NaN
-
-    if x > -pi4o2_h
-        if x <= 0
-            return x
-        elseif x < pi4o2_h
-            return add22condh(x,0.0,-pi4o2_h,-pi4o2_l)
-        end
-    end
-
-    n,y = rem_pio2_kernel(x)
-
-    if iseven(n)
-        if n & 2 == 2 # n % 4 == 2: sub pi
-            return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
-        else          # n % 4 == 0: sub 0 or 2pi
-            if y.hi < 0
-                return y.hi+y.lo
-            else      # positive: sub 2pi
-                return add22condh(y.hi,y.lo,-pi4o2_h,-pi4o2_l)
-            end
-        end
-    else
-        if n & 2 == 2 # n % 4 == 3: sub pi/2
-            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
-        else          # n % 4 == 1: sub 3pi/2
-            return add22condh(y.hi,y.lo,-pi3o2_h,-pi3o2_l)
-        end
-    end
-end
-
-rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
-rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
-rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
-
-# general fallback
-function rem2pi(x::Integer, r::RoundingMode)
-    fx = float(x)
-    fx == x || throw(ArgumentError(LazyString(typeof(x), " argument to rem2pi is too large: ", x)))
-    rem2pi(fx, r)
-end
 
 """
     mod2pi(x)
@@ -1558,7 +1272,10 @@ include("special/exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
 include("special/rem_pio2.jl")
+include("special/rem2pi.jl")
 include("special/log.jl")
+include("special/pow.jl")
+
 
 
 # Float16 definitions
