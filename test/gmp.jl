@@ -719,6 +719,31 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
     end
 end
 
+@testset "good effects" begin
+    @testset "test directly" begin
+        for f in (+, -, *)
+            @test (Base.Compiler.is_removable_if_unused ∘ Base.infer_effects)(f, Tuple{BigInt, BigInt})
+        end
+        for f in ((x -> x + 3), (x -> x - 3), (x -> x * 3), (x -> 3 + x), (x -> 3 - x), (x -> 3 * x))
+            @test (Base.Compiler.is_removable_if_unused ∘ Base.infer_effects)(f, Tuple{BigInt})
+        end
+    end
+    @testset "removable arithmetic gets optimized out" begin
+        function f(x)
+            x + 3
+            x - 3
+            x * 3
+            3 + x
+            3 - x
+            3 * x
+            x + x
+            x - x
+            x * x
+            x
+        end
+        @test (isone ∘ length ∘ (x -> x.code) ∘ first ∘ only ∘ code_typed)(f, Tuple{BigInt})
+    end
+end
 
 aa = 1//2
 bb = -1//3
