@@ -562,7 +562,7 @@ end
 """
     @cmd str
 
-Similar to `` `str` ``, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
+Similar to ``` `str` ```, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
 The [`Cmd`](@ref) object can be run as a process and can outlive the spawning julia process (see `Cmd` for more).
 
 # Examples
