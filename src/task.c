@@ -37,6 +37,10 @@
 #include "threading.h"
 #include "julia_assert.h"
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -307,7 +311,7 @@ CFI_NORETURN
 #endif
 
 /* Rooted by the base module */
-static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
+static _Atomic(jl_value_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
 void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
@@ -333,9 +337,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     ct->ptls->in_pure_callback = 0;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
-    jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
+    jl_value_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        done = (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
@@ -350,34 +354,6 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     }
     jl_gc_debug_critical_error();
     abort();
-}
-
-JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid)
-{
-    size_t off = 0;
-#ifndef _OS_WINDOWS_
-    jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (ptls0->root_task == task) {
-        // See jl_init_root_task(). The root task of the main thread
-        // has its buffer enlarged by an artificial 3000000 bytes, but
-        // that means that the start of the buffer usually points to
-        // inaccessible memory. We need to correct for this.
-        off = ROOT_TASK_STACK_ADJUSTMENT;
-    }
-#endif
-    jl_ptls_t ptls2 = task->ptls;
-    *ptid = -1;
-    if (ptls2) {
-        *ptid = jl_atomic_load_relaxed(&task->tid);
-#ifdef COPY_STACKS
-        if (task->ctx.copy_stack) {
-            *size = ptls2->stacksize;
-            return (char *)ptls2->stackbase - *size;
-        }
-#endif
-    }
-    *size = task->ctx.bufsz - off;
-    return (void *)((char *)task->ctx.stkbuf + off);
 }
 
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
@@ -541,7 +517,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
     lastt->ptls = NULL;
-    fegetenv(&lastt->fenv);
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
@@ -734,7 +709,6 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
     jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
-    fesetenv(&ct->fenv);
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -1023,7 +997,7 @@ the xoshiro256 state. There are two problems with that fix, however:
    need four variations of the internal RNG stream for the four xoshiro256
    registers. That means we'd have to apply the PCG finalizer, add it to
    our dot product accumulator field in the child task, then apply the
-   MurmurHash3 finalizer to that dot product and use the result to purturb
+   MurmurHash3 finalizer to that dot product and use the result to perturb
    the main RNG state.
 
 We avoid both problems by recognizing that the mixing function can be much less
@@ -1099,7 +1073,7 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
     }
 }
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
@@ -1147,7 +1121,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->excstack = NULL;
     t->ctx.started = 0;
     t->priority = 0;
-    fegetenv(&t->fenv);
     jl_atomic_store_relaxed(&t->tid, -1);
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
@@ -1254,7 +1227,6 @@ CFI_NORETURN
     if (!pt->sticky && !pt->ctx.copy_stack)
         jl_atomic_store_release(&pt->tid, -1);
 #endif
-    fesetenv(&ct->fenv);
 
     ct->ctx.started = 1;
     if (ct->metrics_enabled) {
@@ -1566,8 +1538,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     } bootstrap_task = {0};
     jl_set_pgcstack(&bootstrap_task.value.gcstack);
     bootstrap_task.value.ptls = ptls;
-    if (jl_nothing == NULL) // make a placeholder
-        jl_nothing = jl_gc_permobj(0, jl_nothing_type);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));

@@ -595,7 +595,7 @@ function rename_nodes!(D::DFSTree, rename_bb::Vector{BBNumber})
 end
 
 """
-    dominates(domtree::DomTree, bb1::Int, bb2::Int) -> Bool
+    dominates(domtree::DomTree, bb1::Int, bb2::Int)::Bool
 
 Checks if `bb1` dominates `bb2`.
 `bb1` and `bb2` are indexes into the `CFG` blocks.
@@ -606,7 +606,7 @@ dominates(domtree::DomTree, bb1::BBNumber, bb2::BBNumber) =
     _dominates(domtree, bb1, bb2)
 
 """
-    postdominates(domtree::PostDomTree, bb1::Int, bb2::Int) -> Bool
+    postdominates(domtree::PostDomTree, bb1::Int, bb2::Int)::Bool
 
 Checks if `bb1` post-dominates `bb2`.
 `bb1` and `bb2` are indexes into the `CFG` blocks.

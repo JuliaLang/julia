@@ -256,7 +256,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
                 Name,
                 (GlobalVariable *)nullptr,
                 GV->getThreadLocalMode(),
-                GV->getType()->getAddressSpace());
+                cast<PointerType>(TypeRemapper.remapType(GV->getType()))->getAddressSpace());
         NGV->copyAttributesFrom(GV);
         VMap[GV] = NGV;
     }
@@ -276,7 +276,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         auto *NGA = GlobalAlias::create(
                 TypeRemapper.remapType(GA->getValueType()),
-                GA->getType()->getPointerAddressSpace(),
+                cast<PointerType>(TypeRemapper.remapType(GA->getType()))->getAddressSpace(),
                 GA->getLinkage(),
                 Name,
                 &M);
@@ -334,7 +334,11 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         GV->setInitializer(nullptr);
     }
-
+    // Same workaround as in CloneCtx::prepare_vmap to avoid LLVM bug when cloning
+    auto &MD = VMap.MD();
+    for (auto cu: M.debug_compile_units()) {
+        MD[cu].reset(cu);
+    }
     // Similarly, copy over and rewrite function bodies
     for (Function *F : Functions) {
         Function *NF = cast<Function>(VMap[F]);
@@ -413,6 +417,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
             F->eraseFromParent();
         }
     }
+
 
     return true;
 }

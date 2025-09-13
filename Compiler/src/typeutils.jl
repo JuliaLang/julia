@@ -24,7 +24,7 @@ function hasuniquerep(@nospecialize t)
 end
 
 """
-    isTypeDataType(@nospecialize t) -> Bool
+    isTypeDataType(@nospecialize t)::Bool
 
 For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
 we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
@@ -36,14 +36,8 @@ function isTypeDataType(@nospecialize t)
     isType(t) && return false
     # Could be Union{} at runtime
     t === Core.TypeofBottom && return false
-    if t.name === Tuple.name
-        # If we have a Union parameter, could have been redistributed at runtime,
-        # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
-        # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
-        # is not.
-        return all(isTypeDataType, t.parameters)
-    end
-    return true
+    # Return true if `t` is not covariant
+    return t.name !== Tuple.name
 end
 
 has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
@@ -54,43 +48,17 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
 isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
-argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)...}
+function argtypes_to_type(argtypes::Array{Any,1})
+    argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)
+    filter!(@nospecialize(x) -> !isvarargtype(x) || valid_as_lattice(unwrapva(x), true), argtypes)
+    all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), argtypes) || return Bottom
+    return Tuple{argtypes...}
+end
 
 function isknownlength(t::DataType)
     isvatuple(t) || return true
     va = t.parameters[end]
     return isdefined(va, :N) && va.N isa Int
-end
-
-# Compute the minimum number of initialized fields for a particular datatype
-# (therefore also a lower bound on the number of fields)
-function datatype_min_ninitialized(t::DataType)
-    isabstracttype(t) && return 0
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters[1], t.parameters[2]
-        if names isa Tuple
-            return length(names)
-        end
-        t = argument_datatype(types)
-        t isa DataType || return 0
-        t.name === Tuple.name || return 0
-    end
-    if t.name === Tuple.name
-        n = length(t.parameters)
-        n == 0 && return 0
-        va = t.parameters[n]
-        if isvarargtype(va)
-            n -= 1
-            if isdefined(va, :N)
-                va = va.N
-                if va isa Int
-                    n += va
-                end
-            end
-        end
-        return n
-    end
-    return length(t.name.names) - t.name.n_uninitialized
 end
 
 has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often computed only after setting the type and layout fields
@@ -335,7 +303,7 @@ end
 const unwraptv = unwraptv_ub
 
 """
-    is_identity_free_argtype(argtype) -> Bool
+    is_identity_free_argtype(argtype)::Bool
 
 Return `true` if the `argtype` object is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity (see `Base.isidentityfree`).
@@ -348,7 +316,7 @@ is_identity_free_argtype(@nospecialize ty) = is_identity_free_type(widenconst(ig
 is_identity_free_type(@nospecialize ty) = isidentityfree(ty)
 
 """
-    is_immutable_argtype(argtype) -> Bool
+    is_immutable_argtype(argtype)::Bool
 
 Return `true` if the `argtype` object is known to be immutable.
 This query is specifically designed for `getfield_effects` and `isdefined_effects`, allowing
@@ -366,7 +334,7 @@ function _is_immutable_type(@nospecialize ty)
 end
 
 """
-    is_mutation_free_argtype(argtype) -> Bool
+    is_mutation_free_argtype(argtype)::Bool
 
 Return `true` if `argtype` object is mutation free in the sense that no mutable memory
 is reachable from this type (either in the type itself) or through any fields

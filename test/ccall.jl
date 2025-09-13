@@ -1745,6 +1745,7 @@ using Base: ccall_macro_parse, ccall_macro_lower
         :Cvoid,                           # returntype
         Any[:Cstring, :Cstring, :Cint],   # argument types
         Any["%s = %d\n", :name, :value],  # argument symbols
+        false,                            # is gc_safe
         1                                 # number of required arguments (for varargs)
     )
 end
@@ -1757,7 +1758,7 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, :ccall, 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
+        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
         end)
 
     local fptr = :x
@@ -1965,4 +1966,48 @@ let llvm = sprint(code_llvm, world_counter, ())
     @test !occursin("call i64", llvm)
     # the world age should be -1 in generated functions (or other pure contexts)
     @test (generated_world_counter() == reinterpret(UInt, -1))
+end
+
+function gc_safe_ccall()
+    # jl_rand is marked as JL_NOTSAFEPOINT
+    @ccall gc_safe=true jl_rand()::UInt64
+end
+
+let llvm = sprint(code_llvm, gc_safe_ccall, ())
+    # check that the call works
+    @test gc_safe_ccall() isa UInt64
+    # check for the gc_safe store
+    @test occursin("store atomic i8 2", llvm)
+end
+
+@testset "jl_dlfind and dlsym" begin
+    # We shouldn't be able to call libc functions through libccalltest
+    @test_throws ErrorException ccall((:sqrt, libccalltest), Cdouble, (Cdouble,), 2.0)
+    # Test that jl_dlfind finds things in the expected places.
+    @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
+    @static if !Sys.iswindows()
+        @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
+    end
+    @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "malloc") ∉ (1, 2, 3)      # Either 0 or msvcrt.dll on Windows
+    let hdl = Libdl.dlopen(libccalltest, Libdl.RTLD_GLOBAL)
+        try
+            @static if Sys.iswindows()
+                @test_throws ErrorException ccall(:get_c_int, Cint, ())
+            else
+                @test ccall(:get_c_int, Cint, ()) isa Cint
+            end
+        finally
+            Libdl.dlclose(hdl)
+        end
+    end
+end
+
+module Test57749
+using Test, Zstd_jll
+const prefix = "Zstd version: "
+const sym = :ZSTD_versionString
+get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
+@test startswith(get_zstd_version(), "Zstd")
 end

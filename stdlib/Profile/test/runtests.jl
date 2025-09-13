@@ -155,6 +155,20 @@ end
 @test z == 10
 end
 
+@testset "@profile no scope" begin
+    @profile no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    @profile_walltime no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    Profile.Allocs.@profile no_scope_57858_2 = 1
+    @test @isdefined no_scope_57858_2
+    Profile.Allocs.clear()
+end
+
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
@@ -206,9 +220,19 @@ end
 
 import InteractiveUtils
 
+@generated function compile_takes_1_second(x)
+    t = time_ns()
+    while time_ns() < t + 1e9
+        # busy wait for 1 second
+    end
+    return :(x)
+end
 @testset "Module short names" begin
     Profile.clear()
-    @profile InteractiveUtils.peakflops()
+    @profile begin
+        @eval compile_takes_1_second(1) # to increase chance of profiling hitting compilation code
+        InteractiveUtils.peakflops()
+    end
     io = IOBuffer()
     ioc = IOContext(io, :displaysize=>(1000,1000))
     Profile.print(ioc, C=true)
@@ -344,6 +368,8 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
+@static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
 
@@ -373,6 +399,7 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
 end
 
 @testset "PageProfile" begin

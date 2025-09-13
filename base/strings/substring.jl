@@ -135,15 +135,13 @@ end
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
-function hash(s::SubString{String}, h::UInt)
-    h += memhash_seed
-    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
-end
+hash(data::SubString{String}, h::UInt) =
+    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
 
 _isannotated(::SubString{T}) where {T} = _isannotated(T)
 
 """
-    reverse(s::AbstractString) -> AbstractString
+    reverse(s::AbstractString)::AbstractString
 
 Reverses a string. Technically, this function reverses the codepoints in a string and its
 main utility is for reversed-order string processing, especially for reversed

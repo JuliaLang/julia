@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # Test that the Core._apply_iterate bail path taints effects
@@ -378,32 +380,38 @@ let effects = Base.infer_effects(; optimize=false) do
 end
 
 # we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
-# as the cached effects can be easily wrong otherwise
-# since the inference currently doesn't track "world-age" of global variables
-@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
 setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
-let effects = Base.infer_effects() do
-        global_assignment_undefinedyet()
-    end
+let effects = Base.infer_effects(setglobal!_nothrow_undefinedyet)
     @test !Compiler.is_nothrow(effects)
 end
-let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefinedyet()
-    end
+@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+# This declares the binding as ::Any
+@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
+let effects = Base.infer_effects(global_assignment_undefinedyet)
+    @test Compiler.is_nothrow(effects)
+end
+# Again with type mismatch
+global UNDEFINEDYET2::String = "0"
+setglobal!_nothrow_undefinedyet2() = setglobal!(@__MODULE__, :UNDEFINEDYET2, 42)
+@eval global_assignment_undefinedyet2() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET2)) = 42
+let effects = Base.infer_effects(global_assignment_undefinedyet2)
     @test !Compiler.is_nothrow(effects)
 end
-global UNDEFINEDYET::String = "0"
-let effects = Base.infer_effects() do
-        global_assignment_undefinedyet()
-    end
+let effects = Base.infer_effects(setglobal!_nothrow_undefinedyet2)
     @test !Compiler.is_nothrow(effects)
 end
-let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefinedyet()
-    end
+@test_throws TypeError setglobal!_nothrow_undefinedyet2()
+
+module ExportMutableGlobal
+    global mutable_global_for_setglobal_test::Int = 0
+    export mutable_global_for_setglobal_test
+end
+using .ExportMutableGlobal: mutable_global_for_setglobal_test
+f_assign_imported() = global mutable_global_for_setglobal_test = 42
+let effects = Base.infer_effects(f_assign_imported)
     @test !Compiler.is_nothrow(effects)
 end
-@test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
+@test_throws ErrorException f_assign_imported()
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
@@ -1384,3 +1392,90 @@ end |> Compiler.is_nothrow
 @test Base.infer_effects() do
     @ccall unsafecall()::Cvoid
 end == Compiler.EFFECTS_UNKNOWN
+
+# fpext
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float16])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float64}, Float16])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float64}, Float32])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float16}, Float16])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float16}, Float32])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float32])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float64])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Int32}, Float16])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Int16])
+
+# Float intrinsics require float arguments
+@test Base.infer_effects((Int16,)) do x
+    return Core.Intrinsics.abs_float(x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64, Int64, Int64)) do x, y, z
+    return Core.Intrinsics.fma_float(x, y, z)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptoui(UInt32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptosi(Int32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.sitofp(Int64, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((UInt64,)) do x
+    return Core.Intrinsics.uitofp(Int64, x)
+end |> !Compiler.is_nothrow
+
+# effects modeling for pointer-related intrinsics
+let effects = Base.infer_effects(Core.Intrinsics.pointerref, Tuple{Vararg{Any}})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_inaccessiblememonly(effects)
+end
+let effects = Base.infer_effects(Core.Intrinsics.pointerset, Tuple{Vararg{Any}})
+    @test Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+end
+# effects modeling for atomic intrinsics
+# these functions especially need to be marked !effect_free since they imply synchronization
+for atomicfunc = Any[
+        Core.Intrinsics.atomic_pointerref,
+        Core.Intrinsics.atomic_pointerset,
+        Core.Intrinsics.atomic_pointerswap,
+        Core.Intrinsics.atomic_pointerreplace,
+        Core.Intrinsics.atomic_fence]
+    @test !Compiler.is_effect_free(Base.infer_effects(atomicfunc, Tuple{Vararg{Any}}))
+end
+
+# effects modeling for intrinsics that can do arbitrary things
+let effects = Base.infer_effects(Core.Intrinsics.llvmcall, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+let effects = Base.infer_effects(Core.Intrinsics.atomic_pointermodify, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+
+# JuliaLang/julia#57780
+let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
+    @test !Compiler.is_effect_free(effects)
+end
+
+# builtin functions that can do arbitrary things should have the top effects
+@test Base.infer_effects(Core._call_in_world_total, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(Core.invoke_in_world, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()
+
+# Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
+let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
+        Core._svec_ref(svec, i)
+    end
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+end

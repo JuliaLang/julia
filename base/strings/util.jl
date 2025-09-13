@@ -3,7 +3,7 @@
 """
     Base.Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
 
-An alias type for a either single character or a tuple/vector/set of characters, used to describe arguments
+An alias type for either a single character or a tuple/vector/set of characters, used to describe arguments
 of several string-matching functions such as [`startswith`](@ref) and [`strip`](@ref).
 
 !!! compat "Julia 1.11"
@@ -100,7 +100,6 @@ Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
-    cub = ncodeunits(b)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -233,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -241,6 +240,9 @@ See also [`chopsuffix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` prefix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -273,8 +275,16 @@ function chopprefix(s::Union{String, SubString{String}},
     end
 end
 
+function chopprefix(s::AbstractString, prefix::AbstractChar)
+    if !isempty(s) && first(s) == prefix
+        return SubString(s, nextind(s, firstindex(s)))
+    else
+        return SubString(s)
+    end
+end
+
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -282,6 +292,9 @@ See also [`chopprefix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` suffix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -316,11 +329,18 @@ function chopsuffix(s::Union{String, SubString{String}},
     end
 end
 
+function chopsuffix(s::AbstractString, suffix::AbstractChar)
+    if !isempty(s) && last(s) == suffix
+        return SubString(s, firstindex(s), prevind(s, lastindex(s)))
+    else
+        return SubString(s)
+    end
+end
 
 """
-    chomp(s::AbstractString) -> SubString
+    chomp(s::AbstractString)::SubString
 
-Remove a single trailing newline from a string.
+Remove a single trailing newline (i.e. "\\r\\n" or "\\n") from a string.
 
 See also [`chop`](@ref).
 
@@ -328,6 +348,12 @@ See also [`chop`](@ref).
 ```jldoctest
 julia> chomp("Hello\\n")
 "Hello"
+
+julia> chomp("World\\r\\n")
+"World"
+
+julia> chomp("Julia\\r\\n\\n")
+"Julia\\r\\n"
 ```
 """
 function chomp(s::AbstractString)
@@ -337,20 +363,25 @@ function chomp(s::AbstractString)
     (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
     return SubString(s, 1, prevind(s,j))
 end
-function chomp(s::String)
-    i = lastindex(s)
-    if i < 1 || codeunit(s,i) != 0x0a
-        return @inbounds SubString(s, 1, i)
-    elseif i < 2 || codeunit(s,i-1) != 0x0d
-        return @inbounds SubString(s, 1, prevind(s, i))
-    else
-        return @inbounds SubString(s, 1, prevind(s, i-1))
-    end
-end
 
+@assume_effects :removable :foldable function chomp(s::Union{String, SubString{String}})
+    cu = codeunits(s)
+    ncu = length(cu)
+    len = if iszero(ncu)
+        0
+    else
+        has_lf = @inbounds(cu[ncu]) == 0x0a
+        two_bytes = ncu > 1
+        has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
+        ncu - (has_lf + has_cr)
+    end
+    off = s isa String ? 0 : s.offset
+    par = s isa String ? s : s.string
+    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+end
 """
-    lstrip([pred=isspace,] str::AbstractString) -> SubString
-    lstrip(str::AbstractString, chars) -> SubString
+    lstrip([pred=isspace,] str::AbstractString)::SubString
+    lstrip(str::AbstractString, chars)::SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -384,8 +415,8 @@ lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 lstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 
 """
-    rstrip([pred=isspace,] str::AbstractString) -> SubString
-    rstrip(str::AbstractString, chars) -> SubString
+    rstrip([pred=isspace,] str::AbstractString)::SubString
+    rstrip(str::AbstractString, chars)::SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -419,8 +450,8 @@ rstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments
 
 
 """
-    strip([pred=isspace,] str::AbstractString) -> SubString
-    strip(str::AbstractString, chars) -> SubString
+    strip([pred=isspace,] str::AbstractString)::SubString
+    strip(str::AbstractString, chars)::SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -450,7 +481,7 @@ strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 ## string padding functions ##
 
 """
-    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -487,7 +518,7 @@ function lpad(
 end
 
 """
-    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -1041,7 +1072,7 @@ function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
         return String(str)
     end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
-    return String(take!(_replace_finish(out, str, count, e1, patterns, replaces, rs)))
+    return takestring!(_replace_finish(out, str, count, e1, patterns, replaces, rs))
 end
 
 """
@@ -1063,8 +1094,11 @@ is supplied, the transformed string is instead written to `io` (returning `io`).
 (For example, this can be used in conjunction with an [`IOBuffer`](@ref) to re-use
 a pre-allocated buffer array in-place.)
 
-Multiple patterns can be specified, and they will be applied left-to-right
-simultaneously, so only one pattern will be applied to any character, and the
+Multiple patterns can be specified: The input string will be scanned only once
+from start (left) to end (right), and the first matching replacement
+will be applied to each substring. Replacements are applied in the order of
+the arguments provided if they match substrings starting at the same
+input string position. Thus, only one pattern will be applied to any character, and the
 patterns will only be applied to the input text, not the replacements.
 
 !!! compat "Julia 1.7"
@@ -1192,8 +1226,8 @@ end
 end
 
 """
-    bytes2hex(itr) -> String
-    bytes2hex(io::IO, itr)
+    bytes2hex(itr)::String
+    bytes2hex(io::IO, itr)::Nothing
 
 Convert an iterator `itr` of bytes to its hexadecimal string representation, either
 returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream
@@ -1273,5 +1307,5 @@ function Base.rest(s::AbstractString, st...)
     for c in Iterators.rest(s, st...)
         print(io, c)
     end
-    return String(take!(io))
+    return takestring!(io)
 end

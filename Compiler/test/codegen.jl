@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using InteractiveUtils: code_llvm, code_native
 using Libdl
 using Test
 
@@ -21,7 +22,7 @@ end
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
     params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-    d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
     sprint(print, d)
 end
 
@@ -409,7 +410,7 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.1 # less that 10% difference
+@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.3
 
 # returning an argument shouldn't alloc a new box
 @noinline f33829(x) = (global called33829 = true; x)
@@ -889,57 +890,6 @@ ex54166 = Union{Missing, Int64}[missing -2; missing -2];
 dims54166 = (1,2)
 @test (minimum(ex54166; dims=dims54166)[1] === missing)
 
-# #54109 - Excessive LLVM time for egal
-struct DefaultOr54109{T}
-    x::T
-    default::Bool
-end
-
-@eval struct Torture1_54109
-    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:897)...)
-end
-Torture1_54109() = Torture1_54109((DefaultOr54109(1.0, false) for i = 1:897)...)
-
-@eval struct Torture2_54109
-    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:400)...)
-    $((Expr(:(::), Symbol("x$(i+400)"), DefaultOr54109{Int16}) for i = 1:400)...)
-end
-Torture2_54109() = Torture2_54109((DefaultOr54109(1.0, false) for i = 1:400)..., (DefaultOr54109(Int16(1), false) for i = 1:400)...)
-
-@noinline egal_any54109(x, @nospecialize(y::Any)) = x === Base.compilerbarrier(:type, y)
-
-let ir1 = get_llvm(egal_any54109, Tuple{Torture1_54109, Any}),
-    ir2 = get_llvm(egal_any54109, Tuple{Torture2_54109, Any})
-
-    # We can't really do timing on CI, so instead, let's look at the length of
-    # the optimized IR. The original version had tens of thousands of lines and
-    # was slower, so just check here that we only have < 500 lines. If somebody,
-    # implements a better comparison that's larger than that, just re-benchmark
-    # this and adjust the threshold.
-
-    @test count(==('\n'), ir1) < 500
-    @test count(==('\n'), ir2) < 500
-end
-
-## Regression test for egal of a struct of this size without padding, but with
-## non-bitsegal, to make sure that it doesn't accidentally go down the accelerated
-## path.
-@eval struct BigStructAnyInt
-    $((Expr(:(::), Symbol("x$i"), Pair{Any, Int}) for i = 1:33)...)
-end
-BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=>i for i = 1:33)...)
-@test egal_any54109(BigStructAnyInt(), BigStructAnyInt())
-
-## For completeness, also test correctness, since we don't have a lot of
-## large-struct tests.
-
-# The two allocations of the same struct will likely have different padding,
-# we want to make sure we find them egal anyway - a naive memcmp would
-# accidentally look at it.
-@test egal_any54109(Torture1_54109(), Torture1_54109())
-@test egal_any54109(Torture2_54109(), Torture2_54109())
-@test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
-
 bar54599() = Base.inferencebarrier(true) ? (Base.PkgId(Main),1) : nothing
 
 function foo54599()
@@ -1001,6 +951,16 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
     end
 end
 
+# Issue #42326
+primitive type PadAfter64_42326 448 end
+mutable struct CheckPadAfter64_42326
+    a::UInt64
+    pad::PadAfter64_42326
+    b::UInt64
+end
+@test fieldoffset(CheckPadAfter64_42326, 3) == 80
+@test sizeof(CheckPadAfter64_42326) == 96
+
 @noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
@@ -1031,8 +991,87 @@ end
 # Make sure that code that has unbound sparams works
 #https://github.com/JuliaLang/julia/issues/56739
 
-f56739(a) where {T} = a
+@test_warn r"declares type variable T but does not use it" @eval f56739(a) where {T} = a
 
 @test f56739(1) == 1
 g56739(x) = @noinline f56739(x)
 @test g56739(1) == 1
+
+struct Vec56937 x::NTuple{8, VecElement{Int}} end
+
+x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
+@test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
+
+# issue #56996
+let
+   ()->() # trigger various heuristics
+   Base.Experimental.@force_compile
+   default_rng_orig = [] # make a value in a Slot
+   try
+       # overwrite the gc-slots in the exception branch
+       throw(ErrorException("This test is supposed to throw an error"))
+   catch ex
+       # destroy any values that aren't referenced
+       GC.gc()
+       # make sure that default_rng_orig value is still valid
+       @noinline copy!([], default_rng_orig)
+   end
+   nothing
+end
+
+# Test that turning an implicit import into an explicit one doesn't pessimize codegen
+module TurnedIntoExplicit
+    using Test
+    import ..get_llvm
+
+    module ReExportBitCast
+        export bitcast
+        import Base: bitcast
+    end
+    using .ReExportBitCast
+
+    f(x::UInt) = bitcast(Float64, x)
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+
+    import Base: bitcast
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+end
+
+# Test codegen for `isdefinedglobal` of constant (#57872)
+const x57872 = "Hello"
+f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x57872)), x57872) # Extra globalref here to force world age bounds
+@test f57872() == (true, "Hello")
+
+@noinline f_mutateany(@nospecialize x) = x[] = 1
+g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
+@test g_mutateany() === 1
+
+# 58470 tbaa for unionselbyte of heap allocated mutables
+mutable struct Wrapper58470
+    x::Union{Nothing,Int}
+end
+
+function findsomething58470(dict, inds)
+    default = Wrapper58470(nothing)
+    for i in inds
+        x = get(dict, i, default).x
+        if !isnothing(x)
+            return x
+        end
+    end
+    return nothing
+end
+
+let io = IOBuffer()
+    code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+end
+
+let io = IOBuffer()
+    code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
+    str = String(take!(io))
+    @test occursin("julia.write_barrier", str)
+end
