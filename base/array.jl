@@ -1265,9 +1265,9 @@ function _deletebeg!(a::Vector, delta::Integer)
     delta = Int(delta)
     len = length(a)
     # See comment in _deleteend!
-    unsigned(delta) > unsigned(len) && throw(
-        ArgumentError("_deletebeg! requires delta in 0:length(a)")
-    )
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    end
     for i in 1:delta
         @inbounds _unsetindex!(a, i)
     end
@@ -1285,9 +1285,9 @@ function _deleteend!(a::Vector, delta::Integer)
     # Do the comparison unsigned, to so the compiler knows `len` cannot be negative.
     # This works because if delta is negative, it will overflow and still trigger.
     # This enables the compiler to skip the check sometimes.
-    unsigned(delta) > unsigned(len) && throw(
-        ArgumentError("_deleteend! requires delta in 0:length(a)")
-    )
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    end
     newlen = len - delta
     for i in newlen+1:len
         @inbounds _unsetindex!(a, i)
