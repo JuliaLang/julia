@@ -6530,5 +6530,8 @@ end === Type{String}
 @test Base.infer_return_type((typeof(task_returner),)) do f
     fetch(f())
 end === String
+@test Base.infer_return_type((Int,)) do i
+    fetch(Threads.@spawn sin(i))
+end === Float64
 
 end # module inference

@@ -1865,6 +1865,13 @@ let src = code_typed1(()) do
         end, src.code) == 1
 end
 
+# Test that task_result_type gets inlined to its constant value
+let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
+    # Should be inlined to Type{Any} constant, no call to task_result_type
+    @test count(iscall((src, Core.task_result_type)), src.code) == 0
+    @test src.code[end] == ReturnNode(Any)
+end
+
 # apply `ssa_inlining_pass` multiple times
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
 multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
@@ -2370,13 +2377,6 @@ end
 let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
     @test count(isinvoke(:merge_fallback), src.code) == 0
     @test count(iscall((src, Base.merge_fallback)), src.code) == 0
-end
-
-# Test that task_result_type gets inlined to its constant value
-let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
-    # Should be inlined to Type{Any} constant, no call to task_result_type
-    @test count(iscall((src, Core.task_result_type)), src.code) == 0
-    @test src.code[end] == ReturnNode(Any)
 end
 
 end # module inline_tests
