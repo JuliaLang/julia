@@ -17,7 +17,7 @@ end
 ==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
 
 function hash(pkg::PkgId, h::UInt)
-    h += 0xc9f248583a0ca36c % UInt
+    h ⊻= 0xc9f248583a0ca36c % UInt
     h = hash(pkg.uuid, h)
     h = hash(pkg.name, h)
     return h
@@ -32,7 +32,7 @@ function binpack(pkg::PkgId)
     uuid = pkg.uuid
     write(io, uuid === nothing ? UInt128(0) : UInt128(uuid))
     write(io, pkg.name)
-    return String(take!(io))
+    return unsafe_takestring!(io)
 end
 
 function binunpack(s::String)

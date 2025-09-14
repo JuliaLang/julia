@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    LibGit2.tag_list(repo::GitRepo) -> Vector{String}
+    LibGit2.tag_list(repo::GitRepo)::Vector{String}
 
 Get a list of all tags in the git repository `repo`.
 """
@@ -10,7 +10,7 @@ function tag_list(repo::GitRepo)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_tag_list, libgit2), Cint,
                  (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo)
-    res = convert(Vector{String}, sa_ref[])
+    res = collect(sa_ref[])
     free(sa_ref)
     res
 end

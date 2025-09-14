@@ -79,7 +79,7 @@ for func in (:year, :month, :quarter)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType)::Int64
 
         The $($name) of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
@@ -87,7 +87,7 @@ for func in (:year, :month, :quarter)
 end
 
 """
-    week(dt::TimeType) -> Int64
+    week(dt::TimeType)::Int64
 
 Return the [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) of a `Date` or
 `DateTime` as an [`Int64`](@ref). Note that the first week of a year is the week that
@@ -113,7 +113,7 @@ for func in (:day, :dayofmonth)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType)::Int64
 
         The day of month of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
@@ -121,7 +121,7 @@ for func in (:day, :dayofmonth)
 end
 
 """
-    hour(dt::DateTime) -> Int64
+    hour(dt::DateTime)::Int64
 
 The hour of day of a `DateTime` as an [`Int64`](@ref).
 """
@@ -131,7 +131,7 @@ for func in (:minute, :second, :millisecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::DateTime) -> Int64
+            $($name)(dt::DateTime)::Int64
 
         The $($name) of a `DateTime` as an [`Int64`](@ref).
         """ $func(dt::DateTime)
@@ -155,7 +155,7 @@ for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(t::Time) -> Int64
+            $($name)(t::Time)::Int64
 
         The $($name) of a `Time` as an [`Int64`](@ref).
         """ $func(t::Time)

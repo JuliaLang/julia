@@ -110,7 +110,7 @@ The general principles are that:
 - Primitive types get passed in int/float registers.
 - Tuples of VecElement types get passed in vector registers.
 - Structs get passed on the stack.
-- Return values are handle similarly to arguments,
+- Return values are handled similarly to arguments,
   with a size-cutoff at which they will instead be returned via a hidden sret argument.
 
 The total logic for this is implemented by `get_specsig_function` and `deserves_sret`.

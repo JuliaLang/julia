@@ -36,6 +36,8 @@ let
     Base.hash(uuid::UUID, h::UInt) = hash(uuid_hash_seed, hash(convert(NTuple{2, UInt64}, uuid), h))
 end
 
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
+
 let
 @inline function uuid_kernel(s, i, u)
     _c = UInt32(@inbounds codeunit(s, i))
@@ -96,7 +98,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
             u >>= 4
         end
         @inbounds a[24] = a[19] = a[14] = a[9] = '-'
-        return String(a)
+        return unsafe_takestring(a)
     end
 end
 

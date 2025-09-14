@@ -14,7 +14,7 @@
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORESCALAROPTIMIZATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERSCALAROPTIMIZATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREVECTORIZATION
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERVECTORIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterVectorization -force-vector-width=2 -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERVECTORIZATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREINTRINSICLOWERING
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERINTRINSICLOWERING
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORECLEANUP
@@ -285,25 +285,18 @@ attributes #2 = { inaccessiblemem_or_argmemonly }
 
 ; COM: InstSimplify/InstCombine should kill this zext-trunc pair
 ; AFTEREARLYSIMPLIFICATION: [[ZEXT:%.*]] = zext i1 {{%.*}} to i8
-; AFTEREARLYSIMPLIFICATION-NEXT: trunc i8 [[ZEXT]] to i1
-
-; BEFOREEARLYOPTIMIZATION: [[ZEXT:%.*]] = zext i1 {{%.*}} to i8
-; BEFOREEARLYOPTIMIZATION-NEXT: trunc i8 [[ZEXT]] to i1
 
 ; AFTEREARLYOPTIMIZATION-NOT: zext i1 {{%.*}} to i8
-; AFTEREARLYOPTIMIZATION-NOT: trunc i8 {{%.*}} to i1
 
 ; BEFORELOOPOPTIMIZATION-NOT: zext i1 {{%.*}} to i8
-; BEFORELOOPOPTIMIZATION-NOT: trunc i8 {{%.*}} to i1
 
 ; COM: Loop simplification makes the exit condition obvious
 ; AFTERLOOPSIMPLIFICATION: L35.lr.ph:
 ; AFTERLOOPSIMPLIFICATION: add nuw nsw
 
-; COM: Scalar optimization removes the previous add from the preheader
-; AFTERSCALAROPTIMIZATION: L35.lr.ph:
-; AFTERSCALAROPTIMIZATION-NOT: add nuw nsw
-; AFTERSCALAROPTIMIZATION: br label %L35
+; COM: Scalar optimization removes the preheader
+; AFTERSCALAROPTIMIZATION: L17:
+; AFTERSCALAROPTIMIZATION: icmp eq i64 {{%.*}}, 1,
 
 ; COM: Vectorization does stuff
 ; AFTERVECTORIZATION: vector.body

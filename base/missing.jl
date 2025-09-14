@@ -36,7 +36,7 @@ Any
 !!! compat "Julia 1.3"
     This function is exported as of Julia 1.3.
 """
-nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
+nonmissingtype(@nospecialize(T::Type)) = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
@@ -86,6 +86,8 @@ isequal(::Any, ::Missing) = false
 isless(::Missing, ::Missing) = false
 isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
+ispositive(::Missing) = missing
+isnegative(::Missing) = missing
 isapprox(::Missing, ::Missing; kwargs...) = missing
 isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing

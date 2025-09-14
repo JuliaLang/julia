@@ -32,6 +32,7 @@ Base.StridedMatrix
 Base.StridedVecOrMat
 Base.GenericMemory
 Base.Memory
+Base.Memory(::UndefInitializer, ::Int)
 Base.memoryref
 Base.Slices
 Base.RowSlices
@@ -113,6 +114,12 @@ Base.to_indices
 Base.checkbounds
 Base.checkindex
 Base.elsize
+```
+
+While most code can be written in an index-agnostic manner (see, e.g., [`eachindex`](@ref)), it can sometimes be useful to explicitly check for offset axes:
+```@docs
+Base.require_one_based_indexing
+Base.has_offset_axes
 ```
 
 ## Views (SubArrays and other view types)

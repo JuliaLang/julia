@@ -470,3 +470,41 @@ end
         @test prevfloat(f) < i
     end
 end
+
+@testset "π to `BigFloat` with `setrounding`" begin
+    function irrational_to_big_float(c::AbstractIrrational)
+        BigFloat(c)
+    end
+
+    function irrational_to_big_float_with_rounding_mode(c::AbstractIrrational, rm::RoundingMode)
+        f = () -> irrational_to_big_float(c)
+        setrounding(f, BigFloat, rm)
+    end
+
+    function irrational_to_big_float_with_rounding_mode_and_precision(c::AbstractIrrational, rm::RoundingMode, prec::Int)
+        f = () -> irrational_to_big_float_with_rounding_mode(c, rm)
+        setprecision(f, BigFloat, prec)
+    end
+
+    for c ∈ (π, MathConstants.γ, MathConstants.catalan)
+        for p ∈ 1:40
+            @test (
+                irrational_to_big_float_with_rounding_mode_and_precision(c, RoundDown, p) < c <
+                irrational_to_big_float_with_rounding_mode_and_precision(c, RoundUp, p)
+            )
+        end
+    end
+end
+
+@testset "Rounding to floating point types with RoundFromZero #55820" begin
+    @testset "Testing float types: $f" for f ∈ (Float16, Float32, Float64, BigFloat)
+        @testset "Testing value types: $t" for t ∈ (Bool, Rational{Int8})
+            @test iszero(f(zero(t), RoundFromZero))
+        end
+    end
+    @test Float16(100000, RoundToZero) === floatmax(Float16)
+    @test Float16(100000, RoundFromZero) === Inf16
+    @test Float16(-100000, RoundToZero) === -floatmax(Float16)
+    @test Float16(-100000, RoundFromZero) === -Inf16
+    @test Float32(nextfloat(0.0), RoundFromZero) === nextfloat(0.0f0)
+end

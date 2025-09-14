@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-mutable struct LaTeX
+mutable struct LaTeX <: MarkdownElement
     formula::String
 end
 

@@ -177,7 +177,7 @@ $2 = void
 
 The most recent `jl_apply` is at frame #3, so we can go back there and look at the AST for the
 function `julia_convert_16886`. This is the uniqued name for some method of `convert`. `f` in
-this frame is a `jl_function_t*`, so we can look at the type signature, if any, from the `specTypes`
+this frame is a `jl_value_t*`, so we can look at the type signature, if any, from the `specTypes`
 field:
 
 ```
@@ -200,7 +200,7 @@ Expr(:return, Expr(:call, :box, :Float32, Expr(:call, :fptrunc, :Float32, :x)::A
 ```
 
 Finally, and perhaps most usefully, we can force the function to be recompiled in order to step
-through the codegen process. To do this, clear the cached `functionObject` from the `jl_lamdbda_info_t*`:
+through the codegen process. To do this, clear the cached `functionObject` from the `jl_lambda_info_t*`:
 
 ```
 (gdb) p f->linfo->functionObject

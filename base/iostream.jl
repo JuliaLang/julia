@@ -47,21 +47,44 @@ macro _lock_ios(s, expr)
 end
 
 """
-    fd(stream) -> RawFD
+    fd(x)::RawFD
 
-Return the file descriptor backing the stream or file. Note that this function only applies
-to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+Return the file descriptor backing the stream, file, or socket.
 
 `RawFD` objects can be passed directly to other languages via the `ccall` interface.
 
 !!! compat "Julia 1.12"
     Prior to 1.12, this function returned an `Int` instead of a `RawFD`. You may use
     `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
+
+!!! compat "Julia 1.12"
+    Getting the file descriptor of sockets are supported as of Julia 1.12.
+
+!!! warning
+    Duplicate the returned file descriptor with [`Libc.dup()`](@ref) before
+    passing it to another system that will take ownership of it (e.g. a C
+    library). Otherwise both the Julia object `x` and the other system may try
+    to close the file descriptor, which will cause errors.
+
+!!! warning
+    The file descriptors for sockets are asynchronous (i.e. `O_NONBLOCK` on
+    POSIX and `OVERLAPPED` on Windows), they may behave differently than regular
+    file descriptors.
 """
 fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
 
+"""
+    isopen(s::IOStream)
+
+Check if the stream is not yet closed.
+
+A closed `IOStream` may still have data to read in its buffer,
+use [`eof`](@ref) to check for the ability to read data.
+
+Use the `FileWatching` package to be notified when a file might be writable or readable.
+"""
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios) != 0
 
 function close(s::IOStream)
@@ -98,7 +121,7 @@ julia> write(io, "JuliaLang is a GitHub organization.")
 julia> truncate(io, 15)
 IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=15, maxsize=Inf, ptr=16, mark=-1)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a "
 
 julia> io = IOBuffer();
@@ -107,7 +130,7 @@ julia> write(io, "JuliaLang is a GitHub organization.");
 
 julia> truncate(io, 40);
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization.\\0\\0\\0\\0\\0"
 ```
 """
@@ -230,8 +253,8 @@ end
 function filesize(s::IOStream)
     sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
     if sz == -1
-        err = Libc.errno()
-        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+        # if `s` is not seekable `ios_filesize` can fail, so fall back to slower stat method
+        sz = filesize(stat(s))
     end
     return sz
 end
@@ -244,7 +267,7 @@ eof(s::IOStream) = @_lock_ios s _eof_nolock(s)
 # "own" means the descriptor will be closed with the IOStream
 
 """
-    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
+    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false])::IOStream
 
 Create an [`IOStream`](@ref) object from an integer file descriptor. If `own` is `true`, closing
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
@@ -259,7 +282,7 @@ end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 """
-    open(filename::AbstractString; lock = true, keywords...) -> IOStream
+    open(filename::AbstractString; lock = true, keywords...)::IOStream
 
 Open a file in a mode specified by five boolean keyword arguments:
 
@@ -313,7 +336,7 @@ end
 open(fname::AbstractString; kwargs...) = open(convert(String, fname)::String; kwargs...)
 
 """
-    open(filename::AbstractString, [mode::AbstractString]; lock = true) -> IOStream
+    open(filename::AbstractString, [mode::AbstractString]; lock = true)::IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
@@ -456,7 +479,7 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
     isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
-    String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
+    takestring!(copyuntil(IOBuffer(sizehint=70), s, delim; keep))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)

@@ -381,6 +381,8 @@ end
     sA = view(A, 1:2, 3, [1 3; 4 2])
     @test ndims(sA) == 3
     @test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
+    @test axes(similar(typeof(A),axes(A))) == axes(A)
+    @test eltype(similar(typeof(A),axes(A))) == eltype(A)
 end
 
 @testset "logical indexing #4763" begin
@@ -1027,31 +1029,6 @@ catch err
     err isa ErrorException && startswith(err.msg, "syntax:")
 end
 
-
-@testset "avoid allocating in reindex" begin
-    a = reshape(1:16, 4, 4)
-    inds = ([2,3], [3,4])
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (2,3)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
-
-    inds = (reshape([eachindex(a);], size(a)),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2),)
-
-    inds = (reshape([eachindex(a);], size(a)..., 1),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2, 1:1)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
-end
-
 @testset "isassigned" begin
     a = Vector{BigFloat}(undef, 5)
     a[2] = 0
@@ -1123,3 +1100,6 @@ end
     @test Base.mightalias(permutedims(V1), V1)
     @test Base.mightalias(permutedims(V1), permutedims(V1))
 end
+
+
+@test @views quote var"begin" + var"end" end isa Expr

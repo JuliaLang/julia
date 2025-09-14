@@ -19,7 +19,7 @@ export GitError
             EUNMERGED       = Cint(-10), # merge in progress prevented op
             ENONFASTFORWARD = Cint(-11), # ref not fast-forwardable
             EINVALIDSPEC    = Cint(-12), # name / ref not in valid format
-            EMERGECONFLICT  = Cint(-13), # merge conflict prevented op
+            ECONFLICT       = Cint(-13), # Checkout conflicts prevented operation
             ELOCKED         = Cint(-14), # lock file prevented op
             EMODIFIED       = Cint(-15), # ref value does not match expected
             EAUTH           = Cint(-16), # authentication error
@@ -27,6 +27,11 @@ export GitError
             EAPPLIED        = Cint(-18), # patch/merge has already been applied
             EPEEL           = Cint(-19), # the requested peel operation is not possible
             EEOF            = Cint(-20), # unexpected EOF
+            EINVALID        = Cint(-21), # Invalid operation or input
+            EUNCOMMITTED    = Cint(-22), # Uncommitted changes in index prevented operation
+            EDIRECTORY      = Cint(-23), # The operation is not valid for a directory
+            EMERGECONFLICT  = Cint(-24), # A merge conflict exists and cannot continue
+
             PASSTHROUGH     = Cint(-30), # internal only
             ITEROVER        = Cint(-31), # signals end of iteration
             RETRY           = Cint(-32), # internal only
@@ -34,7 +39,11 @@ export GitError
             EINDEXDIRTY     = Cint(-34), # unsaved changes in the index would be overwritten
             EAPPLYFAIL      = Cint(-35), # patch application failed
             EOWNER          = Cint(-36), # the object is not owned by the current user
-            TIMEOUT         = Cint(-37)) # The operation timed out
+            TIMEOUT         = Cint(-37), # The operation timed out
+            EUNCHANGED      = Cint(-38), # There were no changes
+            ENOTSUPPORTED   = Cint(-39), # An option is not supported
+            EREADONLY       = Cint(-40), # The subject is read-only
+)
 
 @enum(Class, None,
              NoMemory,
@@ -88,7 +97,7 @@ Base.show(io::IO, err::GitError) = print(io, "GitError(Code:$(err.code), Class:$
 
 function last_error()
     ensure_initialized()
-    err = ccall((:giterr_last, libgit2), Ptr{ErrorStruct}, ())
+    err = ccall((:git_error_last, libgit2), Ptr{ErrorStruct}, ())
     if err != C_NULL
         err_obj   = unsafe_load(err)
         err_class = Class(err_obj.class)
