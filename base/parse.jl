@@ -38,6 +38,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 ```
 """
 parse(T::Type, str; base = Int)
+parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 """
     tryparse(type, str; base)
@@ -229,9 +230,11 @@ function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
     len = endpos - startpos + 1
     if sbuff isa Union{String, SubString{String}}
         p = pointer(sbuff) + startpos - 1
-        GC.@preserve sbuff begin
-            (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
-            (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
+        truestr = "true"
+        falsestr = "false"
+        GC.@preserve sbuff truestr falsestr begin
+            (len == 4) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, truestr), 4)) && (return true)
+            (len == 5) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, falsestr), 5)) && (return false)
         end
     else
         (len == 4) && (SubString(sbuff, startpos:startpos+3) == "true") && (return true)
@@ -262,20 +265,22 @@ function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = n
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
-    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
-                                 base===nothing ? 0 : check_valid_base(base), true))
+    v = tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), true)
+    v === nothing && error("should not happoen")
+    convert(T, v)
 end
+tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 ## string to float functions ##
 
 function tryparse(::Type{Float64}, s::String)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
+                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
 end
 function tryparse(::Type{Float64}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
+                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
     hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int)
@@ -290,12 +295,12 @@ function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int,
 end
 function tryparse(::Type{Float32}, s::String)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
+                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
 end
 function tryparse(::Type{Float32}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
+                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
     hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int)
@@ -331,14 +336,14 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     if i₊ == i # leading ± sign
         i₊ = something(findnext(in(('+','-')), s, i₊+1), 0)
     end
-    if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
+    if i₊ != 0 && s[prevind(s, i₊)] in ('e','E') # exponent sign
         i₊ = something(findnext(in(('+','-')), s, i₊+1), 0)
     end
 
     # find trailing im/i/j
     iᵢ = something(findprev(in(('m','i','j')), s, e), 0)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
-        iᵢ -= 1
+        iᵢ = prevind(s, iᵢ)
         if s[iᵢ] != 'i'
             raise && throw(ArgumentError("expected trailing \"im\", found only \"m\""))
             return nothing
@@ -347,7 +352,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 
     if i₊ == 0 # purely real or imaginary value
         if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
-            x = tryparse_internal(T, s, i, iᵢ-1, raise)
+            x = tryparse_internal(T, s, i, prevind(s, iᵢ), raise)
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
         else # purely real
@@ -363,11 +368,11 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # parse real part
-    re = tryparse_internal(T, s, i, i₊-1, raise)
+    re = tryparse_internal(T, s, i, prevind(s, i₊), raise)
     re === nothing && return nothing
 
     # parse imaginary part
-    im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise)
+    im = tryparse_internal(T, s, i₊+1, prevind(s, iᵢ), raise)
     im === nothing && return nothing
 
     return Complex{T}(re, s[i₊]=='-' ? -im : im)
@@ -395,7 +400,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...)
     return result
 end
 @noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
-    throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+    throw(ArgumentError(LazyString("cannot parse ", repr(s[startpos:endpos]), " as ", T)))
 
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)

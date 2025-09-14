@@ -6,7 +6,8 @@ calling Julia functions from C code. This can be used to integrate Julia code in
 C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make
 this possible. As almost all programming languages have some way to call C functions, the
 Julia C API can also be used to build further language bridges (e.g. calling Julia from
-Python or C#).
+Python, Rust or C#). Even though Rust and C++ can use the C embedding API directly, both
+have packages helping with it, for C++ [Jluna](https://github.com/Clemapfel/jluna) is useful.
 
 ## High-Level Embedding
 
@@ -53,7 +54,7 @@ linking against `libjulia`.
 The first thing that must be done before calling any other Julia C function is to
 initialize Julia. This is done by calling `jl_init`, which tries to automatically determine
 Julia's install location. If you need to specify a custom location, or specify which system
-image to load, use `jl_init_with_image` instead.
+image to load, use `jl_init_with_image_file` or `jl_init_with_image_handle` instead.
 
 The second statement in the test program evaluates a Julia statement using a call to `jl_eval_string`.
 
@@ -227,7 +228,7 @@ passing arguments computed in C to Julia. For this you will need to invoke Julia
 using `jl_call`:
 
 ```c
-jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
+jl_value_t *func = jl_get_function(jl_base_module, "sqrt");
 jl_value_t *argument = jl_box_float64(2.0);
 jl_value_t *ret = jl_call1(func, argument);
 ```
@@ -239,14 +240,14 @@ the function is called using `jl_call1`. `jl_call0`, `jl_call2`, and `jl_call3` 
 exist, to conveniently handle different numbers of arguments. To pass more arguments, use `jl_call`:
 
 ```
-jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+jl_value_t *jl_call(jl_value_t *f, jl_value_t **args, int32_t nargs)
 ```
 
 Its second argument `args` is an array of `jl_value_t*` arguments and `nargs` is the number of
 arguments.
 
 There is also an alternative, possibly simpler, way of calling Julia functions and that is via [`@cfunction`](@ref).
-Using `@cfunction` allows you to do the type conversions on the Julia side which typically is easier than doing it on
+Using `@cfunction` allows you to do the type conversions on the Julia side, which is typically easier than doing it on
 the C side. The `sqrt` example above would with `@cfunction` be written as:
 
 ```c
@@ -254,7 +255,10 @@ double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt
 double ret = sqrt_jl(2.0);
 ```
 
-where we first define a C callable function in Julia, extract the function pointer from it and finally call it.
+where we first define a C callable function in Julia, extract the function pointer from it, and finally call it.
+In addition to simplifying type conversions by doing them in the higher-level language, calling Julia functions
+via `@cfunction` pointers eliminates the dynamic-dispatch overhead required by `jl_call` (for which all of the
+arguments are "boxed"), and should have performance equivalent to native C function pointers.
 
 ## Memory Management
 
@@ -315,7 +319,7 @@ jl_value_t *ret1 = jl_eval_string("sqrt(2.0)");
 JL_GC_PUSH1(&ret1);
 jl_value_t *ret2 = 0;
 {
-    jl_function_t *func = jl_get_function(jl_base_module, "exp");
+    jl_value_t *func = jl_get_function(jl_base_module, "exp");
     ret2 = jl_call1(func, ret1);
     JL_GC_PUSH1(&ret2);
     // Do something with ret2.
@@ -346,7 +350,7 @@ properly with mutable types.
 ```c
 // This functions shall be executed only once, during the initialization.
 jl_value_t* refs = jl_eval_string("refs = IdDict()");
-jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+jl_value_t* setindex = jl_get_function(jl_base_module, "setindex!");
 
 ...
 
@@ -370,7 +374,7 @@ container is created by `jl_call*`, then you will need to reload the pointer to 
 ```c
 // This functions shall be executed only once, during the initialization.
 jl_value_t* refs = jl_eval_string("refs = IdDict()");
-jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+jl_value_t* setindex = jl_get_function(jl_base_module, "setindex!");
 jl_datatype_t* reft = (jl_datatype_t*)jl_eval_string("Base.RefValue{Any}");
 
 ...
@@ -397,7 +401,7 @@ The GC can be allowed to deallocate a variable by removing the reference to it f
 the function `delete!`, provided that no other reference to the variable is kept anywhere:
 
 ```c
-jl_function_t* delete = jl_get_function(jl_base_module, "delete!");
+jl_value_t* delete = jl_get_function(jl_base_module, "delete!");
 jl_call2(delete, refs, rvar);
 ```
 
@@ -408,7 +412,7 @@ per pointer using
 ```c
 jl_module_t *mod = jl_main_module;
 jl_sym_t *var = jl_symbol("var");
-jl_binding_t *bp = jl_get_binding_wr(mod, var);
+jl_binding_t *bp = jl_get_binding_wr(mod, var, 1);
 jl_checked_assignment(bp, mod, var, val);
 ```
 
@@ -431,26 +435,28 @@ object has just been allocated and no garbage collection has run since then. Not
 `jl_...` functions can sometimes invoke garbage collection.
 
 The write barrier is also necessary for arrays of pointers when updating their data directly.
-For example:
+Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be done. For example:
 
 ```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
-void **data = (void**)jl_array_data(some_array);
+void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
 data[0] = some_value;
-jl_gc_wb(some_array, some_value);
+jl_gc_wb(jl_array_owner(some_array), some_value);
 ```
 
 ### Controlling the Garbage Collector
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
-| Function             | Description                                  |
-|:-------------------- |:-------------------------------------------- |
-| `jl_gc_collect()`    | Force a GC run                               |
-| `jl_gc_enable(0)`    | Disable the GC, return previous state as int |
-| `jl_gc_enable(1)`    | Enable the GC,  return previous state as int |
-| `jl_gc_is_enabled()` | Return current state as int                  |
+| Function                           | Description                                                         |
+| :--------------------------------- | :------------------------------------------------------------------ |
+| `jl_gc_collect(JL_GC_FULL)`        | Force a GC run on all objects                                       |
+| `jl_gc_collect(JL_GC_INCREMENTAL)` | Force a GC run only on young objects                                |
+| `jl_gc_collect(JL_GC_AUTO)`        | Force a GC run, automatically choosing between full and incremental |
+| `jl_gc_enable(0)`                  | Disable the GC, return previous state as int                        |
+| `jl_gc_enable(1)`                  | Enable the GC, return previous state as int                         |
+| `jl_gc_is_enabled()`               | Return current state as int                                         |
 
 ## Working with Arrays
 
@@ -486,20 +492,20 @@ referenced.
 In order to access the data of `x`, we can use `jl_array_data`:
 
 ```c
-double *xData = (double*)jl_array_data(x);
+double *xData = jl_array_data(x, double);
 ```
 
 Now we can fill the array:
 
 ```c
-for(size_t i=0; i<jl_array_len(x); i++)
+for (size_t i = 0; i < jl_array_nrows(x); i++)
     xData[i] = i;
 ```
 
 Now let us call a Julia function that performs an in-place operation on `x`:
 
 ```c
-jl_function_t *func = jl_get_function(jl_base_module, "reverse!");
+jl_value_t *func = jl_get_function(jl_base_module, "reverse!");
 jl_call1(func, (jl_value_t*)x);
 ```
 
@@ -511,7 +517,7 @@ If a Julia function returns an array, the return value of `jl_eval_string` and `
 cast to a `jl_array_t*`:
 
 ```c
-jl_function_t *func  = jl_get_function(jl_base_module, "reverse");
+jl_value_t *func  = jl_get_function(jl_base_module, "reverse");
 jl_array_t *y = (jl_array_t*)jl_call1(func, (jl_value_t*)x);
 ```
 
@@ -526,10 +532,11 @@ that creates a 2D array and accesses its properties:
 ```c
 // Create 2D array of float64 type
 jl_value_t *array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 2);
-jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
+int dims[] = {10,5};
+jl_array_t *x  = jl_alloc_array_nd(array_type, dims, 2);
 
 // Get array pointer
-double *p = (double*)jl_array_data(x);
+double *p = jl_array_data(x, double);
 // Get number of dimensions
 int ndims = jl_array_ndims(x);
 // Get the size of the i-th dim
@@ -657,7 +664,7 @@ double c_func(int i)
     printf("[C %08x] i = %d\n", pthread_self(), i);
 
     // Call the Julia sqrt() function to compute the square root of i, and return it
-    jl_function_t *sqrt = jl_get_function(jl_base_module, "sqrt");
+    jl_value_t *sqrt = jl_get_function(jl_base_module, "sqrt");
     jl_value_t* arg = jl_box_int32(i);
     double ret = jl_unbox_float64(jl_call1(sqrt, arg));
 

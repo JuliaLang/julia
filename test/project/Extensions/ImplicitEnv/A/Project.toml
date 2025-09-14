@@ -1,0 +1,9 @@
+name = "A"
+uuid = "299a509a-2181-4868-8714-15151945d902"
+version = "0.1.0"
+
+[weakdeps]
+B = "c2c18cb0-3543-497c-ac2a-523c527589e5"
+
+[extensions]
+BExt = "B"

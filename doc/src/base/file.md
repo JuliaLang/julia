@@ -1,6 +1,8 @@
 # Filesystem
 
 ```@docs
+Base.read(::String)
+Base.write(::String, ::Any)
 Base.Filesystem.pwd
 Base.Filesystem.cd(::AbstractString)
 Base.Filesystem.cd(::Function)
@@ -27,6 +29,7 @@ Base.Filesystem.operm
 Base.Filesystem.cp
 Base.download
 Base.Filesystem.mv
+Base.Filesystem.rename
 Base.Filesystem.rm
 Base.Filesystem.touch
 Base.Filesystem.tempname

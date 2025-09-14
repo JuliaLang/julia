@@ -31,8 +31,6 @@
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
-(define (julia-current-file) 'none)
-(define (julia-current-line) 0)
 
 ;; parser entry points
 
@@ -93,18 +91,38 @@
 
 ;; lowering entry points
 
+; find the first line number in this expression, before we might eliminate them
+(define (first-lineno blk)
+  (cond ((not (pair? blk)) #f)
+        ((eq? (car blk) 'line) blk)
+        ((and (eq? (car blk) 'hygienic-scope) (pair? (cdddr blk)) (pair? (cadddr blk)) (eq? (car (cadddr blk)) 'line))
+         (cadddr blk))
+        ((memq (car blk) '(escape hygienic-scope))
+         (first-lineno (cadr blk)))
+        ((memq (car blk) '(toplevel block))
+           (let loop ((xs (cdr blk)))
+             (and (pair? xs)
+               (let ((elt (first-lineno (car xs))))
+                 (or elt (loop (cdr xs)))))))
+        (else #f)))
+
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
-(define (expand-toplevel-expr-- e file line)
-  (let ((ex0 (julia-expand-macroscope e)))
+(define (lower-toplevel-expr-- e file line)
+  (let ((lno (first-lineno e))
+        (ex0 (julia-expand-macroscope e)))
+    (if (and lno (or (not (length= lno 3)) (not (atom? (caddr lno))))) (set! lno #f))
     (if (toplevel-only-expr? ex0)
-        ex0
-        (let* ((ex (julia-expand0 ex0 file line))
-               (th (julia-expand1
+        (if (and (pair? e) (memq (car ex0) '(error incomplete)))
+            ex0
+            (if lno `(toplevel ,lno ,ex0) ex0))
+        (let* ((linenode (if (and lno (or (= line 0) (eq? file 'none))) lno `(line ,line ,file)))
+               (ex (julia-lower0 ex0 linenode))
+               (th (julia-lower1
                     `(lambda () ()
                              (scope-block
-                              ,(blockify ex)))
+                              ,(blockify ex lno)))
                     file line)))
           (if (and (null? (cdadr (caddr th)))
                    (and (length= (lam:body th) 2)
@@ -120,24 +138,24 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
+       (or (memq (car e) '(toplevel line module export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
-(define *in-expand* #f)
+(define *in-lowering* #f)
 
-(define (expand-toplevel-expr e file line)
+(define (lower-toplevel-expr e file line)
   (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (error "all-underscore identifier used as rvalue"))
+             (error "all-underscore identifiers are write-only and their values cannot be used in expressions"))
          e)
         (else
-         (let ((last *in-expand*))
+         (let ((last *in-lowering*))
            (if (not last)
                (begin (reset-gensyms)
-                      (set! *in-expand* #t)))
-           (begin0 (expand-toplevel-expr-- e file line)
-                   (set! *in-expand* last))))))
+                      (set! *in-lowering* #t)))
+           (begin0 (lower-toplevel-expr-- e file line)
+                   (set! *in-lowering* last))))))
 
 ;; used to collect warnings during lowering, which are usually discarded
 ;; unless logging is requested
@@ -145,68 +163,40 @@
 
 ;; expand a piece of raw surface syntax to an executable thunk
 
-(define (expand-to-thunk- expr file line)
+(define (lower-to-thunk- expr file line)
   (error-wrap (lambda ()
-                (expand-toplevel-expr expr file line))))
+                (lower-toplevel-expr expr file line))))
 
-(define (expand-to-thunk-stmt- expr file line)
-  (expand-to-thunk- (if (toplevel-only-expr? expr)
-                        expr
-                        `(block ,expr (null)))
-                    file line))
-
-(define (jl-expand-to-thunk-warn expr file line stmt)
+;; Returns a list `(,lowered-code ,warnings) where
+;; - warnings (currently only ambiguous soft scope assignments) may be ignored,
+;;   e.g. when running interactively
+;; - more items may be added to the list later
+(define (jl-lower-to-thunk expr file line)
   (let ((warnings '()))
     (with-bindings
      ;; Abuse scm_to_julia here to convert arguments to warn. This is meant for
      ;; `Expr`s but should be good enough provided we're only passing simple
      ;; numbers, symbols and strings.
-     ((lowering-warning (lambda lst (set! warnings (cons (cons 'warn lst) warnings)))))
-     (let ((thunk (if stmt
-                      (expand-to-thunk-stmt- expr file line)
-                      (expand-to-thunk- expr file line))))
-       (if (pair? warnings) `(warn ,@(reverse warnings) ,thunk) thunk)))))
-
-(define (jl-expand-to-thunk expr file line)
-  (expand-to-thunk- expr file line))
-
-(define (jl-expand-to-thunk-stmt expr file line)
-  (expand-to-thunk-stmt- expr file line))
+     ((lowering-warning (lambda (level group warn_file warn_line . lst)
+        (let ((line (if (= warn_line 0) line warn_line))
+              (file (if (eq? warn_file 'none) file warn_file)))
+          (set! warnings (cons (list* 'warn level group (symbol (string file line)) file line lst) warnings))))))
+     `(,(lower-to-thunk- expr file line)
+       ,(reverse warnings)))))
 
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
 
-;; construct default definitions of `eval` for non-bare modules
-;; called by jl_eval_module_expr
-(define (module-default-defs e)
-  (jl-expand-to-thunk
-   (let* ((name (caddr e))
-          (body (cadddr e))
-          (loc  (if (null? (cdr body)) () (cadr body)))
-          (loc  (if (and (pair? loc) (eq? (car loc) 'line))
-                    (list loc)
-                    '()))
-          (x    (if (eq? name 'x) 'y 'x))
-          (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
-     `(block
-       (= (call eval ,x)
-          (block
-           ,@loc
-           (call (core eval) ,name ,x)))
-       (= (call include ,x)
-          (block
-           ,@loc
-           (call (core _call_latest) (top include) ,name ,x)))
-       (= (call include (:: ,mex (top Function)) ,x)
-          (block
-           ,@loc
-           (call (core _call_latest) (top include) ,mex ,name ,x)))))
-   'none 0))
+(define (jl-default-inner-ctor-body field-kinds file line)
+  (lower-to-thunk- (default-inner-ctor-body (cdr field-kinds) file line) file line))
+
+(define (jl-default-outer-ctor-body args file line)
+  (lower-to-thunk- (default-outer-ctor-body (cadr args) (caddr args) (cadddr args) file line) file line))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
-  (expand-toplevel-expr (julia-parse str) 'none 0))
+  (lower-toplevel-expr (julia-parse str) 'none 0))
 
 (define (profile-e s)
   (with-exception-catcher

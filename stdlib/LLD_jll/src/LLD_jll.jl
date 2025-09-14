@@ -4,7 +4,6 @@
 
 baremodule LLD_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -14,8 +13,8 @@ export lld
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-lld_path = ""
+artifact_dir::String = ""
+lld_path::String = ""
 if Sys.iswindows()
     const lld_exe = "lld.exe"
 else

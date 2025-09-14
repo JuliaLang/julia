@@ -6,6 +6,7 @@
 
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Module.h"
 #include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
@@ -17,11 +18,7 @@ using namespace llvm;
 #ifdef _OS_WINDOWS_
 #  define DLLEXPORT __declspec(dllexport)
 #else
-# if defined(_OS_LINUX_)
-#  define DLLEXPORT __attribute__ ((visibility("protected")))
-# else
 #  define DLLEXPORT __attribute__ ((visibility("default")))
-# endif
 #endif
 
 extern "C" {

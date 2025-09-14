@@ -1,125 +1,118 @@
-Julia v1.10 Release Notes
+Julia v1.13 Release Notes
 ========================
 
 New language features
 ---------------------
 
+  - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+  - New `nth` function to access the `n`-th element of a generic iterable. ([#56580])
+  - New `@__FUNCTION__` macro to refer to the innermost enclosing function. ([#58940])
+  - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
+    is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
+    ([JuliaLang/JuliaSyntax.jl#525], [#57143])
+  - Support for Unicode 17 ([#59534]).
+
 Language changes
 ----------------
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
+is considered a bug fix ([#47102])
 
+  - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
+
+* Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
 
 Compiler/Runtime improvements
 -----------------------------
-* The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 
 Command-line option changes
 ---------------------------
 
+* The option `--sysimage-native-code=no` has been deprecated.
+* The `JULIA_CPU_TARGET` environment variable now supports a `sysimage` keyword to match (or extend) the CPU target used to build the current system image ([#58970]).
+* The `--code-coverage=all` option now automatically throws away sysimage caches so that code coverage can be accurately measured on methods within the sysimage. It is thrown away after startup (and after startup.jl), before any user code is executed ([#59234])
+* New `--trace-eval` command-line option to show expressions being evaluated during top-level evaluation. Supports `--trace-eval=loc` or just `--trace-eval` (show location only), `--trace-eval=full` (show full expressions), and `--trace-eval=no` (disable tracing). Also adds `Base.TRACE_EVAL` global control that takes priority over the command-line option and can be set to `:no`, `:loc`, `:full`, or `nothing` (to use command-line setting). ([#57137])
 
 Multi-threading changes
 -----------------------
 
+* A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock` ([#55944]).
+* A new `PaddedSpinLock <: AbstractSpinLock` is defined.  It has extra padding to avoid false sharing ([#55944]).
+* New types are defined to handle the pattern of code that must run once per process, called
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
+  the first time it is called, and then always return the same result value of type `T`
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
+  similar usage with threads or tasks. ([#TBD])
 
 Build system changes
 --------------------
 
-
 New library functions
 ---------------------
-* `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
-* `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
-   It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
+
+* `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
+  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
+  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
+* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+* `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
+* `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
+* `Iterators.findeach` is a lazy version of `findall` ([#54124])
 
 New library features
 --------------------
-* The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
-  is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
-* `binomial(x, k)` now supports non-integer `x` ([#48124]).
-* A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
-* `printstyled` now supports italic output ([#45164]).
+
+* `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
+* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
+* `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
+* `chopprefix` and `chopsuffix` can now also accept an `AbstractChar` as the prefix/suffix to remove.
+* The `macroexpand` (with default true) and the new `macroexpand!` (with default false)
+  functions now support a `legacyscope` boolean keyword argument to control whether to run
+  the legacy scope resolution pass over the result. The legacy scope resolution code has
+  known design bugs and will be disabled by default in a future version. Users should
+  migrate now by calling `legacyscope=false` or using `macroexpand!`. This may often require
+  fixes to the code calling `macroexpand` with `Meta.unescape` and `Meta.reescape` or by
+  updating tests to expect `hygienic-scope` or `escape` markers might appear in the result.
+* `Base.ScopedValues.LazyScopedValue{T}` is introduced for scoped values that compute their default using a
+  `OncePerProcess{T}` callback, allowing for lazy initialization of the default value. `AbstractScopedValue` is
+  now the abstract base type for both `ScopedValue` and `LazyScopedValue`. ([#59372])
 
 Standard library changes
 ------------------------
 
-* `startswith` now supports seekable `IO` streams ([#43055])
-* printing integral `Rational`s will skip the denominator in `Rational`-typed IO context (e.g. in `Arrays`) ([#45396])
-
-#### Package Manager
-
-* "Package Extensions": support for loading a piece of code based on other
-  packages being loaded in the Julia session.
-  This has similar applications as the Requires.jl package but also
-  supports precompilation and setting compatibility.
-* `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
+#### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
 
-* `AbstractQ` no longer subtypes to `AbstractMatrix`. Moreover, `adjoint(Q::AbstractQ)`
-  no longer wraps `Q` in an `Adjoint` type, but instead in an `AdjointQ`, that itself
-  subtypes `AbstractQ`. This change accounts for the fact that typically `AbstractQ`
-  instances behave like function-based, matrix-backed linear operators, and hence don't
-  allow for efficient indexing. Also, many `AbstractQ` types can act on vectors/matrices
-  of different size, acting like a matrix with context-dependent size. With this change,
-  `AbstractQ` has a well-defined API that is described in detail in the
-  [Julia documentation](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/#man-linalg-abstractq)
-  ([#46196]).
-* Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
-  and `Transpose` wrappers, respectively. Instead, they are wrapped in
-  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
-  `Factorization` ([#46874]).
-* New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
-  (real symmetric) part of a matrix ([#31836]).
-
-#### Printf
-* Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
-
 #### Profile
-
 
 #### Random
 
+* `randperm!` and `randcycle!` now support non-`Array` `AbstractArray` inputs, assuming they are mutable and their indices are one-based ([#58596]).
+
+* `shuffle` now may take an argument of `NTuple` value ([#56906]).
 
 #### REPL
 
-
-#### SuiteSparse
-
-
-#### SparseArrays
-
+* The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
+* Display of repeated frames and cycles in stack traces has been improved by bracketing them in the trace and treating them consistently ([#55841]).
 
 #### Test
 
-
-* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
-  non-boolean value in the same way as a non-broken test. ([#47804])
-
-#### Dates
-
-
-#### Distributed
-
-
-#### Unicode
-
-
-#### DelimitedFiles
-
+* Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
+* Transparent test sets (`@testset let`) now show context when tests error ([#58727]).
+* `@test_throws` now supports a three-argument form `@test_throws ExceptionType pattern expr` to test both exception type and message pattern in one call ([#59117]).
+* The testset stack was changed to use `ScopedValue` rather than task local storage ([#53462]).
 
 #### InteractiveUtils
 
- * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
-
-Deprecated or removed
----------------------
-
+* Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}`. Type-annotated variables as in `f(val::Int; kw::Float64)` are not evaluated if the type annotation provides the necessary information, making this syntax compatible with signatures found in stacktraces ([#57909], [#58222]).
+* Code introspection macros such as `@code_lowered` and `@code_typed` now have a much better support for broadcasting expressions, including broadcasting assignments of the form `x .+= f(y)` ([#58349]).
 
 External dependencies
 ---------------------
 
-
 Tooling Improvements
 --------------------
-
 
 <!--- generated by NEWS-update.jl: -->
