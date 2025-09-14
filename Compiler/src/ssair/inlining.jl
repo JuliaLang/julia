@@ -1201,14 +1201,9 @@ end
 function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
     length(stmt.args) == 3 || return
     # Extract the CodeInstance from the inference result if available
-    info = info.info
-    info isa MethodResultPure && (info = info.info)
-    info isa ConstCallInfo && (info = info.call)
-    info isa MethodMatchInfo || return nothing
-    length(info.edges) == length(info.results) == 1 || return nothing
-    match = info.results[1]::MethodMatch
-    edge = info.edges[1]
-    edge === nothing && return nothing
+    info_edge = extract_indirect_invoke(info; check_fully_covers=false)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
     case === nothing && return nothing
     # Append the CodeInstance as a third argument to the _task call
@@ -1216,6 +1211,20 @@ function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallI
     push!(stmt.args, case.invoke)
     ir[SSAValue(idx)][:stmt] = stmt
     return nothing
+end
+
+function extract_indirect_invoke(info::IndirectCallInfo; check_fully_covers::Bool)
+    info = info.info
+    info isa MethodResultPure && (info = info.info)
+    info isa MethodMatchInfo || return nothing
+    length(info.edges) == length(info.results) == 1 || return nothing
+    match = info.results[1]::MethodMatch
+    if check_fully_covers
+        match.fully_covers || return nothing
+    end
+    edge = info.edges[1]
+    edge === nothing && return nothing
+    return info, edge
 end
 
 # As a matter of convenience, this pass also computes effect-freenes.
@@ -1513,14 +1522,9 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
 end
 
 function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
-    info = info.info
-    info isa MethodResultPure && (info = info.info)
-    info isa MethodMatchInfo || return nothing
-    length(info.edges) == length(info.results) == 1 || return nothing
-    match = info.results[1]::MethodMatch
-    match.fully_covers || return nothing
-    edge = info.edges[1]
-    edge === nothing && return nothing
+    info_edge = extract_indirect_invoke(info; check_fully_covers=true)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
     case === nothing && return nothing
     stmt.head = :invoke_modify
