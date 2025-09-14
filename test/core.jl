@@ -4654,6 +4654,7 @@ end
 
 @testset "effects for `finalizer`" begin
     @test (Base.Compiler.is_noub ∘ Base.infer_effects)(finalizer, Tuple{Function, Any})
+    @test (Base.Compiler.is_nothrow ∘ Base.infer_effects)(finalizer, Tuple{Function, Any})
     @test (Base.Compiler.is_terminates ∘ Base.infer_effects)(finalizer, Tuple{Function, Any})
 end
 
