@@ -608,7 +608,24 @@ const JL = JuliaLowering
                 "x"::K"Identifier"
             ]
 
-        @test JuliaLowering.expr_to_syntaxtree(Expr(:block, esc(LineNumberNode(1)))) ≈ @ast_ [K"block"]
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:block, LineNumberNode(1))) ≈
+            @ast_ [K"block"]
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:block, esc(LineNumberNode(1)))) ≈
+            @ast_ [K"block"]
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:block, QuoteNode(LineNumberNode(1)))) ≈
+            @ast_ [K"block" LineNumberNode(1)::K"Value"]
+
+        # toplevel (and all other non-block forms) keep LineNumberNodes in value position
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:toplevel, esc(LineNumberNode(1)))) ≈
+            @ast_ [K"toplevel"  [K"escape" "nothing"::K"core"]]
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:toplevel, LineNumberNode(1))) ≈
+            @ast_ [K"toplevel" "nothing"::K"core"]
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:toplevel, QuoteNode(LineNumberNode(1)))) ≈
+            @ast_ [K"toplevel" LineNumberNode(1)::K"Value"]
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:call, :identity, LineNumberNode(1))) ≈
+            @ast_ [K"call" "identity"::K"Identifier" "nothing"::K"core"]
+        @test JuliaLowering.expr_to_syntaxtree(Expr(:call, :identity, QuoteNode(LineNumberNode(1)))) ≈
+            @ast_ [K"call" "identity"::K"Identifier" LineNumberNode(1)::K"Value"]
 
     end
 end

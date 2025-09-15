@@ -577,7 +577,9 @@ function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
     name = get(ex, :name_val, nothing)
     if !isnothing(name)
         n = Symbol(name)
-        if hasattr(ex, :scope_layer)
+        if kind(ex) === K"Symbol"
+            return QuoteNode(n)
+        elseif hasattr(ex, :scope_layer)
             Expr(:scope_layer, n, ex.scope_layer)
         else
             n

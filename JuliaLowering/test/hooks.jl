@@ -20,21 +20,38 @@ const JL = JuliaLowering
     end
 
     if isdefined(Core, :_lower)
+        function jeval(str)
+            prog = parseall(Expr, str)
+            local out
+            try
+                JL.activate!()
+                out = Core.eval(test_mod, prog)
+            finally
+                JL.activate!(false)
+            end
+        end
         @testset "integration: `JuliaLowering.activate!`" begin
-            prog = parseall(Expr, "global asdf = 1")
-            JL.activate!()
-            out = Core.eval(test_mod, prog)
-            JL.activate!(false)
+            out = jeval("global asdf = 1")
             @test out === 1
             @test isdefined(test_mod, :asdf)
 
-            prog = parseall(Expr, "module M; x = 1; end")
-            JL.activate!()
-            out = Core.eval(test_mod, prog)
-            JL.activate!(false)
+            out = jeval("module M; x = 1; end")
             @test out isa Module
             @test isdefined(test_mod, :M)
             @test isdefined(test_mod.M, :x)
+
+            # Tricky cases with symbols
+            out = jeval("""module M
+                Base.@constprop :aggressive function f(x); x; end
+                const what = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), Core.nothing)
+            end""")
+            @test out isa Module
+            @test isdefined(test_mod, :M)
+            @test isdefined(test_mod.M, :f)
+            @test isdefined(test_mod.M, :what)
+
+            # TODO: broken, commented to prevent error logging
+            # @test jeval("Base.@propagate_inbounds @inline meta_double_quote_issue(x) = x") isa Function
         end
     end
 end

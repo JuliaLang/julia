@@ -15,8 +15,9 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
     file = file isa Ptr{UInt8} ? unsafe_string(file) : file
     line = !(line isa Int64) ? Int64(line) : line
 
-    st0 = code isa Expr ? expr_to_syntaxtree(code, LineNumberNode(line, file)) : code
+    local st0 = nothing
     try
+        st0 = code isa Expr ? expr_to_syntaxtree(code, LineNumberNode(line, file)) : code
         ctx1, st1 = expand_forms_1(  mod,  st0, true, world)
         ctx2, st2 = expand_forms_2(  ctx1, st1)
         ctx3, st3 = resolve_scopes(  ctx2, st2)
