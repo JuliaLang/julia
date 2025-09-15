@@ -149,7 +149,13 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::Syn
     mod = current_layer(ctx).mod
     expr_form = to_lowered_expr(ex5)
     try
-        Core.eval(mod, expr_form)
+        # Using Core.eval here fails when precompiling packages since we hit the
+        # user-facing error (in `jl_check_top_level_effect`) that warns that
+        # effects won't persist when eval-ing into a closed module.
+        # `jl_invoke_julia_macro` bypasses this by calling `jl_toplevel_eval` on
+        # the macro name.  This is fine assuming the first argument to the
+        # macrocall is effect-free.
+        ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
     catch err
         throw(MacroExpansionError(mctx, ex, "Macro not found", :all, err))
     end
