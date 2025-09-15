@@ -638,13 +638,13 @@ static Value *emit_struct_gep(jl_codectx_t &ctx, Type *lty, Value *base, unsigne
 
 static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall=false);
 
-static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed)
+static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bottom_type)
         return getVoidTy(ctxt);
-    if (jl_is_concrete_immutable(jt)) {
+    if (jl_is_concrete_immutable(jt) || no_boxing) {
         if (jl_datatype_nbits(jt) == 0)
             return getVoidTy(ctxt);
         Type *t = _julia_struct_to_llvm(ctx, ctxt, jt, isboxed);
@@ -657,13 +657,20 @@ static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed)
 {
-    return _julia_type_to_llvm(&ctx.emission_context, ctx.builder.getContext(), jt, isboxed);
+    return _julia_type_to_llvm(&ctx.emission_context, ctx.builder.getContext(), jt, isboxed, false);
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
 Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
 {
-    return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed);
+    return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed, false);
+}
+
+
+extern "C" JL_DLLEXPORT_CODEGEN
+Type *jl_struct_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
+{
+    return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed, true);
 }
 
 
@@ -3086,6 +3093,7 @@ static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tb
 static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v, MDNode *tbaa)
 {
     // newv should already be tagged
+    newv = maybe_decay_tracked(ctx, newv);
     if (v.ispointer()) {
         emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), sizeof(void*));
     }

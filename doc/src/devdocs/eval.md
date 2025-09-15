@@ -62,25 +62,11 @@ The 10,000 foot view of the whole process is as follows:
 
 ## [Parsing](@id dev-parsing)
 
-The Julia parser is a small lisp program written in femtolisp, the source-code for which is distributed
-inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
-
-The interface functions for this are primarily defined in [`jlfrontend.scm`](https://github.com/JuliaLang/julia/blob/master/src/jlfrontend.scm).
-The code in [`ast.c`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) handles this handoff
-on the Julia side.
-
-The other relevant files at this stage are [`julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm),
-which handles tokenizing Julia code and turning it into an AST, and [`julia-syntax.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-syntax.scm),
-which handles transforming complex AST representations into simpler, "lowered" AST representations
-which are more suitable for analysis and execution.
-
-If you want to test the parser without re-building Julia in its entirety, you can run the frontend
-on its own as follows:
-
-    $ cd src
-    $ flisp/flisp
-    > (load "jlfrontend.scm")
-    > (jl-parse-file "<filename>")
+By default, Julia uses [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax.jl) to produce the
+AST. Historically, it used a small lisp program written in femtolisp, the source-code for which is
+distributed inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
+If the `JULIA_USE_FLISP_PARSER` environment variable is set to `1`, the old parser will be used
+instead.
 
 ## [Macro Expansion](@id dev-macro-expansion)
 
