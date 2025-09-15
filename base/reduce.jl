@@ -362,7 +362,7 @@ reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 """
     Base.mapreduce_empty(f, op, T)
 
-The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
 of `T`. See [`Base.reduce_empty`](@ref) for more information.
 """
@@ -374,7 +374,7 @@ mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 # For backward compatibility:
-mapreduce_empty_iter(f, op, itr, ItrEltype) =
+mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F,F2} =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
@@ -388,7 +388,7 @@ reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
 """
     Base.reduce_first(op, x)
 
-The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref) or
 [`foldr`](@ref) with reduction `op` over an iterator which contains a single element
 `x`. This value may also be used to initialise the recursion, so that `reduce(op, [x, y])`
 may call `op(reduce_first(op, x), y)`.
@@ -413,7 +413,7 @@ reduce_first(::typeof(hcat), x) = hcat(x)
 """
     Base.mapreduce_first(f, op, x)
 
-The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
 single element `x`. This value may also be used to initialise the recursion, so that
 `mapreduce(f, op, [x, y])` may call `op(mapreduce_first(f, op, x), f(y))`.

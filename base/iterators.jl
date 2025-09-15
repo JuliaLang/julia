@@ -16,7 +16,7 @@ using .Base:
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
-    afoldl
+    afoldl, mod1
 using .Core
 using Core: @doc
 
@@ -32,7 +32,7 @@ import Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
 public accumulate, filter, map, peel, reverse, Stateful
 
 """
@@ -198,7 +198,7 @@ size(e::Enumerate) = size(e.itr)
     n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
-last(e::Enumerate) = (length(e.itr), e.itr[end])
+last(e::Enumerate) = (length(e.itr), last(e.itr))
 
 eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
 
@@ -267,7 +267,7 @@ pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
 pairs(tuple::Tuple) = Pairs{Int}(tuple, keys(tuple))
-pairs(nt::NamedTuple) = Pairs{Symbol}(nt, keys(nt))
+pairs(nt::NamedTuple) = Pairs{Symbol}(nt, nothing)
 pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
@@ -275,40 +275,40 @@ pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, Base.CartesianIndices(axes(A)))
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 
-length(v::Pairs) = length(getfield(v, :itr))
-axes(v::Pairs) = axes(getfield(v, :itr))
-size(v::Pairs) = size(getfield(v, :itr))
+length(v::Pairs) = length(keys(v))
+axes(v::Pairs) = axes(keys(v))
+size(v::Pairs) = size(keys(v))
 
 Base.@eval @propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
     return $(Expr(:new, :(Pair{K, V}), :idx, :(getfield(p, :data)[idx])))
 end
 
 @propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
-    x = iterate(getfield(p, :itr), state...)
+    x = iterate(keys(p), state...)
     x === nothing && return x
     idx, next = x
     return (_pairs_elt(p, idx), next)
 end
 
-@propagate_inbounds function iterate(r::Reverse{<:Pairs}, state=(reverse(getfield(r.itr, :itr)),))
+@propagate_inbounds function iterate(r::Reverse{<:Pairs}, state=(reverse(keys(r.itr)),))
     x = iterate(state...)
     x === nothing && return x
     idx, next = x
     return (_pairs_elt(r.itr, idx), (state[1], next))
 end
 
-@inline isdone(v::Pairs, state...) = isdone(getfield(v, :itr), state...)
+@inline isdone(v::Pairs, state...) = isdone(keys(v), state...)
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:AbstractUnitRange, <:Tuple}}) = HasLength()
 
 function last(v::Pairs{K, V}) where {K, V}
-    idx = last(getfield(v, :itr))
+    idx = last(keys(v))
     return Pair{K, V}(idx, v[idx])
 end
 
-haskey(v::Pairs, key) = (key in getfield(v, :itr))
-keys(v::Pairs) = getfield(v, :itr)
+haskey(v::Pairs, key) = key in keys(v)
+keys(v::Pairs) = getfield(v, :itr) === nothing ? keys(getfield(v, :data)) : getfield(v, :itr)
 values(v::Pairs) = getfield(v, :data) # TODO: this should be a view of data subset by itr
 getindex(v::Pairs, key) = getfield(v, :data)[key]
 setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
@@ -473,7 +473,8 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+last(z::Zip) = nth(z, length(z))
+
 function reverse(z::Zip)
     if !first(_zip_lengths_finite_equal(z.is))
         throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
@@ -534,10 +535,15 @@ filter(flt, itr) = Filter(flt, itr)
 function iterate(f::Filter, state...)
     y = iterate(f.itr, state...)
     while y !== nothing
-        if f.flt(y[1])
-            return y
+        v, s = y
+        if f.flt(v)
+            if y isa Tuple{Any,Any}
+                return (v, s) # incorporate type information that may be improved by user-provided `f.flt`
+            else
+                return y
+            end
         end
-        y = iterate(f.itr, y[2])
+        y = iterate(f.itr, s)
     end
     nothing
 end
@@ -625,13 +631,19 @@ end
 """
     rest(iter, state)
 
-An iterator that yields the same elements as `iter`, but starting at the given `state`.
+An iterator that yields the same elements as `iter`, but starting at the given `state`, which
+must be a state obtainable via a sequence of one or more calls to `iterate(iter[, state])`
 
 See also: [`Iterators.drop`](@ref), [`Iterators.peel`](@ref), [`Base.rest`](@ref).
 
 # Examples
 ```jldoctest
-julia> collect(Iterators.rest([1,2,3,4], 2))
+julia> iter = [1,2,3,4];
+
+julia> val, state = iterate(iter)
+(1, 2)
+
+julia> collect(Iterators.rest(iter, state))
 3-element Vector{Int64}:
  2
  3
@@ -934,6 +946,34 @@ IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
 eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
 
+"""
+    findeach(f, it)
+    findeach(it)
+
+An iterator that generates every key from the key/value pairs of `pairs(it)`,
+where `f(value)` returns `true`.
+
+If `f` is not specified, default to `identity`.
+
+`Iterators.findeach` is the lazy equivalent of `findall`.
+
+!!! compat "Julia 1.13"
+    `findeach` requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> collect(Iterators.findeach(isodd, Dict(2 => 3, 3 => 2)))
+1-element Vector{Int64}:
+ 2
+
+julia> only(Iterators.findeach(==(1), [3,6,2,1]))
+4
+```
+"""
+findeach(f, it) = (k for (k, v) in pairs(it) if f(v))
+
+findeach(it) = findeach(identity, it)
+
 
 # Cycle an iterator forever
 
@@ -990,6 +1030,7 @@ end
 
 reverse(it::Cycle) = Cycle(reverse(it.xs))
 last(it::Cycle) = last(it.xs)
+
 
 # Repeated - repeat an object infinitely many times
 
@@ -1238,20 +1279,48 @@ flatten_length(f, T) = throw(ArgumentError(
 length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
 length(f::Flatten{Tuple{}}) = 0
 
-@propagate_inbounds function iterate(f::Flatten, state=())
-    if state !== ()
-        y = iterate(tail(state)...)
-        y !== nothing && return (y[1], (state[1], state[2], y[2]))
+@propagate_inbounds function iterate(fl::Flatten)
+    it_result = iterate(fl.it)
+    it_result === nothing && return nothing
+
+    inner_iterator, next_outer_state = it_result
+    inner_it_result = iterate(inner_iterator)
+
+    while inner_it_result === nothing
+        it_result = iterate(fl.it, next_outer_state)
+        it_result === nothing && return nothing
+
+        inner_iterator, next_outer_state = it_result
+        inner_it_result = iterate(inner_iterator)
     end
-    x = (state === () ? iterate(f.it) : iterate(f.it, state[1]))
-    x === nothing && return nothing
-    y = iterate(x[1])
-    while y === nothing
-         x = iterate(f.it, x[2])
-         x === nothing && return nothing
-         y = iterate(x[1])
+
+    item, next_inner_state = inner_it_result
+    return item, (next_outer_state, inner_iterator, next_inner_state)
+end
+
+@propagate_inbounds function iterate(fl::Flatten, state)
+    next_outer_state, inner_iterator, next_inner_state = state
+
+    # try to advance the inner iterator
+    inner_it_result = iterate(inner_iterator, next_inner_state)
+    if inner_it_result !== nothing
+        item, next_inner_state = inner_it_result
+        return item, (next_outer_state, inner_iterator, next_inner_state)
     end
-    return y[1], (x[2], x[1], y[2])
+
+    # advance the outer iterator
+    while true
+        outer_it_result = iterate(fl.it, next_outer_state)
+        outer_it_result === nothing && return nothing
+
+        inner_iterator, next_outer_state = outer_it_result
+        inner_it_result = iterate(inner_iterator)
+
+        if inner_it_result !== nothing
+            item, next_inner_state = inner_it_result
+            return item, (next_outer_state, inner_iterator, next_inner_state)
+        end
+    end
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
@@ -1601,5 +1670,87 @@ end
 # According to the docs of iterate(::AbstractString), the iteration state must
 # be the same as the keys, so this is a valid optimization (see #51631)
 pairs(s::AbstractString) = IterableStatePairs(s)
+
+"""
+    nth(itr, n::Integer)
+
+Get the `n`th element of an iterable collection. Throw a `BoundsError`[@ref] if not existing.
+Will advance any `Stateful`[@ref] iterator.
+
+See also: [`first`](@ref), [`last`](@ref)
+
+# Examples
+```jldoctest
+julia> Iterators.nth(2:2:10, 4)
+8
+
+julia> Iterators.nth(reshape(1:30, (5,6)), 6)
+6
+
+julia> stateful = Iterators.Stateful(1:10); Iterators.nth(stateful, 7)
+7
+
+julia> first(stateful)
+8
+```
+"""
+nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
+nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)
+nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where O = _nth(IteratorSize(O), itr, n)
+@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + n - 1]
+
+function _nth(::Union{HasShape, HasLength}, itr::Cycle{I}, n::Integer) where {I}
+    N = length(itr.xs)
+    N == 0 && throw(BoundsError(itr, n))
+
+    # prevents wrap around behaviour and inherit the error handling
+    return nth(itr.xs, n > 0 ? mod1(n, N) : n)
+end
+
+# Flatten{Take{Repeated{O}}} is the actual type of an Iterators.cycle(iterable::O, m) iterator
+function _nth(::Union{HasShape, HasLength}, itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
+    cycles = itr.it.n
+    torepeat = itr.it.xs.x
+    k = length(torepeat)
+    (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+
+    # prevent wrap around behaviour and inherit the error handling
+    return nth(torepeat, n > 0 ? mod1(n, k) : n)
+end
+
+function _nth(::IteratorSize, itr, n::Integer)
+    # unrolled version of `first(drop)`
+    n > 0 || throw(BoundsError(itr, n))
+    y = iterate(itr)
+    for _ in 1:n-1
+        y === nothing && break
+        y = iterate(itr, y[2])
+    end
+    y === nothing && throw(BoundsError(itr, n))
+    y[1]
+end
+
+_nth(::IteratorSize, z::Zip, n::Integer) = Base.map(nth(n), z.is)
+
+"""
+    nth(n::Integer)
+
+Return a function that gets the `n`-th element from any iterator passed to it.
+Equivalent to `Base.Fix2(nth, n)` or `itr -> nth(itr, n)`.
+
+See also: [`nth`](@ref), [`Base.Fix2`](@ref)
+# Examples
+```jldoctest
+julia> fifth_element = Iterators.nth(5)
+(::Base.Fix2{typeof(Base.Iterators.nth), Int64}) (generic function with 2 methods)
+
+julia> fifth_element(reshape(1:30, (5,6)))
+5
+
+julia> map(fifth_element, ("Willis", "Jovovich", "Oldman"))
+('i', 'v', 'a')
+```
+"""
+nth(n::Integer) = Base.Fix2(nth, n)
 
 end

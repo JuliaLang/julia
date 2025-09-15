@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Needs to come before windows platform headers
+#include "support/dtypes.h"
+
 #ifdef _OS_WINDOWS_
 #include <ws2tcpip.h>
 #include <malloc.h>
@@ -162,7 +165,8 @@ static void jl_uv_call_close_callback(jl_value_t *val)
     JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
     args[0] = jl_eval_global_var(
             jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
-            jl_symbol("_uv_hook_close")); // topmod(typeof(val))._uv_hook_close
+            jl_symbol("_uv_hook_close"),
+            jl_current_task->world_age); // topmod(typeof(val))._uv_hook_close
     args[1] = val;
     jl_apply(args, 2); // TODO: wrap in try-catch?
     JL_GC_POP();
@@ -502,6 +506,8 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
  * @param cpumask A C string representing the CPU affinity mask for the process.
           See also the `cpumask` field of the `uv_process_options_t` structure in the libuv documentation.
  * @param cpumask_size The size of the cpumask.
+ * @param uid The user ID for the process (only used if UV_PROCESS_SETUID flag is set).
+ * @param gid The group ID for the process (only used if UV_PROCESS_SETGID flag is set).
  * @param cb A function pointer to `uv_exit_cb` which is the callback function to be called upon process exit.
  *
  * @return An integer indicating the success or failure of the spawn operation. A return value of 0 indicates success,
@@ -511,16 +517,15 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, char* cpumask,
-                          size_t cpumask_size, uv_exit_cb cb)
+                          size_t cpumask_size, uint32_t uid, uint32_t gid, uv_exit_cb cb)
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
     opts.file = name;
     opts.env = env;
     opts.flags = flags;
-    // unused fields:
-    //opts.uid = 0;
-    //opts.gid = 0;
+    opts.uid = (uv_uid_t)uid;
+    opts.gid = (uv_gid_t)gid;
     opts.cpumask = cpumask;
     opts.cpumask_size = cpumask_size;
     opts.cwd = cwd;
@@ -814,7 +819,7 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
 
 JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
-    static char buf[1000];
+    char buf[1000];
     buf[0] = '\0';
     int last_errno = errno;
 #ifdef _OS_WINDOWS_

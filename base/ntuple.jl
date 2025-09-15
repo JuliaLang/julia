@@ -45,12 +45,6 @@ function ntupleany(f, n)
     (Any[f(i) for i = 1:n]...,)
 end
 
-# inferable ntuple (enough for bootstrapping)
-ntuple(f, ::Val{0}) = ()
-ntuple(f, ::Val{1}) = (@inline; (f(1),))
-ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))
-ntuple(f, ::Val{3}) = (@inline; (f(1), f(2), f(3)))
-
 """
     ntuple(f, ::Val{N})
 
@@ -77,7 +71,6 @@ julia> ntuple(i -> 2*i, Val(4))
         Tuple(f(i) for i = 1:(N::Int))
     end
 end
-typeof(function ntuple end).name.max_methods = UInt8(5)
 
 @inline function fill_to_length(t::Tuple, val, ::Val{_N}) where {_N}
     M = length(t)

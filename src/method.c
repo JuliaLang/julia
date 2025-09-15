@@ -16,8 +16,6 @@
 extern "C" {
 #endif
 
-jl_method_t *jl_opaque_closure_method;
-
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
     if (jl_is_svec(rt))
@@ -79,7 +77,7 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
-                                   int binding_effects, int eager_resolve)
+                                              int binding_effects)
 {
     if (jl_is_symbol(expr)) {
         jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
@@ -104,10 +102,10 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     }
     // These exprs are not fully linearized
     if (e->head == jl_assign_sym) {
-        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
+        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects));
         return expr;
     } else if (e->head == jl_new_opaque_closure_sym) {
-        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
+        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_edge, binding_effects));
         return expr;
     }
     size_t nargs = jl_array_nrows(e->args);
@@ -251,7 +249,7 @@ JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_modu
     size_t i, l = jl_array_nrows(stmts);
     for (i = 0; i < l; i++) {
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_edge, binding_effects, 0));
+        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_edge, binding_effects));
     }
 }
 
@@ -609,6 +607,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->flags, 0);
+    jl_atomic_store_relaxed(&mi->dispatch_status, 0);
     return mi;
 }
 
@@ -719,7 +718,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
     jl_code_instance_t *ci = NULL;
     JL_GC_PUSH5(&ex, &func, &uninferred, &ci, &kind);
     jl_task_t *ct = jl_current_task;
-    int last_lineno = jl_lineno;
+    int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     int last_in = ct->ptls->in_pure_callback;
     size_t last_age = ct->world_age;
 
@@ -817,12 +816,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         }
 
         ct->ptls->in_pure_callback = last_in;
-        jl_lineno = last_lineno;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         ct->world_age = last_age;
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
-        jl_lineno = last_lineno;
+        jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         jl_rethrow();
     }
     JL_GC_POP();
@@ -951,12 +950,15 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = resolve_definition_effects(st, m->module, sparam_vars, (jl_value_t*)m, 1, 0);
+            st = resolve_definition_effects(st, m->module, sparam_vars, (jl_value_t*)m, 1);
         }
         jl_array_ptr_set(copy, i, st);
     }
     src = jl_copy_code_info(src);
     src->isva = m->isva; // TODO: It would be nice to reverse this
+    // If nargs hasn't been set yet, do it now. This can happen if an old CodeInfo is deserialized.
+    if (src->nargs == 0)
+        src->nargs = m->nargs;
     assert(m->nargs == src->nargs);
     src->code = copy;
     jl_gc_wb(src, copy);
@@ -1007,6 +1009,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
     jl_atomic_store_relaxed(&m->dispatch_status, 0);
+    jl_atomic_store_relaxed(&m->interferences, (jl_genericmemory_t*)jl_an_empty_memory_any);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
     jl_atomic_store_relaxed(&m->did_scan_source, 0);
@@ -1154,39 +1157,6 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     return gf;
 }
 
-static void foreach_top_nth_typename(void (*f)(jl_typename_t*, void*), jl_value_t *a JL_PROPAGATES_ROOT, int n, void *env)
-{
-    if (jl_is_datatype(a)) {
-        if (n == 0) {
-            jl_datatype_t *dt = ((jl_datatype_t*)a);
-            jl_typename_t *tn = NULL;
-            while (1) {
-                if (dt != jl_any_type && dt != jl_function_type)
-                    tn = dt->name;
-                if (dt->super == dt)
-                    break;
-                dt = dt->super;
-            }
-            if (tn)
-                f(tn, env);
-        }
-        else if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) >= n)
-                foreach_top_nth_typename(f, jl_tparam(a, n - 1), 0, env);
-        }
-    }
-    else if (jl_is_typevar(a)) {
-        foreach_top_nth_typename(f, ((jl_tvar_t*)a)->ub, n, env);
-    }
-    else if (jl_is_unionall(a)) {
-        foreach_top_nth_typename(f, ((jl_unionall_t*)a)->body, n, env);
-    }
-    else if (jl_is_uniontype(a)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)a;
-        foreach_top_nth_typename(f, u->a, n, env);
-        foreach_top_nth_typename(f, u->b, n, env);
-    }
-}
 
 // get the MethodTable for dispatch, or `nothing` if cannot be determined
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -1198,11 +1168,6 @@ JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGA
 JL_DLLEXPORT jl_methcache_t *jl_method_cache_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     return jl_method_table->cache;
-}
-
-void jl_foreach_top_typename_for(void (*f)(jl_typename_t*, void*), jl_value_t *argtypes JL_PROPAGATES_ROOT, void *env)
-{
-    foreach_top_nth_typename(f, argtypes, 1, env);
 }
 
 jl_methcache_t *jl_kwmethod_cache_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -1256,7 +1221,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     //    jl_value_t **ttypes = { jl_builtin_type, jl_tparam0(jl_anytuple_type) };
     //    jl_value_t *invalidt = jl_apply_tuple_type_v(ttypes, 2); // Tuple{Union{Builtin,OpaqueClosure}, Vararg}
     //    if (!jl_has_empty_intersection(argtype, invalidt))
-    //        jl_error("cannot add methods to a builtin function");
+    //        jl_error("cannot add methods to builtin function");
     //}
 
     assert(jl_is_linenode(functionloc));
@@ -1335,7 +1300,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     }
     ft = jl_rewrap_unionall(ft, argtype);
     if (!external_mt && !jl_has_empty_intersection(ft, (jl_value_t*)jl_builtin_type)) // disallow adding methods to Any, Function, Builtin, and subtypes, or Unions of those
-        jl_error("cannot add methods to a builtin function");
+        jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));
 
     m = jl_new_method_uninit(module);
     m->external_mt = (jl_value_t*)external_mt;

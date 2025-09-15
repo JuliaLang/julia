@@ -405,6 +405,9 @@ end
     return isdefined_tfunc(𝕃, arg1, sym)
 end
 @nospecs function isdefined_tfunc(𝕃::AbstractLattice, arg1, sym)
+    if arg1 isa MustAlias
+        arg1 = widenmustalias(arg1)
+    end
     arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(arg1.parameters[1]) : widenconst(arg1)
     a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
@@ -2093,6 +2096,7 @@ end
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, ref, idx, boundscheck)
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
+    hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
     return ref
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
@@ -2104,7 +2108,7 @@ end
 add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
 
 @nospecs function memoryref_builtin_common_errorcheck(mem, order, boundscheck)
-    hasintersect(widenconst(mem), GenericMemoryRef) || return false
+    hasintersect(widenconst(mem), Union{GenericMemory, GenericMemoryRef}) || return false
     hasintersect(widenconst(order), Symbol) || return false
     hasintersect(widenconst(unwrapva(boundscheck)), Bool) || return false
     return true
@@ -2200,7 +2204,7 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
         idx = widenconst(argtypes[2])
         idx ⊑ Int || return false
         boundscheck ⊑ Bool || return false
-        memtype ⊑ GenericMemoryRef || return false
+        memtype ⊑ Union{GenericMemory, GenericMemoryRef} || return false
         # If we have @inbounds (last argument is false), we're allowed to assume
         # we don't throw bounds errors.
         if isa(boundscheck, Const)
@@ -3204,7 +3208,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)
-        mt = Core.GlobalMethods
+        mt = Core.methodtable
         vinfo = MethodMatchInfo(vresults, mt, types, false) # XXX: this should actually be an info with invoke-type edge
     else
         rt = Const(true)

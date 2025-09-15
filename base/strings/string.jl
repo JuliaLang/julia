@@ -7,9 +7,9 @@ An error occurred when trying to access `str` at index `i` that is not valid.
 """
 struct StringIndexError <: Exception
     string::AbstractString
-    index::Integer
+    index::Int
 end
-@noinline string_index_err(s::AbstractString, i::Integer) =
+@noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
 function Base.showerror(io::IO, exc::StringIndexError)
     s = exc.string
@@ -83,7 +83,7 @@ end
 
 Create a `String` from `m`, changing the interpretation of the contents of `m`.
 This is done without copying, if possible. Thus, any access to `m` after
-calling this function, either to read or to write, is undefined behaviour.
+calling this function, either to read or to write, is undefined behavior.
 """
 function unsafe_takestring(m::Memory{UInt8})
     isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))

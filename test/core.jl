@@ -36,8 +36,8 @@ end
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
-        (Core.Method, [:primary_world, :dispatch_status]),
-        (Core.MethodInstance, [:cache, :flags]),
+        (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
+        (Core.MethodInstance, [:cache, :flags, :dispatch_status]),
         (Core.MethodTable, [:defs]),
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
@@ -243,6 +243,62 @@ k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
 @test k11840(Tuple{Union{Int32, Int64}}) == '2'
 @test k11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
 
+# issue #59327
+@noinline f59327(f, x) = Any[f, x]
+g59327(x) = f59327(+, Any[x][1])
+g59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(f59327), Function, Int},
+    methods(f59327)[1].specializations)
+
+@noinline h59327(f::Union{Function, Nothing}, x) = Any[f, x]
+i59327(x) = h59327(+, Any[x][1])
+i59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(h59327), Function, Int},
+    methods(h59327)[1].specializations)
+
+@noinline j59327(f::Function, x) = Any[f, x]
+k59327(x) = j59327(+, Any[x][1])
+k59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(j59327), Function, Int},
+    methods(j59327)[1].specializations
+)
+
+@noinline l59327(f::Base.Callable, x) = Any[f, x]
+m59327(x) = l59327(+, Any[x][1])
+m59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(l59327), Function, Int},
+    methods(l59327)[1].specializations
+)
+
+# _do_ specialize if the signature has a `where`
+@noinline n59327(f::F, x) where F = Any[f, x]
+o59327(x) = n59327(+, Any[x][1])
+o59327(1)
+@test !any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
+    methods(n59327)[1].specializations
+)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), typeof(+), Int},
+    methods(n59327)[1].specializations
+)
+
+# _do_ specialize if the signature is specific
+@noinline n59327(f::typeof(+), x) = Any[f, x]
+o59327(x) = n59327(+, Any[x][1])
+o59327(1)
+@test !any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
+    methods(n59327)[1].specializations
+)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), typeof(+), Int},
+    methods(n59327)[1].specializations
+)
 
 # issue #20511
 f20511(x::DataType) = 0
@@ -1206,8 +1262,8 @@ end
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
-@test invokelatest(getfield, Module(:anonymous, false, true), :Core) == Core
-@test_throws UndefVarError invokelatest(getfield, Module(:anonymous, false, false), :Core)
+@test invokelatest(getglobal, Module(:anonymous, false, true), :Core) == Core
+@test_throws UndefVarError invokelatest(getglobal, Module(:anonymous, false, false), :Core)
 
 # exception from __init__()
 let didthrow =
@@ -2280,6 +2336,31 @@ end
 x6074 = 6074
 @test @X6074() == 6074
 
+# issues #48910, 54417
+macro X43151_nested()
+    quote my_value = "from_nested_macro" end
+end
+macro X43151_parent()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested()
+        my_value
+    end
+end
+@test @X43151_parent() == "from_parent_macro"
+
+macro X43151_nested_escaping()
+    quote $(esc(:my_value)) = "from_nested_macro" end
+end
+macro X43151_parent_escaping()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested_escaping()
+        my_value
+    end
+end
+@test @X43151_parent_escaping() == "from_nested_macro"
+
 # issue #5536
 test5536(a::Union{Real, AbstractArray}...) = "Splatting"
 test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
@@ -2636,13 +2717,16 @@ struct D14919 <: Function; end
 @test B14919()() == "It's a brand new world"
 @test C14919()() == D14919()() == "Boo."
 
-let ex = ErrorException("cannot add methods to a builtin function")
+let ex_t = ErrorException, ex_r = r"cannot add methods to builtin function"
     for f in (:(Core.Any), :(Core.Function), :(Core.Builtin), :(Base.Callable), :(Union{Nothing,F} where F), :(typeof(Core.getfield)), :(Core.IntrinsicFunction))
-        @test_throws ex @eval (::$f)() = 1
+        @test_throws ex_t @eval (::$f)() = 1
+        @test_throws ex_r @eval (::$f)() = 1
     end
-    @test_throws ex @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    @test_throws ex_t @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    @test_throws ex_r @eval (::Union{Nothing,F})() where {F<:Function} = 1
     for f in (:(Core.getfield),)
-        @test_throws ex @eval $f() = 1
+        @test_throws ex_t @eval $f() = 1
+        @test_throws ex_r @eval $f() = 1
     end
 end
 
@@ -2731,6 +2815,14 @@ f24460(x::Int, y::Int) = "3"
 const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
+
+@testset "invoke with builtins" begin
+    @test invoke(getfield, Tuple{Any, Symbol}, (a = 42,), :a) == 42
+    @test invoke(setfield!, Tuple{Any, Symbol, Any},  Base.RefValue(1), :x, 2) == 2
+    @test invoke(isdefined, Tuple{Any, Symbol}, (a = 1,), :a) == true
+    @test invoke(isdefined, Tuple{Any, Symbol}, (a = 1,), :b) == false
+    @test invoke(invoke, Tuple{Any, Type, Vararg}, sin, Tuple{Real}, 0) == 0.0
+end
 
 # issue #30679
 @noinline function f30679(::DataType)
@@ -4679,8 +4771,28 @@ end
 @test Macro_Yielding_Global_Assignment.x == 2
 
 # issue #15718
-@test :(f($NaN)) == :(f($NaN))
-@test isequal(:(f($NaN)), :(f($NaN)))
+function compare_test(x, y)
+    lx = Meta.lower(@__MODULE__, x)
+    ly = Meta.lower(@__MODULE__, y)
+    if isequal(x, y)
+        @test x == y
+        @test hash(x) == hash(y)
+        @test isequal(lx, ly)
+        @test lx == ly
+        @test hash(lx) == hash(ly)
+        true
+    else
+        @test x != y
+        @test !isequal(lx, ly)
+        @test lx != ly
+        false
+    end
+end
+@test compare_test(:(f($NaN)), :(f($NaN)))
+@test !compare_test(:(1 + (1 * 1)), :(1 + (1 * 1.0)))
+@test compare_test(:(1 + (1 * $NaN)), :(1 + (1 * $NaN)))
+@test compare_test(QuoteNode(NaN), QuoteNode(NaN))
+@test !compare_test(QuoteNode(1), QuoteNode(1.0))
 
 # PR #16011 Make sure dead code elimination doesn't delete push and pop
 # of metadata
@@ -8510,6 +8622,11 @@ module M57638_3
     export x
 end
 @test M57638_3.x === 1
+
+@testset "no unnecessary methods for comparison functions with generically correct and performant fallback methods" begin
+    @test (isone ∘ length ∘ methods)(>, Tuple{Any, Any})
+    @test (isone ∘ length ∘ methods)(>=, Tuple{Any, Any})
+end
 
 module GlobalBindingMulti
     module M

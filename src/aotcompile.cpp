@@ -42,8 +42,9 @@
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 
-
 using namespace llvm;
+
+#include <zstd.h>
 
 #include "jitlayers.h"
 #include "serialize.h"
@@ -549,16 +550,16 @@ Function *IRLinker_copyFunctionProto(Module *DstM, Function *SF) {
   return F;
 }
 
-static Function *aot_abi_converter(jl_codegen_params_t &params, Module *M, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_code_instance_t *codeinst, Module *defM, StringRef func, StringRef specfunc, bool target_specsig)
+static Function *aot_abi_converter(jl_codegen_params_t &params, Module *M, jl_abi_t from_abi, jl_code_instance_t *codeinst, Module *defM, StringRef func, StringRef specfunc, bool target_specsig)
 {
     std::string gf_thunk_name;
     if (!specfunc.empty()) {
         Value *llvmtarget = IRLinker_copyFunctionProto(M, defM->getFunction(specfunc));
-        gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+        gf_thunk_name = emit_abi_converter(M, params, from_abi, codeinst, llvmtarget, target_specsig);
     }
     else {
         Value *llvmtarget = func.empty() ? nullptr : IRLinker_copyFunctionProto(M, defM->getFunction(func));
-        gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget);
+        gf_thunk_name = emit_abi_dispatcher(M, params, from_abi, codeinst, llvmtarget);
     }
     auto F = M->getFunction(gf_thunk_name);
     assert(F);
@@ -576,33 +577,34 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
     for (cfunc_decl_t &cfunc : params.cfuncs) {
-        Module *M = cfunc.theFptr->getParent();
-        jl_value_t *sigt = cfunc.sigt;
+        Module *M = cfunc.cfuncdata->getParent();
+        jl_value_t *sigt = cfunc.abi.sigt;
         JL_GC_PROMISE_ROOTED(sigt);
-        jl_value_t *declrt = cfunc.declrt;
+        jl_value_t *declrt = cfunc.abi.rt;
         JL_GC_PROMISE_ROOTED(declrt);
-        Function *unspec = aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, nullptr, nullptr, "", "", false);
+        Function *unspec = aot_abi_converter(params, M, cfunc.abi, nullptr, nullptr, "", "", false);
         jl_code_instance_t *codeinst = nullptr;
         auto assign_fptr = [&params, &cfunc, &codeinst, &unspec](Function *f) {
             ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
-            SmallVector<Constant*,6> initvals;
+            SmallVector<Constant*,8> initvals;
             for (unsigned i = 0; i < init->getNumOperands(); ++i)
                 initvals.push_back(init->getOperand(i));
-            assert(initvals.size() == 6);
+            assert(initvals.size() == 8);
             assert(initvals[0]->isNullValue());
+            assert(initvals[2]->isNullValue());
             if (codeinst) {
                 Constant *llvmcodeinst = literal_pointer_val_slot(params, f->getParent(), (jl_value_t*)codeinst);
-                initvals[0] = llvmcodeinst; // plast_codeinst
+                initvals[2] = llvmcodeinst; // plast_codeinst
             }
-            assert(initvals[2]->isNullValue());
-            initvals[2] = unspec;
+            assert(initvals[4]->isNullValue());
+            initvals[4] = unspec;
+            initvals[0] = f;
             cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
-            cfunc.theFptr->setInitializer(f);
         };
         Module *defM = nullptr;
         StringRef func;
-        jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
-        if (mi) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        if ((jl_value_t*)mi != jl_nothing) {
             auto it = compiled_mi.find(mi);
             if (it != compiled_mi.end()) {
                 codeinst = it->second;
@@ -621,7 +623,7 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
                     jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
                 }
                 if (func == "jl_fptr_const_return") {
-                    std::string gf_thunk_name = emit_abi_constreturn(M, params, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst->rettype_const);
+                    std::string gf_thunk_name = emit_abi_constreturn(M, params, cfunc.abi, codeinst->rettype_const);
                     auto F = M->getFunction(gf_thunk_name);
                     assert(F);
                     assign_fptr(F);
@@ -629,11 +631,11 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
                 }
                 else if (func == "jl_fptr_args") {
                     assert(!specfunc.empty());
-                    if (!cfunc.specsig && jl_subtype(astrt, declrt)) {
+                    if (!cfunc.abi.specsig && jl_subtype(astrt, declrt)) {
                         assign_fptr(IRLinker_copyFunctionProto(M, defM->getFunction(specfunc)));
                         continue;
                     }
-                    assign_fptr(aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, specfunc, false));
+                    assign_fptr(aot_abi_converter(params, M, cfunc.abi, codeinst, defM, func, specfunc, false));
                     continue;
                 }
                 else if (func == "jl_fptr_sparam" || func == "jl_f_opaque_closure_call") {
@@ -645,13 +647,13 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
                         assign_fptr(IRLinker_copyFunctionProto(M, defM->getFunction(specfunc)));
                         continue;
                     }
-                    assign_fptr(aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, specfunc, true));
+                    assign_fptr(aot_abi_converter(params, M, cfunc.abi, codeinst, defM, func, specfunc, true));
                     continue;
                 }
             }
         }
-        Function *f = codeinst ? aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, "", false) : unspec;
-        return assign_fptr(f);
+        Function *f = codeinst ? aot_abi_converter(params, M, cfunc.abi, codeinst, defM, func, "", false) : unspec;
+        assign_fptr(f);
     }
 }
 
@@ -675,14 +677,17 @@ static bool canPartition(const Function &F)
            !F.hasFnAttribute(Attribute::InlineHint);
 }
 
-// takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world)
+void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
+                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order)
 {
     JL_TIMING(INFERENCE, INFERENCE);
     auto ct = jl_current_task;
+    if (!jl_compile_and_emit_func) {
+        jl_error("inference not available for generating compiled output");
+    }
     bool timed = (ct->reentrant_timing & 1) == 0;
     if (timed)
         ct->reentrant_timing |= 1;
@@ -691,39 +696,37 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
-    jl_cgparams_t cgparams = jl_default_cgparams;
-    size_t compile_for[] = { jl_typeinf_world, world };
-    int compiler_world = 1;
-    if (trim || compile_for[0] == 0)
-        compiler_world = 0;
     jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 4);
-    jl_array_t *codeinfos = NULL;
-    if (jl_typeinf_func) {
-        fargs[0] = (jl_value_t*)jl_typeinf_func;
-        fargs[1] = (jl_value_t*)methods;
+    JL_GC_PUSHARGS(fargs, 8);
 #ifdef _P64
-        jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
+    jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
 #else
-        jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
+    jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
 #endif
-        jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 1 + compiler_world);
-        fargs[2] = (jl_value_t*)worlds;
-        jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
-        jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
-        fargs[3] = jl_box_long(trim);
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_typeinf_world;
-        codeinfos = (jl_array_t*)jl_apply(fargs, 4);
-        ct->world_age = last_age;
-        JL_TYPECHK(create_native, array_any, (jl_value_t*)codeinfos);
-    }
-    else {
-        // we could put a very simple generator here, but there is no reason to do that right now
-        jl_error("inference not available for generating compiled output");
-    }
-    fargs[0] = (jl_value_t*)codeinfos;
-    void *data = jl_emit_native(codeinfos, llvmmod, &cgparams, external_linkage);
+    jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 2);
+    fargs[0] = jl_compile_and_emit_func;
+    fargs[1] = (jl_value_t*)worlds;
+    jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
+    int compiler_world = 1;
+    if (trim || jl_array_data(worlds, size_t)[0] == 0)
+        compiler_world = 0;
+    jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
+    worlds->dimsize[0] = 1 + compiler_world;
+    fargs[2] = jl_box_uint8(trim);
+    fargs[3] = jl_box_bool(external_linkage);
+    fargs[4] = worklist ? (jl_value_t*)worklist : jl_nothing; // worklist (or nothing)
+    fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
+    fargs[6] = jl_box_bool(all);
+    fargs[7] = module_init_order ? (jl_value_t*)module_init_order : jl_nothing; // module_init_order (or nothing)
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
+    fargs[0] = jl_apply(fargs, 8);
+    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = NULL;
+    ct->world_age = last_age;
+    jl_value_t *codeinfos = fargs[0];
+    JL_TYPECHK(jl_create_native, array_any, codeinfos);
+    void *data = jl_emit_native((jl_array_t*)codeinfos, llvmmod, NULL, external_linkage ? 1 : 0);
+    JL_GC_POP();
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
@@ -753,7 +756,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         }
     });
 
-    JL_GC_POP();
     if (timed) {
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
@@ -763,6 +765,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     }
     return data;
 }
+
 
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
@@ -2146,12 +2149,25 @@ void jl_dump_native_impl(void *native_code,
         sysimgM.setDataLayout(DL);
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
-        Constant *data = ConstantDataArray::get(Context,
-            ArrayRef<uint8_t>((const unsigned char*)z->buf, z->size));
+
+        int compression = jl_options.compress_sysimage ? 15 : 0;
+        ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
+        SmallVector<char, 0> compressed_data;
+        if (compression) {
+            compressed_data.resize(ZSTD_compressBound(z->size));
+            size_t comp_size = ZSTD_compress(compressed_data.data(), compressed_data.size(),
+                                             z->buf, z->size, compression);
+            compressed_data.resize(comp_size);
+            sysimg_data = compressed_data;
+            ios_close(z);
+            free(z);
+        }
+
+        Constant *data = ConstantDataArray::get(Context, sysimg_data);
         auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
-        sysdata->setAlignment(Align(64));
+        sysdata->setAlignment(Align(jl_page_size));
 #if JL_LLVM_VERSION >= 180000
         sysdata->setCodeModel(CodeModel::Large);
 #else
@@ -2159,14 +2175,27 @@ void jl_dump_native_impl(void *native_code,
             sysdata->setSection(".ldata");
 #endif
         addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
+        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"), TheTriple);
-        // Free z here, since we've copied out everything into data
-        // Results in serious memory savings
-        ios_close(z);
-        free(z);
+
+        const char *unpack_func = compression ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp";
+        auto unpack = new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,
+                                         GlobalVariable::ExternalLinkage, nullptr,
+                                         unpack_func);
+        addComdat(new GlobalVariable(sysimgM, PointerType::getUnqual(Context), true,
+                                     GlobalVariable::ExternalLinkage, unpack,
+                                     "jl_image_unpack"),
+                  TheTriple);
+
+        if (!compression) {
+            // Free z here, since we've copied out everything into data
+            // Results in serious memory savings
+            ios_close(z);
+            free(z);
+        }
+        compressed_data.clear();
         // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
         // to function as expected
         // no need to free the module/context, destructor handles that
@@ -2270,9 +2299,14 @@ void jl_dump_native_impl(void *native_code,
         auto lock = TSCtx.getLock();
         auto dataM = data->M.getModuleUnlocked();
 
-        // Delete data when add_output thinks it's done with it
-        // Saves memory for use when multithreading
-        data_outputs = compile(*dataM, "text", threads, [data](Module &) { delete data; });
+        data_outputs = compile(*dataM, "text", threads, [data, &lock, &TSCtx](Module &) {
+            // Delete data when add_output thinks it's done with it
+            // Saves memory for use when multithreading
+            auto lock2 = std::move(lock);
+            delete data;
+            // Drop last reference to shared LLVM::Context
+            auto TSCtx2 = std::move(TSCtx);
+        });
     }
 
     if (params->emit_metadata) {
@@ -2343,7 +2377,15 @@ void jl_dump_native_impl(void *native_code,
                                                         "jl_small_typeof");
             jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
             jl_small_typeof_copy->setDSOLocal(true);
-            AT = ArrayType::get(T_psize, 5);
+
+            // Create CPU target string constant
+            auto cpu_target_str = jl_options.cpu_target ? jl_options.cpu_target : "native";
+            auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
+            auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
+                                                       GlobalVariable::InternalLinkage,
+                                                       cpu_target_data, "jl_cpu_target_string");
+
+            AT = ArrayType::get(T_psize, 6);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
                                             ConstantArray::get(AT, {
@@ -2351,7 +2393,8 @@ void jl_dump_native_impl(void *native_code,
                                                     ConstantExpr::getBitCast(shards, T_psize),
                                                     ConstantExpr::getBitCast(ptls, T_psize),
                                                     ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
-                                                    ConstantExpr::getBitCast(target_ids, T_psize)
+                                                    ConstantExpr::getBitCast(target_ids, T_psize),
+                                                    ConstantExpr::getBitCast(cpu_target_global, T_psize)
                                             }),
                                             "jl_image_pointers");
             addComdat(pointers, TheTriple);
@@ -2482,12 +2525,12 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             jl_compiled_functions_t compiled_functions;
             size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
             for (cfunc_decl_t &cfunc : output.cfuncs) {
-                jl_value_t *sigt = cfunc.sigt;
+                jl_value_t *sigt = cfunc.abi.sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
-                jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
-                if (mi == nullptr)
+                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+                if (mi == jl_nothing)
                     continue;
-                jl_code_instance_t *codeinst = jl_type_infer(mi, latestworld, SOURCE_MODE_NOT_REQUIRED);
+                jl_code_instance_t *codeinst = jl_type_infer((jl_method_instance_t*)mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
                 if (codeinst == nullptr || compiled_functions.count(codeinst))
                     continue;
                 orc::ThreadSafeModule decl_m = jl_create_ts_module("extern", ctx, DL, TT);

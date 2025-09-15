@@ -71,7 +71,7 @@ function repl_cmd(cmd, out)
         catch
             # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
             lasterr = current_exceptions()
-            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
             invokelatest(display_error, lasterr)
         end
     end
@@ -99,7 +99,7 @@ function scrub_repl_backtrace(bt)
     return bt
 end
 scrub_repl_backtrace(stack::ExceptionStack) =
-    ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
+    ExceptionStack(NamedTuple[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
     length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
@@ -120,6 +120,10 @@ function display_error(io::IO, er, bt)
 end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+__repl_entry_client_lower(mod::Module, @nospecialize(ast)) = Meta.lower(mod, ast)
+__repl_entry_client_eval(mod::Module, @nospecialize(ast)) = Core.eval(mod, ast)
+
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
@@ -136,8 +140,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 errcount = 0
                 lasterr = nothing
             else
-                ast = Meta.lower(Main, ast)
-                value = Core.eval(Main, ast)
+                ast = __repl_entry_client_lower(Main, ast)
+                value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
@@ -270,10 +274,6 @@ function exec_options(opts)
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
 
-    # load terminfo in for styled printing
-    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-    global current_terminfo = load_terminfo(term_env)
-
     # load ~/.julia/config/startup.jl file
     if startup
         try
@@ -282,6 +282,12 @@ function exec_options(opts)
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             !(repl || is_interactive::Bool) && exit(1)
         end
+    end
+
+    # drop all caches if code coverage is enabled. Do it here not earlier, so julia has a chance
+    # of starting up quickly
+    if Base.JLOptions().code_coverage == 2
+        Base.drop_all_caches()
     end
 
     # process cmds list
@@ -568,7 +574,12 @@ function _start()
             ret = repl_main(ARGS)
         end
         ret === nothing && (ret = 0)
-        ret = Cint(ret)
+        ret = try
+            Cint(ret)
+        catch
+            @error "The return value of `main` should be `nothing` or convertible to `Cint`"
+            Cint(1)
+        end
     catch
         ret = Cint(1)
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
