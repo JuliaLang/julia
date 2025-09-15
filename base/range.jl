@@ -569,7 +569,7 @@ julia> collect(LinRange(-0.1, 0.3, 5))
   0.3
 ```
 
-See also [`Logrange`](@ref Base.LogRange) for logarithmically spaced points.
+See also [`Base.LogRange`](@ref Base.LogRange) for logarithmically spaced points.
 """
 struct LinRange{T,L<:Integer} <: AbstractRange{T}
     start::T
@@ -687,7 +687,7 @@ end
 ## interface implementations
 
 length(r::AbstractRange) = error("length implementation missing") # catch mistakes
-size(r::AbstractRange) = (length(r),)
+size(r::AbstractRange) = (@inline; (length(r),))
 
 isempty(r::StepRange) =
     # steprange_last(r.start, r.step, r.stop) == r.stop
@@ -805,17 +805,12 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         s = step(r)
         diff = last(r) - first(r)
         isempty(r) && return zero(diff)
-        # if |s| > 1, diff might have overflowed, but unsigned(diff)÷s should
-        # therefore still be valid (if the result is representable at all)
-        # n.b. !(s isa T)
-        if s isa Unsigned || -1 <= s <= 1 || s == -s
-            a = div(diff, s) % typeof(diff)
-        elseif s < 0
-            a = div(unsigned(-diff), -s) % typeof(diff)
-        else
-            a = div(unsigned(diff), s) % typeof(diff)
-        end
-        return a + oneunit(a)
+        # Compute `(diff ÷ s) + 1` in a manner robust to signed overflow
+        # by using the absolute values as unsigneds for non-empty ranges.
+        # Note that `s` may be a different type from T and diff; it may not
+        # even be a BitInteger that supports `unsigned`. Handle with care.
+        a = div(unsigned(flipsign(diff, s)), s) % typeof(diff)
+        return flipsign(a, s) + oneunit(a)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)

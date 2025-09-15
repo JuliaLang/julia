@@ -459,7 +459,7 @@ let
             @test stmt.cond === v
         elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
             @test stmt.val === v
-        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue)
+        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue) || isa(stmt, Argument)
             @test stmt === v
         elseif isa(stmt, PiNode)
             @test stmt.val === v && stmt.typ === typeof(stmt)
@@ -508,6 +508,7 @@ let
         GotoNode(5),
         SSAValue(7),
         NewSSAValue(9),
+        Argument(1),
         ReturnNode(SSAValue(11)),
     ]
 
@@ -824,3 +825,23 @@ end
 
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = typemax(Int))
+
+#57153 check that the CFG has a #0 block predecessor and that we don't fail to compile code that observes that
+function _worker_task57153()
+    while true
+        r = let
+        try
+            if @noinline rand(Bool)
+                return nothing
+            end
+            q, m
+        finally
+            missing
+        end
+        end
+        r[1]::Bool
+    end
+end
+let ir = Base.code_ircode(_worker_task57153, (), optimize_until="CC: COMPACT_2")[1].first
+    @test findfirst(x->x==0, ir.cfg.blocks[1].preds) !== nothing
+end

@@ -376,3 +376,7 @@ end
     @test sp[1] < ptr1
     @test all(diff(Int128.(UInt.(sp))) .> 0)
 end
+
+@testset "`lookup` return type inference" begin
+    @test Vector{StackTraces.StackFrame} === Base.infer_return_type(lookup)
+end

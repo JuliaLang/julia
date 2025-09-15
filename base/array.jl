@@ -191,7 +191,6 @@ function size(a::Array, d::Int)
     sz = getfield(a, :size)
     return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
 end
-size(a::Array) = getfield(a, :size)
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
@@ -316,23 +315,61 @@ end
 # It is also mitigated by using a constant string.
 _throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
-copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
+_copyto2arg!(dest, src) = copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+
+copyto!(dest::Array, src::Array) = _copyto2arg!(dest, src)
+copyto!(dest::Array, src::Memory) = _copyto2arg!(dest, src)
+copyto!(dest::Memory, src::Array) = _copyto2arg!(dest, src)
 
 # also to avoid ambiguities in packages
-copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
+copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
 
-# N.B: The generic definition in multidimensional.jl covers, this, this is just here
-# for bootstrapping purposes.
-function fill!(dest::Array{T}, x) where T
+# N.B: This generic definition in for multidimensional arrays is here instead of
+# `multidimensional.jl` for bootstrapping purposes.
+"""
+    fill!(A, x)
+
+Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
+the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
+`Foo()` once.
+
+# Examples
+```jldoctest
+julia> A = zeros(2,3)
+2×3 Matrix{Float64}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> fill!(A, 2.)
+2×3 Matrix{Float64}:
+ 2.0  2.0  2.0
+ 2.0  2.0  2.0
+
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A
+3-element Vector{Vector{Int64}}:
+ [2, 1, 1]
+ [2, 1, 1]
+ [2, 1, 1]
+
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())
+3-element Vector{Int64}:
+ 1
+ 1
+ 1
+```
+"""
+function fill!(A::AbstractArray{T}, x) where T
     @inline
-    x = x isa T ? x : convert(T, x)::T
-    return _fill!(dest, x)
+    xT = x isa T ? x : convert(T, x)::T
+    return _fill!(A, xT)
 end
-function _fill!(dest::Array{T}, x::T) where T
-    for i in eachindex(dest)
-        @inbounds dest[i] = x
+function _fill!(A::AbstractArray{T}, x::T) where T
+    for i in eachindex(A)
+        A[i] = x
     end
-    return dest
+    return A
 end
 
 """
@@ -376,6 +413,7 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1)
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
+similar(::Type{Array{T,N}}, dims::Dims) where {T,N} = similar(Array{T}, dims)
 
 # T[x...] constructs Array{T,1}
 """
@@ -742,9 +780,16 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
-_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+function _collect_indices(::Tuple{}, A)
+    dest = Array{eltype(A),0}(undef)
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
+function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
+    dest = Array{eltype(A)}(undef, length.(indsA))
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
@@ -896,10 +941,6 @@ function grow_to!(dest, itr, st)
     return dest
 end
 
-## Iteration ##
-
-iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
-
 ## Indexing: getindex ##
 
 """
@@ -987,7 +1028,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -1066,6 +1107,41 @@ end
 
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
+function _growbeg_internal!(a::Vector, delta::Int, len::Int)
+    @_terminates_locally_meta
+    ref = a.ref
+    mem = ref.mem
+    offset = memoryrefoffset(ref)
+    newlen = len + delta
+    memlen = length(mem)
+    if offset + len - 1 > memlen || offset < 1
+        throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+    end
+    # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
+    # the +1 is because I didn't want to have an off by 1 error.
+    newmemlen = max(overallocation(len), len + 2 * delta + 1)
+    newoffset = div(newmemlen - newlen, 2) + 1
+    # If there is extra data after the end of the array we can use that space so long as there is enough
+    # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
+    # Specifically, we want to ensure that we will only do this operation once before
+    # increasing the size of the array, and that we leave enough space at both the beginning and the end.
+    if newoffset + newlen < memlen
+        newoffset = div(memlen - newlen, 2) + 1
+        newmem = mem
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+        for j in offset:newoffset+delta-1
+            @inbounds _unsetindex!(mem, j)
+        end
+    else
+        newmem = array_new_memory(mem, newmemlen)
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+    end
+    if ref !== a.ref
+        throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+    end
+    setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
+end
+
 function _growbeg!(a::Vector, delta::Integer)
     @_noub_meta
     delta = Int(delta)
@@ -1081,38 +1157,44 @@ function _growbeg!(a::Vector, delta::Integer)
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
-        @noinline (function()
-        @_terminates_locally_meta
-        memlen = length(mem)
-        if offset + len - 1 > memlen || offset < 1
-            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
-        end
-        # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
-        # the +1 is because I didn't want to have an off by 1 error.
-        newmemlen = max(overallocation(len), len + 2 * delta + 1)
-        newoffset = div(newmemlen - newlen, 2) + 1
-        # If there is extra data after the end of the array we can use that space so long as there is enough
-        # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
-        # Specifically, we want to ensure that we will only do this operation once before
-        # increasing the size of the array, and that we leave enough space at both the beginning and the end.
-        if newoffset + newlen < memlen
-            newoffset = div(memlen - newlen, 2) + 1
-            newmem = mem
-            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-            for j in offset:newoffset+delta-1
-                @inbounds _unsetindex!(mem, j)
-            end
-        else
-            newmem = array_new_memory(mem, newmemlen)
-            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        end
-        if ref !== a.ref
-            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
-        end
-        setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
-        end)()
+        @noinline _growbeg_internal!(a, delta, len)
     end
     return
+end
+
+function _growend_internal!(a::Vector, delta::Int, len::Int)
+    ref = a.ref
+    mem = ref.mem
+    memlen = length(mem)
+    newlen = len + delta
+    offset = memoryrefoffset(ref)
+    newmemlen = offset + newlen - 1
+    if offset + len - 1 > memlen || offset < 1
+        throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+    end
+
+    if offset - 1 > div(5 * newlen, 4)
+        # If the offset is far enough that we can copy without resizing
+        # while maintaining proportional spacing on both ends of the array
+        # note that this branch prevents infinite growth when doing combinations
+        # of push! and popfirst! (i.e. when using a Vector as a queue)
+        newmem = mem
+        newoffset = div(newlen, 8) + 1
+    else
+        # grow either by our computed overallocation factor
+        # or exactly the requested size, whichever is larger
+        # TODO we should possibly increase the offset if the current offset is nonzero.
+        newmemlen2 = max(overallocation(memlen), newmemlen)
+        newmem = array_new_memory(mem, newmemlen2)
+        newoffset = offset
+    end
+    newref = @inbounds memoryref(newmem, newoffset)
+    unsafe_copyto!(newref, ref, len)
+    if ref !== a.ref
+        @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+    end
+    setfield!(a, :ref, newref)
+return
 end
 
 function _growend!(a::Vector, delta::Integer)
@@ -1128,33 +1210,7 @@ function _growend!(a::Vector, delta::Integer)
     setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
-        @noinline (function()
-        if offset + len - 1 > memlen || offset < 1
-            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
-        end
-
-        if offset - 1 > div(5 * newlen, 4)
-            # If the offset is far enough that we can copy without resizing
-            # while maintaining proportional spacing on both ends of the array
-            # note that this branch prevents infinite growth when doing combinations
-            # of push! and popfirst! (i.e. when using a Vector as a queue)
-            newmem = mem
-            newoffset = div(newlen, 8) + 1
-        else
-            # grow either by our computed overallocation factor
-            # or exactly the requested size, whichever is larger
-            # TODO we should possibly increase the offset if the current offset is nonzero.
-            newmemlen2 = max(overallocation(memlen), newmemlen)
-            newmem = array_new_memory(mem, newmemlen2)
-            newoffset = offset
-        end
-        newref = @inbounds memoryref(newmem, newoffset)
-        unsafe_copyto!(newref, ref, len)
-        if ref !== a.ref
-            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
-        end
-        setfield!(a, :ref, newref)
-        end)()
+        @noinline _growend_internal!(a, delta, len)
     end
     return
 end
@@ -3109,14 +3165,17 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function _shrink(shrinker!::F, itr, itrs) where F
+function intersect(itr, itrs...)
     T = promote_eltype(itr, itrs...)
-    keep = shrinker!(Set{T}(itr), itrs...)
+    keep = intersect!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)
 end
 
-intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
-setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)
+function setdiff(itr, itrs...)
+    T = eltype(itr)
+    keep = setdiff!(Set{T}(itr), itrs...)
+    vectorfilter(T, _shrink_filter!(keep), itr)
+end
 
 function intersect(v::AbstractVector, r::AbstractRange)
     T = promote_eltype(v, r)

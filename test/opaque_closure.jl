@@ -407,3 +407,6 @@ let f = f54357(+, Tuple{Int,Int})
     @test g isa Core.OpaqueClosure
     @test g(32.0, 34.0) === 66.0
 end
+
+# 49659: signature-scoped typevar shouldn't fail in lowering
+@test_throws "must be a tuple type" @opaque ((x::T,y::T) where {T}) -> 123

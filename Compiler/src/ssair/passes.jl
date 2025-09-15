@@ -9,7 +9,9 @@ end
 function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
     isinvoke = isexpr(x, :invoke)
     (isinvoke || isexpr(x, :call)) || return false
-    ft = argextype(x.args[isinvoke ? 2 : 1], ir)
+    narg = isinvoke ? 2 : 1
+    length(x.args) < narg && return false
+    ft = argextype(x.args[narg], ir)
     return singleton_type(ft) === func
 end
 
@@ -1530,7 +1532,7 @@ end
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     code::CodeInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    mi = code.def
+    mi = get_ci_mi(code)
     et = InliningEdgeTracker(inlining)
     if code isa CodeInstance
         if use_const_api(code)
@@ -1543,7 +1545,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         return false
     end
 
-    src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
+    src_inlining_policy(inlining.interp, mi, src, info, IR_FLAG_NULL) || return false
     src, spec_info, di = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block

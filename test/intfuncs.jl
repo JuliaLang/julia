@@ -258,6 +258,13 @@ end
         @test invmod(T(3), T(124))::T == 83
     end
 
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test invmod(T(3), unsigned(T)(124)) == 83
+    end
+
+    # Verify issue described in PR 58010 is fixed
+    @test invmod(UInt8(3), UInt16(50000)) === 0x411b
+
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
             for m in typemin(T):typemax(T)
