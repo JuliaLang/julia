@@ -411,9 +411,13 @@ function logmsg_code(_module, file, line, level, message, exs...)
                         end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && $handle_message_nothrow(
-                            logger, level, msg, _module, group, id, file, line;
-                            kwargs...)
+                        if $(logrecord)
+                            @assert @isdefined(msg) "Assertion to tell the compiler about the definedness of this variable"
+                            @assert @isdefined(kwargs) "Assertion to tell the compiler about the definedness of this variable"
+                            $handle_message_nothrow(
+                                logger, level, msg, _module, group, id, file, line;
+                                kwargs...)
+                        end
                     end
                 end
             end

@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using .Compiler: has_typevar
+using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
+            is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
+            is_unary_and_binary_operator
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
@@ -39,16 +42,16 @@ end
 
 function _isself(ft::DataType)
     ftname = ft.name
-    isdefined(ftname, :mt) || return false
-    name = ftname.mt.name
-    mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
-    return invokelatest(isdefinedglobal, mod, name) && ft == typeof(invokelatest(getglobal, mod, name))
+    name = ftname.singletonname
+    ftname.name === name && return false
+    mod = parentmodule(ft)
+    return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
-    name = ft.name.mt.name
+    name = ft.name.singletonname
     if isa(f, Core.IntrinsicFunction)
         print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
@@ -390,12 +393,12 @@ julia> io = IOBuffer();
 
 julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "\\e[31mstring\\e[39m"
 
 julia> printstyled(io, "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "string"
 ```
 
@@ -538,26 +541,24 @@ function active_module()
     return invokelatest(active_module, active_repl)::Module
 end
 
-module UsesCoreAndBaseOnly
+module UsesBaseOnly
 end
 
 function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
-    ft = typeof(f)
-    mt = ft.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table
+    fname = typeof(f).name
+    if fname.name === fname.singletonname
         fallback(io, f)
     elseif compact
-        print(io, mt.name)
-    elseif isdefined(mt, :module) && isdefinedglobal(mt.module, mt.name) &&
-            getglobal(mt.module, mt.name) === f
+        print(io, fname.singletonname)
+    elseif isdefined(fname, :module) && isdefinedglobal(fname.module, fname.singletonname) && isconst(fname.module, fname.singletonname) &&
+            getglobal(fname.module, fname.singletonname) === f
         # this used to call the removed internal function `is_exported_from_stdlib`, which effectively
-        # just checked for exports from Core and Base.
-        mod = get(io, :module, UsesCoreAndBaseOnly)
-        if !(isvisible(mt.name, mt.module, mod) || mt.module === mod)
-            print(io, mt.module, ".")
+        # just checked for exports from Base.
+        mod = get(io, :module, UsesBaseOnly)
+        if !(isvisible(fname.singletonname, fname.module, mod) || fname.module === mod)
+            print(io, fname.module, ".")
         end
-        show_sym(io, mt.name)
+        show_sym(io, fname.singletonname)
     else
         fallback(io, f)
     end
@@ -634,8 +635,8 @@ function make_typealias(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
                     if alias isa UnionAll
                         (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
@@ -827,7 +828,7 @@ function make_typealiases(@nospecialize(x::Type))
     Any === x && return aliases, Union{}
     x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
@@ -838,14 +839,14 @@ function make_typealiases(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)
-                    mod in mod2 || (mod === Base && Core in mods) || continue
+                    mod in mod2 || (mod === Base && Core in mod2) || continue
                     env = env::SimpleVector
                     applied = alias
                     if !isempty(env)
@@ -965,7 +966,7 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     # give a helpful hint for function types
     if x isa DataType && x !== UnionAll && !(get(io, :compact, false)::Bool)
         tn = x.name::Core.TypeName
-        globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+        globname = tn.singletonname
         if is_global_function(tn, globname)
             print(io, " (singleton type of function ")
             show_sym(io, globname)
@@ -1048,11 +1049,11 @@ function isvisible(sym::Symbol, parent::Module, from::Module)
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
-    if globname !== nothing
+    if globname !== nothing && isconcretetype(tn.wrapper) && tn !== DataType.name # ignore that typeof(DataType)===DataType, since it is valid but not useful
         globname_str = string(globname::Symbol)
-        if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-                isdefinedglobal(tn.module, globname) &&
-                isconcretetype(tn.wrapper) && isa(getglobal(tn.module, globname), tn.wrapper))
+        if '#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
+                isdefinedglobal(tn.module, globname) && isconst(tn.module, globname) &&
+                isa(getglobal(tn.module, globname), tn.wrapper)
             return true
         end
     end
@@ -1083,7 +1084,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
         # intercept this case and print `UnionAll` instead.
         return print(io, "UnionAll")
     end
-    globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+    globname = tn.singletonname
     globfunc = is_global_function(tn, globname)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
@@ -1115,6 +1116,8 @@ function show_type_name(io::IO, tn::Core.TypeName)
 end
 
 function maybe_kws_nt(x::DataType)
+    # manually-written version of
+    # x <: (Pairs{Symbol, eltype(NT), Nothing, NT} where NT <: NamedTuple)
     x.name === typename(Pairs) || return nothing
     length(x.parameters) == 4 || return nothing
     x.parameters[1] === Symbol || return nothing
@@ -1124,7 +1127,7 @@ function maybe_kws_nt(x::DataType)
         types isa DataType || return nothing
         x.parameters[2] === eltype(p4) || return nothing
         isa(syms, Tuple) || return nothing
-        x.parameters[3] === typeof(syms) || return nothing
+        x.parameters[3] === Nothing || return nothing
         return p4
     end
     return nothing
@@ -1544,104 +1547,6 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
                          :ncat =>('[',']'), :nrow =>('[',']'),
                          :braces=>('{','}'), :bracescat=>('{','}'))
 
-## AST decoding helpers ##
-
-is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
-is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
-
-"""
-     isidentifier(s) -> Bool
-
-Return whether the symbol or string `s` contains characters that are parsed as
-a valid ordinary identifier (not a binary/unary operator) in Julia code;
-see also [`Base.isoperator`](@ref).
-
-Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
-and macros automatically use variable names containing `#` in order to avoid
-naming collision with the surrounding code. In order for the parser to
-recognize a variable, it uses a limited set of characters (greatly extended by
-Unicode). `isidentifier()` makes it possible to query the parser directly
-whether a symbol contains valid characters.
-
-# Examples
-```jldoctest
-julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
-(true, false)
-```
-"""
-function isidentifier(s::AbstractString)
-    x = Iterators.peel(s)
-    isnothing(x) && return false
-    (s == "true" || s == "false") && return false
-    c, rest = x
-    is_id_start_char(c) || return false
-    return all(is_id_char, rest)
-end
-isidentifier(s::Symbol) = isidentifier(string(s))
-
-is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
-
-_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
-
-"""
-    isoperator(s::Symbol)
-
-Return `true` if the symbol can be used as an operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isoperator(:+), Meta.isoperator(:f)
-(true, false)
-```
-"""
-isoperator(s::Union{Symbol,AbstractString}) = _isoperator(s) || ispostfixoperator(s)
-
-"""
-    isunaryoperator(s::Symbol)
-
-Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperator(:f)
-(true, true, false)
-```
-"""
-isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
-is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
-is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
-
-"""
-    isbinaryoperator(s::Symbol)
-
-Return `true` if the symbol can be used as a binary (infix) operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isbinaryoperator(:-), Meta.isbinaryoperator(:√), Meta.isbinaryoperator(:f)
-(true, false, false)
-```
-"""
-function isbinaryoperator(s::Symbol)
-    return _isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s)) &&
-        s !== Symbol("'")
-end
-
-"""
-    ispostfixoperator(s::Union{Symbol,AbstractString})
-
-Return `true` if the symbol can be used as a postfix operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ")), Meta.ispostfixoperator(:-)
-(true, true, false)
-```
-"""
-function ispostfixoperator(s::Union{Symbol,AbstractString})
-    s = String(s)::String
-    return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
-end
 
 """
     operator_precedence(s::Symbol)
@@ -1780,19 +1685,6 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
-const keyword_syms = Set([
-    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
-    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
-    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
-    :try, :using, :while ])
-
-function is_valid_identifier(sym)
-    return (isidentifier(sym) && !(sym in keyword_syms)) ||
-        (_isoperator(sym) &&
-        !(sym in (Symbol("'"), :(::), :?)) &&
-        !is_syntactic_operator(sym)
-    )
-end
 
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 # kw: `=` expressions are parsed with head `kw` in this context
@@ -2567,10 +2459,10 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
         uwmod = parentmodule(uw)
-        if qualified && !isexported(uwmod, uw.name.mt.name) && uwmod !== Main
+        if qualified && !isexported(uwmod, uw.name.singletonname) && uwmod !== Main
             print_within_stacktrace(io, uwmod, '.', bold=true)
         end
-        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
     elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2649,7 +2541,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
-    str = String(take!(buf))
+    str = takestring!(buf)
     str = type_limited_string_from_context(out, str)
     print(out, str)
     nothing
@@ -2758,7 +2650,7 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
         end
         prev = di
     end
-    return String(take!(output))
+    return unsafe_takestring!(output)
 end
 
 function print_type_bicolor(io, type; kwargs...)
@@ -3193,7 +3085,7 @@ summary(io::IO, x) = print(io, typeof(x))
 function summary(x)
     io = IOBuffer()
     summary(io, x)
-    String(take!(io))
+    takestring!(io)
 end
 
 ## `summary` for AbstractArrays
@@ -3329,7 +3221,7 @@ function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, to
     print(io, "pairs(IndexLinear(), ::", T, ")")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
+function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, Nothing, T}, toplevel) where {T <: NamedTuple}
     print(io, "pairs(::NamedTuple)")
 end
 

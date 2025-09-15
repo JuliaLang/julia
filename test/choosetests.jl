@@ -22,7 +22,7 @@ const TESTNAMES = [
         "euler", "show", "client", "terminfo",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs", "gc",
-        "misc", "threads", "stress", "binaryplatforms", "atexit",
+        "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
@@ -100,6 +100,7 @@ function choosetests(choices = [])
     seed = rand(RandomDevice(), UInt128)
     ci_option_passed = false
     dryrun = false
+    buildroot = joinpath(@__DIR__, "..")
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
@@ -109,6 +110,8 @@ function choosetests(choices = [])
             exit_on_error = true
         elseif t == "--revise"
             use_revise = true
+        elseif startswith(t, "--buildroot=")
+            buildroot = t[(length("--buildroot=") + 1):end]
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[(length("--seed=") + 1):end])
         elseif t == "--ci"
@@ -124,6 +127,7 @@ function choosetests(choices = [])
                   --help-list          : prints the options computed without running them
                   --revise             : load Revise
                   --seed=<SEED>        : set the initial seed for all testgroups (parsed as a UInt128)
+                  --buildroot=<PATH>   : set the build root directory (default: in-tree)
                   --skip <NAMES>...    : skip test or collection tagged with <NAMES>
                 TESTS:
                   Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib \
@@ -261,5 +265,5 @@ function choosetests(choices = [])
         empty!(tests)
     end
 
-    return (; tests, net_on, exit_on_error, use_revise, seed)
+    return (; tests, net_on, exit_on_error, use_revise, buildroot, seed)
 end

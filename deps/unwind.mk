@@ -20,7 +20,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xfz $<
+	cd $(dir $<) && $(TAR) -xzf $<
 	touch -c $(SRCCACHE)/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 
@@ -35,21 +35,21 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applie
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-revert_prelink_unwind.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-aarch64-inline-asm.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-aarch64-inline-asm.patch
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applied
+	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-disable-initial-exec-tls.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-aarch64-inline-asm.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-disable-initial-exec-tls.patch
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-missing-parameter-names.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied
+	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-missing-parameter-names.patch
 	echo 1 > $@
 
 # note minidebuginfo requires liblzma, which we do not have a source build for
 # (it will be enabled in BinaryBuilder-based downloads however)
 # since https://github.com/JuliaPackaging/Yggdrasil/commit/0149e021be9badcb331007c62442a4f554f3003c
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-missing-parameter-names.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" LDFLAGS="$(LDFLAGS) $(LIBUNWIND_LDFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" LDFLAGS="$(LDFLAGS) $(LIBUNWIND_LDFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-debug_frame --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
@@ -102,7 +102,7 @@ $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz: | $(SRCCACHE)
 
 $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/source-extracted: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xf $<
+	cd $(dir $<) && $(TAR) -xf $<
 	mv $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).src $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)
 	echo 1 > $@
 

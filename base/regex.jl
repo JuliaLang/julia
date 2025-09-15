@@ -260,7 +260,7 @@ julia> keys(match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30"))
 function keys(m::RegexMatch)
     idx_to_capture_name = PCRE.capture_names(m.regex.regex)
     return map(eachindex(m.captures)) do i
-        # If the capture group is named, return it's name, else return it's index
+        # If the capture group is named, return its name, else return its index
         get(idx_to_capture_name, i, i)
     end
 end
@@ -802,7 +802,7 @@ end
 ## hash ##
 const hashre_seed = UInt === UInt64 ? 0x67e195eb8555e72d : 0xe32373e4
 function hash(r::Regex, h::UInt)
-    h += hashre_seed
+    h ⊻= hashre_seed
     h = hash(r.pattern, h)
     h = hash(r.compile_options, h)
     h = hash(r.match_options, h)
