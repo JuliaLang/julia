@@ -353,6 +353,13 @@ end
     @test identity(123) === 123
     """; expr_compat_mode=true)
     @test test_result.value === true
+
+    # @enum produces Expr(:toplevel)
+    JuliaLowering.include_string(test_mod, """
+    @enum SOME_ENUM X1 X2 X3
+    """; expr_compat_mode=true)
+    @test test_mod.SOME_ENUM <: Enum
+    @test test_mod.X1 isa Enum
 end
 
 end
