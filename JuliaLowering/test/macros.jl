@@ -346,6 +346,13 @@ end
     end
     isglobal_chk(1)
     """) === (false, false, false, false)
+
+    # @test appears to be the only macro in base to use :inert
+    test_result = JuliaLowering.include_string(test_mod, """
+    using Test
+    @test identity(123) === 123
+    """; expr_compat_mode=true)
+    @test test_result.value === true
 end
 
 end

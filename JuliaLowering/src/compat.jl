@@ -25,7 +25,7 @@ function expr_to_syntaxtree(@nospecialize(e), lnn::Union{LineNumberNode, Nothing
         kind=Kind, syntax_flags=UInt16,
         source=SourceAttrType, var_id=Int, value=Any,
         name_val=String, is_toplevel_thunk=Bool,
-        scope_layer=LayerId)
+        scope_layer=LayerId, meta=CompileHints)
     expr_to_syntaxtree(graph, e, lnn)
 end
 
@@ -188,17 +188,23 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     if isnothing(e)
         st_id = _insert_tree_node(graph, K"core", src; name_val="nothing")
         return st_id, src
+    elseif e isa LineNumberNode
+        # A LineNumberNode in value position evaluates to nothing
+        st_id = _insert_tree_node(graph, K"core", src; name_val="nothing")
+        return st_id, e
     elseif e isa Symbol
         st_id = _insert_tree_node(graph, K"Identifier", src; name_val=String(e))
         return st_id, src
-    elseif e isa QuoteNode && e.value isa Symbol
-        # Undo special handling from st->expr
-        return _insert_convert_expr(Expr(:quote, e.value), graph, src)
-    # elseif e isa QuoteNode
-    #     st_id = _insert_tree_node(graph, K"inert", src)
-    #     quote_child, _ = _insert_convert_expr(e.value, graph, src)
-    #     setchildren!(graph, st_id, NodeId[quote_child])
-    #     return st_id, src
+    elseif e isa QuoteNode
+        if e.value isa Symbol
+            return _insert_convert_expr(Expr(:quoted_symbol, e.value), graph, src)
+        elseif e.value isa Expr
+            return _insert_convert_expr(Expr(:inert, e.value), graph, src)
+        elseif e.value isa LineNumberNode
+            return _insert_tree_node(graph, K"Value", src; value=e.value), src
+        else
+            return _insert_convert_expr(e.value, graph, src)
+        end
     elseif e isa String
         st_id = _insert_tree_node(graph, K"string", src)
         id_inner = _insert_tree_node(graph, K"String", src; value=e)
@@ -207,7 +213,9 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     elseif !(e isa Expr)
         # There are other kinds we could potentially back-convert (e.g. Float),
         # but Value should work fine.
-        st_k = e isa Integer ? K"Integer" : find_kind(string(typeof(e)))
+        st_k = e isa Bool ? K"Bool" :
+            e isa Integer ? K"Integer" :
+            find_kind(string(typeof(e)))
         st_id = _insert_tree_node(graph, isnothing(st_k) ? K"Value" : st_k, src; value=e)
         return st_id, src
     end
@@ -354,6 +362,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             lam_args = Any[]
             lam_eqs = Any[]
             for a in a1.args
+                a isa LineNumberNode && continue
                 a isa Expr && a.head === :(=) ? push!(lam_eqs, a) : push!(lam_args, a)
             end
             !isempty(lam_eqs) && push!(lam_args, Expr(:parameters, lam_eqs...))
@@ -399,6 +408,10 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         callargs = collect_expr_parameters(e.args[1], 2)
         if e.args[1].head === :macrocall
             st_k = K"macrocall"
+            if callargs[2] isa LineNumberNode
+                src = callargs[2]
+            end
+            deleteat!(callargs, 2)
             c1,c1_esc = unwrap_esc(callargs[1])
             callargs[1] = c1_esc(Expr(:MacroName, c1))
         else
@@ -442,12 +455,6 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         st_k = K"latestworld_if_toplevel"
     elseif e.head === Symbol("hygienic-scope")
         st_k = K"hygienic_scope"
-    elseif e.head === :escape
-        if length(e.args) == 1 && unwrap_esc_(e.args[1]) isa LineNumberNode
-            # escape containing only a LineNumberNode will become empty and
-            # thus must be removed before lowering sees it.
-            st_k = K"TOMBSTONE"
-        end
     elseif e.head === :meta
         # Messy and undocumented.  Only sometimes we want a K"meta".
         @assert e.args[1] isa Symbol
@@ -549,25 +556,27 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     if isnothing(child_exprs)
         return st_id, src
     else
-        st_child_ids, last_src = _insert_child_exprs(child_exprs, graph, src)
+        st_child_ids, last_src = _insert_child_exprs(e.head, child_exprs, graph, src)
         setchildren!(graph, st_id, st_child_ids)
         return st_id, last_src
     end
 end
 
-function _insert_child_exprs(child_exprs::Vector{Any}, graph::SyntaxGraph,
-                             src::SourceAttrType)
+function _insert_child_exprs(head::Symbol, child_exprs::Vector{Any},
+                             graph::SyntaxGraph, src::SourceAttrType)
     st_child_ids = NodeId[]
     last_src = src
-    for c in child_exprs
-        if c isa LineNumberNode
-            last_src = c
+    for (i, c) in enumerate(child_exprs)
+        c_unwrapped, _ = unwrap_esc(c)
+        # If c::LineNumberNode is anywhere in a block OR c is not in tail
+        # position, we don't need to insert `nothing` here
+        if c_unwrapped isa LineNumberNode && (head === :block || head === :toplevel && i != length(child_exprs))
+            last_src = c_unwrapped
         else
-            (c_id, c_src) = _insert_convert_expr(c, graph, last_src)
+            (c_id, last_src) = _insert_convert_expr(c, graph, last_src)
             if !isnothing(c_id)
                 push!(st_child_ids, c_id)
             end
-            last_src = something(c_src, src)
         end
     end
     return st_child_ids, last_src
