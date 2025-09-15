@@ -499,12 +499,12 @@ begin
     local second = @capture_stdout @time @eval calldouble2(1.0)
 
     # these functions were not recompiled
-    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", first))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
 
-    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", second))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
@@ -1632,10 +1632,10 @@ end
 let errs = IOBuffer()
     run(`$(Base.julia_cmd()) -e '
         using Test
-        @test !isempty(Core.GlobalMethods.backedges)
+        @test !isempty(Core.methodtable.backedges)
         Base.Experimental.disable_new_worlds()
         @test_throws "disable_new_worlds" @eval f() = 1
-        @test isempty(Core.GlobalMethods.backedges)
+        @test isempty(Core.methodtable.backedges)
         @test_throws "disable_new_worlds" Base.delete_method(which(+, (Int, Int)))
         @test 1+1 == 2
         using Dates

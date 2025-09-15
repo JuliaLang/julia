@@ -312,7 +312,7 @@ julia> length([1 2; 3 4])
 4
 ```
 """
-length(t::AbstractArray) = (@inline; prod(size(t)))
+length(t::AbstractArray)
 
 # `eachindex` is mostly an optimization of `keys`
 eachindex(itrs...) = keys(itrs...)
@@ -967,7 +967,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src)
     return dest
 end
 
-# copy from an some iterable object into an AbstractArray
+# copy from an iterable object into an AbstractArray
 function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
     if (sstart < 1)
         throw(ArgumentError(LazyString("source start offset (",sstart,") is < 1")))
@@ -1238,13 +1238,13 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
 iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
-@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
-@inline function _iterate(A::AbstractArray, state::Tuple)
+@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate_abstractarray(A, state)
+@inline function _iterate_abstractarray(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
 end
-@inline function _iterate(A::AbstractArray, state::Integer)
+@inline function _iterate_abstractarray(A::AbstractArray, state::Integer)
     checkbounds(Bool, A, state) || return nothing
     A[state], state + one(state)
 end
@@ -3116,14 +3116,14 @@ end
 function _ind2sub_recurse(inds, ind)
     @inline
     r1 = inds[1]
-    indnext, f, l = _div(ind, r1)
-    (ind-l*indnext+f, _ind2sub_recurse(tail(inds), indnext)...)
+    indnext, indsub = divrem(ind, _indexlength(r1))
+    (_lookup(indsub, r1), _ind2sub_recurse(tail(inds), indnext)...)
 end
 
+_indexlength(d::Integer) = d
+_indexlength(r::AbstractUnitRange) = length(r)
 _lookup(ind, d::Integer) = ind+1
 _lookup(ind, r::AbstractUnitRange) = ind+first(r)
-_div(ind, d::Integer) = div(ind, d), 1, d
-_div(ind, r::AbstractUnitRange) = (d = length(r); (div(ind, d), first(r), d))
 
 # Vectorized forms
 function _sub2ind(inds::Indices{1}, I1::AbstractVector{T}, I::AbstractVector{T}...) where T<:Integer
