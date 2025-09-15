@@ -212,6 +212,33 @@ function prepare_macro_args(ctx, mctx, raw_args)
     return macro_args
 end
 
+# TODO: Do we need to handle :scope_layer or multiple escapes here?
+# See https://github.com/c42f/JuliaLowering.jl/issues/39
+"""
+Insert a hygienic-scope around each arg of K"toplevel" returned from a macro.
+
+It isn't correct for macro expansion to recurse into a K"toplevel" expression
+since one child may define a macro and the next may use it.  However, not
+recursing now means we lose some important context: the module of the macro we
+just expanded, which is necessary for resolving the identifiers in the
+K"toplevel" AST.  The solution implemented in JuliaLang/julia#53515 was to save
+our place and expand later using `Expr(:hygienic-scope toplevel_child mod)`.
+
+Of course, these hygienic-scopes are also necessary because existing user code
+contains the corresponding escaping, which would otherwise cause errors. We
+already consumed the hygienic-scope that comes with every expansion, but won't
+be looking for escapes under :toplevel, so push hygienic-scope under toplevel
+"""
+function fix_toplevel_expansion(ctx, ex::SyntaxTree, mod::Module, lnn::LineNumberNode)
+    if kind(ex) === K"toplevel"
+        mapchildren(ctx, ex) do e
+            @ast ctx ex [K"hygienic_scope" e mod::K"Value" lnn::K"Value"]
+        end
+    else
+        mapchildren(e->fix_toplevel_expansion(ctx, e, mod, lnn), ctx, ex)
+    end
+end
+
 function expand_macro(ctx, ex)
     @assert kind(ex) == K"macrocall"
 
@@ -219,6 +246,10 @@ function expand_macro(ctx, ex)
     mctx = MacroContext(ctx.graph, ex, current_layer(ctx))
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = ex[2:end]
+    macro_loc = let loc = source_location(LineNumberNode, ex)
+        # Some macros, e.g. @cmd, don't play nicely with file == nothing
+        isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
+    end
     # We use a specific well defined world age for the next checks and macro
     # expansion invocations. This avoids inconsistencies if the latest world
     # age changes concurrently.
@@ -248,10 +279,6 @@ function expand_macro(ctx, ex)
     else
         # Compat: attempt to invoke an old-style macro if there's no applicable
         # method for new-style macro arguments.
-        macro_loc = let loc = source_location(LineNumberNode, ex)
-            # Some macros, e.g. @cmd, don't play nicely with file == nothing
-            isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
-        end
         macro_args = Any[macro_loc, current_layer(ctx).mod]
         for arg in raw_args
             # For hygiene in old-style macros, we omit any additional scope
@@ -287,6 +314,7 @@ function expand_macro(ctx, ex)
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
                                              ctx.macro_world).def.module
+        expanded = fix_toplevel_expansion(ctx, expanded, mod_for_ast, macro_loc)
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
                                current_layer_id(ctx), true)
         push!(ctx.scope_layers, new_layer)
