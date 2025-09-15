@@ -673,21 +673,24 @@ module IteratorsMD
         # CartesianPartition.
         mi = iter.parent.mi
         ci = iter.parent.parent
-        ax, ax1 = axes(ci), Base.axes1(ci)
-        subs = Base.ind2sub_rs(ax, mi, first(iter.indices[1]))
-        vl, fl = Base._sub2ind(tail(ax), tail(subs)...), subs[1]
-        vr, fr = divrem(last(iter.indices[1]) - 1, mi[end]) .+ (1, first(ax1))
+        ax1 = Base.axes1(ci)
+        function splitdim1(i, mi)
+            d, r = divrem(i - 1, mi)
+            d + 1, r + first(ax1)
+        end
+        vl, fl = splitdim1(first(iter.indices[1]), mi[1])
+        vr, fr = splitdim1(last(iter.indices[1]), mi[1])
+        # form the iterator for outer dimensions, equivalent to vec(oci), but mi is reused
         oci = CartesianIndices(tail(ci.indices))
-        # A fake CartesianPartition to reuse the outer iterate fallback
-        outer = @inbounds view(ReshapedArray(oci, (length(oci),), mi), vl:vr)
-        init = @inbounds dec(oci[tail(subs)...].I, oci.indices) # real init state
+        roci = ReshapedArray(oci, (length(oci),), tail(mi))
+        outer = @inbounds view(roci, vl:vr)
         # Use Generator to make inner loop branchless
         @inline function skip_len_I(i::Int, I::CartesianIndex)
             l = i == 1 ? fl : first(ax1)
             r = i == length(outer) ? fr : last(ax1)
             l - first(ax1), r - l + 1, I
         end
-        (skip_len_I(i, I) for (i, I) in Iterators.enumerate(Iterators.rest(outer, (init, 0))))
+        (skip_len_I(i, I) for (i, I) in Iterators.enumerate(outer))
     end
     @inline function simd_outer_range(iter::CartesianPartition{CartesianIndex{2}})
         # But for two-dimensional Partitions the above is just a simple one-dimensional range
@@ -2043,7 +2046,34 @@ function _hash_fib(A, h::UInt)
     return hash_uint(h)
 end
 
-function hash_shaped(A, h::UInt)
+"""
+    union_split(f, x, ts::Tuple{Vararg{Val}}, args...)
+
+call `f(x, args...)`, union-splitting on all the types specified by `ts`
+
+`union_split(f, x, (Val{T1}(), Val{T2}()), y, z)` is equivalent to
+
+```
+if x isa T1
+    f(x, y, z)
+elseif x isa T2
+    f(x, y, z)
+else
+    f(x, y, z)
+end
+```
+"""
+@inline function union_split(f, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Val,N}}, args...) where {T, N}
+    if x isa T
+        f(x, args...)
+    else
+        union_split(f, x, Base.tail(ts), args...)
+    end
+end
+@inline union_split(f, x, ::Tuple{}, args::Vararg{Any, N}) where {N} = f(x, args...)
+
+function hash_shaped(A, h0::UInt, eltype_hint=())
+    h::UInt = h0
     # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
@@ -2053,20 +2083,20 @@ function hash_shaped(A, h::UInt)
     if len < 8
         # for the shortest arrays we chain directly
         for elt in A
-            h = hash(elt, h)
+            h = union_split(hash, elt, eltype_hint, h)
         end
         return h
     elseif len < 32768
         # separate accumulator streams, unrolled
-        @nexprs 8 i -> p_i = h
+        @nexprs 8 i -> p_i::UInt = h
         n  = 1
         limit = len - 7
         while n <= limit
-            @nexprs 8 i -> p_i = hash(A[n + i - 1], p_i)
+            @nexprs 8 i -> p_i = union_split(hash, A[n + i - 1], eltype_hint, p_i)
             n += 8
         end
         while n <= len
-            p_1 = hash(A[n], p_1)
+            p_1 = union_split(hash, A[n], eltype_hint, p_1)
             n += 1
         end
         # fold all streams back together

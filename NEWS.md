@@ -10,6 +10,7 @@ New language features
   - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
     is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
     ([JuliaLang/JuliaSyntax.jl#525], [#57143])
+  - Support for Unicode 17 ([#59534]).
 
 Language changes
 ----------------
@@ -53,7 +54,7 @@ New library functions
   it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
   for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
-* `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
+* `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
 * `Iterators.findeach` is a lazy version of `findall` ([#54124])
 
