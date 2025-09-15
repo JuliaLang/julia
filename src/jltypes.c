@@ -3691,7 +3691,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "time_infer_self",
                             "time_compile",
                             //"absolute_max",
-                            "specsigflags", "precompile",
+                            "flags", "precompile",
                             "invoke", "specptr"), // function object decls
                         jl_svec(21,
                             jl_any_type,

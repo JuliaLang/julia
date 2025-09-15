@@ -308,33 +308,28 @@ end
 function enqueue_specialization!(all::Bool, worklist, mi::Core.MethodInstance)
     # Translation of precompile_enq_specialization_ from C
     codeinst = isdefined(mi, :cache) ? mi.cache : nothing
-
     while codeinst !== nothing
         do_compile = false
-
         if codeinst.owner !== nothing
             # TODO(vchuravy) native code caching for foreign interpreters
             # Skip foreign code instances
-        elseif !use_const_api(codeinst) # Check if invoke is not jl_fptr_const_return
-            if codeinst.invoke != C_NULL || codeinst.precompile
+        elseif use_const_api(codeinst) # Check if invoke is jl_fptr_const_return
+            do_compile = true
+        elseif codeinst.invoke != C_NULL || codeinst.precompile
+            do_compile = true
+        elseif !do_compile && isdefined(codeinst, :inferred)
+            inferred = codeinst.inferred
+            # Check compilation options and inlining cost
+            if (all || inferred === nothing ||
+                ((isa(inferred, String) || isa(inferred, CodeInfo) || isa(inferred, UInt8)) &&
+                 ccall(:jl_ir_inlining_cost, UInt16, (Any,), inferred) == typemax(UInt16)))
                 do_compile = true
             end
-            if !do_compile && isdefined(codeinst, :inferred)
-                inferred = codeinst.inferred
-                # Check compilation options and inlining cost
-                if (all || inferred === nothing ||
-                    ((isa(inferred, String) || isa(inferred, CodeInfo) || isa(inferred, UInt8)) &&
-                     ccall(:jl_ir_inlining_cost, UInt16, (Any,), inferred) == typemax(UInt16)))
-                    do_compile = true
-                end
-            end
         end
-
         if do_compile
             push!(worklist, mi)
             return true
         end
-
         # Move to the next code instance in the chain
         codeinst = isdefined(codeinst, :next) ? codeinst.next : nothing
     end
@@ -425,9 +420,6 @@ function compile_and_emit_native(worlds::Vector{UInt},
         # been printed, so give up here and exit (w/o a stack trace).
         invokelatest(exit, 1)
     end
-
-    # Step 5: Always set newly_inferred global for serialization use
-    #ccall(:jl_set_newly_inferred, Cvoid, (Any,), filter(ci -> ci isa CodeInstance, codeinfos))
 
     return codeinfos
 
