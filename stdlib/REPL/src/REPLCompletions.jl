@@ -15,7 +15,7 @@ using Base.Filesystem: _readdirx
 using Base.JuliaSyntax: @K_str, @KSet_str, parseall, byte_range, children, is_prefix_call, is_trivia, kind
 
 using ..REPL.LineEdit: NamedCompletion
-using ..REPL.SyntaxUtil: CursorNode, find_parent, seek_pos, char_range, char_last, children_nt, find_delim
+using ..REPL.SyntaxUtil: CursorNode, find_parent, seek_pos, char_range, char_first, char_last, children_nt, find_delim
 
 abstract type Completion end
 
@@ -1043,7 +1043,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #   `file ~/exa TAB          => `file ~/example.txt
     #   `file ~/example.txt TAB  => `file /home/user/example.txt
     if (n = find_parent(cur, K"CmdString")) !== nothing
-        off = n.position - 1
+        off = char_first(n) - 1
         ret, r, success = shell_completions(string[char_range(n)], pos - off, hint, cmd_escape=true)
         success && return ret, r .+ off, success
     end
@@ -1107,14 +1107,14 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     # Symbol completion
     # TODO: Should completions replace the identifier at the cursor?
     looks_like_ident = Base.isidentifier(@view string[intersect(char_range(cur), 1:pos)])
-    if cur.parent !== nothing && kind(cur.parent) == K"var"
+    if cur.parent !== nothing && kind(cur.parent) === K"var"
         # Replace the entire var"foo", but search using only "foo".
         r = intersect(char_range(cur.parent), 1:pos)
         r2 = char_range(children_nt(cur.parent)[1])
         s = string[intersect(r2, 1:pos)]
-    elseif kind(cur) == K"MacroName"
+    elseif cur.parent !== nothing && kind(cur.parent) === K"macro_name"
         # Include the `@`
-        r = intersect(prevind(string, cur.position):char_last(cur), 1:pos)
+        r = intersect(prevind(string, char_first(cur)):char_last(cur), 1:pos)
         s = string[r]
     elseif looks_like_ident || kind(cur) in KSet"Bool Identifier @"
         r = intersect(char_range(cur), 1:pos)
@@ -1141,7 +1141,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         end
 
         # Allow completion for `import Mod.name` (where `name` is not a module)
-        complete_modules_only = prefix == nothing || kind(n.parent) == K"using"
+        complete_modules_only = prefix === nothing || kind(n.parent) === K"using"
         comp_keywords = false
     end
 
@@ -1175,8 +1175,10 @@ function find_ref_key(cur::CursorNode, pos::Int)
     n = find_parent(cur, K"ref")
     n !== nothing || return nothing, nothing, nothing
     key, closed = find_delim(n, K"[", K"]")
-    first(key) - 1 <= pos <= last(key) || return nothing, nothing, nothing
-    n, key, closed
+    if key === nothing || !(first(key) - 1 <= pos <= last(key))
+        return nothing, nothing, nothing
+    end
+    return n, key, closed
 end
 
 # If the cursor is in a literal string, return the contents and char range
@@ -1212,6 +1214,7 @@ function node_prefix(node::CursorNode, context_module::Module)
     p = node.parent
     # In x.var"y", the parent is the "var" when the cursor is on "y".
     kind(p) == K"var" && (p = p.parent)
+    kind(p) == K"macro_name" && (p = p.parent)
 
     # expr.node => expr
     if kind(p) == K"."
