@@ -244,7 +244,7 @@ function exec_options(opts)
     )
     for v in debug_env_vars
         if get_bool_env(v, false)
-            Base.TRACE_EVAL = :loc # Enable --trace-eval (location only)
+            Base.TRACE_EVAL = Base.TRACE_EVAL === :full ? :full : :loc # Enable --trace-eval (location only)
             ENV["JULIA_TEST_VERBOSE"] = "true" # Set JULIA_TEST_VERBOSE for this session
             break
         end
