@@ -506,6 +506,9 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     // add module
     add_node_to_roots_buffer(closure, &buf, &len, jl_main_module);
 
+    // add global_method_table
+    add_node_to_roots_buffer(closure, &buf, &len, jl_method_table);
+
     // buildin values
     add_node_to_roots_buffer(closure, &buf, &len, jl_an_empty_vec_any);
     add_node_to_roots_buffer(closure, &buf, &len, jl_module_init_order);
