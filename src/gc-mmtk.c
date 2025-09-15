@@ -1022,9 +1022,8 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return realloc(p, sz);
 }
 
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;
     size_t allocsz = mmtk_align_alloc_sz(sz);
     void* addr = mmtk_immortal_alloc_fast(&ptls->gc_tls.mmtk_mutator, allocsz, align, offset);
     return addr;
@@ -1032,20 +1031,20 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offs
 
 void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
 {
-    return jl_gc_perm_alloc_nolock(sz, zero, align, offset);
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return jl_gc_perm_alloc_nolock(ptls, sz, zero, align, offset);
 }
 
-jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
+jl_value_t *jl_gc_permobj(jl_ptls_t ptls, size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (align == 0) {
         align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
     }
-    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
+    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(ptls, allocsz, 0, align,
                                                               sizeof(void*) % align);
 
-    jl_ptls_t ptls = jl_current_task->ptls;
     mmtk_immortal_post_alloc_fast(&ptls->gc_tls.mmtk_mutator, jl_valueof(o), allocsz);
     o->header = (uintptr_t)ty;
     return jl_valueof(o);
