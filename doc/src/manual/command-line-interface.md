@@ -46,6 +46,19 @@ but at the conclusion of executing a script or expression, `julia` will attempt 
 `Main.main(Base.ARGS)` if such a function `Main.main` has been defined and this behavior was opted into
 by using the `@main` macro.
 
+A simple and typical example of its usage could be
+```
+function (@main)(ARGS)
+    open("out.log", "w") do io
+        println(io, "My pet is $(ARGS[1])")
+    end
+    return nothing
+end
+```
+where we explicit note that the `(@main)` function must return `nothing` (or a value convertible to `Int32` - which 
+can be used to output error codes, for example). Running the above script with `julia script.jl "Buddy"`, will automatically 
+run `(@main)` and create the `out.log` file.
+
 This feature is intended to aid in the unification
 of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
 function may be spatially and temporally separated from the invocation. However, for interactive workflows,
