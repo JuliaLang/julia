@@ -275,12 +275,14 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
                                              Expr(:MacroName, a12_esc(a12.value))))
             end
         elseif a1 isa GlobalRef && a1.mod === Core
-            # TODO (maybe): syntax-introduced macrocalls are listed here for
-            # reference.  We probably don't need to convert these.
+            # Syntax-introduced macrocalls are listed here for reference.  We
+            # probably don't need to convert these.
             if a1.name === Symbol("@cmd")
-            elseif a1.name === Symbol("@doc")
+            elseif a1.name === Symbol("@doc") && nargs === 4 # two macro args only
+                # Single-arg @doc is a lookup not corresponding to K"doc"
+                # Revise sometimes calls @doc with three args, but probably shouldn't
                 st_k = K"doc"
-                child_exprs = child_exprs[2:end]
+                child_exprs = child_exprs[2:3]
             elseif a1.name === Symbol("@int128_str")
             elseif a1.name === Symbol("@int128_str")
             elseif a1.name === Symbol("@big_str")
