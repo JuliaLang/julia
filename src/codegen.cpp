@@ -4123,7 +4123,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         for (size_t i = 0; i < nargs; i++) {
             Value *elem = boxed(ctx, argv[i + 1]);
             Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));
-            ctx.builder.CreateAlignedStore(elem, elem_ptr, Align(ctx.types().sizeof_ptr));
+            auto *store = ctx.builder.CreateAlignedStore(elem, elem_ptr, Align(ctx.types().sizeof_ptr));
+            store->setOrdering(AtomicOrdering::Release);
             emit_write_barrier(ctx, svec, elem);
         }
         *ret = mark_julia_type(ctx, svec, true, jl_simplevector_type);
