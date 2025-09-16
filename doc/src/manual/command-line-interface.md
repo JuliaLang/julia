@@ -55,8 +55,8 @@ function (@main)(ARGS)
     return nothing
 end
 ```
-where we explicit note that the `(@main)` function must return `nothing` (or a value convertible to `Int32` - which 
-can be used to output error codes, for example). Running the above script with `julia script.jl "Buddy"`, will automatically 
+where we explicit note that the `(@main)` function must return `nothing` (or a value convertible to `Int32` - which
+can be used to output error codes, for example). Running the above script with `julia script.jl "Buddy"`, will automatically
 run `(@main)` and create the `out.log` file.
 
 This feature is intended to aid in the unification
