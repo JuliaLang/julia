@@ -147,7 +147,7 @@ _never_exist = @m_not_exist 42
 #---------------------
 MacroExpansionError while expanding @m_not_exist in module Main.TestMod:
 _never_exist = @m_not_exist 42
-#               └─────────┘ ── Macro not found
+#              └──────────┘ ── Macro not found
 Caused by:
 UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
 Suggestion: check for spelling errors or missing imports.

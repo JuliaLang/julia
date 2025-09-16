@@ -308,7 +308,7 @@ GC.@preserve a b g() begin
     body
 end
 #---------------------
-MacroExpansionError while expanding (. GC @preserve) in module Main.TestMod:
+MacroExpansionError while expanding GC.@preserve in module Main.TestMod:
 GC.@preserve a b g() begin
 #                └─┘ ── Preserved variable must be a symbol
     body

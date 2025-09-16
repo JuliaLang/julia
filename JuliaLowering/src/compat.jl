@@ -267,12 +267,12 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         end
         deleteat!(child_exprs, 2)
         if a1 isa Symbol
-            child_exprs[1] = a1_esc(Expr(:MacroName, a1))
+            child_exprs[1] = a1_esc(Expr(:macro_name, a1))
         elseif a1 isa Expr && a1.head === :(.)
             a12,a12_esc = unwrap_esc(a1.args[2])
             if a12 isa QuoteNode
                 child_exprs[1] = a1_esc(Expr(:(.), a1.args[1],
-                                             Expr(:MacroName, a12_esc(a12.value))))
+                                             Expr(:macro_name, a12_esc(a12.value))))
             end
         elseif a1 isa GlobalRef && a1.mod === Core
             # Syntax-introduced macrocalls are listed here for reference.  We
@@ -415,7 +415,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             end
             deleteat!(callargs, 2)
             c1,c1_esc = unwrap_esc(callargs[1])
-            callargs[1] = c1_esc(Expr(:MacroName, c1))
+            callargs[1] = c1_esc(Expr(:macro_name, c1))
         else
             st_k = K"call"
         end
@@ -523,13 +523,20 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     end
 
     #---------------------------------------------------------------------------
-    # Temporary heads introduced by us converting the parent expr
-    if e.head === :MacroName
+    # Possibly-temporary heads introduced by us converting the parent expr
+    if e.head === :macro_name
         @assert nargs === 1
-        mac_name = string(e.args[1])
-        mac_name = mac_name == "@__dot__" ? "@." : mac_name
-        st_id = _insert_tree_node(graph, K"MacroName", src, st_flags; name_val=mac_name)
-        return st_id, src
+        # Trim `@` for a correct SyntaxTree, although we need to add it back
+        # later for finding the macro
+        if e.args[1] === :(.)
+            mac_name = string(e.args[1][2])
+            mac_name = mac_name == "@__dot__" ? "." : mac_name[2:end]
+            child_exprs[1] = Expr(:(.), e.args[1][1], Symbol(mac_name))
+        else
+            mac_name = string(e.args[1])
+            mac_name = mac_name == "@__dot__" ? "." : mac_name[2:end]
+            child_exprs[1] = Symbol(mac_name)
+        end
     elseif e.head === :catch_var_placeholder
         st_k = K"Placeholder"
         st_attrs[:name_val] = ""
