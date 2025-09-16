@@ -236,7 +236,8 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                 Expr(:error) :
                 Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
         else
-            val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
+            scoped_val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
+            val = @isexpr(scoped_val, :scope_layer) ? scoped_val.args[1] : scoped_val
             if val isa Union{Int128,UInt128,BigInt}
                 # Ignore the values of large integers and convert them back to
                 # symbolic/textural form for compatibility with the Expr
@@ -247,9 +248,11 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                         Symbol("@big_str")
                 return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
             elseif is_identifier(k)
-                return lower_identifier_name(val, k)
+                val2 = lower_identifier_name(val, k)
+                return @isexpr(scoped_val, :scope_layer) ?
+                    Expr(:scope_layer, val2, scoped_val.args[2]) : val2
             else
-                return val
+                return scoped_val
             end
         end
     end
