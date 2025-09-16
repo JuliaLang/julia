@@ -354,7 +354,8 @@ STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st) JL_NO
     if (st->instance)
         return;
     if (jl_is_datatype_make_singleton(st)) {
-        st->instance = jl_gc_permobj(0, st, 0);
+        jl_task_t *ct = jl_current_task;
+        st->instance = jl_gc_permobj(ct->ptls, 0, st, 0);
     }
 }
 
@@ -616,7 +617,8 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
 
     if (jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
         if (kind == (jl_value_t*)jl_not_atomic_sym || kind == (jl_value_t*)jl_atomic_sym) {
-            jl_genericmemory_t *zeroinst = (jl_genericmemory_t*)jl_gc_permobj(LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT) + (elsz ? elsz : isunion), st, 0);
+            jl_task_t *ct = jl_current_task;
+            jl_genericmemory_t *zeroinst = (jl_genericmemory_t*)jl_gc_permobj(ct->ptls, LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT) + (elsz ? elsz : isunion), st, 0);
             zeroinst->length = 0;
             zeroinst->ptr = (char*)zeroinst + JL_SMALL_BYTE_ALIGNMENT;
             memset(zeroinst->ptr, 0, elsz ? elsz : isunion);
@@ -1458,12 +1460,13 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
 
 #define PERMBOXN_FUNC(nb)                                                  \
     jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
-    {   /* n.b. t must be a concrete isbits datatype of the right size */  \
-        jl_value_t *v = jl_gc_permobj(LLT_ALIGN(nb, sizeof(void*)), t, 0); \
-        assert(tag);                                                       \
-        jl_set_typetagof(v, tag, GC_OLD_MARKED);                           \
-        *(uint##nb##_t*)jl_data_ptr(v) = x;                                \
-        return v;                                                          \
+    {   /* n.b. t must be a concrete isbits datatype of the right size */               \
+        jl_task_t *ct = jl_current_task;                                                \
+        jl_value_t *v = jl_gc_permobj(ct->ptls, LLT_ALIGN(nb, sizeof(void*)), t, 0);    \
+        assert(tag);                                                                    \
+        jl_set_typetagof(v, tag, GC_OLD_MARKED);                                        \
+        *(uint##nb##_t*)jl_data_ptr(v) = x;                                             \
+        return v;                                                                       \
     }
 PERMBOXN_FUNC(8)
 PERMBOXN_FUNC(16)
