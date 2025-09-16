@@ -18,4 +18,4 @@ end
 # CHECK-NOT: store {{.*}} addrspace(10) {{.*}}GenericMemoryRef
 # CHECK: call void @ijl_bounds_error_int
 
-emit(bf, Tuple{Int, Vector{Float64}})
+emit(bf, Int, Vector{Float64})
