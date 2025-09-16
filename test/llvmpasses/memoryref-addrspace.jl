@@ -14,7 +14,7 @@ end
 
 # CHECK-LABEL: @julia_bf
 # CHECK: oob:
-# CHECK: store {{.*}} addrspace(11) {{.*}}GenericMemoryRef
+# CHECK: store ptr {{.*}}, ptr %"box::GenericMemoryRef"
 # CHECK-NOT: store {{.*}} addrspace(10) {{.*}}GenericMemoryRef
 # CHECK: call void @ijl_bounds_error_int
 
