@@ -1748,7 +1748,7 @@ struct JuliaOJIT::DLSymOptimizer {
 
     void *lookup_symbol(void *libhandle, const char *fname) JL_NOTSAFEPOINT {
         void *addr;
-        jl_dlsym(libhandle, fname, &addr, 0, 0);
+        jl_dlsym(libhandle, fname, &addr, 0, 1);
         return addr;
     }
 

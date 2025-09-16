@@ -2195,11 +2195,7 @@ enum JL_RTLD_CONSTANT {
      /* MacOS X 10.5+: */
      JL_RTLD_FIRST=128U
 };
-#ifdef _OS_DARWIN_
-#define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND | JL_RTLD_FIRST)
-#else
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
-#endif
 
 typedef void *jl_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
 JL_DLLEXPORT jl_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);

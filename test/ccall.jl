@@ -1981,8 +1981,6 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
 end
 
 @testset "jl_dlfind and dlsym" begin
-    # We shouldn't be able to call libc functions through libccalltest
-    @test_throws ErrorException ccall((:sqrt, libccalltest), Cdouble, (Cdouble,), 2.0)
     # Test that jl_dlfind finds things in the expected places.
     @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
     @static if !Sys.iswindows()
