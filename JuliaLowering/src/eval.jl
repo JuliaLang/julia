@@ -79,20 +79,25 @@ end
 
 function add_ir_debug_info!(current_codelocs_stack, stmt)
     locstk = [(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
-    for j in 1:max(length(locstk), length(current_codelocs_stack))
-        if j > length(locstk) || (length(current_codelocs_stack) >= j &&
-                                  current_codelocs_stack[j][1] != locstk[j][1])
-            while length(current_codelocs_stack) >= j
+    for j in 1:length(locstk)
+        if j === 1 && current_codelocs_stack[j][1] != locstk[j][1]
+            # dilemma: the filename stack here shares no prefix with that of the
+            # previous statement, where differing filenames usually (j > 1) mean
+            # a different macro expansion has started at this statement.  guess
+            # that both files are the same, and inherit the previous filename.
+            locstk[j] = (current_codelocs_stack[j][1], locstk[j][2])
+        end
+        if j < length(current_codelocs_stack) && (j === length(locstk) ||
+                current_codelocs_stack[j+1][1] != locstk[j+1][1])
+            while j < length(current_codelocs_stack)
                 info = pop!(current_codelocs_stack)
                 push!(last(current_codelocs_stack)[2], info)
             end
-        end
-        if j > length(locstk)
-            break
         elseif j > length(current_codelocs_stack)
             push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
         end
     end
+    @assert length(locstk) === length(current_codelocs_stack)
     for (j, (file,line)) in enumerate(locstk)
         fn, edges, codelocs = current_codelocs_stack[j]
         @assert fn == file
