@@ -108,7 +108,12 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     print(io, "MacroExpansionError")
     ctx = exc.context
     if !isnothing(ctx)
-        print(io, " while expanding ", ctx.macrocall[1],
+        # Use `Expr` formatting to pretty print the macro name for now -
+        # there's quite a lot of special cases. We could alternatively consider
+        # calling sourcetext() though that won't work well if it's a
+        # synthetically-generated macro name path.
+        macname_str = string(Expr(:macrocall, Expr(ctx.macrocall[1]), nothing))
+        print(io, " while expanding ", macname_str,
               " in module ", ctx.scope_layer.mod)
     end
     print(io, ":\n")
@@ -137,11 +142,31 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     end
 end
 
+function fixup_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
+    k = kind(ex)
+    if k == K"StrMacroName" || k == K"CmdMacroName"
+        layerid = get(ex, :scope_layer, current_layer_id(ctx))
+        newname = JuliaSyntax.lower_identifier_name(ex.name_val, k)
+        makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid, name_val=newname)
+    elseif k == K"macro_name"
+        @chk numchildren(ex) === 1
+        if kind(ex[1]) === K"."
+            @ast ctx ex [K"." ex[1][1] [K"macro_name" ex[1][2]]]
+        else
+            layerid = get(ex, :scope_layer, current_layer_id(ctx))
+            newname = JuliaSyntax.lower_identifier_name(ex[1].name_val, K"macro_name")
+            makeleaf(ctx, ex[1], ex[1], kind=kind(ex[1]), name_val=newname)
+        end
+    else
+        mapchildren(e->fixup_macro_name(ctx,e), ctx, ex)
+    end
+end
+
 function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::SyntaxTree)
     # `ex1` might contain a nontrivial mix of scope layers so we can't just
     # `eval()` it, as it's already been partially lowered by this point.
     # Instead, we repeat the latter parts of `lower()` here.
-    ex1 = expand_forms_1(ctx, ex)
+    ex1 = expand_forms_1(ctx, fixup_macro_name(ctx, ex))
     ctx2, ex2 = expand_forms_2(ctx, ex1)
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
     ctx4, ex4 = convert_closures(ctx3, ex3)
@@ -368,9 +393,10 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             layerid = get(ex, :scope_layer, current_layer_id(ctx))
             makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
         end
-    elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName" || k == K"CmdMacroName"
-        layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
+    elseif k == K"StrMacroName" || k == K"CmdMacroName" || k == K"macro_name"
+        # These can appear outside of a macrocall, e.g. in `import`
+        e2 = fixup_macro_name(ctx, ex)
+        expand_forms_1(ctx, e2)
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes
         @chk numchildren(ex) == 1
@@ -431,7 +457,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
     elseif k == K"cmdstring"
         @chk numchildren(ex) == 1
-        e2 = @ast ctx ex [K"macrocall" "@cmd"::K"core" ex[1]]
+        e2 = @ast ctx ex [K"macrocall" [K"macro_name" "cmd"::K"core"] ex[1]]
         expand_macro(ctx, e2)
     elseif (k == K"call" || k == K"dotcall")
         # Do some initial desugaring of call and dotcall here to simplify

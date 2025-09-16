@@ -7,7 +7,7 @@ version = "1.0.0-DEV"
 JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 
 [sources]
-JuliaSyntax = {rev = "e02f29f", url = "https://github.com/JuliaLang/JuliaSyntax.jl"}
+JuliaSyntax = {rev = "99e975a7", url = "https://github.com/JuliaLang/JuliaSyntax.jl"}
 
 [compat]
 julia = "1"

@@ -457,7 +457,7 @@ attrsummary(name, value::Number) = "$name=$value"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k in KSet"Identifier MacroName StringMacroName CmdMacroName" || is_operator(k) ? ex.name_val :
+    str = k in KSet"Identifier StrMacroName CmdMacroName" || is_operator(k) ? ex.name_val :
           k == K"Placeholder" ? ex.name_val           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
@@ -611,11 +611,17 @@ function _find_SyntaxTree_macro(ex, line)
         # We're in the line range. Either
         if firstline == line && kind(c) == K"macrocall" && begin
                     name = c[1]
+                    if kind(name) == K"macro_name"
+                        name = name[1]
+                    end
                     if kind(name) == K"."
                         name = name[2]
+                        if kind(name) == K"macro_name"
+                            name = name[1]
+                        end
                     end
-                    @assert kind(name) == K"MacroName"
-                    name.name_val == "@SyntaxTree"
+                    @assert kind(name) == K"Identifier"
+                    name.name_val == "SyntaxTree"
                 end
             # We find the node we're looking for. NB: Currently assuming a max
             # of one @SyntaxTree invocation per line. Though we could relax
