@@ -104,4 +104,59 @@ end
     @test lower_str(Main, "x + y").args[1].has_image_globalref === true
 end
 
+@testset "docstrings: doc-only expressions" begin
+    local jeval(mod, str) = JuliaLowering.include_string(mod, str; expr_compat_mode=true)
+    jeval(test_mod, "function fun_exists(x); x; end")
+    jeval(test_mod, "module M end; module M2 end")
+    # TODO: return values are to be determined, currently Base.Docs.Binding for
+    # both lowering implementations.  We can't return the value of the
+    # expression in these special cases.
+    jeval(test_mod, "\"docstr1\" sym_noexist")
+    jeval(test_mod, "\"docstr2\" fun_noexist()")
+    jeval(test_mod, "\"docstr3\" fun_exists(sym_noexist)")
+    jeval(test_mod, "\"docstr4\" M.sym_noexist")
+    jeval(test_mod, "\"docstr5\" M.fun_noexist()")
+    jeval(test_mod, "\"docstr6\" M.fun_exists(sym_noexist)")
+    @test jeval(test_mod, "@doc sym_noexist")               |> string === "docstr1\n"
+    @test jeval(test_mod, "@doc fun_noexist()")             |> string === "docstr2\n"
+    @test jeval(test_mod, "@doc fun_exists(sym_noexist)")   |> string === "docstr3\n"
+    @test jeval(test_mod, "@doc M.sym_noexist")             |> string === "docstr4\n"
+    @test jeval(test_mod, "@doc M.fun_noexist()")           |> string === "docstr5\n"
+    @test jeval(test_mod, "@doc M.fun_exists(sym_noexist)") |> string === "docstr6\n"
+    @test jeval(test_mod.M, "@doc M.sym_noexist")             |> string === "docstr4\n"
+    @test jeval(test_mod.M, "@doc M.fun_noexist()")           |> string === "docstr5\n"
+    @test jeval(test_mod.M, "@doc M.fun_exists(sym_noexist)") |> string === "docstr6\n"
+
+    jeval(test_mod.M2, "\"docstr7\" M2.M2.sym_noexist")
+    jeval(test_mod.M2, "\"docstr8\" M2.M2.fun_noexist()")
+    jeval(test_mod.M2, "\"docstr9\" M2.M2.fun_exists(sym_noexist)")
+    @test jeval(test_mod, "@doc M2.M2.sym_noexist")             |> string === "docstr7\n"
+    @test jeval(test_mod, "@doc M2.M2.fun_noexist()")           |> string === "docstr8\n"
+    @test jeval(test_mod, "@doc M2.M2.fun_exists(sym_noexist)") |> string === "docstr9\n"
+    @test jeval(test_mod.M2, "@doc M2.M2.sym_noexist")             |> string === "docstr7\n"
+    @test jeval(test_mod.M2, "@doc M2.M2.fun_noexist()")           |> string === "docstr8\n"
+    @test jeval(test_mod.M2, "@doc M2.M2.fun_exists(sym_noexist)") |> string === "docstr9\n"
+
+    # Try with signatures and type variables
+    jeval(test_mod, "abstract type T_exists end")
+
+    jeval(test_mod, "\"docstr10\" f10(x::Int, y, z::T_exists)")
+    d = jeval(test_mod, "@doc f10")
+    @test d |> string === "docstr10\n"
+    # TODO: Is there a better way of accessing this? Feel free to change tests
+    # if docsystem storage changes.
+    @test d.meta[:results][1].data[:typesig] === Tuple{Int, Any, test_mod.T_exists}
+
+    jeval(test_mod, "\"docstr11\" f11(x::T_exists, y::U, z::T) where {T, U<:Number}")
+    d = jeval(test_mod, "@doc f11")
+    @test d |> string === "docstr11\n"
+    @test d.meta[:results][1].data[:typesig] === Tuple{test_mod.T_exists, U, T} where {T, U<:Number}
+
+    jeval(test_mod, "\"docstr12\" f12(x::Int, y::U, z::T=1) where {T, U<:Number}")
+    d = jeval(test_mod, "@doc f12")
+    @test d |> string === "docstr12\n"
+    @test d.meta[:results][1].data[:typesig] === Union{Tuple{Int64, U, T}, Tuple{Int64, U}} where {T, U<:Number}
+
+end
+
 end
