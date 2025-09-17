@@ -267,10 +267,10 @@ end
 
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
-            for m in typemin(T):typemax(T)
-                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+            for m in (T <: Signed ? (typemin(T):typemax(T)) : (T(1):typemax(T)))
+                if try gcdx(x, m)[1] == 1 catch _ true end
                     y = invmod(x, m)
-                    @test mod(widemul(y, x), m) == mod(1, m)
+                    @test mod(widemul(y, x), m) == mod(T(1), m)
                     @test div(y, m) == 0
                 else
                     @test_throws DomainError invmod(x, m)

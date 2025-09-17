@@ -285,16 +285,44 @@ function invmod(n::Integer, m::Integer)
     end
     g, x, y = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
-    # Note that m might be negative here.
-    if x isa Unsigned && hastypemax(typeof(x)) && x > typemax(x)>>1
-        # x might have wrapped if it would have been negative
-        # adding back m forces a correction
-        x += m
+    
+    # For unsigned integers, verify the result using widemul to handle potential overflow
+    if n isa Unsigned && m isa Unsigned && hastypemax(typeof(x))
+        result = mod(x, m)
+        # Check if the result is correct using widemul
+        if mod(widemul(result, n), m) != mod(one(typeof(result)), m)
+            # The gcdx result wrapped, need to compute inverse properly
+            result = _invmod_unsigned_correct(n, m)
+        end
+        return result
+    else
+        # Note that m might be negative here.
+        if x isa Unsigned && hastypemax(typeof(x)) && x > typemax(x)>>1
+            # x might have wrapped if it would have been negative
+            # adding back m forces a correction
+            x += m
+        end
     end
+    
     # The postcondition is: mod(result * n, m) == mod(T(1), m) && div(result, m) == 0
     return mod(x, m)
 end
 
+# Helper function for unsigned integer invmod when gcdx result is incorrect due to overflow
+function _invmod_unsigned_correct(n::T, m::T) where T <: Unsigned
+    # Use extended Euclidean algorithm with wide arithmetic to avoid overflow
+    T_wide = widen(T)
+    a, b = T_wide(m), T_wide(n)
+    x0, x1 = T_wide(0), T_wide(1)
+    
+    while b != 0
+        q = div(a, b)
+        a, b = b, a - q * b
+        x0, x1 = x1, x0 - q * x1
+    end
+    
+    return T(mod(x1, T_wide(m)))
+end
 """
     invmod(n::Integer, T) where {T <: Base.BitInteger}
     invmod(n::T) where {T <: Base.BitInteger}
