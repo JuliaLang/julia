@@ -46,7 +46,7 @@ but at the conclusion of executing a script or expression, `julia` will attempt 
 `Main.main(Base.ARGS)` if such a function `Main.main` has been defined and this behavior was opted into
 by using the `@main` macro.
 
-A simple and typical example of its usage could be:
+To see this feature in action, consider the following definition:
 ```
 function (@main)(ARGS)
     open("out.log", "w") do io
@@ -66,6 +66,7 @@ $ julia -e "(@main)(args=ARGS) = return nothing"; echo $?0
 $ julia -e "(@main)(args=ARGS) = return 1"; echo $?
 1
 ```
+Typically exit codes are in the range `0:255`, although their interpretation might be OS dependent. 
 
 This feature is intended to aid in the unification of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
 function may be spatially and temporally separated from the invocation. However, for interactive workflows,
