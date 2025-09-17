@@ -125,8 +125,8 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # and reduce the risk of resulting method invalidations.
     annotations_type = Vector{@NamedTuple{region::UnitRange{Int}, label::Symbol, value}}
     message = string(message)
-    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message)::annotations_type)
-        message = Base.AnnotatedString(String(message)::String, Base.annotations(message)::annotations_type)
+    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message)::Vector{Base.RegionAnnotation})
+        message = Base.AnnotatedString(String(message)::String, Base.annotations(message)::Vector{Base.RegionAnnotation})
         @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String}}, SubString{String}}}[
             (indent=0, msg=l) for l in split(chomp(message), '\n')]
     else
