@@ -62,8 +62,8 @@ function summarysize(obj;
             end
         elseif isa(x, GenericMemory)
             T = eltype(x)
-            if Base.allocatedinline(T)
-                np = Base.datatype_npointers(T)
+            if allocatedinline(T)
+                np = datatype_npointers(T)
                 nf = length(x) * np
                 idx = (i-1) ÷ np + 1
                 if @inbounds @inline isassigned(x, idx)
@@ -80,7 +80,7 @@ function summarysize(obj;
                 end
             end
         else
-            nf = Base.datatype_npointers(typeof(x))
+            nf = datatype_npointers(typeof(x))
             if nth_pointer_isdefined(x, i)
                 val = get_nth_pointer(x, i)
             end
@@ -101,12 +101,12 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj, ss.count)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize(obj), count::Bool)
-    Base.issingletontype(typeof(obj)) && return 0
+    issingletontype(typeof(obj)) && return 0
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    if Base.datatype_npointers(typeof(obj)) > 0
+    if datatype_npointers(typeof(obj)) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
     end
@@ -154,7 +154,7 @@ function (ss::SummarySize)(obj::GenericMemory)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     headersize = 2 * sizeof(Int)
     size::Int = (ss.count ? 1 : headersize)
-    datakey = Base.unsafe_convert(Ptr{Cvoid}, obj)
+    datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
         if !ss.count
@@ -163,7 +163,7 @@ function (ss::SummarySize)(obj::GenericMemory)
             size += 1
         end
         T = eltype(obj)
-        if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
+        if !isempty(obj) && T !== Symbol && (!allocatedinline(T) || (T isa DataType && !datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end
@@ -216,4 +216,4 @@ function (ss::SummarySize)(obj::Task)
     return size
 end
 
-(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj, ss.count) + obj.alloc * (ss.count ? 1 : sizeof(Base.GMP.Limb))
+(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj, ss.count) + obj.alloc * (ss.count ? 1 : sizeof(GMP.Limb))
