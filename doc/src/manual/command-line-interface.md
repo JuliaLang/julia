@@ -59,7 +59,7 @@ Executing the above script with `julia script.jl "Buddy"` will automatically run
 file, despite there being no explicit call to `(@main)`.
 
 The return value of the `(@main)` function is the exit code, and must be a value convertible to `Cint`
-(`nothing` will be converted to `Cint(0)`):
+(`nothing` will be replaced by `Cint(0)`):
 ```
 $ julia -e "(@main)(args=ARGS) = return nothing"; echo $?0
 0
