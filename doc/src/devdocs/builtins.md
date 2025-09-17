@@ -73,20 +73,22 @@ Adding a new builtin function requires changes across multiple subsystems in Jul
 **File: `src/builtin_proto.h`**
 ```c
 // Add to JL_BUILTIN_FUNCTIONS macro (alphabetically)
-#define JL_BUILTIN_FUNCTIONS \
-    XX(apply_type,"apply_type") \
-    XX(_task,"_task") \          // <-- Add your function here
+#define JL_BUILTIN_FUNCTIONS(XX) \
+    // ... other functions
+    XX(_using, "_using") \
+    XX(_your_builtin,"_your_builtin") \          // <-- Add your function here
+    XX(applicable,"applicable") \
     // ... other functions
 ```
 
 **File: `src/builtins.c`**
 ```c
 // Implement the C function
-JL_CALLABLE(jl_f__task)
+JL_CALLABLE(jl__your_builtin)
 {
-    JL_NARGS(_task, 2, 3);
-    JL_TYPECHK(_task, long, args[1]);
-    return jl_new_task_impl(args, nargs);
+    JL_NARGS(_your_builtin, 2, 3);
+    JL_TYPECHK(_your_builtin, long, args[1]);
+    return _your_builtin_impl(args, nargs);
 }
 ```
 
@@ -97,7 +99,7 @@ JL_CALLABLE(jl_f__task)
 **File: `Compiler/src/tfuncs.jl`**
 ```julia
 # Add simple tfunc if no special state is required
-add_tfunc(Core._task, 2, 3, (@nospecialize(f), @nospecialize(size), @nospecialize(optional...)) -> Task, 20)
+add_tfunc(Core._your_builtin, 2, 3, (@nospecialize(arg1), @nospecialize(arg2), @nospecialize(optional...)) -> Typ, 20)
 
 # OR for complex cases requiring AbstractInterpreter state:
 # Leave out add_tfunc and implement in abstractinterpretation.jl instead
