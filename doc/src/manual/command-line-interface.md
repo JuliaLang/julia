@@ -47,7 +47,7 @@ but at the conclusion of executing a script or expression, `julia` will attempt 
 by using the `@main` macro.
 
 To see this feature in action, consider the following definition:
-```
+```jldoctest
 function (@main)(ARGS)
     open("out.log", "w") do io
         println(io, "My pet is $(ARGS[1])")
