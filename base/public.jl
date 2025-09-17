@@ -129,4 +129,5 @@ public
     runtests,
     text_colors,
     depwarn,
-    donotdelete
+    donotdelete,
+    promote_typejoin
