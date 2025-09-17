@@ -135,8 +135,7 @@ end
 function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    size::Int = (ss.count ? 1 : (7 * Core.sizeof(Int) + 6 * Core.sizeof(Int32)))
-    size += (ss.count ? 1 : (4 * nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)))
+    size::Int = ss.count ? 1 : sizeof(DataType)
     size += ss(obj.parameters)::Int
     if isdefined(obj, :types)
         size += ss(obj.types)::Int
@@ -159,7 +158,7 @@ function (ss::SummarySize)(obj::GenericMemory)
         ss.seen[datakey] = true
         if !ss.count
             size += sizeof(obj)
-        elseif pointer_from_objref(obj) + headersize != datakey
+        elseif pointer_from_objref(obj) + 16 != datakey
             size += 1
         end
         T = eltype(obj)
@@ -216,4 +215,4 @@ function (ss::SummarySize)(obj::Task)
     return size
 end
 
-(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj, ss.count) + obj.alloc * (ss.count ? 1 : sizeof(GMP.Limb))
+(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj, ss.count) + (ss.count ? 1 : obj.alloc * sizeof(GMP.Limb))
