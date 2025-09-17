@@ -1888,21 +1888,6 @@ function testset_context(args, ex, source)
     return esc(ex)
 end
 
-function insert_toplevel_latestworld(@nospecialize(tests))
-    isa(tests, Expr) || return tests
-    (tests.head !== :block) && return tests
-    ret = Expr(:block)
-    for arg in tests.args
-        push!(ret.args, arg)
-        if isa(arg, LineNumberNode) ||
-          (isa(arg, Expr) && arg.head in (:latestworld, :var"latestworld-if-toplevel"))
-            continue
-        end
-        push!(ret.args, Expr(:var"latestworld-if-toplevel"))
-    end
-    return ret
-end
-
 """
 Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
@@ -1920,8 +1905,6 @@ function testset_beginend_call(args, tests, source)
     if testsettype === nothing
         testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
-
-    tests = insert_toplevel_latestworld(tests)
 
     # Generate a block of code that initializes a new testset, adds
     # it to the task local storage, evaluates the test(s), before
