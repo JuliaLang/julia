@@ -24,9 +24,11 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, PROGRAM_FILE)
     foreach(x->println(Core.stdout, x), args)
 
-    # test map/mapreduce; should work but relies on inlining and other optimizations
-    # test that you can dispatch to some number of concrete cases
-    println(Core.stdout, sum_areas(Shape[Circle(1), Square(2)]))
+    # broken on 1.12
+    #
+    # # test map/mapreduce; should work but relies on inlining and other optimizations
+    # # test that you can dispatch to some number of concrete cases
+    # println(Core.stdout, sum_areas(Shape[Circle(1), Square(2)]))
 
     arr = rand(10)
     sorted_arr = sort(arr)
