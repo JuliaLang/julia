@@ -10,6 +10,13 @@ All tests belong to a *test set*. There is a default, task-level
 test set that throws on the first failure. Users can choose to wrap
 their tests in (possibly nested) test sets that will store results
 and summarize them at the end of the test set with `@testset`.
+
+Environment variables:
+
+* `JULIA_TEST_VERBOSE`: Set to `true` to enable verbose test output, including
+  testset entry/exit messages and detailed hierarchical test summaries.
+* `JULIA_TEST_FAILFAST`: Set to `true` to stop testing on the first failure.
+* `JULIA_TEST_RECORD_PASSES`: Set to `true` to record passed tests (for debugging).
 """
 module Test
 
@@ -1226,7 +1233,7 @@ mutable struct DefaultTestSet <: AbstractTestSet
     results_lock::ReentrantLock
     results::Vector{Any}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = something(Base.ScopedValues.get(VERBOSE_TESTSETS)), showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -2103,9 +2110,19 @@ const TESTSET_PRINT_ENABLE = ScopedValue{Bool}(true)
 const TEST_RECORD_PASSES = LazyScopedValue{Bool}(OncePerProcess{Bool}() do
     return Base.get_bool_env("JULIA_TEST_RECORD_PASSES", false)
 end)
+const VERBOSE_TESTSETS = LazyScopedValue{Bool}(OncePerProcess{Bool}() do
+    return Base.get_bool_env("JULIA_TEST_VERBOSE", false)
+end)
 
 macro with_testset(ts, expr)
-    :(@with(CURRENT_TESTSET => $(esc(ts)), TESTSET_DEPTH => get_testset_depth() + 1, $(esc(expr))))
+    quote
+        print_testset_verbose(:enter, $(esc(ts)))
+        try
+            @with(CURRENT_TESTSET => $(esc(ts)), TESTSET_DEPTH => get_testset_depth() + 1, $(esc(expr)))
+        finally
+            print_testset_verbose(:exit, $(esc(ts)))
+        end
+    end
 end
 
 """
@@ -2125,6 +2142,41 @@ Return the number of active test sets, not including the default test set
 """
 function get_testset_depth()
     something(Base.ScopedValues.get(TESTSET_DEPTH))
+end
+
+"""
+Print testset entry/exit messages when JULIA_TEST_VERBOSE is set
+"""
+function print_testset_verbose(action::Symbol, ts::AbstractTestSet)
+    something(Base.ScopedValues.get(VERBOSE_TESTSETS)) || return
+    indent = "  " ^ get_testset_depth()
+    desc = if hasfield(typeof(ts), :description)
+        ts.description
+    elseif isa(ts, ContextTestSet)
+        string(ts.context_name, " = ", ts.context)
+    else
+        string(typeof(ts))
+    end
+    if action === :enter
+        println("$(indent)Starting testset: $desc")
+    elseif action === :exit
+        duration_str = ""
+        # Calculate duration for testsets that have timing information
+        if hasfield(typeof(ts), :time_start) && hasfield(typeof(ts), :showtiming)
+            if ts.showtiming
+                current_time = time()
+                dur_s = current_time - ts.time_start
+                if dur_s < 60
+                    duration_str = " ($(round(dur_s, digits = 1))s)"
+                else
+                    m, s = divrem(dur_s, 60)
+                    s = lpad(string(round(s, digits = 1)), 4, "0")
+                    duration_str = " ($(round(Int, m))m$(s)s)"
+                end
+            end
+        end
+        println("$(indent)Finished testset: $desc$duration_str")
+    end
 end
 
 _args_and_call((args..., f)...; kwargs...) = (args, kwargs, f(args...; kwargs...))

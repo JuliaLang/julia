@@ -16,8 +16,6 @@
 extern "C" {
 #endif
 
-jl_method_t *jl_opaque_closure_method;
-
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
     if (jl_is_svec(rt))
@@ -772,6 +770,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         }
 
         if (cache || needs_cache_for_correctness) {
+            // TODO: this should poison the runtime, so that attempts to call save in staticdata afterwards will abort,
+            // since enabling `needs_cache_for_correctness` is unsound in the presence of cache files
             uninferred = (jl_code_info_t*)jl_copy_ast((jl_value_t*)func);
             ci = jl_new_codeinst_for_uninferred(mi, uninferred);
             jl_code_instance_t *cached_ci = jl_cache_uninferred(mi, cache_ci, world, ci);

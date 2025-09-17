@@ -1140,6 +1140,11 @@ end
     end
 end
 
+@testset "partialsort! for UnwrappableSubArray with non-zero offset on 1.11 (#59569)" begin
+    a = reshape(6000:-1:1, 1000, :) |> collect;
+    @test partialsort!(view(copy(a), :, 6), 500:501) == [500, 501]
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
