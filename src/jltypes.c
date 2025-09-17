@@ -22,6 +22,13 @@ extern "C" {
 _Atomic(jl_value_t*) cmpswap_names JL_GLOBALLY_ROOTED;
 jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(*ijl_small_typeof)]; // 16-bit aligned, like the GC
 
+// Global data structures for accessing symbols and other globals
+#if !defined(__clang_analyzer__)
+struct jl_sysimg_global sysimg_global;
+struct jl_const_globals const_globals;
+struct jl_internal_global internal_global;
+#endif
+
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define h2index(hv, sz) (size_t)((hv) & ((sz)-1))
@@ -614,7 +621,7 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
         size_t min_elements = nfields-1;
         for (long j = i-1; j >= 0; j--) {
             jl_value_t *ttj = temp[j];
-            if (!jl_is_tuple_type(ttj)) break;
+            if (!(ttj && jl_is_tuple_type(ttj))) break;
             size_t nfieldsj = jl_nparams(ttj);
             if (nfieldsj >= min_elements) continue;
             if (nfieldsj != min_elements-1) break;
@@ -2939,12 +2946,33 @@ void export_jl_small_typeof(void)
     memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
+void export_jl_sysimg_globals(void)
+{
+    // Use jl_dlsym to reference "jl_"#name from the jl_libjulia_handle instead
+    // of directly making a symbol from it which will have problems with cpp
+#define XX(name, type) do { \
+        type *ptr; \
+        jl_dlsym(jl_libjulia_handle, "jl_" #name, (void**)&ptr, 1, 0); \
+        *ptr = jl_##name; \
+    } while (0);
+    JL_EXPORTED_DATA_POINTERS(XX)
+#undef XX
+#define YY(name, type) do { \
+        type *ptr; \
+        jl_dlsym(jl_libjulia_handle, "jl_" #name, (void**)&ptr, 1, 0); \
+        *ptr = jl_##name; \
+    } while (0);
+    JL_CONST_GLOBAL_VARS(YY)
+#undef YY
+}
+
 #define XX(name) \
     ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type; \
     jl_##name##_type->smalltag = jl_##name##_tag;
 void jl_init_types(void) JL_GC_DISABLED
 {
     jl_module_t *core = NULL; // will need to be assigned later
+    jl_task_t *ct = jl_current_task;
 
     // create base objects
     jl_datatype_type = jl_new_uninitialized_datatype();
@@ -2958,7 +2986,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type = jl_new_uninitialized_datatype();
     jl_method_table = jl_new_method_table(jl_symbol("methodtable"), core);
 
-    jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type, 0);
+    jl_emptysvec = (jl_svec_t*)jl_gc_permobj(ct->ptls, sizeof(void*), jl_simplevector_type, 0);
     jl_set_typetagof(jl_emptysvec, jl_simplevector_tag, GC_OLD_MARKED);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
 
@@ -3074,7 +3102,6 @@ void jl_init_types(void) JL_GC_DISABLED
     // now they can be used to create the remaining base kinds and types
     jl_nothing_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
                                       jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
-    jl_void_type = jl_nothing_type; // deprecated alias
     XX(nothing);
     jl_nothing_type->instance = jl_nothing;
 
@@ -3089,7 +3116,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), core, type_type, jl_emptysvec,
                                            jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     XX(typeofbottom);
-    jl_bottom_type = jl_gc_permobj(0, jl_typeofbottom_type, 0);
+    jl_bottom_type = jl_gc_permobj(ct->ptls, 0, jl_typeofbottom_type, 0);
     jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_OLD_MARKED);
     jl_typeofbottom_type->instance = jl_bottom_type;
 
@@ -3139,7 +3166,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
     jl_typeofbottom_type->super->layout = jl_typeofbottom_type->layout; // the only abstract type with a layout
     jl_emptytuple_type = (jl_datatype_t*)jl_apply_tuple_type(jl_emptysvec, 0);
-    jl_emptytuple = jl_gc_permobj(0, jl_emptytuple_type, 0);
+    jl_emptytuple = jl_gc_permobj(ct->ptls, 0, jl_emptytuple_type, 0);
     jl_emptytuple_type->instance = jl_emptytuple;
 
     // non-primitive definitions follow
@@ -3392,7 +3419,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(2, jl_symbol_type, jl_array_any_type),
                         jl_emptysvec, 0, 1, 2);
 
-    jl_value_t *symornothing[2] = { (jl_value_t*)jl_symbol_type, (jl_value_t*)jl_void_type };
+    jl_value_t *symornothing[2] = { (jl_value_t*)jl_symbol_type, (jl_value_t*)jl_nothing_type };
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "line", "file"),
@@ -3665,7 +3692,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "time_infer_self",
                             "time_compile",
                             //"absolute_max",
-                            "specsigflags", "precompile",
+                            "flags", "precompile",
                             "invoke", "specptr"), // function object decls
                         jl_svec(21,
                             jl_any_type,
@@ -3898,6 +3925,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_module_type->isidentityfree = 1;
 
     export_jl_small_typeof();
+    export_jl_sysimg_globals();
 }
 
 static jl_value_t *core(const char *name)
@@ -3905,7 +3933,6 @@ static jl_value_t *core(const char *name)
     return jl_get_global(jl_core_module, jl_symbol(name));
 }
 
-jl_debuginfo_t *jl_nulldebuginfo;
 
 // fetch references to things defined in boot.jl
 void post_boot_hooks(void)
@@ -3965,27 +3992,12 @@ void post_boot_hooks(void)
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
-    jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
     export_jl_small_typeof();
+    export_jl_sysimg_globals();
 }
 
-void post_image_load_hooks(void) {
-    // Ensure that `Base` has been loaded.
-    assert(jl_base_module != NULL);
-
-    jl_module_t *libc_module = (jl_module_t *)jl_get_global(jl_base_module, jl_symbol("Libc"));
-    if (libc_module) {
-        jl_libdl_module = (jl_module_t *)jl_get_global(libc_module, jl_symbol("Libdl"));
-    }
-    if (jl_libdl_module) {
-        jl_libdl_dlopen_func = jl_get_global(
-            jl_libdl_module,
-            jl_symbol("dlopen")
-        );
-    }
-}
 #undef XX
 
 #ifdef __cplusplus
