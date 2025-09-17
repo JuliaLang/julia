@@ -563,12 +563,15 @@ function _sort!(v::UnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw
     @getkw lo hi
     # @assert v.stride1 == 1
     parent = v.parent
-    if parent isa Array && !(parent isa Vector) && hi - lo < 100
+    if parent isa Array && !(parent isa Vector) && hi - lo < 100 || !iszero(v.offset1)
         # vec(::Array{T, ≠1}) allocates and is therefore somewhat expensive.
         # We don't want that for small inputs.
+
+        # Additionally, if offset1 is non-zero, then this optimization is incompatible with
+        # algorithms that track absolute first and last indices (e.g. ScratchQuickSort)
         _sort!(v, a.next, o, kw)
     else
-        _sort!(vec(parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
+        _sort!(vec(parent), a.next, o, kw)
     end
 end
 
