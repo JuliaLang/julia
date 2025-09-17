@@ -123,7 +123,6 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # Generate a text representation of the message and all key value pairs,
     # split into lines.  This is specialised to improve type inference,
     # and reduce the risk of resulting method invalidations.
-    annotations_type = Vector{@NamedTuple{region::UnitRange{Int}, label::Symbol, value}}
     message = string(message)
     msglines = if Base._isannotated(message) && !isempty(Base.annotations(message)::Vector{Base.RegionAnnotation})
         message = Base.AnnotatedString(String(message)::String, Base.annotations(message)::Vector{Base.RegionAnnotation})
