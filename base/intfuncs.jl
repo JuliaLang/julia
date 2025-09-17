@@ -314,13 +314,11 @@ function _invmod_unsigned_correct(n::T, m::T) where T <: Unsigned
     T_wide = widen(T)
     a, b = T_wide(m), T_wide(n)
     x0, x1 = T_wide(0), T_wide(1)
-    
     while b != 0
         q = div(a, b)
         a, b = b, a - q * b
         x0, x1 = x1, x0 - q * x1
     end
-    
     return T(mod(x1, T_wide(m)))
 end
 """
