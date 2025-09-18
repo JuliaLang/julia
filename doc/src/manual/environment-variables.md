@@ -537,6 +537,15 @@ A few special features are supported:
 
 Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for more information.
 
+### CI Debug Environment Variables
+
+Julia automatically enables verbose debugging options when certain continuous integration (CI) debug environment variables are set. This improves the debugging experience when CI jobs are re-run with debug logging enabled, by automatically:
+
+- Enabling `--trace-eval` (location mode) to show expressions being evaluated
+- Setting `JULIA_TEST_VERBOSE=true` to enable verbose test output
+
+This allows developers to get detailed debugging information from CI runs without modifying their scripts or workflow files.
+
 ### [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@id JULIA_PROFILE_PEEK_HEAP_SNAPSHOT)
 
 Enable collecting of a heap snapshot during execution via the profiling peek mechanism.
