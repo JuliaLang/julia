@@ -30,6 +30,13 @@
             <a href="https://codecov.io/gh/JuliaLang/julia"><img src="https://codecov.io/gh/JuliaLang/julia/branch/master/graph/badge.svg?token=TckCRxc7HS"/></a>
         </td>
     </tr>
+    <!-- Project health -->
+    <tr>
+        <td>Project health</td>
+        <td>
+            <a href='https://insights.linuxfoundation.org/project/julialang-julia'><img src='https://insights.linuxfoundation.org/api/badge/health-score?project=julialang-julia' alt='Health Score'/></a>
+        </td>
+    </tr>
 </table>
 
 ## The Julia Language
