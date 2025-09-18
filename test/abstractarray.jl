@@ -2293,6 +2293,21 @@ end
     end
 end
 
+@testset "AbstractOneTo" begin
+    s = SizedArrays.SizedArray{(2,2)}(ones(2,2))
+    v = view(s, :, 1)
+    @test axes(v,1) isa SizedArrays.SOneTo{2}
+    @test eachindex(v) isa SizedArrays.SOneTo{2}
+
+    ax = axes(v,1)
+    @test ax[Base.IdentityUnitRange(ax)] == ax
+    @test ax[Base.IdentityUnitRange(2:2)] == Base.IdentityUnitRange(2:2)
+
+    # check that IdentityUnitRange behaves like Slice
+    @test axes(Base.IdentityUnitRange(ax), 1) === ax
+    @test eachindex(Base.IdentityUnitRange(ax)) === ax
+end
+
 @testset "effect inference for `iterate` for `Array` and for `Memory`" begin
     for El ∈ (Float32, Real, Any)
         for Arr ∈ (Memory{El}, Array{El, 0}, Vector{El}, Matrix{El}, Array{El, 3})
@@ -2315,4 +2330,22 @@ end
     @test sum(x for x in v) == sum(A[1:2:end])
     v2 = view(A, Base.IdentityUnitRange(1:length(A)))
     @test sum(x for x in v2) == sum(A)
+end
+
+@testset "self referential" begin
+    v = Any[1,2,3]
+    v[1] = v
+    io = IOBuffer()
+    show(io, v)
+    @test String(take!(io)) == "Any[Any[#= circular reference @-1 =#], 2, 3]"
+
+    m1 = Any[1 2; 3 4]
+    m1[1] = m1
+    show(io, m1)
+    @test String(take!(io)) == "Any[#= circular reference @-1 =# 2; 3 4]"
+
+    m2 = Any[1; 2;; 3; 4;;; 5; 6;; 7; 8]
+    m2[1] = m2
+    show(io, m2)
+    @test String(take!(io)) == "Any[#= circular reference @-1 =# 3; 2 4;;; 5 7; 6 8]"
 end

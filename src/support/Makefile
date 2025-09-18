@@ -3,10 +3,10 @@ JULIAHOME := $(abspath $(SRCDIR)/../..)
 BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
-JCFLAGS += $(CFLAGS)
-JCXXFLAGS += $(CXXFLAGS)
-JCPPFLAGS += $(CPPFLAGS)
-JLDFLAGS += $(LDFLAGS)
+JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
+JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
+JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
+JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
 
 SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod rle
@@ -24,12 +24,12 @@ HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-FLAGS := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
-FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
-JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
+FLAGS_COMMON := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
+FLAGS_COMMON += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
+JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
-DEBUGFLAGS += $(FLAGS)
-SHIPFLAGS += $(FLAGS)
+SHIPFLAGS_COMMON += $(FLAGS_COMMON)
+DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
 
 default: release
 
@@ -53,8 +53,8 @@ $(BUILDDIR)/host/Makefile:
 	@printf "%s\n" 'BUILDING_HOST_TOOLS=1' >> $@
 	@printf "%s\n" 'include $(SRCDIR)/Makefile' >> $@
 
-release: $(BUILDDIR)/libsupport.a
-debug: $(BUILDDIR)/libsupport-debug.a
+release: $(BUILDDIR)/libsupport.a $(BUILDDIR)/compile_commands.json
+debug: $(BUILDDIR)/libsupport-debug.a $(BUILDDIR)/compile_commands.json
 
 $(BUILDDIR)/libsupport.a: $(OBJS) | $(BUILDIR)
 	rm -rf $@
@@ -70,6 +70,50 @@ $(BUILDDIR)/host/libsupport.a: $(BUILDDIR)/host/Makefile
 $(BUILDDIR)/host/libsupport-debug.a: $(BUILDDIR)/host/Makefile
 	$(MAKE) -C $(BUILDDIR)/host libsupport-debug.a
 
+# Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
+CLANG_TOOLING_S_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG)
+CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
+
+# Included files in support
+INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
+
+# Compilation database generation
+$(BUILDDIR)/compile_commands.json:
+	@{ \
+		CLANG_TOOLING_S_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
+		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS))"; \
+		echo "["; \
+		first=true; \
+		for src in $(SRCS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			if [ -f $(SRCDIR)/$$src.S ]; then \
+				cmd="$${CLANG_TOOLING_S_FLAGS}, \"$$src.S\""; \
+				file_path="$$src.S"; \
+			else \
+				cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$src.c\""; \
+				file_path="$$src.c"; \
+			fi; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+		done; \
+		for included_pair in $(INCLUDED_SUPPORT_FILES); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			including_file=$${included_pair%%:*}; \
+			included_file=$${included_pair##*:}; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$including_file\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
+		done; \
+		echo "]"; \
+	} > $@.tmp
+	@# This ensures we replace the file atomically, and avoid spurious rewrites
+	@if ! cmp -s $@.tmp $@; then \
+		mv $@.tmp $@; \
+	else \
+		rm -f $@.tmp; \
+	fi
+
+compile-database: $(BUILDDIR)/compile_commands.json
+	@echo "Compilation database created in support: $<"
+
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
@@ -78,4 +122,7 @@ clean:
 	rm -f $(BUILDDIR)/core*
 	rm -f $(BUILDDIR)/libsupport.a
 	rm -f $(BUILDDIR)/libsupport-debug.a
+	rm -f $(BUILDDIR)/compile_commands.json
 	rm -f $(BUILDDIR)/host/*
+
+.PHONY: compile-database $(BUILDDIR)/compile_commands.json

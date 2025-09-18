@@ -10,6 +10,7 @@ Base.Iterators.take
 Base.Iterators.takewhile
 Base.Iterators.drop
 Base.Iterators.dropwhile
+Base.Iterators.findeach
 Base.Iterators.cycle
 Base.Iterators.repeated
 Base.Iterators.product

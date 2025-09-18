@@ -248,6 +248,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         switch ((enum jl_small_typeof_tags)(dtag >> 4)) {
         case jl_int8_tag:
         case jl_uint8_tag:
+        case jl_addrspacecore_tag:
             return *(uint8_t*)a == *(uint8_t*)b;
         case jl_int16_tag:
         case jl_uint16_tag:
@@ -255,10 +256,14 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_int32_tag:
         case jl_uint32_tag:
         case jl_char_tag:
+        case jl_intrinsic_tag:
             return *(uint32_t*)a == *(uint32_t*)b;
         case jl_int64_tag:
         case jl_uint64_tag:
             return *(uint64_t*)a == *(uint64_t*)b;
+        case jl_ssavalue_tag:
+        case jl_slotnumber_tag:
+            return *(size_t*)a == *(size_t*)b;
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
@@ -270,6 +275,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_symbol_tag:
         case jl_module_tag:
         case jl_bool_tag:
+        case jl_nothing_tag:
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -663,8 +669,8 @@ static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 JL_CALLABLE(jl_f__apply_iterate)
 {
     JL_NARGSV(_apply_iterate, 2);
-    jl_function_t *iterate = args[0];
-    jl_function_t *f = args[1];
+    jl_value_t *iterate = args[0];
+    jl_value_t *f = args[1];
     assert(iterate);
     args += 1;
     nargs -= 1;
@@ -695,9 +701,15 @@ JL_CALLABLE(jl_f__apply_iterate)
                 return (jl_value_t*)t;
             }
         }
-        else if (f == BUILTIN(tuple) && jl_is_tuple(args[1])) {
-            return args[1];
+        else if (f == BUILTIN(tuple)) {
+            if (jl_is_tuple(args[1]))
+                return args[1];
+            if (jl_is_svec(args[1]))
+                return jl_f_tuple(NULL, jl_svec_data(args[1]), jl_svec_len(args[1]));
         }
+        // optimization for `f(svec...)`
+        if (jl_is_svec(args[1]))
+            return jl_apply_generic(f, jl_svec_data(args[1]), jl_svec_len(args[1]));
     }
     // estimate how many real arguments we appear to have
     size_t precount = 1;
@@ -2145,6 +2157,14 @@ JL_CALLABLE(jl_f__compute_sparams)
     return (jl_value_t*)env;
 }
 
+JL_CALLABLE(jl_f__svec_len)
+{
+    JL_NARGS(_svec_len, 1, 1);
+    jl_svec_t *s = (jl_svec_t*)args[0];
+    JL_TYPECHK(_svec_len, simplevector, (jl_value_t*)s);
+    return jl_box_long(jl_svec_len(s));
+}
+
 JL_CALLABLE(jl_f__svec_ref)
 {
     JL_NARGS(_svec_ref, 2, 2);
@@ -2470,7 +2490,7 @@ static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pf
 
 static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) JL_GC_DISABLED
 {
-    jl_value_t *i = jl_permbox32(jl_intrinsic_type, 0, (int32_t)f);
+    jl_value_t *i = jl_permbox32(jl_intrinsic_type, jl_intrinsic_tag, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_initial_const(inm, sym, i, 1);
 }
@@ -2545,7 +2565,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
-    add_builtin("GlobalMethods", (jl_value_t*)jl_method_table);
+    add_builtin("methodtable", (jl_value_t*)jl_method_table);
     add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);

@@ -532,13 +532,13 @@ let f(x) = x == 1 ? true : x == 2 ? false : 1
     @test_throws TypeError all(map(f,[1,3]))
 end
 
-# any and all with functors
+# any and all with callable structs
 
-struct SomeFunctor end
-(::SomeFunctor)(x) = true
+struct SomeCallable end
+(::SomeCallable)(x) = true
 
-@test @inferred any(SomeFunctor(), 1:10)
-@test @inferred all(SomeFunctor(), 1:10)
+@test @inferred any(SomeCallable(), 1:10)
+@test @inferred all(SomeCallable(), 1:10)
 
 
 # in

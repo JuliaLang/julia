@@ -111,6 +111,7 @@ Base.show(io::IO, x::Int24) = print(io, "Int24(", Core.Intrinsics.zext_int(Int, 
 ## Fields
 
 @noinline function _test_field_operators(r)
+    GC.gc(false)
     r = r[]
     TT = fieldtype(typeof(r), :x)
     T = typeof(getfield(r, :x))
@@ -147,6 +148,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
 
 @noinline function _test_field_orderings(r, x, y)
     @nospecialize x y
+    GC.gc(false)
     r = r[]
     TT = fieldtype(typeof(r), :x)
 
@@ -328,8 +330,9 @@ test_field_orderings(ARefxy{Any}(true, false), true, false)
 test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, missing)
 test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-test_field_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_field_orderings(Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
 test_field_orderings(Complex{Rational{Integer}}(10, 30), Complex{Rational{Integer}}(20, 40))
+test_field_orderings(Pair{NTuple{3,Float64},NTuple{3,Real}}((10.5,11.5,12.5), (30.5,40.5,50.5)), Pair{NTuple{3,Float64},NTuple{3,Real}}((110.5,111.5,112.5), (130.5,140.5,150.5)))
 test_field_orderings(10.0, 20.0)
 test_field_orderings(NaN, Inf)
 
@@ -705,7 +708,7 @@ test_global_orderings(Any, true, false)
 test_global_orderings(Union{Nothing,Missing}, nothing, missing)
 test_global_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_global_orderings(Complex{Int128}, Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-test_global_orderings(Complex{Real}, Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_global_orderings(Complex{Real}, Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
 test_global_orderings(Float64, 10.0, 20.0)
 test_global_orderings(Float64, NaN, Inf)
 
@@ -1024,15 +1027,17 @@ test_memory_operators(Float64)
 end
 @noinline function test_memory_orderings(T::Type, x, y)
     @nospecialize
-    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
-    memoryrefset!(xr, x, :unordered, true) # @atomic xr[] = x
-    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 2), 2)
+    memoryrefset!(xr, x, :unordered, true) # @atomic xr[2] = x
+    yr = GenericMemoryRef(Memory{T}(undef, 2), 2)
     yr[] = y
+    GC.gc(false)
     _test_memory_orderings(Ref(xr), Ref(yr), x, y)
-    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
-    memoryrefset!(xr, x, :unordered, true) # @atomic xr[] = x
-    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 2), 2)
+    memoryrefset!(xr, x, :unordered, true) # @atomic xr[2] = x
+    yr = GenericMemoryRef(Memory{T}(undef, 2), 2)
     yr[] = y
+    GC.gc(false)
     _test_memory_orderings(Ref{Any}(xr), Ref{Any}(yr), x, y)
     nothing
 end
@@ -1047,7 +1052,8 @@ test_memory_orderings(Any, true, false)
 test_memory_orderings(Union{Nothing,Missing}, nothing, missing)
 test_memory_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_memory_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-test_memory_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_memory_orderings(Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
+test_memory_orderings(Pair{NTuple{3,Float64},NTuple{3,Real}}((10.5,11.5,12.5), (30.5,40.5,50.5)), Pair{NTuple{3,Float64},NTuple{3,Real}}((110.5,111.5,112.5), (130.5,140.5,150.5)))
 test_memory_orderings(10.0, 20.0)
 test_memory_orderings(NaN, Inf)
 

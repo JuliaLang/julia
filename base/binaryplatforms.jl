@@ -520,14 +520,17 @@ function triplet(p::AbstractPlatform)
     )
 
     # Tack on optional compiler ABI flags
-    if libgfortran_version(p) !== nothing
-        str = string(str, "-libgfortran", libgfortran_version(p).major)
+    libgfortran_version_ = libgfortran_version(p)
+    if libgfortran_version_ !== nothing
+        str = string(str, "-libgfortran", libgfortran_version_.major)
     end
-    if cxxstring_abi(p) !== nothing
-        str = string(str, "-", cxxstring_abi(p))
+    cxxstring_abi_ = cxxstring_abi(p)
+    if cxxstring_abi_ !== nothing
+        str = string(str, "-", cxxstring_abi_)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
+    libstdcxx_version_ = libstdcxx_version(p)
+    if libstdcxx_version_ !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version_.patch)
     end
 
     # Tack on all extra tags
@@ -855,7 +858,7 @@ function parse_dl_name_version(path::AbstractString, os::AbstractString=_this_os
 end
 
 function get_csl_member(member::Symbol)
-    # If CompilerSupportLibraries_jll is an stdlib, we can just grab things from it
+    # If CompilerSupportLibraries_jll is a stdlib, we can just grab things from it
     csl_pkgids = filter(pkgid -> pkgid.name == "CompilerSupportLibraries_jll", keys(Base.loaded_modules))
     if !isempty(csl_pkgids)
         CSL_mod = Base.loaded_modules[first(csl_pkgids)]
@@ -878,7 +881,7 @@ detected.
 """
 function detect_libgfortran_version()
     function get_libgfortran_path()
-        # If CompilerSupportLibraries_jll is an stdlib, we can just directly ask for
+        # If CompilerSupportLibraries_jll is a stdlib, we can just directly ask for
         # the path here, without checking `dllist()`:
         libgfortran_path = get_csl_member(:libgfortran_path)
         if libgfortran_path !== nothing
@@ -920,7 +923,7 @@ it is linked against (if any).  `max_minor_version` is the latest version in the
 """
 function detect_libstdcxx_version(max_minor_version::Int=30)
     function get_libstdcxx_handle()
-        # If CompilerSupportLibraries_jll is an stdlib, we can just directly open it
+        # If CompilerSupportLibraries_jll is a stdlib, we can just directly open it
         libstdcxx = get_csl_member(:libstdcxx)
         if libstdcxx !== nothing
             return nothing

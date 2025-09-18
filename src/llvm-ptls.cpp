@@ -344,7 +344,8 @@ bool LowerPTLS::run(bool *CFGModified)
             auto f = call->getCaller();
             Value *pgcstack = NULL;
             for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end(); ++arg) {
-                if (arg->hasSwiftSelfAttr()) {
+                AttributeSet attrs = f->getAttributes().getParamAttrs(arg->getArgNo());
+                if (attrs.hasAttribute("gcstack")) {
                     pgcstack = &*arg;
                     break;
                 }

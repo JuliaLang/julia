@@ -1601,6 +1601,18 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, 
     ctx.builder.SetInsertPoint(ifok);
 }
 
+
+static bool has_known_null_nullptr(Type *T)
+{
+    if (auto PT = cast<PointerType>(T)) {
+        auto addrspace = PT->getAddressSpace();
+        if (addrspace == AddressSpace::Generic || (AddressSpace::FirstSpecial <= addrspace && addrspace <= AddressSpace::LastSpecial)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // ctx.builder.CreateIsNotNull(v) lowers incorrectly in non-standard
 // address spaces where null is not zero
 // TODO: adapt to https://github.com/llvm/llvm-project/pull/131557 once merged
@@ -1608,10 +1620,11 @@ static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 {
     ++EmittedNullchecks;
     Type *T = v->getType();
-    return ctx.builder.CreateICmpNE(
-            v,
-            ctx.builder.CreateAddrSpaceCast(
-                Constant::getNullValue(ctx.builder.getPtrTy(0)), T));
+    if (has_known_null_nullptr(T))
+        return ctx.builder.CreateIsNotNull(v);
+    else
+        return ctx.builder.CreateICmpNE(v, ctx.builder.CreateAddrSpaceCast(
+            Constant::getNullValue(ctx.builder.getPtrTy(0)), T));
 }
 
 
@@ -2215,6 +2228,9 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     }
     Value *instr = nullptr;
     if (!isboxed && jl_is_genericmemoryref_type(jltype)) {
+        //We don't specify the stronger expected memory ordering here because of fears it may interfere with vectorization and other optimizations
+        //if (Order == AtomicOrdering::NotAtomic)
+        //    Order = AtomicOrdering::Monotonic;
         // load these FCA as individual fields, so LLVM does not need to split them later
         Value *fld0 = ctx.builder.CreateStructGEP(elty, ptr, 0);
         LoadInst *load0 = ctx.builder.CreateAlignedLoad(elty->getStructElementType(0), fld0, Align(alignment), false);
@@ -2390,11 +2406,26 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             instr = load;
         }
         if (r) {
-            StoreInst *store = ctx.builder.CreateAlignedStore(r, ptr, Align(alignment));
-            store->setOrdering(Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-            ai.decorateInst(store);
+            if (false && !isboxed && Order == AtomicOrdering::NotAtomic && jl_is_genericmemoryref_type(jltype)) {
+                // if enabled, store these FCA as individual fields, so LLVM does not need to split them later and they can use release ordering
+                assert(r->getType() == ctx.types().T_jlgenericmemory);
+                Value *f1 = ctx.builder.CreateExtractValue(r, 0);
+                Value *f2 = ctx.builder.CreateExtractValue(r, 1);
+                static_assert(offsetof(jl_genericmemoryref_t, ptr_or_offset) == 0, "wrong field order");
+                StoreInst *store = ctx.builder.CreateAlignedStore(f1, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 0), Align(alignment));
+                store->setOrdering(AtomicOrdering::Release);
+                ai.decorateInst(store);
+                store = ctx.builder.CreateAlignedStore(f2, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 1), Align(alignment));
+                store->setOrdering(AtomicOrdering::Release);
+                ai.decorateInst(store);
+            }
+            else {
+                StoreInst *store = ctx.builder.CreateAlignedStore(r, ptr, Align(alignment));
+                store->setOrdering(Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order);
+                ai.decorateInst(store);
+            }
         }
         else {
             assert(Order == AtomicOrdering::NotAtomic && !isboxed && rhs.typ == jltype);
@@ -3299,7 +3330,7 @@ static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *
         if (jl_is_genericmemoryref_type(sty))
             sty = (jl_datatype_t*)jl_field_type_concrete(sty, 1);
         size_t sz = sty->layout->size;
-        if (sty->layout->flags.arrayelem_isunion)
+        if (sty->layout->flags.arrayelem_isunion && add_isunion)
             sz++;
         auto elsize = ConstantInt::get(ctx.types().T_size, sz);
         return elsize;
@@ -4422,10 +4453,11 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         for (size_t i = nargs; i < nf; i++) {
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strctinfo.tbaa);
-                ai.decorateInst(ctx.builder.CreateAlignedStore(
+                auto *store = ctx.builder.CreateAlignedStore(
                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                         emit_ptrgep(ctx, strct, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1),
-                        Align(1)));
+                        Align(1));
+                ai.decorateInst(store);
             }
         }
         // TODO: verify that nargs <= nf (currently handled by front-end)
@@ -4716,8 +4748,8 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
 
     } else {
         data = emit_genericmemoryptr(ctx, boxmem, layout, 0);
-        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jl_tparam1(typ));
-        data = ctx.builder.CreateInBoundsGEP(elty, data, idx0);
+        idx0 = ctx.builder.CreateMul(idx0, emit_genericmemoryelsize(ctx, boxmem, mem.typ, false), "", true, true);
+        data = ctx.builder.CreatePtrAdd(data, idx0);
     }
 
     return _emit_memoryref(ctx, boxmem, data, layout, typ);
@@ -4820,9 +4852,10 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             setName(ctx.emission_context, ovflw, "memoryref_ovflw");
         }
 #endif
-        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jl_tparam1(ref.typ));
-        newdata = ctx.builder.CreateGEP(elty, data, offset);
-        setName(ctx.emission_context, newdata, "memoryref_data_offset");
+        boffset = ctx.builder.CreateMul(offset, elsz);
+        setName(ctx.emission_context, boffset, "memoryref_byteoffset");
+        newdata = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
+        setName(ctx.emission_context, newdata, "memoryref_data_byteoffset");
         (void)boffset; // LLVM is very bad at handling GEP with types different from the load
         if (bc) {
             BasicBlock *failBB, *endBB;

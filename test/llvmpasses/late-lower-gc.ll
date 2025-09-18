@@ -199,7 +199,7 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
 ; CHECK: %r = call i32 @callee_root(ptr addrspace(10) %l0, ptr addrspace(10) %l1)
 ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
 
-define swiftcc ptr addrspace(10) @insert_element(ptr swiftself %0) {
+define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
 ; CHECK-LABEL: @insert_element
   %2 = alloca [10 x i64], i32 1, align 8
 ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 10)

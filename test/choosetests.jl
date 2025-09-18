@@ -29,7 +29,8 @@ const TESTNAMES = [
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
-        "scopedvalues", "compileall", "rebinding"
+        "scopedvalues", "compileall", "rebinding",
+        "faulty_constructor_method_should_not_cause_stack_overflows"
 ]
 
 const INTERNET_REQUIRED_LIST = [

@@ -227,7 +227,7 @@ function Base.write(io::IO, aio::AnnotatedIOBuffer)
         # This does introduce an overhead that technically
         # could be avoided, but I'm not sure that it's currently
         # worth the effort to implement an efficient version of
-        # writing from a AnnotatedIOBuffer with style.
+        # writing from an AnnotatedIOBuffer with style.
         # In the meantime, by converting to an `AnnotatedString` we can just
         # reuse all the work done to make that work.
         ansi_write_(write, io, read(aio, AnnotatedString))::Int

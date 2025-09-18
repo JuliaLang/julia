@@ -8,6 +8,8 @@ module Unicode
 
 export graphemes, isequal_normalized
 
+public normalize
+
 """
     Unicode.julia_chartransform(c::Union{Char,Integer})
 

@@ -324,12 +324,12 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         elseif item isa SimpleVector
             rt = item[1]::Type
             sig = item[2]::Type
-            ptr = ccall(:jl_get_specialization1,
-                        #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
                         sig, this_world, #= mt_cache =# 0)
             asrt = Any
-            valid = if ptr !== C_NULL
-                mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+            valid = if mi !== nothing
+                mi = mi::MethodInstance
                 ci = get(caches, mi, nothing)
                 if ci isa CodeInstance
                     # TODO: should we find a way to indicate to the user that this gets called via ccallable?
