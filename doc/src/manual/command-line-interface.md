@@ -66,7 +66,7 @@ $ julia -e "(@main)(args=ARGS) = return nothing"; echo $?0
 $ julia -e "(@main)(args=ARGS) = return 1"; echo $?
 1
 ```
-Typically exit codes are in the range `0:255`, although their interpretation might be OS dependent.
+Typically exit codes are in the range `0:255`, although the interpretation of the return value might be OS dependent.
 
 This feature is intended to aid in the unification of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
 function may be spatially and temporally separated from the invocation. However, for interactive workflows,
