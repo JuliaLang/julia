@@ -209,7 +209,7 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 //              necessarily mark any objects that would have ordinarily been rooted by
 //              the allocated object. All objects stored in fields of this object
 //              must be either permanently allocated or have other roots.
-struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT;
+struct _jl_value_t *jl_gc_permobj(struct _jl_tls_states_t *ptls, size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT;
 // This function notifies the GC about memory addresses that are set when loading the boot image.
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.

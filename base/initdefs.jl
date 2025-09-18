@@ -284,22 +284,14 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
         if startswith(env, "@script")
-            if @isdefined(PROGRAM_FILE)
-                dir = dirname(PROGRAM_FILE)
-            else
-                cmds = unsafe_load_commands(JLOptions().commands)
-                if any(cmd::Pair{Char, String}->cmd_suppresses_program(first(cmd)), cmds)
-                    # Usage error. The user did not pass a script.
-                    return nothing
-                end
-                dir = dirname(ARGS[1])
-            end
-            if env == "@script"  # complete match, not startswith, so search upwards
-                return current_project(dir)
-            else
-                # starts with, so assume relative path is after
-                return abspath(replace(env, "@script" => dir))
-            end
+            program_file = JLOptions().program_file
+            program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
+            isnothing(program_file) && return nothing # User did not pass a script
+
+            # Expand trailing relative path
+            dir = dirname(program_file)
+            dir = env != "@script" ? (dir * env[length("@script")+1:end]) : dir
+            return current_project(dir)
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
@@ -502,10 +494,13 @@ end
 ## hook for disabling threaded libraries ##
 
 library_threading_enabled::Bool = true
-const disable_library_threading_hooks = []
+
+# Base.OncePerProcess ensures that any registered hooks do not outlive the session.
+# (even if they are registered during the sysimage build process by top-level code)
+const disable_library_threading_hooks = Base.OncePerProcess(Vector{Any})
 
 function at_disable_library_threading(f)
-    push!(disable_library_threading_hooks, f)
+    push!(disable_library_threading_hooks(), f)
     if !library_threading_enabled
         disable_library_threading()
     end
@@ -514,8 +509,8 @@ end
 
 function disable_library_threading()
     global library_threading_enabled = false
-    while !isempty(disable_library_threading_hooks)
-        f = pop!(disable_library_threading_hooks)
+    while !isempty(disable_library_threading_hooks())
+        f = pop!(disable_library_threading_hooks())
         try
             f()
         catch err

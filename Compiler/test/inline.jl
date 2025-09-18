@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module inline_tests
+
 using Test
 using Base.Meta
 using Core: ReturnNode
@@ -1850,7 +1852,7 @@ multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
 let i::Int, continue_::Bool
     interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="inlining", interp))
+    ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
@@ -1874,7 +1876,7 @@ multi_inlining2(a::Int, b::Int) = call_func_mul_int(a, b)
 let i::Int, continue_::Bool
     interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="inlining", interp))
+    ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
@@ -2218,7 +2220,7 @@ struct Issue52644
 end
 issue52644(::DataType) = :DataType
 issue52644(::UnionAll) = :UnionAll
-let ir = Base.code_ircode((Issue52644,); optimize_until="inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="CC: INLINING") do t
         issue52644(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}
@@ -2227,7 +2229,7 @@ let ir = Base.code_ircode((Issue52644,); optimize_until="inlining") do t
     @test irfunc(Issue52644(Tuple{<:Integer})) === :UnionAll
 end
 issue52644_single(x::DataType) = :DataType
-let ir = Base.code_ircode((Issue52644,); optimize_until="inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="CC: INLINING") do t
         issue52644_single(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}
@@ -2311,3 +2313,44 @@ g_noinline_invoke(x) = f_noinline_invoke(x)
 let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
     @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
 end
+
+path = Ref{Symbol}(:unknown)
+function f59018_generator(x)
+    if @generated
+        if x isa DataType && x.name === Type.body.name
+            path[] = :generator
+            return Core.sizeof(x.parameters[1])
+        end
+    else
+        path[] = :fallback
+        return Core.sizeof(x.parameters[1])
+    end
+end
+f59018() = f59018_generator(Base.inferencebarrier(Int64))
+let src = code_typed1(f59018, ())
+    # We should hit a dynamic dispatch, because not enough information
+    # is available to expand the generator during compilation.
+    @test iscall((src, f59018_generator), src.code[end - 1])
+    @test path[] === :unknown
+    @test f59018() === 8
+    @test path[] === :generator
+end
+
+# https://github.com/JuliaLang/julia/issues/58915
+f58915(nt) = @inline Base.setindex(nt, 2, :next)
+# This function should fully-inline, i.e. it should have only built-in / intrinsic calls
+# and no invokes or dynamic calls of user code
+let src = code_typed1(f58915, Tuple{@NamedTuple{next::UInt32,prev::UInt32}})
+    # Any calls should be built-in calls
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
+    # There should be no invoke at all
+    @test count(isinvoke(Returns(true)), src.code) == 0
+end
+
+# https://github.com/JuliaLang/julia/issues/58915#issuecomment-3061421895
+let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
+    @test count(isinvoke(:merge_fallback), src.code) == 0
+    @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
+end # module inline_tests
