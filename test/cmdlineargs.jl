@@ -84,13 +84,15 @@ if Sys.isunix()
             const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
             ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
             write(stdout, "r")
-            eof(stdout)
+            while true
+                sleep(1)
+            end
         """
         exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
-        errp = IOBuffer()
+        errp = PipeBuffer()
         # disable coredumps for this process
         p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
-        @test read(p, UInt8) = UInt8('r')
+        @test read(p, UInt8) == UInt8('r')
         Base.kill(p, Base.SIGQUIT)
         wait(p)
         err_s = readchomp(errp)
