@@ -296,7 +296,8 @@ jl_value_t *jl_get_cfunction_trampoline(
                 permanent = true;
         }
         if (permanent) {
-            result = jl_gc_permobj(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type, 0);
+            jl_task_t *ct = jl_current_task;
+            result = jl_gc_permobj(ct->ptls, sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type, 0);
             memset(result, 0, jl_datatype_size(result_type));
         }
         else {
