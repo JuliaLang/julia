@@ -445,6 +445,17 @@ end
         _, rt = ret
         @test rt === Bool
     end
+
+    @testset "Vararg handling" begin
+        @test_throws "cannot come after" @eval @code_typed +(::Vararg{Int}, ::Float64)
+        @test_throws "cannot come after" @eval @code_typed +(::Int..., ::Float64)
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5.0))[2] === Int # 5.0 gets purposefully ignored
+        @test (@code_typed +(1, 2, 3, ::Int...))[2] === Int
+        @test (@code_typed +(1, 2, 3, ::Int..., 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, ::Int..., 5.0))[2] === Int
+    end
 end
 
 module HygieneTest

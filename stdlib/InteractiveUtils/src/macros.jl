@@ -9,8 +9,34 @@ using Base: insert!, replace_ref_begin_end!,
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[esc(reescape(get_typeof, a)) for a in args]...)}), where_params)
-typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[reescape(get_typeof, a) for a in args]...)}), where_params)
+typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[esc(reescape(get_typeof, a)) for a in extract_args(args)]...)}), where_params)
+typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[reescape(get_typeof, a) for a in extract_args(args)]...)}), where_params)
+
+function extract_args(args)
+    stop = 0
+    for (i, arg) in enumerate(args)
+        arg = Meta.unescape(arg)
+        encountered_vararg = stop !== 0
+        isexpr(arg, :(::)) && encountered_vararg && error("Explicit type annotations cannot come after a `::Vararg{...} or `::T...` annotation")
+        is_vararg = isexpr(arg, :...) && isexpr(arg.args[1], :(::)) ||
+                    # technically, a user may define their own `Vararg` binding,
+                    # but handling this right would require deferring the check until runtime,
+                    # where we can't differentiate between a type coming from a value or a type annotation
+                    isexpr(arg, :(::)) && is_vararg_symbol(arg.args[end])
+        !is_vararg && continue
+        encountered_vararg && error("`::Vararg{...}` or `::T...` annotations must occur only once")
+        stop = i
+    end
+    stop === 0 && return args
+    return args[1:stop]
+end
+
+function is_vararg_symbol(@nospecialize ex)
+    ex = ignore_qualifiers(ex)
+    name = isexpr(ex, :curly) ? ex.args[1] : ex
+    return in(name, (:Vararg, Vararg))
+end
+ignore_qualifiers(@nospecialize ex) = isexpr(ex, :(.), 2) ? ex.args[2] : ex
 
 function extract_where_parameters(ex::Expr)
     isexpr(ex, :where) || return ex, nothing
