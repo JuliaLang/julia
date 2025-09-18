@@ -175,7 +175,28 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_task_t *ct = jl_current_task;
         jl_value_t *fptr = jl_exprarg(e, 0);
         // Handle dot expressions in tuple arguments for ccall by converting to GlobalRef eagerly
-        if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == jl_symbol("tuple")) {
+        jl_sym_t *tuple_sym = jl_symbol("tuple");
+        if (jl_is_quotenode(fptr)) {
+            if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
+                fptr = jl_quotenode_value(fptr);
+        }
+        if (jl_is_tuple(fptr)) {
+            // convert literal Tuple to Expr tuple
+            jl_expr_t *tupex = jl_exprn(tuple_sym, jl_nfields(fptr));
+            jl_value_t *v = NULL;
+            JL_GC_PUSH2(&tupex, &v);
+            for (long i = 0; i < jl_nfields(fptr); i++) {
+                v = jl_fieldref(fptr, i);
+                if (!jl_is_string(v))
+                    v = jl_new_struct(jl_quotenode_type, v);
+                jl_exprargset(tupex, i, v);
+            }
+            jl_exprargset(e, 0, tupex);
+            fptr = (jl_value_t*)tupex;
+            JL_GC_POP();
+        }
+        if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == tuple_sym) {
+            // verify Expr tuple can be interpreted and handle
             jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
             size_t nargs_tuple = jl_expr_nargs(tuple_expr);
             if (nargs_tuple == 0)
@@ -212,14 +233,25 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
                     }
                 }
                 else if (jl_is_quotenode(arg)) {
-                    jl_value_t *quoted_val = jl_quotenode_value(arg);
-                    if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val))
-                        jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, quoted_val);
+                    if (i == 0) {
+                        // function name must be a symbol or string, library can be anything
+                        jl_value_t *quoted_val = jl_quotenode_value(arg);
+                        if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val))
+                            jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, jl_quotenode_value(arg));
+                    }
                 }
                 else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
-                    jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, arg);
+                    jl_type_error(i == 0 ? "ccall function name" : "ccall library name", (jl_value_t*)jl_symbol_type, arg);
                 }
             }
+        }
+        else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
+            // convert String to Expr (String,)
+            // convert QuoteNode(Symbol) to Expr (QuoteNode(Symbol),)
+            jl_expr_t *tupex = jl_exprn(tuple_sym, 1);
+            jl_exprargset(tupex, 0, fptr);
+            jl_exprargset(e, 0, tupex);
+            fptr = (jl_value_t*)tupex;
         }
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);

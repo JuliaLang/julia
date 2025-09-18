@@ -1012,7 +1012,8 @@ The arguments to [`ccall`](@ref) are:
       name.
     - Single name: `(:function_name,)` or `"function_name"` - uses default library lookup.
     - Name with library: `(:function_name, "library")` - specifies both function and library.
-    - Symbol and string literals are automatically normalized to tuple form.
+    - Symbol, string, and tuple literal constants (not expressions that evaluate to those constants,
+      but actual literals) are automatically normalized to tuple form.
     * **Pointer-based calls** (non-tuple syntax):
     - Anything that is not a literal tuple expression specified above is assumed to be an
       expression that evaluates to a function pointers at runtime.

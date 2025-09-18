@@ -1093,12 +1093,7 @@
    ;; Already a tuple - keep as-is, validation will happen in C
    ((tuple-syntax? raw-name)
     raw-name)
-   ;; Normalize atoms like strings and quoted values into 1-element tuple, since they aren't pointers
-   ((and (atom? raw-name) (not (symbol? raw-name)))
-    `(tuple ,raw-name))
-   ((and (pair? raw-name) (quoted? raw-name))
-    `(tuple ,raw-name))
-   ;; Otherwise it is a pointer expression
+   ;; Otherwise it is an atom or pointer expression, which will be validated later in C
    (else (expand-forms raw-name))))
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
