@@ -465,7 +465,7 @@ Used for:
  - `Core._task(f, size)` where `f()` will be called when the task runs
  - `Core.finalizer(f, obj)` where `f(obj)` will be called during garbage collection
 
-Contains the CallInfo for the indirect function call, its effects, and whether
+Contains the `CallInfo` for the indirect function call, its effects, and whether
 the indirect call should contribute edges for invalidation tracking.
 """
 struct IndirectCallInfo <: CallInfo
@@ -499,6 +499,5 @@ end
 function add_edges_impl(edges::Vector{Any}, info::GlobalAccessInfo)
     push!(edges, info.b)
 end
-
 
 @specialize
