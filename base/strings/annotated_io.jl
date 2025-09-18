@@ -250,6 +250,14 @@ Base.print(io::AnnotatedIOBuffer, s::Union{<:AnnotatedString, SubString{<:Annota
 Base.print(io::AnnotatedIOBuffer, c::AnnotatedChar) =
     (write(io, c); nothing)
 
+styled_print(io::AnnotatedIOBuffer, msg::Any, kwargs::Any) = print(io, msg...)
+
+styled_print_(io::AnnotatedIOBuffer, @nospecialize(msg), @nospecialize(kwargs)) =
+    invoke_in_world(tls_world_age(), styled_print, io, msg, kwargs)::Nothing
+
+Base.printstyled(io::AnnotatedIOBuffer, msg...; kwargs...) =
+    styled_print_(io, msg, kwargs)
+
 # Escape
 
 Base.escape_string(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}},
