@@ -124,10 +124,12 @@ public
 # filesystem operations
     rename,
 
+# promotion
+    promote_typejoin,
+
 # misc
     notnothing,
     runtests,
     text_colors,
     depwarn,
-    donotdelete,
-    promote_typejoin
+    donotdelete
