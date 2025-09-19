@@ -1149,43 +1149,49 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
 }
 
 // Look through instructions to find all possible allocas that might become the sret argument
-static std::optional<SmallSetVector<AllocaInst *, 8>> FindSretAllocas(Value* SRetArg) {
-    SmallSetVector<AllocaInst *, 8> allocas;
+static SmallSetVector<AllocaInst *, 1> FindSretAllocas(Value* SRetArg) {
+    SmallSetVector<AllocaInst *, 1> allocas;
     if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
         allocas.insert(OneSRet); // Found it directly
-    } else {
+    }
+    else {
         SmallSetVector<Value *, 8> worklist;
         worklist.insert(SRetArg);
         while (!worklist.empty()) {
             Value *V = worklist.pop_back_val();
             if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
                 allocas.insert(Alloca); // Found a candidate
-            } else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
+            }
+            else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
                 for (Value *Incoming : Phi->incoming_values()) {
                     worklist.insert(Incoming);
                 }
-            } else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
+            }
+            else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
                 auto TrueBranch = SI->getTrueValue();
                 auto FalseBranch = SI->getFalseValue();
                 if (TrueBranch && FalseBranch) {
                     worklist.insert(TrueBranch);
                     worklist.insert(FalseBranch);
-                } else {
+                }
+                else {
                     llvm_dump(SI);
                     dbgs() << "Malformed Select\n";
-                    return {};
+                    allocas.clear();
+                    return allocas;
                 }
-            } else {
+            }
+            else {
                 llvm_dump(V);
                 dbgs() << "Unexpected SRet argument\n";
-                return {};
+                allocas.clear();
+                return allocas;
             }
         }
     }
-    assert(allocas.size() > 0);
     assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca) JL_NOTSAFEPOINT {
             return (SRetAlloca->getArraySize() == allocas[0]->getArraySize() &&
-            SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());
+                SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());
         }
     ));
     return allocas;
@@ -1245,48 +1251,27 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 }
                 bool HasDefBefore = false;
-                if (CI->hasStructRetAttr()) {
-                    Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
-                    auto tracked = CountTrackedPointers(ElT, true);
-                    if (tracked.count) {
-                        HasDefBefore = true;
-                        auto allocas_opt = FindSretAllocas((CI->arg_begin()[0])->stripInBoundsOffsets());
+                // Loop over all arguments to find those with "julia.return_roots" attribute
+                AttributeList Attrs = CI->getAttributes();
+                for (unsigned i = 0; i < CI->arg_size(); ++i) {
+                    Attribute RetRootsAttr = Attrs.getParamAttr(i, "julia.return_roots");
+                    if (RetRootsAttr.isValid()) {
+                        size_t return_roots = atol(RetRootsAttr.getValueAsString().data());
+                        assert(return_roots);
+                        auto gc_allocas = FindSretAllocas(CI->getArgOperand(i)->stripInBoundsOffsets());
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
-                        // If they are tracked.all we can just pass through but if they have a roots bundle it's possible we need to emit some copies ¯\_(ツ)_/¯
-                        if (!allocas_opt.has_value()) {
+                        if (gc_allocas.size() == 0) {
                             llvm_dump(&F);
                             abort();
                         }
-                        auto allocas = allocas_opt.value();
-                        for (AllocaInst *SRet : allocas) {
-                            if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                assert(!tracked.derived);
-                                if (tracked.all) {
-                                    S.ArrayAllocas[SRet] = tracked.count * cast<ConstantInt>(SRet->getArraySize())->getZExtValue();
-                                }
-                                else {
-                                    Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
-                                    auto gc_allocas_opt = FindSretAllocas(arg1);
-                                    if (!gc_allocas_opt.has_value()) {
-                                        llvm_dump(&F);
-                                        abort();
-                                    }
-                                    auto gc_allocas = gc_allocas_opt.value();
-                                    if (gc_allocas.size() == 0) {
-                                        llvm_dump(CI);
-                                        errs() << "Expected one Alloca at least\n";
-                                        abort();
-                                    }
-                                    else {
-                                        for (AllocaInst* SRet_gc : gc_allocas) {
-                                            Type *ElT = SRet_gc->getAllocatedType();
-                                            if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                                S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
-                                            }
-                                        }
-                                    }
-                                }
+                        for (AllocaInst *SRet_gc : gc_allocas) {
+                            Type *ElT = SRet_gc->getAllocatedType();
+                            if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
+                                // this is a umax operation since we sometimes see the calls cloned, although we don't see these reused for different sizes
+                                auto &live_roots = S.ArrayAllocas[SRet_gc];
+                                if (live_roots < return_roots)
+                                    live_roots = return_roots;
                             }
                         }
                     }
