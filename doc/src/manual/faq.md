@@ -148,8 +148,8 @@ and notice that it works fine in an interactive environment (like the Julia REPL
 but gives ```UndefVarError: `x` not defined``` when you try to run it in script or other
 file. What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
-Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
-an assignment to a global in that local scope.
+Here, `x` is a global variable, `while` defines a distinct [local scope](@ref scope-of-variables) for each of its iteration, and 
+`x += 1` is an assignment to a global in one of those local scopes.
 
 As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
 keyword for code in the REPL (and many other interactive environments), to simplify
