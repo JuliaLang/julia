@@ -84,7 +84,7 @@ julia> mem = Memory{String}(undef, 10);
 julia> ref = Base.memoryindex(memoryref(mem, 3))
 3
 
-julia> Base.memoryindex(memoryref(Memory{Nothing}, 10), 8)
+julia> Base.memoryindex(memoryref(Memory{Nothing}(undef, 10), 8))
 8
 ```
 
