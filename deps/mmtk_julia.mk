@@ -1,9 +1,9 @@
 ## MMTK ##
 
 # Both MMTK_MOVING and MMTK_PLAN should be specified in the Make.user file.
-# At this point, since we only support non-moving this is always set to 0
-# FIXME: change it to `?:` when introducing moving plans
-MMTK_MOVING := 0
+# FIXME: By default we do a non-moving build. We should change the default to 1
+# once we support moving plans.
+MMTK_MOVING ?= 0
 MMTK_VARS := MMTK_PLAN=$(MMTK_PLAN) MMTK_MOVING=$(MMTK_MOVING)
 
 ifneq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
@@ -75,6 +75,25 @@ endif # MMTK_JULIA_DIR
 else
 # We are building using the BinaryBuilder version of the binding
 
+# This will download all the versions of the binding that are available in the BinaryBuilder
 $(eval $(call bb-install,mmtk_julia,MMTK_JULIA,false))
+
+# Make sure we use the right version of $MMTK_PLAN, $MMTK_MOVING and $MMTK_BUILD
+ifeq (${MMTK_PLAN},Immix)
+LIB_PATH_PLAN = immix
+else ifeq (${MMTK_PLAN},StickyImmix)
+LIB_PATH_PLAN = sticky
+endif
+
+ifeq ($(MMTK_MOVING), 0)
+LIB_PATH_MOVING := non_moving
+else
+LIB_PATH_MOVING := moving
+endif
+
+version-check-mmtk_julia: $(BUILDROOT)/usr/lib/libmmtk_julia.so
+
+$(BUILDROOT)/usr/lib/libmmtk_julia.so: get-mmtk_julia
+	@ln -sf $(BUILDROOT)/usr/lib/$(LIB_PATH_PLAN)/$(LIB_PATH_MOVING)/$(MMTK_BUILD)/libmmtk_julia.so $@
 
 endif # USE_BINARYBUILDER_MMTK_JULIA

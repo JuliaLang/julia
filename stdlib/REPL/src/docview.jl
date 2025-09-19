@@ -312,10 +312,11 @@ function summarize(binding::Binding, sig)
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
-        if Base.isbindingresolved(binding.mod, binding.var)
-            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
-        else
+        bpart = Base.lookup_binding_partition(Base.tls_world_age(), convert(Core.Binding, GlobalRef(binding.mod, binding.var)))
+        if Base.binding_kind(bpart) === Base.PARTITION_KIND_GUARD
             println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        else
+            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
         end
     end
     md = Markdown.parse(seekstart(io))
@@ -567,8 +568,7 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_ac
     quote
         repl_latex($io, $str)
         repl_search($io, $str, $mod)
-        $(if !isdefined(mod, s) && !Base.isbindingresolved(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
-               # n.b. we call isdefined for the side-effect of resolving the binding, if possible
+        $(if !isdefined(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str, $mod))
           end)
         $(_repl(s, brief, mod, internal_accesses))

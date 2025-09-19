@@ -16,6 +16,7 @@ export BINDIR,
        JIT,
        cpu_info,
        cpu_summary,
+       sysimage_target,
        uptime,
        loadavg,
        free_memory,
@@ -104,7 +105,7 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 """
-    Sys.SC_CLK_TCK:
+    Sys.SC_CLK_TCK::Clong
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
@@ -310,6 +311,23 @@ function cpu_info()
     end
     ccall(:uv_free_cpu_info, Cvoid, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus
+end
+
+"""
+    Sys.sysimage_target()
+
+Return the CPU target string that was used to build the current system image.
+
+This function returns the original CPU target specification that was passed to Julia
+when the system image was compiled. This can be useful for reproducing the same
+system image or for understanding what CPU features were enabled during compilation.
+
+If the system image was built with the default settings this will return `"native"`.
+
+See also [`JULIA_CPU_TARGET`](@ref).
+"""
+function sysimage_target()
+    return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
 end
 
 """
@@ -658,10 +676,10 @@ function which(program_name::String)
     # If we couldn't find anything, don't return anything
     nothing
 end
-which(program_name::AbstractString) = which(String(program_name))
+which(program_name::AbstractString) = which(String(program_name)::String)
 
 """
-    Sys.username() -> String
+    Sys.username()::String
 
 Return the username for the current user. If the username cannot be determined
 or is empty, this function throws an error.

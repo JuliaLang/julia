@@ -58,14 +58,16 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 In the following REPL session:
 
-```julia-repl
+```jldoctest
 julia> x = 1.0
+1.0
 ```
 
 is equivalent to:
 
-```julia-repl
+```jldoctest
 julia> global x = 1.0
+1.0
 ```
 
 so all the performance issues discussed previously apply.
@@ -113,6 +115,8 @@ problem with type-stability or creating many small temporary arrays.
 Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
+
+For more information about memory management and garbage collection in Julia, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
 (the remaining allocation reported below is due to running the `@time` macro in global scope)
@@ -915,6 +919,40 @@ In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
+#### Use `@__FUNCTION__` for recursive closures
+
+For recursive closures specifically, the [`@__FUNCTION__`](@ref) macro can avoid both type instability and boxing.
+
+First, let's see the unoptimized version:
+
+```julia
+function make_fib_unoptimized()
+    fib(n) = n <= 1 ? 1 : fib(n - 1) + fib(n - 2)  # fib is boxed
+    return fib
+end
+```
+
+The `fib` function is boxed, meaning the return type is inferred as `Any`:
+
+```julia
+@code_warntype make_fib_unoptimized()
+```
+
+Now, to eliminate this type instability, we can instead use `@__FUNCTION__` to refer to the concrete function object:
+
+```julia
+function make_fib_optimized()
+    fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+    return fib
+end
+```
+
+This gives us a concrete return type:
+
+```julia
+@code_warntype make_fib_optimized()
+```
+
 
 ### [Types with values-as-parameters](@id man-performance-value-type)
 
@@ -1043,7 +1081,7 @@ JIT-compilation machinery to basically execute the equivalent of a switch statem
 lookup in your own code.
 
 Some run-time benchmarks comparing (1) type dispatch, (2) dictionary lookup, and (3) a "switch"
-statement can be found [on the mailing list](https://groups.google.com/forum/#!msg/julia-users/jUMu9A3QKQQ/qjgVWr7vAwAJ).
+statement can be found [on discourse](https://discourse.julialang.org/t/suggestion-updating-the-dispatch-vs-dict-switch-benchmark-link-in-the-manual/132159).
 
 Perhaps even worse than the run-time impact is the compile-time impact: Julia will compile specialized
 functions for each different `Car{Make, Model}`; if you have hundreds or thousands of such types,
@@ -1480,7 +1518,7 @@ Further, note the `Statistics` extension `SparseArraysExt` has been activated be
 tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
 
 This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
-Also the `Pkg` utility `why` can be used to report why a an indirect dependency exists.
+Also the `Pkg` utility `why` can be used to report why an indirect dependency exists.
 
 ```
 (CustomPackage) pkg> why FFMPEG_jll
@@ -1505,6 +1543,36 @@ Note the `--startup-file=no` which helps isolate the test from packages you may 
 
 More analysis of the reasons for recompilation can be achieved with the
 [`SnoopCompile`](https://github.com/timholy/SnoopCompile.jl) package.
+
+### Tracing expression evaluation
+
+If you need to understand what code is being evaluated during test or script execution,
+you can use the `--trace-eval` command-line option or the [`Base.TRACE_EVAL`](@ref) global control to trace the outermost expressions being evaluated (top-level statements). Note this does not individually report the contents of function calls or code blocks:
+
+```bash
+# Show only location information during evaluation
+julia --trace-eval=loc script.jl
+
+# Show full expressions being evaluated
+julia --trace-eval=full script.jl
+```
+
+You can also control this programmatically:
+
+```julia
+# Enable full expression tracing
+Base.TRACE_EVAL = :full
+
+# Show only locations
+Base.TRACE_EVAL = :loc
+
+# Disable tracing
+Base.TRACE_EVAL = :no
+
+# Reset to use command-line setting
+Base.TRACE_EVAL = nothing
+```
+
 
 ### Reducing precompilation time
 
@@ -1697,7 +1765,7 @@ in generated code by using Julia's [`code_native`](@ref) function.
 
 Note that `@fastmath` also assumes that `NaN`s will not occur during the computation, which can lead to surprising behavior:
 
-```julia-repl
+```jldoctest
 julia> f(x) = isnan(x);
 
 julia> f(NaN)

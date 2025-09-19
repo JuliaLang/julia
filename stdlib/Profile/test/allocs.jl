@@ -8,6 +8,11 @@ let iobuf = IOBuffer()
     end
 end
 
+# Issue #57103: This test does not work with MMTk because of fastpath
+# allocation which never calls the allocation profiler.
+# TODO: We should port these observability tools (e.g. allocation
+# profiler and heap snapshot) to MMTk
+@static if Base.USING_STOCK_GC
 @testset "alloc profiler doesn't segfault" begin
     res = Allocs.@profile sample_rate=1.0 begin
         # test the allocations during compilation
@@ -73,14 +78,8 @@ end
     @test length(first_alloc.stacktrace) > 0
     @test length(string(first_alloc.type)) > 0
 
-    # Issue #57103: This test does not work with MMTk because of fastpath
-    # allocation which never calls the allocation profiler.
-    # TODO: We should port these observability tools (e.g. allocation
-    # profiler and heap snapshot) to MMTk
-    @static if Base.USING_STOCK_GC
-        @testset for type in (Task, Vector{Float64},)
-            @test length(filter(a->a.type <: type, profile.allocs)) >= NUM_TASKS
-        end
+    @testset for type in (Task, Vector{Float64},)
+        @test length(filter(a->a.type <: type, profile.allocs)) >= NUM_TASKS
     end
 
     # TODO: it would be nice to assert that these tasks
@@ -149,8 +148,6 @@ end
     @test length([a for a in prof.allocs if a.type == String]) >= 1
 end
 
-# FIXME: Issue #57103 disabling test for MMTk.
-@static if Base.USING_STOCK_GC
 @testset "alloc profiler catches allocs from codegen" begin
     @eval begin
         struct MyType x::Int; y::Int end
@@ -170,7 +167,6 @@ end
     @test length(prof.allocs) >= 1
     @test length([a for a in prof.allocs if a.type == MyType]) >= 1
 end
-end
 
 @testset "alloc profiler catches allocs from buffer resize" begin
     f(a) = for _ in 1:100; push!(a, 1); end
@@ -186,4 +182,5 @@ end
     @test 3 <= length(prof.allocs) <= 10
     @test length([a for a in prof.allocs if a.type === Allocs.BufferType]) == 1
     @test length([a for a in prof.allocs if a.type === Memory{Int}]) >= 2
+end
 end

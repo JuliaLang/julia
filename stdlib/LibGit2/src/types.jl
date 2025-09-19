@@ -953,7 +953,7 @@ end
 @assert Base.allocatedinline(ConfigBackendEntry)
 
 """
-    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry)::Tuple{String,String,String,String}
 
 Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
 
@@ -1272,7 +1272,7 @@ end
 abstract type AbstractCredential end
 
 """
-    isfilled(cred::AbstractCredential) -> Bool
+    isfilled(cred::AbstractCredential)::Bool
 
 Verifies that a credential is ready for use in authentication.
 """
@@ -1444,7 +1444,7 @@ function Base.shred!(p::CredentialPayload)
 end
 
 """
-    reset!(payload, [config]) -> CredentialPayload
+    reset!(payload, [config])::CredentialPayload
 
 Reset the `payload` state back to the initial values so that it can be used again within
 the credential callback. If a `config` is provided the configuration will also be updated.
@@ -1466,7 +1466,7 @@ function reset!(p::CredentialPayload, config::GitConfig=p.config)
 end
 
 """
-    approve(payload::CredentialPayload; shred::Bool=true) -> Nothing
+    approve(payload::CredentialPayload; shred::Bool=true) -> nothing
 
 Store the `payload` credential for re-use in a future authentication. Should only be called
 when authentication was successful.
@@ -1497,7 +1497,7 @@ function approve(p::CredentialPayload; shred::Bool=true)
 end
 
 """
-    reject(payload::CredentialPayload; shred::Bool=true) -> Nothing
+    reject(payload::CredentialPayload; shred::Bool=true) -> nothing
 
 Discard the `payload` credential from begin re-used in future authentication. Should only be
 called when authentication was unsuccessful.

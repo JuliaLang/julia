@@ -4,10 +4,15 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#ifndef MMTK_GC
+#ifndef WITH_THIRD_PARTY_HEAP
 #include "gc-tls-stock.h"
 #else
+// Pick the appropriate third-party implementation
+#ifdef WITH_THIRD_PARTY_HEAP
+#if WITH_THIRD_PARTY_HEAP == 1 // MMTk
 #include "gc-tls-mmtk.h"
+#endif
+#endif
 #endif
 #include "gc-tls-common.h"
 #include "julia_atomics.h"
@@ -220,9 +225,6 @@ typedef struct _jl_tls_states_t {
 
 #define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
 
-// all values are callable as Functions
-typedef jl_value_t jl_function_t;
-
 typedef struct _jl_timing_block_t jl_timing_block_t;
 typedef struct _jl_timing_event_t jl_timing_event_t;
 typedef struct _jl_excstack_t jl_excstack_t;
@@ -237,7 +239,7 @@ typedef struct _jl_task_t {
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *scope;
-    jl_function_t *start;
+    jl_value_t *start;
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint16_t priority;

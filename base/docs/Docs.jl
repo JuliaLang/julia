@@ -51,6 +51,10 @@ You can retrieve docs for functions, macros and other objects as follows:
     @doc @time
     @doc md""
 
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, retrieving documentation with the `@doc` macro requires that
+    the `REPL` stdlib is loaded.
+
 ## Functions & Methods
 Placing documentation before a method definition (e.g. `function foo() ...` or `foo() = ...`)
 will cause that specific method to be documented, as opposed to the whole function. Method
@@ -75,8 +79,8 @@ const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
 function meta(m::Module; autoinit::Bool=true)
-    if !isdefinedglobal(m, META)
-        return autoinit ? invokelatest(initmeta, m) : nothing
+    if !invokelatest(isdefinedglobal, m, META)
+        return autoinit ? initmeta(m) : nothing
     end
     # TODO: This `invokelatest` is not technically required, but because
     # of the automatic constant backdating is currently required to avoid
@@ -85,13 +89,13 @@ function meta(m::Module; autoinit::Bool=true)
 end
 
 function initmeta(m::Module)
-    if !isdefinedglobal(m, META)
+    if !invokelatest(isdefinedglobal, m, META)
         val = METAType()
         Core.eval(m, :(const $META = $val))
         push!(modules, m)
         return val
     end
-    return getglobal(m, META)
+    return invokelatest(getglobal, m, META)
 end
 
 function signature!(tv::Vector{Any}, expr::Expr)
@@ -787,6 +791,9 @@ When `pattern` is a string, case is ignored. Results are printed to `io`.
 ```
 help?> "pattern"
 ```
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, `apropos` requires that the `REPL` stdlib is loaded.
 """
 function apropos end
 
@@ -797,6 +804,9 @@ Return all documentation that matches both `binding` and `sig`.
 
 If `getdoc` returns a non-`nothing` result on the value of the binding, then a
 dynamic docstring is returned instead of one based on the binding itself.
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, `Docs.doc` requires that the `REPL` stdlib is loaded.
 """
 function doc end
 

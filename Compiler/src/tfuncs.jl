@@ -405,6 +405,9 @@ end
     return isdefined_tfunc(𝕃, arg1, sym)
 end
 @nospecs function isdefined_tfunc(𝕃::AbstractLattice, arg1, sym)
+    if arg1 isa MustAlias
+        arg1 = widenmustalias(arg1)
+    end
     arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(arg1.parameters[1]) : widenconst(arg1)
     a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
@@ -439,8 +442,9 @@ end
                 end
             elseif isa(arg1, PartialStruct)
                 if !isvarargtype(arg1.fields[end])
-                    if 1 ≤ idx ≤ length(arg1.fields)
-                        return Const(true)
+                    aundefᵢ = _getundefs(arg1)[idx]
+                    if aundefᵢ isa Bool
+                        return Const(!aundefᵢ)
                     end
                 end
             elseif !isvatuple(a1)
@@ -449,6 +453,10 @@ end
                     return Const(true)
                 end
             end
+        # datatype_fieldcount is what `fieldcount` uses internally
+        # and returns nothing (!==0) for non-definite field counts.
+        elseif datatype_fieldcount(a1) === 0
+            return Const(false)
         end
     elseif isa(a1, Union)
         # Results can only be `Const` or `Bool`
@@ -572,6 +580,25 @@ end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
+
+@nospecs function _svec_len_tfunc(𝕃::AbstractLattice, s)
+    if isa(s, Const) && isa(s.val, SimpleVector)
+        return Const(length(s.val))
+    end
+    return Int
+end
+add_tfunc(Core._svec_len, 1, 1, _svec_len_tfunc, 1)
+
+@nospecs function _svec_ref_tfunc(𝕃::AbstractLattice, s, i)
+    if isa(s, Const) && isa(i, Const)
+        s, i = s.val, i.val
+        if isa(s, SimpleVector) && isa(i, Int)
+            return 1 ≤ i ≤ length(s) ? Const(s[i]) : Bottom
+        end
+    end
+    return Any
+end
+add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
 @nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
@@ -906,31 +933,6 @@ add_tfunc(<:, 2, 2, subtype_tfunc, 10)
     return lty ⊑ Type && rty ⊑ Type
 end
 
-function fieldcount_noerror(@nospecialize t)
-    if t isa UnionAll || t isa Union
-        t = argument_datatype(t)
-        if t === nothing
-            return nothing
-        end
-    elseif t === Union{}
-        return 0
-    end
-    t isa DataType || return nothing
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount_noerror(types)
-        end
-        return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-        return nothing
-    end
-    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
-end
-
 function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
     typ = argument_datatype(typ)
     typ === nothing && return nothing
@@ -1073,17 +1075,15 @@ end
 end
 
 @nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name, boundscheck_or_order)
-    t = isvarargtype(boundscheck_or_order) ? unwrapva(boundscheck_or_order) :
-        widenconst(boundscheck_or_order)
-    hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    if !isvarargtype(boundscheck_or_order)
+        t = widenconst(boundscheck_or_order)
+        hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    end
     return getfield_tfunc(𝕃, s00, name)
 end
 @nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name, order, boundscheck)
     hasintersect(widenconst(order), Symbol) || return Bottom
-    if isvarargtype(boundscheck)
-        t = unwrapva(boundscheck)
-        hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
-    else
+    if !isvarargtype(boundscheck)
         hasintersect(widenconst(boundscheck), Bool) || return Bottom
     end
     return getfield_tfunc(𝕃, s00, name)
@@ -1143,8 +1143,12 @@ end
         sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
-            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
-                return unwrapva(s00.fields[nv])
+            if isa(nv, Int)
+                if nv < 1
+                    return Bottom
+                elseif nv ≤ length(s00.fields)
+                    return unwrapva(s00.fields[nv])
+                end
             end
         end
         s00 = s
@@ -1439,7 +1443,7 @@ end
             if TF2 === Bottom
                 RT = Bottom
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
-                RT = PartialStruct(fallback_lattice, RT, Any[TF, TF2])
+                RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
             end
             info = ModifyOpInfo(callinfo.info)
             return CallMeta(RT, Any, Effects(), info)
@@ -1965,15 +1969,8 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
         # UnionAll context is missing around this.
         pop!(argtypes)
     end
-    all_are_const = true
-    for i in 1:length(argtypes)
-        if !isa(argtypes[i], Const)
-            all_are_const = false
-            break
-        end
-    end
-    if all_are_const
-        return Const(ntuple(i::Int->argtypes[i].val, length(argtypes)))
+    if is_all_const_arg(argtypes, 1) # repeated from builtin_tfunction for the benefit of callers that use this tfunc directly
+        return Const(tuple(collect_const_args(argtypes, 1)...))
     end
     params = Vector{Any}(undef, length(argtypes))
     anyinfo = false
@@ -2017,7 +2014,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
     issingletontype(typ) && return Const(typ.instance)
-    return anyinfo ? PartialStruct(𝕃, typ, argtypes) : typ
+    return anyinfo ? PartialStruct(𝕃, typ, partialstruct_init_undefs(typ, argtypes)::Vector, argtypes) : typ
 end
 
 @nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, memlen)
@@ -2025,7 +2022,7 @@ end
     memt = tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
     memt == Union{} && return memt
     # PartialStruct so that loads of Const `length` get inferred
-    return PartialStruct(𝕃, memt, Any[memlen, Ptr{Nothing}])
+    return PartialStruct(𝕃, memt, Union{Nothing,Bool}[false,false], Any[memlen, Ptr{Nothing}])
 end
 add_tfunc(Core.memorynew, 2, 2, memorynew_tfunc, 10)
 
@@ -2101,6 +2098,7 @@ end
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, ref, idx, boundscheck)
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
+    hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
     return ref
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
@@ -2112,7 +2110,7 @@ end
 add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
 
 @nospecs function memoryref_builtin_common_errorcheck(mem, order, boundscheck)
-    hasintersect(widenconst(mem), GenericMemoryRef) || return false
+    hasintersect(widenconst(mem), Union{GenericMemory, GenericMemoryRef}) || return false
     hasintersect(widenconst(order), Symbol) || return false
     hasintersect(widenconst(unwrapva(boundscheck)), Bool) || return false
     return true
@@ -2208,7 +2206,7 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
         idx = widenconst(argtypes[2])
         idx ⊑ Int || return false
         boundscheck ⊑ Bool || return false
-        memtype ⊑ GenericMemoryRef || return false
+        memtype ⊑ Union{GenericMemory, GenericMemoryRef} || return false
         # If we have @inbounds (last argument is false), we're allowed to assume
         # we don't throw bounds errors.
         if isa(boundscheck, Const)
@@ -2338,11 +2336,17 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core.compilerbarrier
         na == 2 || return false
         return compilerbarrier_nothrow(argtypes[1], nothing)
+    elseif f === Core._svec_len
+        na == 1 || return false
+        return _svec_len_tfunc(𝕃, argtypes[1]) isa Const
+    elseif f === Core._svec_ref
+        na == 2 || return false
+        return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
     end
     return false
 end
 
-# known to be always effect-free (in particular nothrow)
+# known to be always effect-free (in particular also nothrow)
 const _PURE_BUILTINS = Any[
     tuple,
     svec,
@@ -2368,7 +2372,11 @@ const _CONSISTENT_BUILTINS = Any[
     throw,
     Core.throw_methoderror,
     setfield!,
-    donotdelete
+    donotdelete,
+    memoryrefnew,
+    memoryrefoffset,
+    Core._svec_len,
+    Core._svec_ref,
 ]
 
 # known to be effect-free (but not necessarily nothrow)
@@ -2393,6 +2401,8 @@ const _EFFECT_FREE_BUILTINS = [
     Core.throw_methoderror,
     getglobal,
     compilerbarrier,
+    Core._svec_len,
+    Core._svec_ref,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -2426,14 +2436,13 @@ const _ARGMEM_BUILTINS = Any[
     replacefield!,
     setfield!,
     swapfield!,
+    Core._svec_len,
+    Core._svec_ref,
 ]
 
 const _INCONSISTENT_INTRINSICS = Any[
-    Intrinsics.pointerref,      # this one is volatile
-    Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
-    Intrinsics.have_fma,        # this one depends on the runtime environment
-    Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
-    # ... and list fastmath intrinsics:
+    # all is_pure_intrinsic_infer plus
+    # ... all the unsound fastmath functions which should have been in is_pure_intrinsic_infer
     # join(string.("Intrinsics.", sort(filter(endswith("_fast")∘string, names(Core.Intrinsics)))), ",\n")
     Intrinsics.add_float_fast,
     Intrinsics.div_float_fast,
@@ -2450,8 +2459,41 @@ const _INCONSISTENT_INTRINSICS = Any[
     # Intrinsics.muladd_float,    # this is not interprocedurally consistent
 ]
 
-const _SPECIAL_BUILTINS = Any[
-    Core._apply_iterate,
+# Intrinsics that require all arguments to be floats
+const _FLOAT_INTRINSICS = Any[
+    Intrinsics.neg_float,
+    Intrinsics.add_float,
+    Intrinsics.sub_float,
+    Intrinsics.mul_float,
+    Intrinsics.div_float,
+    Intrinsics.min_float,
+    Intrinsics.max_float,
+    Intrinsics.fma_float,
+    Intrinsics.muladd_float,
+    Intrinsics.neg_float_fast,
+    Intrinsics.add_float_fast,
+    Intrinsics.sub_float_fast,
+    Intrinsics.mul_float_fast,
+    Intrinsics.div_float_fast,
+    Intrinsics.min_float_fast,
+    Intrinsics.max_float_fast,
+    Intrinsics.eq_float,
+    Intrinsics.ne_float,
+    Intrinsics.lt_float,
+    Intrinsics.le_float,
+    Intrinsics.eq_float_fast,
+    Intrinsics.ne_float_fast,
+    Intrinsics.lt_float_fast,
+    Intrinsics.le_float_fast,
+    Intrinsics.fpiseq,
+    Intrinsics.abs_float,
+    Intrinsics.copysign_float,
+    Intrinsics.ceil_llvm,
+    Intrinsics.floor_llvm,
+    Intrinsics.trunc_llvm,
+    Intrinsics.rint_llvm,
+    Intrinsics.sqrt_llvm,
+    Intrinsics.sqrt_llvm_fast
 ]
 
 # Types compatible with fpext/fptrunc
@@ -2523,8 +2565,74 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
 end
 
+# add a new builtin function to this list only after making sure that
+# `builtin_effects` is properly implemented for it
+const _EFFECTS_KNOWN_BUILTINS = Any[
+    <:,
+    ===,
+    # Core._abstracttype,
+    # _apply_iterate,
+    # Core._call_in_world_total,
+    # Core._compute_sparams,
+    # Core._defaultctors,
+    # Core._equiv_typedef,
+    Core._expr,
+    # Core._primitivetype,
+    # Core._setsuper!,
+    # Core._structtype,
+    Core._svec_len,
+    Core._svec_ref,
+    # Core._typebody!,
+    Core._typevar,
+    apply_type,
+    compilerbarrier,
+    Core.current_scope,
+    donotdelete,
+    Core.finalizer,
+    Core.get_binding_type,
+    Core.ifelse,
+    # Core.invoke_in_world,
+    # invokelatest,
+    Core.memorynew,
+    memoryref_isassigned,
+    memoryrefget,
+    # Core.memoryrefmodify!,
+    memoryrefnew,
+    memoryrefoffset,
+    # Core.memoryrefreplace!,
+    memoryrefset!,
+    # Core.memoryrefsetonce!,
+    # Core.memoryrefswap!,
+    Core.sizeof,
+    svec,
+    Core.throw_methoderror,
+    applicable,
+    fieldtype,
+    getfield,
+    getglobal,
+    # invoke,
+    isa,
+    isdefined,
+    # isdefinedglobal,
+    modifyfield!,
+    # modifyglobal!,
+    nfields,
+    replacefield!,
+    # replaceglobal!,
+    setfield!,
+    # setfieldonce!,
+    # setglobal!,
+    # setglobalonce!,
+    swapfield!,
+    # swapglobal!,
+    throw,
+    tuple,
+    typeassert,
+    typeof
+]
+
 """
-    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Effects
+    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Effects
 
 Compute the effects of a builtin function call. `argtypes` should not include `f` itself.
 """
@@ -2533,7 +2641,9 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return intrinsic_effects(f, argtypes)
     end
 
-    @assert !contains_is(_SPECIAL_BUILTINS, f)
+    if !(f in _EFFECTS_KNOWN_BUILTINS)
+        return Effects()
+    end
 
     if f === getfield
         return getfield_effects(𝕃, argtypes, rt)
@@ -2575,9 +2685,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefnew || f === memoryrefoffset
-            consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
@@ -2667,7 +2775,7 @@ current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
 hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
 
 """
-    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
+    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Bool
 
 Compute throw-ness of a builtin function call. `argtypes` should not include `f` itself.
 """
@@ -2686,11 +2794,12 @@ end
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
-    if isa(f, IntrinsicFunction)
-        if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
-            argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
+    # Early constant evaluation for foldable builtins with all const args
+    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (f in _PURE_BUILTINS || (f in _CONSISTENT_BUILTINS && f in _EFFECT_FREE_BUILTINS))
+        if is_all_const_arg(argtypes, 1)
+            argvals = collect_const_args(argtypes, 1)
             try
-                # unroll a few cases which have specialized codegen
+                # unroll a few common cases for better codegen
                 if length(argvals) == 1
                     return Const(f(argvals[1]))
                 elseif length(argvals) == 2
@@ -2704,6 +2813,8 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                 return Bottom
             end
         end
+    end
+    if isa(f, IntrinsicFunction)
         iidx = Int(reinterpret(Int32, f)) + 1
         if iidx < 0 || iidx > length(T_IFUNC)
             # unknown intrinsic
@@ -2730,6 +2841,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         tf = T_FFUNC_VAL[fidx]
     end
+
     if hasvarargtype(argtypes)
         if length(argtypes) - 1 > tf[2]
             # definitely too many arguments
@@ -2763,6 +2875,8 @@ _istypemin(@nospecialize x) = !_iszero(x) && Intrinsics.neg_int(x) === x
 function builtin_exct(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_exct(𝕃, f, argtypes)
+    elseif f === Core._svec_ref
+        return BoundsError
     end
     return Any
 end
@@ -2871,13 +2985,20 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return ErrorException
         end
 
-        # fpext and fptrunc have further restrictions on the allowed types.
+        # fpext, fptrunc, fptoui, fptosi, uitofp, and sitofp have further
+        # restrictions on the allowed types.
         if f === Intrinsics.fpext &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+        if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
+            return ErrorException
+        end
+        if (f === Intrinsics.uitofp || f === Intrinsics.sitofp) && !(ty <: CORE_FLOAT_TYPES)
             return ErrorException
         end
 
@@ -2892,11 +3013,15 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         return Union{}
     end
 
-    # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
-    # primitive types of the same type.
+    # The remaining intrinsics are math/bits/comparison intrinsics.
+    # All the non-floating point intrinsics work on primitive values of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return ErrorException
+    if contains_is(_FLOAT_INTRINSICS, f)
+        argtype1 <: CORE_FLOAT_TYPES || return ErrorException
+    end
+
     for i = 2:length(argtypes)
         argtype = widenconst(argtypes[i])
         if isshift ? !isprimitivetype(argtype) : argtype !== argtype1
@@ -2910,36 +3035,48 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
     return intrinsic_exct(SimpleInferenceLattice.instance, f, argtypes) === Union{}
 end
 
-# whether `f` is pure for inference
-function is_pure_intrinsic_infer(f::IntrinsicFunction)
-    return !(f === Intrinsics.pointerref || # this one is volatile
-             f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
+function _is_effect_free_infer(f::IntrinsicFunction)
+     return !(f === Intrinsics.pointerset ||
+              f === Intrinsics.atomic_pointerref ||
+              f === Intrinsics.atomic_pointerset ||
+              f === Intrinsics.atomic_pointerswap ||
+              # f === Intrinsics.atomic_pointermodify ||
+              f === Intrinsics.atomic_pointerreplace ||
+              f === Intrinsics.atomic_fence)
 end
 
-# whether `f` is effect free if nothrow
-function intrinsic_effect_free_if_nothrow(@nospecialize f)
-    return f === Intrinsics.pointerref ||
-           f === Intrinsics.have_fma ||
-           is_pure_intrinsic_infer(f)
+# whether `f` is pure for inference
+function is_pure_intrinsic_infer(f::IntrinsicFunction, is_effect_free::Union{Nothing,Bool}=nothing)
+    if is_effect_free === nothing
+        is_effect_free = _is_effect_free_infer(f)
+    end
+    return is_effect_free && !(
+            f === Intrinsics.llvmcall ||              # can do arbitrary things
+            f === Intrinsics.atomic_pointermodify ||  # can do arbitrary things
+            f === Intrinsics.pointerref ||            # this one is volatile
+            f === Intrinsics.sqrt_llvm_fast ||        # this one may differ at runtime (by a few ulps)
+            f === Intrinsics.have_fma ||              # this one depends on the runtime environment
+            f === Intrinsics.cglobal)                 # cglobal lookup answer changes at runtime
 end
 
 function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
     if f === Intrinsics.llvmcall
         # llvmcall can do arbitrary things
         return Effects()
+    elseif f === atomic_pointermodify
+        # atomic_pointermodify has memory effects, plus any effects from the ModifyOpInfo
+        return Effects()
     end
-    if contains_is(_INCONSISTENT_INTRINSICS, f)
-        consistent = ALWAYS_FALSE
-    else
+    is_effect_free = _is_effect_free_infer(f)
+    effect_free = is_effect_free ? ALWAYS_TRUE : ALWAYS_FALSE
+    if ((is_pure_intrinsic_infer(f, is_effect_free) && !contains_is(_INCONSISTENT_INTRINSICS, f)) ||
+        f === Intrinsics.pointerset || f === Intrinsics.atomic_pointerset || f === Intrinsics.atomic_fence)
         consistent = ALWAYS_TRUE
+    else
+        consistent = ALWAYS_FALSE
     end
-    effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
     nothrow = intrinsic_nothrow(f, argtypes)
-    inaccessiblememonly = ALWAYS_TRUE
+    inaccessiblememonly = is_effect_free && !(f === Intrinsics.pointerref) ? ALWAYS_TRUE : ALWAYS_FALSE
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
 end
 
@@ -3080,15 +3217,12 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         isdispatchelem(ft) || return CallMeta(Bool, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
-    mt = ccall(:jl_method_table_for, Any, (Any,), types)
-    if !isa(mt, MethodTable)
-        return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
-    end
     match, valid_worlds = findsup(types, method_table(interp))
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)
+        mt = Core.methodtable
         vinfo = MethodMatchInfo(vresults, mt, types, false) # XXX: this should actually be an info with invoke-type edge
     else
         rt = Const(true)
