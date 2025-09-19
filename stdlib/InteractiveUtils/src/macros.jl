@@ -23,13 +23,6 @@ function make_tuple_type(types::Vector{Any})
     throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($(join(types[varargs], ", "))); if provided, it must be unique"))
 end
 
-function is_vararg_symbol(@nospecialize ex)
-    ex = ignore_qualifiers(ex)
-    name = isexpr(ex, :curly) ? ex.args[1] : ex
-    return in(name, (:Vararg, Vararg))
-end
-ignore_qualifiers(@nospecialize ex) = isexpr(ex, :(.), 2) ? ex.args[2] : ex
-
 function extract_where_parameters(ex::Expr)
     isexpr(ex, :where) || return ex, nothing
     ex.args[1], ex.args[2:end]
