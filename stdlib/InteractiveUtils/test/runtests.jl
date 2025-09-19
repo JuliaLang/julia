@@ -447,11 +447,11 @@ end
     end
 
     @testset "Vararg handling" begin
-        @test_throws "cannot come after" @eval @code_typed +(::Vararg{Int}, ::Float64)
-        @test_throws "cannot come after" @eval @code_typed +(::Int..., ::Float64)
+        @test_throws "More than one `Core.Vararg`" @eval (@code_typed +(1, 2::Vararg{Int}, 3, 4::Vararg{Int}))[2]
         @test (@code_typed +(1, 2, 3, 4::Vararg{Int}))[2] === Int
         @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5))[2] === Int
         @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5.0))[2] === Int # 5.0 gets purposefully ignored
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, ::Float64))[2] === Int # same for the Float64 type annotation
         @test (@code_typed +(1, 2, 3, ::Int...))[2] === Int
         @test (@code_typed +(1, 2, 3, ::Int..., 5))[2] === Int
         @test (@code_typed +(1, 2, 3, ::Int..., 5.0))[2] === Int

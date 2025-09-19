@@ -9,26 +9,18 @@ using Base: insert!, replace_ref_begin_end!,
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[esc(reescape(get_typeof, a)) for a in extract_args(args)]...)}), where_params)
-typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[reescape(get_typeof, a) for a in extract_args(args)]...)}), where_params)
+typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:($make_tuple_type(Any[$(Any[esc(reescape(get_typeof, a)) for a in args]...)])), where_params)
+typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:($make_tuple_type(Any[$(Any[reescape(get_typeof, a) for a in args]...)])), where_params)
 
-function extract_args(args)
-    stop = 0
-    for (i, arg) in enumerate(args)
-        arg = Meta.unescape(arg)
-        encountered_vararg = stop !== 0
-        isexpr(arg, :(::)) && encountered_vararg && error("Explicit type annotations cannot come after a `::Vararg{...} or `::T...` annotation")
-        is_vararg = isexpr(arg, :...) && isexpr(arg.args[1], :(::)) ||
-                    # technically, a user may define their own `Vararg` binding,
-                    # but handling this right would require deferring the check until runtime,
-                    # where we can't differentiate between a type coming from a value or a type annotation
-                    isexpr(arg, :(::)) && is_vararg_symbol(arg.args[end])
-        !is_vararg && continue
-        encountered_vararg && error("`::Vararg{...}` or `::T...` annotations must occur only once")
-        stop = i
+function make_tuple_type(types::Vector{Any})
+    varargs = Int[]
+    for i in eachindex(types)
+        i == 1 && continue # ignore function type
+        isa(types[i], Core.TypeofVararg) && push!(varargs, i)
     end
-    stop === 0 && return args
-    return args[1:stop]
+    isempty(varargs) && return Tuple{types...}
+    length(varargs) == 1 && return Tuple{types[1:varargs[]]...}
+    throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($(join(types[varargs], ", "))); if provided, it must be unique"))
 end
 
 function is_vararg_symbol(@nospecialize ex)
