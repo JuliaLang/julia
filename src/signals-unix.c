@@ -560,7 +560,7 @@ static void JL_NORETURN jl_exit_thread0_cb(void)
 {
 CFI_NORETURN
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
-    jl_critical_error(thread0_exit_signo, 0, NULL, jl_current_task);
+    jl_critical_error(thread0_exit_signo, INT_MAX, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
 }
