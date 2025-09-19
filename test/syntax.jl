@@ -352,6 +352,12 @@ end
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
+# Using the value of a `global` declaration is allowed, provided that value came
+# from something that isn't another `global` declaration:
+@test_nowarn Meta.lower(Main, Meta.parse("foo = global bar = baz()"))
+
+@test_nowarn Meta.lower(Main, Meta.parse("begin global foo; global bar end"))
+
 # issue #15844
 function f15844(x)
     x
