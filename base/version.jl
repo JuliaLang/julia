@@ -122,8 +122,12 @@ $"ix
 
 function try_split_idents(s::AbstractString)
     idents = eachsplit(s, '.')
-    any(ident->occursin(r"^\d+$", ident) && tryparse(UInt64, ident)===nothing, idents) && return nothing
-    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    pidents = Union{UInt64,String}[]
+    for ident in idents
+        processed = occursin(r"^\d+$", ident) ? tryparse(UInt64, ident) : String(ident)
+        isnothing(processed) && return nothing
+        push!(pidents, processed)
+    end
     return tuple(pidents...)::VerTuple
 end
 
