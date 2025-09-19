@@ -253,7 +253,7 @@ julia> splitpath("/home/myuser/example.jl")
  "example.jl"
 ```
 """
-splitpath(p::AbstractString) = splitpath(String(p))
+splitpath(p::AbstractString) = splitpath(String(p)::String)
 
 function splitpath(p::String)
     drive, p = splitdrive(p)
@@ -608,10 +608,10 @@ function relpath(path::String, startpath::String = ".")
     return isempty(relpath_) ? curdir :  relpath_
 end
 relpath(path::AbstractString, startpath::AbstractString) =
-    relpath(String(path), String(startpath))
+    relpath(String(path)::String, String(startpath)::String)
 
 for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
-    @eval $f(path::AbstractString) = $f(String(path))
+    @eval $f(path::AbstractString) = $f(String(path)::String)
 end
 
 # RFC3986 Section 2.1
@@ -665,4 +665,4 @@ else
     end
 end
 
-uripath(path::AbstractString) = uripath(String(path))
+uripath(path::AbstractString) = uripath(String(path)::String)

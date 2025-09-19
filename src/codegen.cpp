@@ -4065,20 +4065,37 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if ((f == BUILTIN(_apply_iterate) && nargs == 3) && ctx.vaSlot > 0) {
+    else if (f == BUILTIN(_apply_iterate) && nargs == 3) {
         // turn Core._apply_iterate(iter, f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
-        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[3].V)) {
-            if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
-                Value *theF = boxed(ctx, argv[2]);
-                Value *nva = emit_n_varargs(ctx);
+        if (ctx.vaSlot > 0) {
+            if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[3].V)) {
+                if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
+                    Value *theF = boxed(ctx, argv[2]);
+                    Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
-                nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
+                    nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
 #endif
-                Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
-                Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
-                *ret = mark_julia_type(ctx, r, true, jl_any_type);
-                return true;
+                    Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
+                    Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
+                    *ret = mark_julia_type(ctx, r, true, jl_any_type);
+                    return true;
+                }
             }
+        }
+        // optimization for _apply_iterate when there is one argument and it is a SimpleVector
+        const jl_cgval_t &arg = argv[3];
+        if (arg.typ == (jl_value_t*)jl_simplevector_type) {
+            Value *theF = boxed(ctx, argv[2]);
+            Value *svec_val = boxed(ctx, arg);
+            Value *svec_len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, decay_derived(ctx, svec_val), Align(ctx.types().sizeof_ptr));
+#ifdef _P64
+            svec_len = ctx.builder.CreateTrunc(svec_len, getInt32Ty(ctx.builder.getContext()));
+#endif
+            Value *svec_data = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, svec_val), ctx.types().sizeof_ptr);
+            OperandBundleDef OpBundle("jl_roots", svec_val);
+            Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, svec_data, svec_len }, OpBundle);
+            *ret = mark_julia_type(ctx, r, true, jl_any_type);
+            return true;
         }
     }
 
@@ -4091,6 +4108,27 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = emit_new_struct(ctx, rt, nargs, argv.drop_front(), is_promotable);
             return true;
         }
+    }
+
+    else if (f == BUILTIN(svec)) {
+        if (nargs == 0) {
+            *ret = mark_julia_const(ctx, (jl_value_t*)jl_emptysvec);
+            return true;
+        }
+        Value *svec = emit_allocobj(ctx, ctx.types().sizeof_ptr * (nargs + 1), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jl_simplevector_type), ctx.types().T_pjlvalue), true, julia_alignment((jl_value_t*)jl_simplevector_type));
+        Value *svec_derived = decay_derived(ctx, svec);
+        ctx.builder.CreateAlignedStore(ConstantInt::get(ctx.types().T_size, nargs), svec_derived, Align(ctx.types().sizeof_ptr));
+        Value *svec_data = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr);
+        ctx.builder.CreateMemSet(svec_data, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), ctx.types().sizeof_ptr * nargs, Align(ctx.types().sizeof_ptr));
+        for (size_t i = 0; i < nargs; i++) {
+            Value *elem = boxed(ctx, argv[i + 1]);
+            Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));
+            auto *store = ctx.builder.CreateAlignedStore(elem, elem_ptr, Align(ctx.types().sizeof_ptr));
+            store->setOrdering(AtomicOrdering::Release);
+            emit_write_barrier(ctx, svec, elem);
+        }
+        *ret = mark_julia_type(ctx, svec, true, jl_simplevector_type);
+        return true;
     }
 
     else if (f == BUILTIN(throw) && nargs == 1) {
@@ -4599,6 +4637,20 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
              (f == BUILTIN(modifyfield) && (nargs == 4 || nargs == 5)) ||
              (f == BUILTIN(setfieldonce) && (nargs == 3 || nargs == 4 || nargs == 5))) {
         return emit_f_opfield(ctx, ret, f, argv, nargs, nullptr);
+    }
+
+    else if (f == BUILTIN(_svec_len) && nargs == 1) {
+        const jl_cgval_t &obj = argv[1];
+        Value *len;
+        if (obj.constant && jl_is_svec(obj.constant)) {
+            len = ConstantInt::get(ctx.types().T_size, jl_svec_len(obj.constant));
+        }
+        else {
+            Value *svec_val = decay_derived(ctx, boxed(ctx, obj));
+            len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, svec_val, Align(ctx.types().sizeof_ptr));
+        }
+        *ret = mark_julia_type(ctx, len, false, jl_long_type);
+        return true;
     }
 
     else if (f == BUILTIN(nfields) && nargs == 1) {

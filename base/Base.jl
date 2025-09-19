@@ -180,6 +180,7 @@ using .Filesystem
 include("cmd.jl")
 include("process.jl")
 include("terminfo.jl")
+include("Terminals.jl") # Moved from REPL to reduce invalidations
 include("secretbuffer.jl")
 
 # core math functions
