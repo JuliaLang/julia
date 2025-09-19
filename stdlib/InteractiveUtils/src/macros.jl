@@ -21,17 +21,21 @@ function make_tuple_type(types::Vector{Any})
             vararg !== -1 && throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($type detected after $(types[vararg])); if provided, it must be unique"))
             vararg = i
             if isdefined(type, :N)
-                n = length(types) - vararg
-                n != type.N && throw(ArgumentError("Expected exactly $(type.N) types after `$type`, found $n instead"))
+                n = length(types) - vararg + 1
+                n > type.N && throw(ArgumentError("Expected at most $(type.N) types after `$type`, found $n instead"))
             end
         elseif vararg !== -1
             ref = types[vararg]
-            isdefined(ref, :T) && !(type <: ref.T) && throw(ArgumentError("Inconsistent type `$type` detected after `$ref`; `$type <: $(ref.T)` must hold"))
+            if isdefined(ref, :T) && !skip_type_check(ref.T) && !skip_type_check(type)
+                !(type <: ref.T) && throw(ArgumentError("Inconsistent type `$type` detected after `$ref`; `$type <: $(ref.T)` must hold"))
+            end
         end
     end
     vararg === -1 && return Tuple{types...}
     return Tuple{@view(types[1:vararg])...}
 end
+
+skip_type_check(@nospecialize(T)) = isa(T, TypeVar) || isa(T, UnionAll) || Core.has_free_typevars(T)
 
 function extract_where_parameters(ex::Expr)
     isexpr(ex, :where) || return ex, nothing
