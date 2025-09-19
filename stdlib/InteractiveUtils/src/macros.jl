@@ -18,7 +18,7 @@ function make_tuple_type(types::Vector{Any})
         i == 1 && continue # ignore function type
         type = types[i]
         if isa(type, Core.TypeofVararg)
-            vararg !== -1 && throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($type detected after $(types[vararg])))); if provided, it must be unique"))
+            vararg !== -1 && throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($type detected after $(types[vararg])); if provided, it must be unique"))
             vararg = i
             if isdefined(type, :N)
                 n = length(types) - vararg
