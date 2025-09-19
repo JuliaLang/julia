@@ -497,8 +497,8 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
-struct OverlayCodeCache
-    globalcache::InternalCodeCache
+struct OverlayCodeCache{Cache}
+    globalcache::Cache
     localcache::Vector{InferenceResult}
 end
 

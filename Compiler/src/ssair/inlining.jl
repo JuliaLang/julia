@@ -852,7 +852,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
     elseif inferred_result isa InferredResult
         (; src, effects, edge) = inferred_result
     elseif inferred_result isa CodeInstance
-        src = @atomic :monotonic inferred_result.inferred
+        src = ci_get_source(state.interp, inferred_result)
         effects = decode_effects(inferred_result.ipo_purity_bits)
         edge = inferred_result
     else # there is no cached source available for this, but there might be code for the compilation sig
@@ -891,7 +891,7 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
         add_inlining_edge!(et, cached_result.edge)
         return cached_result
     elseif cached_result isa CodeInstance
-        src = @atomic :monotonic cached_result.inferred
+        src = ci_get_source(state.interp, cached_result)
         effects = decode_effects(cached_result.ipo_purity_bits)
     else # there is no cached source available, bail out
         return nothing
