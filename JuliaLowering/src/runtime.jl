@@ -207,35 +207,6 @@ end
 #--------------------------------------------------
 # Functions which create modules or mutate their bindings
 
-# Construct new bare module including only the "default names"
-#
-#     using Core
-#     const modname = modval
-#     public modname
-#
-# And run statments in the toplevel expression `body`
-function eval_module(parentmod::Module, modname::AbstractString, std_defs::Bool,
-                     expr_compat_mode::Bool, body::SyntaxTree)
-    # Here we just use `eval()` with an Expr.
-    # If we wanted to avoid this we'd need to reproduce a lot of machinery from
-    # jl_eval_module_expr()
-    #
-    # 1. Register / deparent toplevel modules
-    # 2. Set binding in parent module
-    # 3. Deal with replacing modules
-    #    * Warn if replacing
-    #    * Root old module being replaced
-    # 4. Run __init__
-    #    * Also run __init__ for any children after parent is defined
-    # mod = @ccall jl_new_module(Symbol(modname)::Symbol, parentmod::Module)::Any
-    # ...
-    name = Symbol(modname)
-    eval_module_body(mod) = eval(mod, body; expr_compat_mode=expr_compat_mode)
-    Core.eval(parentmod,
-        Expr(:module, std_defs, name,
-             Expr(:block, Expr(:call, eval_module_body, name))))
-end
-
 const _Base_has_eval_import = isdefined(Base, :_eval_import)
 
 function eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
@@ -357,11 +328,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
                               value=Any, name_val=String)
     # Attributes for macro expansion
-    graph = ensure_attributes(graph,
-                              var_id=IdTag,
-                              scope_layer=LayerId,
-                              __macro_ctx__=Nothing,
-                              meta=CompileHints,
+    graph = ensure_attributes(ensure_macro_attributes(graph),
                               # Additional attribute for resolve_scopes, for
                               # adding our custom lambda below
                               is_toplevel_thunk=Bool
@@ -393,7 +360,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
     ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
                                  ctx1.bindings, ctx1.scope_layers,
-                                 LayerId[], false, macro_world)
+                                 ctx1.scope_layer_stack, false, macro_world)
     ex1 = reparent(ctx1, ex1)
 
     # Desugaring

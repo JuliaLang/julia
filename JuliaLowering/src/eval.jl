@@ -358,18 +358,63 @@ end
 
 #-------------------------------------------------------------------------------
 # Our version of eval takes our own data structures
-@fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false)
+@fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
+        expr_compat_mode::Bool=false, macro_world=Base.get_world_counter())
+    graph = ensure_macro_attributes(syntax_graph(ex))
+    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
+    _eval(ctx, ex)
+end
+
+function _eval_stmts(ctx, exs)
+    res = nothing
+    for ex in exs
+        res = _eval(ctx, ex)
+    end
+    res
+end
+
+function _eval_module_body(ctx, mod, ex)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod,
+                           current_layer_id(ctx), false)
+    push!(ctx.scope_layers, new_layer)
+    push!(ctx.scope_layer_stack, new_layer.id)
+    stmts = kind(ex[2]) == K"block" ? ex[2][1:end] : ex[2:2]
+    _eval_stmts(ctx, stmts)
+    pop!(ctx.scope_layer_stack)
+end
+
+function _eval_module(ctx, ex)
+    # Here we just use `eval()` with an Expr to create a module.
+    # TODO: Refactor jl_eval_module_expr() in the runtime so that we can avoid
+    # eval.
+    std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
+    newmod_name = Symbol(ex[1].name_val)
+    Core.eval(current_layer(ctx).mod,
+              Expr(:module, std_defs, newmod_name,
+                   Expr(:block, Expr(:call,
+                                     newmod->_eval_module_body(ctx, newmod, ex),
+                                     newmod_name))))
+end
+
+function _eval(ctx, ex::SyntaxTree)
     k = kind(ex)
     if k == K"toplevel"
-        x = nothing
-        for e in children(ex)
-            x = eval(mod, e; expr_compat_mode)
+        _eval_stmts(ctx, children(ex))
+    elseif k == K"module"
+        _eval_module(ctx, ex)
+    else
+        ex1 = expand_forms_1(ctx, ex)
+        if kind(ex1) in KSet"toplevel module"
+            _eval(ctx, ex1)
+        else
+            ctx2, ex2 = expand_forms_2(ctx, ex1)
+            ctx3, ex3 = resolve_scopes(ctx2, ex2)
+            ctx4, ex4 = convert_closures(ctx3, ex3)
+            ctx5, ex5 = linearize_ir(ctx4, ex4)
+            thunk = to_lowered_expr(ex5)
+            Core.eval(current_layer(ctx).mod, thunk)
         end
-        return x
     end
-    linear_ir = lower(mod, ex; expr_compat_mode)
-    thunk = to_lowered_expr(linear_ir)
-    Core.eval(mod, thunk)
 end
 
 """
