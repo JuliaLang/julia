@@ -1132,16 +1132,6 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
-@inline function wait_forever()
-    while true
-        wait()
-    end
-end
-
-const get_sched_task = OncePerThread{Task}() do
-    Task(wait_forever)
-end
-
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
     W = workqueue_for(Threads.threadid())
@@ -1191,11 +1181,13 @@ function wait()
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
     if task === nothing
-        # No tasks to run; switch to the scheduler task to run the
-        # thread sleep logic.
-        sched_task = get_sched_task()
-        if ct !== sched_task
-            return yieldto(sched_task)
+        # No tasks to run; if the current task is done/failed, switch to an
+        # empty "scheduler" task to run the thread sleep logic.
+        if istaskdone(ct)
+            scheduler_task() = nothing
+            if ct.code !== scheduler_task
+                return yieldto(Task(scheduler_task))
+            end
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end
