@@ -1928,6 +1928,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(core_sym) \
     XX(coverageeffect_sym) \
     XX(do_sym) \
+    XX(doc_sym) \
     XX(dot_sym) \
     XX(empty_sym) \
     XX(enter_sym) \

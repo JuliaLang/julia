@@ -612,14 +612,14 @@ let __source__ = LineNumberNode(0),
             :(f(x = 1)),
             :(f(; x = 1))
         ]
-        @test Meta.isexpr(Docs.docm(__source__, __module__, "...", each), :block)
+        @test Meta.isexpr(Core.old_docm(__source__, __module__, "...", each), :block)
     end
     for each in [ # invalid syntax
             :(f("...")),
             :(f(1, 2)),
             :(f(() -> ()))
         ]
-        result = Docs.docm(__source__, __module__, "...", each)
+        result = Core.old_docm(__source__, __module__, "...", each)
         @test Meta.isexpr(result, :call)
         @test result.args[1] === error
     end
@@ -1519,8 +1519,8 @@ struct B_20087 end
 
 # issue #27832
 
-_last_atdoc = Core.atdoc
-Core.atdoc!(Base.CoreDocs.docm)  # test bootstrap doc system
+_last_setdoc = Core.old_docm
+Core._set_old_docm!(Base.CoreDocs.docm)  # test bootstrap doc system
 
 """
 """
@@ -1533,7 +1533,7 @@ for fn in (:isdone,)
 end
 end
 @test M27832.xs == ":(\$(Expr(:\$, :fn)))"
-Core.atdoc!(_last_atdoc)
+Core._set_old_docm!(_last_setdoc)
 
 # issue #29432
 "First docstring" module Module29432 end

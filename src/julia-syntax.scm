@@ -353,7 +353,7 @@
 
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
-(define (method-def-expr- name sparams argl body (rett '(core Any)))
+(define (method-def-expr- name sparams argl body (docargs #f) (rett '(core Any)))
   (if
    (any kwarg? argl)
    ;; has optional positional args
@@ -373,7 +373,7 @@
         (receive
          (vararg req) (separate vararg? argl)
          (optional-positional-defs name sparams req opt dfl body
-                                   (append req opt vararg) rett)))))
+                                   (append req opt vararg) docargs rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
           (anames (llist-vars argl))
@@ -438,14 +438,21 @@
                                                            types)))
                                  (call (core svec) ,@temps)
                                  (inert ,loc)))
-                          ,body))))
-       (if (or (symbol? name) (globalref? name))
-           `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
-           (if (overlay? name)
-             (if (not (null? generator))
-                `(block ,@generator ,mdef)
-                mdef)
-            `(block ,@generator ,mdef (null))))))))
+                          ,body)))
+            (mdef (if docargs
+                      (let ((md-ssa (make-ssavalue)))
+                        `(block (= ,md-ssa ,mdef)
+                                ,(setdoc-call docargs md-ssa `(inert method-def-expr-443))
+                                ,md-ssa))
+                      mdef)))
+       (set! *did-setdoc-testing-only* #t)
+       (cond
+        ((or (symbol? name) (globalref? name))
+         `(block ,@generator (method ,name)
+                 (latestworld-if-toplevel) ,mdef (unnecessary ,name)))  ;; return the function
+        ((overlay? name) (if (null? generator) mdef `(block ,@generator ,mdef)))
+        ;; form (::T)() = ...
+        (else `(block ,@generator ,mdef (null))))))))
 
 ;; wrap expr in nested scopes assigning names to vals
 (define (scopenest names vals expr)
@@ -460,7 +467,7 @@
     ,@(map make-assignment names vals)
     ,expr))
 
-(define (keywords-method-def-expr name sparams argl body rett)
+(define (keywords-method-def-expr name sparams argl body docargs rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (cadr (caddr a)))))
                            (filter nospecialize-meta? kargl)))
@@ -552,7 +559,7 @@
                                    (if (has-thisfunction? `(block ,@stmts))
                                        (cons `(meta thisfunction-original ,(arg-name (car not-optional))) annotations)
                                        annotations)))
-          rett)
+          docargs rett)
 
         ;; call with no keyword args
         ,(method-def-expr-
@@ -567,7 +574,8 @@
                                        ,@splatted-vararg))))
                (if ordered-defaults
                    (scopenest keynames vals ret)
-                   ret))))
+                   ret)))
+          docargs)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
@@ -642,7 +650,8 @@
                               ,@keyvars
                               ,@(if (null? restkw) '() (list rkw))
                               ,@(map arg-name pargl)
-                              ,@splatted-vararg))))))
+                              ,@splatted-vararg)))))
+          docargs)
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))
@@ -673,7 +682,7 @@
           (else
            (loop filtered (cdr params))))))
 
-(define (optional-positional-defs name sparams req opt dfl body overall-argl rett)
+(define (optional-positional-defs name sparams req opt dfl body overall-argl docargs rett)
   (let ((prologue (without-generated (extract-method-prologue body))))
     `(block
       ,@(map (lambda (n)
@@ -705,9 +714,9 @@
                                `(block
                                  ,@prologue
                                  (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
-                 (method-def-expr- name sp passed body)))
+                 (method-def-expr- name sp passed body docargs)))
              (iota (length opt)))
-      ,(method-def-expr- name sparams overall-argl body rett))))
+      ,(method-def-expr- name sparams overall-argl body docargs rett))))
 
 ;; strip empty (parameters ...), normalizing `f(x;)` to `f(x)`.
 (define (remove-empty-parameters argl)
@@ -746,19 +755,19 @@
 ;; definitions without keyword arguments are passed to method-def-expr-,
 ;; which handles optional positional arguments by adding the needed small
 ;; boilerplate definitions.
-(define (method-def-expr name sparams argl body rett)
+(define (method-def-expr name sparams argl body docargs rett)
   (let ((argl (throw-unassigned-kw-args (remove-empty-parameters argl))))
     (if (has-parameters? argl)
         ;; has keywords
         (begin (check-kw-args (cdar argl))
-               (keywords-method-def-expr name sparams argl body rett))
+               (keywords-method-def-expr name sparams argl body docargs rett))
         ;; no keywords
-        (method-def-expr- name sparams argl body rett))))
+        (method-def-expr- name sparams argl body docargs rett))))
 
-(define (struct-def-expr name params super fields mut)
+(define (struct-def-expr name params super fields mut docargs)
   (receive
    (params bounds) (sparam-name-bounds params)
-   (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
+   (struct-def-expr- name params bounds super (flatten-blocks fields) mut docargs)))
 
 ;; definition with Any for all arguments (except type, which is exact)
 ;; field-kinds:
@@ -954,7 +963,7 @@
                               (thismodule) ,name))))
         field-types))
 
-(define (struct-def-expr- name params bounds super fields0 mut)
+(define (struct-def-expr- name params bounds super fields0 mut docargs)
   (receive
    (fields defs) (separate eventually-decl? fields0)
    (let* ((attrs ())
@@ -1031,9 +1040,10 @@
              (global ,name)
              ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))
        (latestworld)
+       ,.(maybe-setdoc-call docargs name `(inert struct-def-expr-1047))
        (null)))))
 
-(define (abstract-type-def-expr name params super)
+(define (abstract-type-def-expr name params super (docargs #f))
   (receive
    (params bounds) (sparam-name-bounds params)
    `(block
@@ -1052,9 +1062,10 @@
            (null)
            (const (globalref (thismodule) ,name) ,name))
        (latestworld)
+       ,.(maybe-setdoc-call docargs name `(inert abstract))
        (null))))))
 
-(define (primitive-type-def-expr n name params super)
+(define (primitive-type-def-expr n name params super (docargs #f))
   (receive
    (params bounds) (sparam-name-bounds params)
    `(block
@@ -1073,6 +1084,7 @@
            (null)
            (const (globalref (thismodule) ,name) ,name))
        (latestworld)
+       ,.(maybe-setdoc-call docargs name `(inert primitive))
        (null))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
@@ -1130,10 +1142,10 @@
            (and (eq? (car ex) 'where)
                 (just-arglist? (cadr ex))))))
 
-(define (expand-function-def e)   ;; handle function definitions
+(define (expand-function-def e (docargs #f))   ;; handle function definitions
   (if (just-arglist? (cadr e))
       (expand-forms (cons '-> (cdr e)))
-      (expand-function-def- e)))
+      (expand-function-def- e docargs)))
 
 ;; convert (where (where x S) T) to (where x T S)
 (define (flatten-where-expr e)
@@ -1172,7 +1184,7 @@
           (loop (cdr argl) (cons (car a) newa)
                 (if (cdr a) (cons (cdr a) stmts) stmts))))))
 
-(define (expand-function-def- e)
+(define (expand-function-def- e (docargs #f))
   (let* ((name  (cadr e))
          (where (if (and (pair? name) (eq? (car name) 'where))
                     (let ((w (flatten-where-expr name)))
@@ -1187,10 +1199,12 @@
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
            (if (not (valid-name? name))
                (error (string "invalid function name \"" name "\"")))
-           (if (globalref? name)
-             `(block (global ,name) (method ,name))
-             `(block (global-if-global ,name) (method ,name))))
-          ((not (pair? name))  e)
+           (let ((md-ssa (make-ssavalue)))
+             `(block ,(if (globalref? name) `(global ,name) `(global-if-global ,name))
+                     ;; no method is being defined
+                     (= ,md-ssa (method ,name))
+                     ,.(maybe-setdoc-call docargs md-ssa `(inert expand-function-def-cond1)))))
+          ((not (pair? name)) (tprint "what is this") (tprint e) e)  ; TODO
           ((eq? (car name) 'call)
            (let* ((raw-typevars (or where '()))
                   (sparams (map analyze-typevar raw-typevars))
@@ -1224,7 +1238,7 @@
                   (name    (if (or (decl? name) (and (pair? name) (memq (car name) '(curly where))))
                                #f name)))
              (expand-forms
-              (method-def-expr name sparams argl body rett))))
+              (method-def-expr name sparams argl body docargs rett))))
           (else
            (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
@@ -1338,7 +1352,7 @@
 (define (valid-macro-def-name? e)
   (or (symbol? e) (valid-modref? e) (globalref? e)))
 
-(define (expand-macro-def e)
+(define (expand-macro-def e (docargs #f))
   (cond ((and (pair? (cadr e))
               (eq? (car (cadr e)) 'call)
               (valid-macro-def-name? (cadr (cadr e))))
@@ -1360,7 +1374,7 @@
         (else
          (error "invalid macro definition"))))
 
-(define (expand-struct-def e)
+(define (expand-struct-def e (docargs #f))
   (let ((mut (cadr e))
         (sig (caddr e))
         (fields (cdr (cadddr e))))
@@ -1375,7 +1389,7 @@
                   (else '())))))
     (expand-forms
      (receive (name params super) (analyze-type-sig sig)
-              (struct-def-expr name params super fields mut)))))
+              (struct-def-expr name params super fields mut docargs)))))
 
 ;; the following are for expanding `try` blocks
 
@@ -1431,7 +1445,7 @@
           (else
            (error "invalid \"try\" form")))))
 
-(define (expand-unionall-def name type-ex (const? #t))
+(define (expand-unionall-def name type-ex (const? #t) (docargs #f))
   (if (and (pair? name)
            (eq? (car name) 'curly))
       (let ((name   (cadr name))
@@ -1444,6 +1458,7 @@
               (= ,rr (where ,type-ex ,@params))
               (,(if const? 'const 'assign-const-if-global) ,name ,rr)
               (latestworld-if-toplevel)
+              ,.(maybe-setdoc-call docargs name `(inert expand-unionall))
               ,rr)))
       (expand-forms
        `(const (= ,name ,type-ex)))))
@@ -1452,7 +1467,7 @@
   (filter (lambda (x) (not (underscore-symbol? x))) syms))
 
 ;; Expand `[global] const a::T = val`
-(define (expand-const-decl e)
+(define (expand-const-decl e (docargs #f))
   (define (check-assignment asgn)
     (unless (and (pair? asgn) (eq? (car asgn) '=))
       ;; (const (global x)) is possible due to a parser quirk
@@ -1466,17 +1481,20 @@
                       `(block
                         ,.(map (lambda (v) `(global ,v))
                                (lhs-bound-names (cadr asgn)))
-                        ,(expand-assignment asgn #t))))
+                        ,(expand-assignment asgn docargs #t))))
           ((=)      (check-assignment arg)
-                    (expand-assignment arg #t))
+                    (expand-assignment arg docargs #t))
           (else     (error "expected assignment after \"const\""))))))
 
 (define (expand-atomic-decl e)
   (error "unimplemented or unsupported atomic declaration"))
 
-(define (expand-local-or-global-decl e)
+(define (expand-local-or-global-decl e (docargs #f))
   (if (and (symbol? (cadr e)) (length= e 2))
-      e
+      (if (and docargs (eq? (car e) 'global))
+          ;; `(block (maybe-setdoc-call) e) TODO
+          e
+          e)
       (expand-forms (expand-decls (car e) (cdr e)))))
 
 ;; given a complex assignment LHS, return the symbol that will ultimately be assigned to
@@ -1508,14 +1526,15 @@
                              assigns))))
                 ((and (pair? x) (eq? (car x) '|::|))
                  (loop (cdr b)
-                       (cons `(decl ,@(cdr x)) (cons `(,what ,(decl-var x)) decls))
+                       (cons `(decl ,@(cdr x))
+                             (cons `(,what ,(decl-var x)) decls))
                        assigns))
                 ((symbol? x)
                  (loop (cdr b) (cons `(,what, x) decls) assigns))
                 (else
                  (error (string "invalid syntax in \"" what "\" declaration"))))))))
 
-(define (expand-assignment e (const? #f))
+(define (expand-assignment e (docargs #f) (const? #f))
   (define lhs (cadr e))
   (define (function-lhs? lhs)
     (and (pair? lhs)
@@ -1566,6 +1585,7 @@
             ,(sink-assignment rr (expand-forms (caddr e)))
             (const ,lhs ,rr)
             (latestworld)
+            ,.(maybe-setdoc-call docargs lhs `(inert expand-assignment-1588))
             (unnecessary ,rr)))
         (sink-assignment lhs (expand-forms (caddr e)))))
    ((atom? lhs)
@@ -2520,6 +2540,118 @@
                 (= ,lhs ,(car rr))))
       `(= ,lhs ,rhs)))
 
+;; The string(x::Any...) method we need comes after the first interpolated
+;; docstring in bootstrap, so we convert `(string x y z) and normal strings to
+;; svec (which is also how it's stored in DocStr).
+;; Expansion is necessary since s can contain embedded expressions
+(define (fixup-docstring s)
+  (expand-forms
+   (cond
+    ((eq? 'julia_value (typeof s)) `(call (core svec) ,s))
+    ((pair? s) `(call (core svec) ,.(cdr s)))
+    (else (error (string "unknown docstring type: " s))))))
+
+;; lowering is responsible for turning `(doc ...) exprs into core calls, but it
+;; doesn't usually look into toplevel expressions, so handle these specially
+(define (lower-toplevel-doc e)
+  (let ((docstr (fixup-docstring (cadr e)))
+        (x (caddr e))
+        (lnn (cadddr e)))
+    (cond
+     ((eq? (car x) 'module)
+      ;; Note (thismodule) is the parent here, so not what we want.
+      (let ((mod (caddr x)))
+      ;; We append to the module body instead of wrapping the module and setdoc
+      ;; call with 'toplevel (or else stdlibs break).
+        (append! (cadddr x)
+                 `((call (core setdoc) ,mod ,docstr (inert ,lnn) ,mod
+                         (inert toplevel-mod)))))
+      x)
+     ((and (memq x '(const global)) (every symbol? (cdr x)))
+      ;; todo: handle `global a,b,c` (existing buggy behaviour is to document a only)
+      (let ((lno (cadr lnn))
+            (file (caddr lnn))
+            (newx `(block ,x `(call (core setdoc) (thismodule) ,docstr
+                                    (inert ,lnn) ,(cadr x) (inert toplevel-global)))))
+        (julia-lower newx file line)))
+     (else (error (string "unsupported docstring on \"" (deparse x) "\""))))))
+
+;; Some forms are not executed (and are allowed to reference undefined vars) when annotated
+;; with a docstring; see #53533.  Return the setdoc call if `e` is one of these.
+(define (setdoc-if-doc-only docargs e)
+  (cond
+   ((symbol? e) (setdoc-call docargs `(inert ,e) '(inert doconly-0)))
+   ((and (pair? e) (eq? (car e) 'call)) (setdoc-call docargs '(inert TODO_fake) '(inert doconly-1)))
+   ((and (length= e 3) (eq? '|.| (car e)) (quoted? (caddr e))) (setdoc-call docargs `(inert ,(cadr e)) '(inert doconly-2)))
+   ((and (length= e 2) (eq? (car e) 'inert)) (setdoc-call docargs `(inert ,(cadr e)) '(inert doconly-3)))
+   (else #f)))
+
+;; docargs is `(,module ,docstr ,linenode) passed from expand-doc
+(define (setdoc-call docargs x . args)
+  (set! *did-setdoc-testing-only* #t)
+  `(call (core setdoc) ,@docargs ,x ,@args))
+(define (maybe-setdoc-call docargs x . args)
+  (if docargs (list (apply setdoc-call `(,docargs ,x ,.args))) '()))
+
+;; __doc__ produces `(block (meta doc) ,x).  return x.
+(define (doc-target e)
+  (and (length> (car e) 2) (eq? (car e) 'block) (equal? (cadr e) `(meta doc)) (caddr e)))
+
+(define *did-setdoc-testing-only* #f)
+
+;; `(doc ,str ,x ,linenode) semantics:
+;;
+;;  1. Lower code that evaluates x (unless marked with *), documents x, and
+;;     returns the evaluateded result (or nothing) if x is something we know
+;;     how to document:
+;;       - is toplevel and accepted by lower-toplevel-doc
+;;       - julia-value (only Base.BaseDocs.Keyword right now)
+;;     * - symbol
+;;     * - head in '(call |.| inert)
+;;       - head in
+(define DOC-HEADS '(function macro = struct abstract primitive const global))
+;;  2. If x is a block with only one non-linenumber child y, try step 1 with x=y.
+;;  3. If x is a tuple, document each child.
+;;  4. Otherwise, look for @__doc__ markers:
+;;     for every y of the form `(block (meta doc) ...) in x, try step 1 with x=y.
+;;  5. If haven't found anything to document, throw an error in lowering.
+(define (expand-doc e)
+  (let* ((docstr (fixup-docstring (cadr e)))
+         (x (caddr e))
+         (lnn (cadddr e))
+         (docargs `((thismodule) ,docstr (inert ,lnn)))
+         (ignoredoc (lambda () (set! *did-setdoc-testing-only* #t) (expand-forms x))))
+    (with-bindings
+     ((*did-setdoc-testing-only* #f))
+     (let ((out (cond
+                 ((eq? 'julia_value (typeof x))
+                  (expand-forms (setdoc-call docargs x `(inert base-docs-keyword-def))))
+                 ((setdoc-if-doc-only docargs x)
+                  => (lambda (c) (expand-forms c)))
+                 ((memq (car x) DOC-HEADS)
+                  (let ((ex (get expand-table (car x) #f)))
+                    (ex x docargs)))
+                 ((and (eq? (car e) 'block) ;; TODO stop early
+                       (let ((xs (filter (lambda (x) (not (line? x)))) (cdr x)))
+                         (and (length= xs 1) (car xs))))
+                  => (lambda (b) (set! *did-setdoc-testing-only* #t)
+                             (expand-doc `(doc ,docstr ,b ,lnn))))
+                 ((eq? 'tuple (car x))
+                  (set! *did-setdoc-testing-only* #t)
+                  `(block               ; TODO use multidoc
+                    ,@(map (lambda (t) (expand-doc `(doc ,docstr ,t ,lnn))) (cdr x))))
+                 ;; TODO __doc__s
+                 ;; TODO isquotedmacrocall
+                 ((eq? 'error (car x)) (ignoredoc))
+                 (else (expand-forms x)))))
+       (if (or #t *did-setdoc-testing-only*)
+           out
+           (begin
+             ;; (tprint docstr)
+             ;; (tprint x)
+             ;; (tprint lnn)
+             (error (string "unused docstring in " e))))))))
+
 (define (expand-forms e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta export public thismodule toplevel-only)))
       e
@@ -2565,6 +2697,7 @@
    'macro          expand-macro-def
    'struct         expand-struct-def
    'try            expand-try
+   'doc            expand-doc
 
    'lambda
    (lambda (e)
@@ -2653,19 +2786,19 @@
    '= expand-assignment
 
    'abstract
-   (lambda (e)
+   (lambda (e (docargs #f))
      (let ((sig (cadr e)))
        (expand-forms
         (receive (name params super) (analyze-type-sig sig)
-                 (abstract-type-def-expr name params super)))))
+                 (abstract-type-def-expr name params super docargs)))))
 
    'primitive
-   (lambda (e)
+   (lambda (e (docargs #f))
      (let ((sig (cadr e))
            (n   (caddr e)))
        (expand-forms
         (receive (name params super) (analyze-type-sig sig)
-                 (primitive-type-def-expr n name params super)))))
+                 (primitive-type-def-expr n name params super docargs)))))
 
    'comparison
    (lambda (e) (expand-forms (expand-compare-chain (cdr e))))
