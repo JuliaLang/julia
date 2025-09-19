@@ -35,7 +35,7 @@ function make_tuple_type(types::Vector{Any})
     return Tuple{@view(types[1:vararg])...}
 end
 
-skip_type_check(@nospecialize(T)) = isa(T, TypeVar) || isa(T, UnionAll) || Core.has_free_typevars(T)
+skip_type_check(@nospecialize(T)) = isa(T, TypeVar) || Core.has_free_typevars(T)
 
 function extract_where_parameters(ex::Expr)
     isexpr(ex, :where) || return ex, nothing
