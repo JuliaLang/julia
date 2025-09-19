@@ -127,27 +127,24 @@ function try_split_idents(s::AbstractString)
     return tuple(pidents...)::VerTuple
 end
 
-macro _something_or_return_nothing(f)
-    return quote
-        v = $(esc(f))
-        isnothing(v) && return nothing
-        v
-    end
-end
-
 function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
     m = match(VERSION_REGEX, String(v)::String)
     m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = @_something_or_return_nothing(tryparse(VInt, major::AbstractString))
-    minor = minor !== nothing ? @_something_or_return_nothing(tryparse(VInt, minor)) : VInt(0)
-    patch = patch !== nothing ? @_something_or_return_nothing(tryparse(VInt, patch)) : VInt(0)
+    major = tryparse(VInt, major::AbstractString)
+    isnothing(major) && return nothing
+    minor = minor !== nothing ? tryparse(VInt, minor) : VInt(0)
+    isnothing(minor) && return nothing
+    patch = patch !== nothing ? tryparse(VInt, patch) : VInt(0)
+    isnothing(patch) && return nothing
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
-    prerl = prerl !== nothing ? @_something_or_return_nothing(try_split_idents(prerl)) : minus !== nothing ? ("",) : ()
-    build = build !== nothing ? @_something_or_return_nothing(try_split_idents(build)) : plus  !== nothing ? ("",) : ()
+    prerl = prerl !== nothing ? try_split_idents(prerl) : minus !== nothing ? ("",) : ()
+    isnothing(prerl) && return nothing
+    build = build !== nothing ? try_split_idents(build) : plus  !== nothing ? ("",) : ()
+    isnothing(build) && return nothing
     return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
 
