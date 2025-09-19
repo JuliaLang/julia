@@ -447,14 +447,21 @@ end
     end
 
     @testset "Vararg handling" begin
-        @test_throws "More than one `Core.Vararg`" @eval (@code_typed +(1, 2::Vararg{Int}, 3, 4::Vararg{Int}))[2]
+        @test_throws "More than one `Core.Vararg`" @eval @code_typed +(1, 2::Vararg{Int}, 3, 4::Vararg{Float64})
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Int..., 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Float64)
+        @test_throws "Inconsistent type `Any`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Any)
+        @test_throws "exactly 2 types" @eval @code_typed +(1, 2, 3, 4::Vararg{Int,2}, 5)
+        @test_throws "found 1 instead" @eval @code_typed +(1, 2, 3, 4::Vararg{Int,2}, 5)
+        @test_throws "found 3 instead" @eval @code_typed +(1, 2, 3, 4::Vararg{Int,2}, 5, 6, 7)
         @test (@code_typed +(1, 2, 3, 4::Vararg{Int}))[2] === Int
         @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5))[2] === Int
-        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5.0))[2] === Int # 5.0 gets purposefully ignored
-        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, ::Float64))[2] === Int # same for the Float64 type annotation
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}, 5, 6, 7))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg))[2] === Any
+        @test (@code_typed +(1, 2, 3, 4::Vararg, 5.0))[2] === Any
         @test (@code_typed +(1, 2, 3, ::Int...))[2] === Int
         @test (@code_typed +(1, 2, 3, ::Int..., 5))[2] === Int
-        @test (@code_typed +(1, 2, 3, ::Int..., 5.0))[2] === Int
     end
 end
 

@@ -13,14 +13,24 @@ typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = noth
 typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:($make_tuple_type(Any[$(Any[reescape(get_typeof, a) for a in args]...)])), where_params)
 
 function make_tuple_type(types::Vector{Any})
-    varargs = Int[]
+    vararg = -1
     for i in eachindex(types)
         i == 1 && continue # ignore function type
-        isa(types[i], Core.TypeofVararg) && push!(varargs, i)
+        type = types[i]
+        if isa(type, Core.TypeofVararg)
+            vararg !== -1 && throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($type detected after $(types[vararg])))); if provided, it must be unique"))
+            vararg = i
+            if isdefined(type, :N)
+                n = length(types) - vararg
+                n != type.N && throw(ArgumentError("Expected exactly $(type.N) types after `$type`, found $n instead"))
+            end
+        elseif vararg !== -1
+            ref = types[vararg]
+            isdefined(ref, :T) && !(type <: ref.T) && throw(ArgumentError("Inconsistent type `$type` detected after `$ref`; `$type <: $(ref.T)` must hold"))
+        end
     end
-    isempty(varargs) && return Tuple{types...}
-    length(varargs) == 1 && return Tuple{types[1:varargs[]]...}
-    throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($(join(types[varargs], ", "))); if provided, it must be unique"))
+    vararg === -1 && return Tuple{types...}
+    return Tuple{@view(types[1:vararg])...}
 end
 
 function extract_where_parameters(ex::Expr)
@@ -46,7 +56,7 @@ function get_typeof(@nospecialize ex)
     isexpr(ex, :(::), 2) && return ex.args[2]
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
-        isexpr(splatted, :(::), 1) && return Expr(:curly, :(Core.Vararg), splatted.args[1])
+        isexpr(splatted, :(::)) && return Expr(:curly, :(Core.Vararg), splatted.args[end])
         return :(Any[Core.Typeof(x) for x in $splatted]...)
     end
     return :(Core.Typeof($ex))
