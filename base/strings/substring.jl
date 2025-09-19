@@ -44,7 +44,7 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         new(s, i, j)
     end
-    function _unsafe_new_substring(s::AbstractString, offset::Int, ncodeunits::Int)
+    global function _unsafe_new_substring(s::AbstractString, offset::Int, ncodeunits::Int)
         new{typeof(s)}(s, offset, ncodeunits)
     end
 end
