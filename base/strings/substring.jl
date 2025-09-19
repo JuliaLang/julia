@@ -56,8 +56,16 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
+function SubString(s::AbstractString)
+    # Note: This is always valid, and will make the construction a noop
+    return @inbounds @inline SubString{typeof(s)}(
+        s, 0, Int(ncodeunits(s))::Int, Val{:noshift}()
+    )
+end
+
+SubString{T}(s::T) where {T<:AbstractString} = SubString(s)
+
+SubString(s::SubString) = s
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
