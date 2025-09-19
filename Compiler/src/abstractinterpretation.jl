@@ -1243,7 +1243,7 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         # all the way through and learn something new.
         code = get(code_cache(interp), mi, nothing)
         if isa(code, CodeInstance)
-            inferred = @atomic :monotonic code.inferred
+            inferred = ci_get_source(interp, code)
             # TODO propagate a specific `CallInfo` that conveys information about this call
             if src_inlining_policy(interp, mi, inferred, NoCallInfo(), IR_FLAG_NULL)
                 return true

@@ -55,10 +55,10 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
         $Compiler.cache_owner(::$InterpName) = $InterpName
         $(ephemeral_cache && quote
         $Compiler.code_cache(interp::$InterpName) = $Compiler.OverlayCodeCache(interp.global_cache, interp.inf_cache)
-        $Compiler.get(cache::$InterpCacheName, mi::$C.MethodInstance, default) = get(cache.cache.dict, mi, default)
-        $Compiler.getindex(cache::$InterpCacheName, mi::$C.MethodInstance) = getindex(cache.cache.dict, mi)
-        $Compiler.haskey(cache::$InterpCacheName, mi::$C.MethodInstance) = haskey(cache.cache.dict, mi)
-        $Compiler.setindex!(cache::$InterpCacheName, ci::$C.CodeInstance, mi::$C.MethodInstance) = setindex!(cache.cache.dict, ci, mi)
+        $Compiler.get(cache::$InterpCacheName, mi::$C.MethodInstance, default) = get(cache.dict, mi, default)
+        $Compiler.getindex(cache::$InterpCacheName, mi::$C.MethodInstance) = getindex(cache.dict, mi)
+        $Compiler.haskey(cache::$InterpCacheName, mi::$C.MethodInstance) = haskey(cache.dict, mi)
+        $Compiler.setindex!(cache::$InterpCacheName, ci::$C.CodeInstance, mi::$C.MethodInstance) = setindex!(cache.dict, ci, mi)
         end)
     end
 end

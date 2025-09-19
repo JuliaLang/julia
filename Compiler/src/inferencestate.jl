@@ -865,7 +865,7 @@ end
 function IRInterpretationState(interp::AbstractInterpreter,
         codeinst::CodeInstance, mi::MethodInstance, argtypes::Vector{Any})
     @assert codeinst.def === mi "method instance is not synced with code instance"
-    src = @atomic :monotonic codeinst.inferred
+    src = ci_get_source(interp, codeinst)
     if isa(src, String)
         src = _uncompressed_ir(codeinst, src)
     else

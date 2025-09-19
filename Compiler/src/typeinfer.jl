@@ -431,7 +431,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     return src
 end
 
-function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
+function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost::InlineCostType)
     may_discard_trees(interp) || return false
     return inlining_cost == MAX_INLINE_COST
 end
@@ -442,6 +442,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     can_discard_trees = may_discard_trees(interp)
     cache_the_tree = !can_discard_trees || is_inlineable(ci)
     cache_the_tree || return nothing
+    # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
     return ci
 end
@@ -1305,6 +1306,16 @@ function ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
     return ci_has_source(interp, code)
 end
 
+function ci_get_source(interp::AbstractInterpreter, code::CodeInstance)
+    codegen = codegen_cache(interp)
+    codegen === nothing && return nothing
+    use_const_api(code) &&
+        return codeinfo_for_const(interp, get_ci_mi(code), WorldRange(code.min_world, code.max_world), code.edges, code.rettype_const)
+    inf = get(codegen, code, nothing)
+    inf === nothing || return inf
+    return @atomic :monotonic code.inferred
+end
+
 """
     ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
 
@@ -1531,23 +1542,17 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         callee = pop!(workqueue)
         ci_has_invoke(callee) && continue
         isinspected(workqueue, callee) && continue
-        src = get(codegen, callee, nothing)
+        src = ci_get_source(interp, callee)
         if !isa(src, CodeInfo)
-            src = @atomic :monotonic callee.inferred
-            if isa(src, String)
-                src = _uncompressed_ir(callee, src)
+            newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
+            if newcallee isa CodeInstance
+                callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
+                push!(workqueue, newcallee)
             end
-            if !isa(src, CodeInfo)
-                newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
-                if newcallee isa CodeInstance
-                    callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
-                    push!(workqueue, newcallee)
-                end
-                if newcallee !== callee
-                    markinspected!(workqueue, callee)
-                end
-                continue
+            if newcallee !== callee
+                markinspected!(workqueue, callee)
             end
+            continue
         end
         markinspected!(workqueue, callee)
         mi = get_ci_mi(callee)
