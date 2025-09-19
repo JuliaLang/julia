@@ -71,6 +71,7 @@ size(a::GenericMemory) = (length(a),)
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
 parent(ref::GenericMemoryRef) = ref.mem
+parentindices(ref::GenericMemoryRef) = (memoryrefoffset(ref),)
 
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
