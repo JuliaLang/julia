@@ -19,7 +19,7 @@ function DesugaringContext(ctx, expr_compat_mode::Bool)
     DesugaringContext(graph,
                       ctx.bindings,
                       ctx.scope_layers,
-                      first(ctx.scope_layers).mod,
+                      current_layer(ctx).mod,
                       expr_compat_mode)
 end
 
@@ -4271,39 +4271,6 @@ function expand_public(ctx, ex)
 end
 
 #-------------------------------------------------------------------------------
-# Expand module definitions
-
-function expand_module(ctx, ex::SyntaxTree)
-    modname_ex = ex[1]
-    @chk kind(modname_ex) == K"Identifier"
-    modname = modname_ex.name_val
-
-    std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
-
-    body = ex[2]
-    @chk kind(body) == K"block"
-
-    @ast ctx ex [K"block"
-        [K"assert"
-            "global_toplevel_only"::K"Symbol"
-            [K"inert" ex]
-        ]
-        [K"call"
-            eval_module           ::K"Value"
-            ctx.mod               ::K"Value"
-            modname               ::K"String"
-            std_defs              ::K"Bool"
-            ctx.expr_compat_mode  ::K"Bool"
-            [K"inert"(body)
-                [K"toplevel"
-                    children(body)...
-                ]
-            ]
-        ]
-    ]
-end
-
-#-------------------------------------------------------------------------------
 # Expand docstring-annotated expressions
 
 function expand_doc(ctx, ex, docex, mod=ctx.mod)
@@ -4477,7 +4444,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"$"
         throw(LoweringError(ex, "`\$` expression outside string or quote block"))
     elseif k == K"module"
-        expand_module(ctx, ex)
+        throw(LoweringError(ex, "`module` is only allowed at top level"))
     elseif k == K"import" || k == K"using"
         expand_import_or_using(ctx, ex)
     elseif k == K"export" || k == K"public"

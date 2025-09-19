@@ -1,4 +1,4 @@
-@testset "JuliaLowering.jl" begin
+@testset "modules" begin
 
 test_mod = Module()
 
@@ -26,12 +26,29 @@ end
 @test !isdefined(B, :eval)
 @test !isdefined(B, :Base)
 
-# modules allowed in nested code in global scope
-@test typeof(JuliaLowering.include_string(test_mod, """
-begin
+# Module init order
+Amod = JuliaLowering.include_string(test_mod, """
+module A
+    init_order = []
+    __init__() = push!(init_order, "A")
+    module B
+        using ..A
+        __init__() = push!(A.init_order, "B")
+    end
     module C
+        using ..A
+        __init__() = push!(A.init_order, "C")
+        module D
+            using ...A
+            __init__() = push!(A.init_order, "D")
+        end
+        module E
+            using ...A
+            __init__() = push!(A.init_order, "E")
+        end
     end
 end
-""")) == Module
+""")
+@test Amod.init_order == ["B", "D", "E", "C", "A"]
 
 end
