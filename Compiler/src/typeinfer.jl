@@ -968,16 +968,18 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
+    src = ci_get_source(interp, codeinst)
+    call_result = CachedCallResult(src, effects, codeinst)
     update_valid_age!(caller, WorldRange(min_world(codeinst), max_world(codeinst)))
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
-    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited))
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited, call_result))
 end
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
                           @nospecialize(rt), @nospecialize(exct), effects::Effects,
                           edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
-                          volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
+                          call_result::Union{Nothing,InferredCallResult} = nothing)
     if edge === nothing
         edgecycle = edgelimited = true
     end
@@ -1000,7 +1002,7 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         end
     end
 
-    return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
+    return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, call_result)
 end
 
 # allocate a dummy `edge::CodeInstance` to be added by `add_edges!`, reusing an existing_edge if possible
@@ -1117,12 +1119,16 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
                 # note that this result is cached globally exclusively, so we can use this local result destructively
-                local volatile_inf_result = if isinferred && edge_ci isa CodeInstance
+                local call_result = if edge_ci isa CodeInstance && isinferred
                     result.ci_as_edge = edge_ci # set the edge for the inliner usage
-                    VolatileInferenceResult(result)
+                    if cache_mode === CACHE_MODE_GLOBAL
+                        VolatileInferenceResult(result)
+                    else # cache_mode === CACHE_MODE_LOCAL
+                        LocalInferenceResult(result)
+                    end
                 end
                 mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-                    edge, edgecycle, edgelimited, volatile_inf_result)
+                    edge, edgecycle, edgelimited, call_result)
                 return true
             end)
             return mresult
