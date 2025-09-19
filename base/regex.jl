@@ -447,12 +447,10 @@ end
 
 function _annotatedmatch(m::RegexMatch{S}, str::AnnotatedString{S}) where {S<:AbstractString}
     RegexMatch{AnnotatedString{S}}(
-        (@inbounds SubString{AnnotatedString{S}}(
-            str, m.match.offset, m.match.ncodeunits, Val(:noshift))),
+        _unsafe_new_substring(str, m.match.offset, m.match.ncodeunits),
         Union{Nothing,SubString{AnnotatedString{S}}}[
             if !isnothing(cap)
-                (@inbounds SubString{AnnotatedString{S}}(
-                    str, cap.offset, cap.ncodeunits, Val(:noshift)))
+                _unsafe_new_substring(str, cap.offset, cap.ncodeunits)
             end for cap in m.captures],
         m.offset, m.offsets, m.regex)
 end
