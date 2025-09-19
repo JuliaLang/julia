@@ -1568,15 +1568,16 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
         return;
     }
     if (__unlikely(!jl_is_datatype((jl_datatype_t *)child_vt) || ((jl_datatype_t *)child_vt)->smalltag)) {
-        jl_safe_printf("GC error (probable corruption)\n");
-        jl_gc_debug_print_status();
-        jl_safe_printf("Parent %p\n", (void *)parent);
-        jl_safe_printf("of type:\n");
-        jl_(jl_typeof(parent));
-        jl_safe_printf("While marking child at %p\n", (void *)child);
-        jl_safe_printf("of type:\n");
-        jl_(child_vtag);
-        jl_gc_debug_critical_error();
+        ios_t *const s = ios_safe_stderr;
+        jl_safe_fprintf(s, "GC error (probable corruption)\n");
+        jl_gc_debug_fprint_status(s);
+        jl_safe_fprintf(s, "Parent %p\n", (void *)parent);
+        jl_safe_fprintf(s, "of type:\n");
+        jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)jl_typeof(parent));
+        jl_safe_fprintf(s, "While marking child at %p\n", (void *)child);
+        jl_safe_fprintf(s, "of type:\n");
+        jl_safe_static_show(s, (jl_value_t *)child_vtag);
+        jl_gc_debug_fprint_critical_error(s);
         abort();
     }
 #endif
@@ -1650,21 +1651,22 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
 // Dump mark queue on critical error
 JL_NORETURN NOINLINE void gc_dump_queue_and_abort(jl_ptls_t ptls, jl_datatype_t *vt) JL_NOTSAFEPOINT
 {
-    jl_safe_printf("GC error (probable corruption)\n");
-    jl_gc_debug_print_status();
-    jl_(vt);
-    jl_gc_debug_critical_error();
+    ios_t *const s = ios_safe_stderr;
+    jl_safe_fprintf(s, "GC error (probable corruption)\n");
+    jl_gc_debug_fprint_status(s);
+    jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)vt);
+    jl_gc_debug_fprint_critical_error(s);
     if (jl_n_gcthreads == 0) {
-        jl_safe_printf("\n");
+        jl_safe_fprintf(s, "\n");
         jl_value_t *new_obj;
         jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
-        jl_safe_printf("thread %d ptr queue:\n", ptls->tid);
-        jl_safe_printf("~~~~~~~~~~ ptr queue top ~~~~~~~~~~\n");
+        jl_safe_fprintf(s, "thread %d ptr queue:\n", ptls->tid);
+        jl_safe_fprintf(s, "~~~~~~~~~~ ptr queue top ~~~~~~~~~~\n");
         while ((new_obj = gc_ptr_queue_steal_from(mq)) != NULL) {
-            jl_(new_obj);
-            jl_safe_printf("==========\n");
+            jl_safe_static_show((JL_STREAM*)s, new_obj);
+            jl_safe_fprintf(s, "==========\n");
         }
-        jl_safe_printf("~~~~~~~~~~ ptr queue bottom ~~~~~~~~~~\n");
+        jl_safe_fprintf(s, "~~~~~~~~~~ ptr queue bottom ~~~~~~~~~~\n");
     }
     abort();
 }

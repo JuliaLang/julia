@@ -381,7 +381,7 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 }
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
-void jl_show_sigill(void *_ctx);
+void jl_fprint_sigill(ios_t *s, void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
     || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
@@ -484,7 +484,7 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
 #endif
 }
 
-void jl_show_sigill(void *_ctx)
+void jl_fprint_sigill(ios_t *s, void *_ctx)
 {
     char *pc = (char*)jl_get_pc_from_ctx(_ctx);
     // unsupported platform
@@ -495,31 +495,31 @@ void jl_show_sigill(void *_ctx)
     size_t len = jl_safe_read_mem(pc, (char*)inst, sizeof(inst));
     // ud2
     if (len >= 2 && inst[0] == 0x0f && inst[1] == 0x0b) {
-        jl_safe_printf("Unreachable reached at %p\n", (void*)pc);
+        jl_safe_fprintf(s, "Unreachable reached at %p\n", (void*)pc);
     }
     else {
-        jl_safe_printf("Invalid instruction at %p: ", (void*)pc);
+        jl_safe_fprintf(s, "Invalid instruction at %p: ", (void*)pc);
         for (int i = 0;i < len;i++) {
             if (i == 0) {
-                jl_safe_printf("0x%02" PRIx8, inst[i]);
+                jl_safe_fprintf(s, "0x%02" PRIx8, inst[i]);
             }
             else {
-                jl_safe_printf(", 0x%02" PRIx8, inst[i]);
+                jl_safe_fprintf(s, ", 0x%02" PRIx8, inst[i]);
             }
         }
-        jl_safe_printf("\n");
+        jl_safe_fprintf(s, "\n");
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     uint32_t inst = 0;
     size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
     if (len < 4)
-        jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+        jl_safe_fprintf(s, "Fault when reading instruction: %d bytes read\n", (int)len);
     if (inst == 0xd4200020) { // brk #0x1
         // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-        jl_safe_printf("Unreachable reached at %p\n", pc);
+        jl_safe_fprintf(s, "Unreachable reached at %p\n", pc);
     }
     else {
-        jl_safe_printf("Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
+        jl_safe_fprintf(s, "Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
@@ -528,31 +528,31 @@ void jl_show_sigill(void *_ctx)
         uint16_t inst[2] = {0, 0};
         size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 2)
-            jl_safe_printf("Fault when reading Thumb instruction: %d bytes read\n", (int)len);
+            jl_safe_fprintf(s, "Fault when reading Thumb instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst[0] == 0xdefe || inst[0] == 0xdeff) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-            jl_safe_printf("Unreachable reached in Thumb mode at %p: 0x%04" PRIx16 "\n",
-                           (void*)pc, inst[0]);
+            jl_safe_fprintf(s, "Unreachable reached in Thumb mode at %p: 0x%04" PRIx16 "\n",
+                            (void*)pc, inst[0]);
         }
         else {
-            jl_safe_printf("Invalid Thumb instruction at %p: 0x%04" PRIx16 ", 0x%04" PRIx16 "\n",
-                           (void*)pc, inst[0], inst[1]);
+            jl_safe_fprintf(s, "Invalid Thumb instruction at %p: 0x%04" PRIx16 ", 0x%04" PRIx16 "\n",
+                            (void*)pc, inst[0], inst[1]);
         }
     }
     else {
         uint32_t inst = 0;
         size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 4)
-            jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+            jl_safe_fprintf(s, "Fault when reading instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst == 0xe7ffdefe || inst == 0xe7f000f0) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-            jl_safe_printf("Unreachable reached in ARM mode at %p: 0x%08" PRIx32 "\n",
-                           (void*)pc, inst);
+            jl_safe_fprintf(s, "Unreachable reached in ARM mode at %p: 0x%08" PRIx32 "\n",
+                            (void*)pc, inst);
         }
         else {
-            jl_safe_printf("Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
+            jl_safe_fprintf(s, "Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
         }
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
@@ -606,13 +606,13 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
 }
 
 // what to do on a critical error on a thread
-void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct)
+void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *context, jl_task_t *ct)
 {
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
     if (sig) {
-        // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
+        // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jl_fprint_backtrace in jl_exit)
         // and also resets the state of ct and ptls so that some code can run on this task again
         jl_task_frame_noreturn(ct);
 #ifndef _OS_WINDOWS_
@@ -636,21 +636,21 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
-            jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
-    jl_safe_printf("in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
+    jl_safe_fprintf(s, "in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
     if (context && ct) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
+        jl_fprint_bt_entry_codeloc(s, bt_data + i);
     }
-    jl_gc_debug_print_status();
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_status(s);
+    jl_gc_debug_fprint_critical_error(s);
 }
 
 #ifdef __cplusplus
