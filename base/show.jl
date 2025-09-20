@@ -3237,8 +3237,8 @@ this is the direct call from `summary` and `false` for nested (recursive) calls.
 The fallback definition is to print x as "::$(typeof(x))", representing argument x in terms
 of its type. (The double-colon is omitted if toplevel=true.) However, you can specialize
 this function for specific types to customize printing. This customization is useful for
-types that have simple constructors and verbose types such as `reinterpret`ed arrays or
-`SubArray`s.
+types that have simple, public constructors and verbose and/or internal types and type 
+parameters such as `reinterpret`ed arrays or `SubArray`s.
 
 # Examples
 
