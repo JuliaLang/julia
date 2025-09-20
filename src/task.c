@@ -352,7 +352,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
             jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
@@ -735,7 +735,8 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
     jl_static_show((JL_STREAM*)STDERR_FILENO, e);
     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-    jlbacktrace(); // written to STDERR_FILENO
+    jl_fprint_backtrace(ios_safe_stderr);
+
     if (ct == NULL)
         jl_raise(6);
     jl_exit(1);
@@ -1262,7 +1263,7 @@ skip_pop_exception:;
     ct->result = res;
     jl_gc_wb(ct, ct->result);
     jl_finish_task(ct);
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 

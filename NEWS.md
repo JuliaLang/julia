@@ -10,6 +10,7 @@ New language features
   - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
     is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
     ([JuliaLang/JuliaSyntax.jl#525], [#57143])
+  - Support for Unicode 17 ([#59534]).
 
 Language changes
 ----------------
@@ -29,6 +30,7 @@ Command-line option changes
 * The option `--sysimage-native-code=no` has been deprecated.
 * The `JULIA_CPU_TARGET` environment variable now supports a `sysimage` keyword to match (or extend) the CPU target used to build the current system image ([#58970]).
 * The `--code-coverage=all` option now automatically throws away sysimage caches so that code coverage can be accurately measured on methods within the sysimage. It is thrown away after startup (and after startup.jl), before any user code is executed ([#59234])
+* New `--trace-eval` command-line option to show expressions being evaluated during top-level evaluation. Supports `--trace-eval=loc` or just `--trace-eval` (show location only), `--trace-eval=full` (show full expressions), and `--trace-eval=no` (disable tracing). Also adds `Base.TRACE_EVAL` global control that takes priority over the command-line option and can be set to `:no`, `:loc`, `:full`, or `nothing` (to use command-line setting). ([#57137])
 
 Multi-threading changes
 -----------------------
@@ -48,8 +50,11 @@ New library functions
 ---------------------
 
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
+  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
+  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
-* `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
+* `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
 * `Iterators.findeach` is a lazy version of `findall` ([#54124])
 
@@ -60,6 +65,7 @@ New library features
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 * `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
+* `chopprefix` and `chopsuffix` can now also accept an `AbstractChar` as the prefix/suffix to remove.
 * The `macroexpand` (with default true) and the new `macroexpand!` (with default false)
   functions now support a `legacyscope` boolean keyword argument to control whether to run
   the legacy scope resolution pass over the result. The legacy scope resolution code has

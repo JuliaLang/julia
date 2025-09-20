@@ -157,6 +157,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-target-increment
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // trace-eval
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
                         0, // gc_sweep_always_full
@@ -344,6 +345,7 @@ static const char opts_hidden[]  =
     "                                               With unsafe-warn warnings will be printed for\n"
     "                                               dynamic call sites that might lead to such errors.\n"
     "                                               In safe mode compile-time errors are given instead.\n"
+    " --trace-eval={loc|full|no*}                   Show the expression being evaluated before eval.\n"
     " --hard-heap-limit=<size>[<unit>]              Set a hard limit on the heap size: if we ever\n"
     "                                               go above this limit, we will abort. The value\n"
     "                                               may be specified as a number of bytes,\n"
@@ -410,6 +412,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
+           opt_trace_eval,
            opt_experimental_features,
            opt_compress_sysimage,
     };
@@ -484,6 +487,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "gc-sweep-always-full", no_argument, 0, opt_gc_sweep_always_full },
         { "trim",  optional_argument, 0, opt_trim },
         { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
+        { "trace-eval",       optional_argument, 0, opt_trace_eval },
         { 0, 0, 0, 0 }
     };
 
@@ -1057,6 +1061,16 @@ restart_switch:
                 jl_options.trim = JL_TRIM_UNSAFE_WARN;
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
+            break;
+        case opt_trace_eval:
+            if (optarg == NULL || !strcmp(optarg,"loc"))
+                jl_options.trace_eval = 1;
+            else if (!strcmp(optarg,"full"))
+                jl_options.trace_eval = 2;
+            else if (!strcmp(optarg,"no"))
+                jl_options.trace_eval = 0;
+            else
+                jl_errorf("julia: invalid argument to --trace-eval={yes|no} (%s)", optarg);
             break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))

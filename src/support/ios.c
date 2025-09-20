@@ -1061,6 +1061,7 @@ ios_t *ios_fd(ios_t *s, long fd, int isfile, int own)
 ios_t *ios_stdin = NULL;
 ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
+ios_t *ios_safe_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
@@ -1074,6 +1075,12 @@ void ios_init_stdstreams(void)
     ios_stderr = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
+
+    // this 'safe' variant must use `bm_none` to avoid memory allocation
+    // in an async-signal context
+    ios_safe_stderr = (ios_t*)malloc_s(sizeof(ios_t));
+    ios_fd(ios_safe_stderr, STDERR_FILENO, 0, 0);
+    ios_safe_stderr->bm = bm_none;
 }
 
 /* higher level interface */
