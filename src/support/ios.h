@@ -86,6 +86,7 @@ extern void (*ios_set_io_wait_func)(int);
 JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos) JL_NOTSAFEPOINT; // absolute seek
 JL_DLLEXPORT int64_t ios_seek_end(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_skip(ios_t *s, int64_t offs);  // relative seek
@@ -151,6 +152,10 @@ JL_DLLEXPORT int ios_peekc(ios_t *s);
 int ios_ungetc(int c, ios_t *s);
 //wint_t ios_ungetwc(ios_t *s, wint_t wc);
 #define ios_puts(str, s) ios_write(s, str, strlen(str))
+
+#ifdef _OS_WINDOWS_
+const wchar_t *ios_utf8_to_wchar(const char *str);
+#endif
 
 /*
   With memory streams, mixed reads and writes are equivalent to performing

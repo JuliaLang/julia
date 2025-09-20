@@ -3458,8 +3458,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     return;
 }
 
-JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
-
 // Takes in a path of the form "usr/lib/julia/sys.so"
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 {
