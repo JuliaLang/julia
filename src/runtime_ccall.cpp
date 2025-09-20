@@ -65,22 +65,35 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *
 
 // jl_load_and_lookup, but with library computed at run time on first call
 extern "C" JL_DLLEXPORT
-void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name)
+void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
 {
     void *lib_ptr;
+    const char *fname_str;
 
-    if (jl_is_symbol(lib_val))
-        lib_ptr = jl_get_library(jl_symbol_name((jl_sym_t*)lib_val));
-    else if (jl_is_string(lib_val))
-        lib_ptr = jl_get_library(jl_string_data(lib_val));
-    else if (jl_libdl_dlopen_func != NULL) {
-        // Call `dlopen(lib_val)`; this is the correct path for the `LazyLibrary` case,
-        // but it also takes any other value, and so we define `dlopen(x::Any) = throw(TypeError(...))`.
-        lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
-    } else
-        jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+    if (jl_is_symbol(f_name))
+        fname_str = jl_symbol_name((jl_sym_t*)f_name);
+    else if (jl_is_string(f_name))
+        fname_str = jl_string_data(f_name);
+    else
+        jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, f_name);
+
+    if (lib_val) {
+        if (jl_is_symbol(lib_val))
+            lib_ptr = jl_get_library(jl_symbol_name((jl_sym_t*)lib_val));
+        else if (jl_is_string(lib_val))
+            lib_ptr = jl_get_library(jl_string_data(lib_val));
+        else if (jl_libdl_dlopen_func != NULL) {
+            lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
+        } else
+            jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+    }
+    else {
+        // If the user didn't supply a library name, try to find it now from the runtime value of f_name
+        lib_ptr = jl_get_library(jl_dlfind(fname_str));
+    }
+
     void *ptr;
-    jl_dlsym(lib_ptr, f_name, &ptr, 1, 1);
+    jl_dlsym(lib_ptr, fname_str, &ptr, 1, 1);
     return ptr;
 }
 

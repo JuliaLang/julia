@@ -279,9 +279,17 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             error = "unresolved cfunction"
         elseif isexpr(stmt, :foreigncall)
             foreigncall = stmt.args[1]
-            if foreigncall isa QuoteNode
-                if foreigncall.value in runtime_functions
-                    error = "disallowed ccall into a runtime function"
+            if isexpr(foreigncall, :tuple, 1)
+                foreigncall = foreigncall.args[1]
+                if foreigncall isa String
+                    foreigncall = QuoteNode(Symbol(foreigncall))
+                end
+                if foreigncall isa QuoteNode
+                    if foreigncall.value in runtime_functions
+                        error = "disallowed ccall into a runtime function"
+                    end
+                else
+                    error = "disallowed ccall with non-constant name and no library"
                 end
             end
         elseif isexpr(stmt, :new_opaque_closure)

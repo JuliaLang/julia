@@ -24,9 +24,10 @@ const __internal_changes_list = (
     :invertedlinetables,
     :codeinforefactor,
     :miuninferredrm,
-    :codeinfonargs,  # #54341
+    :codeinfonargs, #54341
     :ocnopartial,
     :printcodeinfocalls,
+    :syntacticccall, #59165
     # Add new change names above this line
 )
 

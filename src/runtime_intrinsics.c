@@ -654,25 +654,8 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         f_lib = jl_fieldref(v, 1);
         v = jl_fieldref(v, 0);
     }
-
-    char *f_name = NULL;
-    if (jl_is_symbol(v))
-        f_name = jl_symbol_name((jl_sym_t*)v);
-    else if (jl_is_string(v))
-        f_name = jl_string_data(v);
-    else
-        JL_TYPECHK(cglobal, symbol, v)
-
-    void *ptr;
-    if (f_lib) {
-        ptr = jl_lazy_load_and_lookup(f_lib, f_name);
-    }
-    else {
-        void *handle = jl_get_library((char*)jl_dlfind(f_name));
-        jl_dlsym(handle, f_name, &ptr, 1, 0);
-    }
+    void *ptr = jl_lazy_load_and_lookup(f_lib, v);
     JL_GC_POP();
-
     jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), rt);
     *(void**)jl_data_ptr(jv) = ptr;
     return jv;
