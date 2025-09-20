@@ -472,33 +472,71 @@ function gc_bytes()
     b[]
 end
 
-function allocated(f, args::Vararg{Any,N}) where {N}
+@constprop :none function allocated(f, args::Vararg{Any,N}) where {N}
     b0 = Ref{Int64}(0)
     b1 = Ref{Int64}(0)
     Base.gc_bytes(b0)
-    f(args...)
+    @noinline f(args...)
     Base.gc_bytes(b1)
     return b1[] - b0[]
 end
 only(methods(allocated)).called = 0xff
 
-function allocations(f, args::Vararg{Any,N}) where {N}
+@constprop :none function allocations(f, args::Vararg{Any,N}) where {N}
     stats = Base.gc_num()
-    f(args...)
+    @noinline f(args...)
     diff = Base.GC_Diff(Base.gc_num(), stats)
     return Base.gc_alloc_count(diff)
 end
 only(methods(allocations)).called = 0xff
 
 function is_simply_call(@nospecialize ex)
+    is_simple_atom(a) = a isa QuoteNode || a isa Symbol || !isa_ast_node(a)
     Meta.isexpr(ex, :call) || return false
     for a in ex.args
-        a isa QuoteNode && continue
-        a isa Symbol && continue
-        isa_ast_node(a) || continue
+        is_simple_atom(a) && continue
+        Meta.isexpr(a, :..., 1) && is_simple_atom(a.args[1]) && continue
         return false
     end
     return true
+end
+
+function _gen_allocation_measurer(ex, fname::Symbol)
+    if isexpr(ex, :call)
+        if !is_simply_call(ex)
+            ex = :((() -> $ex)())
+        end
+        pushfirst!(ex.args, GlobalRef(Base, fname))
+        return quote
+            Experimental.@force_compile
+            $(esc(ex))
+        end
+    elseif fname === :allocated
+        # v1.11-compatible implementation
+        return quote
+            Experimental.@force_compile
+            local b0 = Ref{Int64}(0)
+            local b1 = Ref{Int64}(0)
+            gc_bytes(b0)
+            $(esc(ex))
+            gc_bytes(b1)
+            b1[] - b0[]
+        end
+    else
+        @assert fname === :allocations
+        return quote
+            Experimental.@force_compile
+            # Note this value is unused, but without it `allocated` and `allocations`
+            # are sufficiently different that the compiler can remove allocations here
+            # that it cannot remove there, giving inconsistent numbers.
+            local b1 = Ref{Int64}(0)
+            local stats = Base.gc_num()
+            $(esc(ex))
+            local diff = Base.GC_Diff(Base.gc_num(), stats)
+            gc_bytes(b1)
+            Base.gc_alloc_count(diff)
+        end
+    end
 end
 
 """
@@ -506,6 +544,20 @@ end
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 total number of bytes allocated during evaluation of the expression.
+
+If the expression is a function call, an effort is made to measure only allocations from
+the argument expressions and during the function, excluding any overhead from calling it
+and not performing constant propagation with the provided argument values. If you want to
+include those effects, i.e. measuring the call site as well, use the syntax
+`@allocated (()->f(1))()`.
+
+It is recommended to measure function calls with only simple argument expressions, e.g.
+`x = []; @allocated f(x)` instead of `@allocated f([])` to clarify that only `f` is
+being measured.
+
+For more complex expressions, the code is simply run in place and therefore may see
+allocations due to the surrounding context. For example it is possible for
+`@allocated f(1)` and `@allocated x = f(1)` to give different results.
 
 See also [`@allocations`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
@@ -516,11 +568,7 @@ julia> @allocated rand(10^6)
 ```
 """
 macro allocated(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
-    end
-    pushfirst!(ex.args, GlobalRef(Base, :allocated))
-    return esc(ex)
+    _gen_allocation_measurer(ex, :allocated)
 end
 
 """
@@ -541,11 +589,7 @@ julia> @allocations rand(10^6)
     This macro was added in Julia 1.9.
 """
 macro allocations(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
-    end
-    pushfirst!(ex.args, GlobalRef(Base, :allocations))
-    return esc(ex)
+    _gen_allocation_measurer(ex, :allocations)
 end
 
 
