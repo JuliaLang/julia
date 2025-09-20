@@ -29,6 +29,16 @@ function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode
     MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode, world)
 end
 
+function push_layer!(ctx::MacroExpansionContext, mod::Module, is_macro_expansion::Bool)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod,
+                           current_layer_id(ctx), is_macro_expansion)
+    push!(ctx.scope_layers, new_layer)
+    push!(ctx.scope_layer_stack, new_layer.id)
+end
+function pop_layer!(ctx::MacroExpansionContext)
+    pop!(ctx.scope_layer_stack)
+end
+
 current_layer(ctx::MacroExpansionContext) = ctx.scope_layers[last(ctx.scope_layer_stack)]
 current_layer_id(ctx::MacroExpansionContext) = last(ctx.scope_layer_stack)
 
@@ -342,10 +352,9 @@ function expand_macro(ctx, ex)
         expanded = fix_toplevel_expansion(ctx, expanded, mod_for_ast, macro_loc)
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
                                current_layer_id(ctx), true)
-        push!(ctx.scope_layers, new_layer)
-        push!(ctx.scope_layer_stack, new_layer.id)
+        push_layer!(ctx, mod_for_ast, true)
         expanded = expand_forms_1(ctx, expanded)
-        pop!(ctx.scope_layer_stack)
+        pop_layer!(ctx)
     end
     return expanded
 end
