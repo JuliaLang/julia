@@ -14,7 +14,7 @@ The reduction operator used in `sum`. The main difference from [`+`](@ref) is th
 integers are promoted to `Int`/`UInt`.
 """
 add_sum(x, y) = x + y
-add_sum(x::BitSignedSmall, y::BitSignedSmall) = Int(x) + Int(y)
+add_sum(x::Union{Bool,BitIntegerSmall}, y::Union{Bool,BitIntegerSmall}) = Int(x) + Int(y)
 add_sum(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
 
@@ -362,7 +362,7 @@ reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 """
     Base.mapreduce_empty(f, op, T)
 
-The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
 of `T`. See [`Base.reduce_empty`](@ref) for more information.
 """
@@ -374,7 +374,7 @@ mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
 # For backward compatibility:
-mapreduce_empty_iter(f, op, itr, ItrEltype) =
+mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F,F2} =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
@@ -388,7 +388,7 @@ reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
 """
     Base.reduce_first(op, x)
 
-The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref) or
 [`foldr`](@ref) with reduction `op` over an iterator which contains a single element
 `x`. This value may also be used to initialise the recursion, so that `reduce(op, [x, y])`
 may call `op(reduce_first(op, x), y)`.
@@ -407,11 +407,13 @@ reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
 reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
 reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
+reduce_first(::typeof(vcat), x) = vcat(x)
+reduce_first(::typeof(hcat), x) = hcat(x)
 
 """
     Base.mapreduce_first(f, op, x)
 
-The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
 single element `x`. This value may also be used to initialise the recursion, so that
 `mapreduce(f, op, [x, y])` may call `op(mapreduce_first(f, op, x), f(y))`.
@@ -1073,8 +1075,8 @@ julia> count(i->(4<=i<=6), [2,3,4,5,6])
 julia> count([true, false, true, true])
 3
 
-julia> count(>(3), 1:7, init=0x03)
-0x07
+julia> count(>(3), 1:7, init=UInt(0))
+0x0000000000000004
 ```
 """
 count(itr; init=0) = count(identity, itr; init)
@@ -1083,8 +1085,10 @@ count(f, itr; init=0) = _simple_count(f, itr, init)
 
 _simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
-function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
-    n::T = init
+function _simple_count(::typeof(identity), x::Array{Bool}, init=0)
+    v0 = Base.add_sum(init, false)
+    T = typeof(v0)
+    n::T = v0
     chunks = length(x) ÷ sizeof(UInt)
     mask = 0x0101010101010101 % UInt
     GC.@preserve x begin

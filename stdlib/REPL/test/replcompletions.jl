@@ -139,6 +139,7 @@ let ex =
             kwtest4(a::SubString; x23, _something) = pass
             kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
             kwtest5(a::Char, b; xyz) = pass
+            kwtest6(f::Function, arg1; somekwarg) = pass
 
             const named = (; len2=3)
             const fmsoebelkv = (; len2=3)
@@ -198,6 +199,8 @@ test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastinde
 test_complete_pos(s) = map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1)))
 test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
     map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
+test_complete_context_pos(s, m=@__MODULE__; shift::Bool=true) =
+    map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1, m, shift)))
 test_complete_foo(s; shift::Bool=true) = test_complete_context(s, Main.CompletionFoo; shift)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -1073,6 +1076,39 @@ let c, r, res
     @test res === false
 end
 
+# A pair of utility function for the REPL completions test to test PATH_cache
+# dependent completions, which ordinarily happen asynchronously.
+# Only to be used from the test suite
+function test_only_arm_cache_refresh()
+    @lock REPL.REPLCompletions.PATH_cache_lock begin
+        @assert REPL.REPLCompletions.PATH_cache_condition === nothing
+
+        # Arm a condition we can wait on
+        REPL.REPLCompletions.PATH_cache_condition = Threads.Condition(REPL.REPLCompletions.PATH_cache_lock)
+
+        # Check if the previous update is still running - if so, wait for it to finish
+        while REPL.REPLCompletions.PATH_cache_task !== nothing
+            @assert !istaskdone(REPL.REPLCompletions.PATH_cache_task)
+            wait(REPL.REPLCompletions.PATH_cache_condition)
+        end
+
+        # force the next cache update to happen immediately
+        REPL.REPLCompletions.next_cache_update = 0
+    end
+    return nothing
+end
+
+function test_only_wait_cache_path_done()
+    @lock REPL.REPLCompletions.PATH_cache_lock begin
+        @assert REPL.REPLCompletions.PATH_cache_condition !== nothing
+
+        while REPL.REPLCompletions.next_cache_update == 0.
+            wait(REPL.REPLCompletions.PATH_cache_condition)
+        end
+        REPL.REPLCompletions.PATH_cache_condition = nothing
+    end
+end
+
 if Sys.isunix()
 let s, c, r
     #Assume that we can rely on the existence and accessibility of /tmp
@@ -1204,12 +1240,9 @@ let s, c, r
                 # Files reachable by PATH are cached async when PATH is seen to have been changed by `complete_path`
                 # so changes are unlikely to appear in the first complete. For testing purposes we can wait for
                 # caching to finish
-                @lock REPL.REPLCompletions.PATH_cache_lock begin
-                    # force the next cache update to happen immediately
-                    REPL.REPLCompletions.next_cache_update = 0
-                end
+                test_only_arm_cache_refresh()
                 c,r = test_scomplete(s)
-                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
+                test_only_wait_cache_path_done()
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1238,12 +1271,9 @@ let s, c, r
 
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
-                @lock REPL.REPLCompletions.PATH_cache_lock begin
-                    # force the next cache update to happen immediately
-                    REPL.REPLCompletions.next_cache_update = 0
-                end
+                test_only_arm_cache_refresh()
                 c,r = test_scomplete(s)
-                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
+                test_only_wait_cache_path_done()
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
@@ -2632,6 +2662,35 @@ const issue57780_orig = copy(issue57780)
 test_complete_context("empty!(issue57780).", Main)
 @test issue57780 == issue57780_orig
 
+function g54131 end
+for i in 1:498
+    @eval g54131(::Val{$i}) = i
+end
+g54131(::Val{499}; kwarg=true) = 499*kwarg
+struct F54131; end
+Base.getproperty(::F54131, ::Symbol) = Any[cos, sin, g54131][rand(1:3)]
+f54131 = F54131()
+@testset "performance of kwarg completion with large method tables" begin
+    # The goal here is to simply ensure we aren't hitting catestrophically bad
+    # behaviors when shift isn't pressed. The difference between good and bad
+    # is on the order of tens of milliseconds vs tens of seconds; using 1 sec as
+    # a very rough canary that is hopefully robust even in the noisy CI coalmines
+    s = "g54131(kwa"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+
+    s = "f54131.x("
+    a, b, c = completions(s, lastindex(s), @__MODULE__, false)
+    @test only(a) isa REPLCompletions.TextCompletion
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+
+    s = "f54131.x(kwa"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, false)
+    @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+end
+
 # Completion inside string interpolation
 let s = "\"example: \$varflo"
     c, r = test_complete_foo(s)
@@ -2663,4 +2722,39 @@ let s = "foo58296(findfi"
     c, r = test_complete(s)
     @test "findfirst" in c
     @test r == 10:15
+end
+
+# #58931 - only show local names when completing the empty string
+let s = ""
+    c, r = test_complete_foo(s)
+    @test "test" in c
+    @test !("rand" in c)
+end
+
+# #58309, #58832 - don't show every name when completing after a full keyword
+let s = "true"     # bool is a little different (Base.isidentifier special case)
+    c, r = test_complete(s)
+    @test "trues" in c
+    @test "true" in c
+    @test !("rand" in c)
+end
+
+let s = "for"
+    c, r = test_complete(s)
+    @test "for" in c
+    @test "foreach" in c
+    @test !("rand" in c)
+end
+
+# #58833 - Autocompletion of keyword arguments with do-blocks is broken
+let s = "kwtest6(123; som|) do x; x + 3 end"
+    c, r = test_complete_context_pos(s, Main.CompletionFoo)
+    @test "somekwarg=" in c
+    @test r == 14:16
+end
+
+# Test that `jl_resolve_definition_effects_in_ir` is called correctly and inference doesn't pass unexpected toplevel code
+let s = "(@ccall strlen(\"foo\"::Cstring)::Csize_t).|"
+    _, _, res  = test_complete_pos(s)
+    @test res
 end

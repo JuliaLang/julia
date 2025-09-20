@@ -141,7 +141,7 @@ import .Base:
     bytesavailable, position, read, read!, readbytes!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error, _uv_error,
     setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
-    isexecutable, isreadable, iswritable, MutableDenseArrayType, truncate
+    isexecutable, isreadable, iswritable, MutableDenseArrayType, truncate, unsafe_takestring!
 
 import .Base.RefValue
 
@@ -390,7 +390,7 @@ function isexecutable(path::String)
     X_OK = 0x01
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
 end
-isexecutable(path::AbstractString) = isexecutable(String(path))
+isexecutable(path::AbstractString) = isexecutable(String(path)::String)
 
 """
     isreadable(path::String)
@@ -417,7 +417,7 @@ function isreadable(path::String)
     R_OK = 0x04
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
 end
-isreadable(path::AbstractString) = isreadable(String(path))
+isreadable(path::AbstractString) = isreadable(String(path)::String)
 
 """
     iswritable(path::String)
@@ -444,7 +444,7 @@ function iswritable(path::String)
     W_OK = 0x02
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end
-iswritable(path::AbstractString) = iswritable(String(path))
+iswritable(path::AbstractString) = iswritable(String(path)::String)
 
 
 end

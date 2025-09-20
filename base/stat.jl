@@ -320,7 +320,7 @@ function filemode_string(mode)
         end
         complete && write(str, "-")
     end
-    return String(take!(str))
+    return unsafe_takestring!(str)
 end
 
 """
@@ -380,7 +380,7 @@ function ispath(path::String)
     end
     return r == 0
 end
-ispath(path::AbstractString) = ispath(String(path))
+ispath(path::AbstractString) = ispath(String(path)::String)
 
 """
     isfifo(path)::Bool

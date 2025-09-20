@@ -12,7 +12,8 @@ typedef struct {
     const llvm::object::ObjectFile *obj;
     llvm::DIContext *ctx;
     int64_t slide;
-} objfileentry_t;
+    std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap;
+} jl_object_file_entry_t;
 
 // Central registry for resolving function addresses to `jl_code_instance_t`s and
 // originating `ObjectFile`s (for the DWARF debug info).
@@ -121,7 +122,7 @@ private:
     using rev_map = std::map<KeyT, ValT, std::greater<KeyT>>;
 
     typedef rev_map<size_t, SectionInfo> objectmap_t;
-    typedef rev_map<uint64_t, objfileentry_t> objfilemap_t;
+    typedef rev_map<uint64_t, jl_object_file_entry_t> objfilemap_t;
 
     objectmap_t objectmap{};
     rev_map<size_t, std::pair<size_t, jl_code_instance_t *>> cimap{};
@@ -152,4 +153,6 @@ public:
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;
     Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
+
+    std::shared_mutex symbol_mutex;
 };
