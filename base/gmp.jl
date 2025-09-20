@@ -689,7 +689,7 @@ function _prod(arr::AbstractArray{BigInt}, lo, hi)
         # to avoid re-allocations
         nlimbs = 0
         for i in lo:hi
-            nlimbs += arr[i].size
+            nlimbs += abs(arr[i].size)
         end
         init = BigInt(; nbits=nlimbs*BITS_PER_LIMB)
         MPZ.set_si!(init, 1)
