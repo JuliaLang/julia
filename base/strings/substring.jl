@@ -44,6 +44,9 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         new(s, i, j)
     end
+    global function _unsafe_new_substring(s::AbstractString, offset::Int, ncodeunits::Int)
+        new{typeof(s)}(s, offset, ncodeunits)
+    end
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
@@ -56,8 +59,14 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
+function SubString(s::AbstractString)
+    # Note: This is always valid, and will make the construction a noop
+    _unsafe_new_substring(s, 0, Int(ncodeunits(s))::Int)
+end
+
+SubString{T}(s::T) where {T<:AbstractString} = SubString(s)
+
+SubString(s::SubString) = s
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
