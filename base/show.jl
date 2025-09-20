@@ -3120,14 +3120,14 @@ Show the quasi-type of `x` where quasi-type is the type of `x` or an expression 
 containing quasi-types) that would generate an object of the same type as `x`. The shorter
 of these two options is typically used.
 
-This function is used by summary to display type information in terms of sequences of
+This function is used by `summary` to display type information in terms of sequences of
 function calls on objects.
 
 Show a leading `::` if `toplevel` is `false` and showing a type. `toplevel` is `true` if
 this is the direct call from `summary` and `false` for nested (recursive) calls.
 
-The fallback definition is to print x as "::\\\$(typeof(x))", representing argument x in terms
-of its type. (The double-colon is omitted if toplevel=true.) However, you can specialize
+The fallback definition is to print `x` as "::\\\$(typeof(x))", representing argument `x` in terms
+of its type. (The double-colon is omitted if `toplevel=true`.) However, you can specialize
 this function for specific types to customize printing. This customization is useful for
 types that have simple, public constructors and verbose and/or internal types and type
 parameters such as `reinterpret`ed arrays or `SubArray`s.
