@@ -1586,7 +1586,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             add_inlining_edge!(et, code)
             return true
         end
-        src = @atomic :monotonic code.inferred
+        src = ci_get_source(inlining.interp, code)
     else
         return false
     end
