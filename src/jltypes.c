@@ -2971,6 +2971,12 @@ void export_jl_sysimg_globals(void)
     jl_##name##_type->smalltag = jl_##name##_tag;
 void jl_init_types(void) JL_GC_DISABLED
 {
+   // n.b. When adding fields to existing types, update const/atomic field bitvectors carefully:
+   //   Bits represent field positions (0-indexed).
+   //   Prefer `0b` notation (converting if needed from `0x`).
+   //   Only set bits for new atomic/const fields, shift existing bits as needed.
+   //   Only 32 bits in one field, overflow goes into the next field.
+
     jl_module_t *core = NULL; // will need to be assigned later
     jl_task_t *ct = jl_current_task;
 
@@ -3782,7 +3788,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(27,
+                        jl_perm_symsvec(28,
                                         "next",
                                         "queue",
                                         "storage",
@@ -3790,6 +3796,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "result",
                                         "scope",
                                         "code",
+                                        "invoked",
                                         "_state",
                                         "sticky",
                                         "priority",
@@ -3810,7 +3817,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "last_started_running_at",
                                         "running_time_ns",
                                         "finished_at"),
-                        jl_svec(27,
+                        jl_svec(28,
+                                jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -3843,10 +3851,10 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
-    // Set field 20 (metrics_enabled) as const
-    // Set fields 8 (_state) and 24-27 (metric counters) as atomic
-    const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };
-    const static uint32_t task_atomicfields[1] = { 0b00000111100000000000000010000000 };
+    // Set field 21 (metrics_enabled) as const
+    // Set fields 9 (_state) and 25-28 (metric counters) as atomic
+    const static uint32_t task_constfields[]  = { 0b0000000100000000000000000000 };
+    const static uint32_t task_atomicfields[] = { 0b1111000000000000000100000000 };
     jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 
@@ -3864,6 +3872,10 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_perm_symsvec(4, "typ", "env", "parent", "source"),
         jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_any_type),
         jl_emptysvec, 0, 0, 4);
+    jl_partial_task_type = jl_new_datatype(jl_symbol("PartialTask"), core, jl_any_type, jl_emptysvec,
+        jl_perm_symsvec(2, "fetch_type", "fetch_error"),
+        jl_svec(2, jl_any_type, jl_any_type),
+        jl_emptysvec, 0, 0, 2);
 
     // complete builtin type metadata
     jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
