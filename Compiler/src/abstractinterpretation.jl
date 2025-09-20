@@ -3704,13 +3704,13 @@ function scan_specified_partitions(query::F1, walk_binding_partition::F2,
             @assert lookup_world in partition_validity
             this_rte = query(interp, leaf_binding, leaf_partition)
             if @isdefined(rte)
+                if min_world(total_validity) <= wwr.this
+                    @goto out
+                end
                 if this_rte === rte
                     total_validity = union(total_validity, partition_validity)
                     lookup_world = min_world(total_validity) - 1
                     continue
-                end
-                if min_world(total_validity) <= wwr.this
-                    @goto out
                 end
             end
             total_validity = partition_validity
