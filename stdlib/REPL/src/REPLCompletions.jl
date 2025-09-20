@@ -1043,7 +1043,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #   `file ~/exa TAB          => `file ~/example.txt
     #   `file ~/example.txt TAB  => `file /home/user/example.txt
     if (n = find_parent(cur, K"CmdString")) !== nothing
-        off = n.position - 1
+        off = char_first(n) - 1
         ret, r, success = shell_completions(string[char_range(n)], pos - off, hint, cmd_escape=true)
         success && return ret, r .+ off, success
     end
@@ -1114,7 +1114,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         s = string[intersect(r2, 1:pos)]
     elseif kind(cur) == K"MacroName"
         # Include the `@`
-        r = intersect(prevind(string, cur.position):char_last(cur), 1:pos)
+        r = intersect(prevind(string, char_first(cur)):char_last(cur), 1:pos)
         s = string[r]
     elseif looks_like_ident || kind(cur) in KSet"Bool Identifier @"
         r = intersect(char_range(cur), 1:pos)

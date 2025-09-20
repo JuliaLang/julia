@@ -14,7 +14,7 @@ export CursorNode, char_range, char_last, children_nt, find_delim, seek_pos
 struct CursorData <: AbstractSyntaxData
     source::SourceFile
     raw::GreenNode{SyntaxHead}
-    position::Int
+    byte_end::Int
     index::Int
     index_nt::Int # nth non-trivia in parent
     val::Any
@@ -71,8 +71,9 @@ function Base.Expr(node::CursorNode)
     Expr(SyntaxNode(src, node.raw))
 end
 
-char_range(node) = node.position:char_last(node)
-char_last(node) = thisind(node.source, node.position + span(node) - 1)
+char_range(node) = char_first(node):char_last(node)
+char_first(node) = node.byte_end - node.raw.span + 1
+char_last(node) = thisind(node.source, node.byte_end)
 
 children_nt(node) = [n for n in children(node) if !is_trivia(n)]
 
@@ -103,7 +104,7 @@ function find_delim(node, left_kind, right_kind)
     left !== nothing || return nothing, nothing
     right = findlast(c -> kind(c) == right_kind, cs)
     closed = right !== nothing && right != left
-    right = closed ? thisind(node.source, cs[right].position - 1) : char_last(node)
+    right = closed ? char_first(cs[right]) : char_last(node)
     left = nextind(node.source, char_last(cs[left]))
     return left:right, closed
 end
