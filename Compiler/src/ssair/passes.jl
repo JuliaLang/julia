@@ -2039,6 +2039,7 @@ function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::I
         for ur in userefs(compact.result[phi][:stmt])
             val = ur[]
             isa(val, SSAValue) || continue
+            (1 ≤ val.id < compact.result_idx) || continue
             isa(compact[val][:stmt], PhiNode) || continue
             (val.id in safe_phis) && continue
             push!(worklist, val.id)
@@ -2153,6 +2154,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         for ur in userefs(inst[:stmt]::PhiNode)
             use = ur[]
             if isa(use, SSAValue)
+                (1 <= use.id <= length(phi_uses)) || continue
                 phi_uses[use.id] += 1
                 stmt = compact.result[use.id][:stmt]
                 if isa(stmt, PhiNode)

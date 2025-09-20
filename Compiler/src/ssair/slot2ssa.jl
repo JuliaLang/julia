@@ -49,9 +49,7 @@ end
 
 function renumber_ssa(stmt::SSAValue, ssanums::Vector{SSAValue}, new_ssa::Bool=false)
     id = stmt.id
-    if id > length(ssanums)
-        return stmt
-    end
+    (1 <= id <= length(ssanums)) || return stmt
     val = ssanums[id]
     @assert val.id > 0
     return val

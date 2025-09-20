@@ -2121,3 +2121,25 @@ let src = code_typed1(foosvalconstprop, ())
     end
     @test count(is_constfield_load, src.code) == 0
 end
+
+@testset "PhiNode renumbering with placeholder SSAValues" begin
+    # issues #55388 and #57827
+
+    function f55388(nextstate)
+        nextstate === 0x3 && @goto state3
+        while @noinline rand(Bool)
+            ct = @noinline rand(Bool) ? [] : nothing
+            if @noinline rand(Bool)
+                return
+                @label state3
+            end
+            Base.donotdelete(ct)
+        end
+        nothing
+    end
+
+    f57827(arr) = foldl((acc, x) -> ifelse(x > acc[1], (x,), (acc[1],)), arr, init = (-Inf,))
+
+    @test code_typed(f55388, (UInt8,)) isa Vector
+    @test code_typed(f57827, (Vector{Int},)) isa Vector
+end
