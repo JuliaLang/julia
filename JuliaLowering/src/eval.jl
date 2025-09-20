@@ -1,3 +1,6 @@
+# Non-incremental lowering API for non-toplevel non-module expressions.
+# May be removed?
+
 function lower(mod::Module, ex0; expr_compat_mode=false, world=Base.get_world_counter())
     ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
     ctx2, ex2 = expand_forms_2(  ctx1, ex1)
@@ -11,6 +14,96 @@ function macroexpand(mod::Module, ex; expr_compat_mode=false, world=Base.get_wor
     ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
     ex1
 end
+
+# Incremental lowering API which can manage toplevel and module expressions.
+#
+# This iteration API is oddly bespoke and arguably somewhat non-Julian for two
+# reasons:
+#
+# * Lowering knows when new modules are required, and may request them with
+#   `:begin_module`. However `eval()` generates those modules so they need to
+#   be passed back into lowering. So we can't just use `Base.iterate()`. (Put a
+#   different way, we have a situation which is suited to coroutines but we
+#   don't want to use full Julia `Task`s for this.)
+# * We might want to implement this `eval()` in Julia's C runtime code or early
+#   in bootstrap. Hence using SimpleVector and Symbol as the return values of
+#   `lower_step()`
+#
+# We might consider changing at least the second of these choices, depending on
+# how we end up putting this into Base.
+
+struct LoweringIterator{GraphType}
+    ctx::MacroExpansionContext{GraphType}
+    todo::Vector{Tuple{SyntaxTree{GraphType}, Bool, Int}}
+end
+
+function lower_init(ex::SyntaxTree, mod::Module, macro_world::UInt; expr_compat_mode::Bool=false)
+    graph = ensure_macro_attributes(syntax_graph(ex))
+    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
+    ex = reparent(ctx, ex)
+    LoweringIterator{typeof(graph)}(ctx, [(ex, false, 0)])
+end
+
+function lower_step(iter, push_mod=nothing)
+    if !isnothing(push_mod)
+        push_layer!(iter.ctx, push_mod, false)
+    end
+
+    if isempty(iter.todo)
+        return Core.svec(:done)
+    end
+
+    ex, is_module_body, child_idx = pop!(iter.todo)
+    if child_idx > 0
+        next_child = child_idx + 1
+        if child_idx <= numchildren(ex)
+            push!(iter.todo, (ex, is_module_body, next_child))
+            ex = ex[child_idx]
+        else
+            if is_module_body
+                pop_layer!(iter.ctx)
+                return Core.svec(:end_module)
+            else
+                return lower_step(iter)
+            end
+        end
+    end
+
+    k = kind(ex)
+    if !(k in KSet"toplevel module")
+        ex = expand_forms_1(iter.ctx, ex)
+        k = kind(ex)
+    end
+    if k == K"toplevel"
+        push!(iter.todo, (ex, false, 1))
+        return lower_step(iter)
+    elseif k == K"module"
+        name = ex[1]
+        if kind(name) != K"Identifier"
+            throw(LoweringError(name, "Expected module name"))
+        end
+        newmod_name = Symbol(name.name_val)
+        body = ex[2]
+        if kind(body) != K"block"
+            throw(LoweringError(body, "Expected block in module body"))
+        end
+        std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
+        loc = source_location(LineNumberNode, ex)
+        push!(iter.todo, (body, true, 1))
+        return Core.svec(:begin_module, newmod_name, std_defs, loc)
+    else
+        # Non macro expansion parts of lowering
+        ctx2, ex2 = expand_forms_2(iter.ctx, ex)
+        ctx3, ex3 = resolve_scopes(ctx2, ex2)
+        ctx4, ex4 = convert_closures(ctx3, ex3)
+        ctx5, ex5 = linearize_ir(ctx4, ex4)
+        thunk = to_lowered_expr(ex5)
+        return Core.svec(:thunk, thunk)
+    end
+end
+
+
+#-------------------------------------------------------------------------------
 
 function codeinfo_has_image_globalref(@nospecialize(e))
     if e isa GlobalRef
@@ -274,7 +367,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"code_info"
         ir = to_code_info(ex[1], ex.slots)
         if ex.is_toplevel_thunk
-            Expr(:thunk, ir)
+            Expr(:thunk, ir) # TODO: Maybe nice to just return a CodeInfo here?
         else
             ir
         end
@@ -357,64 +450,74 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
 end
 
 #-------------------------------------------------------------------------------
-# Our version of eval takes our own data structures
+# Our version of eval - should be upstreamed though?
 @fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
-        expr_compat_mode::Bool=false, macro_world=Base.get_world_counter())
-    graph = ensure_macro_attributes(syntax_graph(ex))
-    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
-    _eval(ctx, ex)
+                                macro_world::UInt=Base.get_world_counter(),
+                                opts...)
+    iter = lower_init(ex, mod, macro_world; opts...)
+    _eval(mod, iter)
 end
 
-function _eval_stmts(ctx, exs)
-    res = nothing
-    for ex in exs
-        res = _eval(ctx, ex)
-    end
-    res
-end
+if VERSION >= v"1.13.0-DEV.1199" # https://github.com/JuliaLang/julia/pull/59604
 
-function _eval_module_body(ctx, mod, ex)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod,
-                           current_layer_id(ctx), false)
-    push!(ctx.scope_layers, new_layer)
-    push!(ctx.scope_layer_stack, new_layer.id)
-    stmts = kind(ex[2]) == K"block" ? ex[2][1:end] : ex[2:2]
-    _eval_stmts(ctx, stmts)
-    pop!(ctx.scope_layer_stack)
-end
-
-function _eval_module(ctx, ex)
-    # Here we just use `eval()` with an Expr to create a module.
-    # TODO: Refactor jl_eval_module_expr() in the runtime so that we can avoid
-    # eval.
-    std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
-    newmod_name = Symbol(ex[1].name_val)
-    Core.eval(current_layer(ctx).mod,
-              Expr(:module, std_defs, newmod_name,
-                   Expr(:block, Expr(:call,
-                                     newmod->_eval_module_body(ctx, newmod, ex),
-                                     newmod_name))))
-end
-
-function _eval(ctx, ex::SyntaxTree)
-    k = kind(ex)
-    if k == K"toplevel"
-        _eval_stmts(ctx, children(ex))
-    elseif k == K"module"
-        _eval_module(ctx, ex)
-    else
-        ex1 = expand_forms_1(ctx, ex)
-        if kind(ex1) in KSet"toplevel module"
-            _eval(ctx, ex1)
+function _eval(mod, iter)
+    modules = Module[]
+    new_mod = nothing
+    result = nothing
+    while true
+        thunk = lower_step(iter, new_mod)::Core.SimpleVector
+        new_mod = nothing
+        type = thunk[1]::Symbol
+        if type == :done
+            break
+        elseif type == :begin_module
+            push!(modules, mod)
+            mod = @ccall jl_begin_new_module(mod::Any, thunk[2]::Symbol, thunk[3]::Cint,
+                                             thunk[4].file::Cstring, thunk[4].line::Cint)::Module
+            new_mod = mod
+        elseif type == :end_module
+            @ccall jl_end_new_module(mod::Module)::Cvoid
+            result = mod
+            mod = pop!(modules)
         else
-            ctx2, ex2 = expand_forms_2(ctx, ex1)
-            ctx3, ex3 = resolve_scopes(ctx2, ex2)
-            ctx4, ex4 = convert_closures(ctx3, ex3)
-            ctx5, ex5 = linearize_ir(ctx4, ex4)
-            thunk = to_lowered_expr(ex5)
-            Core.eval(current_layer(ctx).mod, thunk)
+            @assert type == :thunk
+            result = Core.eval(mod, thunk[2])
         end
     end
+    @assert isempty(modules)
+    return result
+end
+
+else
+
+function _eval(mod, iter, new_mod=nothing)
+    in_new_mod = !isnothing(new_mod)
+    result = nothing
+    while true
+        thunk = lower_step(iter, new_mod)::Core.SimpleVector
+        new_mod = nothing
+        type = thunk[1]::Symbol
+        if type == :done
+            @assert !in_new_mod
+            break
+        elseif type == :begin_module
+            name = thunk[2]::Symbol
+            std_defs = thunk[3]
+            result = Core.eval(mod,
+                Expr(:module, std_defs, name,
+                     Expr(:block, thunk[4], Expr(:call, m->_eval(m, iter, m), name)))
+            )
+        elseif type == :end_module
+            @assert in_new_mod
+            return mod
+        else
+            @assert type == :thunk
+            result = Core.eval(mod, thunk[2])
+        end
+    end
+    return result
+end
+
 end
 
 """

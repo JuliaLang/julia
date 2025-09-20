@@ -74,7 +74,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Module containing macros used in the demo.
-define_macros = true
+define_macros = false
 if !define_macros
     eval(:(module M end))
 else
