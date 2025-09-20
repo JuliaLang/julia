@@ -932,7 +932,9 @@ end
 
 function _count_added_node!(compact::IncrementalCompact, @nospecialize(val))
     if isa(val, SSAValue)
-        compact.used_ssas[val.id] += 1
+        if val.id > 0
+            compact.used_ssas[val.id] += 1
+        end
         return false
     elseif isa(val, NewSSAValue)
         @assert val.id < 0 # Newly added nodes should be canonicalized
@@ -1101,8 +1103,10 @@ end
 
 function kill_current_use!(compact::IncrementalCompact, @nospecialize(val))
     if isa(val, SSAValue)
-        @assert compact.used_ssas[val.id] >= 1
-        compact.used_ssas[val.id] -= 1
+        if val.id > 0
+            @assert compact.used_ssas[val.id] >= 1
+            compact.used_ssas[val.id] -= 1
+        end
     elseif isa(val, NewSSAValue)
         @assert val.id < 0
         @assert compact.new_new_used_ssas[-val.id] >= 1
@@ -1316,9 +1320,7 @@ function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{In
         new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool, mark_refined!::Union{Refiner, Nothing})
     id = val.id
     if do_rename_ssa
-        if id > length(ssanums)
-            return val
-        end
+        (1 <= id <= length(ssanums)) || return val
         val = ssanums[id]
     end
     if isa(val, Refined)
@@ -1326,7 +1328,9 @@ function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{In
         mark_refined! !== nothing && mark_refined!()
     end
     if isa(val, SSAValue)
-        used_ssas[val.id] += 1
+        if val.id > 0
+            used_ssas[val.id] += 1
+        end
     elseif isa(val, NewSSAValue)
         @assert val.id < 0
         new_new_used_ssas[-val.id] += 1
