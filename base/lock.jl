@@ -398,7 +398,7 @@ macro lock_nofail(l, expr)
 end
 
 """
-  Lockable(value, lock = ReentrantLock())
+    Lockable(value, lock = ReentrantLock())
 
 Creates a `Lockable` object that wraps `value` and
 associates it with the provided `lock`. This object
@@ -431,7 +431,7 @@ Lockable(value) = Lockable(value, ReentrantLock())
 getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
 
 """
-  lock(f::Function, l::Lockable)
+    lock(f::Function, l::Lockable)
 
 Acquire the lock associated with `l`, execute `f` with the lock held,
 and release the lock when `f` returns. `f` will receive one positional
@@ -704,6 +704,9 @@ calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -813,6 +816,9 @@ if that behavior is correct within your library's threading-safety design.
     task after the call might not be the same as the one at the start of the call.
 
 See also: [`OncePerTask`](@ref).
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
 ## Example
 
@@ -941,6 +947,9 @@ Calling a `OncePerTask` object returns a value of type `T` by running the functi
 exactly once per Task. All future calls in the same Task will return exactly the same value.
 
 See also: [`task_local_storage`](@ref).
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
 ## Example
 

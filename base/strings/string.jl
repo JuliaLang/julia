@@ -7,9 +7,9 @@ An error occurred when trying to access `str` at index `i` that is not valid.
 """
 struct StringIndexError <: Exception
     string::AbstractString
-    index::Integer
+    index::Int
 end
-@noinline string_index_err(s::AbstractString, i::Integer) =
+@noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
 function Base.showerror(io::IO, exc::StringIndexError)
     s = exc.string
@@ -62,8 +62,8 @@ In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
 String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
+
 function String(v::Vector{UInt8})
-    #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
     len == 0 && return ""
     ref = v.ref
@@ -83,14 +83,33 @@ end
 
 Create a `String` from `m`, changing the interpretation of the contents of `m`.
 This is done without copying, if possible. Thus, any access to `m` after
-calling this function, either to read or to write, is undefined behaviour.
+calling this function, either to read or to write, is undefined behavior.
 """
 function unsafe_takestring(m::Memory{UInt8})
     isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
 end
 
 """
+    takestring!(x) -> String
+
+Create a string from the content of `x`, emptying `x`.
+
+# Examples
+```jldoctest
+julia> v = [0x61, 0x62, 0x63];
+
+julia> s = takestring!(v)
+"abc"
+
+julia> isempty(v)
+true
+```
+"""
+takestring!(v::Vector{UInt8}) = String(v)
+
+"""
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
+    unsafe_string(p::Cstring)
 
 Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
 (The pointer can be safely freed afterwards.) If `length` is specified
@@ -139,7 +158,7 @@ pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
-codeunit(s::String, i::Integer) = codeunit(s, Int(i))
+codeunit(s::String, i::Integer) = codeunit(s, Int(i)::Int)
 @assume_effects :foldable @inline function codeunit(s::String, i::Int)
     @boundscheck checkbounds(s, i)
     b = GC.@preserve s unsafe_load(pointer(s, i))

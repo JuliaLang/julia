@@ -97,8 +97,8 @@ void __cdecl crt_sig_handler(int sig, int num)
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
-            jl_show_sigill(&Context);
-        jl_critical_error(sig, 0, &Context, jl_get_current_task());
+            jl_fprint_sigill(ios_safe_stderr, &Context);
+        jl_fprint_critical_error(ios_safe_stderr, sig, 0, &Context, jl_get_current_task());
         raise(sig);
     }
 }
@@ -285,7 +285,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     }
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
         jl_safe_printf("\n");
-        jl_show_sigill(ExceptionInfo->ContextRecord);
+        jl_fprint_sigill(ios_safe_stderr, ExceptionInfo->ContextRecord);
     }
     jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
     switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
@@ -333,9 +333,9 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         jl_safe_printf("UNKNOWN"); break;
     }
     jl_safe_printf(" at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-    jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_fprint_native_codeloc(ios_safe_stderr, (uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-    jl_critical_error(0, 0, ExceptionInfo->ContextRecord, ct);
+    jl_fprint_critical_error(ios_safe_stderr, 0, 0, ExceptionInfo->ContextRecord, ct);
     static int recursion = 0;
     if (recursion++)
         exit(1);
