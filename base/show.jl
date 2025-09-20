@@ -3126,7 +3126,7 @@ function calls on objects.
 Show a leading `::` if `toplevel` is `false` and showing a type. `toplevel` is `true` if
 this is the direct call from `summary` and `false` for nested (recursive) calls.
 
-The fallback definition is to print x as "::$(typeof(x))", representing argument x in terms
+The fallback definition is to print x as "::\\\$(typeof(x))", representing argument x in terms
 of its type. (The double-colon is omitted if toplevel=true.) However, you can specialize
 this function for specific types to customize printing. This customization is useful for
 types that have simple, public constructors and verbose and/or internal types and type
@@ -3159,13 +3159,13 @@ type, indicating that any recursed calls are not at the top level.
 Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
 behavior, because no specialized method for `Array` has been defined.
 """
+function showarg(io::IO, @nospecialize(x), toplevel)
+    toplevel || print(io, "::")
+    print(io, typeof(x))
+end
 function showarg(io::IO, T::Type, toplevel)
     toplevel || print(io, "::")
     print(io, "Type{", T, "}")
-end
-function showarg(io::IO, @nospecialize(x), toplevel) # TODO: attach the docstring to this method, instead.
-    toplevel || print(io, "::")
-    print(io, typeof(x))
 end
 # This method resolves an ambiguity for packages that specialize on eltype
 function showarg(io::IO, a::Array{Union{}}, toplevel)
