@@ -910,14 +910,20 @@ typedef struct _jl_typemap_level_t {
 
 typedef struct _jl_methcache_t {
     JL_DATA_TYPE
+    // hash map from dispatchtuple type to a linked-list of TypeMapEntry
+    // entry.sig == type for all entries in the linked-list
     _Atomic(jl_genericmemory_t*) leafcache;
+
+    // cache for querying everything else (anything that didn't seem profitable to put into leafcache)
     _Atomic(jl_typemap_t*) cache;
+
     jl_mutex_t writelock;
 } jl_methcache_t;
 
 // contains global MethodTable
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
+    // full set of entries
     _Atomic(jl_typemap_t*) defs;
     jl_methcache_t *cache;
     jl_sym_t *name; // sometimes used for debug printing
