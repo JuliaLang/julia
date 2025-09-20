@@ -421,6 +421,7 @@
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
     XX(jl_static_show) \
+    XX(jl_safe_static_show) \
     XX(jl_static_show_func_sig) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \

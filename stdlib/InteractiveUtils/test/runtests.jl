@@ -445,6 +445,31 @@ end
         _, rt = ret
         @test rt === Bool
     end
+
+    @testset "Vararg handling" begin
+        @test_throws "More than one `Core.Vararg`" @eval @code_typed +(1, 2::Vararg{Int}, 3, 4::Vararg{Float64})
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Int..., 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Float64)
+        @test_throws "Inconsistent type `Any`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Any)
+        @test_throws r"at most 2 types .* found 3 instead" @eval @code_typed +(1, 2, 3, 4::Vararg{Int,2}, 5, 6)
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}, 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}, 5, 6))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg))[2] === Any
+        @test (@code_typed +(1, 2, 3, 4::Vararg, 5.0))[2] === Any
+        @test (@code_typed +(1, 2, 3, ::Int...))[2] === Int
+        @test (@code_typed +(1, 2, 3, ::Int..., 5))[2] === Int
+        # We just ignore the checks with `where` parameters for simplicity of implementation.
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::T) where {T}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Float64) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Float64) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Int) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{Vector{T}}, ::Int) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{Int}, ::T) where {T<:Real}), Vector{Any})
+    end
 end
 
 module HygieneTest

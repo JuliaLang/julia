@@ -664,8 +664,8 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT;
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
@@ -1524,11 +1524,11 @@ size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_cont
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip);
-void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
+void jl_fprint_critical_error(ios_t *t, int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
-void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
-void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
+void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT;
+void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
 #ifdef _OS_WINDOWS_
 JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
 #endif

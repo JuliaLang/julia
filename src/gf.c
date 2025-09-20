@@ -109,7 +109,7 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
         jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: tracer callback function threw an error:\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-        jlbacktrace(); // written to STDERR_FILENO
+        jl_fprint_backtrace(ios_safe_stderr);
     }
 }
 
@@ -475,7 +475,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
             jl_printf((JL_STREAM*)STDERR_FILENO, "unexpected error in runtime:\n");
             jl_static_show((JL_STREAM*)STDERR_FILENO, e);
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-            jlbacktrace(); // written to STDERR_FILENO
+            jl_fprint_backtrace(ios_safe_stderr);
         }
         ci = NULL;
 #ifndef JL_NDEBUG
@@ -3152,7 +3152,7 @@ static void JL_NORETURN jl_method_error_bare(jl_value_t *f, jl_value_t *args, si
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_ptls_t ptls = jl_current_task->ptls;
         ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
-        jl_critical_error(0, 0, NULL, jl_current_task);
+        jl_fprint_critical_error(ios_safe_stderr, 0, 0, NULL, jl_current_task);
         abort();
     }
     // not reached
