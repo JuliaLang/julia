@@ -3159,13 +3159,13 @@ type, indicating that any recursed calls are not at the top level.
 Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
 behavior, because no specialized method for `Array` has been defined.
 """
-function showarg(io::IO, @nospecialize(x), toplevel)
-    toplevel || print(io, "::")
-    print(io, typeof(x))
-end
 function showarg(io::IO, T::Type, toplevel)
     toplevel || print(io, "::")
     print(io, "Type{", T, "}")
+end
+function showarg(io::IO, @nospecialize(x), toplevel) # TODO: attach the docstring to this method, instead.
+    toplevel || print(io, "::")
+    print(io, typeof(x))
 end
 # This method resolves an ambiguity for packages that specialize on eltype
 function showarg(io::IO, a::Array{Union{}}, toplevel)
