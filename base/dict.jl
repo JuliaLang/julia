@@ -124,9 +124,10 @@ _shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
 #     sh::UInt8 - short hash (7 highest hash bits)
-function hashindex(key, sz)
+function hashindex(key, sz::Integer)
+    sz = Int(sz)::Int
     hsh = hash(key)::UInt
-    idx = (((hsh % Int) & (sz-1)) + 1)::Int
+    idx = ((hsh % Int) & (sz-1)) + 1
     return idx, _shorthash7(hsh)
 end
 
@@ -190,7 +191,8 @@ end
     return h
 end
 
-function sizehint!(d::Dict{T}, newsz; shrink::Bool=true) where T
+function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
+    newsz = Int(newsz)::Int
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)
@@ -532,7 +534,7 @@ end
 Determine whether a collection has a mapping for a given `key`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -554,7 +556,7 @@ in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 Return the key matching argument `key` if one exists in `collection`, otherwise return `default`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -696,11 +698,11 @@ function skip_deleted_floor!(h::Dict)
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
+@propagate_inbounds _iterate_dict(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted(t, t.idxfloor))
+    _iterate_dict(t, skip_deleted(t, t.idxfloor))
 end
-@propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
+@propagate_inbounds iterate(t::Dict, i) = _iterate_dict(t, skip_deleted(t, i))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
@@ -898,7 +900,7 @@ end
 """
     PersistentDict
 
-`PersistentDict` is a dictionary implemented as an hash array mapped trie,
+`PersistentDict` is a dictionary implemented as a hash array mapped trie,
 which is optimal for situations where you need persistence, each operation
 returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple

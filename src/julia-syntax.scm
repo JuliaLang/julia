@@ -3,11 +3,16 @@
 
 ;; pass 1: syntax desugaring
 
-;; allow (:: T) => (:: #gensym T) in formal argument lists
+;; unnamed or all-underscore arguments may still be read from internally, so
+;; convert (:: T) => (:: #gensym T) and _ => #gensym in formal argument lists
 (define (fill-missing-argname a unused)
-  (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
-      `(|::| ,(if unused UNUSED (gensy)) ,(cadr a))
-      a))
+  (define (replace-if-underscore u)
+    (if (underscore-symbol? u) (if unused UNUSED (gensy)) u))
+  (if (and (pair? a) (eq? (car a) '|::|))
+      (cond ((null? (cddr a))  `(|::| ,(if unused UNUSED (gensy)) ,(cadr a)))
+            ((null? (cdddr a)) `(|::| ,(replace-if-underscore (cadr a)) ,(caddr a)))
+            (else a))
+      (replace-if-underscore a)))
 (define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
       (error "invalid \"...\" on non-final argument"))
@@ -165,10 +170,7 @@
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
-  (let ((argl (map (lambda (x)
-                     (let ((n (arg-name x)))
-                       (if (underscore-symbol? n) UNUSED n)))
-                   argl))
+  (let ((argl (map arg-name argl))
         (body (blockify body)))
     `(lambda ,argl ()
              (scope-block
@@ -374,7 +376,7 @@
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
-          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
+          (anames (llist-vars argl))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
           (ename (if (nodot-sym-ref? name) name
                     (if (overlay? name) (cadr name) `(null)))))
@@ -543,14 +545,13 @@
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
           mangled sparams
-          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
-            ;; strip type off function self argument if not needed for a static param.
-            ;; then it is ok for cl-convert to move this definition above the original def.
-            ,@not-optional ,@vararg)
+          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw ,@not-optional ,@vararg)
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
-                                   annotations))
+                                   (if (has-thisfunction? `(block ,@stmts))
+                                       (cons `(meta thisfunction-original ,(arg-name (car not-optional))) annotations)
+                                       annotations)))
           rett)
 
         ;; call with no keyword args
@@ -683,28 +684,27 @@
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
                        (if (any vararg? (butlast vals))
-                         ;; Forbid splat in all but the final default value
-                         (error "invalid \"...\" in non-final positional argument default value")
-                         (if (any (lambda (defaultv)
-                                  ;; does any default val expression...
-                                  (contains (lambda (e)
-                                              ;; contain "e" such that...
-                                              (any (lambda (a)
-                                                     ;; "e" is in an absent arg
-                                                     (contains (lambda (u)
-                                                                 (eq? u e))
-                                                               a))
-                                                   absent))
-                                            defaultv))
-                                vals)
-                           ;; then add only one next argument
-                           `(block
-                             ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
-                           ;; otherwise add all
-                           `(block
-                             ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
+                           ;; Forbid splat in all but the final default value
+                           (error "invalid \"...\" in non-final positional argument default value")
+                           (if (any (lambda (defaultv)
+                                      ;; does any default val expression...
+                                      (expr-contains-p
+                                       (lambda (e)
+                                         ;; contain "e" such that...
+                                         (any (lambda (a)
+                                                ;; "e" is in an absent arg
+                                                (expr-contains-eq e a))
+                                              absent))
+                                       defaultv))
+                                    vals)
+                               ;; then add only one next argument
+                               `(block
+                                 ,@prologue
+                                 (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
+                               ;; otherwise add all
+                               `(block
+                                 ,@prologue
+                                 (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))
@@ -1644,9 +1644,9 @@
                (expand-forms
                 ;; TODO: This behaviour (`const _:T = ...` does not call convert,
                 ;; but still evaluates RHS) should be documented.
-                `(const ,(car e) ,(if (underscore-symbol? (car e))
-                                rhs
-                                (convert-for-type-decl rhs T #t #f))))
+                `(const (= ,(car e) ,(if (underscore-symbol? (car e))
+                                         rhs
+                                         (convert-for-type-decl rhs T #t #f)))))
                (expand-forms
                 `(block ,@(cdr e)
                         ;; TODO: When x is a complex expression, this acts as a
@@ -2521,7 +2521,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2540,6 +2540,20 @@
 
 (define (something e)
   (find (lambda (x) (not (equal? x '(null)))) e))
+
+(define (check-import-paths what e)
+  (define (check-dot-path e)
+    (and (list? e) (eq? (car e) '|.|) (every symbol? (cdr e))))
+  (define (check-path e)
+    (and (pair? e)
+         (or (check-dot-path e)
+             (and (eq? (car e) 'as)
+                  (check-dot-path (cadr e)) (symbol? (caddr e))))))
+  (unless (and (list? e)
+               (or (every check-path e)
+                   (and (list? (car e)) (eq? (caar e) ':)
+                        (every check-path (cdar e)))))
+    (error (string "malformed \"" what "\" statement"))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
@@ -2585,11 +2599,13 @@
             (typ-svec  (caddr sig-svec))
             (tvars     (cddr (cadddr sig-svec)))
             (argtypes  (cdddr typ-svec))
-            (functionloc (cadr (caddddr sig-svec))))
-       (let* ((argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
-                                (expand-forms `(curly (core Tuple) ,@argtypes))
-                                (reverse tvars))))
-         `(_opaque_closure ,(or argt argtype) ,rt_lb ,rt_ub ,isva ,(length argtypes) ,allow-partial ,functionloc ,lam))))
+            (functionloc (cadr (caddddr sig-svec)))
+            (argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
+                              (expand-forms `(curly (core Tuple) ,@argtypes))
+                              (reverse tvars)))
+            (argtype (or argt argtype))
+            (argtype (if (null? stmts) argtype `(block ,@stmts ,argtype))))
+       `(_opaque_closure ,argtype ,rt_lb ,rt_ub ,isva ,(length argtypes) ,allow-partial ,functionloc ,lam)))
 
    'block
    (lambda (e)
@@ -2896,6 +2912,7 @@
    'generator
    (lambda (e)
      (check-no-return e)
+     (check-no-thisfunction e)
      (expand-generator e #f '()))
 
    'flatten
@@ -2939,6 +2956,38 @@
     (lambda (e)
       (set! *current-desugar-loc* e)
       e)
+
+    ;; We insert (latestworld) after every call to _eval_import or _eval_using
+    ;; to avoid having to do it in eval_import_path (#57316)
+    'import
+    (lambda (e)
+      (check-import-paths "import" (cdr e))
+      `(block
+        (toplevel-only import)
+        ,.(if (eq? (caadr e) ':)
+              `((call (top _eval_import) (true) (thismodule)
+                      ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
+                (latestworld))
+              (map (lambda (x)
+                     `(block
+                       (call (top _eval_import) (true) (thismodule) (null) (inert ,x))
+                       (latestworld)))
+                   (cdr e)))))
+
+    'using
+    (lambda (e)
+      (check-import-paths "using" (cdr e))
+      `(block
+        (toplevel-only using)
+        ,.(if (eq? (caadr e) ':)
+              `((call (top _eval_import) (false) (thismodule)
+                      ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
+                (latestworld))
+              (map (lambda (x)
+                     `(block
+                       (call (top _eval_using) (thismodule) (inert ,x))
+                       (latestworld)))
+                   (cdr e)))))
     ))
 
 (define (has-return? e)
@@ -2948,6 +2997,13 @@
   (if (has-return? e)
       (error "\"return\" not allowed inside comprehension or generator")))
 
+(define (has-thisfunction? e)
+  (expr-contains-p thisfunction? e (lambda (x) (not (function-def? x)))))
+
+(define (check-no-thisfunction e)
+  (if (has-thisfunction? e)
+      (error "\"@__FUNCTION__\" not allowed inside comprehension or generator")))
+
 (define (has-break-or-continue? e)
   (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
                    e
@@ -2956,6 +3012,7 @@
 
 (define (lower-comprehension ty expr itrs)
   (check-no-return expr)
+  (check-no-thisfunction expr)
   (if (has-break-or-continue? expr)
       (error "break or continue outside loop"))
   (let ((result    (make-ssavalue))
@@ -3183,7 +3240,7 @@
          (check-valid-name (cadr e))
          ;; remove local decls
          '(null))
-        ((memq (car e) '(using import export public))
+        ((memq (car e) '(export public))
           ;; no scope resolution - identifiers remain raw symbols
           e)
         ((eq? (car e) 'require-existing-local)
@@ -3387,7 +3444,7 @@
               vi)
     tab))
 
-;; env:      list of vinfo (includes any closure #self#; should not include globals)
+;; env:      list of vinfo (should not include globals)
 ;; captvars: list of vinfo
 ;; sp:       list of symbol
 ;; new-sp:   list of symbol (static params declared here)
@@ -3444,10 +3501,15 @@
 (define (analyze-vars e env captvars sp tab)
   (if (or (atom? e) (quoted? e))
       (begin
-        (if (symbol? e)
-            (let ((vi (get tab e #f)))
-              (if vi
-                  (vinfo:set-read! vi #t))))
+        (cond
+         ((symbol? e)
+          (let ((vi (get tab e #f)))
+            (if vi
+                (vinfo:set-read! vi #t))))
+         ((nospecialize-meta? e)
+          (let ((vi (get tab (caddr e) #f)))
+            (if vi
+                (vinfo:set-nospecialize! vi #t)))))
         e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
@@ -3465,6 +3527,11 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
+           ;; calls f(x...) go through `_apply_iterate`
+           (if (and (length> e 3) (equal? (cadr e) '(core _apply_iterate)))
+               (let ((vi2 (get tab (cadddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
            ;; calls to functions with keyword args have head of `kwcall` first
            (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
                (let ((vi2 (get tab (cadddr e) #f)))
@@ -3540,21 +3607,6 @@ f(x) = yt(x)
                 (const (globalref (thismodule) ,name) ,s)
                 (call (core _typebody!) (false) ,s (call (core svec) ,@types))
                 (return (null)))))))))
-
-(define (type-for-closure name fields super)
-  (let ((s (make-ssavalue)))
-    `((thunk ,(linearize `(lambda ()
-       (() () 0 ())
-       (block (global ,name)
-              (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
-                          (call (core svec) ,@(map quotify fields))
-                          (call (core svec))
-                          (false) ,(length fields)))
-              (call (core _setsuper!) ,s ,super)
-              (const (globalref (thismodule) ,name) ,s)
-              (call (core _typebody!) (false) ,s
-                    (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
-              (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places
 ;; need to fix that in order to handle #265 fully (and use the definitions)
@@ -3813,9 +3865,9 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref global-if-global assign-const-if-global isglobal thismodule
+         global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
          const atomic null true false ssavalue isdefined toplevel module lambda
-         error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
+         error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
   (or (and tab (has? tab s))
@@ -3969,6 +4021,10 @@ f(x) = yt(x)
       (let ((cv (assq v (cadr (lam:vinfo lam)))))
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
+(define (is-var-nospecialize? v lam)
+  (let ((vi (assq v (car (lam:vinfo lam)))))
+    (and vi (vinfo:nospecialize vi))))
+
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
@@ -4047,7 +4103,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core global globalref thismodule lineinfo line break inert module toplevel null true false meta import using) e)
+          ((quote top core global globalref thismodule thisfunction lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4260,16 +4316,14 @@ f(x) = yt(x)
                         (closure-param-syms (map (lambda (s) (make-ssavalue)) closure-param-names))
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
-                                                   (if (is-var-boxed? v lam)
-                                                       '(core Box)
-                                                       (make-ssavalue)))
+                                                   (cond ((is-var-boxed? v lam) '(core Box))
+                                                         ((is-var-nospecialize? v lam) (vinfo:type (assq v (car (lam:vinfo lam)))))
+                                                         (else (make-ssavalue))))
                                                  capt-vars))
                                 (para (append closure-param-syms
                                               (filter ssavalue? fieldtypes)))
                                 (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
-                           (if (null? para)
-                               (type-for-closure type-name capt-vars '(core Function))
-                               (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
+                           (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function))))
                         (mk-method ;; expression to make the method
                          (if short '()
                              (let* ((iskw ;; TODO jb/functions need more robust version of this
@@ -4299,7 +4353,7 @@ f(x) = yt(x)
                                 (P (append
                                     closure-param-names
                                     (filter identity (map (lambda (v ve)
-                                                            (if (is-var-boxed? v lam)
+                                                            (if (or (is-var-boxed? v lam) (is-var-nospecialize? v lam))
                                                                 #f
                                                                 `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
@@ -4974,7 +5028,7 @@ f(x) = yt(x)
              (if value (error "misplaced \"global\" declaration"))
              (if (or (length= e 2) (atom? (caddr e))) (emit e)
               (let ((rr (make-ssavalue)))
-                (emit `(= ,rr ,(caddr e)))
+                (emit `(= ,rr ,(compile (caddr e) break-labels #t #f)))
                 (emit `(globaldecl ,(cadr e) ,rr))))
              (if (null? (cadr lam))
                (emit `(latestworld))))
@@ -5045,7 +5099,7 @@ f(x) = yt(x)
              '(null))
 
             ;; other top level expressions
-            ((import using export public latestworld)
+            ((export public latestworld)
              (check-top-level e)
              (if (not (eq? (car e) 'latestworld))
               (emit e))
@@ -5089,6 +5143,30 @@ f(x) = yt(x)
 
             ((error)
              (error (cadr e)))
+
+            ;; thisfunction replaced with first argument name
+            ((thisfunction)
+             (let ((first-arg (and (pair? (lam:args lam)) (car (lam:args lam)))))
+               (if first-arg
+                   (let* ((arg-name (arg-name first-arg))
+                          ;; Check for thisfunction-original metadata in keyword wrapper functions
+                          (original-name (let ((body (lam:body lam)))
+                                          (and (pair? body) (pair? (cdr body))
+                                               (let loop ((stmts (cdr body)))
+                                                 (if (pair? stmts)
+                                                     (let ((stmt (car stmts)))
+                                                       (if (and (pair? stmt) (eq? (car stmt) 'meta)
+                                                                (pair? (cdr stmt)) (eq? (cadr stmt) 'thisfunction-original)
+                                                                (pair? (cddr stmt)))
+                                                           (caddr stmt)
+                                                           (loop (cdr stmts))))
+                                                     #f)))))
+                          (final-name (or original-name arg-name)))
+                     (cond (tail  (emit-return tail final-name))
+                           (value final-name)
+                           (else (emit final-name) #f)))
+                    (error "\"@__FUNCTION__\" can only be used inside a function"))))
+
             (else
              (error (string "invalid syntax " (deparse e)))))))
     ;; introduce new slots for assigned arguments
@@ -5186,6 +5264,14 @@ f(x) = yt(x)
 (define (set-lineno! lineinfo num)
   (set-car! (cddr lineinfo) num))
 
+;; note that the 'list and 'block atoms make all lists 1-indexed.
+;; returns a 5-element vector containing:
+;;   code:           `(block ,@(n expressions))
+;;   locs:           list of line-table index, where code[i] has lineinfo line-table[locs[i]]
+;;   line-table:     list of `(lineinfo file.jl 123 0)'
+;;   ssavalue-table: table of (ssa-num . code-index)
+;;                   where ssavalue references in `code` need this remapping
+;;   label-table:    table of (label . code-index)
 (define (compact-ir body file line)
   (let ((code         '(block))
         (locs         '(list))
@@ -5288,11 +5374,11 @@ f(x) = yt(x)
             ((nospecialize-meta? e)
              ;; convert nospecialize vars to slot numbers
              `(meta ,(cadr e) ,@(map renumber-stuff (cddr e))))
-            ((or (atom? e) (quoted? e) (memq (car e) '(using import export public global toplevel)))
+            ((or (atom? e) (quoted? e) (memq (car e) '(export public global toplevel)))
              e)
             ((ssavalue? e)
              (let ((idx (get ssavalue-table (cadr e) #f)))
-               (if (not idx) (begin (prn e) (prn lam) (error "ssavalue with no def")))
+               (if (not idx) (error "internal bug: ssavalue with no def"))
                `(ssavalue ,idx)))
             ((eq? (car e) 'goto)
              `(goto ,(get label-table (cadr e))))

@@ -322,6 +322,68 @@ Here, Julia cannot decide which `f` you are referring to, so you have to make a 
 
 3. When the names in question *do* share a meaning, it is common for one module to import it from another, or have a lightweight “base” package with the sole function of defining an interface like this, which can be used by other packages. It is conventional to have such package names end in `...Base` (which has nothing to do with Julia's `Base` module).
 
+### Precedence order of definitions
+
+There are in general four kinds of binding definitions:
+   1. Those provided via implicit import through `using M`
+   2. Those provided via explicit import (e.g. `using M: x`, `import M: x`)
+   3. Those declared implicitly as global (via `global x` without type specification)
+   4. Those declared explicitly using definition syntax (`const`, `global x::T`, `struct`, etc.)
+
+Syntactically, we divide these into three precedence levels (from weakest to strongest)
+   1. Implicit imports
+   2. Implicit declarations
+   3. Explicit declarations and imports
+
+In general, we permit replacement of weaker bindings by stronger ones:
+
+```julia-repl
+julia> module M1; const x = 1; export x; end
+Main.M1
+
+julia> using .M1
+
+julia> x # Implicit import from M1
+1
+
+julia> begin; f() = (global x; x = 1) end
+
+julia> x # Implicit declaration
+ERROR: UndefVarError: `x` not defined in `Main`
+Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
+
+julia> const x = 2 # Explicit declaration
+2
+```
+
+However, within the explicit precedence level, replacement is syntactically disallowed:
+```julia-repl
+julia> module M1; const x = 1; export x; end
+Main.M1
+
+julia> import .M1: x
+
+julia> const x = 2
+ERROR: cannot declare Main.x constant; it was already declared as an import
+Stacktrace:
+ [1] top-level scope
+   @ REPL[3]:1
+```
+
+or ignored:
+
+```julia-repl
+julia> const y = 2
+2
+
+julia> import .M1: x as y
+WARNING: import of M1.x into Main conflicts with an existing identifier; ignored.
+```
+
+The resolution of an implicit binding depends on the set of all `using`'d modules visible
+in the current world age. See [the manual chapter on world age](@ref man-worldage) for more
+details.
+
 ### Default top-level definitions and bare modules
 
 Modules automatically contain `using Core`, `using Base`, and definitions of the [`eval`](@ref)

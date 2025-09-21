@@ -173,6 +173,43 @@ false
 """
 ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
 
+"""
+    @__FUNCTION__
+
+Get the innermost enclosing function object.
+
+!!! note
+    `@__FUNCTION__` has the same scoping behavior as `return`: when used
+    inside a closure, it refers to the closure and not the outer function.
+    Some macros, including [`@spawn`](@ref Threads.@spawn), [`@async`](@ref), etc.,
+    wrap their input in closures. When `@__FUNCTION__` is used within such code,
+    it will refer to the closure created by the macro rather than the enclosing function.
+
+# Examples
+
+`@__FUNCTION__` enables recursive anonymous functions:
+
+```jldoctest
+julia> factorial = (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1));
+
+julia> factorial(5)
+120
+```
+
+`@__FUNCTION__` can be combined with `nameof` to identify a function's
+name from within its body:
+
+```jldoctest
+julia> bar() = nameof(@__FUNCTION__);
+
+julia> bar()
+:bar
+```
+"""
+macro __FUNCTION__()
+    Expr(:thisfunction)
+end
+
 # TODO: this is vaguely broken because it only works for explicit calls to
 # `Base.deprecate`, not the @deprecated macro:
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -528,6 +565,10 @@ struct DataTypeLayout
     # fielddesc_type : 2;
     # arrayelem_isboxed : 1;
     # arrayelem_isunion : 1;
+    # arrayelem_isatomic : 1;
+    # arrayelem_islocked : 1;
+    # isbitsegal : 1;
+    # padding : 8;
 end
 
 """
@@ -600,7 +641,7 @@ function datatype_isbitsegal(dt::DataType)
     @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags & (1<<5)) != 0
+    return (flags & (1<<7)) != 0
 end
 
 """
@@ -851,10 +892,45 @@ end
 """
     isdispatchtuple(T)
 
-Determine whether type `T` is a tuple of concrete types,
-meaning it could appear as a type signature in dispatch
-and has no subtypes (or supertypes) which could appear in a call.
+Determine whether type `T` is a [`Tuple`](@ref) that could appear as a type
+signature in dispatch.  For this to be true, every element of the tuple type
+must be either:
+- [concrete](@ref isconcretetype) but not a [kind type](@ref Base.iskindtype)
+- a [`Type{U}`](@ref Type) with no free type variables in `U`
+
+!!! note
+    A dispatch tuple is relevant for method dispatch because it has no inhabited
+    subtypes.
+
+    For example, `Tuple{Int, DataType}` is concrete, but is not a dispatch tuple
+    because `Tuple{Int, Type{Bool}}` is an inhabited subtype.
+
+    `Tuple{Tuple{DataType}}` *is* a dispatch tuple because `Tuple{DataType}` is
+    concrete and not a kind; the subtype `Tuple{Tuple{Type{Int}}}` is not
+    inhabited.
+
 If `T` is not a type, then return `false`.
+
+# Examples
+```jldoctest
+julia> isdispatchtuple(Int)
+false
+
+julia> isdispatchtuple(Tuple{Int})
+true
+
+julia> isdispatchtuple(Tuple{Number})
+false
+
+julia> isdispatchtuple(Tuple{DataType})
+false
+
+julia> isdispatchtuple(Tuple{Type{Int}})
+true
+
+julia> isdispatchtuple(Tuple{Type})
+false
+```
 """
 isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
 
@@ -900,7 +976,40 @@ function isidentityfree(@nospecialize(t))
     return false
 end
 
+"""
+    Base.iskindtype(T)
+
+Determine whether `T` is a kind, that is, the type of a Julia type:
+a [`DataType`](@ref), [`Union`](@ref), [`UnionAll`](@ref),
+or [`Core.TypeofBottom`](@ref).
+
+All kinds are [concrete](@ref isconcretetype) because types are Julia values.
+"""
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+
+"""
+    Base.isconcretedispatch(T)
+
+Returns true if `T` is a [concrete type](@ref isconcretetype) that could appear
+as an element of a [dispatch tuple](@ref isdispatchtuple).
+
+See also: [`isdispatchtuple`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.isconcretedispatch(Int)
+true
+
+julia> Base.isconcretedispatch(Number)
+false
+
+julia> Base.isconcretedispatch(DataType)
+false
+
+julia> Base.isconcretedispatch(Type{Int})
+false
+```
+"""
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 
 using Core: has_free_typevars
@@ -923,6 +1032,16 @@ Determine whether type `T` is a concrete type, meaning it could have direct inst
 Note that this is not the negation of `isabstracttype(T)`.
 If `T` is not a type, then return `false`.
 
+!!! note
+    While concrete types are not [abstract](@ref isabstracttype) and
+    vice versa, types can be neither concrete nor abstract (for example,
+    `Vector` (a [`UnionAll`](@ref))).
+
+!!! note
+    `T` must be the exact type that would be returned from `typeof`.  It is
+    possible for a type `U` to exist such that `T == U`, `isconcretetype(T)`,
+    but `!isconcretetype(U)`.
+
 See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
 # Examples
@@ -932,6 +1051,9 @@ false
 
 julia> isconcretetype(Complex{Float32})
 true
+
+julia> isconcretetype(Vector)
+false
 
 julia> isconcretetype(Vector{Complex})
 true
@@ -944,6 +1066,9 @@ false
 
 julia> isconcretetype(Union{Int,String})
 false
+
+julia> isconcretetype(Tuple{T} where T<:Int)
+false
 ```
 """
 isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0002) == 0x0002)
@@ -953,8 +1078,14 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
 
 Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract type` syntax).
-Note that this is not the negation of `isconcretetype(T)`.
 If `T` is not a type, then return `false`.
+
+!!! note
+    While abstract types are not [concrete](@ref isconcretetype) and
+    vice versa, types can be neither concrete nor abstract (for example,
+    `Vector` (a [`UnionAll`](@ref))).
+
+See also: [`isconcretetype`](@ref).
 
 # Examples
 ```jldoctest
@@ -1007,10 +1138,25 @@ morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type
 morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
-    fieldoffset(type, i)
+    fieldoffset(type, name::Symbol | i::Integer)
 
-The byte offset of field `i` of a type relative to the data start. For example, we could
-use it in the following manner to summarize information about a struct:
+The byte offset of a field (specified by name or index) of a type relative to its start.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldoffset(Foo, 2)
+0x0000000000000008
+
+julia> fieldoffset(Foo, :x)
+0x0000000000000000
+```
+
+We can use it to summarize information about a struct:
 
 ```jldoctest
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
@@ -1032,8 +1178,12 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000060, :ctime, Float64)
  (0x0000000000000068, :ioerrno, Int32)
 ```
+
+!!! compat "Julia 1.13"
+    Specifying the field by name rather than index requires Julia 1.13 or later.
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, name::Symbol) = fieldoffset(x, fieldindex(x, name))
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -1057,7 +1207,7 @@ String
 fieldtype
 
 """
-    Base.fieldindex(T, name::Symbol, err:Bool=true)
+    fieldindex(T, name::Symbol, err:Bool=true)
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
@@ -1069,14 +1219,20 @@ julia> struct Foo
            y::String
        end
 
-julia> Base.fieldindex(Foo, :z)
+julia> fieldindex(Foo, :y)
+2
+
+julia> fieldindex(Foo, :z)
 ERROR: FieldError: type Foo has no field `z`, available fields: `x`, `y`
 Stacktrace:
 [...]
 
-julia> Base.fieldindex(Foo, :z, false)
+julia> fieldindex(Foo, :z, false)
 0
 ```
+
+!!! compat "Julia 1.13"
+    This function is exported as of Julia 1.13.
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return err ? _fieldindex_maythrow(T, name) : _fieldindex_nothrow(T, name)
@@ -1116,7 +1272,7 @@ function datatype_fieldcount(t::DataType)
             return length(names)
         end
         if types isa DataType && types <: Tuple
-            return fieldcount(types)
+            return datatype_fieldcount(types)
         end
         return nothing
     elseif isabstracttype(t)
@@ -1281,8 +1437,14 @@ max_world(m::Core.CodeInfo) = m.max_world
 """
     get_world_counter()
 
-Returns the current maximum world-age counter. This counter is global and monotonically
+Returns the current maximum world-age counter. This counter is monotonically
 increasing.
+
+!!! warning
+    This counter is global and may change at any time between invocations.
+    In general, most reflection functions operate on the current task's world
+    age, rather than the global maximum world age. See [`tls_world_age`](@ref)
+    as well as the [manual chapter of world age](@ref man-world-age).
 """
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 
@@ -1292,6 +1454,8 @@ get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 Returns the world the [current_task()](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
+
+get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
 
 """
     propertynames(x, private=false)
@@ -1331,14 +1495,14 @@ hasproperty(x, s::Symbol) = s in propertynames(x)
 Make method `m` uncallable and force recompilation of any methods that use(d) it.
 """
 function delete_method(m::Method)
-    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
+    ccall(:jl_method_table_disable, Cvoid, (Any,), m)
 end
 
 
 # type for reflecting and pretty-printing a subset of methods
 mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
-    mt::Core.MethodTable
+    tn::Core.TypeName # contains module.singletonname globalref for altering some aspects of printing
 end
 
 size(m::MethodList) = size(m.ms)
@@ -1349,25 +1513,17 @@ function MethodList(mt::Core.MethodTable)
     visit(mt) do m
         push!(ms, m)
     end
-    return MethodList(ms, mt)
+    return MethodList(ms, Any.name)
 end
 
-function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+function matches_to_methods(ms::Array{Any,1}, tn::Core.TypeName, mod)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
-    # Remove shadowed methods with identical type signatures
-    prev = nothing
-    filter!(ms) do m
-        l = prev
-        repeated = (l isa Method && m.sig == l.sig)
-        prev = m
-        return !repeated
-    end
-    # Remove methods not part of module (after removing shadowed methods)
+    # Remove methods not part of module
     mod === nothing || filter!(ms) do m
         return parentmodule(m) ∈ mod
     end
-    return MethodList(ms, mt)
+    return MethodList(ms, tn)
 end
 
 """
@@ -1389,7 +1545,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     ms = _methods(f, t, -1, world)::Vector{Any}
-    return matches_to_methods(ms, typeof(f).name.mt, mod)
+    return matches_to_methods(ms, typeof(f).name, mod)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
@@ -1400,7 +1556,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector{Any}
-    return matches_to_methods(ms, typeof(f).name.mt, nothing)
+    return matches_to_methods(ms, typeof(f).name, nothing)
 end
 
 function methods(@nospecialize(f),
@@ -1452,6 +1608,15 @@ end
 
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
     ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+
+function get_ci_mi(codeinst::CodeInstance)
+    def = codeinst.def
+    if def isa Core.ABIOverride
+        return def.def
+    else
+        return def::MethodInstance
+    end
+end
 
 """
     Base.generating_output([incremental::Bool])::Bool
@@ -1589,20 +1754,24 @@ end
 
 function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return method.sig
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
-        mt, atype, sparams, method, #=int return_if_compileable=#0)
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+        atype, sparams, method, #=int return_if_compileable=#0)
 end
 
 is_nospecialized(method::Method) = method.nospecialize ≠ 0
 is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospecialized(method)
+
+"""
+Return MethodInstance corresponding to `atype` and `sparams`.
+
+No widening / narrowing / compileable-normalization of `atype` is performed.
+"""
 function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     @inline
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
     end
-    if is_nospecializeinfer(method)
+    if is_nospecializeinfer(method) # TODO: this shouldn't be here
         atype = get_nospecializeinfer_sig(method, atype, sparams)
     end
     if preexisting

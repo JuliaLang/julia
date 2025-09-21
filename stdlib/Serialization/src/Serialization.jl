@@ -8,6 +8,7 @@ Provide serialization of Julia objects via the functions
 module Serialization
 
 import Base: Bottom, unsafe_convert
+import Base.ScopedValues: ScopedValue, with
 import Core: svec, SimpleVector
 using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
@@ -27,6 +28,8 @@ mutable struct Serializer{I<:IO} <: AbstractSerializer
 end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
+
+const current_module = ScopedValue{Union{Nothing,Module}}(nothing)
 
 ## serializing values ##
 
@@ -467,6 +470,18 @@ function serialize(s::AbstractSerializer, meth::Method)
     nothing
 end
 
+function serialize(s::AbstractSerializer, mt::Core.MethodTable)
+    serialize_type(s, typeof(mt))
+    serialize(s, mt.name)
+    serialize(s, mt.module)
+    nothing
+end
+
+function serialize(s::AbstractSerializer, mc::Core.MethodCache)
+    error("cannot serialize MethodCache objects")
+end
+
+
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
     writetag(s.io, METHODINSTANCE_TAG)
@@ -536,11 +551,12 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     serialize(s, t.max_methods)
-    if isdefined(t, :mt) && t.mt !== Symbol.name.mt
-        serialize(s, t.mt.name)
-        serialize(s, collect(Base.MethodList(t.mt)))
-        serialize(s, t.mt.max_args)
-        kws = collect(methods(Core.kwcall, (Any, t.wrapper, Vararg)))
+    ms = Base.matches_to_methods(Base._methods_by_ftype(Tuple{t.wrapper, Vararg}, -1, Base.get_world_counter()), t, nothing).ms
+    if t.singletonname !== t.name || !isempty(ms)
+        serialize(s, t.singletonname)
+        serialize(s, ms)
+        serialize(s, t.max_args)
+        kws = Base.matches_to_methods(Base._methods_by_ftype(Tuple{typeof(Core.kwcall), Any, t.wrapper, Vararg}, -1, Base.get_world_counter()), t, nothing).ms
         if isempty(kws)
             writetag(s.io, UNDEFREF_TAG)
         else
@@ -555,21 +571,17 @@ end
 # decide whether to send all data for a type (instead of just its name)
 function should_send_whole_type(s, t::DataType)
     tn = t.name
-    if isdefined(tn, :mt)
-        # TODO improve somehow
-        # send whole type for anonymous functions in Main
-        name = tn.mt.name
-        mod = tn.module
-        isanonfunction = mod === Main && # only Main
-            t.super === Function && # only Functions
-            unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
-            (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
-            # TODO: more accurate test? (tn.name !== "#" name)
-        #TODO: iskw = startswith(tn.name, "#kw#") && ???
-        #TODO: iskw && return send-as-kwftype
-        return mod === __deserialized_types__ || isanonfunction
-    end
-    return false
+    # TODO improve somehow?
+    # send whole type for anonymous functions in Main
+    name = tn.singletonname
+    mod = tn.module
+    mod === __deserialized_types__ && return true
+    isanonfunction = mod === Main && # only Main
+        t.super === Function && # only Functions
+        unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
+        (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
+        # TODO: more accurate test? (tn.name !== "#" name)
+    return isanonfunction
 end
 
 function serialize_type_data(s, @nospecialize(t::DataType))
@@ -1055,7 +1067,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nospecializeinfer = false
     constprop = 0x00
     purity = 0x0000
-    template_or_is_opaque = deserialize(s)
+    local template_or_is_opaque, template
+    with(current_module => mod) do
+        template_or_is_opaque = deserialize(s)
+    end
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 24
@@ -1069,7 +1084,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         elseif format_version(s) >= 17
             purity = UInt16(deserialize(s)::UInt8)
         end
-        template = deserialize(s)
+        with(current_module => mod) do
+            template = deserialize(s)
+        end
     else
         template = template_or_is_opaque
     end
@@ -1112,14 +1129,20 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             meth.recursion_relation = recursion_relation
         end
         if !is_for_opaque_closure
-            mt = ccall(:jl_method_table_for, Any, (Any,), sig)
-            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, Base.get_world_counter())
+            mt = Core.methodtable
+            if nothing === ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, Base.get_world_counter()) # XXX: quite sketchy?
                 ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
             end
         end
         remember_object(s, meth, lnumber)
     end
     return meth
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.MethodTable})
+    name = deserialize(s)::Symbol
+    mod = deserialize(s)::Module
+    return getglobal(mod, name)::Core.MethodTable
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
@@ -1167,6 +1190,22 @@ function deserialize(s::AbstractSerializer, ::Type{PhiNode})
     return PhiNode(edges, values)
 end
 
+# v1.12 disallows bare symbols in IR, but older CodeInfos might still have them
+function symbol_to_globalref(@nospecialize(x), m::Module)
+    mapper(@nospecialize(x)) = symbol_to_globalref(x, m)
+    if x isa Symbol
+        return GlobalRef(m, x)
+    elseif x isa Expr
+        return Expr(x.head, map(mapper, x.args)...)
+    elseif x isa ReturnNode
+        return ReturnNode(mapper(x.val))
+    elseif x isa GotoIfNot
+        return GotoIfNot(mapper(x.cond), x.dest)
+    else
+        return x
+    end
+end
+
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     deserialize_cycle(s, ci)
@@ -1184,6 +1223,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
                 code[i] = GotoIfNot(ex.args[1], ex.args[2])
             end
         end
+    end
+    if current_module[] !== nothing
+        map!(x->symbol_to_globalref(x, current_module[]), code)
     end
     _x = deserialize(s)
     have_debuginfo = _x isa Core.DebugInfo
@@ -1233,6 +1275,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.slottypes = deserialize(s)
         ci.rettype = deserialize(s)
         ci.parent = deserialize(s)
+        if format_version(s) < 29 && ci.parent isa MethodInstance && ci.parent.def isa Method
+            ci.nargs = ci.parent.def.nargs
+        end
         world_or_edges = deserialize(s)
         pre_13 = isa(world_or_edges, Union{UInt, Int})
         if pre_13
@@ -1243,7 +1288,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             ci.min_world = deserialize(s)::UInt
             ci.max_world = deserialize(s)::UInt
         end
-        if format_version(s) >= 26
+        if format_version(s) >= 29
             ci.method_for_inference_limit_heuristics = deserialize(s)
         end
     end
@@ -1471,20 +1516,10 @@ function deserialize_typename(s::AbstractSerializer, number)
     if tag != UNDEFREF_TAG
         mtname = handle_deserialize(s, tag)
         defs = deserialize(s)
-        maxa = deserialize(s)::Int
+        maxa = deserialize(s)::Union{Int,Int32}
         if makenew
-            mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
-            if !isempty(parameters)
-                mt.offs = 0
-            end
-            mt.name = mtname
-            setfield!(mt, :max_args, maxa, :monotonic)
-            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
-            for def in defs
-                if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
-                end
-            end
+            tn.singletonname = mtname
+            setfield!(tn, :max_args, Int32(maxa), :monotonic)
         end
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
@@ -1494,9 +1529,6 @@ function deserialize_typename(s::AbstractSerializer, number)
                 @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
             end
         end
-    elseif makenew
-        mt = Symbol.name.mt
-        ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
     end
     return tn
 end

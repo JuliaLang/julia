@@ -14,8 +14,6 @@ extern "C" {
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.
-
-//make it compatible with UV Handles
 typedef enum { bm_none=1000, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
@@ -127,6 +125,7 @@ JL_DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
 extern JL_DLLEXPORT ios_t *ios_stdin;
 extern JL_DLLEXPORT ios_t *ios_stdout;
 extern JL_DLLEXPORT ios_t *ios_stderr;
+extern JL_DLLEXPORT ios_t *ios_safe_stderr; // safe for async-signal context
 void ios_init_stdstreams(void);
 
 /* high-level functions - output */

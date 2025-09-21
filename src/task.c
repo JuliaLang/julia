@@ -37,6 +37,10 @@
 #include "threading.h"
 #include "julia_assert.h"
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -307,7 +311,7 @@ CFI_NORETURN
 #endif
 
 /* Rooted by the base module */
-static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
+static _Atomic(jl_value_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
 void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
@@ -333,9 +337,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     ct->ptls->in_pure_callback = 0;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
-    jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
+    jl_value_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        done = (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
@@ -348,7 +352,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
             jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
@@ -731,7 +735,8 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
     jl_static_show((JL_STREAM*)STDERR_FILENO, e);
     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-    jlbacktrace(); // written to STDERR_FILENO
+    jl_fprint_backtrace(ios_safe_stderr);
+
     if (ct == NULL)
         jl_raise(6);
     jl_exit(1);
@@ -1069,7 +1074,7 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
     }
 }
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
@@ -1258,7 +1263,7 @@ skip_pop_exception:;
     ct->result = res;
     jl_gc_wb(ct, ct->result);
     jl_finish_task(ct);
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
@@ -1534,8 +1539,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     } bootstrap_task = {0};
     jl_set_pgcstack(&bootstrap_task.value.gcstack);
     bootstrap_task.value.ptls = ptls;
-    if (jl_nothing == NULL) // make a placeholder
-        jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));

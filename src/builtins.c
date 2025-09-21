@@ -3,6 +3,8 @@
 /*
   implementations of built-in functions
 */
+#include "dtypes.h"
+#include "julia_atomics.h"
 #include "platform.h"
 
 #include <stdlib.h>
@@ -246,6 +248,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         switch ((enum jl_small_typeof_tags)(dtag >> 4)) {
         case jl_int8_tag:
         case jl_uint8_tag:
+        case jl_addrspacecore_tag:
             return *(uint8_t*)a == *(uint8_t*)b;
         case jl_int16_tag:
         case jl_uint16_tag:
@@ -253,10 +256,14 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_int32_tag:
         case jl_uint32_tag:
         case jl_char_tag:
+        case jl_intrinsic_tag:
             return *(uint32_t*)a == *(uint32_t*)b;
         case jl_int64_tag:
         case jl_uint64_tag:
             return *(uint64_t*)a == *(uint64_t*)b;
+        case jl_ssavalue_tag:
+        case jl_slotnumber_tag:
+            return *(size_t*)a == *(size_t*)b;
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
@@ -268,6 +275,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_symbol_tag:
         case jl_module_tag:
         case jl_bool_tag:
+        case jl_nothing_tag:
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -661,8 +669,8 @@ static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 JL_CALLABLE(jl_f__apply_iterate)
 {
     JL_NARGSV(_apply_iterate, 2);
-    jl_function_t *iterate = args[0];
-    jl_function_t *f = args[1];
+    jl_value_t *iterate = args[0];
+    jl_value_t *f = args[1];
     assert(iterate);
     args += 1;
     nargs -= 1;
@@ -693,9 +701,15 @@ JL_CALLABLE(jl_f__apply_iterate)
                 return (jl_value_t*)t;
             }
         }
-        else if (f == BUILTIN(tuple) && jl_is_tuple(args[1])) {
-            return args[1];
+        else if (f == BUILTIN(tuple)) {
+            if (jl_is_tuple(args[1]))
+                return args[1];
+            if (jl_is_svec(args[1]))
+                return jl_f_tuple(NULL, jl_svec_data(args[1]), jl_svec_len(args[1]));
         }
+        // optimization for `f(svec...)`
+        if (jl_is_svec(args[1]))
+            return jl_apply_generic(f, jl_svec_data(args[1]), jl_svec_len(args[1]));
     }
     // estimate how many real arguments we appear to have
     size_t precount = 1;
@@ -1338,7 +1352,7 @@ JL_CALLABLE(jl_f_getglobal)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
     else if (order >= jl_memory_order_seq_cst)
         jl_fence();
-    jl_value_t *v = jl_eval_global_var(mod, sym); // relaxed load
+    jl_value_t *v = jl_eval_global_var(mod, sym, jl_current_task->world_age); // relaxed load
     if (order >= jl_memory_order_acquire)
         jl_fence();
     return v;
@@ -1504,7 +1518,44 @@ JL_CALLABLE(jl_f_setglobalonce)
     return old == NULL ? jl_true : jl_false;
 }
 
+// import, using --------------------------------------------------------------
 
+// Import binding `from.sym` as `asname` into `to`:
+//     _import(to::Module, from::Module, asname::Symbol, sym::Symbol, imported::Bool)
+//
+// Create const binding to `mod` in `to` with name `asname`:
+//     _import(to::Module, mod::Module, asname::Symbol)
+JL_CALLABLE(jl_f__import)
+{
+    JL_NARGS(_import, 3, 5);
+    JL_TYPECHK(_import, module, args[0]);
+    JL_TYPECHK(_import, module, args[1]);
+    JL_TYPECHK(_import, symbol, args[2]);
+    if (nargs == 3) {
+        jl_import_module(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+                         (jl_sym_t *)args[2]);
+    }
+    else if (nargs == 4) {
+        jl_too_few_args("_import", 5);
+    }
+    else if (nargs == 5) {
+        JL_TYPECHK(_import, symbol, args[3]);
+        JL_TYPECHK(_import, bool, args[4]);
+        jl_module_import(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+                         (jl_sym_t *)args[2], (jl_sym_t *)args[3], args[4] == jl_true);
+    }
+    return jl_nothing;
+}
+
+// _using(to::Module, from::Module)
+JL_CALLABLE(jl_f__using)
+{
+    JL_NARGS(_using, 2, 2);
+    JL_TYPECHK(_using, module, args[0]);
+    JL_TYPECHK(_using, module, args[1]);
+    jl_module_using((jl_module_t *)args[0], (jl_module_t *)args[1]);
+    return jl_nothing;
+}
 
 // apply_type -----------------------------------------------------------------
 
@@ -1726,30 +1777,45 @@ JL_CALLABLE(jl_f_memoryrefnew)
         return (jl_value_t*)jl_new_memoryref(typ, m, m->ptr);
     }
     else {
-        JL_TYPECHK(memoryrefnew, genericmemoryref, args[0]);
         JL_TYPECHK(memoryrefnew, long, args[1]);
         if (nargs == 3)
             JL_TYPECHK(memoryrefnew, bool, args[2]);
+        size_t i = (size_t) jl_unbox_long(args[1]) - 1;
+        char *data;
+        if (jl_is_genericmemory(args[0])) {
+            jl_genericmemory_t *m = (jl_genericmemory_t*)args[0];
+            jl_value_t *typ = jl_apply_type((jl_value_t*)jl_genericmemoryref_type, jl_svec_data(((jl_datatype_t*)jl_typetagof(m))->parameters), 3);
+            JL_GC_PROMISE_ROOTED(typ); // it is a concrete type
+            if (i >= m->length)
+                jl_bounds_error((jl_value_t*)m, args[1]);
+            const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m))->layout;
+            if (layout->flags.arrayelem_isunion || layout->size == 0)
+                return (jl_value_t*)jl_new_memoryref(typ, m, (char*)i);
+            else if (layout->flags.arrayelem_isboxed)
+                return (jl_value_t*)jl_new_memoryref(typ, m, (char*)m->ptr + sizeof(jl_value_t*)*i);
+            return (jl_value_t*)jl_new_memoryref(typ, m, (char*)m->ptr + layout->size*i);
+        }
+        JL_TYPECHK(memoryrefnew, genericmemoryref, args[0]);
         jl_genericmemoryref_t *m = (jl_genericmemoryref_t*)args[0];
-        size_t i = jl_unbox_long(args[1]) - 1;
-        const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m->mem))->layout;
-        char *data = (char*)m->ptr_or_offset;
+        jl_genericmemory_t *mem = m->mem;
+        data = (char*)m->ptr_or_offset;
+        const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(mem))->layout;
         if (layout->flags.arrayelem_isboxed) {
-            if (((data - (char*)m->mem->ptr) / sizeof(jl_value_t*)) + i >= m->mem->length)
+            if (((data - (char*)mem->ptr) / sizeof(jl_value_t*)) + i >= mem->length)
                 jl_bounds_error((jl_value_t*)m, args[1]);
             data += sizeof(jl_value_t*) * i;
         }
         else if (layout->flags.arrayelem_isunion || layout->size == 0) {
-            if ((size_t)data + i >= m->mem->length)
+            if ((size_t)data + i >= mem->length)
                 jl_bounds_error((jl_value_t*)m, args[1]);
             data += i;
         }
         else {
-            if (((data - (char*)m->mem->ptr) / layout->size) + i >= m->mem->length)
+            if (((data - (char*)mem->ptr) / layout->size) + i >= mem->length)
                 jl_bounds_error((jl_value_t*)m, args[1]);
             data += layout->size * i;
         }
-        return (jl_value_t*)jl_new_memoryref((jl_value_t*)jl_typetagof(m), m->mem, data);
+        return (jl_value_t*)jl_new_memoryref((jl_value_t*)jl_typetagof(m), mem, data);
     }
 }
 
@@ -2091,6 +2157,14 @@ JL_CALLABLE(jl_f__compute_sparams)
     return (jl_value_t*)env;
 }
 
+JL_CALLABLE(jl_f__svec_len)
+{
+    JL_NARGS(_svec_len, 1, 1);
+    jl_svec_t *s = (jl_svec_t*)args[0];
+    JL_TYPECHK(_svec_len, simplevector, (jl_value_t*)s);
+    return jl_box_long(jl_svec_len(s));
+}
+
 JL_CALLABLE(jl_f__svec_ref)
 {
     JL_NARGS(_svec_ref, 2, 2);
@@ -2382,7 +2456,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
@@ -2416,7 +2490,7 @@ static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pf
 
 static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) JL_GC_DISABLED
 {
-    jl_value_t *i = jl_permbox32(jl_intrinsic_type, 0, (int32_t)f);
+    jl_value_t *i = jl_permbox32(jl_intrinsic_type, jl_intrinsic_tag, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_initial_const(inm, sym, i, 1);
 }
@@ -2437,14 +2511,11 @@ void jl_init_intrinsic_functions(void) JL_GC_DISABLED
     jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
-    jl_mk_builtin_func(
-        (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type),
-        jl_symbol("OpaqueClosure"), jl_f_opaque_closure_call);
 
+    jl_datatype_t *oc = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type);
     // Save a reference to the just created OpaqueClosure method, so we can provide special
     // codegen for it later.
-    jl_opaque_closure_method = (jl_method_t*)jl_methtable_lookup(jl_opaque_closure_typename->mt,
-        (jl_value_t*)jl_anytuple_type, 1);
+    jl_opaque_closure_method = jl_mk_builtin_func(oc, jl_symbol("OpaqueClosure"), jl_f_opaque_closure_call); // TODO: awkwardly not actually declared a Builtin, even though it relies on being handled by the special cases for Builtin everywhere else
 
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
 #define ADD_HIDDEN(name, nargs)
@@ -2494,6 +2565,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
+    add_builtin("methodtable", (jl_value_t*)jl_method_table);
+    add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
@@ -2558,6 +2631,26 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
     add_builtin("String", (jl_value_t*)jl_string_type);
+
+    // ensure that primitive types are fully allocated (since jl_init_types is incomplete)
+    assert(jl_atomic_load_relaxed(&jl_world_counter) == 1);
+    jl_module_t *core = jl_core_module;
+    jl_svec_t *bindings = jl_atomic_load_relaxed(&core->bindings);
+    jl_value_t **table = jl_svec_data(bindings);
+    for (size_t i = 0; i < jl_svec_len(bindings); i++) {
+        if (table[i] != jl_nothing) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            jl_value_t *v = jl_get_binding_value_in_world(b, 1);
+            if (v) {
+                if (jl_is_unionall(v))
+                    v = jl_unwrap_unionall(v);
+                if (jl_is_datatype(v)) {
+                    jl_datatype_t *tt = (jl_datatype_t*)v;
+                    tt->name->module = core;
+                }
+            }
+        }
+    }
 }
 
 #ifdef __cplusplus

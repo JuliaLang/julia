@@ -186,7 +186,7 @@ function complete_symbol!(suggestions::Vector{Completion},
                           complete_modules_only::Bool=false,
                           shift::Bool=false)
     local mod, t, val
-    complete_internal_only = false
+    complete_internal_only = isempty(name)
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -330,18 +330,29 @@ end
 
 const PATH_cache_lock = Base.ReentrantLock()
 const PATH_cache = Set{String}()
-PATH_cache_task::Union{Task,Nothing} = nothing # used for sync in tests
+PATH_cache_task::Union{Task,Nothing} = nothing
+PATH_cache_condition::Union{Threads.Condition, Nothing} = nothing # used for sync in tests
 next_cache_update::Float64 = 0.0
 function maybe_spawn_cache_PATH()
-    global PATH_cache_task, next_cache_update
+    global PATH_cache_task, PATH_cache_condition, next_cache_update
     @lock PATH_cache_lock begin
-        PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+        # Extract to local variables to enable flow-sensitive type inference for these global variables
+        PATH_cache_task_local = PATH_cache_task
+        PATH_cache_task_local isa Task && !istaskdone(PATH_cache_task_local) && return
         time() < next_cache_update && return
-        PATH_cache_task = Threads.@spawn begin
-            REPLCompletions.cache_PATH()
-            @lock PATH_cache_lock PATH_cache_task = nothing # release memory when done
+        PATH_cache_task = PATH_cache_task_local = Threads.@spawn begin
+            try
+                REPLCompletions.cache_PATH()
+            finally
+                @lock PATH_cache_lock begin
+                    next_cache_update = time() + 10 # earliest next update can run is 10s after
+                    PATH_cache_task = nothing # release memory when done
+                    PATH_cache_condition_local = PATH_cache_condition
+                    PATH_cache_condition_local !== nothing && notify(PATH_cache_condition_local)
+                end
+            end
         end
-        Base.errormonitor(PATH_cache_task)
+        Base.errormonitor(PATH_cache_task_local)
     end
 end
 
@@ -349,8 +360,6 @@ end
 function cache_PATH()
     path = get(ENV, "PATH", nothing)
     path isa String || return
-
-    global next_cache_update
 
     # Calling empty! on PATH_cache would be annoying for async typing hints as completions would temporarily disappear.
     # So keep track of what's added this time and at the end remove any that didn't appear this time from the global cache.
@@ -414,7 +423,6 @@ function cache_PATH()
 
     @lock PATH_cache_lock begin
         intersect!(PATH_cache, this_PATH_cache) # remove entries from PATH_cache that weren't found this time
-        next_cache_update = time() + 10 # earliest next update can run is 10s after
     end
 
     @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
@@ -563,18 +571,18 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # be employed, for instance, by `typeinf_ext_toplevel`.
 is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === CC.CACHE_MODE_NULL
 
-function is_call_graph_uncached(sv::CC.InferenceState)
+function is_call_stack_uncached(sv::CC.InferenceState)
     CC.is_cached(sv) && return false
     parent = CC.frame_parent(sv)
     parent === nothing && return true
-    return is_call_graph_uncached(parent::CC.InferenceState)
+    return is_call_stack_uncached(parent::CC.InferenceState)
 end
 
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
     # Ignore saw_latestworld
-    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
+    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         partition = CC.abstract_eval_binding_partition!(interp, g, sv)
         if CC.is_defined_const_binding(CC.binding_kind(partition))
             return CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL)
@@ -590,41 +598,11 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
                                               sv::CC.InferenceState)
 end
 
-function is_repl_frame_getproperty(sv::CC.InferenceState)
-    def = sv.linfo.def
-    def isa Method || return false
-    def.name === :getproperty || return false
-    CC.is_cached(sv) && return false
-    return is_repl_frame(CC.frame_parent(sv))
-end
-
-# aggressive global binding resolution for `getproperty(::Module, ::Symbol)` calls within `repl_frame`
-function CC.builtin_tfunction(interp::REPLInterpreter, @nospecialize(f),
-                              argtypes::Vector{Any}, sv::CC.InferenceState)
-    if f === Core.getglobal && (interp.limit_aggressive_inference ? is_repl_frame_getproperty(sv) : is_call_graph_uncached(sv))
-        if length(argtypes) == 2
-            a1, a2 = argtypes
-            if isa(a1, Const) && isa(a2, Const)
-                a1val, a2val = a1.val, a2.val
-                if isa(a1val, Module) && isa(a2val, Symbol)
-                    g = GlobalRef(a1val, a2val)
-                    if isdefined_globalref(g)
-                        return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
-                    end
-                    return Union{}
-                end
-            end
-        end
-    end
-    return @invoke CC.builtin_tfunction(interp::CC.AbstractInterpreter, f::Any,
-                                        argtypes::Vector{Any}, sv::CC.InferenceState)
-end
-
 # aggressive concrete evaluation for `:inconsistent` frames within `repl_frame`
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
                                    sv::CC.InferenceState)
-    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
+    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
                                      result.edgecycle, result.edgelimited, result.volatile_inf_result)
@@ -649,6 +627,8 @@ function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.A
     return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
 end
 
+# Perform some post-hoc mutation on lowered code, as expected by some abstract interpretation
+# routines, especially for `:foreigncall` and `:cglobal`.
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     @ccall jl_resolve_definition_effects_in_ir(
         #=jl_array_t *stmts=# src.code::Any,
@@ -657,6 +637,11 @@ function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
         #=jl_value_t *binding_edge=# C_NULL::Ptr{Cvoid},
         #=int binding_effects=# 0::Int)::Cvoid
     return src
+end
+
+function construct_toplevel_mi(src::Core.CodeInfo, context_module::Module)
+    resolve_toplevel_symbols!(src, context_module)
+    return @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
 end
 
 # lower `ex` and run type inference on the resulting top-level expression
@@ -678,10 +663,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
     src = lwr.args[1]::Core.CodeInfo
 
-    resolve_toplevel_symbols!(src, context_module)
-    # construct top-level `MethodInstance`
-    mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, context_module)
-
+    mi = construct_toplevel_mi(src, context_module)
     interp = REPLInterpreter(limit_aggressive_inference)
     result = CC.InferenceResult(mi)
     frame = CC.InferenceState(result, src, #=cache=#:no, interp)
@@ -712,6 +694,15 @@ code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
 MAX_METHOD_COMPLETIONS::Int = 40
 function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     isempty(ex_org.args) && return 2, nothing, [], Set{Symbol}()
+    # Desugar do block call into call with lambda
+    if ex_org.head === :do && length(ex_org.args) >= 2
+        ex_call = ex_org.args[1]
+        ex_args = [x for x in ex_call.args if !(x isa Expr && x.head === :parameters)]
+        ex_params = findfirst(x -> x isa Expr && x.head === :parameters, ex_call.args)
+        new_args = [ex_args[1], ex_org.args[end], ex_args[2:end]...]
+        ex_params !== nothing && push!(new_args, ex_call.args[ex_params])
+        ex_org = Expr(:call, new_args...)
+    end
     funct = repl_eval_ex(ex_org.args[1], context_module)
     funct === nothing && return 2, nothing, [], Set{Symbol}()
     funct = CC.widenconst(funct)
@@ -719,9 +710,12 @@ function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     return kwargs_flag, funct, args_ex, kwargs_ex
 end
 
-function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false)
+# cursor_pos: either :positional (complete either kwargs or positional) or :kwargs (beyond semicolon)
+function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false, cursor_pos::Symbol=:positional)
     kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex_org, context_module, shift)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
     out = Completion[]
+    # Allow more arguments when cursor before semicolon, even if kwargs are present
+    cursor_pos == :positional && kwargs_flag == 1 && (kwargs_flag = 0)
     kwargs_flag == 2 && return out # one of the kwargs is invalid
     kwargs_flag == 0 && push!(args_ex, Vararg{Any}) # allow more arguments if there is no semicolon
     complete_methods!(out, funct, args_ex, kwargs_ex, shift ? -2 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
@@ -729,24 +723,12 @@ function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
-function recursive_explore_names!(seen::IdSet, callee_module::Module, initial_module::Module, exploredmodules::IdSet{Module}=IdSet{Module}())
-    push!(exploredmodules, callee_module)
-    for name in names(callee_module; all=true, imported=true)
-        if !Base.isdeprecated(callee_module, name) && !startswith(string(name), '#') && isdefined(initial_module, name)
-            func = getfield(callee_module, name)
-            if !isa(func, Module)
-                funct = Core.Typeof(func)
-                push!(seen, funct)
-            elseif isa(func, Module) && func ∉ exploredmodules
-                recursive_explore_names!(seen, func, initial_module, exploredmodules)
-            end
-        end
-    end
-end
-function recursive_explore_names(callee_module::Module, initial_module::Module)
-    seen = IdSet{Any}()
-    recursive_explore_names!(seen, callee_module, initial_module)
-    seen
+
+function accessible(mod::Module, private::Bool)
+    bindings = IdSet{Any}(Core.Typeof(getglobal(mod, s)) for s in names(mod; all=private, imported=private, usings=private)
+                   if !Base.isdeprecated(mod, s) && !startswith(string(s), '#') && !startswith(string(s), '@') && isdefined(mod, s))
+    delete!(bindings, Module)
+    return collect(bindings)
 end
 
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
@@ -764,7 +746,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     # semicolon for the ".?(" syntax
     moreargs && push!(args_ex, Vararg{Any})
 
-    for seen_name in recursive_explore_names(callee_module, callee_module)
+    for seen_name in accessible(callee_module, callee_module === context_module)
         complete_methods!(out, seen_name, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
     end
 
@@ -910,14 +892,22 @@ end
 end
 
 # Provide completion for keyword arguments in function calls
+# Returns true if the current argument must be a keyword because the cursor is beyond the semicolon
 function complete_keyword_argument!(suggestions::Vector{Completion},
                                     ex::Expr, last_word::String,
-                                    context_module::Module; shift::Bool=false)
+                                    context_module::Module,
+                                    arg_pos::Symbol; shift::Bool=false)
     kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex, context_module, true)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
-    kwargs_flag == 2 && false # one of the previous kwargs is invalid
+    kwargs_flag == 2 && return false # one of the previous kwargs is invalid
 
     methods = Completion[]
-    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
+    # Limit kwarg completions to cases when function is concretely known; looking up
+    # matching methods for abstract functions — particularly `Any` or `Function` — can
+    # take many seconds to run over the thousands of possible methods. Note that
+    # isabstracttype would return naively return true for common constructor calls
+    # like Array, but the REPL's introspection here may know their Type{T}.
+    isconcretetype(funct) || return false
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
 
@@ -947,7 +937,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     for kwarg in kwargs
         push!(suggestions, KeywordArgumentCompletion(kwarg))
     end
-    return kwargs_flag != 0
+    return kwargs_flag != 0 && arg_pos == :kwargs
 end
 
 function get_loading_candidates(pkgstarts::String, project_file::String)
@@ -1083,7 +1073,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     (kind(cur) in KSet"String Comment ErrorEofMultiComment" || inside_cmdstr) &&
          return Completion[], 1:0, false
 
-    if (n = find_prefix_call(cur_not_ws)) !== nothing
+    n, arg_pos = find_prefix_call(cur_not_ws)
+    if n !== nothing
         func = first(children_nt(n))
         e = Expr(n)
         # Remove arguments past the first parse error (allows unclosed parens)
@@ -1100,7 +1091,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         #   foo(x, TAB   => list of methods signatures for foo with x as first argument
         if kind(cur_not_ws) in KSet"( , ;"
             # Don't provide method completions unless the cursor is after: '(' ',' ';'
-            return complete_methods(e, context_module, shift), char_range(func), false
+            return complete_methods(e, context_module, shift, arg_pos), char_range(func), false
 
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
@@ -1108,24 +1099,25 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             r = char_range(cur)
             s = string[intersect(r, 1:pos)]
             # Return without adding more suggestions if kwargs only
-            complete_keyword_argument!(suggestions, e, s, context_module; shift) &&
+            complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true
         end
     end
 
     # Symbol completion
     # TODO: Should completions replace the identifier at the cursor?
+    looks_like_ident = Base.isidentifier(@view string[intersect(char_range(cur), 1:pos)])
     if cur.parent !== nothing && kind(cur.parent) == K"var"
         # Replace the entire var"foo", but search using only "foo".
         r = intersect(char_range(cur.parent), 1:pos)
         r2 = char_range(children_nt(cur.parent)[1])
         s = string[intersect(r2, 1:pos)]
-    elseif kind(cur) in KSet"Identifier @"
-        r = intersect(char_range(cur), 1:pos)
-        s = string[r]
     elseif kind(cur) == K"MacroName"
         # Include the `@`
         r = intersect(prevind(string, cur.position):char_last(cur), 1:pos)
+        s = string[r]
+    elseif looks_like_ident || kind(cur) in KSet"Bool Identifier @"
+        r = intersect(char_range(cur), 1:pos)
         s = string[r]
     else
         r = nextind(string, pos):pos
@@ -1134,7 +1126,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     complete_modules_only = false
     prefix = node_prefix(cur, context_module)
-    comp_keywords = prefix === nothing
+    comp_keywords = prefix === nothing && !isempty(s)
 
     # Complete loadable module names:
     #   import Mod TAB
@@ -1196,18 +1188,20 @@ function find_str(cur::CursorNode)
 end
 
 # Is the cursor directly inside of the arguments of a prefix call (no nested
-# expressions)?
+# expressions)?  If so, return:
+#   - The call node
+#   - Either :positional or :kwargs, if the cursor is before or after the `;`
 function find_prefix_call(cur::CursorNode)
     n = cur.parent
-    n !== nothing || return nothing
+    n !== nothing || return nothing, nothing
     is_call(n) = kind(n) in KSet"call dotcall" && is_prefix_call(n)
     if kind(n) == K"parameters"
-        is_call(n.parent) || return nothing
-        n.parent
+        is_call(n.parent) || return nothing, nothing
+        n.parent, :kwargs
     else
         # Check that we are beyond the function name.
-        is_call(n) && cur.index > children_nt(n)[1].index || return nothing
-        n
+        is_call(n) && cur.index > children_nt(n)[1].index || return nothing, nothing
+        n, :positional
     end
 end
 
@@ -1273,20 +1267,20 @@ function dict_eval(@nospecialize(e), context_module::Module=Main)
 end
 
 function method_search(partial::AbstractString, context_module::Module, shift::Bool)
-    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+    rexm = match(r"([\w.]+.)?\?\((.*)$", partial)
     if rexm !== nothing
         # Get the module scope
-        if isempty(rexm.captures[1])
-            callee_module = context_module
-        else
-            modname = Symbol(rexm.captures[1][1:end-1])
-            if isdefined(context_module, modname)
-                callee_module = getfield(context_module, modname)
-                if !isa(callee_module, Module)
-                    callee_module = context_module
+        callee_module = context_module
+        if !isnothing(rexm.captures[1])
+            modnames = map(Symbol, split(something(rexm.captures[1]), '.'))
+            for m in modnames
+                if isdefined(callee_module, m)
+                    callee_module = getfield(callee_module, m)
+                    if !isa(callee_module, Module)
+                        callee_module = context_module
+                        break
+                    end
                 end
-            else
-                callee_module = context_module
             end
         end
         moreargs = !endswith(rexm.captures[2], ')')
@@ -1296,7 +1290,8 @@ function method_search(partial::AbstractString, context_module::Module, shift::B
         end
         ex_org = Meta.parse(callstr, raise=false, depwarn=false)
         if isa(ex_org, Expr)
-            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            pos_q = isnothing(rexm.captures[1]) ? 1 : sizeof(something(rexm.captures[1]))+1 # position after ?
+            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:pos_q) .+ rexm.offset, false
         end
     end
 end

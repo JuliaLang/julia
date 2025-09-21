@@ -2165,3 +2165,5 @@ end
     @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
 end
+
+@test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
