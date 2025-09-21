@@ -1019,7 +1019,7 @@ struct Returns{V} <: Function
     end
 end
 
-(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = _maybe_unwrap_type(obj.value)
+(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
 
 # function composition
 
@@ -1108,10 +1108,10 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
     function ComposedFunction(outer, inner)
         if _is_complete_type(outer)
-            outer = Constructor{outer}()
+            outer = TypeWrapper{outer}()
         end
         if _is_complete_type(inner)
-            inner = Constructor{inner}()
+            inner = TypeWrapper{inner}()
         end
         new{typeof(outer), typeof(inner)}(outer, inner)
     end
@@ -1158,31 +1158,6 @@ function _maybe_unwrap_type(x)
     end
 end
 
-"""
-    Base.Constructor::Type
-
-`Base.Constructor{parameter}()` is a callable that forwards all arguments to
-`parameter`. A motivation for using it, instead of using `parameter` directly, is
-the following property: for any `x` such that `x isa Base.Constructor`, we have
-`Base.isingletontype(typeof(x))`.
-
-Example:
-
-```jldoctest
-julia> c = Base.Constructor{Float32}()
-(::Base.Constructor{Float32}) (generic function with 1 method)
-
-julia> c(7)
-7.0f0
-```
-
-Used for [`ComposedFunction`](@ref) and for [`Base.Fix`](@ref).
-
-!!! compat "Julia 1.8"
-    `Base.Constructor` requires at least Julia 1.8.
-
-See also: [`Base.isingletontype`](@ref).
-"""
 struct Constructor{F} <: Function end
 (::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
 maybeconstructor(::Type{F}) where {F} = Constructor{F}()
@@ -1268,7 +1243,7 @@ struct Fix{N,F,T} <: Function
             throw(ArgumentError("ambiguous input"))
         end
         if _is_complete_type(f)
-            f = Constructor{f}()
+            f = TypeWrapper{f}()
         end
         if _is_complete_type(x)
             x = TypeWrapper{x}()
@@ -1279,13 +1254,16 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
-    x = _maybe_unwrap_type(f.x)
-    return f.f(args[begin:begin+(N-2)]..., x, args[begin+(N-1):end]...; kws...)
+    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
 end
 
 # Special cases for improved constant propagation
-(f::Fix{1})(arg; kws...) = f.f(_maybe_unwrap_type(f.x), arg; kws...)
-(f::Fix{2})(arg; kws...) = f.f(arg, _maybe_unwrap_type(f.x); kws...)
+(f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
+(f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
+
+function Base.getproperty(returns::Union{ComposedFunction,Fix,Returns}, name::Symbol)
+    _maybe_unwrap_type(getfield(returns, name))
+end
 
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
