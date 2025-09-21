@@ -370,7 +370,7 @@ end
                 x::Int
             end
             f = Fix{1}(MyStruct, 1)
-            @test f isa Fix{1,Type{MyStruct},Int}
+            @test f isa Fix{1,Base.Constructor{MyStruct},Int}
         end
     end
 end
