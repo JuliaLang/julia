@@ -979,6 +979,9 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 """
 |>(x, f) = f(x)
 
+_type_is_complete(::Type{T}) where {T} = @isdefined(T) ? true : false
+_is_complete_type(x) = (x isa Type) && _type_is_complete(x)
+
 """
     f = Returns(value)
 
@@ -1009,7 +1012,7 @@ struct Returns{V} <: Function
         if value isa TypeWrapper
             throw(ArgumentError("ambiguous input"))
         end
-        if value isa Type
+        if _is_complete_type(value)
             value = TypeWrapper{value}()
         end
         new{typeof(value)}(value)
@@ -1104,10 +1107,10 @@ struct ComposedFunction{O,I} <: Function
     inner::I
     ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
     function ComposedFunction(outer, inner)
-        if outer isa Type
+        if _is_complete_type(outer)
             outer = Constructor{outer}()
         end
-        if inner isa Type
+        if _is_complete_type(inner)
             inner = Constructor{inner}()
         end
         new{typeof(outer), typeof(inner)}(outer, inner)
@@ -1264,10 +1267,10 @@ struct Fix{N,F,T} <: Function
         if x isa TypeWrapper
             throw(ArgumentError("ambiguous input"))
         end
-        if f isa Type
+        if _is_complete_type(f)
             f = Constructor{f}()
         end
-        if x isa Type
+        if _is_complete_type(x)
             x = TypeWrapper{x}()
         end
         new{N,typeof(f),typeof(x)}(f, x)
