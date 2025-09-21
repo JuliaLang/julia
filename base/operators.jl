@@ -1120,6 +1120,31 @@ unwrap_composed(c) = (maybeconstructor(c),)
 call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
 call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
 
+"""
+    Base.TypeWrapper::Type
+
+`Base.TypeWrapper{parameter}()` is a sentinel value that represents `parameter`. A
+motivation for using it, instead of using `parameter` directly, is the following
+property: for any `x` such that `x isa Base.TypeWrapper`, we have
+`Base.isingletontype(typeof(x))`.
+
+A `getindex` call, without providing any indices, returns the type parameter:
+
+```jldoctest
+julia> w = Base.TypeWrapper{Float32}()
+Base.TypeWrapper{Float32}()
+
+julia> w[]
+Float32
+```
+
+Used for [`Returns`](@ref) and for [`Base.Fix`](@ref).
+
+!!! compat "Julia 1.13"
+    `Base.TypeWrapper` requires at least Julia 1.13.
+
+See also: [`Base.isingletontype`](@ref).
+"""
 struct TypeWrapper{T} end
 getindex(::TypeWrapper{T}) where {T} = T
 function _maybe_unwrap_type(x)
@@ -1130,6 +1155,31 @@ function _maybe_unwrap_type(x)
     end
 end
 
+"""
+    Base.Constructor::Type
+
+`Base.Constructor{parameter}()` is a callable that forwards all arguments to
+`parameter`. A motivation for using it, instead of using `parameter` directly, is
+the following property: for any `x` such that `x isa Base.Constructor`, we have
+`Base.isingletontype(typeof(x))`.
+
+Example:
+
+```jldoctest
+julia> c = Base.Constructor{Float32}()
+(::Base.Constructor{Float32}) (generic function with 1 method)
+
+julia> c(7)
+7.0f0
+```
+
+Used for [`ComposedFunction`](@ref) and for [`Base.Fix`](@ref).
+
+!!! compat "Julia 1.8"
+    `Base.Constructor` requires at least Julia 1.8.
+
+See also: [`Base.isingletontype`](@ref).
+"""
 struct Constructor{F} <: Function end
 (::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
 maybeconstructor(::Type{F}) where {F} = Constructor{F}()
