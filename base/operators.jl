@@ -979,9 +979,6 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 """
 |>(x, f) = f(x)
 
-_stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
-
 """
     f = Returns(value)
 
