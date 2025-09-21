@@ -1196,6 +1196,9 @@ struct Fix{N,F,T} <: Function
         elseif N < 1
             throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
         end
+        if f isa Type
+            f = Constructor{f}()
+        end
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
