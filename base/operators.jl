@@ -1008,10 +1008,18 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    Returns(value) = new{_stable_typeof(value)}(value)
+    function Returns(value)
+        if value isa TypeWrapper
+            throw(ArgumentError("ambiguous input"))
+        end
+        if value isa Type
+            value = TypeWrapper{value}()
+        end
+        new{typeof(value)}(value)
+    end
 end
 
-(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
+(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = _maybe_unwrap_type(obj.value)
 
 # function composition
 
