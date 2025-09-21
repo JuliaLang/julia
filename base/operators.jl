@@ -1214,21 +1214,28 @@ struct Fix{N,F,T} <: Function
         elseif N < 1
             throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
         end
+        if x isa TypeWrapper
+            throw(ArgumentError("ambiguous input"))
+        end
         if f isa Type
             f = Constructor{f}()
         end
-        new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
+        if x isa Type
+            x = TypeWrapper{x}()
+        end
+        new{N,typeof(f),typeof(x)}(f, x)
     end
 end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
-    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
+    x = _maybe_unwrap_type(f.x)
+    return f.f(args[begin:begin+(N-2)]..., x, args[begin+(N-1):end]...; kws...)
 end
 
 # Special cases for improved constant propagation
-(f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
-(f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
+(f::Fix{1})(arg; kws...) = f.f(_maybe_unwrap_type(f.x), arg; kws...)
+(f::Fix{2})(arg; kws...) = f.f(arg, _maybe_unwrap_type(f.x); kws...)
 
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
