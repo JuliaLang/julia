@@ -236,6 +236,19 @@ let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
 
+@testset "`sizeof` tests for `Fix`, `ComposedFunction`, `Returns`; issue #59619" begin
+    local args = (nothing, sin, Float32)
+    for x in args
+        @test (iszero ∘ sizeof ∘ Returns)(x)
+        for y in args
+            @test (iszero ∘ sizeof ∘ (∘))(x, y)
+            for n in [1, 2, 3, 999]
+                @test (iszero ∘ sizeof ∘ Base.Fix{n})(x, y)
+            end
+        end
+    end
+end
+
 @testset "Basic tests of Fix1, Fix2, and Fix" begin
     function test_fix1(Fix1=Base.Fix1)
         increment = Fix1(+, 1)
