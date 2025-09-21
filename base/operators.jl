@@ -1098,7 +1098,15 @@ struct ComposedFunction{O,I} <: Function
     outer::O
     inner::I
     ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
-    ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
+    function ComposedFunction(outer, inner)
+        if outer isa Type
+            outer = Constructor{outer}()
+        end
+        if inner isa Type
+            inner = Constructor{inner}()
+        end
+        new{typeof(outer), typeof(inner)}(outer, inner)
+    end
 end
 
 (c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
