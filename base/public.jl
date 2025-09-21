@@ -14,6 +14,8 @@ public
     AbstractPipe,
     AsyncCondition,
     CodeUnits,
+    Constructor,
+    TypeWrapper,
     Event,
     Fix,
     Fix1,
