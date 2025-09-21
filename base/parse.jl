@@ -41,9 +41,16 @@ parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Uni
 @noinline _invalid_base(base) = throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 @noinline _invalid_digit(base, char) = throw(ArgumentError("invalid base $base digit $(repr(char))"))
 
-function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where {T <: Integer}
+function parse_char(
+        ::Type{T},
+        c::AbstractChar,
+        base::Integer,
+        throw::Bool
+    ) where {T <: Integer}
     a::UInt8 = (base <= 36 ? 10 : 36)
-    2 <= base <= 62 || _invalid_base(base)
+    if !(2 <= base <= 62)
+        throw ? _invalid_base(base) : return nothing
+    end
     base = base % UInt8
     codepoint = c > 'z' ? 0xff : UInt8(c)
     d = if UInt8('0') ≤ codepoint ≤ UInt8('9')
@@ -55,8 +62,18 @@ function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where {T <: Integ
     else
         0xff
     end
-    d < base || _invalid_digit(base, c)
+    if d >= base
+        throw ? _invalid_digit(base, c) : return nothing
+    end
     return convert(T, d)::T
+end
+
+function parse(::Type{T}, c::AbstractChar; base::Integer=10) where {T <: Integer}
+    @inline parse_char(T, c, base, true)
+end
+
+function tryparse(::Type{T}, c::AbstractChar; base::Integer=10) where {T <: Integer}
+    @inline parse_char(T, c, base, false)
 end
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)

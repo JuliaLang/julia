@@ -29,6 +29,13 @@
     @test parse(Int, 'a', base=16) == 10
     @test_throws ArgumentError parse(Int, 'a')
     @test_throws ArgumentError parse(Int,typemax(Char))
+
+    @test tryparse(Int, '8') === 8
+    @test tryparse(Int, 'a') === nothing
+    @test tryparse(Int, 'a'; base=11) === 10
+    @test tryparse(Int32, 'a'; base=11) === Int32(10)
+    @test tryparse(UInt8, 'f'; base=16) === 0x0f
+    @test tryparse(UInt8, 'f'; base=15) === nothing
 end
 
 # Issue 29451
