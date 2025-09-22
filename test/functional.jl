@@ -240,6 +240,7 @@ end
     local args = (nothing, sin, Float32)
     for x in args
         @test (iszero ∘ sizeof ∘ Returns)(x)
+        @test (iszero ∘ sizeof ∘ splat)(x)
         for y in args
             @test (iszero ∘ sizeof ∘ (∘))(x, y)
             for n in [1, 2, 3, 999]

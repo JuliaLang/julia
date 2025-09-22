@@ -1261,10 +1261,6 @@ end
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
 
-function Base.getproperty(x::Union{ComposedFunction,Fix,Returns}, name::Symbol)
-    _maybe_unwrap_type(getfield(x, name))
-end
-
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
 """
@@ -1408,10 +1404,22 @@ See also [`splat`](@ref).
 """
 struct Splat{F} <: Function
     f::F
-    Splat(f) = new{Core.Typeof(f)}(f)
+    function Splat(f)
+        if f isa TypeWrapper
+            throw(ArgumentError("ambiguous input"))
+        end
+        if _is_complete_type(f)
+            f = TypeWrapper{f}()
+        end
+        new{typeof(f)}(f)
+    end
 end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
+
+function Base.getproperty(x::Union{ComposedFunction,Fix,Returns,Splat}, name::Symbol)
+    _maybe_unwrap_type(getfield(x, name))
+end
 
 ## in and related operators
 
