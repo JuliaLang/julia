@@ -174,12 +174,7 @@ struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <
 
     Broadcasted(style::Union{Nothing,BroadcastStyle}, f::Tuple, args::Tuple) = error() # disambiguation: tuple is not callable
     function Broadcasted(style::Union{Nothing,BroadcastStyle}, f::F, args::Tuple, axes=nothing) where {F}
-        if f isa Base.TypeWrapper
-            throw(ArgumentError("ambiguous input"))
-        end
-        if Base._is_complete_type(f)
-            f = Base.TypeWrapper{f}()
-        end
+        f = Base._maybe_wrap_type(f)
         return new{typeof(style), typeof(axes), typeof(f), typeof(args)}(style, f, args, axes)
     end
 
@@ -188,12 +183,7 @@ struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <
     end
 
     function Broadcasted{Style}(f::F, args, axes=nothing) where {Style, F}
-        if f isa Base.TypeWrapper
-            throw(ArgumentError("ambiguous input"))
-        end
-        if Base._is_complete_type(f)
-            f = Base.TypeWrapper{f}()
-        end
+        f = Base._maybe_wrap_type(f)
         return new{Style, typeof(axes), typeof(f), typeof(args)}(Style()::Style, f, args, axes)
     end
 

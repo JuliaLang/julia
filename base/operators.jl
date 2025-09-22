@@ -1009,12 +1009,7 @@ struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
     function Returns(value)
-        if value isa TypeWrapper
-            throw(ArgumentError("ambiguous input"))
-        end
-        if _is_complete_type(value)
-            value = TypeWrapper{value}()
-        end
+        value = _maybe_wrap_type(value)
         new{typeof(value)}(value)
     end
 end
@@ -1107,12 +1102,8 @@ struct ComposedFunction{O,I} <: Function
     inner::I
     ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
     function ComposedFunction(outer, inner)
-        if _is_complete_type(outer)
-            outer = TypeWrapper{outer}()
-        end
-        if _is_complete_type(inner)
-            inner = TypeWrapper{inner}()
-        end
+        outer = _maybe_wrap_type(outer)
+        inner = _maybe_wrap_type(inner)
         new{typeof(outer), typeof(inner)}(outer, inner)
     end
 end
@@ -1161,6 +1152,16 @@ getindex(::TypeWrapper{T}) where {T} = T
 function _maybe_unwrap_type(x)
     if x isa TypeWrapper
         x[]
+    else
+        x
+    end
+end
+function _maybe_wrap_type(x)
+    if x isa TypeWrapper
+        throw(ArgumentError("ambiguous input"))
+    end
+    if _is_complete_type(x)
+        TypeWrapper{x}()
     else
         x
     end
@@ -1247,15 +1248,8 @@ struct Fix{N,F,T} <: Function
         elseif N < 1
             throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
         end
-        if x isa TypeWrapper
-            throw(ArgumentError("ambiguous input"))
-        end
-        if _is_complete_type(f)
-            f = TypeWrapper{f}()
-        end
-        if _is_complete_type(x)
-            x = TypeWrapper{x}()
-        end
+        f = _maybe_wrap_type(f)
+        x = _maybe_wrap_type(x)
         new{N,typeof(f),typeof(x)}(f, x)
     end
 end
@@ -1413,12 +1407,7 @@ See also [`splat`](@ref).
 struct Splat{F} <: Function
     f::F
     function Splat(f)
-        if f isa TypeWrapper
-            throw(ArgumentError("ambiguous input"))
-        end
-        if _is_complete_type(f)
-            f = TypeWrapper{f}()
-        end
+        f = _maybe_wrap_type(f)
         new{typeof(f)}(f)
     end
 end
