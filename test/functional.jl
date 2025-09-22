@@ -241,6 +241,8 @@ end
     for x in args
         @test (iszero ∘ sizeof ∘ Returns)(x)
         @test (iszero ∘ sizeof ∘ splat)(x)
+        @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(x, ())
+        @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(nothing, x, ())
         for y in args
             @test (iszero ∘ sizeof ∘ (∘))(x, y)
             for n in [1, 2, 3, 999]
