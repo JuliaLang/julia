@@ -236,6 +236,22 @@ let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
 
+@testset "`Base.TypeWrapper`" begin
+    @test let type = Float32
+        type === Base.TypeWrapper{type}()[]
+    end
+    @test let type = Float32
+        local t::Type{type}
+        t = Base.TypeWrapper{type}()
+        type === t
+    end
+    @test let type = Float32
+        local w::BaseTypeWrapper{type}
+        w = type
+        w === Base.TypeWrapper{type}()
+    end
+end
+
 @testset "`sizeof` tests for `Fix`, `ComposedFunction`, `Returns`; issue #59619" begin
     local args = (nothing, sin, Float32)
     for x in args

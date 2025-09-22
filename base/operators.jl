@@ -1166,6 +1166,12 @@ function _maybe_wrap_type(x)
         x
     end
 end
+function convert(::Type{TypeWrapper{T}}, ::Type{T}) where {T}
+    TypeWrapper{T}()
+end
+function convert(::Type{Type{T}}, ::TypeWrapper{T}) where {T}
+    T
+end
 
 struct Constructor{F} <: Function end
 (::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
