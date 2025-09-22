@@ -96,9 +96,33 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
+
+        ios_t s;
+        ios_mem(&s, 0);
         if (sig == SIGILL)
-            jl_fprint_sigill(ios_safe_stderr, &Context);
-        jl_fprint_critical_error(ios_safe_stderr, sig, 0, &Context, jl_get_current_task());
+            jl_fprint_sigill(&s, &Context);
+        jl_fprint_critical_error(&s, sig, 0, &Context, jl_get_current_task());
+
+        // First write to stderr
+        ios_write_direct(ios_safe_stderr, &s);
+
+        // Then write to Application log
+        HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
+        if (event_source != INVALID_HANDLE_VALUE) {
+            ios_putc('\0', &s);
+            const wchar_t *strings[] = { ios_utf8_to_wchar(s.buf) };
+            ReportEventW(
+                event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
+               /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
+            );
+            free(strings[0]);
+
+            if (jl_options.alert_on_critical_error) {
+                MessageBoxW(NULL, /* message */ L"error: libjulia received a fatal signal.\n\n"
+                                                L"See Application log in Event Viewer for more information.",
+                            /* title */ L"fatal error in libjulia", MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
+            }
+        }
         raise(sig);
     }
 }
@@ -283,59 +307,91 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             break;
         }
     }
+    ios_t full_error, summary;
+    ios_mem(&full_error, 0);
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
-        jl_safe_printf("\n");
-        jl_fprint_sigill(ios_safe_stderr, ExceptionInfo->ContextRecord);
+        jl_safe_fprintf(&full_error, "\n");
+        jl_fprint_sigill(&full_error, ExceptionInfo->ContextRecord);
     }
-    jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
+    jl_safe_fprintf(&full_error, "\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\n");
+    ios_mem(&summary, 128);
+    jl_safe_fprintf(&summary, "Exception: ");
     switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
     case EXCEPTION_ACCESS_VIOLATION:
-        jl_safe_printf("EXCEPTION_ACCESS_VIOLATION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_ACCESS_VIOLATION"); break;
     case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-        jl_safe_printf("EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
     case EXCEPTION_BREAKPOINT:
-        jl_safe_printf("EXCEPTION_BREAKPOINT"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_BREAKPOINT"); break;
     case EXCEPTION_DATATYPE_MISALIGNMENT:
-        jl_safe_printf("EXCEPTION_DATATYPE_MISALIGNMENT"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_DATATYPE_MISALIGNMENT"); break;
     case EXCEPTION_FLT_DENORMAL_OPERAND:
-        jl_safe_printf("EXCEPTION_FLT_DENORMAL_OPERAND"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_DENORMAL_OPERAND"); break;
     case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-        jl_safe_printf("EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
     case EXCEPTION_FLT_INEXACT_RESULT:
-        jl_safe_printf("EXCEPTION_FLT_INEXACT_RESULT"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_INEXACT_RESULT"); break;
     case EXCEPTION_FLT_INVALID_OPERATION:
-        jl_safe_printf("EXCEPTION_FLT_INVALID_OPERATION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_INVALID_OPERATION"); break;
     case EXCEPTION_FLT_OVERFLOW:
-        jl_safe_printf("EXCEPTION_FLT_OVERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_OVERFLOW"); break;
     case EXCEPTION_FLT_STACK_CHECK:
-        jl_safe_printf("EXCEPTION_FLT_STACK_CHECK"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_STACK_CHECK"); break;
     case EXCEPTION_FLT_UNDERFLOW:
-        jl_safe_printf("EXCEPTION_FLT_UNDERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_UNDERFLOW"); break;
     case EXCEPTION_ILLEGAL_INSTRUCTION:
-        jl_safe_printf("EXCEPTION_ILLEGAL_INSTRUCTION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_ILLEGAL_INSTRUCTION"); break;
     case EXCEPTION_IN_PAGE_ERROR:
-        jl_safe_printf("EXCEPTION_IN_PAGE_ERROR"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_IN_PAGE_ERROR"); break;
     case EXCEPTION_INT_DIVIDE_BY_ZERO:
-        jl_safe_printf("EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
     case EXCEPTION_INT_OVERFLOW:
-        jl_safe_printf("EXCEPTION_INT_OVERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_INT_OVERFLOW"); break;
     case EXCEPTION_INVALID_DISPOSITION:
-        jl_safe_printf("EXCEPTION_INVALID_DISPOSITION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_INVALID_DISPOSITION"); break;
     case EXCEPTION_NONCONTINUABLE_EXCEPTION:
-        jl_safe_printf("EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
     case EXCEPTION_PRIV_INSTRUCTION:
-        jl_safe_printf("EXCEPTION_PRIV_INSTRUCTION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_PRIV_INSTRUCTION"); break;
     case EXCEPTION_SINGLE_STEP:
-        jl_safe_printf("EXCEPTION_SINGLE_STEP"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_SINGLE_STEP"); break;
     case EXCEPTION_STACK_OVERFLOW:
-        jl_safe_printf("EXCEPTION_STACK_OVERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_STACK_OVERFLOW"); break;
     default:
-        jl_safe_printf("UNKNOWN"); break;
+        jl_safe_fprintf(&summary, "UNKNOWN"); break;
     }
-    jl_safe_printf(" at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-    jl_fprint_native_codeloc(ios_safe_stderr, (uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_safe_fprintf(&summary, " at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_fprint_native_codeloc(&summary, (uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    ios_write(&full_error, summary.buf, ios_pos(&summary));
+    ios_puts("\nSee Application log in Event Viewer for more information.\n", &summary);
 
-    jl_fprint_critical_error(ios_safe_stderr, 0, 0, ExceptionInfo->ContextRecord, ct);
+    jl_fprint_critical_error(&full_error, 0, 0, ExceptionInfo->ContextRecord, ct);
+
+    // First print to STDERR
+    ios_write_direct(ios_safe_stderr, &full_error);
+
+    // Secondly print to Application log
+    HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
+    if (event_source != INVALID_HANDLE_VALUE) {
+        ios_putc('\0', &full_error);
+        const wchar_t *strings[] = { ios_utf8_to_wchar(full_error.buf) };
+        ReportEventW(
+            event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
+           /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
+        );
+        free(strings[0]);
+
+        if (jl_options.alert_on_critical_error) {
+            ios_putc('\0', &summary);
+            const wchar_t *message = ios_utf8_to_wchar(summary.buf);
+            MessageBoxW(NULL, message, /* title */ L"fatal error in libjulia",
+                        MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
+            free(message);
+        }
+    }
+
+    ios_close(&summary);
+    ios_close(&full_error);
     static int recursion = 0;
     if (recursion++)
         exit(1);
