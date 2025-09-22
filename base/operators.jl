@@ -1141,7 +1141,15 @@ julia> w[]
 Float32
 ```
 
-Used for [`Returns`](@ref) and for [`Base.Fix`](@ref).
+Used for:
+
+* [`Base.Fix`](@ref)
+
+* [`ComposedFunction`](@ref)
+
+* [`Returns`](@ref)
+
+* [`splat`](@ref)
 
 !!! compat "Julia 1.13"
     `Base.TypeWrapper` requires at least Julia 1.13.
