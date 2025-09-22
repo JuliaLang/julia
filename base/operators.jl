@@ -1261,8 +1261,8 @@ end
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
 
-function Base.getproperty(returns::Union{ComposedFunction,Fix,Returns}, name::Symbol)
-    _maybe_unwrap_type(getfield(returns, name))
+function Base.getproperty(x::Union{ComposedFunction,Fix,Returns}, name::Symbol)
+    _maybe_unwrap_type(getfield(x, name))
 end
 
 """
