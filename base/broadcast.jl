@@ -202,6 +202,15 @@ struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <
     end
 end
 
+function Base.getproperty(x::Broadcasted, name::Symbol)
+    field_value = getfield(x, name)
+    if name === :f
+        _maybe_unwrap_type(field_value)
+    else
+        field_value
+    end
+end
+
 struct AndAnd end
 const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
