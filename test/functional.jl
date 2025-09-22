@@ -246,7 +246,7 @@ end
         type === t
     end
     @test let type = Float32
-        local w::BaseTypeWrapper{type}
+        local w::Base.TypeWrapper{type}
         w = type
         w === Base.TypeWrapper{type}()
     end
