@@ -195,7 +195,7 @@ end
 function Base.getproperty(x::Broadcasted, name::Symbol)
     field_value = getfield(x, name)
     if name === :f
-        _maybe_unwrap_type(field_value)
+        Base._maybe_unwrap_type(field_value)
     else
         field_value
     end
