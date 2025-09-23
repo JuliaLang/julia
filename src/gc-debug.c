@@ -276,8 +276,8 @@ void gc_verify(jl_ptls_t ptls)
     }
     restore();
     gc_verify_track(ptls);
-    jl_gc_debug_print_status();
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_status(ios_safe_stderr);
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 #endif
@@ -465,21 +465,21 @@ int jl_gc_debug_check_other(void)
     return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
-    jl_safe_printf("Allocations: %" PRIu64 " "
+    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
-void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
 {
-    jl_gc_debug_print_status();
+    jl_gc_debug_fprint_status(s);
     if (!jl_gc_debug_env.wait_for_debugger)
         return;
-    jl_safe_printf("Waiting for debugger to attach\n");
+    jl_safe_fprintf(s, "Waiting for debugger to attach\n");
     while (1) {
         sleep(1000);
     }
@@ -489,7 +489,7 @@ void jl_gc_debug_print(void)
 {
     if (!gc_debug_alloc_check(&jl_gc_debug_env.print))
         return;
-    jl_gc_debug_print_status();
+    jl_gc_debug_fprint_status(ios_safe_stderr);
 }
 
 // a list of tasks for conservative stack scan during gc_scrub
@@ -562,18 +562,18 @@ void gc_scrub(void)
     jl_gc_debug_tasks.len = 0;
 }
 #else
-void jl_gc_debug_critical_error(void)
+void jl_gc_debug_fprint_critical_error(ios_t *s)
 {
 }
 
-void jl_gc_debug_print_status(void)
+void jl_gc_debug_fprint_status(ios_t *s)
 {
     // May not be accurate but should be helpful enough
     uint64_t pool_count = gc_num.poolalloc;
     uint64_t big_count = gc_num.bigalloc;
-    jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, gc_num.pause);
+    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
+                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
+                    pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
 #endif
 

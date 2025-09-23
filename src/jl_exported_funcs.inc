@@ -330,6 +330,8 @@
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
+    XX(jl_new_opaque_closure_from_code_info) \
+    XX(jl_new_opaque_closure_from_code_info_in_world) \
     XX(jl_new_primitivetype) \
     XX(jl_new_struct) \
     XX(jl_new_structt) \
@@ -419,6 +421,7 @@
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
     XX(jl_static_show) \
+    XX(jl_safe_static_show) \
     XX(jl_static_show_func_sig) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \

@@ -2195,11 +2195,7 @@ enum JL_RTLD_CONSTANT {
      /* MacOS X 10.5+: */
      JL_RTLD_FIRST=128U
 };
-#ifdef _OS_DARWIN_
-#define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND | JL_RTLD_FIRST)
-#else
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
-#endif
 
 typedef void *jl_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
 JL_DLLEXPORT jl_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
@@ -2474,6 +2470,8 @@ JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list a
     _JL_FORMAT_ATTR(2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(1, 2);
+JL_DLLEXPORT void jl_safe_fprintf(ios_t *s, const char *str, ...) JL_NOTSAFEPOINT
+    _JL_FORMAT_ATTR(2, 3);
 
 extern JL_DLLEXPORT JL_STREAM *JL_STDIN;
 extern JL_DLLEXPORT JL_STREAM *JL_STDOUT;
@@ -2488,8 +2486,10 @@ JL_DLLEXPORT int jl_termios_size(void);
 JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_fprint_backtrace(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;

@@ -162,6 +162,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         -1, // timeout_for_safepoint_straggler_s
                         0, // gc_sweep_always_full
                         0, // compress_sysimage
+                        0, // alert_on_critical_error
     };
     jl_options_initialized = 1;
 }

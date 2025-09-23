@@ -3458,8 +3458,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     return;
 }
 
-JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
-
 // Takes in a path of the form "usr/lib/julia/sys.so"
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 {
@@ -3993,7 +3991,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     // and we overwrite the name field (field 0) now so preserve it too
                     if (dt->instance) {
                         if (dt->instance == jl_nothing)
-                            dt->instance = jl_gc_permobj(0, newdt, 0);
+                            dt->instance = jl_gc_permobj(ct->ptls, 0, newdt, 0);
                         newdt->instance = dt->instance;
                     }
                     static_assert(offsetof(jl_datatype_t, name) == 0, "");
