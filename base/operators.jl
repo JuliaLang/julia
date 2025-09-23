@@ -1253,14 +1253,22 @@ struct Fix{N,F,T} <: Function
             throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
         end
         f = _maybe_wrap_type(f)
-        x = _maybe_wrap_type(x)
-        new{N,typeof(f),typeof(x)}(f, x)
+        new{N,typeof(f),_stable_typeof(x)}(f, x)
     end
 end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
     return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
+end
+
+function Base.getproperty(x::Fix, name::Symbol)
+    field_value = getfield(x, name)
+    if name === :f
+        _maybe_unwrap_type(field_value)
+    else
+        field_value
+    end
 end
 
 # Special cases for improved constant propagation
@@ -1418,7 +1426,7 @@ end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
-function Base.getproperty(x::Union{ComposedFunction,Fix,Splat}, name::Symbol)
+function Base.getproperty(x::Union{ComposedFunction,Splat}, name::Symbol)
     _maybe_unwrap_type(getfield(x, name))
 end
 

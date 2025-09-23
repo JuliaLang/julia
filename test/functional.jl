@@ -258,11 +258,11 @@ end
         @test (iszero ∘ sizeof ∘ splat)(x)
         @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(x, ())
         @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(nothing, x, ())
+        for n in [1, 2, 3, 999]
+            @test (iszero ∘ sizeof ∘ Base.Fix{n})(x, nothing)
+        end
         for y in args
             @test (iszero ∘ sizeof ∘ (∘))(x, y)
-            for n in [1, 2, 3, 999]
-                @test (iszero ∘ sizeof ∘ Base.Fix{n})(x, y)
-            end
         end
     end
 end
