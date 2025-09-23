@@ -1120,7 +1120,7 @@ call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
 `Base.TypeWrapper{parameter}()` is a sentinel value that represents `parameter`. A
 motivation for using it, instead of using `parameter` directly, is the following
 property: for any `x` such that `x isa Base.TypeWrapper`, we have
-`Base.isingletontype(typeof(x))`.
+`Base.issingletontype(typeof(x))`.
 
 A `getindex` call, without providing any indices, returns the type parameter:
 
@@ -1143,7 +1143,7 @@ Used for:
 !!! compat "Julia 1.13"
     `Base.TypeWrapper` requires at least Julia 1.13.
 
-See also: [`Base.isingletontype`](@ref).
+See also: [`Base.issingletontype`](@ref).
 """
 struct TypeWrapper{T} end
 getindex(::TypeWrapper{T}) where {T} = T
