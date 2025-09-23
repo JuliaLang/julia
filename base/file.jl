@@ -255,7 +255,7 @@ end
 
 # Files that were requested to be deleted but can't be by the current process
 # i.e. loaded DLLs on Windows
-delayed_delete_dir() = joinpath(tempdir(), "julia_delayed_deletes")
+delayed_delete_list() = joinpath(tempdir(), "julia_delayed_deletes.txt")
 
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
@@ -278,8 +278,7 @@ Stacktrace:
 [...]
 ```
 """
-function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allow_delayed_delete::Bool=true)
-    # allow_delayed_delete is used by Pkg.gc() but is otherwise not part of the public API
+function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
         try
             unlink(path)
@@ -287,14 +286,16 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
             if isa(err, IOError)
                 force && err.code==Base.UV_ENOENT && return
                 @static if Sys.iswindows()
-                    if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
+                    if err.code==Base.UV_EACCES && endswith(path, ".dll")
                         # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
-                        # but they can be moved. So move out to allow the dir to be deleted.
-                        # Pkg.gc() cleans up this dir when possible
-                        dir = mkpath(delayed_delete_dir())
-                        temp_path = tempname(dir, cleanup = false, suffix = string("_", basename(path)))
-                        @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
-                        mv(path, temp_path)
+                        # but they can be renamed. Do so temporarily, until later cleanup by Pkg.gc()
+                        temp_path = tempname(dirname(path), cleanup = false, suffix = string("_", basename(path)))
+                        # ensure that temp_path is on the same drive as path to avoid issue #59589
+                        @debug "Could not delete DLL most likely because it is loaded, moving to a temporary path" path temp_path
+                        Base.open(delayed_delete_list(), "a") do io
+                            println(io, temp_path) # record the temporary path for Pkg.gc()
+                        end
+                        rename(path, temp_path) # do not call mv which could recursively call rm(path)
                         return
                     end
                 end
