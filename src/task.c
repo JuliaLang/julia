@@ -753,7 +753,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
             event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
            /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
         );
-        free(strings[0]);
+        free((void *)strings[0]);
 
         if (jl_options.alert_on_critical_error) {
             MessageBoxW(NULL, /* message */ L"fatal: error thrown and no exception handler available\n\n"
