@@ -3364,7 +3364,7 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
     });
 }
 
-static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2);
+static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2);
 
 static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
@@ -3415,7 +3415,7 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
     return phi;
 }
 
-static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2)
+static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
     ++EmittedBitsCompares;
     jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
@@ -3428,16 +3428,16 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
 
     if (at->isIntegerTy() || at->isPointerTy() || at->isFloatingPointTy()) {
         Type *at_int = INTT(at, ctx.emission_context.DL);
-        Value *varg1 = emit_unbox(ctx, at_int, arg1, argty);
-        Value *varg2 = emit_unbox(ctx, at_int, arg2, argty);
+        Value *varg1 = emit_unbox(ctx, at_int, arg1);
+        Value *varg2 = emit_unbox(ctx, at_int, arg2);
         return ctx.builder.CreateICmpEQ(varg1, varg2);
     }
 
     if (at->isVectorTy()) {
         jl_svec_t *types = ((jl_datatype_t*)argty)->types;
         Value *answer = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
-        Value *varg1 = emit_unbox(ctx, at, arg1, argty);
-        Value *varg2 = emit_unbox(ctx, at, arg2, argty);
+        Value *varg1 = emit_unbox(ctx, at, arg1);
+        Value *varg2 = emit_unbox(ctx, at, arg2);
         for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
             jl_value_t *fldty = jl_svecref(types, i);
             Value *subAns, *fld1, *fld2;
@@ -4518,7 +4518,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         jl_cgval_t va_ary( // fake instantiation of a cgval, in order to call emit_bounds_check (it only checks the `.V` field)
                                 emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*)),
                                 NULL, NULL);
-                        Value *idx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                        Value *idx = emit_unbox(ctx, ctx.types().T_size, fld);
                         idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen, boundscheck);
                         idx = ctx.builder.CreateAdd(idx, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                         Instruction *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, idx), Align(sizeof(void*)));
@@ -4546,13 +4546,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     }
                     else {
                         // unknown index
-                        Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                        Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld);
                         if (emit_getfield_unknownidx(ctx, ret, obj, vidx, utt, boundscheck, order)) {
                             return true;
                         }
                     }
                 }
-                Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld);
                 if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(utt->parameters, true)) {
                     // For tuples, we can emit code even if we don't know the exact
                     // type (e.g. because we don't know the length). This is possible
@@ -4722,7 +4722,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *tyv = boxed(ctx, typ);
                 Value *types_svec = emit_datatype_types(ctx, tyv);
                 Value *types_len = emit_datatype_nfields(ctx, tyv);
-                Value *idx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                Value *idx = emit_unbox(ctx, ctx.types().T_size, fld);
                 jl_value_t *boundscheck = (nargs == 3 ? argv[3].constant : jl_true);
                 if (nargs == 3)
                     emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "fieldtype");
@@ -4863,7 +4863,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 isdefined_unknown_idx:
             if (nargs == 3 || fld.typ != (jl_value_t*)jl_long_type)
                 return false;
-            Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+            Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld);
             vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(ctx.types().T_size, 1));
             Value *isd = ctx.builder.CreateCall(prepare_call(jlfieldisdefinedchecked_func), { boxed(ctx, obj), vidx });
             isd = ctx.builder.CreateTrunc(isd, getInt8Ty(ctx.builder.getContext()));
@@ -5113,7 +5113,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                 }
             }
             else {
-                Value *val = emit_unbox(ctx, et, arg, jt);
+                Value *val = emit_unbox(ctx, et, arg);
                 if (!val) {
                     // There was a type mismatch of some sort - exit early
                     emit_error(ctx, "(INTERNAL ERROR - IR Validity): Argument type mismatch in Expr(:invoke)");
@@ -5470,7 +5470,7 @@ static jl_cgval_t emit_specsig_oc_call(jl_codectx_t &ctx, jl_value_t *oc_type, j
     // Load specptr
     jl_cgval_t &theArg = argv[0];
     jl_cgval_t closure_specptr = emit_getfield_knownidx(ctx, theArg, 4, (jl_datatype_t*)oc_type, jl_memory_order_notatomic);
-    Value *specptr = emit_unbox(ctx, ctx.types().T_size, closure_specptr, (jl_value_t*)jl_long_type);
+    Value *specptr = emit_unbox(ctx, ctx.types().T_size, update_julia_type(ctx, closure_specptr, (jl_value_t*)jl_voidpointer_type));
     specptr = emit_inttoptr(ctx, specptr, ctx.types().T_ptr);
     JL_GC_PUSH1(&sigtype);
     jl_cgval_t r = emit_call_specfun_other(ctx, true, sigtype, oc_rett, specptr, "", NULL, argv, nargs,
@@ -6120,7 +6120,7 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const T
         emit_typecheck(ctx, condV, (jl_value_t*)jl_bool_type, msg);
     }
     if (isbool) {
-        Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), condV, (jl_value_t*)jl_bool_type);
+        Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), update_julia_type(ctx, condV, (jl_value_t*)jl_bool_type));
         return ctx.builder.CreateNot(cond);
     }
     if (condV.isboxed) {
@@ -6411,7 +6411,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_throw_undef_if_not_sym) {
         assert(nargs == 2);
         jl_sym_t *var = (jl_sym_t*)args[0];
-        Value *cond = ctx.builder.CreateTrunc(emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type), getInt1Ty(ctx.builder.getContext()));
+        Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), update_julia_type(ctx, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type));
         if (var == jl_getfield_undefref_sym) {
             raise_exception_unless(ctx, cond,
                 literal_pointer_val(ctx, jl_undefref_exception));
@@ -6870,7 +6870,7 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
     jl_cgval_t ret = emit_invoke(ctx, modifyop, argv, 3, (jl_value_t*)jl_any_type, true);
     emit_typecheck(ctx, ret, jltype, fname);
     ret = update_julia_type(ctx, ret, jltype);
-    ctx.builder.CreateRet(emit_unbox(ctx, elty, ret, jltype));
+    ctx.builder.CreateRet(emit_unbox(ctx, elty, ret));
     if (ctx.topalloca->use_empty()) {
       ctx.topalloca->eraseFromParent();
       ctx.topalloca = nullptr;
@@ -7033,7 +7033,7 @@ static void emit_specsig_to_specsig(
             ctx.builder.CreateRetVoid();
         }
         else {
-            ctx.builder.CreateRet(emit_unbox(ctx, gfrt, gf_retval, rettype));
+            ctx.builder.CreateRet(emit_unbox(ctx, gfrt, gf_retval));
         }
         break;
     }
@@ -7580,7 +7580,7 @@ static Function *gen_cfun_wrapper(
     else if (!type_is_ghost(sig.lrt)) {
         Type *prt = sig.prt;
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
-        Value *v = emit_unbox(ctx, sig.lrt, retval, retval.typ);
+        Value *v = emit_unbox(ctx, sig.lrt, retval);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
         if (sig.sret) {
             ctx.builder.CreateStore(r, sretPtr);
@@ -9312,7 +9312,7 @@ static jl_llvm_functions_t
                 if (type_is_ghost(retty))
                     retval = NULL;
                 else
-                    retval = emit_unbox(ctx, retty, retvalinfo, jlrettype);
+                    retval = emit_unbox(ctx, retty, retvalinfo);
                 break;
             case jl_returninfo_t::SRet:
                 retval = NULL;
@@ -9604,7 +9604,7 @@ static jl_llvm_functions_t
                         // load of val) if the runtime type of val isn't phiType
                         Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                         V = emit_guarded_test(ctx, isvalid, undef_value_for_type(VN->getType()), [&] {
-                            return emit_unbox(ctx, VN->getType(), val, phiType);
+                            return emit_unbox(ctx, VN->getType(), update_julia_type(ctx, val, phiType));
                         });
                     }
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());

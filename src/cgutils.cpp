@@ -300,7 +300,7 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     return Call;
 }
 
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt);
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x);
 static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, MaybeAlign align_src, Align align_dst, bool isVolatile=false);
 
 static bool type_is_permalloc(jl_value_t *typ)
@@ -378,7 +378,7 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
     else if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
         jl_value_t *jltype = x.typ;
         Type *T = julia_type_to_llvm(ctx, jltype);
-        Value *agg = emit_unbox(ctx, T, x, jltype);
+        Value *agg = emit_unbox(ctx, T, x);
         SmallVector<unsigned,4> perm_offsets;
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
         return ExtractTrackedValues(agg, agg->getType(), false, ctx.builder, perm_offsets);
@@ -2380,7 +2380,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             r = ctx.builder.CreateLoad(realelty, intcast);
         }
         else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
-            r = emit_unbox(ctx, realelty, rhs, jltype);
+            r = emit_unbox(ctx, realelty, rhs);
         }
         if (realelty != elty)
             r = ctx.builder.CreateZExt(r, elty);
@@ -2451,7 +2451,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             // if this value can be loaded from memory, do that now so that it is sequenced before the atomicmodify
             // and the IR is less dependent on what was emitted before now to create this rhs.
             // Inlining should do okay to clean this up later if there are parts we don't need.
-            rhs = jl_cgval_t(emit_unbox(ctx, julia_type_to_llvm(ctx, rhs.typ), rhs, rhs.typ), rhs.typ, NULL);
+            rhs = jl_cgval_t(emit_unbox(ctx, julia_type_to_llvm(ctx, rhs.typ), rhs), rhs.typ, NULL);
         }
         bool gcstack_arg = JL_FEAT_TEST(ctx,gcstack_arg);
         Function *op = emit_modifyhelper(ctx, cmpop, *modifyop, jltype, elty, rhs, fname, gcstack_arg);
@@ -2522,7 +2522,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     Compare = ctx.builder.CreateLoad(realelty, intcast);
                 }
                 else {
-                    Compare = emit_unbox(ctx, realelty, cmpop, jltype);
+                    Compare = emit_unbox(ctx, realelty, cmpop);
                 }
                 if (realelty != elty)
                     Compare = ctx.builder.CreateZExt(Compare, elty);
@@ -2595,7 +2595,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     ctx.builder.CreateStore(realCompare, intcast);
             }
             else if (Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
-                r = emit_unbox(ctx, realelty, rhs, jltype);
+                r = emit_unbox(ctx, realelty, rhs);
             }
             if (realelty != elty)
                 r = ctx.builder.CreateZExt(r, elty);
@@ -2724,7 +2724,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             else if (!isboxed && intcast_eltyp) {
                 assert(issetfield);
                 // issetfield doesn't use intcast, so need to reload rhs with the correct type
-                r = emit_unbox(ctx, intcast_eltyp, rhs, jltype);
+                r = emit_unbox(ctx, intcast_eltyp, rhs);
             }
             if (!isboxed)
                 emit_write_multibarrier(ctx, parent, r, rhs.typ);
@@ -3530,7 +3530,7 @@ static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction<TypeFn_t> *intr, 
 static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v)
 {
     assert(!v.isboxed);
-    return emit_unbox(ctx, to, v, v.typ);
+    return emit_unbox(ctx, to, v);
 }
 
 static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
@@ -4383,7 +4383,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         cast<Instruction>(fval_info.V)->eraseFromParent();
                     }
                     else if (init_as_value) {
-                        fval = emit_unbox(ctx, fty, fval_info, jtype);
+                        fval = emit_unbox(ctx, fty, fval_info);
                     }
                     else {
                         split_value_into(ctx, fval_info, align_src, dest, align_dst, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), false, roots);
@@ -4633,7 +4633,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     emptymemBB = BasicBlock::Create(ctx.builder.getContext(), "emptymem");
     nonemptymemBB = BasicBlock::Create(ctx.builder.getContext(), "nonemptymem");
     retvalBB = BasicBlock::Create(ctx.builder.getContext(), "retval");
-    auto nel_unboxed = emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_long_type);
+    auto nel_unboxed = emit_unbox(ctx, ctx.types().T_size, nel);
     Value *memorynew_empty = ctx.builder.CreateICmpEQ(nel_unboxed, ConstantInt::get(T_size, 0));
     setName(ctx.emission_context, memorynew_empty, "memorynew_empty");
     ctx.builder.CreateCondBr(memorynew_empty, emptymemBB, nonemptymemBB);
@@ -4720,7 +4720,11 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
     bool isunion = layout->flags.arrayelem_isunion;
     bool isghost = layout->size == 0;
     Value *boxmem = boxed(ctx, mem);
-    Value *i = emit_unbox(ctx, ctx.types().T_size, idx, (jl_value_t*)jl_long_type);
+    emit_typecheck(ctx, idx, (jl_value_t*)jl_long_type, "memoryrefnew");
+    idx = update_julia_type(ctx, idx, (jl_value_t*)jl_long_type);
+    if (idx.typ == jl_bottom_type)
+        return jl_cgval_t();
+    Value *i = emit_unbox(ctx, ctx.types().T_size, idx);
     Value *idx0 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
     bool bc = bounds_check_enabled(ctx, inbounds);
     if (bc) {
@@ -4794,7 +4798,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
     maybeSetName(ctx.emission_context, data, "memoryref_data");
     Value *mem = CreateSimplifiedExtractValue(ctx, V, 1);
     maybeSetName(ctx.emission_context, mem, "memoryref_mem");
-    Value *i = emit_unbox(ctx, ctx.types().T_size, idx, (jl_value_t*)jl_long_type);
+    Value *i = emit_unbox(ctx, ctx.types().T_size, idx);
     Value *offset = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
     setName(ctx.emission_context, offset, "memoryref_offset");
     Value *elsz = emit_genericmemoryelsize(ctx, mem, ref.typ, false);
