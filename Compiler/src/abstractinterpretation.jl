@@ -3691,7 +3691,7 @@ end
 
 function scan_specified_partitions(query::F1, walk_binding_partition::F2,
     interp::Union{AbstractInterpreter,Nothing}, g::GlobalRef, wwr::WorldWithRange) where {F1,F2}
-    local total_validity, rte, binding_partition
+    local total_validity, rte, binding_partition, kind
     binding = convert(Core.Binding, g)
     lookup_world = max_world(wwr.valid_worlds)
     while true
@@ -3704,18 +3704,19 @@ function scan_specified_partitions(query::F1, walk_binding_partition::F2,
             @assert lookup_world in partition_validity
             this_rte = query(interp, leaf_binding, leaf_partition)
             if @isdefined(rte)
-                if min_world(total_validity) <= wwr.this
-                    @goto out
-                end
-                if this_rte === rte
+                if this_rte === rte && !(is_some_guard(kind) ⊻ is_some_guard(binding_kind(leaf_partition))) # Don't merge from no guard to guard
                     total_validity = union(total_validity, partition_validity)
                     lookup_world = min_world(total_validity) - 1
                     continue
+                end
+                if min_world(total_validity) <= wwr.this
+                    @goto out
                 end
             end
             total_validity = partition_validity
             lookup_world = min_world(total_validity) - 1
             rte = this_rte
+            kind = binding_kind(leaf_partition)
         end
         min_world(total_validity) > min_world(wwr.valid_worlds) || break
     end
