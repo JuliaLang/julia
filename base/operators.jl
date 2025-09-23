@@ -979,6 +979,9 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 """
 |>(x, f) = f(x)
 
+_stable_typeof(x) = typeof(x)
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+
 _type_is_complete(::Type{T}) where {T} = @isdefined(T) ? true : false
 _is_complete_type(x) = (x isa Type) && _type_is_complete(x)
 
@@ -1008,10 +1011,7 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    function Returns(value)
-        value = _maybe_wrap_type(value)
-        new{typeof(value)}(value)
-    end
+    Returns(value) = new{_stable_typeof(value)}(value)
 end
 
 (obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
@@ -1137,8 +1137,6 @@ Used for:
 * [`Base.Fix`](@ref)
 
 * [`ComposedFunction`](@ref)
-
-* [`Returns`](@ref)
 
 * [`splat`](@ref)
 
@@ -1420,7 +1418,7 @@ end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
-function Base.getproperty(x::Union{ComposedFunction,Fix,Returns,Splat}, name::Symbol)
+function Base.getproperty(x::Union{ComposedFunction,Fix,Splat}, name::Symbol)
     _maybe_unwrap_type(getfield(x, name))
 end
 

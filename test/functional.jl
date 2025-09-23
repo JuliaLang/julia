@@ -255,7 +255,6 @@ end
 @testset "`sizeof` tests for `Fix`, `ComposedFunction`, `Returns`; issue #59619" begin
     local args = (nothing, sin, Float32)
     for x in args
-        @test (iszero ∘ sizeof ∘ Returns)(x)
         @test (iszero ∘ sizeof ∘ splat)(x)
         @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(x, ())
         @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(nothing, x, ())
