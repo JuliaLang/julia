@@ -252,7 +252,7 @@ end
     end
 end
 
-@testset "`sizeof` tests for `Fix`, `ComposedFunction`, `Returns`; issue #59619" begin
+@testset "`sizeof` tests for `Fix`, `ComposedFunction`, `Splat`, `Broadcasted`; issue #59619" begin
     local args = (nothing, sin, Float32)
     for x in args
         @test (iszero ∘ sizeof ∘ splat)(x)
