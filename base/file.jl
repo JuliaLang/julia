@@ -293,7 +293,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                         # ensure that temp_path is on the same drive as path to avoid issue #59589
                         @debug "Could not delete DLL most likely because it is loaded, moving to a temporary path" path temp_path
                         Base.open(delayed_delete_list(), "a") do io
-                            println(io, temp_path) # record the temporary path for Pkg.gc()
+                            println(io, abspath(temp_path)) # record the temporary path for Pkg.gc()
                         end
                         rename(path, temp_path) # do not call mv which could recursively call rm(path)
                         return
