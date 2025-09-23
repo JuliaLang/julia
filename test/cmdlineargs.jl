@@ -84,9 +84,7 @@ if Sys.isunix()
             const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
             ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
             write(stdout, "r")
-            while true
-                sleep(1)
-            end
+            wait()
         """
         exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         errp = PipeBuffer()
