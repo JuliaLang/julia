@@ -200,6 +200,8 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{RegionA
     end
 end
 
+function printstyled end
+
 # NOTE: This is an interim solution to the invalidations caused
 # by the split styled display implementation. This should be
 # replaced by a more robust solution (such as a consolidation of
