@@ -470,8 +470,8 @@ void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
     jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-                   pool_count + other_count, pool_count, other_count, gc_num.pause);
+                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
+                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
 void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
