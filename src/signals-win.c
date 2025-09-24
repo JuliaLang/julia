@@ -115,7 +115,7 @@ void __cdecl crt_sig_handler(int sig, int num)
                 event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
                /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
             );
-            free(strings[0]);
+            free((void *)strings[0]);
 
             if (jl_options.alert_on_critical_error) {
                 MessageBoxW(NULL, /* message */ L"error: libjulia received a fatal signal.\n\n"
@@ -379,14 +379,14 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
            /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
         );
-        free(strings[0]);
+        free((void *)strings[0]);
 
         if (jl_options.alert_on_critical_error) {
             ios_putc('\0', &summary);
             const wchar_t *message = ios_utf8_to_wchar(summary.buf);
             MessageBoxW(NULL, message, /* title */ L"fatal error in libjulia",
                         MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
-            free(message);
+            free((void *)message);
         }
     }
 
