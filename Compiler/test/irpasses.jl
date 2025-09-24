@@ -2045,3 +2045,17 @@ let src = code_typed1(()) do
     end
     @test count(iscall((src, setfield!)), src.code) == 1
 end
+
+# JuliaLang/julia #59548
+# Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
+# the codegen ABI
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, xs...)
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, 1, xs...) # convert tuples represented by `PartialStruct`
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
