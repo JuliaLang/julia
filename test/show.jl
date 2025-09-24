@@ -878,7 +878,7 @@ else
 end
 
 @testset "method show: method url return type inference" begin
-    @test (isconcretetype ∘ Base.infer_return_type)(Base.url)
+    @test isconcretetype(Base.infer_return_type(Base.url))
 end
 
 # Method location correction (Revise integration)
