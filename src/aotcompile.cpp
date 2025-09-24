@@ -1957,9 +1957,8 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
                 // or it may skip emitting debug info for that file. Here set it to ./julia#N
                 DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                auto &MD = VMap.MD();
-                if (M.getNamedMetadata("llvm.dbg.cu"))
-                    for (auto cu: M.getNamedMetadata("llvm.dbg.cu")->operands()) {
+                if (M->getNamedMetadata("llvm.dbg.cu"))
+                    for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
                         CU->replaceOperandWith(0, topfile);
                 timers[i].construct.stopTimer();
 
