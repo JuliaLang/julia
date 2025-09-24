@@ -3653,29 +3653,31 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
         if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
             goto invalidated;
     }
-    if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
-        return 1;
-    jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
-    if (no_replacement)
-        goto add_backedge;
-    jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
-    if (!latest_imported_bpart)
-        return 1;
-    if (jl_atomic_load_relaxed(&latest_imported_bpart->min_world) <=
-        jl_atomic_load_relaxed(&bpart->min_world)) {
-add_backedge:
-        // Imported binding is still valid
-        if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
-                external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
-            jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+    {
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
+            return 1;
+        jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
+        jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
+        if (no_replacement)
+            goto add_backedge;
+        if (!latest_imported_bpart)
+            return 1;
+        if (jl_atomic_load_relaxed(&latest_imported_bpart->min_world) <=
+            jl_atomic_load_relaxed(&bpart->min_world)) {
+    add_backedge:
+            // Imported binding is still valid
+            if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
+                    external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
+                jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+            }
+            return 1;
         }
-        return 1;
-    }
-    else {
-        // Binding partition was invalidated
-        assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
-        jl_atomic_store_relaxed(&bpart->min_world,
-            jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+        else {
+            // Binding partition was invalidated
+            assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
+            jl_atomic_store_relaxed(&bpart->min_world,
+                jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+        }
     }
 invalidated:
     // We need to go through and re-validate any bindings in the same image that
