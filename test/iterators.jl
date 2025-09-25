@@ -1053,6 +1053,7 @@ end
 @testset "cycle IteratorSize (#53169)" begin
     @test Base.IteratorSize(Iterators.cycle(1:3)) == Base.SizeUnknown()
     @test Base.IteratorSize(Iterators.cycle(1:0)) == Base.SizeUnknown()
+    @test Base.IteratorSize(Iterators.cycle(7)) == Base.IsInfinite()
     @test collect(Iterators.cycle(1:0))::Vector{Int} == Int[]
     @test Base.IteratorSize(Iterators.cycle(Iterators.Repeated(6))) == Base.IsInfinite()
 
