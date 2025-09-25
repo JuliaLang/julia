@@ -83,12 +83,6 @@ This means that most iterators are assumed to implement [`length`](@ref).
 This trait is generally used to select between algorithms that pre-allocate space for their
 result, and algorithms that resize their result incrementally.
 
-Most iterators' `IteratorSize` category can be determined from their type. In this case
-the generic `IteratorSize(iterator) = IteratorSize(typeof(iterator))` fallback applies.
-However, some iterators (e.g. [`Iterators.cycle`](@ref)) have a size category that can only
-be determined at runtime. In this case the `IteratorSize(itr)` method will not be type
-stable and the `IteratorSize(::Type)` method will return `SizeUnknown`.
-
 ```jldoctest
 julia> Base.IteratorSize(1:5)
 Base.HasShape{1}()
