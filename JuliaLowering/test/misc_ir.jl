@@ -183,38 +183,18 @@ LoweringError:
 #       └─┘ ── Invalid named tuple element
 
 ########################################
-# Module lowering
-module Mod
-    body
-    stmts
-end
-#---------------------
-1   (call JuliaLowering.eval_module TestMod "Mod" true false (inert (toplevel body stmts)))
-2   (return %₁)
-
-########################################
-# Bare module lowering
-baremodule BareMod
-    body
-    stmts
-end
-#---------------------
-1   (call JuliaLowering.eval_module TestMod "BareMod" false false (inert (toplevel body stmts)))
-2   (return %₁)
-
-########################################
-# Error: Modules not allowed in local scope
-let
+# Error: Modules not allowed inside blocks
+begin
     module C
     end
 end
 #---------------------
 LoweringError:
-let
+begin
 #   ┌───────
     module C
     end
-#─────┘ ── module is only allowed in global scope
+#─────┘ ── `module` is only allowed at top level
 end
 
 ########################################
@@ -229,7 +209,7 @@ function f()
 #   ┌───────
     module C
     end
-#─────┘ ── module is only allowed in global scope
+#─────┘ ── `module` is only allowed at top level
 end
 
 ########################################

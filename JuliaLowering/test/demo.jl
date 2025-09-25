@@ -74,7 +74,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Module containing macros used in the demo.
-define_macros = true
+define_macros = false
 if !define_macros
     eval(:(module M end))
 else
@@ -893,7 +893,7 @@ ex = parsestmt(SyntaxTree, src, filename="foo.jl")
  ctx3, ex_scoped,
  ctx4, ex_converted,
  ctx5, ex_compiled,
- ex_expr, eval_result) = debug_lower(M, ex; verbose=true)
+ ex_expr, eval_result) = debug_lower(M, ex; verbose=true, do_eval=true)
 
 # Automatic test reduction
 # bad = reduce_any_failing_toplevel(JuliaLowering, joinpath(@__DIR__, "../src/desugaring.jl"))
