@@ -29,6 +29,16 @@ function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode
     MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode, world)
 end
 
+function push_layer!(ctx::MacroExpansionContext, mod::Module, is_macro_expansion::Bool)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod,
+                           current_layer_id(ctx), is_macro_expansion)
+    push!(ctx.scope_layers, new_layer)
+    push!(ctx.scope_layer_stack, new_layer.id)
+end
+function pop_layer!(ctx::MacroExpansionContext)
+    pop!(ctx.scope_layer_stack)
+end
+
 current_layer(ctx::MacroExpansionContext) = ctx.scope_layers[last(ctx.scope_layer_stack)]
 current_layer_id(ctx::MacroExpansionContext) = last(ctx.scope_layer_stack)
 
@@ -342,10 +352,9 @@ function expand_macro(ctx, ex)
         expanded = fix_toplevel_expansion(ctx, expanded, mod_for_ast, macro_loc)
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
                                current_layer_id(ctx), true)
-        push!(ctx.scope_layers, new_layer)
-        push!(ctx.scope_layer_stack, new_layer.id)
+        push_layer!(ctx, mod_for_ast, true)
         expanded = expand_forms_1(ctx, expanded)
-        pop!(ctx.scope_layer_stack)
+        pop_layer!(ctx)
     end
     return expanded
 end
@@ -520,23 +529,28 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     end
 end
 
+function ensure_macro_attributes(graph)
+    ensure_attributes(graph,
+                      var_id=IdTag,
+                      scope_layer=LayerId,
+                      __macro_ctx__=Nothing,
+                      meta=CompileHints)
+end
+
 @fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     if kind(ex) == K"local"
         # This error assumes we're expanding the body of a top level thunk but
         # we might want to make that more explicit in the pass system.
         throw(LoweringError(ex, "local declarations have no effect outside a scope"))
     end
-    graph = ensure_attributes(syntax_graph(ex),
-                              var_id=IdTag,
-                              scope_layer=LayerId,
-                              __macro_ctx__=Nothing,
-                              meta=CompileHints)
+    graph = ensure_macro_attributes(syntax_graph(ex))
     ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
     ex2 = expand_forms_1(ctx, reparent(ctx, ex))
     graph2 = delete_attributes(graph, :__macro_ctx__)
     # TODO: Returning the context with pass-specific mutable data is a bad way
     # to carry state into the next pass. We might fix this by attaching such
     # data to the graph itself as global attributes?
-    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, LayerId[], expr_compat_mode, macro_world)
+    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, ctx.scope_layer_stack,
+                                 expr_compat_mode, macro_world)
     return ctx2, reparent(ctx2, ex2)
 end
