@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(GCInvariantVerifier)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(GCInvariantVerifier)' -S %s | FileCheck %s
 
 ; CHECK-LABEL: @vectorized_addrspacecast
 define ptr addrspace(10) @vectorized_addrspacecast() {

@@ -37,7 +37,7 @@ function treewalk(f, tree::GitTree, post::Bool = false)
         end, Cint, (Cstring, Ptr{Cvoid}, Ref{Vector{Any}}))
     err = ccall((:git_tree_walk, libgit2), Cint,
                 (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Any),
-                tree.ptr, post, cbf, payload)
+                tree, post, cbf, payload)
     if err < 0
         err_class, _ = Error.last_error()
         if err_class != Error.Callback
@@ -58,19 +58,21 @@ Return the filename of the object on disk to which `te` refers.
 """
 function filename(te::GitTreeEntry)
     ensure_initialized()
-    str = ccall((:git_tree_entry_name, libgit2), Cstring, (Ptr{Cvoid},), te.ptr)
-    str != C_NULL && return unsafe_string(str)
+    GC.@preserve te begin
+        str = ccall((:git_tree_entry_name, libgit2), Cstring, (Ptr{Cvoid},), te.ptr)
+        str != C_NULL && return unsafe_string(str)
+    end
     return nothing
 end
 
 """
-    filemode(te::GitTreeEntry) -> Cint
+    filemode(te::GitTreeEntry)::Cint
 
 Return the UNIX filemode of the object on disk to which `te` refers as an integer.
 """
 function filemode(te::GitTreeEntry)
     ensure_initialized()
-    return ccall((:git_tree_entry_filemode, libgit2), Cint, (Ptr{Cvoid},), te.ptr)
+    return ccall((:git_tree_entry_filemode, libgit2), Cint, (Ptr{Cvoid},), te)
 end
 
 """
@@ -81,7 +83,7 @@ one of the types which [`objtype`](@ref) returns, e.g. a `GitTree` or `GitBlob`.
 """
 function entrytype(te::GitTreeEntry)
     ensure_initialized()
-    otype = ccall((:git_tree_entry_type, libgit2), Cint, (Ptr{Cvoid},), te.ptr)
+    otype = ccall((:git_tree_entry_type, libgit2), Cint, (Ptr{Cvoid},), te)
     return objtype(Consts.OBJECT(otype))
 end
 
@@ -101,7 +103,7 @@ end
 
 function count(tree::GitTree)
     ensure_initialized()
-    return ccall((:git_tree_entrycount, libgit2), Csize_t, (Ptr{Cvoid},), tree.ptr)
+    return ccall((:git_tree_entrycount, libgit2), Csize_t, (Ptr{Cvoid},), tree)
 end
 
 function Base.getindex(tree::GitTree, i::Integer)
@@ -111,7 +113,7 @@ function Base.getindex(tree::GitTree, i::Integer)
     ensure_initialized()
     te_ptr = ccall((:git_tree_entry_byindex, libgit2),
                    Ptr{Cvoid},
-                   (Ptr{Cvoid}, Csize_t), tree.ptr, i-1)
+                   (Ptr{Cvoid}, Csize_t), tree, i-1)
     return GitTreeEntry(tree, te_ptr, false)
 end
 
@@ -170,7 +172,7 @@ function _getindex(tree::GitTree, target::AbstractString)
 end
 
 """
-    getindex(tree::GitTree, target::AbstractString) -> GitObject
+    getindex(tree::GitTree, target::AbstractString)::GitObject
 
 Look up `target` path in the `tree`, returning a [`GitObject`](@ref) (a [`GitBlob`](@ref) in
 the case of a file, or another [`GitTree`](@ref) if looking up a directory).

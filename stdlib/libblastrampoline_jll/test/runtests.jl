@@ -3,5 +3,5 @@
 using Test, Libdl, libblastrampoline_jll
 
 @testset "libblastrampoline_jll" begin
-    @test isa(Libdl.dlsym(libblastrampoline_jll.libblastrampoline_handle, :dgemm_64_), Ptr{Nothing})
+    @test isa(Libdl.dlsym(libblastrampoline_jll.libblastrampoline, :dgemm_64_), Ptr{Nothing})
 end

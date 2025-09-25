@@ -128,7 +128,7 @@ The corresponding LLDB command is (after the process is started):
 (lldb) pro hand -p true -s false -n false SIGSEGV
 ```
 
-If you are debugging a segfault with threaded code, you can set a breakpoint on `jl_critical_error`
+If you are debugging a segfault with threaded code, you can set a breakpoint on `jl_fprint_critical_error`
 (`sigdie_handler` should also work on Linux and BSD) in order to only catch the actual segfault
 rather than the GC synchronization points.
 
@@ -177,7 +177,7 @@ $2 = void
 
 The most recent `jl_apply` is at frame #3, so we can go back there and look at the AST for the
 function `julia_convert_16886`. This is the uniqued name for some method of `convert`. `f` in
-this frame is a `jl_function_t*`, so we can look at the type signature, if any, from the `specTypes`
+this frame is a `jl_value_t*`, so we can look at the type signature, if any, from the `specTypes`
 field:
 
 ```
@@ -200,7 +200,7 @@ Expr(:return, Expr(:call, :box, :Float32, Expr(:call, :fptrunc, :Float32, :x)::A
 ```
 
 Finally, and perhaps most usefully, we can force the function to be recompiled in order to step
-through the codegen process. To do this, clear the cached `functionObject` from the `jl_lamdbda_info_t*`:
+through the codegen process. To do this, clear the cached `functionObject` from the `jl_lambda_info_t*`:
 
 ```
 (gdb) p f->linfo->functionObject
@@ -241,7 +241,7 @@ process)
 
 Julia now works out of the box with [rr](https://rr-project.org/), the lightweight recording and
 deterministic debugging framework from Mozilla. This allows you to replay the trace of an execution
-deterministically.  The replayed execution's address spaces, register contents, syscall data etc
+deterministically. The replayed execution's address spaces, register contents, syscall data etc
 are exactly the same in every run.
 
 A recent version of rr (3.1.0 or higher) is required.

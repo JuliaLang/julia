@@ -239,11 +239,11 @@ or grows the HAMT by inserting a new trie instead.
     end
 end
 
-length(::Leaf) = 1
-length(trie::HAMT) = sum((length(trie.data[i]) for i in eachindex(trie.data)), init=0)
+Base.length(::Leaf) = 1
+Base.length(trie::HAMT) = sum((length(trie.data[i]) for i in eachindex(trie.data)), init=0)
 
-isempty(::Leaf) = false
-function isempty(trie::HAMT)
+Base.isempty(::Leaf) = false
+function Base.isempty(trie::HAMT)
     if islevel_empty(trie)
         return true
     end
@@ -251,7 +251,7 @@ function isempty(trie::HAMT)
 end
 
 # DFS
-function iterate(trie::HAMT, state=nothing)
+function Base.iterate(trie::HAMT, state=nothing)
     if state === nothing
         state = (;parent=nothing, trie, i=1)
     end

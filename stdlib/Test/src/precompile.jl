@@ -1,5 +1,6 @@
 if Base.generating_output()
-    redirect_stdout(devnull) do
+let
+    function example_payload()
         @testset "example" begin
             @test 1 == 1
             @test_throws ErrorException error()
@@ -8,4 +9,7 @@ if Base.generating_output()
             @test 1 ≈ 1.0000000000000001
         end
     end
+
+    redirect_stdout(example_payload, devnull)
+end
 end

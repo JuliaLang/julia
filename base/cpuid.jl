@@ -21,7 +21,7 @@ Base.:<=(a::ISA, b::ISA) = a.features <= b.features
 Base.:<(a::ISA,  b::ISA) = a.features <  b.features
 Base.isless(a::ISA,  b::ISA) = a < b
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "features_h.jl"))  # include($BUILDROOT/base/features_h.jl)
+include(string(Base.BUILDROOT, "features_h.jl"))  # include($BUILDROOT/base/features_h.jl)
 
 # Keep in sync with `arch_march_isa_mapping`.
 const ISAs_by_family = Dict(
@@ -61,10 +61,17 @@ const ISAs_by_family = Dict(
         "a64fx" => ISA(Set((JL_AArch64_v8_2a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_sha2, JL_AArch64_ccpp, JL_AArch64_complxnum, JL_AArch64_fullfp16, JL_AArch64_sve))),
         "apple_m1" => ISA(Set((JL_AArch64_v8_5a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2, JL_AArch64_sha3, JL_AArch64_ccpp, JL_AArch64_complxnum, JL_AArch64_fp16fml, JL_AArch64_fullfp16, JL_AArch64_dotprod, JL_AArch64_rcpc, JL_AArch64_altnzcv))),
     ],
+    "riscv64" => [
+        "riscv64" => ISA(Set{UInt32}()),
+    ],
     "powerpc64le" => [
         # We have no way to test powerpc64le features yet, so we're only going to declare the lowest ISA:
         "power8" => ISA(Set{UInt32}()),
-    ]
+    ],
+    "riscv64" => [
+        # We have no way to test riscv64 features yet, so we're only going to declare the lowest ISA:
+        "riscv64" => ISA(Set{UInt32}()),
+    ],
 )
 
 # Test a CPU feature exists on the currently-running host
