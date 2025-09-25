@@ -989,7 +989,8 @@ cycle(xs, n::Integer) = flatten(repeated(xs, n))
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
 function IteratorSize(::Type{Cycle{I}}) where {I}
-    IteratorSize(I) === IsInfinite() ? IsInfinite() : SizeUnknown()
+    IS = IteratorSize(I)
+    (IS === IsInfinite() || IS == HasShape{0}()) ? IsInfinite() : SizeUnknown()
 end
 
 iterate(it::Cycle) = iterate(it.xs)
