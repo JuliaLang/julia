@@ -128,7 +128,7 @@ The corresponding LLDB command is (after the process is started):
 (lldb) pro hand -p true -s false -n false SIGSEGV
 ```
 
-If you are debugging a segfault with threaded code, you can set a breakpoint on `jl_critical_error`
+If you are debugging a segfault with threaded code, you can set a breakpoint on `jl_fprint_critical_error`
 (`sigdie_handler` should also work on Linux and BSD) in order to only catch the actual segfault
 rather than the GC synchronization points.
 

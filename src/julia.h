@@ -910,14 +910,20 @@ typedef struct _jl_typemap_level_t {
 
 typedef struct _jl_methcache_t {
     JL_DATA_TYPE
+    // hash map from dispatchtuple type to a linked-list of TypeMapEntry
+    // entry.sig == type for all entries in the linked-list
     _Atomic(jl_genericmemory_t*) leafcache;
+
+    // cache for querying everything else (anything that didn't seem profitable to put into leafcache)
     _Atomic(jl_typemap_t*) cache;
+
     jl_mutex_t writelock;
 } jl_methcache_t;
 
 // contains global MethodTable
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
+    // full set of entries
     _Atomic(jl_typemap_t*) defs;
     jl_methcache_t *cache;
     jl_sym_t *name; // sometimes used for debug printing
@@ -2470,6 +2476,8 @@ JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list a
     _JL_FORMAT_ATTR(2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(1, 2);
+JL_DLLEXPORT void jl_safe_fprintf(ios_t *s, const char *str, ...) JL_NOTSAFEPOINT
+    _JL_FORMAT_ATTR(2, 3);
 
 extern JL_DLLEXPORT JL_STREAM *JL_STDIN;
 extern JL_DLLEXPORT JL_STREAM *JL_STDOUT;
@@ -2484,8 +2492,10 @@ JL_DLLEXPORT int jl_termios_size(void);
 JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_fprint_backtrace(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
