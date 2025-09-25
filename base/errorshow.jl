@@ -185,6 +185,14 @@ function showerror(io::IO, ex::UndefVarError)
     end
     Experimental.show_error_hints(io, ex)
 end
+function _UndefVarError_str_macro_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    m = match(r"@([a-zA-Z_][a-zA-Z0-9_]*)_str\b", string(var))
+    if m !== nothing && length(m.captures) == 1
+        print(io, "\nSuggestion: You may be using the string macro form `", m.captures[1], "\"\"`, for which the expected `$(var)` macro is not defined.")
+    end
+end
+Base.Experimental.register_error_hint(_UndefVarError_str_macro_hint, UndefVarError)
 
 function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
