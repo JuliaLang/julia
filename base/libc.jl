@@ -1,9 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libc
-@doc """
+"""
 Interface to libc, the C standard library.
-""" Libc
+"""
+Libc
 
 import Base: transcode, windowserror, show
 # these need to be defined separately for bootstrapping but belong to Libc
@@ -52,7 +53,7 @@ show(io::IO, fd::RawFD) = print(io, "RawFD(", bitcast(Int32, fd), ')')  # avoids
 
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
-    @doc """
+    """
         WindowsRawSocket
 
     Primitive type which wraps the native Windows file `HANDLE`.

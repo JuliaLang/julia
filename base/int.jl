@@ -596,7 +596,8 @@ bitrotate(x::T, k::Integer) where {T <: BitInteger} =
     (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
 
 for fname in (:mod, :rem)
-    @eval @doc """
+    @eval begin
+    """
         rem(x::Integer, T::Type{<:Integer})::T
         mod(x::Integer, T::Type{<:Integer})::T
         %(x::Integer, T::Type{<:Integer})::T
@@ -620,7 +621,9 @@ for fname in (:mod, :rem)
     julia> typeof(x)
     BigInt
     ```
-    """ $fname(x::Integer, T::Type{<:Integer})
+    """
+    $fname(x::Integer, T::Type{<:Integer})
+    end
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x

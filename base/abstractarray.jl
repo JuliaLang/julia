@@ -1498,27 +1498,29 @@ _unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
 """
     parent(A)
 
-Return the underlying parent object of the view. This parent of objects of types `SubArray`, `SubString`, `ReshapedArray`
-or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
-during object creation. If the input is not a wrapped object, return the input itself. If the input is
-wrapped multiple times, only the outermost wrapper will be removed.
+Return the underlying object of a view-like container. For example for `SubArray`, `SubString`, `ReshapedArray`
+or `LinearAlgebra.Transpose` this is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
+during object creation. If the argument is not a wrapped object, return the argument itself. If the argument is
+wrapped multiple times, only the outermost wrapper is removed.
 
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
 
-julia> V = view(A, 1:2, :)
-2×2 view(::Matrix{Int64}, 1:2, :) with eltype Int64:
+julia> B = view(A, 1:2, 1:2)
+2×2 view(::Matrix{Int64}, 1:2, 1:2) with eltype Int64:
  1  2
- 3  4
+ 4  5
 
-julia> parent(V)
-2×2 Matrix{Int64}:
- 1  2
- 3  4
+julia> parent(B)
+3×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
 ```
 """
 function parent end
