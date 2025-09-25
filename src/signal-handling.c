@@ -641,6 +641,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
             jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
             jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+        if (sig == SIGQUIT) {
+            jl_print_task_backtraces(0);
+        }
     }
     jl_safe_fprintf(s, "in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
     if (context && ct) {
