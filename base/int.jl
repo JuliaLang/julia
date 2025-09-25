@@ -115,7 +115,7 @@ julia> Base.mul_hi(0xff, 0xff)
 ```
 """
 function mul_hi(a::T, b::T) where {T<:BitInteger}
-    ((widen(a)*b) >>> (sizeof(a)*8)) % T
+    ((widen(a)*b) >>> Base.top_set_bit(-1 % T)) % T
 end
 
 function mul_hi(a::UInt128, b::UInt128)
