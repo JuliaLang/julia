@@ -1511,14 +1511,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         }
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
-        bool isboxed=true;
-        Type *xtyp = julia_type_to_llvm(ctx, xinfo.typ, &(isboxed));
-        if (float_func()[f])
-            xtyp = FLOATT(xtyp);
-        else
-            xtyp = INTT(xtyp, DL);
-        if (!xtyp)
-             return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]
         ////so while they are represented as i8,
         ////the operations need to be done in mod 1

@@ -1179,9 +1179,9 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     jl_value_t *ty = jl_typeof(a);
     jl_value_t *tyb = jl_typeof(b);
     jl_value_t *et = NULL;
-    jl_value_t *np = NULL;
+    int np = 0;
     jl_value_t *etb = NULL;
-    jl_value_t *npb = NULL;
+    int npb = 0;
     if (tyb != ty) {
         if (!cvtb)
             jl_errorf("%s: types of a and b must match", name);
@@ -1306,15 +1306,15 @@ JL_DLLEXPORT jl_value_t *jl_##op_name(jl_value_t *a, jl_value_t *b) \
     jl_value_t *newv = jl_gc_alloc(ct->ptls, sz*np, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
     if (aty == jl_float16_type) \
-        jl_##name##16(16*np, pa, pb, pr); \
+        jl_##op_name##16(16*np, pa, pb, pr); \
     else if (aty == jl_bfloat16_type) \
-        jl_##name##bf16(16*np, pa, pb, pr); \
+        jl_##op_name##bf16(16*np, pa, pb, pr); \
     else if (aty == jl_float32_type) \
-        jl_##name##32(32*np, pa, pb, pr); \
+        jl_##op_name##32(32*np, pa, pb, pr); \
     else if (aty == jl_float64_type) \
-        jl_##name##64(64*np, pa, pb, pr); \
+        jl_##op_name##64(64*np, pa, pb, pr); \
     else \
-        jl_error(#name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
+        jl_error(#op_name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
     return newv; \
 }
 
@@ -1342,15 +1342,15 @@ JL_DLLEXPORT jl_value_t *jl_##op_name(jl_value_t *a, jl_value_t *b) \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b); \
     int cmp; \
     if (aty == jl_float16_type) \
-        cmp = jl_##name##16(16, pa, pb); \
+        cmp = jl_##op_name##16(16, pa, pb); \
     else if (aty == jl_bfloat16_type) \
-        cmp = jl_##name##bf16(16, pa, pb); \
+        cmp = jl_##op_name##bf16(16, pa, pb); \
     else if (aty == jl_float32_type) \
-        cmp = jl_##name##32(32, pa, pb); \
+        cmp = jl_##op_name##32(32, pa, pb); \
     else if (aty == jl_float64_type) \
-        cmp = jl_##name##64(64, pa, pb); \
+        cmp = jl_##op_name##64(64, pa, pb); \
     else \
-        jl_error(#name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
+        jl_error(#op_name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
  \
     return cmp ? jl_true : jl_false; \
 }
@@ -1381,15 +1381,15 @@ JL_DLLEXPORT jl_value_t *jl_##op_name(jl_value_t *a, jl_value_t *b, jl_value_t *
     jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
     if (aty == jl_float16_type) \
-            jl_##name##16(16, pa, pb, pc, pr); \
+            jl_##op_name##16(16, pa, pb, pc, pr); \
     else if (aty == jl_bfloat16_type) \
-            jl_##name##bf16(16, pa, pb, pc, pr); \
+            jl_##op_name##bf16(16, pa, pb, pc, pr); \
     else if (aty == jl_float32_type) \
-        jl_##name##32(32, pa, pb, pc, pr); \
+        jl_##op_name##32(32, pa, pb, pc, pr); \
     else if (aty == jl_float64_type) \
-        jl_##name##64(64, pa, pb, pc, pr); \
+        jl_##op_name##64(64, pa, pb, pc, pr); \
     else \
-        jl_error(#name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
+        jl_error(#op_name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
     return newv; \
 }
 
