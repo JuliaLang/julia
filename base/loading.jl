@@ -593,8 +593,8 @@ end
 """
     pkgversion(m::Module)
 
-If the module `m` belongs to a versioned package, returns the
-version number of that package. Otherwise returns `nothing`.
+If the module `m` belongs to a versioned package, return the
+version number of that package. Otherwise return `nothing`.
 
 The version is read from the package's Project.toml during package
 load.
