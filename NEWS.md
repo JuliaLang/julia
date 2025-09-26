@@ -69,6 +69,16 @@ New library functions
 * `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).
+* `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
+  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
+  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
+* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+* `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
+* `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
+* `Iterators.findeach` is a lazy version of `findall` ([#54124])
+* `Base.unsafe_substring` is an unexported, public constructor to build a `SubString` without checking for
+   valid string indices.
 
 New library features
 --------------------

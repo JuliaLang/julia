@@ -113,6 +113,7 @@ public
 
 # Strings
     escape_raw_string,
+    unsafe_substring,
 
 # Chars
     ismalformed,
