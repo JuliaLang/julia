@@ -295,6 +295,7 @@ Base.splat
 Base.Fix
 Base.Fix1
 Base.Fix2
+Returns
 ```
 
 ## Syntax

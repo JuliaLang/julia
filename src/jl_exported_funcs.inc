@@ -330,6 +330,8 @@
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
+    XX(jl_begin_new_module) \
+    XX(jl_end_new_module) \
     XX(jl_new_opaque_closure_from_code_info) \
     XX(jl_new_opaque_closure_from_code_info_in_world) \
     XX(jl_new_primitivetype) \

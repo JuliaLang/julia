@@ -614,11 +614,11 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
         jl_value_t *va = jl_tparam(tt, nfields-1);
         if (jl_vararg_kind(va) != JL_VARARG_UNBOUND) continue;
         jl_value_t *t = jl_unwrap_vararg(va);
+        size_t min_elements = nfields-1;
         for (size_t j = 0; j < nfields-1; j++)
             if (!jl_egal(jl_tparam(tt, j), t)) goto outer_loop;
 
         // look for Tuple{T, T, ...} then Tuple{T, ...}, etc
-        size_t min_elements = nfields-1;
         for (long j = i-1; j >= 0; j--) {
             jl_value_t *ttj = temp[j];
             if (!(ttj && jl_is_tuple_type(ttj))) break;

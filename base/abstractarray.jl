@@ -39,7 +39,11 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+function size(t::AbstractArray, dim)
+    d = Int(dim)::Int
+    s = size(t)
+    d <= length(s) ? s[d] : 1
+end
 
 """
     axes(A, d)

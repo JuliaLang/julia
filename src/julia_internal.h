@@ -1527,6 +1527,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip);
 void jl_fprint_critical_error(ios_t *t, int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT;
 void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT;
 void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
 #ifdef _OS_WINDOWS_
@@ -2035,8 +2036,8 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 //   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
 //   warning is spurious if the variable is not modified inside the JL_TRY.
 //   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
-#ifdef _COMPILER_GCC_
 #define JL_DO_PRAGMA(s) _Pragma(#s)
+#ifdef _COMPILER_GCC_
 #define JL_GCC_IGNORE_START(warning) \
     JL_DO_PRAGMA(GCC diagnostic push) \
     JL_DO_PRAGMA(GCC diagnostic ignored warning)
@@ -2046,6 +2047,24 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #define JL_GCC_IGNORE_START(w)
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
+
+#ifdef _COMPILER_CLANG_
+#define JL_CLANG_IGNORE_START(warning) \
+    JL_DO_PRAGMA(clang diagnostic push) \
+    JL_DO_PRAGMA(clang diagnostic ignored warning)
+#define JL_CLANG_IGNORE_STOP \
+    JL_DO_PRAGMA(clang diagnostic pop)
+#else
+#define JL_CLANG_IGNORE_START(w)
+#define JL_CLANG_IGNORE_STOP
+#endif // _COMPILER_CLANG_
+
+#define JL_CC_IGNORE_START(warning) \
+    JL_GCC_IGNORE_START(warning) \
+    JL_CLANG_IGNORE_START(warning)
+#define JL_CC_IGNORE_STOP \
+    JL_GCC_IGNORE_STOP \
+    JL_CLANG_IGNORE_STOP
 
 #ifdef __clang_gcanalyzer__
   // Not a safepoint (so it doesn't free other values), but an artificial use.
