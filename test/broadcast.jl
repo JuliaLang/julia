@@ -1221,3 +1221,11 @@ end
     @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
     @test a .+ [1 2] == a.a .+ [1 2]
 end
+
+@testset "axes/size for a specific broadcasted axis" begin
+    b = Broadcast.broadcasted(+, ones(2), ones(2,3))
+    @test axes(b,1) == 1:2
+    @test axes(b,2) == 1:3
+    @test size(b,1) == 2
+    @test size(b,2) == 3
+end
