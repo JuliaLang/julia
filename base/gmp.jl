@@ -605,10 +605,19 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
+# all uses of _bit_magnitude MUST ensure at callsite that `x` is strictly positive, otherwise it is UB
+_bit_magnitude(x::BigInt) = x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
+
+function exponent(x::BigInt)
+    iszero(x) && throw(DomainError(x, "cannot be zero"))
+    ux = abs(x)
+    return _bit_magnitude(ux) - 1
+end
+
 function top_set_bit(x::BigInt)
     isnegative(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
     iszero(x) && return 0
-    x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
+    return _bit_magnitude(x)
 end
 
 divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
