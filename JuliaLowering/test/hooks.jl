@@ -82,4 +82,118 @@ const JL = JuliaLowering
 
         @test jeval("Base.@propagate_inbounds @inline meta_double_quote_issue(x) = x") isa Function
     end
+
+    @testset "CompilerFrontend" begin
+        _Core = JuliaLowering._Core
+        old_fe = _Core._set_compiler_frontend!(JuliaLowering.JuliaLoweringFrontend(false))
+        try
+            # Expr works with eval()
+            _Core.eval(test_mod, :(xxx = 6))
+            @test _Core.eval(test_mod, :(xxx / 2)) == 3
+
+            # SyntaxTree works with eval()
+            _Core.eval(test_mod, JuliaLowering.@SyntaxTree :(xxx = 8))
+            @test _Core.eval(test_mod, JuliaLowering.@SyntaxTree :(xxx / 2)) == 4
+
+        finally
+            _Core._set_compiler_frontend!(old_fe)
+        end
+    end
+end
+
+@testset "Compiler frontend $frontend" for frontend in [JuliaLowering._Base.FlispCompilerFrontend(),
+                                                        JuliaLowering._Base.DefaultCompilerFrontend()]
+    test_mod = Module()
+
+    _Core = JuliaLowering._Core
+    _Base = JuliaLowering._Base
+    old_fe = _Core._set_compiler_frontend!(frontend)
+    try
+        # Basic top level expressions
+        @test _Base.include_string(test_mod,
+        """
+        x = 1
+        y = 2
+
+        (x,y)
+        """) === (1,2)
+
+        # Nested modules and module init order
+        Amod = _Base.include_string(test_mod, """
+        module A
+            init_order = []
+            __init__() = push!(init_order, "A")
+            module B
+                using ..A
+                __init__() = push!(A.init_order, "B")
+            end
+            module C
+                using ..A
+                __init__() = push!(A.init_order, "C")
+                module D
+                    using ...A
+                    __init__() = push!(A.init_order, "D")
+                end
+                module E
+                    using ...A
+                    __init__() = push!(A.init_order, "E")
+                end
+            end
+        end
+        """)
+        Core.@latestworld
+        @test nameof(Amod) == :A
+        @test Amod.C.D isa Module
+        @test Amod.init_order == ["B", "D", "E", "C", "A"]
+
+        # Macro expansion world age
+        @test _Base.include_string(test_mod,
+        """
+        module ModuleTopLevelEvalWorldTest
+            macro mac2()
+                :(101)
+            end
+
+            xx = @mac2
+        end
+
+        ModuleTopLevelEvalWorldTest.xx
+        """) === 101
+
+        # Macros expanding to `Expr(:toplevel)`
+        @test _Base.include_string(test_mod,
+        """
+        macro expand_to_toplevel()
+            esc(Expr(:toplevel,
+                :(a = 1),
+                :(b = 2),
+                :((a, b)),
+            ))
+        end
+
+        @expand_to_toplevel
+        """) == (1,2)
+
+        # Test that `mapexpr` argument to `include()` is applied
+        function test_mapexpr(ex)
+            if ex isa Expr && ex.head != :module
+                10101
+            else
+                ex
+            end
+        end
+        @test JuliaLowering.include_string(test_mapexpr, test_mod, """
+        module ContentNotMapped
+            x = 1  # This line won't have mapexpr applied even though it's at
+                   # top level in the module.
+        end
+
+        this + expression + will + be + replaced
+        """) === 10101
+        Core.@latestworld
+        @test test_mod.ContentNotMapped.x == 1
+
+    finally
+        _Core._set_compiler_frontend!(old_fe)
+    end
 end

@@ -368,11 +368,11 @@ end
     # with K"Placeholder"s
     @test JuliaLowering.include_string(test_mod, """
     __ = 1
-    function isglobal_chk(___)
+    function isglobal_chk_2(___)
        local ____ = 1
        (@isglobal(_), @isglobal(__), @isglobal(___), @isglobal(____))
     end
-    isglobal_chk(1)
+    isglobal_chk_2(1)
     """) === (false, false, false, false)
 
     # @test appears to be the only macro in base to use :inert
