@@ -340,6 +340,20 @@ static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res
     }
 }
 
+static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, MDNode *tbaa, bool isVolatile=false)
+{
+    SmallVector<Value*,0> gcroots(npointers);
+    Type *T_prjlvalue = ctx.types().T_prjlvalue;
+    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+    for (size_t i = 0; i < npointers; i++) {
+        Value *field_ptr = emit_ptrgep(ctx, data_pointer, jl_ptr_offset(typ, i) * sizeof(jl_value_t*));
+        Instruction *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)), isVolatile);
+        roots_ai.decorateInst(root);
+        gcroots[i] = root;
+    }
+    return gcroots;
+}
+
 // load a pointer to N inlined_roots into registers (as a SmallVector)
 static llvm::SmallVector<Value*,0> load_gc_roots(jl_codectx_t &ctx, Value *inline_roots_ptr, size_t npointers, MDNode *tbaa, bool isVolatile=false)
 {
