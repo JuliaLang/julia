@@ -1,4 +1,4 @@
-@testset "modules" begin
+@testset "modules and top level code" begin
 
 test_mod = Module()
 
@@ -50,5 +50,43 @@ module A
 end
 """)
 @test Amod.init_order == ["B", "D", "E", "C", "A"]
+
+# Macros in top level and module expressions may be used immediately in the
+# next top level statement after their definition
+@test JuliaLowering.include_string(test_mod, """
+macro mac1()
+    :(42)
+end
+
+@mac1
+""") === 42
+
+@test JuliaLowering.include_string(test_mod, """
+module ModuleTopLevelEvalWorldTest
+    macro mac2()
+        :(101)
+    end
+
+    xx = @mac2
+end
+
+ModuleTopLevelEvalWorldTest.xx
+""") === 101
+
+function test_mapexpr_1(ex::JuliaLowering.SyntaxTree)
+    JuliaLowering.@ast JuliaSyntax.syntax_graph(ex) ex 10101::K"Integer"
+end
+
+@test JuliaLowering.include_string(test_mapexpr_1, test_mod, """
+this + expression + will + be + replaced
+""") === 10101
+
+function test_mapexpr_2(ex::Expr)
+    20202
+end
+
+@test JuliaLowering.include_string(test_mapexpr_2, test_mod, """
+this + expression + will + be + replaced
+"""; expr_compat_mode=true) === 20202
 
 end

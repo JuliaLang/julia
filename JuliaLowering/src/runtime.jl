@@ -307,6 +307,8 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # entirely) like macro expansion.
     #
     # TODO: Reduce duplication where possible.
+    #
+    # TODO: Factor GeneratedFunctionStub lowering into the frontend API
 
     # Attributes from parsing
     graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
@@ -321,10 +323,12 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     __module__ = source.module
 
-    # Macro expansion. Note that we expand in `tls_world_age()` (see
-    # Core.GeneratedFunctionStub)
+    # Macro expansion. Note that we expand in `tls_world_age()` in contrast to
+    # flisp which inconsistently relies on the Julia internals to eval macro
+    # methods in the latest world.
     macro_world = Base.tls_world_age()
-    ctx1 = MacroExpansionContext(graph, __module__, g.expr_compat_mode, macro_world)
+    ctx1 = MacroExpansionContext(graph, g.expr_compat_mode, macro_world)
+    push_layer!(ctx1, __module__, true)
 
     layer = only(ctx1.scope_layers)
 
