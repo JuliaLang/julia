@@ -330,13 +330,7 @@ function delayed_delete_dll(path)
     drive = first(splitdrive(path))
     tmpdrive = first(splitdrive(tempdir()))
     # in-use DLL must be kept on the same drive
-    deletedir = if drive == tmpdrive
-        joinpath(tempdir(), "julia_delayed_deletes")
-    else
-        joinpath(drive, "julia_delayed_deletes")
-    end
-    mkpath(deletedir)
-    temp_path = tempname(deletedir; cleanup=false, suffix=string("_", basename(path)))
+    temp_path = tempname(abspath(dirname(path)); cleanup=false, suffix=string("_", basename(path)))
     @debug "Could not delete DLL most likely because it is loaded, moving to a temporary path" path temp_path
     mkpath(delayed_delete_ref())
     io = last(mktemp(delayed_delete_ref(); cleanup=false))
