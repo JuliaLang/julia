@@ -158,6 +158,13 @@ eltype(::Type{<:AnnotatedString{S}}) where {S} = AnnotatedChar{eltype(S)}
 firstindex(s::AnnotatedString) = firstindex(s.string)
 lastindex(s::AnnotatedString) = lastindex(s.string)
 
+plain_substring(s::AnnotatedString) = @inbounds unsafe_substring(s.string, 1, ncodeunits(s))
+
+function plain_substring(s::SubString{<:AnnotatedString})
+    @inbounds unsafe_substring(s.string.string, s.offset + 1, s.ncodeunits)
+end
+
+
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
@@ -204,16 +211,14 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 # To prevent substring equality from hitting the generic fallback
 
 function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
-    SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) ==
-        SubString(b.string.string, b.offset, b.ncodeunits, Val(:noshift)) &&
-        annotations(a) == annotations(b)
+    plain_substring(a) == plain_substring(b) && annotations(a) == annotations(b)
 end
 
 ==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
-    annotations(a) == annotations(b) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b.string
+    annotations(a) == annotations(b) && plain_substring(a) == b.string
 
 ==(a::SubString{<:AnnotatedString}, b::AbstractString) =
-    isempty(annotations(a)) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b
+    isempty(annotations(a)) && plain_substring(a) == b
 
 ==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
 
@@ -262,7 +267,7 @@ function annotatedstring(xs...)
                     push!(annotations, setindex(annot, rstart:rstop, :region))
                 end
             end
-            print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
+            print(s, plain_substring(x))
         elseif x isa AnnotatedChar
             for annot in x.annotations
                 push!(annotations, (region=1+size:1+size, annot...))

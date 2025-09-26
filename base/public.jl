@@ -107,6 +107,7 @@ public
 
 # Strings
     escape_raw_string,
+    unsafe_substring,
 
 # IO
     # types
