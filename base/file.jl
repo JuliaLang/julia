@@ -1237,7 +1237,6 @@ function sendfile(src::AbstractString, dst::AbstractString; force::Bool=true)
     result = ccall(:jl_fs_copyfile, Int32, (Cstring, Cstring, Cint),
                     src, dst, flags % Cint)
     uv_error("copyfile", result)
-    chmod(dst, filemode(src))
     return nothing
 end
 
