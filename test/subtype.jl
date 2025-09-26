@@ -68,6 +68,13 @@ function test_2()
     @test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Int,Int,Vararg{Int,1}})
     @test Tuple{Int,Vararg{Int}} == Tuple{Int,Vararg{Int}}
     @test (@UnionAll N Tuple{Int,Vararg{Int,N}}) == (@UnionAll N Tuple{Int,Vararg{Int,N}})
+    @test Union{Tuple{}, Tuple{Int}, Tuple{UInt}} <: Union{
+        Tuple{},
+        Tuple{Int},
+        Tuple{UInt},
+        Tuple{UInt, Vararg{UInt}},
+        Tuple{Int, Int, Vararg{Int}}
+    }
 
     @test issub_strict(Tuple{Tuple{Int,Int},Tuple{Int,Int}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
     @test !issub(Tuple{Tuple{Int,Int},Tuple{Int,}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)

@@ -50,7 +50,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
     *Advanced*: you may skip steps 2-4 by running:
 
     ```sh
-    setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
+    setup-x86_64.exe -s <url> -q -P cmake,gcc-g++=12.5.0-1,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++=12.5.0-1,mingw64-i686-gcc-fortran=12.5.0-1,mingw64-i686-gcc-core=12.5.0-1,mingw64-i686-headers=12.0.0-1,mingw64-i686-runtime=12.0.0-1,mingw64-i686-winpthreads=12.0.0-1,mingw64-x86_64-gcc-g++=12.5.0-1,mingw64-x86_64-gcc-fortran=12.5.0-1,mingw64-x86_64-gcc-core=12.5.0-1,mingw64-x86_64-headers=12.0.0-1,mingw64-x86_64-runtime=12.0.0-1,mingw64-x86_64-winpthreads=12.0.0-1
     ```
 
     replacing `<url>` with a site from [https://cygwin.com/mirrors.html](https://cygwin.com/mirrors.html)
@@ -65,9 +65,11 @@ MinGW-w64 compilers available through Cygwin's package manager.
     3. From *Interpreters* (or *Python*) category: `m4`, `python3`
     4. From the *Archive* category: `p7zip`
     5. For 32 bit Julia, and also from the *Devel* category:
-       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
+       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran` and `mingw64-i686-gcc-core` (version "12.5.0-1")
+       `mingw64-i686-headers` and `mingw64-i686-runtime` and `mingw64-i686-winpthreads` (version "12.0.0-1")
     6. For 64 bit Julia, and also from the *Devel* category:
-       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
+       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran` and `mingw64-x86_64-gcc-core` (version "12.5.0-1")
+       `mingw64-x86_64-headers` and `mingw64-x86_64-runtime` and `mingw64-x86_64-winpthreads` (version "12.0.0-1")
 
  4. Allow Cygwin installation to finish, then start from the installed shortcut
     *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.

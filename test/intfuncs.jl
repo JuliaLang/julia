@@ -216,6 +216,35 @@ end
     x, y = Int8(-12), UInt(100)
     d, u, v = gcdx(x, y)
     @test x*u + y*v == d
+
+end
+
+# issue #58025
+@testset "Mixed signed/unsigned types" begin
+    cases = [ # adapted from https://github.com/JuliaLang/julia/pull/59487#issuecomment-3258209203
+        (UInt16(100), Int8(-101)),
+        (Int8(-50), UInt16(75)),
+        (UInt32(12), Int16(-18)),
+        (Int64(-24), UInt8(36)),
+        (UInt8(15), Int16(-25)),
+        (Int32(-42), UInt64(56)),
+        (UInt128(1000), Int32(-1500)),
+        (UInt64(0), Int32(-5)),
+        (Int16(-7), UInt8(0)),
+        (Int8(-14), UInt8(13)),
+    ]
+    for (a, b) in cases
+        g1 = gcd(a, b)
+        g2, s, t = gcdx(a, b)
+        @test g1 === g2
+        @test s*a + t*b == g2
+        @test g2 >= 0
+        @test lcm(a, b) === convert(typeof(g1), lcm(widen(a), widen(b)))
+    end
+
+    @test gcdx(Int16(-32768), Int8(-128)) === (Int16(128), Int16(0), Int16(-1))
+    @test gcdx(Int8(-128), UInt16(256)) === (0x0080, 0xffff, 0x0000)
+    @test_broken gcd(Int8(-128), UInt16(256)) === 0x0080
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin

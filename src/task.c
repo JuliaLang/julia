@@ -352,7 +352,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
             jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
@@ -732,10 +732,38 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     if (!e)
         e = jl_current_exception(ct);
 
-    jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
-    jl_static_show((JL_STREAM*)STDERR_FILENO, e);
-    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-    jlbacktrace(); // written to STDERR_FILENO
+    // Write error to memory first
+    ios_t s;
+    ios_mem(&s, 1024);
+    jl_safe_fprintf(&s, "fatal: error thrown and no exception handler available.\n");
+    jl_static_show((JL_STREAM*)&s, e);
+    jl_safe_fprintf(&s, "\n");
+    jl_fprint_backtrace(&s);
+
+    // Then to STDERR
+    ios_write_direct(ios_stderr, &s);
+
+    // Finally write to system log (if supported)
+#ifdef _OS_WINDOWS_
+    HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
+    if (event_source != INVALID_HANDLE_VALUE) {
+        ios_putc('\0', &s);
+        const wchar_t *strings[] = { ios_utf8_to_wchar(s.buf) };
+        ReportEventW(
+            event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
+           /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
+        );
+        free((void *)strings[0]);
+
+        if (jl_options.alert_on_critical_error) {
+            MessageBoxW(NULL, /* message */ L"fatal: error thrown and no exception handler available\n\n"
+                                            L"See Application log in Event Viewer for more information.",
+                        /* title */ L"fatal error in libjulia", MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
+        }
+    }
+#endif
+
+    ios_close(&s);
     if (ct == NULL)
         jl_raise(6);
     jl_exit(1);
@@ -1262,7 +1290,7 @@ skip_pop_exception:;
     ct->result = res;
     jl_gc_wb(ct, ct->result);
     jl_finish_task(ct);
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 

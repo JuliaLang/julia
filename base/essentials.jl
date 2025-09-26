@@ -979,11 +979,7 @@ setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomi
 
 getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
-    @_total_meta
-    t = @_gc_preserve_begin v
-    len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
-    @_gc_preserve_end t
-    return len
+    Core._svec_len(v)
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
@@ -1058,6 +1054,10 @@ struct Colon <: Function
 end
 const (:) = Colon()
 
+function show(io::IO, ::Colon)
+    show_type_name(io, Colon.name)
+    print(io, "()")
+end
 
 """
     Val(c)
