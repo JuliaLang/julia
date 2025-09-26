@@ -399,7 +399,7 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
     elseif isdir(src)
         cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
     else
-        sendfile(src, dst)
+        sendfile(src, dst; force)
     end
     dst
 end
@@ -1229,26 +1229,16 @@ function rename(oldpath::AbstractString, newpath::AbstractString)
     newpath
 end
 
-function sendfile(src::AbstractString, dst::AbstractString)
-    src_open = false
-    dst_open = false
-    local src_file, dst_file
-    try
-        src_file = open(src, JL_O_RDONLY)
-        src_open = true
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, filemode(src_file))
-        dst_open = true
+const UV_FS_COPYFILE_EXCL = 0x0001
+const UV_FS_COPYFILE_FICLONE = 0x0002
 
-        bytes = filesize(stat(src_file))
-        sendfile(dst_file, src_file, Int64(0), Int(bytes))
-    finally
-        if src_open && isopen(src_file)
-            close(src_file)
-        end
-        if dst_open && isopen(dst_file)
-            close(dst_file)
-        end
-    end
+function sendfile(src::AbstractString, dst::AbstractString; force::Bool=true)
+    flags = force ? UV_FS_COPYFILE_FICLONE : UV_FS_COPYFILE_FICLONE | UV_FS_COPYFILE_EXCL
+    result = ccall(:jl_fs_copyfile, Int32, (Cstring, Cstring, Cint),
+                    src, dst, flags % Cint)
+    uv_error("copyfile", result)
+    chmod(dst, filemode(src))
+    return nothing
 end
 
 if Sys.iswindows()
