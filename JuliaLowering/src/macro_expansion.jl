@@ -9,14 +9,15 @@ struct MacroExpansionContext{Attrs} <: AbstractLoweringContext
     macro_world::UInt
 end
 
-function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode::Bool, world::UInt)
-    layers = ScopeLayer[ScopeLayer(1, mod, 0, false)]
-    MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode, world)
+function MacroExpansionContext(graph::SyntaxGraph, expr_compat_mode::Bool, world::UInt)
+    MacroExpansionContext(graph, Bindings(), ScopeLayer[], LayerId[], expr_compat_mode, world)
 end
 
 function push_layer!(ctx::MacroExpansionContext, mod::Module, is_macro_expansion::Bool)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod,
-                           current_layer_id(ctx), is_macro_expansion)
+    new_id = length(ctx.scope_layers) + 1
+    new_layer = ScopeLayer(new_id, mod,
+                           new_id == 1 ? 0 : current_layer_id(ctx),
+                           is_macro_expansion)
     push!(ctx.scope_layers, new_layer)
     push!(ctx.scope_layer_stack, new_layer.id)
 end
@@ -154,7 +155,7 @@ end
 # isn't clear the language is meant to support this).
 function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::SyntaxTree)
     mod = current_layer(ctx).mod
-    ex = expand_forms_1(ctx, ex0)
+    ex = _expand_forms_1(ctx, ex0)
     try
         if kind(ex) === K"Value"
             !(ex.value isa GlobalRef) ? ex.value :
@@ -350,7 +351,7 @@ function expand_macro(ctx, ex)
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
                                current_layer_id(ctx), true)
         push_layer!(ctx, mod_for_ast, true)
-        expanded = expand_forms_1(ctx, expanded)
+        expanded = _expand_forms_1(ctx, expanded)
         pop_layer!(ctx)
     end
     return expanded
@@ -403,7 +404,7 @@ need to be dealt with before other lowering.
 * Processes quoted syntax turning `K"quote"` into `K"inert"` (eg, expanding
   interpolations)
 """
-function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
+function _expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier"
         name_str = ex.name_val
@@ -422,7 +423,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes
         @chk numchildren(ex) == 1
-        expand_forms_1(ctx, ex[1])
+        _expand_forms_1(ctx, ex[1])
     elseif k == K"escape"
         # For processing of old-style macros
         @chk numchildren(ex) >= 1 "`escape` requires an argument"
@@ -430,7 +431,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             throw(MacroExpansionError(ex, "`escape` node in outer context"))
         end
         top_layer = pop!(ctx.scope_layer_stack)
-        escaped_ex = expand_forms_1(ctx, ex[1])
+        escaped_ex = _expand_forms_1(ctx, ex[1])
         push!(ctx.scope_layer_stack, top_layer)
         escaped_ex
     elseif k == K"hygienic_scope"
@@ -439,7 +440,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                                current_layer_id(ctx), true)
         push!(ctx.scope_layers, new_layer)
         push!(ctx.scope_layer_stack, new_layer.id)
-        hyg_ex = expand_forms_1(ctx, ex[1])
+        hyg_ex = _expand_forms_1(ctx, ex[1])
         pop!(ctx.scope_layer_stack)
         hyg_ex
     elseif k == K"juxtapose"
@@ -447,8 +448,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @chk numchildren(ex) == 2
         @ast ctx ex [K"call"
             "*"::K"Identifier"(scope_layer=layerid)
-            expand_forms_1(ctx, ex[1])
-            expand_forms_1(ctx, ex[2])
+            _expand_forms_1(ctx, ex[1])
+            _expand_forms_1(ctx, ex[2])
         ]
     elseif k == K"quote"
         @chk numchildren(ex) == 1
@@ -465,7 +466,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             # enum-like entities rather than pieces of AST.
             @ast ctx ex[1] ex[1]=>K"Symbol"
         else
-            expand_forms_1(ctx, expand_quote(ctx, ex[1]))
+            _expand_forms_1(ctx, expand_quote(ctx, ex[1]))
         end
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
@@ -486,12 +487,12 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         if kind(rhs) == K"quote" && numchildren(rhs) == 1
             rhs = rhs[1]
         end
-        e2 = expand_forms_1(ctx, rhs)
+        e2 = _expand_forms_1(ctx, rhs)
         if kind(e2) == K"Identifier" || kind(e2) == K"Placeholder"
             # FIXME: Do the K"Symbol" transformation in the parser??
             e2 = @ast ctx e2 e2=>K"Symbol"
         end
-        @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
+        @ast ctx ex [K"." _expand_forms_1(ctx, ex[1]) e2]
     elseif k == K"cmdstring"
         @chk numchildren(ex) == 1
         e2 = @ast ctx ex [K"macrocall" "@cmd"::K"core" ex[1]]
@@ -521,8 +522,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             # dotcall expansion.
             @ast ctx ex [k
                 "literal_pow"::K"top"
-                expand_forms_1(ctx, farg)
-                expand_forms_1(ctx, args[1])
+                _expand_forms_1(ctx, farg)
+                _expand_forms_1(ctx, args[1])
                 [K"call"
                     [K"call"
                         "apply_type"::K"core"
@@ -541,8 +542,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             # we've already reordered arguments.)
             callflags = JuliaSyntax.call_type_flags(ex)
             @ast ctx ex [k(syntax_flags=(callflags == 0 ? nothing : callflags))
-                expand_forms_1(ctx, farg)
-                (expand_forms_1(ctx, a) for a in args)...
+                _expand_forms_1(ctx, farg)
+                (_expand_forms_1(ctx, a) for a in args)...
             ]
         end
     elseif is_leaf(ex)
@@ -551,10 +552,10 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # TODO: Should every form get layerid systematically? Or only the ones
         # which expand_forms_2 needs?
         layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        setattr(mapchildren(e->expand_forms_1(ctx,e), ctx, ex),
+        setattr(mapchildren(e->_expand_forms_1(ctx,e), ctx, ex),
                 :scope_layer, layerid)
     else
-        mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
+        mapchildren(e->_expand_forms_1(ctx,e), ctx, ex)
     end
 end
 
@@ -566,15 +567,20 @@ function ensure_macro_attributes(graph)
                       meta=CompileHints)
 end
 
-@fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
+@fzone "JL: macroexpand" function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     if kind(ex) == K"local"
         # This error assumes we're expanding the body of a top level thunk but
         # we might want to make that more explicit in the pass system.
         throw(LoweringError(ex, "local declarations have no effect outside a scope"))
     end
+    return _expand_forms_1(ctx, reparent(ctx, ex))
+end
+
+@fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     graph = ensure_macro_attributes(syntax_graph(ex))
-    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
-    ex2 = expand_forms_1(ctx, reparent(ctx, ex))
+    ctx = MacroExpansionContext(graph, expr_compat_mode, macro_world)
+    push_layer!(ctx, mod, false)
+    ex2 = expand_forms_1(ctx, ex)
     graph2 = delete_attributes(graph, :__macro_ctx__)
     # TODO: Returning the context with pass-specific mutable data is a bad way
     # to carry state into the next pass. We might fix this by attaching such
