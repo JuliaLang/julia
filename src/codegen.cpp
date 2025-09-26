@@ -2650,10 +2650,11 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
                 CreateTrap(ctx.builder);
             return jl_cgval_t();
         }
+        assert(jl_is_datatype(typ));
         bool mustbox_union = v.TIndex && deserves_unionbox(typ);
         if (v.Vboxed && (v.isboxed || mustbox_union)) {
             if (skip)
-                *skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, v, (jl_datatype_t*)typ, true));
+                *skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, v, (jl_datatype_t *)typ, true));
             return jl_cgval_t(v.Vboxed, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
         }
         if (mustbox_union) {
@@ -2663,6 +2664,33 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
             else
                 CreateTrap(ctx.builder);
             return jl_cgval_t();
+        }
+        if (v.TIndex) {
+            size_t inline_roots_count = 0;
+            if (deserves_stack(typ) && ((jl_datatype_t *)typ)->layout->first_ptr >= 0)
+                inline_roots_count = ((jl_datatype_t *)typ)->layout->npointers;
+
+            // mustbox_union case above handles the situation when `v` is (always) boxed,
+            // so here `v` is (maybe) unboxed and should always have sufficient roots
+            if (inline_roots_count <= v.inline_roots.size()) {
+                jl_cgval_t result(v, typ, /* TIndex */ nullptr);
+
+                // `v` is (maybe) unboxed, but `result` is statically unboxed (it has no runtime
+                // "isboxed" bit and expects its roots to always be valid), so dynamically extract
+                // the roots if boxed
+                if (inline_roots_count > 0 && v.V != nullptr) {
+                    Value *isboxed = ctx.builder.CreateICmpNE(
+                        ctx.builder.CreateAnd(v.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
+                        ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
+                    emit_guarded_test(ctx, isboxed, result.inline_roots, [&] {
+                        return extract_gc_roots(ctx, v.V, (jl_datatype_t *)typ, inline_roots_count, ctx.tbaa().tbaa_value);
+                    });
+                }
+                return result;
+            } else {
+                assert(jl_type_intersection(v.typ, typ) == (jl_value_t*)jl_bottom_type);
+                return jl_cgval_t(); // undef / unreachable
+            }
         }
     }
     else {
