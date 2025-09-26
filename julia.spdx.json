@@ -421,6 +421,18 @@
             "summary": "7-Zip is a file archiver with a high compression ratio."
         },
         {
+            "name": "libpicosat",
+            "SPDXID": "SPDXRef-libpicosat",
+            "downloadLocation": "https://fmv.jku.at/picosat/",
+            "filesAnalyzed": false,
+            "homepage": "https://fmv.jku.at/picosat/",
+            "sourceInfo": "The version in use can be found in the file deps/libpicosat.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2006-2014 Armin Biere, Johannes Kepler University",
+            "summary": "PicoSAT is a SAT solver for boolean satisfiability problems in conjunctive normal form."
+        },
+        {
             "name": "zlib",
             "SPDXID": "SPDXRef-zlib",
             "downloadLocation": "git+https://github.com/madler/zlib.git",
