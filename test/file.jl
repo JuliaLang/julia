@@ -2154,7 +2154,7 @@ end
 
 @testset "diskstat() works" begin
     # Sanity check assuming disk is smaller than 32PB
-    PB = Int64(2)^44
+    PB = Int64(2)^50
 
     dstat = diskstat()
     @test dstat.total < 32PB
