@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-#
 
 const WorkThunk = Any
 # #@eval struct WorkThunk
@@ -7,6 +6,12 @@ const WorkThunk = Any
 #    WorkThunk(work) = new($(Expr(:opaque_closure, :(Tuple{Vector{Tasks}}), :Bool, :Bool, :((tasks) -> work(tasks))))) # @opaque Vector{Tasks}->Bool (tasks)->work(tasks)
 # end
 # (p::WorkThunk)() = p.thunk()
+
+# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
+const InlineCostType = UInt16
+const MAX_INLINE_COST = typemax(InlineCostType)
+const MIN_INLINE_COST = InlineCostType(10)
+const MaybeCompressed = Union{CodeInfo, String}
 
 """
     AbstractInterpreter
@@ -492,10 +497,45 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
+struct OverlayCodeCache{Cache}
+    globalcache::Cache
+    localcache::Vector{InferenceResult}
+end
+
+setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance) = (setindex!(cache.globalcache, ci, mi); cache)
+
+haskey(cache::OverlayCodeCache, mi::MethodInstance) = get(cache, mi, nothing) !== nothing
+
+function get(cache::OverlayCodeCache, mi::MethodInstance, default)
+    for cached_result in cache.localcache
+        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
+        cached_result.linfo === mi || continue
+        cached_result.overridden_by_const === nothing || continue
+        isdefined(cached_result, :ci) || continue
+        ci = cached_result.ci
+        isdefined(ci, :inferred) || continue
+        return ci
+    end
+    return get(cache.globalcache, mi, default)
+end
+
+function getindex(cache::OverlayCodeCache, mi::MethodInstance)
+    r = get(cache, mi, nothing)
+    r === nothing && throw(KeyError(mi))
+    return r::CodeInstance
+end
+
+code_cache(interp::AbstractInterpreter, #=extended_range=#::WorldRange) = code_cache(interp)
+
 function code_cache(interp::AbstractInterpreter)
-  cache = InternalCodeCache(cache_owner(interp))
-  worlds = WorldRange(get_inference_world(interp))
-  return WorldView(cache, worlds)
+    cache = InternalCodeCache(cache_owner(interp), get_inference_world(interp))
+    return OverlayCodeCache(cache, get_inference_cache(interp))
+end
+
+function code_cache(interp::NativeInterpreter, extended_range::WorldRange)
+    @assert get_inference_world(interp) in extended_range
+    cache = InternalCodeCache(cache_owner(interp), extended_range)
+    return OverlayCodeCache(cache, get_inference_cache(interp))
 end
 
 get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)
