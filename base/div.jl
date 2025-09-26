@@ -322,7 +322,7 @@ end
 
 # For bootstrapping purposes, we define div for integers directly. Provide the
 # generic signature also
-div(a::T, b::T, ::typeof(RoundToZero)) where {T<:Union{BitSigned, BitUnsigned64}} = div(a, b)
+div(a::T, b::T, ::typeof(RoundToZero)) where {T<:Union{BitSigned, BitUnsigned}} = div(a, b)
 div(a::Bool, b::Bool, r::RoundingMode) = div(a, b)
 # Prevent ambiguities
 for rm in (RoundUp, RoundDown, RoundToZero, RoundFromZero)
@@ -335,10 +335,6 @@ function div(x::Bool, y::Bool, rnd::Union{typeof(RoundNearest),
 end
 fld(a::T, b::T) where {T<:Union{Integer,AbstractFloat}} = div(a, b, RoundDown)
 cld(a::T, b::T) where {T<:Union{Integer,AbstractFloat}} = div(a, b, RoundUp)
-div(a::Int128, b::Int128, ::typeof(RoundToZero)) = div(a, b)
-div(a::UInt128, b::UInt128, ::typeof(RoundToZero)) = div(a, b)
-rem(a::Int128, b::Int128, ::typeof(RoundToZero)) = rem(a, b)
-rem(a::UInt128, b::UInt128, ::typeof(RoundToZero)) = rem(a, b)
 
 # These are kept for compatibility with external packages overriding fld / cld.
 # In 2.0, packages should extend div(a, b, r) instead, in which case, these can
