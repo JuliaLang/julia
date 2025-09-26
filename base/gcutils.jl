@@ -83,7 +83,11 @@ end
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     _check_mutable(o)
-    Core.finalizer(f, o)
+    let fin = Core.finalizer  # only apply the effects to the call of `fin`
+        @_terminates_globally_meta
+        @_noub_meta
+        fin(f, o)
+    end
     return o
 end
 
