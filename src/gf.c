@@ -113,7 +113,7 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 
 static uint_t speccache_hash(size_t idx, jl_value_t *data)
 {
-    jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx);
+    jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx); // This must always happen inside the lock
     jl_value_t *sig = ml->specTypes;
     if (jl_is_unionall(sig))
         sig = jl_unwrap_unionall(sig);
@@ -122,6 +122,8 @@ static uint_t speccache_hash(size_t idx, jl_value_t *data)
 
 static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv)
 {
+    if (idx >= jl_svec_len(data))
+        return 0; // We got a OOB access, probably due to a data race
     jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx);
     jl_value_t *sig = ml->specTypes;
     if (ty == sig)
