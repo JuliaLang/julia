@@ -605,6 +605,7 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
+# all uses of _bit_magnitude MUST ensure at callsite that `x` is strictly positive, otherwise it is UB
 _bit_magnitude(x::BigInt) = x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
 
 function exponent(x::BigInt)
