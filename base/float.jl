@@ -807,7 +807,8 @@ precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, b
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
 
 
-function _nextfloat(f::IEEEFloat, dneg::Bool, da::Unsigned)
+function _nextfloat(f::IEEEFloat, dneg::Bool, da::Integer)
+    # da must be > 0
     F = typeof(f)
     fumax = reinterpret(Unsigned, F(Inf))
     U = typeof(fumax)
