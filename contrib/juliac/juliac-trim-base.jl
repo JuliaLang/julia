@@ -12,6 +12,7 @@ end
     depwarn(msg, funcsym; force::Bool=false) = nothing
     _assert_tostring(msg) = ""
     reinit_stdio() = nothing
+    wait_forever() = while true; wait(); end
     JuliaSyntax.enable_in_core!() = nothing
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
