@@ -1234,7 +1234,7 @@ const UV_FS_COPYFILE_FICLONE = 0x0002
 
 function sendfile(src::AbstractString, dst::AbstractString; force::Bool=true)
     flags = force ? UV_FS_COPYFILE_FICLONE : UV_FS_COPYFILE_FICLONE | UV_FS_COPYFILE_EXCL
-    result = ccall(:jl_fs_copyfile, Int32, (Cstring, Cstring, Cint),
+    result = ccall(:jl_fs_copyfile, Cint, (Cstring, Cstring, Cint),
                     src, dst, flags % Cint)
     uv_error("copyfile", result)
     return nothing
