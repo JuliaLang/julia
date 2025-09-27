@@ -257,7 +257,7 @@ end
 
     @test gcdx(Int16(-32768), Int8(-128)) === (Int16(128), Int16(0), Int16(-1))
     @test gcdx(Int8(-128), UInt16(256)) === (0x0080, 0xffff, 0x0000)
-    @test_broken gcd(Int8(-128), UInt16(256)) === 0x0080
+    @test gcd(Int8(-128), UInt16(256)) === 0x0080
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin
