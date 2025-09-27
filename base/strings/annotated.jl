@@ -158,10 +158,29 @@ eltype(::Type{<:AnnotatedString{S}}) where {S} = AnnotatedChar{eltype(S)}
 firstindex(s::AnnotatedString) = firstindex(s.string)
 lastindex(s::AnnotatedString) = lastindex(s.string)
 
-plain_substring(s::AnnotatedString) = @inbounds unsafe_substring(s.string, 1, ncodeunits(s))
+"""
+    unannotate(s::AnnotatedString{S})::S
+    unannotate(s::SubString{AnnotatedString{S}})::SubString{S}
 
-function plain_substring(s::SubString{<:AnnotatedString})
-    @inbounds unsafe_substring(s.string.string, s.offset + 1, s.ncodeunits)
+Get the underlying string of `s`, without copying.
+
+# Examples
+```jldoctest; setup=:(using Base: AnnotatedString)
+julia> s = AnnotatedString("abcde", [(1:3, :A, 4)])
+"abcde"
+
+julia> u = unannotate(s)
+"abcde"
+
+julia> typeof(u)
+String
+```
+"""
+unannotate(s::AnnotatedString) = s.string
+
+function unannotate(s::SubString{<:AnnotatedString})
+    start_index = first(parentindices(s)[1])
+    @inbounds unsafe_substring(parent(s).string, start_index, ncodeunits(s))
 end
 
 
@@ -211,14 +230,14 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 # To prevent substring equality from hitting the generic fallback
 
 function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
-    plain_substring(a) == plain_substring(b) && annotations(a) == annotations(b)
+    unannotate(a) == unannotate(b) && annotations(a) == annotations(b)
 end
 
 ==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
-    annotations(a) == annotations(b) && plain_substring(a) == b.string
+    annotations(a) == annotations(b) && unannotate(a) == b.string
 
 ==(a::SubString{<:AnnotatedString}, b::AbstractString) =
-    isempty(annotations(a)) && plain_substring(a) == b
+    isempty(annotations(a)) && unannotate(a) == b
 
 ==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
 
@@ -267,7 +286,7 @@ function annotatedstring(xs...)
                     push!(annotations, setindex(annot, rstart:rstop, :region))
                 end
             end
-            print(s, plain_substring(x))
+            print(s, unannotate(x))
         elseif x isa AnnotatedChar
             for annot in x.annotations
                 push!(annotations, (region=1+size:1+size, annot...))
