@@ -1050,13 +1050,10 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     @boundscheck setindex_shape_check(X, length(I))
     @boundscheck checkbounds(A, I)
-    require_one_based_indexing(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
-    count = 1
-    for i in I′
-        @inbounds A[i] = X′[count]
-        count += 1
+    for (j, i) in zip(eachindex(X′), I′)
+        @inbounds A[i] = X′[j]
     end
     return A
 end

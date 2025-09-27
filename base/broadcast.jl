@@ -614,7 +614,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 end
 
 Base.@propagate_inbounds function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
-    I = to_index(Base.IteratorsMD.flatten(Is))
+    I = to_index(Base.flatten(Is))
     _getindex(IndexStyle(bc), bc, I)
 end
 @inline function _getindex(::IndexStyle, bc, I)
