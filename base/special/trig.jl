@@ -1260,27 +1260,32 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
     hname = string(finvh)
     dname = string(finvd)
     @eval begin
-        @doc """
+        """
             $($name)(x::T) where {T <: Number} -> float(T)
 
         Compute the $($fn) of `x`, where `x` is in radians.
 
         Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
-        """ ($finv)(z::Number) = inv(($f)(z))
-        @doc """
+        """
+        ($finv)(z::Number) = inv(($f)(z))
+
+        """
             $($hname)(x::T) where {T <: Number} -> float(T)
 
         Compute the hyperbolic $($fn) of `x`.
 
         Return a `T(NaN)` if `isnan(x)`.
-        """ ($finvh)(z::Number) = inv(($fh)(z))
-        @doc """
+        """
+        ($finvh)(z::Number) = inv(($fh)(z))
+
+        """
             $($dname)(x::T) where {T <: Number} -> float(T)
 
         Compute the $($fn) of `x`, where `x` is in degrees.
 
         Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
-        """ ($finvd)(z::Number) = inv(($fd)(z))
+        """
+        ($finvd)(z::Number) = inv(($fd)(z))
     end
 end
 
@@ -1290,16 +1295,19 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     tname = string(tfa)
     hname = string(hfa)
     @eval begin
-        @doc """
+        """
             $($tname)(x::T) where {T <: Number} -> float(T)
 
         Compute the inverse $($fn) of `x`, where the output is in radians.
-        """ ($tfa)(y::Number) = ($tfainv)(inv(y))
-        @doc """
+        """
+        ($tfa)(y::Number) = ($tfainv)(inv(y))
+
+        """
             $($hname)(x::T) where {T <: Number} -> float(T)
 
         Compute the inverse hyperbolic $($fn) of `x`.
-        """ ($hfa)(y::Number) = ($hfainv)(inv(y))
+        """
+        ($hfa)(y::Number) = ($hfainv)(inv(y))
     end
 end
 
@@ -1402,7 +1410,7 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
     for (fu, un) in ((:deg2rad, "degrees"),)
         name = string(fd)
         @eval begin
-            @doc """
+            """
                 $($name)(x::T) where T -> float(T)
 
             Compute $($fn) of `x`, where `x` is in $($un).
@@ -1412,7 +1420,8 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
 
             !!! compat "Julia 1.7"
                 Matrix arguments require Julia 1.7 or later.
-            """ ($fd)(x) = ($f)(($fu).(x))
+            """
+            ($fd)(x) = ($f)(($fu).(x))
         end
     end
 end
@@ -1423,7 +1432,7 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
     for (fu, un) in ((:rad2deg, "degrees"),)
         name = string(fd)
         @eval begin
-            @doc """
+            """
                 $($name)(x)
 
             Compute the inverse $($fn) of `x`, where the output is in $($un).
@@ -1431,7 +1440,8 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
 
             !!! compat "Julia 1.7"
                 Matrix arguments require Julia 1.7 or later.
-            """ ($fd)(x) = ($fu).(($f)(x))
+            """
+            ($fd)(x) = ($fu).(($f)(x))
         end
     end
 end

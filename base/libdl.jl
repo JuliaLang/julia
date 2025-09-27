@@ -1,9 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libdl
-@doc """
+"""
 Interface to libdl. Provides dynamic linking support.
-""" Libdl
+"""
+Libdl
 
 import Base: DL_LOAD_PATH, isdebugbuild
 
