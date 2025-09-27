@@ -1859,7 +1859,15 @@ function compilecache_path(pkg::PkgId;
         end
         try
             # update timestamp of precompilation file so that it is the first to be tried by code loading
-            touch(path_to_try)
+            # but don't touch bundled cache files that come with the Julia installation
+            julia_share_dir = joinpath(Sys.BINDIR, DATAROOTDIR)
+            # Cache files are at: share/julia/compiled/v1.x/PkgName/file.ji
+            cache_julia_dir = abspath(joinpath(path_to_try, "..", "..", "..", ".."))
+            julia_dir = abspath(joinpath(julia_share_dir, "julia"))
+            is_bundled = samefile(julia_dir, cache_julia_dir)
+            if !is_bundled
+                touch(path_to_try)
+            end
         catch ex
             # file might be read-only and then we fail to update timestamp, which is fine
             ex isa IOError || rethrow()
