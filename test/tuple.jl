@@ -815,6 +815,29 @@ namedtup = (;a=1, b=2, c=3)
         NamedTuple{(:c,), Tuple{Int}},
     }
 
+@testset "`Base.split_rest(::Tuple, ::Vararg)` return type inference" begin
+    let f(t) = Base.split_rest(t, 3)
+        tuple_types_of_length(n::Int) = (NTuple{n, Any}, NTuple{n}, NTuple{n, Float32})
+        @testset "inferred return type must subtype `NTuple{2, Tuple}`" begin
+            for T in (
+                Tuple, Tuple{Vararg{Float32}},  # any length
+                Tuple{Any, Vararg{Any}}, (Tuple{T, Vararg{T}} where {T}), Tuple{Float32, Vararg{Float32}},  # length greater than one
+                tuple_types_of_length(5)...,  # length five
+            )
+                @test Base.infer_return_type(f, Tuple{T}) <: NTuple{2, Tuple}
+                for S in (Tuple{T, Any, Any}, Tuple{T, Any}, Tuple{T, Int, Any}, Tuple{T, Int}, Tuple{T, Int, Int})
+                    @test Base.infer_return_type(Base.split_rest, S) <: NTuple{2, Tuple}
+                end
+            end
+        end
+        @testset "with exactly-known length: `5 == 2 + 3`" begin
+            for T in tuple_types_of_length(5)
+                @test Base.infer_return_type(f, Tuple{T}) <: Tuple{Tuple{Any, Any}, Tuple{Any, Any, Any}}
+            end
+        end
+    end
+end
+
 # Make sure that tuple iteration is foldable
 @test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
 @test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))
