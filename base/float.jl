@@ -850,8 +850,7 @@ end
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
 applications of [`prevfloat`](@ref) if `n < 0`.
 """
-nextfloat(f::AbstractFloat, d::Integer) = _nextfloat(f, d < 0, uabs(d))
-nextfloat(f::IEEEFloat, d::Unsigned) = _nextfloat(f, false, d)
+nextfloat(f::AbstractFloat, d::Integer) = _nextfloat(f, isnegative(d), uabs(d))
 
 """
     nextfloat(x::AbstractFloat)
@@ -869,7 +868,7 @@ nextfloat(x::AbstractFloat) = nextfloat(x, 1)
 The result of `n` iterative applications of `prevfloat` to `x` if `n >= 0`, or `-n`
 applications of [`nextfloat`](@ref) if `n < 0`.
 """
-prevfloat(x::AbstractFloat, d::Integer) = _nextfloat(x, d > 0, uabs(d))
+prevfloat(x::AbstractFloat, d::Integer) = _nextfloat(x, ispositive(d), uabs(d))
 
 """
     prevfloat(x::AbstractFloat)
