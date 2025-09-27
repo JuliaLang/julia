@@ -1132,9 +1132,25 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
-@inline function wait_forever()
+function wait_forever()
     while true
-        wait()
+        try
+            while true
+                wait()
+            end
+        catch e
+            local errs = stderr
+            # try to display the failure atomically
+            errio = IOContext(PipeBuffer(), errs::IO)
+            emphasize(errio, "Internal Task ")
+            display_error(errio, current_exceptions())
+            write(errs, errio)
+            # victimize another random Task also
+            if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
+                backend = repl_backend_task()
+                backend isa Task && throwto(backend, e)
+            end
+        end
     end
 end
 
@@ -1195,6 +1211,7 @@ function wait()
         # thread sleep logic.
         sched_task = get_sched_task()
         if ct !== sched_task
+            istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
