@@ -1201,11 +1201,8 @@ end
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
 
-function Base.show(io::IO, fix::Fix)
-    function get_n(::Fix{N}) where {N}
-        N
-    end
-    constr = Fix{get_n(fix)}
+function Base.show(io::IO, fix::Fix{N}) where {N}
+    constr = Fix{N}
     callable = fix.f
     fixed_argument = fix.x
     show(io, constr)
