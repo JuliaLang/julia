@@ -485,8 +485,6 @@ module IteratorsMD
 
     size(iter::CartesianIndices) = map(length, iter.indices)
 
-    length(iter::CartesianIndices) = prod(size(iter))
-
     # make CartesianIndices a multidimensional range
     Base.step(iter::CartesianIndices) = CartesianIndex(map(step, iter.indices))
 
@@ -836,7 +834,6 @@ LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
 LogicalIndex{Int}(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
-length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
 show(io::IO, r::LogicalIndex) = print(io,collect(r))
 print_array(io::IO, X::LogicalIndex) = print_array(io, collect(X))

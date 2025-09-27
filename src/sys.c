@@ -496,8 +496,8 @@ JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
-extern char **environ;
+#if !defined(_OS_WINDOWS_) || (defined(_COMPILER_GCC_) && defined(_POSIX_C_SOURCE))
+extern JL_DLLIMPORT char **environ;
 #endif
 #endif
 
