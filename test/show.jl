@@ -877,6 +877,10 @@ else
     @test occursin("https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 end
 
+@testset "method show: method url return type inference" begin
+    @test isconcretetype(Base.infer_return_type(Base.url))
+end
+
 # Method location correction (Revise integration)
 dummyloc(m::Method) = :nofile, Int32(123456789)
 Base.methodloc_callback[] = dummyloc

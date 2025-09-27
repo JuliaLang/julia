@@ -191,7 +191,7 @@ const _julia_charmap = Dict{UInt32,UInt32}(
     0x210F => 0x0127, # hbar -> small letter h with stroke (#48870)
 )
 
-utf8proc_map(s::AbstractString, flags::Integer, chartransform::F = identity) where F = utf8proc_map(String(s), flags, chartransform)
+utf8proc_map(s::AbstractString, flags::Integer, chartransform::F = identity) where F = utf8proc_map(String(s)::String, flags, chartransform)
 
 # Documented in Unicode module
 function normalize(

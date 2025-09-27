@@ -900,7 +900,7 @@ end
 
 function take_string_or_substring(l, contains_underscore)::SubString
     subs = take_substring(l)
-    # Need to pass a AbstractString to `parse` so materialize it in case it
+    # Need to pass an AbstractString to `parse` so materialize it in case it
     # contains underscore.
     return contains_underscore ? SubString(filter(!=('_'), subs)) : subs
 end

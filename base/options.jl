@@ -69,6 +69,7 @@ struct JLOptions
     timeout_for_safepoint_straggler_s::Int16
     gc_sweep_always_full::Int8
     compress_sysimage::Int8
+    alert_on_critical_error::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

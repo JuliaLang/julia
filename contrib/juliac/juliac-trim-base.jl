@@ -77,7 +77,6 @@ end
             print(io, T.var.name)
         end
     end
-    show_type_name(io::IO, tn::Core.TypeName) = print(io, tn.name)
     # this function is not `--trim`-compatible if it resolves to a Varargs{...} specialization
     # and since it only has 1-argument methods this happens too often by default (just 2-3 args)
     setfield!(typeof(throw_eachindex_mismatch_indices).name, :max_args, Int32(5), :monotonic)

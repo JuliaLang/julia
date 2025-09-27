@@ -233,8 +233,8 @@ See also [`AnnotatedString`](@ref) and [`AnnotatedChar`](@ref).
 ## Examples
 
 ```jldoctest; setup=:(using Base: AnnotatedString, annotatedstring)
-julia> annotatedstring("now a AnnotatedString")
-"now a AnnotatedString"
+julia> annotatedstring("now an AnnotatedString")
+"now an AnnotatedString"
 
 julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label, 1)]), ", and unannotated")
 "annotated, and unannotated"

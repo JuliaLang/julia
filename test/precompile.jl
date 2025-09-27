@@ -1002,11 +1002,11 @@ precompile_test_harness("code caching") do dir
 
         useflbi() = $StaleA.flbi()
 
-        # force precompilation
+        # force precompilation, force call so that inlining heuristics don't affect the result
         begin
             Base.Experimental.@force_compile
-            useA2()
-            useflbi()
+            @noinline useA2()
+            @noinline useflbi()
         end
         precompile($StaleA.fib, ())
 
@@ -1325,11 +1325,11 @@ precompile_test_harness("invoke") do dir
         end
 
         m = get_method_for_type(M.h, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = get_method_for_type(M.hnc, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callq))
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqnc))
         @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqi))
@@ -1985,16 +1985,18 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, edges, new_ext_cis, external_methods, new_method_roots, cache_sizes = sv
-    for m in external_methods
+    modules, init_order, internal_methods, new_method_roots, cache_sizes = sv
+    for m in internal_methods::Vector{Any}
+        m isa Core.MethodInstance || continue
         m = m.func::Method
         if m.name !== :f
             @test m.name == :repl_cmd && m.nargs == 1
         end
     end
-    @test new_ext_cis === nothing || any(new_ext_cis) do ci
+    @test any(internal_methods) do ci
+        ci isa Core.CodeInstance || return false
         mi = ci.def::Core.MethodInstance
-        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+        return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end
 

@@ -20,7 +20,7 @@ jobs:
           persist-credentials: false
       - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
         with:
-          version: '1'
+          version: '1.11.6'
       - name: Check whitespace
         run: |
           contrib/check-whitespace.jl

@@ -515,7 +515,7 @@ function seek(io::GenericIOBuffer, n::Int)
     end
 
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
-    #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
+    #       of a GenericIOBuffer), so that would need to be fixed in order to throw an error here
     max_ptr = io.size + 1
     min_ptr = get_offset(io) + 1
     io.ptr = clamp(translate_seek_position(io, n), min_ptr, max_ptr)
@@ -953,7 +953,7 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb)::Int)
 
 function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     io.readable || _throw_not_readable()

@@ -61,8 +61,7 @@ import Base:
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
-include("Terminals.jl")
-using .Terminals
+using Base.Terminals
 
 abstract type AbstractREPL end
 

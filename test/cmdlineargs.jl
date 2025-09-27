@@ -74,6 +74,32 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
+if Sys.isunix()
+    @testset "SIGQUIT prints task backtraces" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            write(stdout, "r")
+            wait()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+        errp = PipeBuffer()
+        # disable coredumps for this process
+        p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
+        @test read(p, UInt8) == UInt8('r')
+        Base.kill(p, Base.SIGQUIT)
+        wait(p)
+        err_s = readchomp(errp)
+        @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
+        @test occursin("==== Thread ", err_s)
+        @test occursin("==== Done", err_s)
+    end
+end
+
 @testset "julia_cmd" begin
     julia_basic = Base.julia_cmd()
     function get_julia_cmd(arg)

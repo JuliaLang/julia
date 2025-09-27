@@ -474,8 +474,20 @@ function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothin
     return cmd
 end
 
-pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
+pipeline(cmd::AbstractCmd, dest::Union{AbstractCmd, AbstractString, Redirectable}) = pipeline(cmd, stdout=dest)
 pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(cmd, stdin=src)
+
+"""
+    pipeline(command, redir::Pair{<:Integer, <:Redirectable})
+
+Redirect fd number `redir.first` of `command` to or from the given `redir.second`, which can be
+an I/O stream, a filename, or a file descriptor. This method is primarily used to pass additional
+fds beyond the standard ios that are not supported by the keyword argument interface.
+
+!!! compat "Julia 1.13"
+    This method requires Julia 1.13 or later.
+"""
+pipeline(cmd::AbstractCmd, redir::Pair{<:Integer, <:Redirectable}) = CmdRedirect(cmd, redir.second, Int(redir.first))
 
 """
     pipeline(from, to, ...)

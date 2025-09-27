@@ -443,6 +443,13 @@ typedef struct _jl_opaque_closure_t {
 // exclusive ownership of the CodeInstance:
 //   def, owner, rettype, exctype, rettype_const, analysis_results,
 //   time_infer_total, time_infer_self
+
+// flags bits for CodeInstance
+#define JL_CI_FLAGS_SPECPTR_SPECIALIZED      0b0001
+#define JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR   0b0010
+#define JL_CI_FLAGS_FROM_IMAGE               0b0100
+#define JL_CI_FLAGS_NATIVE_CACHE_VALID       0b1000
+
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
     jl_value_t *def; // MethodInstance or ABIOverride
@@ -489,9 +496,10 @@ typedef struct _jl_code_instance_t {
     uint16_t time_infer_self; // self cost of julia inference for `inferred` (included in time_infer_total)
     _Atomic(uint16_t) time_compile; // self cost of llvm compilation (e.g. of computing `invoke`)
     //TODO: uint8_t absolute_max; // whether true max world is unknown
-    _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
-                                   // & 0b010 == invokeptr matches specptr
-                                   // & 0b100 == From image
+    _Atomic(uint8_t) flags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
+                            // & 0b010 == invokeptr matches specptr
+                            // & 0b100 == From image
+                            // & 0b1000 == native_cache_valid
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
     _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
@@ -902,14 +910,20 @@ typedef struct _jl_typemap_level_t {
 
 typedef struct _jl_methcache_t {
     JL_DATA_TYPE
+    // hash map from dispatchtuple type to a linked-list of TypeMapEntry
+    // entry.sig == type for all entries in the linked-list
     _Atomic(jl_genericmemory_t*) leafcache;
+
+    // cache for querying everything else (anything that didn't seem profitable to put into leafcache)
     _Atomic(jl_typemap_t*) cache;
+
     jl_mutex_t writelock;
 } jl_methcache_t;
 
 // contains global MethodTable
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
+    // full set of entries
     _Atomic(jl_typemap_t*) defs;
     jl_methcache_t *cache;
     jl_sym_t *name; // sometimes used for debug printing
@@ -2047,7 +2061,6 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
-extern JL_DLLIMPORT int jl_n_gcthreads;
 extern int jl_n_markthreads;
 extern int jl_n_sweepthreads;
 
@@ -2187,11 +2200,7 @@ enum JL_RTLD_CONSTANT {
      /* MacOS X 10.5+: */
      JL_RTLD_FIRST=128U
 };
-#ifdef _OS_DARWIN_
-#define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND | JL_RTLD_FIRST)
-#else
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
-#endif
 
 typedef void *jl_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
 JL_DLLEXPORT jl_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
@@ -2466,6 +2475,8 @@ JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list a
     _JL_FORMAT_ATTR(2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(1, 2);
+JL_DLLEXPORT void jl_safe_fprintf(ios_t *s, const char *str, ...) JL_NOTSAFEPOINT
+    _JL_FORMAT_ATTR(2, 3);
 
 extern JL_DLLEXPORT JL_STREAM *JL_STDIN;
 extern JL_DLLEXPORT JL_STREAM *JL_STDOUT;
@@ -2480,8 +2491,10 @@ JL_DLLEXPORT int jl_termios_size(void);
 JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_fprint_backtrace(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
