@@ -1,6 +1,6 @@
 module Precompilation
 
-using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
+using Base: CoreLogging, PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
             base_project, isdefined
 
@@ -532,9 +532,16 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
     parallel_limiter = Base.Semaphore(num_tasks)
 
-    # suppress passive loading printing in julia test suite. `JULIA_TESTS` is set in Base.runtests
-    io = (_from_loading && !Sys.isinteractive() && Base.get_bool_env("JULIA_TESTS", false)) ? IOContext{IO}(devnull) : _io
-
+    # suppress precompilation progress messages when precompiling for loading packages, except during interactive sessions
+    # or when specified by logging heuristics that explicitly require it
+    # since the complicated IO implemented here can have somewhat disastrous consequences when happening in the background (e.g. #59599)
+    io = _io
+    logcalls = nothing
+    if _from_loading && !isinteractive()
+        io = IOContext{IO}(devnull)
+        fancyprint = false
+        logcalls = isinteractive() ? CoreLogging.Info : CoreLogging.Debug # sync with Base.compilecache
+    end
 
     nconfigs = length(configs)
     hascolor = get(io, :color, false)::Bool
@@ -608,8 +615,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # consider exts of project deps to be project deps so that errors are reported
     append!(project_deps, keys(filter(d->last(d).name in keys(env.project_deps), ext_to_parent)))
 
-    @debug "precompile: deps collected"
-
     # An extension effectively depends on another extension if it has a strict superset of its triggers
     for ext_a in keys(ext_to_parent)
         for ext_b in keys(ext_to_parent)
@@ -664,7 +669,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             end
         end
     end
-    @debug "precompile: extensions collected"
 
     serial_deps = Base.PkgId[] # packages that are being precompiled in serial
 
@@ -704,7 +708,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             was_recompiled[pkg_config] = false
         end
     end
-    @debug "precompile: signalling initialized"
 
     # find and guard against circular deps
     cycles = Vector{Base.PkgId}[]
@@ -732,7 +735,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     if !isempty(circular_deps)
         @warn excluded_circular_deps_explanation(io, ext_to_parent, circular_deps, cycles)
     end
-    @debug "precompile: circular dep check done"
 
     # If you have a workspace and want to precompile all projects in it, look through all packages in the manifest
     # instead of collecting from a project i.e. not filter out packages that are in the current project.
@@ -785,7 +787,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     else
         target[] = "for $nconfigs compilation configurations..."
     end
-    @debug "precompile: packages filtered"
 
     pkg_queue = PkgConfig[]
     failed_deps = Dict{PkgConfig, String}()
@@ -1013,16 +1014,23 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             return
                         end
                         try
-                            # allows processes to wait if another process is precompiling a given package to
-                            # a functionally identical package cache (except for preferences, which may differ)
-                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, ignore_loaded) do
-                                Base.with_logger(Base.NullLogger()) do
-                                    # whether to respect already loaded dependency versions
-                                    keep_loaded_modules = !ignore_loaded
-                                    # for extensions, any extension in our direct dependencies is one we have a right to load
-                                    # for packages, we may load any extension (all possible triggers are accounted for above)
-                                    loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), direct_deps[pkg]) : nothing
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, keep_loaded_modules;
+                            # for extensions, any extension in our direct dependencies is one we have a right to load
+                            # for packages, we may load any extension (all possible triggers are accounted for above)
+                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), direct_deps[pkg]) : nothing
+                            if _from_loading && pkg in requested_pkgids
+                                # loading already took the cachefile_lock and printed logmsg for its explicit requests
+                                t = @elapsed ret = begin
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
+                                                      flags, cacheflags, loadable_exts)
+                                end
+                            else
+                                # allows processes to wait if another process is precompiling a given package to
+                                # a functionally identical package cache (except for preferences, which may differ)
+                                t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, ignore_loaded) do
+                                    logcalls === nothing || @lock print_lock begin
+                                        Base.@logmsg logcalls "Precompiling $(repr("text/plain", pkg))"
+                                    end
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts)
                                 end
                             end
