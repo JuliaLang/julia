@@ -1112,31 +1112,32 @@ static int subtype_tuple_varargs(
             }
         }
     }
-    int x_same = vx > 1 || (lastx && obviously_egal(xp0, lastx));
-    int y_same = vy > 1 || (lasty && obviously_egal(yp0, lasty));
-    // keep track of number of consecutive identical subtyping
-    x_reps = y_same && x_same ? x_reps + 1 : 1;
-    if (x_reps > 2) {
-        // an identical type on the left doesn't need to be compared to the same
-        // element type on the right more than twice.
+    {
+        int x_same = vx > 1 || (lastx && obviously_egal(xp0, lastx));
+        int y_same = vy > 1 || (lasty && obviously_egal(yp0, lasty));
+        // keep track of number of consecutive identical subtyping
+        x_reps = y_same && x_same ? x_reps + 1 : 1;
+        if (x_reps > 2) {
+            // an identical type on the left doesn't need to be compared to the same
+            // element type on the right more than twice.
+        }
+        else if (x_same && e->Runions.depth == 0 && y_same &&
+            !jl_has_free_typevars(xp0) && !jl_has_free_typevars(yp0)) {
+            // fast path for repeated elements
+        }
+        else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xp0) : jl_is_concrete_type(xp0)) && !jl_has_free_typevars(yp0)) {
+            // fast path for separable sub-formulas
+            if (!jl_subtype(xp0, yp0))
+                return 0;
+        }
+        else {
+            // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
+            // simulate the possibility of multiple arguments, which is needed
+            // to implement the diagonal rule correctly.
+            if (!subtype(xp0, yp0, e, param)) return 0;
+            if (x_reps < 2 && !subtype(xp0, yp0, e, 1)) return 0;
+        }
     }
-    else if (x_same && e->Runions.depth == 0 && y_same &&
-        !jl_has_free_typevars(xp0) && !jl_has_free_typevars(yp0)) {
-        // fast path for repeated elements
-    }
-    else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xp0) : jl_is_concrete_type(xp0)) && !jl_has_free_typevars(yp0)) {
-        // fast path for separable sub-formulas
-        if (!jl_subtype(xp0, yp0))
-            return 0;
-    }
-    else {
-        // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
-        // simulate the possibility of multiple arguments, which is needed
-        // to implement the diagonal rule correctly.
-        if (!subtype(xp0, yp0, e, param)) return 0;
-        if (x_reps < 2 && !subtype(xp0, yp0, e, 1)) return 0;
-    }
-
 constrain_length:
     if (!yp1) {
         return 1;

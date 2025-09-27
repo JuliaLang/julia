@@ -1397,11 +1397,19 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 // Print backtrace for specified task to `s`
 JL_DLLEXPORT void jl_fprint_backtracet(ios_t *s, jl_task_t *t) JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    ptls->bt_size = 0;
-    jl_bt_element_t *bt_data = ptls->bt_data;
-    jl_record_backtrace_result_t r = jl_record_backtrace(t, bt_data, JL_MAX_BT_SIZE, 0);
+    jl_bt_element_t *bt_data;
+    jl_task_t *ct = jl_get_current_task();
+    size_t max_bt_size;
+    if (ct && ct->ptls != NULL) {
+        jl_ptls_t ptls = ct->ptls;
+        ptls->bt_size = 0;
+        bt_data = ptls->bt_data;
+        max_bt_size = JL_MAX_BT_SIZE;
+    } else {
+        max_bt_size = 1024; //8kb of stack should be safe
+        bt_data = (jl_bt_element_t *)alloca(max_bt_size * sizeof(jl_bt_element_t));
+    }
+    jl_record_backtrace_result_t r = jl_record_backtrace(t, bt_data, max_bt_size, 0);
     size_t bt_size = r.bt_size;
     size_t i;
     for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {

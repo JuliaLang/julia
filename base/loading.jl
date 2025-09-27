@@ -593,9 +593,8 @@ end
 """
     pkgversion(m::Module)
 
-Return the version of the package that imported module `m`,
-or `nothing` if `m` was not imported from a package, or imported
-from a package without a version field set.
+If the module `m` belongs to a versioned package, return the
+version number of that package. Otherwise return `nothing`.
 
 The version is read from the package's Project.toml during package
 load.

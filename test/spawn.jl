@@ -1066,6 +1066,11 @@ end
     @test Cmd(["ls", args...]) == `ls -l /tmp`
 end
 
+let buf = IOBuffer()
+    run(pipeline(`$(Base.julia_cmd()) -e 'println(Base.PipeEndpoint(RawFD(3)), "Hello")'`, 3=>buf))
+    @test String(take!(buf)) == "Hello\n"
+end
+
 # Test passing a pipe server as an addition fd
 @testset "Pipe server as additional fd" begin
     if !Sys.iswindows()

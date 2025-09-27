@@ -1172,7 +1172,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     return NULL;
 }
 
-void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
 {
 }
 
@@ -1181,14 +1181,14 @@ int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT
     return 0;
 }
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 {
     // May not be accurate but should be helpful enough
     uint64_t pool_count = gc_num.poolalloc;
     uint64_t big_count = gc_num.bigalloc;
-    jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, gc_num.pause);
+    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
+                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
+                    pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
 
 JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)

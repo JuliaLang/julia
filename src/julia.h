@@ -910,14 +910,20 @@ typedef struct _jl_typemap_level_t {
 
 typedef struct _jl_methcache_t {
     JL_DATA_TYPE
+    // hash map from dispatchtuple type to a linked-list of TypeMapEntry
+    // entry.sig == type for all entries in the linked-list
     _Atomic(jl_genericmemory_t*) leafcache;
+
+    // cache for querying everything else (anything that didn't seem profitable to put into leafcache)
     _Atomic(jl_typemap_t*) cache;
+
     jl_mutex_t writelock;
 } jl_methcache_t;
 
 // contains global MethodTable
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
+    // full set of entries
     _Atomic(jl_typemap_t*) defs;
     jl_methcache_t *cache;
     jl_sym_t *name; // sometimes used for debug printing
@@ -2055,7 +2061,6 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
-extern JL_DLLIMPORT int jl_n_gcthreads;
 extern int jl_n_markthreads;
 extern int jl_n_sweepthreads;
 

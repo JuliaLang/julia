@@ -874,14 +874,15 @@ function perform_lifting!(compact::IncrementalCompact,
     return Pair{Any, PhiNest}(stmt_val, PhiNest(visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback))
 end
 
-function lift_apply_args!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
-    # Handle _apply_iterate calls: convert arguments to use `Core.svec`. The behavior of Core.svec (with boxing) better matches the ABI of codegen.
+# Handle _apply_iterate calls: convert arguments to use `Core.svec`.
+# The behavior of `Core.svec` (with boxing) better matches the ABI of codegen.
+function lift_apply_args!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     compact[idx] = nothing
-    for i in 4:length(stmt.args)  # Skip iterate function, f, and first iterator
+    for i in 4:length(stmt.args) # Skip `_apply_iterate`, `iterate`, and the function
         arg = stmt.args[i]
-        arg_type = argextype(arg, compact)
-        svec_args = nothing
+        arg_type = widenconst(argextype(arg, compact))
         if isa(arg_type, DataType) && arg_type.name === Tuple.name
+            svec_args = nothing
             if isa(arg, SSAValue)
                 arg_stmt = compact[arg][:stmt]
                 if is_known_call(arg_stmt, Core.tuple, compact)
@@ -902,15 +903,14 @@ function lift_apply_args!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
                     end
                 end
             end
-        end
-        # Create Core.svec call if we have arguments
-        if svec_args !== nothing
-            svec_args[1] = GlobalRef(Core, :svec)
-            new_svec_call = Expr(:call)
-            new_svec_call.args = svec_args
-            inst = compact[SSAValue(idx)]
-            new_svec_ssa = insert_node!(compact, SSAValue(idx), NewInstruction(new_svec_call, SimpleVector, NoCallInfo(), inst[:line], inst[:flag]))
-            stmt.args[i] = new_svec_ssa
+            if svec_args !== nothing
+                svec_args[1] = GlobalRef(Core, :svec)
+                new_svec_call = Expr(:call)
+                new_svec_call.args = svec_args
+                inst = compact[SSAValue(idx)]
+                new_svec_ssa = insert_node!(compact, SSAValue(idx), NewInstruction(new_svec_call, SimpleVector, NoCallInfo(), inst[:line], inst[:flag]))
+                stmt.args[i] = new_svec_ssa
+            end
         end
     end
     compact[idx] = stmt
@@ -1422,7 +1422,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             elseif is_known_call(stmt, Core._apply_iterate, compact)
                 length(stmt.args) >= 4 || continue
-                lift_apply_args!(compact, idx, stmt, 𝕃ₒ)
+                lift_apply_args!(compact, idx, stmt)
             end
             continue
         end

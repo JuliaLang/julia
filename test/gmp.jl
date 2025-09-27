@@ -235,6 +235,11 @@ let a, b
     @test prod(b) == foldl(*, b)
     @test 1 == prod(BigInt[]) isa BigInt
     @test prod(BigInt[0, 0, 0]) == 0 # issue #46665
+    # Test prod with negative numbers
+    @test prod(BigInt[-2, 3, -4]) == 24
+    @test prod(BigInt[-1, -2, -3]) == -6
+    @test prod(BigInt[-5]) == -5
+    @test prod(BigInt[-2, -2, -2, -2]) == 16
 end
 
 @testset "Iterated arithmetic" begin

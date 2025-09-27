@@ -1594,7 +1594,7 @@ JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
-JCPPFLAGS += -D_WIN32_WINNT=_WIN32_WINNT_WIN8
+JCPPFLAGS += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
 UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
