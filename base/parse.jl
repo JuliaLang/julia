@@ -38,14 +38,31 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 parse(T::Type, str; base = Int)
 parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
-function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
-    a::Int = (base <= 36 ? 10 : 36)
-    2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-    d = '0' <= c <= '9' ? c-'0'    :
-        'A' <= c <= 'Z' ? c-'A'+10 :
-        'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
-    d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
-    convert(T, d)
+@noinline function _invalid_base(base)
+    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+end
+
+@noinline _invalid_digit(base, char) = throw(ArgumentError("invalid base $base digit $(repr(char))"))
+
+function parse_char(::Type{T}, c::AbstractChar, base::Integer, throw::Bool) where {T <: Integer}
+    a::UInt8 = (base <= 36 ? 10 : 36)
+    (2 <= base <= 62) || (throw ? _invalid_base(base) : return nothing)
+    base = base % UInt8
+    codepoint = c > 'z' ? 0xff : UInt8(c)
+    d = UInt8('0') ≤ codepoint ≤ UInt8('9') ? codepoint - UInt8('0') :
+        UInt8('A') ≤ codepoint ≤ UInt8('Z') ? codepoint - UInt8('A') + UInt8(10) :
+        UInt8('a') ≤ codepoint ≤ UInt8('z') ? codepoint - UInt8('a') + a :
+        0xff
+    d < base || (throw ? _invalid_digit(base, c) : return nothing)
+    convert(T, d)::T
+end
+
+function parse(::Type{T}, c::AbstractChar; base::Integer=10) where {T <: Integer}
+    @inline parse_char(T, c, base, true)
+end
+
+function tryparse(::Type{T}, c::AbstractChar; base::Integer=10) where {T <: Integer}
+    @inline parse_char(T, c, base, false)
 end
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
