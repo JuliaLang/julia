@@ -2865,7 +2865,7 @@ julia> hvcat(5, M...) |> size  # hvcat puts matrices next to each other
 (14, 15)
 ```
 """
-stack(iter; dims=:) = _stack(dims, iter)
+stack(iter; dims::D=:) where {D} = _stack(dims, iter)
 
 """
     stack(f, args...; [dims])
@@ -2894,14 +2894,14 @@ julia> stack(eachrow([1 2 3; 4 5 6]), (10, 100); dims=1) do row, n
  4.0  5.0  6.0  400.0  500.0  600.0  0.04  0.05  0.06
 ```
 """
-stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
-stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
+stack(f, iter; dims::D=:) where {D} = _stack(dims, f(x) for x in iter)
+stack(f, xs, yzs...; dims::D=:) where {D} = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
 
-_stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
+_stack(dims::D, iter) where {D<:Union{Integer, Colon}} = _stack(dims, IteratorSize(iter), iter)
 
-_stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
+_stack(dims::D, ::IteratorSize, iter) where {D} = _stack(dims, collect(iter))
 
-function _stack(dims, ::Union{HasShape, HasLength}, iter)
+function _stack(dims::D, ::Union{HasShape, HasLength}, iter) where {D}
     S = @default_eltype iter
     T = S != Union{} ? eltype(S) : Any  # Union{} occurs for e.g. stack(1,2), postpone the error
     if isconcretetype(T)
