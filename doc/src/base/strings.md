@@ -314,4 +314,5 @@ Base.AnnotatedChar
 Base.annotatedstring
 Base.annotations
 Base.annotate!
+Base.unannotate
 ```
