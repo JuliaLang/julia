@@ -57,6 +57,8 @@ New library functions
 * `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
 * `Iterators.findeach` is a lazy version of `findall` ([#54124])
+* `Base.unsafe_substring` is an unexported, public constructor to build a `SubString` without checking for
+   valid string indices.
 
 New library features
 --------------------

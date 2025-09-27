@@ -36,18 +36,67 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         return new(s, i-1, nextind(s,j)-i)
     end
-    function SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where T<:AbstractString
-        @boundscheck if !(i == j == 0)
-            si, sj = i + 1, prevind(s, j + i + 1)
-            @inbounds isvalid(s, si) || string_index_err(s, si)
-            @inbounds isvalid(s, sj) || string_index_err(s, sj)
-        end
-        new(s, i, j)
+    # We don't expose this, because the exposed constructor needs to avoid constructing
+    # a SubString{SubString{T}} when passed a substring.
+    global function _unsafe_substring(s::T, offset::Int, ncodeunits::Int) where {T <: AbstractString}
+        new{T}(s, offset, ncodeunits)
     end
 end
 
+function check_codeunit_bounds(s::AbstractString, first_index::Int, n_codeunits::Int)
+    last_index = first_index + n_codeunits - 1
+    bad_index = if first_index < 1
+        first_index
+    elseif last_index > ncodeunits(s)
+        last_index
+    else
+        return nothing
+    end
+    throw(BoundsError(s, bad_index))
+end
+
+"""
+    unsafe_substring(s::AbstractString, first_index::Int, n_codeunits::Int)::SubString{typeof(s)}
+    unsafe_substring(s::SubString{S}, first_index::Int, n_codeunits::Int)::SubString{S}
+
+Create a substring of `s` spanning the codeunits `first_index:(first_index + n_codeunits - 1)`.
+
+If `first_index` < 1, or `first_index + n_codeunits - 1 > ncodeunits(s)`, throw a `BoundsError`.
+
+This function does check bounds, but does not validate that the arguments corresponds to valid
+start and end indices in `s`, and so the resulting substring may contain truncated characters.
+The presence of truncated characters is safe and well-defined for `String` and `SubString{String}`,
+but may not be permitted for custom subtypes of `AbstractString`.
+
+# Examples
+```jldoctest
+julia> s = "Hello, Bjørn!";
+
+julia> ss = unsafe_substring(s, 3, 10)
+"lo, Bjørn"
+
+julia> typeof(ss)
+SubString{String}
+
+julia> ss2 = unsafe_substring(ss, 2, 6)
+"o, Bj\\xc3"
+
+julia> typeof(ss2)
+SubString{String}
+```
+"""
+function unsafe_substring(s::AbstractString, first_index::Int, n_codeunits::Int)
+    @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+    return _unsafe_substring(s, first_index - 1, n_codeunits)
+end
+
+function unsafe_substring(s::SubString, first_index::Int, n_codeunits::Int)
+    @boundscheck @inline check_codeunit_bounds(s, first_index, n_codeunits)
+    string = s.string
+    return _unsafe_substring(string, first_index + s.offset - 1, n_codeunits)
+end
+
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-@propagate_inbounds SubString(s::T, i::Int, j::Int, v::Val{:noshift}) where {T<:AbstractString} = SubString{T}(s, i, j, v)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i)::Int, Int(j)::Int)
 @propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
@@ -56,8 +105,9 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
+SubString(s::AbstractString) = @inbounds unsafe_substring(s, 1, Int(ncodeunits(s))::Int)
+SubString{T}(s::T) where {T<:AbstractString} = SubString(s)
+SubString(s::SubString) = s
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)

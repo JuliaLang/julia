@@ -222,10 +222,17 @@ end
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
     end
 
-    @testset ":noshift constructor" begin
-        @test SubString("", 0, 0, Val(:noshift)) == ""
-        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
-        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
+    @testset "unsafe_substring" begin
+        s = "abcdefgøø"
+        @test unsafe_substring(s, 1, 11) == s
+        @test unsafe_substring(s, 1, 3) == "abc"
+        @test unsafe_substring(s, 3, 3) == "cde"
+        @test unsafe_substring(s, 5, 4) == String(codeunits(s)[5:8])
+        @test unsafe_substring(s, 1, 2) isa SubString{String}
+        @test unsafe_substring(unsafe_substring(s, 2, 8), 1, 3) isa SubString{String}
+
+        @test_throws BoundsError unsafe_substring(s, 0, 2)
+        @test_throws BoundsError unsafe_substring(s, 2, 11)
     end
 end
 
