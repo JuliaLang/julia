@@ -1,0 +1,6 @@
+# test/mul_hi.jl
+using Test
+include("../base/special/mul_hi.jl")
+
+@test mul_hi(Int32(100000), Int32(100000)) == 2
+@test mul_hi(UInt8(250), UInt8(100)) == 97
