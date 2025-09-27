@@ -1522,7 +1522,8 @@ end
     @test "⁽¹²³⁾ⁿ" in test_complete("\\^(123)n")[1]
     @test "ⁿ" in test_complete("\\^n")[1]
     @test "ᵞ" in test_complete("\\^gamma")[1]
-    @test isempty(test_complete("\\^(123)nq")[1])
+    @test "⁽¹²³⁾ⁿ𐞥" in test_complete("\\^(123)nq")[1]
+    @test isempty(test_complete("\\^(123)nQ")[1])
     @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
     @test "ₙ" in test_complete("\\_n")[1]
     @test "ᵧ" in test_complete("\\_gamma")[1]
