@@ -1499,7 +1499,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,AbstractUnitRange{Int}})
+@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::D) where {D<:Union{Colon,AbstractUnitRange{Int}}}
     I0 = to_indices(B, (J0,))[1]
     @boundscheck checkbounds(B, I0)
     l0 = length(I0)
@@ -1511,7 +1511,7 @@ end
 end
 
 @inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
+        I0::DI0, I::Union{Int,AbstractUnitRange{Int},Colon}...) where {DI0<:Union{Colon,AbstractUnitRange{Int}}, }
     J = to_indices(B, (I0, I...))
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, X, J...)
@@ -1552,7 +1552,7 @@ end
 end
 
 @propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
-        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
+        I0::DI0, I::Union{Int,AbstractUnitRange{Int},Colon}...) where {DI0<:Union{Colon,AbstractUnitRange{Int}}}
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 
@@ -1747,7 +1747,7 @@ julia> unique(A, dims=3)
  0  0
 ```
 """
-unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
+unique(A::AbstractArray; dims::D = :) where {D<:Union{Colon,Integer}} = _unique_dims(A, dims)
 
 _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 
