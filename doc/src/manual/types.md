@@ -473,7 +473,7 @@ To recap, two essential properties define immutability in Julia:
     * For composite  types, this means that the identity of the values of its fields will
       never change. When the fields are bits types, that means their bits will never change,
       for fields whose values are mutable types like arrays, that means the fields will
-      always refer to the same mutable value even though that mutable value's content may
+      always refer to the same mutable value(here array) even though that mutable value's content may
       itself be modified.
   * An object with an immutable type may be copied freely by the compiler since its
     immutability makes it impossible to programmatically distinguish between the original
