@@ -143,13 +143,19 @@ function lcm(a::T, b::T) where T<:Integer
     end
 end
 
+function _promote_mixed_signs(a::Signed, b::Unsigned)
+    # handle the case a == typemin(typeof(a)) if R != typeof(a)
+    R = promote_type(typeof(a), typeof(b))
+   promote(abs(a % signed(R)), b)
+end
+
 gcd(a::Integer) = checked_abs(a)
 gcd(a::Rational) = checked_abs(a.num) // a.den
 lcm(a::Union{Integer,Rational}) = gcd(a)
-gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
-gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
+gcd(a::Unsigned, b::Signed) = gcd(b, a)
+gcd(a::Signed, b::Unsigned) = gcd(_promote_mixed_signs(a, b)...)
 lcm(a::Unsigned, b::Signed) = lcm(promote(a, abs(b))...)
-lcm(a::Signed, b::Unsigned) = lcm(promote(abs(a), b)...)
+lcm(a::Signed, b::Unsigned) = lcm(_promote_mixed_signs(a, b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
 lcm(a::Real, b::Real) = lcm(promote(a,b)...)
 gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
@@ -261,9 +267,7 @@ end
 
 gcdx(a::Integer, b::Integer) = gcdx(promote(a, b)...)
 function gcdx(a::Signed, b::Unsigned)
-    R = promote_type(typeof(a), typeof(b))
-    _a = a % signed(R) # handle the case a == typemin(typeof(a)) if R != typeof(a)
-    d, u, v = gcdx(promote(abs(_a), b)...)
+    d, u, v = gcdx(_promote_mixed_signs(a, b)...)
     d, flipsign(u, a), v
 end
 function gcdx(a::Unsigned, b::Signed)
