@@ -29,6 +29,7 @@ New language features
 * `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
   `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109]).
 * The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall` ([#49933]).
+* A single method covering multiple functions is now allowed in more cases. See issue #54620. ([#58131]).
 
 Language changes
 ----------------
