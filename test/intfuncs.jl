@@ -217,6 +217,19 @@ end
     d, u, v = gcdx(x, y)
     @test x*u + y*v == d
 
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test_throws OverflowError gcdx(typemin(T), typemin(T))
+        @test_throws OverflowError gcdx(typemin(T), T(0))
+        @test_throws OverflowError gcdx(T(0), typemin(T))
+        d, u, v = gcdx(typemin(T), T(-1))
+        @test d == T(1)
+        @test typemin(T) * u + T(-1) * v == T(1)
+        @test gcdx(T(-1), typemin(T)) == (d, v, u)
+        d, u, v = gcdx(typemin(T), T(1))
+        @test d == T(1)
+        @test typemin(T) * u + T(1) * v == T(1)
+        @test gcdx(T(1), typemin(T)) == (d, v, u)
+    end
 end
 
 # issue #58025
@@ -297,7 +310,11 @@ end
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
             for m in typemin(T):typemax(T)
-                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+                if !(
+                    iszero(m) ||
+                    iszero(mod(x, m)) && !isone(abs(m)) ||
+                    !isone(gcd(x, m))
+                )
                     y = invmod(x, m)
                     @test mod(widemul(y, x), m) == mod(1, m)
                     @test div(y, m) == 0

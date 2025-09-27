@@ -223,22 +223,26 @@ julia> gcdx(15, 12, 20)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
-    T = promote_type(typeof(a), typeof(b))
-    a == b == 0 && return (zero(T), zero(T), zero(T))
+Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Integer}
+    if iszero(a) && iszero(b)
+        return (zero(T), zero(T), zero(T))
+    elseif isone(abs(b))
+        # handles (typemin(::Signed), -1)
+        return (one(T), zero(T), b)
+    elseif isone(abs(a))
+        return (one(T), a, zero(T))
+    end
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a && s1*a0 + t1*b0 == b
-    x = a % T
-    y = b % T
-    while y != 0
-        q, r = divrem(x, y)
-        x, y = y, r
+    while b != 0
+        q, r = divrem(a, b)
+        a, b = b, r
         s0, s1 = s1, s0 - q*s1
         t0, t1 = t1, t0 - q*t1
     end
-    x < 0 ? (-x, -s0, -t0) : (x, s0, t0)
+    a < 0 ? (checked_abs(a), -s0, -t0) : (a, s0, t0)
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
@@ -254,6 +258,8 @@ function gcdx(a::Real, b::Real, cs::Real...)
     d′, x, ys... = gcdx(d, cs...)
     return d′, i*x, j*x, ys...
 end
+
+gcdx(a::Integer, b::Integer) = gcdx(promote(a, b)...)
 function gcdx(a::Signed, b::Unsigned)
     R = promote_type(typeof(a), typeof(b))
     _a = a % signed(R) # handle the case a == typemin(typeof(a)) if R != typeof(a)
@@ -289,11 +295,11 @@ julia> invmod(5, 6)
 function invmod(n::Integer, m::Integer)
     iszero(m) && throw(DomainError(m, "`m` must not be 0."))
     if n isa Signed && hastypemax(typeof(n))
-        # work around inconsistencies in gcdx
-        # https://github.com/JuliaLang/julia/issues/33781
         T = promote_type(typeof(n), typeof(m))
-        n == typemin(typeof(n)) && m == typeof(n)(-1) && return T(0)
-        n == typeof(n)(-1) && m == typemin(typeof(n)) && return T(-1)
+        t = typemin(T)
+        (m == t) && (iszero(n) || n == t) &&
+            throw(DomainError((n, m), LazyString("Greatest common divisor is ", m, ".")))
+
     end
     g, x, y = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
