@@ -18,7 +18,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
         end
         return Pair{Any,Tuple{Bool,Bool}}(Const(value), (true, true))
     else
-        mi = ci.def
+        mi = get_ci_mi(ci)
         if is_constprop_edge_recursed(mi, parent)
             return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
         end

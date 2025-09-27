@@ -185,13 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = size(a, Int(d)::Int)
-function size(a::Array, d::Int)
-    d < 1 && error("arraysize: dimension out of range")
-    sz = getfield(a, :size)
-    return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
-end
-
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
