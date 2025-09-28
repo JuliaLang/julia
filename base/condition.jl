@@ -69,6 +69,8 @@ struct GenericCondition{L<:AbstractLock}
     GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
 end
 
+show(io::IO, c::GenericCondition) = print(io, GenericCondition, "(", c.lock, ")")
+
 assert_havelock(c::GenericCondition) = assert_havelock(c.lock)
 lock(c::GenericCondition) = lock(c.lock)
 unlock(c::GenericCondition) = unlock(c.lock)
@@ -103,19 +105,16 @@ end
 """
     wait([x])
 
-Block the current task until some event occurs, depending on the type of the argument:
+Block the current task until some event occurs.
 
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition and return the `val`
-  parameter passed to `notify`. Waiting on a condition additionally allows passing
-  `first=true` which results in the waiter being put _first_ in line to wake up on `notify`
-  instead of the usual first-in-first-out behavior.
+  parameter passed to `notify`. See the `Condition`-specific docstring of `wait` for
+  the exact behavior.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
-* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, a
-  `TaskFailedException` (which wraps the failed task) is thrown.  Waiting on a task
-  additionally allows passing `throw=false` which prevents throwing a `TaskFailedException`
-  when the task fails.
+* [`Task`](@ref): Wait for a `Task` to finish. See the `Task`-specific docstring of `wait` for
+  the exact behavior.
 * [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
@@ -124,6 +123,16 @@ restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
 Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
 proceeding.
 """
+function wait end
+
+"""
+    wait(c::GenericCondition; first::Bool=false)
+
+Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notify`.
+
+If the keyword `first` is set to `true`, the waiter will be put _first_
+in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
+"""
 function wait(c::GenericCondition; first::Bool=false)
     ct = current_task()
     _wait2(c, ct, first)
@@ -131,7 +140,7 @@ function wait(c::GenericCondition; first::Bool=false)
     try
         return wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()
     finally
         relockall(c.lock, token)
@@ -186,6 +195,8 @@ this, and can be used for level-triggered events.
 This object is NOT thread-safe. See [`Threads.Condition`](@ref) for a thread-safe version.
 """
 const Condition = GenericCondition{AlwaysLockedST}
+
+show(io::IO, ::Condition) = print(io, Condition, "()")
 
 lock(c::GenericCondition{AlwaysLockedST}) =
     throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))

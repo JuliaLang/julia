@@ -1,8 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 
 declare {}*** @julia.ptls_states()
@@ -28,14 +26,12 @@ define void @argument_refinement({} addrspace(10)* %a) {
 ; Check that we reuse the gc slot from the box
 define void @heap_refinement1(i64 %a) {
 ; CHECK-LABEL: @heap_refinement1
-; TYPED:   %gcframe = alloca {} addrspace(10)*, i32 3
 ; OPAQUE:   %gcframe = alloca ptr addrspace(10), i32 3
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
     %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
-; TYPED: store {} addrspace(10)* %aboxed
 ; OPAQUE: store ptr addrspace(10) %aboxed
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
@@ -47,14 +43,12 @@ define void @heap_refinement1(i64 %a) {
 ; Check that we don't root the allocated value here, just the derived value
 define void @heap_refinement2(i64 %a) {
 ; CHECK-LABEL: @heap_refinement2
-; TYPED:   %gcframe = alloca {} addrspace(10)*, i32 3
 ; OPAQUE:   %gcframe = alloca ptr addrspace(10), i32 3
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
     %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
-; TYPED: store {} addrspace(10)* %loaded1
 ; OPAQUE: store ptr addrspace(10) %loaded1
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
@@ -65,20 +59,14 @@ define void @heap_refinement2(i64 %a) {
 ; Check that the way we compute rooting is compatible with refinements
 define void @issue22770() {
 ; CHECK-LABEL: @issue22770
-; TYPED: %gcframe = alloca {} addrspace(10)*, i32 4
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 4
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %y = call {} addrspace(10)* @allocate_some_value()
     %casted1 = bitcast {} addrspace(10)* %y to {} addrspace(10)* addrspace(10)*
     %x = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
-; TYPED: store {} addrspace(10)* %y,
 ; OPAQUE: store ptr addrspace(10) %y,
     %a = call {} addrspace(10)* @allocate_some_value()
-; TYPED: store {} addrspace(10)* %a
-; TYPED: call void @one_arg_boxed({} addrspace(10)* %x)
-; TYPED: call void @one_arg_boxed({} addrspace(10)* %a)
-; TYPED: call void @one_arg_boxed({} addrspace(10)* %y)
 
 ; OPAQUE: store ptr addrspace(10) %a
 ; OPAQUE: call void @one_arg_boxed(ptr addrspace(10) %x)
@@ -87,10 +75,8 @@ define void @issue22770() {
     call void @one_arg_boxed({} addrspace(10)* %x)
     call void @one_arg_boxed({} addrspace(10)* %a)
     call void @one_arg_boxed({} addrspace(10)* %y)
-; TYPED: store {} addrspace(10)* %x
 ; OPAQUE: store ptr addrspace(10) %x
     %c = call {} addrspace(10)* @allocate_some_value()
-; TYPED: store {} addrspace(10)* %c
 ; OPAQUE: store ptr addrspace(10) %c
     call void @one_arg_boxed({} addrspace(10)* %x)
     call void @one_arg_boxed({} addrspace(10)* %c)
@@ -121,7 +107,6 @@ L3:
 
 define void @dont_refine_loop({} addrspace(10)* %x) {
 ; CHECK-LABEL: @dont_refine_loop
-; TYPED: %gcframe = alloca {} addrspace(10)*, i32 4
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 4
 top:
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -165,7 +150,6 @@ L2:
 
 define void @refine_loop_indirect({} addrspace(10)* %x) {
 ; CHECK-LABEL: @refine_loop_indirect
-; TYPED: %gcframe = alloca {} addrspace(10)*, i32 3
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 top:
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -191,7 +175,6 @@ L2:
 
 define void @refine_loop_indirect2({} addrspace(10)* %x) {
 ; CHECK-LABEL: @refine_loop_indirect2
-; TYPED: %gcframe = alloca {} addrspace(10)*, i32 3
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 top:
   %pgcstack = call {}*** @julia.get_pgcstack()

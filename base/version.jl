@@ -51,8 +51,7 @@ struct VersionNumber
     build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::VerTuple,
-            bld::VerTuple)
+                           @nospecialize(pre::VerTuple), @nospecialize(bld::VerTuple))
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -179,7 +178,7 @@ ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(A::VerTuple, B::VerTuple)
+function ident_cmp(@nospecialize(A::VerTuple), @nospecialize(B::VerTuple))
     for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
         c = ident_cmp(a, b)
         (c != 0) && return c
@@ -219,7 +218,7 @@ function isless(a::VersionNumber, b::VersionNumber)
 end
 
 function hash(v::VersionNumber, h::UInt)
-    h += 0x8ff4ffdb75f9fede % UInt
+    h ⊻= 0x8ff4ffdb75f9fede % UInt
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
