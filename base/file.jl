@@ -697,7 +697,7 @@ function temp_cleanup_postprocess(cleanup_dirs)
             end
         end
         """
-        cmd = Cmd(`$(Base.julia_cmd()) --startup-file=no -e $rmcmd`; ignorestatus=true, detach=true)
+        cmd = Cmd(Base.cmd_gen(((Base.julia_cmd(),), ("--startup-file=no",), ("-e",), (rmcmd,))); ignorestatus = true, detach = true)
         pw = Base.PipeEndpoint()
         rd, wr = Base.link_pipe(true, true)
         try
