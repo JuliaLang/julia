@@ -110,6 +110,26 @@ if threadpoolsize(:default) > 1
     end
 end
 
+if threadpoolsize() > 1
+    let lk = Base.Threads.PaddedSpinLock()
+        c1 = Base.Event()
+        c2 = Base.Event()
+        @test trylock(lk)
+        @test !trylock(lk)
+        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
+        t2 = Threads.@spawn (notify(c2); trylock(lk))
+        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
+        wait(c1)
+        wait(c2)
+        @test !fetch(t2)
+        @test istaskdone(t2)
+        @test !istaskdone(t1)
+        unlock(lk)
+        @test fetch(t1)
+        @test istaskdone(t1)
+    end
+end
+
 # threading constructs
 
 @testset "@threads and @spawn threadpools" begin

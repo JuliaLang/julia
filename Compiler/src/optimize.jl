@@ -113,7 +113,9 @@ set_inlineable!(src::CodeInfo, val::Bool) =
 function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
-    return convert(InlineCostType, x)
+    x = ccall(:jl_encode_inlining_cost, UInt8, (InlineCostType,), x)
+    x = ccall(:jl_decode_inlining_cost, InlineCostType, (UInt8,), x)
+    return x
 end
 
 const SRC_FLAG_DECLARED_INLINE = 0x1
@@ -130,6 +132,17 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 #####################
 
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
+
+function src_inlining_policy(interp::AbstractInterpreter, mi::MethodInstance,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    # If we have a generator, but we can't invoke it (because argument type information is lacking),
+    # don't inline so we defer its invocation to runtime where we'll have precise type information.
+    if isa(mi.def, Method) && hasgenerator(mi)
+        may_invoke_generator(mi) || return false
+    end
+    return src_inlining_policy(interp, src, info, stmt_flag)
+end
+
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     isa(src, OptimizationState) && (src = src.src)
@@ -147,16 +160,46 @@ struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
     world::UInt
     interp::Interp
+    opt_cache::IdDict{MethodInstance,CodeInstance}
 end
-function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    return InliningState(sv.edges, frame_world(sv), interp)
+function InliningState(sv::InferenceState, interp::AbstractInterpreter,
+                       opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    return InliningState(sv.edges, frame_world(sv), interp, opt_cache)
 end
-function InliningState(interp::AbstractInterpreter)
-    return InliningState(Any[], get_inference_world(interp), interp)
+function InliningState(interp::AbstractInterpreter,
+                       opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    return InliningState(Any[], get_inference_world(interp), interp, opt_cache)
+end
+
+struct OptimizerCache{CodeCache}
+    wvc::WorldView{CodeCache}
+    owner
+    opt_cache::IdDict{MethodInstance,CodeInstance}
+    function OptimizerCache(
+        wvc::WorldView{CodeCache},
+        @nospecialize(owner),
+        opt_cache::IdDict{MethodInstance,CodeInstance}) where CodeCache
+        new{CodeCache}(wvc, owner, opt_cache)
+    end
+end
+function get((; wvc, owner, opt_cache)::OptimizerCache, mi::MethodInstance, default)
+    if haskey(opt_cache, mi)
+        codeinst = opt_cache[mi]
+        @assert codeinst.min_world ≤ wvc.worlds.min_world &&
+                wvc.worlds.max_world ≤ codeinst.max_world &&
+                codeinst.owner === owner
+        @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
+        return codeinst
+    end
+    return get(wvc, mi, default)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
-code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
+function code_cache(state::InliningState)
+    cache = WorldView(code_cache(state.interp), state.world)
+    owner = cache_owner(state.interp)
+    return OptimizerCache(cache, owner, state.opt_cache)
+end
 
 mutable struct OptimizationResult
     ir::IRCode
@@ -183,13 +226,15 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     bb_vartables::Vector{Union{Nothing,VarTable}}
     insert_coverage::Bool
 end
-function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
-    inlining = InliningState(sv, interp)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
+                           opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    inlining = InliningState(sv, interp, opt_cache)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
                              sv.unreachable, sv.bb_vartables, sv.insert_coverage)
 end
-function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter,
+                           opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
@@ -209,7 +254,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     mod = isa(def, Method) ? def.module : def
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
-    inlining = InliningState(interp)
+    inlining = InliningState(interp, opt_cache)
     cfg = compute_basic_blocks(src.code)
     unreachable = BitSet()
     bb_vartables = Union{VarTable,Nothing}[]
@@ -686,7 +731,9 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
     f === nothing && return false
     if f === getfield
         nargs = 4
-    elseif f === memoryrefnew || f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefnew
+        nargs= 3
+    elseif f === memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5
