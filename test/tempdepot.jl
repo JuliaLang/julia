@@ -9,22 +9,7 @@
 
 if Sys.iswindows() && !@isdefined(DEPOTS_TOREMOVE)
     const DEPOTS_TOREMOVE = String[]
-    atexit() do # launch a process that will rm the depots
-        rmcmd = """
-        for _ in 1:3600 # wait up to 1h from atexit() until the julia testing process dies
-            sleep(1)
-            ccall(:uv_kill, Cint, (Cuint, Cint), $(getpid()), 0) == Base.UV_ESRCH && break
-        end
-        for path in $DEPOTS_TOREMOVE
-            try
-                rm(path, force=true, recursive=true)
-            catch
-            end
-        end
-        """
-        cmd = Cmd(`$(Base.julia_cmd()) --startup-file=no -e $rmcmd`; ignorestatus=true, detach=true)
-        run(cmd; wait=false)
-    end
+    atexit(() -> Base.Filesystem.temp_cleanup_postprocess(DEPOTS_TOREMOVE))
 end
 
 function rmdepot(depot)
