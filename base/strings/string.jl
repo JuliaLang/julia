@@ -78,6 +78,8 @@ function String(v::Vector{UInt8})
     return str
 end
 
+String(itr::Generator) = String(collect(itr))
+
 """
     unsafe_takestring(m::Memory{UInt8})::String
 
