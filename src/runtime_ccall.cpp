@@ -59,7 +59,7 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
     void * ptr;
-    jl_dlsym(handle, f_name, &ptr, 1, 0);
+    jl_dlsym(handle, f_name, &ptr, 1, 1);
     return ptr;
 }
 
@@ -80,7 +80,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name)
     } else
         jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
     void *ptr;
-    jl_dlsym(lib_ptr, f_name, &ptr, 1, 0);
+    jl_dlsym(lib_ptr, f_name, &ptr, 1, 1);
     return ptr;
 }
 
@@ -296,7 +296,8 @@ jl_value_t *jl_get_cfunction_trampoline(
                 permanent = true;
         }
         if (permanent) {
-            result = jl_gc_permobj(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type, 0);
+            jl_task_t *ct = jl_current_task;
+            result = jl_gc_permobj(ct->ptls, sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type, 0);
             memset(result, 0, jl_datatype_size(result_type));
         }
         else {
