@@ -96,6 +96,44 @@ inv(x::Integer) = float(one(x)) / float(x)
 # skip promotion for system integer types
 (/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
+
+"""
+    mul_hi(a::T, b::T) where {T<:Base.Integer}
+
+Returns the higher half of the product of `a` and `b` where `T` is a fixed size integer.
+
+# Examples
+```jldoctest
+julia> Base.mul_hi(12345678987654321, 123456789)
+82624
+
+julia> (widen(12345678987654321) * 123456789) >> 64
+82624
+
+julia> Base.mul_hi(0xff, 0xff)
+0xfe
+```
+"""
+function mul_hi(a::T, b::T) where {T<:Integer}
+    ((widen(a)*b) >>> Base.top_set_bit(-1 % T)) % T
+end
+
+function mul_hi(a::UInt128, b::UInt128)
+    shift = sizeof(a)*4
+    mask = typemax(UInt128) >> shift
+    a1, a2 = a >>> shift, a & mask
+    b1, b2 = b >>> shift, b & mask
+    a1b1, a1b2, a2b1, a2b2 = a1*b1, a1*b2, a2*b1, a2*b2
+    carry = ((a1b2 & mask) + (a2b1 & mask) + (a2b2 >>> shift)) >>> shift
+    a1b1 + (a1b2 >>> shift) + (a2b1 >>> shift) + carry
+end
+
+function mul_hi(a::Int128, b::Int128)
+    shift = sizeof(a)*8 - 1
+    t1, t2 = (a >> shift) & b % UInt128, (b >> shift) & a % UInt128
+    (mul_hi(a % UInt128, b % UInt128) - t1 - t2) % Int128
+end
+
 """
     isodd(x::Number)::Bool
 
