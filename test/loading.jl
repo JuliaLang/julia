@@ -735,9 +735,18 @@ end
             # If the project file doesn't exist, active_manifest() should return `nothing`:
             @test _activate_and_get_active_manifest_noarg(proj) === nothing
 
-            # Once the project file exists, active_manifest() should return the path to the manifest:
+            # If the project file exists but the manifest file does not, active_manifest() should still return `nothing`:
             touch(proj)
-            @test _activate_and_get_active_manifest_noarg(proj) == joinpath(proj, "Manifest.toml")
+            @test _activate_and_get_active_manifest_noarg() === nothing
+
+            # If the project and manifest files both exist, active_manifest() should return the path to the manifest:
+            manif = joinpath(proj, "Manifest.toml")
+            touch(manif)
+            @test _activate_and_get_active_manifest_noarg(proj) == manif
+
+            # If the manifest file exists but the project file does not, active_manifest() should return `nothing`:
+            rm(proj)
+            @test _activate_and_get_active_manifest_noarg(proj) == nothing
         end
     end
 
@@ -752,9 +761,18 @@ end
             # If the project file doesn't exist, active_manifest(proj) should return `nothing`:
             @test Base.active_manifest(proj) === nothing
 
-            # Once the project file exists, active_manifest(proj) should return the path to the manifest:
+            # If the project file exists but the manifest file does not, active_manifest(proj) should still return `nothing`:
             touch(proj)
-            @test Base.active_manifest(proj) == joinpath(proj, "Manifest.toml")
+            @test Base.active_manifest(proj) === nothing
+
+            # If the project and manifest files both exist, active_manifest(proj) should return the path to the manifest:
+            manif = joinpath(proj, "Manifest.toml")
+            touch(manif)
+            @test Base.active_manifest(proj) == manif
+
+            # If the manifest file exists but the project file does not, active_manifest(proj) should return `nothing`:
+            rm(proj)
+            @test Base.active_manifest(proj) === nothing
         end
     end
 
