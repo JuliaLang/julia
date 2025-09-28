@@ -708,7 +708,7 @@ mktempdir() do dir
     @test success(cmd)
 end
 
-@testset "Base.active_manifest()" begin 
+@testset "Base.active_manifest()" begin
     old_act_proj = Base.ACTIVE_PROJECT[]
     try
         Base.ACTIVE_PROJECT[] = nothing
