@@ -731,8 +731,10 @@ end
         end
         mktempdir do dir
             proj = joinpath(dir, "Project.toml")
+
             # If the project file doesn't exist, active_manifest() should return `nothing`:
             @test _activate_and_get_active_manifest_noarg(proj) === nothing
+
             # Once the project file exists, active_manifest() should return the path to the manifest:
             touch(proj)
             @test _activate_and_get_active_manifest_noarg(proj) == joinpath(proj, "Manifest.toml")
@@ -746,7 +748,11 @@ end
         end
         mktempdir do dir
             proj = joinpath(dir, "Project.toml")
+
+            # If the project file doesn't exist, active_manifest(proj) should return `nothing`:
             @test Base.active_manifest(proj) === nothing
+
+            # Once the project file exists, active_manifest(proj) should return the path to the manifest:
             touch(proj)
             @test Base.active_manifest(proj) == joinpath(proj, "Manifest.toml")
         end
@@ -761,7 +767,7 @@ end
         mktempdir() do dir
             proj = joinpath(dir, "Project.toml")
             @test Base.active_manifest(proj) = nothing
-            @test _activate_and_get_active_manifest_noarg() === nothing
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
         end
     end
 end
