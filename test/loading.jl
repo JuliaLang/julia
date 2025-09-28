@@ -708,6 +708,16 @@ mktempdir() do dir
     @test success(cmd)
 end
 
+@testset "Base.active_manifest()" begin 
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    try
+        Base.ACTIVE_PROJECT[] = nothing
+        @test Base.active_manifest === nothing
+    finally
+        Base.ACTIVE_PROJECT[] = old_act_proj
+    end
+end
+
 @testset "expansion of JULIA_LOAD_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
     tmp = "/this/does/not/exist"
