@@ -79,8 +79,9 @@ public
     isoperator,
     isunaryoperator,
 
-# scalar math
+# Integer math
     uabs,
+    mul_hi,
 
 # C interface
     cconvert,

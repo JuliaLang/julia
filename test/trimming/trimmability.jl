@@ -48,5 +48,7 @@ function @main(args::Vector{String})::Cint
     catch
     end
 
+    Base.donotdelete(reshape([1,2,3],:,1,1))
+
     return 0
 end

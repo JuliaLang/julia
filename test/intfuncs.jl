@@ -216,6 +216,35 @@ end
     x, y = Int8(-12), UInt(100)
     d, u, v = gcdx(x, y)
     @test x*u + y*v == d
+
+end
+
+# issue #58025
+@testset "Mixed signed/unsigned types" begin
+    cases = [ # adapted from https://github.com/JuliaLang/julia/pull/59487#issuecomment-3258209203
+        (UInt16(100), Int8(-101)),
+        (Int8(-50), UInt16(75)),
+        (UInt32(12), Int16(-18)),
+        (Int64(-24), UInt8(36)),
+        (UInt8(15), Int16(-25)),
+        (Int32(-42), UInt64(56)),
+        (UInt128(1000), Int32(-1500)),
+        (UInt64(0), Int32(-5)),
+        (Int16(-7), UInt8(0)),
+        (Int8(-14), UInt8(13)),
+    ]
+    for (a, b) in cases
+        g1 = gcd(a, b)
+        g2, s, t = gcdx(a, b)
+        @test g1 === g2
+        @test s*a + t*b == g2
+        @test g2 >= 0
+        @test lcm(a, b) === convert(typeof(g1), lcm(widen(a), widen(b)))
+    end
+
+    @test gcdx(Int16(-32768), Int8(-128)) === (Int16(128), Int16(0), Int16(-1))
+    @test gcdx(Int8(-128), UInt16(256)) === (0x0080, 0xffff, 0x0000)
+    @test_broken gcd(Int8(-128), UInt16(256)) === 0x0080
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin
@@ -534,7 +563,7 @@ end
         x::Int
     end
     MyInt(x::MyInt) = x
-    Base.:+(a::MyInt, b::MyInt) = a.x + b.x
+    Base.uabs(x::MyInt) = Base.uabs(x.x)
 
     for n in 0:100
         x = ceil(Int, log2(n + 1))
@@ -550,9 +579,6 @@ end
         @test 32  == Base.top_set_bit(Int32(n)) == Base.top_set_bit(unsigned(Int32(n)))
         @test 8   == Base.top_set_bit(Int8(n)) == Base.top_set_bit(unsigned(Int8(n)))
         @test_throws DomainError Base.top_set_bit(big(n))
-        # This error message should never be exposed to the end user anyway.
-        err = n == -1 ? InexactError : DomainError
-        @test_throws err Base.top_set_bit(MyInt(n))
     end
 
     @test count_zeros(Int64(1)) == 63
@@ -570,6 +596,70 @@ end
     @test isqrt(5) == 2
     @test isqrt(Int8(4)) === Int8(2)
     @test isqrt(Int8(5)) === Int8(2)
+end
+
+@testset "exponent and top_set_bit consistency" begin
+    for _T in (Int8, Int16, Int32, Int64, Int128)
+        for issigned in (false, true)
+            T = issigned ? _T : unsigned(_T)
+            nbits = 8sizeof(T)
+            @test_throws DomainError exponent(T(0))
+            @test Base.top_set_bit(T(0)) == 0
+            @test Base.top_set_bit(T(0)) == invoke(Base.top_set_bit, Tuple{Integer}, T(0))
+
+            for i in 0:(nbits - (issigned ? 2 : 1))
+                p2 = T(1) << i
+                @test exponent(p2) == i
+                @test exponent(p2) == invoke(exponent, Tuple{Integer}, p2)
+                @test Base.top_set_bit(p2) == i + 1
+                @test Base.top_set_bit(p2) == invoke(Base.top_set_bit, Tuple{Integer}, p2)
+
+                p2m1 = p2 - T(1)
+                if p2m1 != 0
+                    @test exponent(p2m1) == i - 1
+                    @test exponent(p2m1) == invoke(exponent, Tuple{Integer}, p2m1)
+                    @test Base.top_set_bit(p2m1) == i
+                    @test Base.top_set_bit(p2m1) == invoke(Base.top_set_bit, Tuple{Integer}, p2m1)
+                end
+
+                p2p1 = p2 + T(1)
+                if p2p1 != 0
+                    @test exponent(p2p1) == max(i, 1)
+                    @test exponent(p2p1) == invoke(exponent, Tuple{Integer}, p2p1)
+                    @test Base.top_set_bit(p2p1) == max(i, 1) + 1
+                    @test Base.top_set_bit(p2p1) == invoke(Base.top_set_bit, Tuple{Integer}, p2p1)
+                end
+            end
+
+            @test exponent(typemax(T)) == nbits - (issigned ? 2 : 1)
+            @test exponent(typemax(T)) == invoke(exponent, Tuple{Integer}, typemax(T))
+            expected_max = !issigned ? nbits : nbits - 1
+            @test Base.top_set_bit(typemax(T)) == expected_max
+            @test Base.top_set_bit(typemax(T)) == invoke(Base.top_set_bit, Tuple{Integer}, typemax(T))
+
+            if issigned
+                for val in [T(-1), T(-2), T(-17), typemin(T)]
+                    expected = exponent(abs(BigInt(val)))
+                    @test exponent(val) == expected
+                    @test exponent(val) == invoke(exponent, Tuple{Integer}, val)
+                    @test Base.top_set_bit(val) == nbits
+                    @test invoke(Base.top_set_bit, Tuple{Integer}, val) == expected + 1
+                end
+            end
+        end
+
+        @test exponent(big(2)^100) == 100
+        @test exponent(big(2)^100 - 1) == 99
+        @test exponent(big(2)^100 + 1) == 100
+        @test exponent(big(-1)) == 0
+        @test_throws DomainError exponent(big(0))
+
+        @test Base.top_set_bit(big(0)) == 0
+        @test Base.top_set_bit(big(2)^100) == 101
+        @test Base.top_set_bit(big(2)^100 - 1) == 100
+        @test Base.top_set_bit(big(2)^100 + 1) == 101
+        @test_throws DomainError Base.top_set_bit(big(-1))
+    end
 end
 
 @testset "issue #4884" begin
