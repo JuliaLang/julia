@@ -708,13 +708,61 @@ mktempdir() do dir
     @test success(cmd)
 end
 
-@testset "Base.active_manifest()" begin
-    old_act_proj = Base.ACTIVE_PROJECT[]
-    try
-        Base.ACTIVE_PROJECT[] = nothing
-        @test Base.active_manifest === nothing
+old_act_proj = Base.ACTIVE_PROJECT[]
+function _activate_and_get_active_manifest_noarg(f::Function, project_file::AbstractString)
+    return try
+        Base.ACTIVE_PROJECT[] = project_file
+        return Base.active_manifest()
     finally
         Base.ACTIVE_PROJECT[] = old_act_proj
+    end
+end
+
+@testset "Base.active_manifest()" begin
+    test_dir = @__DIR__
+    test_cases = [
+        (joinpath(test_dir, "TestPkg", "Project.toml"), joinpath(test_dir, "TestPkg", "Manifest.toml")),
+        (joinpath(test_dir, "project", "Project.toml"), joinpath(test_dir, "project", "Manifest.toml")),
+    ]
+
+    @testset "active_manifest() - no argument passed" begin
+        for (proj, expected_man) in test_cases
+            @test _activate_and_get_active_manifest_noarg(proj) == expected_man
+        end
+        mktempdir do dir
+            proj = joinpath(dir, "Project.toml")
+            # If the project file doesn't exist, active_manifest() should return `nothing`:
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
+            # Once the project file exists, active_manifest() should return the path to the manifest:
+            touch(proj)
+            @test _activate_and_get_active_manifest_noarg(proj) == joinpath(proj, "Manifest.toml")
+        end
+    end
+
+    @testset "active_manifest(proj::AbstractString)" begin
+        Base.ACTIVE_PROJECT[] = old_act_proj
+        for (proj, expected_man) in test_cases
+            @test Base.active_manifest(proj) == expected_man
+        end
+        mktempdir do dir
+            proj = joinpath(dir, "Project.toml")
+            @test Base.active_manifest(proj) === nothing
+            touch(proj)
+            @test Base.active_manifest(proj) == joinpath(proj, "Manifest.toml")
+        end
+    end
+
+    @testset "ACTIVE_PROJECT[] is `nothing` => active_manifest() is nothing" begin
+        @test Base.active_manifest(nothing) === nothing
+        @test _activate_and_get_active_manifest_noarg(nothing) === nothing
+    end
+
+    @testset "Project file does not exist => active_manifest() is nothing" begin
+        mktempdir() do dir
+            proj = joinpath(dir, "Project.toml")
+            @test Base.active_manifest(proj) = nothing
+            @test _activate_and_get_active_manifest_noarg() === nothing
+        end
     end
 end
 
