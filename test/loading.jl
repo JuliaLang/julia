@@ -3,7 +3,7 @@
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
-# NOTE: the __LINE__ numbers for these first couple tests are significant, so
+# NOTE: the __LINE__ numbers for these first couple tests are signifmktempdiricant, so
 # adding any lines here will make those tests fail
 @test (@__LINE__) == 8
 
@@ -729,7 +729,7 @@ end
         for (proj, expected_man) in test_cases
             @test _activate_and_get_active_manifest_noarg(proj) == expected_man
         end
-        mktempdir do dir
+        mktempdir() do dir
             proj = joinpath(dir, "Project.toml")
 
             # If the project file doesn't exist, active_manifest() should return `nothing`:
@@ -755,7 +755,7 @@ end
         for (proj, expected_man) in test_cases
             @test Base.active_manifest(proj) == expected_man
         end
-        mktempdir do dir
+        mktempdir() do dir
             proj = joinpath(dir, "Project.toml")
 
             # If the project file doesn't exist, active_manifest(proj) should return `nothing`:
