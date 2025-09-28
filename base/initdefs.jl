@@ -376,7 +376,7 @@ end
     active_manifest(project_file::AbstractString)
 
 Return the path of the active manifest file, or the manifest file that would be used for a given `project_file`.
-See [`Project environments`](@ref) for details on the difference between a project and a manifest, and the naming
+See [`Project environments`](@ref project-environments) for details on the difference between a project and a manifest, and the naming
 options and their priority in package loading.
 
 See also [`Base.active_project`](@ref), [`Base.set_active_project`](@ref).
