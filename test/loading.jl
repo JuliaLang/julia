@@ -784,7 +784,7 @@ end
     @testset "Project file does not exist => active_manifest() is nothing" begin
         mktempdir() do dir
             proj = joinpath(dir, "Project.toml")
-            @test Base.active_manifest(proj) = nothing
+            @test Base.active_manifest(proj) === nothing
             @test _activate_and_get_active_manifest_noarg(proj) === nothing
         end
     end
