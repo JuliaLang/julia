@@ -1030,7 +1030,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
     # take many seconds to run over the thousands of possible methods. Note that
     # isabstracttype would return naively return true for common constructor calls
     # like Array, but the REPL's introspection here may know their Type{T}.
-    isconcretetype(funct) || return fail
+    isconcretetype(funct) || (Base.isType(funct) && !isabstracttype(funct.parameters[1])) || return fail
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, kwargs_flag == 1)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
