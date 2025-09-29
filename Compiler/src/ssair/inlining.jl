@@ -1219,6 +1219,37 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::Call
             stmt.args[3] = newT
         end
     end
+    return nothing
+end
+
+function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
+    length(stmt.args) == 3 || return
+    # Extract the CodeInstance from the inference result if available
+    info_edge = extract_indirect_invoke(info; check_fully_covers=false)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
+    case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
+    case === nothing && return nothing
+    # Append the CodeInstance as a third argument to the _task call
+    # Core._task(func, size) becomes Core._tak(func, size, ci)
+    push!(stmt.args, case.invoke)
+    ir[SSAValue(idx)][:stmt] = stmt
+    return nothing
+end
+
+function extract_indirect_invoke(info::IndirectCallInfo; check_fully_covers::Bool)
+    info = info.info
+    info isa MethodResultPure && (info = info.info)
+    info isa ConstCallInfo && (info = info.call)
+    info isa MethodMatchInfo || return nothing
+    length(info.edges) == length(info.results) == 1 || return nothing
+    match = info.results[1]::MethodMatch
+    if check_fully_covers
+        match.fully_covers || return nothing
+    end
+    edge = info.edges[1]
+    edge === nothing && return nothing
+    return info, edge
 end
 
 # As a matter of convenience, this pass also computes effect-freenes.
@@ -1288,7 +1319,8 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
                 f !== modifyfield! &&
                 f !== Core.modifyglobal! &&
                 f !== Core.memoryrefmodify! &&
-                f !== atomic_pointermodify)
+                f !== atomic_pointermodify &&
+                f !== Core._task)
                 # No inlining defined for most builtins (just invoke/apply/typeassert/finalizer), so attempt an early exit for them
                 return nothing
             end
@@ -1538,16 +1570,10 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     return nothing
 end
 
-function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOpInfo, state::InliningState)
-    info = info.info
-    info isa MethodResultPure && (info = info.info)
-    info isa ConstCallInfo && (info = info.call)
-    info isa MethodMatchInfo || return nothing
-    length(info.edges) == length(info.results) == 1 || return nothing
-    match = info.results[1]::MethodMatch
-    match.fully_covers || return nothing
-    edge = info.edges[1]
-    edge === nothing && return nothing
+function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
+    info_edge = extract_indirect_invoke(info; check_fully_covers=true)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
     case === nothing && return nothing
     stmt.head = :invoke_modify
@@ -1556,7 +1582,7 @@ function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOp
     return nothing
 end
 
-function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::FinalizerInfo,
+function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo,
                                 state::InliningState)
     # Finalizers don't return values, so if their execution is not observable,
     # we can just not register them
@@ -1649,14 +1675,22 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # handle special cased builtins
+        f = sig.f
         if isa(info, OpaqueClosureCallInfo)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
-        elseif isa(info, ModifyOpInfo)
-            handle_modifyop!_call!(ir, idx, stmt, info, state)
-        elseif sig.f === Core.invoke
+        elseif isa(info, IndirectCallInfo)
+            if f === Core.finalizer
+                handle_finalizer_call!(ir, idx, stmt, info, state)
+            elseif f === modifyfield! ||
+                   f === Core.modifyglobal! ||
+                   f === Core.memoryrefmodify! ||
+                   f === atomic_pointermodify
+                handle_modifyop!_call!(ir, idx, stmt, info, state)
+            elseif f === Core._task
+                handle_task_call!(ir, idx, stmt, info, state)
+            end
+        elseif f === Core.invoke
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
-        elseif isa(info, FinalizerInfo)
-            handle_finalizer_call!(ir, idx, stmt, info, state)
         else
             # cascade to the generic (and extendable) handler
             handle_call!(todo, ir, idx, stmt, info, flag, sig, state)
@@ -1718,6 +1752,8 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
         elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
             return SomeCase(stmt.args[3])
         end
+    elseif f === Core.task_result_type
+        return SomeCase(quoted(instanceof_tfunc(type)[1]))
     end
     return nothing
 end

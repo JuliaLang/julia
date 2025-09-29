@@ -240,6 +240,7 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *scope;
     jl_value_t *start;
+    jl_value_t *invoked; // Method/CodeInstance/Type for optimized task invocation
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint16_t priority;

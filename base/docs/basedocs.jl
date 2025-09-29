@@ -3961,6 +3961,31 @@ The current differences are:
 Core.finalizer
 
 """
+    Core._task(f, size) -> Task
+    Core._task(f, size, invoked) -> Task
+
+This builtin is an implementation detail used by the `Task` constructor and should
+not be called directly by end-users. Use `Task(f)` instead.
+
+Creates a new `Task` that will execute function `f` with the specified stack size.
+The optional third argument `invoked` can be a `Method`, `MethodInstance`, `CodeInstance`,
+or `Type` that will be used for optimized task invocation via `Core.invoke`.
+
+This is a low-level interface that bypasses safety checks and initialization
+performed by the public `Task` constructor.
+"""
+Core._task
+
+"""
+    Core.task_result_type(task) -> Type
+
+The builtin function returns a conservative upper bound for the return type of the closure
+provided when the `Task` was created.
+Always return the type `Any`. However inference may replace it with any other Type.
+"""
+Core.task_result_type
+
+"""
     ConcurrencyViolationError(msg) <: Exception
 
 An error thrown when a detectable violation of concurrent semantics has occurred.

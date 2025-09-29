@@ -454,33 +454,31 @@ end
 add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo) = add_edges!(edges, info.info)
 
 """
-    info::FinalizerInfo <: CallInfo
+    info::IndirectCallInfo <: CallInfo
 
-Represents the information of a potential (later) call to the finalizer on the given
-object type.
+Represents information about a call that involves an indirect/nested function call.
+Used for:
+ - `modifyfield!(obj, name, op, x, [order])` where `op(getval(), x)` is called
+ - `modifyglobal!(mod, var, op, x, order)` where `op(getval(), x)` is called
+ - `memoryrefmodify!(memref, op, x, order, boundscheck)` where `op(getval(), x)` is called
+ - `Intrinsics.atomic_pointermodify(ptr, op, x, order)` where `op(getval(), x)` is called
+ - `Core._task(f, size)` where `f()` will be called when the task runs
+ - `Core.finalizer(f, obj)` where `f(obj)` will be called during garbage collection
+
+Contains the `CallInfo` for the indirect function call, its effects, and whether
+the indirect call should contribute edges for invalidation tracking.
 """
-struct FinalizerInfo <: CallInfo
-    info::CallInfo   # the callinfo for the finalizer call
-    effects::Effects # the effects for the finalizer call
+struct IndirectCallInfo <: CallInfo
+    info::CallInfo   # the callinfo for the indirect function call
+    effects::Effects # the effects for the indirect function call
+    add_edges::Bool  # whether to add edges for invalidation tracking
 end
-# merely allocating a finalizer does not imply edges (unless it gets inlined later)
-add_edges_impl(::Vector{Any}, ::FinalizerInfo) = nothing
-
-"""
-    info::ModifyOpInfo <: CallInfo
-
-Represents a resolved call of one of:
- - `modifyfield!(obj, name, op, x, [order])`
- - `modifyglobal!(mod, var, op, x, order)`
- - `memoryrefmodify!(memref, op, x, order, boundscheck)`
- - `Intrinsics.atomic_pointermodify(ptr, op, x, order)`
-
-`info.info` wraps the call information of `op(getval(), x)`.
-"""
-struct ModifyOpInfo <: CallInfo
-    info::CallInfo # the callinfo for the `op(getval(), x)` call
+function add_edges_impl(edges::Vector{Any}, info::IndirectCallInfo)
+    if info.add_edges
+        add_edges!(edges, info.info)
+    end
+    # otherwise add no edges (e.g., for finalizers that don't imply edges unless inlined)
 end
-add_edges_impl(edges::Vector{Any}, info::ModifyOpInfo) = add_edges!(edges, info.info)
 
 struct VirtualMethodMatchInfo <: CallInfo
     info::Union{MethodMatchInfo,UnionSplitInfo,InvokeCallInfo}

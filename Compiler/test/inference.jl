@@ -6522,4 +6522,16 @@ function haskey_inference_test()
 end
 @inferred haskey_inference_test()
 
+@test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
+task_returner() = Task(() -> "hello")
+@test Base.infer_return_type((typeof(task_returner),)) do f
+    Core.task_result_type(f())
+end === Type{String}
+@test Base.infer_return_type((typeof(task_returner),)) do f
+    fetch(f())
+end === String
+@test Base.infer_return_type((Int,)) do i
+    fetch(Threads.@spawn sin(i))
+end === Float64
+
 end # module inference

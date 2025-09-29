@@ -498,6 +498,10 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
+    if isdefined(t, :invoked)
+        error("cannot serialize a Task constructed with invoke info")
+        # we could serialize it though, as long as the info isn't for a CodeInstance
+    end
     writetag(s.io, TASK_TAG)
     serialize(s, t.code)
     serialize(s, t.storage)
