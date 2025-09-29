@@ -385,14 +385,6 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         // might still need to be optimized.
         return;
     }
-    else if (head == jl_latestworld_sym) {
-        // Detects:
-        //   const
-        //   using, import
-        //   export (public is not lowered)
-        //   global, globaldecl
-        *has_defs = 1;
-    }
     else if (head == jl_copyast_sym) {
         // Note: `copyast` is included here since it indicates the presence of
         // `quote` and probably `eval`.
@@ -433,7 +425,8 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_ccall = 1;
             }
-            if (called == BUILTIN(_typebody)) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
+            // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
+            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const)) {
                 *has_defs = 1;
             }
         }
