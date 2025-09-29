@@ -242,7 +242,7 @@ Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Int
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a && s1*a0 + t1*b0 == b
-    while b != 0
+    while !iszero(b)
         q, r = divrem(a, b)
         a, b = b, r
         s0, s1 = s1, s0 - q*s1
