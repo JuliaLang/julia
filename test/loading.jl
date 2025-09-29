@@ -709,12 +709,17 @@ mktempdir() do dir
 end
 
 old_act_proj = Base.ACTIVE_PROJECT[]
-function _activate_and_get_active_manifest_noarg(f::Function, project_file::AbstractString)
-    return try
+function _with_activate(f::Function, project_file::AbstractString)
+    try
         Base.ACTIVE_PROJECT[] = project_file
-        return Base.active_manifest()
+        f()
     finally
         Base.ACTIVE_PROJECT[] = old_act_proj
+    end
+end
+function _activate_and_get_active_manifest_noarg(project_file::AbstractString)
+    _with_activate(project_file) do
+        Base.active_manifest()
     end
 end
 
@@ -737,7 +742,7 @@ end
 
             # If the project file exists but the manifest file does not, active_manifest() should still return `nothing`:
             touch(proj)
-            @test _activate_and_get_active_manifest_noarg() === nothing
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
 
             # If the project and manifest files both exist, active_manifest() should return the path to the manifest:
             manif = joinpath(proj, "Manifest.toml")
