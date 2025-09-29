@@ -1521,7 +1521,7 @@ JL_CALLABLE(jl_f_declare_const)
     jl_binding_t *b = jl_get_module_binding((jl_module_t *)args[0], (jl_sym_t *)args[1], 1);
     jl_value_t *val = nargs == 3 ? args[2] : NULL;
     jl_declare_constant_val(b, (jl_module_t *)args[0], (jl_sym_t *)args[1], val);
-    return args[2];
+    return nargs > 2 ? args[2] : jl_nothing;
 }
 
 // import, using --------------------------------------------------------------
