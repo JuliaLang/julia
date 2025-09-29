@@ -1,0 +1,19 @@
+name = "TOML"
+uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.3"
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
+[compat]
+Dates = "1.11.0"
+julia = "1.6"
+
+[extras]
+Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+p7zip_jll = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+
+[targets]
+test = ["Downloads", "p7zip_jll", "Tar", "Test"]

@@ -1,2 +1,11 @@
-OPENBLAS_BRANCH=v0.3.3
-OPENBLAS_SHA1=fd8d1868a126bb9f12bbc43b36ee30d1ba943fbb
+# -*- makefile -*-
+## jll artifact
+OPENBLAS_JLL_NAME := OpenBLAS
+
+## source build
+OPENBLAS_VER := 0.3.29
+OPENBLAS_BRANCH=v0.3.29
+OPENBLAS_SHA1=8795fc7985635de1ecf674b87e2008a15097ffab
+
+# LAPACK, source-only
+LAPACK_VER := 3.9.0

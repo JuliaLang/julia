@@ -30,6 +30,13 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.GenericMemory
+Base.Memory
+Base.Memory(::UndefInitializer, ::Int)
+Base.memoryref
+Base.Slices
+Base.RowSlices
+Base.ColumnSlices
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
@@ -40,6 +47,7 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
+Base.empty
 Base.similar
 ```
 
@@ -51,6 +59,7 @@ Base.size
 Base.axes(::Any)
 Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
+Base.keys(::AbstractArray)
 Base.eachindex
 Base.IndexStyle
 Base.IndexLinear
@@ -71,16 +80,19 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__dot__
+Base.Broadcast.BroadcastFunction
 ```
 
 For specializing broadcast on custom types, see
 ```@docs
 Base.BroadcastStyle
-Base.broadcast_axes
 Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle
 Base.Broadcast.broadcastable
+Base.Broadcast.combine_axes
+Base.Broadcast.combine_styles
+Base.Broadcast.result_style
 ```
 
 ## Indexing and assignment
@@ -88,7 +100,10 @@ Base.Broadcast.broadcastable
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.nextind
+Base.prevind
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+Base.copy!
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
@@ -98,9 +113,28 @@ Base.LinearIndices
 Base.to_indices
 Base.checkbounds
 Base.checkindex
+Base.elsize
+```
+
+While most code can be written in an index-agnostic manner (see, e.g., [`eachindex`](@ref)), it can sometimes be useful to explicitly check for offset axes:
+```@docs
+Base.require_one_based_indexing
+Base.has_offset_axes
 ```
 
 ## Views (SubArrays and other view types)
+
+A “view” is a data structure that acts like an array (it is a subtype of `AbstractArray`), but the underlying data is actually
+part of another array.
+
+For example, if `x` is an array and `v = @view x[1:10]`, then `v` acts like a 10-element array, but its data is actually
+accessing the first 10 elements of `x`. Writing to a view, e.g. `v[3] = 2`, writes directly to the underlying array `x`
+(in this case modifying `x[3]`).
+
+Slicing operations like `x[1:10]` create a copy by default in Julia. `@view x[1:10]` changes it to make a view. The
+`@views` macro can be used on a whole block of code (e.g. `@views function foo() .... end` or `@views begin ... end`)
+to change all the slicing operations in that block to use views. Sometimes making a copy of the data is faster and
+sometimes using a view is faster, as described in the [performance tips](@ref man-performance-views).
 
 ```@docs
 Base.view
@@ -111,8 +145,10 @@ Base.parentindices
 Base.selectdim
 Base.reinterpret
 Base.reshape
+Base.insertdims
 Base.dropdims
 Base.vec
+Base.SubArray
 ```
 
 ## Concatenation and permutation
@@ -122,6 +158,8 @@ Base.cat
 Base.vcat
 Base.hcat
 Base.hvcat
+Base.hvncat
+Base.stack
 Base.vect
 Base.circshift
 Base.circshift!
@@ -157,6 +195,9 @@ Base.rot180
 Base.rotl90
 Base.rotr90
 Base.mapslices
+Base.eachrow
+Base.eachcol
+Base.eachslice
 ```
 
 ## Combinatorics

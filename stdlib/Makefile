@@ -1,46 +1,89 @@
 default: install
 
-.PHONY: default extract-pkg get-pkg clean-pkg getall install
-
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 SRCCACHE := $(abspath $(SRCDIR)/srccache)
-BUILDDIR := $(SRCCACHE)
+BUILDDIR := .
 
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/tools/common.mk
-include $(JULIAHOME)/deps/tools/git-external.mk
+include $(JULIAHOME)/deps/tools/stdlib-external.mk
+# include all `*.version` files, import `LIBNAME_JLL_NAME` and `LIBNAME_JLL_VER`
+# Note: Some deps do not have a `_jll` pkg: [libwhich, patchelf, utf8proc]
+include $(JULIAHOME)/deps/*.version
 
-VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
-# Download and extract Pkg
-PKG := https://github.com/JuliaLang/Pkg.jl
-PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
-$(eval $(call git-external,Pkg,PKG,,,$(BUILDDIR)))
+VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
+DIRS := $(build_datarootdir)/julia/stdlib/$(VERSDIR) $(build_prefix)/manifest/$(VERSDIR)
+LIBDIR := $(build_datarootdir)/lib/julia
 
-extract-pkg: $(BUILDDIR)/$(PKG_SRC_DIR)/source-extracted
-Pkg: $(BUILDDIR)/$(PKG_SRC_DIR)/source-extracted
-	rm -rf $@
-	cp -r $(BUILDDIR)/$(PKG_SRC_DIR) $@
-get-pkg: Pkg
-clean-pkg:
-	-rm -rf Pkg
-	-rm -rf $(BUILDDIR)/$(PKG_SRC_DIR)
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
-# Generate symlinks to all stdlibs from usr/share/julia/stdlib/vX.Y/
-STDLIBS = Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
-          Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
-          Markdown Mmap Printf Profile Random REPL Serialization SHA \
-          SharedArrays Sockets SparseArrays Statistics SuiteSparse Test Unicode UUIDs
+JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV OPENSSL MPFR NGHTTP2 \
+       BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
+       ZSTD LLVMUNWIND CSL UNWIND LLD
 
-$(foreach pkg, $(STDLIBS), $(eval $(call symlink_target,$(JULIAHOME)/stdlib/$(pkg),$(build_datarootdir)/julia/stdlib/$(shell echo $(VERSDIR)),$(pkg))))
-$(eval $(call symlink_target,$(BUILDROOT)/stdlib/Pkg,$(build_datarootdir)/julia/stdlib/$(shell echo $(VERSDIR)),Pkg))
+# Initialize this with JLLs that aren't in "deps/$(LibName).version"
+JLL_NAMES := MozillaCACerts_jll
+get-MozillaCACerts_jll:
+install-MozillaCACerts_jll:
 
-$(build_datarootdir)/julia/stdlib/$(shell echo $(VERSDIR)):
-	mkdir -p $@
+# Define rule to download `StdlibArtifacts.toml` files for each JLL we bundle.
+define download-artifacts-toml
+JLL_NAMES += $$($(1)_JLL_NAME)_jll
+$(1)_STDLIB_PATH := $$(JULIAHOME)/stdlib/$$($(1)_JLL_NAME)_jll
+$(1)_JLL_VER ?= $$(shell [ -f $$($(1)_STDLIB_PATH)/Project.toml ] && grep "^version" $$($(1)_STDLIB_PATH)/Project.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"?([^"]+)"?/\1/')
 
-STDLIBS_LINK_TARGETS = $(addprefix $(build_datarootdir)/julia/stdlib/$(shell echo $(VERSDIR))/, $(STDLIBS) Pkg)
+$$($(1)_STDLIB_PATH)/StdlibArtifacts.toml:
+	$(JLDOWNLOAD) $$@ https://github.com/JuliaBinaryWrappers/$$($(1)_JLL_NAME)_jll.jl/raw/$$($(1)_JLL_NAME)-v$$($(1)_JLL_VER)/Artifacts.toml
+get-$$($(1)_JLL_NAME)_jll: $$($(1)_STDLIB_PATH)/StdlibArtifacts.toml
+install-$$($(1)_JLL_NAME)_jll: get-$$($(1)_JLL_NAME)_jll
+endef
+$(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 
-install: Pkg $(STDLIBS_LINK_TARGETS)
-getall: get-pkg
+STDLIBS = Artifacts Base64 CRC32c Dates FileWatching \
+          Future InteractiveUtils Libdl LibGit2 Logging \
+          Markdown Mmap Printf Profile Random REPL Serialization \
+          SharedArrays Sockets Test TOML Unicode UUIDs \
+          $(JLL_NAMES)
 
+STDLIBS_EXT = Pkg Statistics LazyArtifacts LibCURL DelimitedFiles Downloads ArgTools \
+              Tar NetworkOptions SuiteSparse SparseArrays StyledStrings SHA Distributed \
+              JuliaSyntaxHighlighting LinearAlgebra
+
+$(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
+
+ifneq ($(filter $(STDLIBS),$(STDLIBS_EXT)),)
+$(error ERROR duplicated STDLIBS in list)
+endif
+
+# Generate symlinks to all stdlibs at usr/share/julia/stdlib/vX.Y/
+$(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/$(module),$$(build_datarootdir)/julia/stdlib/$$(VERSDIR),$(module))))
+
+STDLIBS_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/stdlib/$(VERSDIR)/,$(STDLIBS))
+
+remove-gpl-libs:
+ifeq ($(USE_GPL_LIBS),0)
+	@echo Removing GPL libs...
+	-rm -f $(LIBDIR)/libcholmod*
+	-rm -f $(LIBDIR)/libklu_cholmod*
+	-rm -f $(LIBDIR)/librbio*
+	-rm -f $(LIBDIR)/libspqr*
+	-rm -f $(LIBDIR)/libumfpack*
+endif
+
+getall get: $(addprefix get-, $(STDLIBS_EXT) $(JLL_NAMES))
+
+install: version-check $(addprefix install-, $(STDLIBS_EXT) $(JLL_NAMES)) $(STDLIBS_LINK_TARGETS) remove-gpl-libs
+version-check: $(addprefix version-check-, $(STDLIBS_EXT))
+uninstall: $(addprefix uninstall-, $(STDLIBS_EXT))
+extstdlibclean:
+	for module in $(STDLIBS_EXT) ; do \
+		rm -rf $(JULIAHOME)/stdlib/$${module}-*; \
+	done
+clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS) extstdlibclean
+distclean: $(addprefix distclean-, $(STDLIBS_EXT)) clean
+checksumall: $(addprefix checksum-, $(STDLIBS_EXT))
+
+DEP_LIBS_STAGED_ALL := $(addprefix $(VERSDIR)/,$(STDLIBS_EXT))
+include $(JULIAHOME)/deps/tools/uninstallers.mk

@@ -1,10 +1,12 @@
-JULIAHOME := $(abspath ../..)
+SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+JULIAHOME := $(abspath $(SRCDIR)/../..)
 BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
-override CFLAGS += $(JCFLAGS)
-override CXXFLAGS += $(JCXXFLAGS)
-override CPPFLAGS += $(JCPPFLAGS)
+JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
+JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
+JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
+JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
 
 NAME := flisp
 EXENAME := $(NAME)
@@ -13,54 +15,75 @@ LIBTARGET := lib$(NAME)
 SRCS := flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
+LLTDIR := ../support
+LLTSRCDIR := $(SRCDIR)/$(LLTDIR)
+NATIVE_BUILDDIR :=
+ifeq ($(BUILDING_HOST_TOOLS), 1)
+NATIVE_BUILDDIR := $(BUILDDIR)/..
+LLT_BUILDDIR := $(BUILDDIR)/../$(LLTDIR)/host
+else
+NATIVE_BUILDDIR := $(BUILDDIR)
+LLT_BUILDDIR := $(BUILDDIR)/$(LLTDIR)
+endif
+
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
-LLTDIR := ../support
-LLT_release := $(BUILDDIR)/$(LLTDIR)/libsupport.a
-LLT_debug := $(BUILDDIR)/$(LLTDIR)/libsupport-debug.a
-LIBFILES_release := $(LLT_release) $(LIBUV) $(LIBUTF8PROC)
-LIBFILES_debug := $(LLT_debug) $(LIBUV) $(LIBUTF8PROC)
+LLT_release := $(LLT_BUILDDIR)/libsupport.a
+LLT_debug := $(LLT_BUILDDIR)/libsupport-debug.a
+LIBFILES_release := $(LLT_release) $(LIBUV)
+LIBFILES_debug := $(LLT_debug) $(LIBUV)
 LIBS :=
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
 
-FLAGS := -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
-        -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
-        -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
-ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden -Wpointer-arith -Wundef
-FLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
+ifeq ($(USE_SYSTEM_UTF8PROC),0)
+LIBFILES_release += $(LIBUTF8PROC)
+LIBFILES_debug += $(LIBUTF8PROC)
+else
+LIBS += $(LIBUTF8PROC)
 endif
 
-DEBUGFLAGS += $(FLAGS)
-SHIPFLAGS += $(FLAGS)
+
+FLAGS_COMMON := -I$(LLTSRCDIR) $(HFILEDIRS:%=-I%) \
+        -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) \
+        -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
+ifneq ($(OS), emscripten)
+FLAGS_COMMON += -DUSE_COMPUTED_GOTO
+endif
+FLAGS_COMMON += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
+FLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
+
+SHIPFLAGS_COMMON  += $(FLAGS_COMMON)
+DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
 
 default: release
 
-release: $(BUILDDIR)/$(EXENAME)
+release: $(BUILDDIR)/$(EXENAME)$(EXE) $(BUILDDIR)/compile_commands.json
 
-debug: $(BUILDDIR)/$(EXENAME)-debug
+debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) $(BUILDDIR)/compile_commands.json
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
-$(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
-$(BUILDDIR)/flisp.o:   flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
-$(BUILDDIR)/flisp.dbg.obj:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
-$(BUILDDIR)/flmain.o:  flmain.c flisp.h
-$(BUILDDIR)/flmain.dbg.obj: flmain.c flisp.h
+FLISP_SRCS := $(addprefix $(SRCDIR)/,flisp.c cvalues.c types.c flisp.h print.c read.c equal.c)
+FLMAIN_SRCS := $(addprefix $(SRCDIR)/,flmain.c flisp.h)
+$(BUILDDIR)/flisp.o: $(FLISP_SRCS)
+$(BUILDDIR)/flisp.dbg.obj: $(FLISP_SRCS)
+$(BUILDDIR)/flmain.o: $(FLMAIN_SRCS)
+$(BUILDDIR)/flmain.dbg.obj: $(FLMAIN_SRCS)
 
-$(LLT_release): $(LLTDIR)/*.h $(LLTDIR)/*.c
-	$(MAKE) -C $(LLTDIR) BUILDDIR='$(abspath $(BUILDDIR)/$(LLTDIR))'
-$(LLT_debug): $(LLTDIR)/*.h $(LLTDIR)/*.c
-	$(MAKE) debug -C $(LLTDIR) BUILDDIR='$(abspath $(BUILDDIR)/$(LLTDIR))'
+$(LLT_release): $(LLTSRCDIR)/*.h $(LLTSRCDIR)/*.c
+	$(MAKE) -C $(NATIVE_BUILDDIR)/$(LLTDIR) $(subst $(abspath $(NATIVE_BUILDDIR)/$(LLTDIR))/,,$(abspath $(LLT_release)))
+$(LLT_debug): $(LLTSRCDIR)/*.h $(LLTSRCDIR)/*.c
+	$(MAKE) -C $(NATIVE_BUILDDIR)/$(LLTDIR) $(subst $(abspath $(NATIVE_BUILDDIR)/$(LLTDIR))/,,$(abspath $(LLT_debug)))
 
 $(BUILDDIR)/$(LIBTARGET)-debug.a: $(DOBJS) | $(BUILDDIR)
 	rm -rf $@
@@ -70,31 +93,89 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
-ifneq ($(USEMSVC), 1)
 CCLD := $(CC)
-else
-CCLD := $(LD)
+
+# Override `-shared-libasan` from root Make.inc
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_ADDRESS),1)
+JLDFLAGS += -static-libsan
+endif
 endif
 
-$(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(LDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
+$(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 
-$(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(LDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
+$(BUILDDIR)/$(EXENAME)$(EXE): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(JLDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
+
+$(BUILDDIR)/host/Makefile:
+	mkdir -p $(BUILDDIR)/host
+	@# add Makefiles to the build directories for convenience (pointing back to the source location of each)
+	@printf "%s\n" '# -- This file is automatically generated in julia/src/flisp/Makefile -- #' > $@
+	@printf "%s\n" 'BUILDDIR=$(BUILDDIR)/host' >> $@
+	@printf "%s\n" 'BUILDING_HOST_TOOLS=1' >> $@
+	@printf "%s\n" 'include $(SRCDIR)/Makefile' >> $@
+
+$(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile | ${BUILDDIR}/host/flisp.boot
+	$(MAKE) -C $(BUILDDIR)/host $(EXENAME)
+
+
+$(BUILDDIR)/host/flisp.boot: $(SRCDIR)/flisp.boot | $(BUILDDIR)/host/Makefile
+	cp $< $@
 
 ifneq ($(BUILDDIR),.)
-$(BUILDDIR)/flisp.boot: flisp.boot | $(BUILDDIR)
+ifneq ($(BUILDDIR),$(SRCDIR))
+$(BUILDDIR)/flisp.boot: $(SRCDIR)/flisp.boot | $(BUILDDIR)
 	cp $< $@
+endif
 endif
 
 test:
-ifneq ($(USEMSVC), 1)
-	$(call spawn,./$(EXENAME)) unittest.lsp
-endif
+	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
+
+# Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
+CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
+
+# Included files in flisp
+INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.c:read.c flisp.c:equal.c
+
+# Compilation database generation
+$(BUILDDIR)/compile_commands.json:
+	@{ \
+		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
+		echo "["; \
+		first=true; \
+		for src in $(SRCS) flmain.c; do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$src\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$src" "$$cmd"; \
+		done; \
+		for included_pair in $(INCLUDED_FLISP_FILES); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			including_file=$${included_pair%%:*}; \
+			included_file=$${included_pair##*:}; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"$$including_file\""; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
+		done; \
+		echo "]"; \
+	} > $@.tmp
+	@# This ensures we replace the file atomically, and avoid spurious rewrites
+	@if ! cmp -s $@.tmp $@; then \
+		mv $@.tmp $@; \
+	else \
+		rm -f $@.tmp; \
+	fi
+
+compile-database: $(BUILDDIR)/compile_commands.json
+	@echo "Compilation database created for flisp: $<"
 
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
 	rm -f $(BUILDDIR)/*.a
-	rm -f $(BUILDDIR)/$(EXENAME)
-	rm -f $(BUILDDIR)/$(EXENAME)-debug
+	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
+	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
+	rm -f $(BUILDDIR)/compile_commands.json
+	rm -f $(BUILDDIR)/host/*
+
+.PHONY: flisp-deps compile-database $(BUILDDIR)/compile_commands.json

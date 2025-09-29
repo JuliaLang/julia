@@ -8,13 +8,13 @@ Load the index file for the repository `repo`.
 function GitIndex(repo::GitRepo)
     ensure_initialized()
     idx_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_repository_index, :libgit2), Cint,
-                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), idx_ptr_ptr, repo.ptr)
+    @check ccall((:git_repository_index, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), idx_ptr_ptr, repo)
     return GitIndex(repo, idx_ptr_ptr[])
 end
 
 """
-    read!(idx::GitIndex, force::Bool = false) -> GitIndex
+    read!(idx::GitIndex, force::Bool = false)::GitIndex
 
 Update the contents of `idx` by reading changes made on disk. For example, `idx`
 might be updated if a file has been added to the repository since it was created.
@@ -25,23 +25,23 @@ has changed since the last time it was loaded into `idx`.
 """
 function read!(idx::GitIndex, force::Bool = false)
     ensure_initialized()
-    @check ccall((:git_index_read, :libgit2), Cint, (Ptr{Cvoid}, Cint), idx.ptr, Cint(force))
+    @check ccall((:git_index_read, libgit2), Cint, (Ptr{Cvoid}, Cint), idx, Cint(force))
     return idx
 end
 
 """
-    write!(idx::GitIndex) -> GitIndex
+    write!(idx::GitIndex)::GitIndex
 
 Write the state of index `idx` to disk using a file lock.
 """
 function write!(idx::GitIndex)
     ensure_initialized()
-    @check ccall((:git_index_write, :libgit2), Cint, (Ptr{Cvoid},), idx.ptr)
+    @check ccall((:git_index_write, libgit2), Cint, (Ptr{Cvoid},), idx)
     return idx
 end
 
 """
-    write_tree!(idx::GitIndex) -> GitHash
+    write_tree!(idx::GitIndex)::GitHash
 
 Write the index `idx` as a [`GitTree`](@ref) on disk. Trees will be recursively
 created for each subtree in `idx`. The returned [`GitHash`](@ref) can be used to
@@ -51,8 +51,8 @@ repository cannot be bare. `idx` must not contain any files with conflicts.
 function write_tree!(idx::GitIndex)
     ensure_initialized()
     oid_ptr = Ref(GitHash())
-    @check ccall((:git_index_write_tree, :libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Cvoid}), oid_ptr, idx.ptr)
+    @check ccall((:git_index_write_tree, libgit2), Cint,
+                 (Ptr{GitHash}, Ptr{Cvoid}), oid_ptr, idx)
     return oid_ptr[]
 end
 
@@ -73,8 +73,8 @@ Read the tree `tree` (or the tree pointed to by `treehash` in the repository own
 """
 function read_tree!(idx::GitIndex, tree::GitTree)
     ensure_initialized()
-    @check ccall((:git_index_read_tree, :libgit2), Cint,
-                 (Ptr{Cvoid}, Ptr{Cvoid}), idx.ptr, tree.ptr)
+    @check ccall((:git_index_read_tree, libgit2), Cint,
+                 (Ptr{Cvoid}, Ptr{Cvoid}), idx, tree)
 end
 read_tree!(idx::GitIndex, hash::AbstractGitHash) =
     read_tree!(idx, GitTree(repository(idx), hash))
@@ -104,9 +104,9 @@ with respect to ignored files:
 function add!(idx::GitIndex, files::AbstractString...;
               flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     ensure_initialized()
-    @check ccall((:git_index_add_all, :libgit2), Cint,
+    @check ccall((:git_index_add_all, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
-                 idx.ptr, collect(files), flags, C_NULL, C_NULL)
+                 idx, collect(files), flags, C_NULL, C_NULL)
 end
 
 """
@@ -120,9 +120,9 @@ database.
 """
 function update!(idx::GitIndex, files::AbstractString...)
     ensure_initialized()
-    @check ccall((:git_index_update_all, :libgit2), Cint,
+    @check ccall((:git_index_update_all, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{Cvoid}, Ptr{Cvoid}),
-                 idx.ptr, collect(files), C_NULL, C_NULL)
+                 idx, collect(files), C_NULL, C_NULL)
 end
 
 """
@@ -134,9 +134,9 @@ of the `repo`).
 """
 function remove!(idx::GitIndex, files::AbstractString...)
     ensure_initialized()
-    @check ccall((:git_index_remove_all, :libgit2), Cint,
+    @check ccall((:git_index_remove_all, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{Cvoid}, Ptr{Cvoid}),
-                 idx.ptr, collect(files), C_NULL, C_NULL)
+                 idx, collect(files), C_NULL, C_NULL)
 end
 
 function add!(repo::GitRepo, files::AbstractString...;
@@ -173,13 +173,13 @@ end
 
 function count(idx::GitIndex)
     ensure_initialized()
-    return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), idx.ptr)
+    return ccall((:git_index_entrycount, libgit2), Csize_t, (Ptr{Cvoid},), idx)
 end
 
 function Base.getindex(idx::GitIndex, i::Integer)
     ensure_initialized()
     GC.@preserve idx begin
-        ie_ptr = ccall((:git_index_get_byindex, :libgit2),
+        ie_ptr = ccall((:git_index_get_byindex, libgit2),
                        Ptr{IndexEntry},
                        (Ptr{Cvoid}, Csize_t), idx.ptr, i-1)
         ie_ptr == C_NULL && return nothing
@@ -191,14 +191,14 @@ end
 function Base.findall(path::String, idx::GitIndex)
     ensure_initialized()
     pos_ref = Ref{Csize_t}(0)
-    ret = ccall((:git_index_find, :libgit2), Cint,
-                  (Ref{Csize_t}, Ptr{Cvoid}, Cstring), pos_ref, idx.ptr, path)
+    ret = ccall((:git_index_find, libgit2), Cint,
+                  (Ref{Csize_t}, Ptr{Cvoid}, Cstring), pos_ref, idx, path)
     ret == Cint(Error.ENOTFOUND) && return nothing
     return pos_ref[]+1
 end
 
 """
-    stage(ie::IndexEntry) -> Cint
+    stage(ie::IndexEntry)::Cint
 
 Get the stage number of `ie`. The stage number `0` represents the current state
 of the working tree, but other numbers can be used in the case of a merge conflict.
@@ -210,7 +210,7 @@ of a multi-branch "octopus" merge, stages `2`, `3`, and `4` might be used).
 """
 function stage(ie::IndexEntry)
     ensure_initialized()
-    return ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
+    return ccall((:git_index_entry_stage, libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
 end
 
 function Base.show(io::IO, idx::GitIndex)

@@ -1,27 +1,31 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Interface to [libgit2](https://libgit2.github.com/).
+Interface to [libgit2](https://libgit2.org/).
 """
 module LibGit2
 
 import Base: ==
-using Base: something, notnothing
-using Base.Printf: @printf
+using Base: something
+using NetworkOptions
+using Printf: @printf
+using SHA: sha1, sha256
 
 export with, GitRepo, GitConfig
 
+using LibGit2_jll
+
 const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
+    r"^(?:(?:ssh://)?git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 const REFCOUNT = Threads.Atomic{Int}(0)
 
 function ensure_initialized end
 
+include("error.jl")
 include("utils.jl")
 include("consts.jl")
 include("types.jl")
-include("error.jl")
 include("signature.jl")
 include("oid.jl")
 include("reference.jl")
@@ -52,7 +56,7 @@ struct State
 end
 
 """
-    head(pkg::AbstractString) -> String
+    head(pkg::AbstractString)::String
 
 Return current HEAD [`GitHash`](@ref) of
 the `pkg` repo as a string.
@@ -77,14 +81,14 @@ function need_update(repo::GitRepo)
 end
 
 """
-    iscommit(id::AbstractString, repo::GitRepo) -> Bool
+    iscommit(id::AbstractString, repo::GitRepo)::Bool
 
 Check if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
 
@@ -110,7 +114,7 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """
-    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false) -> Bool
+    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false)::Bool
 
 Check if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
@@ -164,7 +168,7 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
 end
 
 """
-    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}
+    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...)::Vector{AbstractString}
 
 Show which files have changed in the git repository `repo` between branches `branch1`
 and `branch2`.
@@ -220,14 +224,14 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
 end
 
 """
-    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool
+    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)::Bool
 
 Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 `b`, a [`GitHash`](@ref) in string form.
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
 
@@ -289,7 +293,7 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         fo = FetchOptions(callbacks=remote_callbacks)
         fetch(rmt, refspecs, msg="from $(url(rmt))", options=fo)
     catch err
-        if isa(err, GitError) && err.code == Error.EAUTH
+        if isa(err, GitError) && err.code === Error.EAUTH
             reject(cred_payload)
         else
             Base.shred!(cred_payload)
@@ -345,7 +349,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         push_opts = PushOptions(callbacks=remote_callbacks)
         push(rmt, refspecs, force=force, options=push_opts)
     catch err
-        if isa(err, GitError) && err.code == Error.EAUTH
+        if isa(err, GitError) && err.code === Error.EAUTH
             reject(cred_payload)
         else
             Base.shred!(cred_payload)
@@ -474,7 +478,7 @@ current changes. Note that this detaches the current HEAD.
 
 # Examples
 ```julia
-repo = LibGit2.init(repo_path)
+repo = LibGit2.GitRepo(repo_path)
 open(joinpath(LibGit2.path(repo), "file1"), "w") do f
     write(f, "111\n")
 end
@@ -579,7 +583,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
         repo = try
             clone(repo_url, repo_path, clone_opts)
         catch err
-            if isa(err, GitError) && err.code == Error.EAUTH
+            if isa(err, GitError) && err.code === Error.EAUTH
                 reject(cred_payload)
             else
                 Base.shred!(cred_payload)
@@ -589,6 +593,44 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
     end
     approve(cred_payload)
     return repo
+end
+
+"""
+    connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION; kwargs...)
+
+Open a connection to a remote. `direction` can be either `DIRECTION_FETCH`
+or `DIRECTION_PUSH`.
+
+The keyword arguments are:
+  * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
+    against a private repository.
+  * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
+"""
+function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION;
+                 credentials::Creds=nothing,
+                 callbacks::Callbacks=Callbacks())
+    cred_payload = reset!(CredentialPayload(credentials))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
+    remote_callbacks = RemoteCallbacks(callbacks)
+    try
+        connect(rmt, direction, remote_callbacks)
+    catch err
+        if isa(err, GitError) && err.code === Error.EAUTH
+            reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
+        end
+        rethrow()
+    end
+    approve(cred_payload)
+    return rmt
 end
 
 """ git reset [<committish>] [--] <pathspecs>... """
@@ -685,7 +727,7 @@ function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractStrin
 end
 
 """
-    merge!(repo::GitRepo; kwargs...) -> Bool
+    merge!(repo::GitRepo; kwargs...)::Bool
 
 Perform a git merge on the repository `repo`, merging commits
 with diverging history into the current branch. Return `true`
@@ -728,7 +770,7 @@ function merge!(repo::GitRepo;
                                "There is no fetch reference for this branch."))
             end
             Base.map(fh->GitAnnotated(repo,fh), fheads)
-        else # merge commitish
+        else # merge committish
             [GitAnnotated(repo, committish)]
         end
     else
@@ -785,7 +827,7 @@ function merge!(repo::GitRepo;
                merge_opts=merge_opts,
                checkout_opts=checkout_opts)
     finally
-        Base.map(close, upst_anns)
+        Base.foreach(close, upst_anns)
     end
 end
 
@@ -845,7 +887,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             end
         finally
             if !isempty(newbase)
-                close(onto_ann)
+                close(onto_ann::GitAnnotated)
             end
             close(upst_ann)
             close(head_ann)
@@ -856,7 +898,7 @@ end
 
 
 """
-    authors(repo::GitRepo) -> Vector{Signature}
+    authors(repo::GitRepo)::Vector{Signature}
 
 Return all authors of commits to the `repo` repository.
 
@@ -889,7 +931,7 @@ function authors(repo::GitRepo)
 end
 
 """
-    snapshot(repo::GitRepo) -> State
+    snapshot(repo::GitRepo)::State
 
 Take a snapshot of the current state of the repository `repo`,
 storing the current HEAD, index, and any uncommitted work.
@@ -958,53 +1000,71 @@ end
 
 ## lazy libgit2 initialization
 
+const ENSURE_INITIALIZED_LOCK = ReentrantLock()
+
+@noinline function throw_negative_refcount_error(x::Int)
+    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
+end
+
 function ensure_initialized()
-    x = Threads.atomic_cas!(REFCOUNT, 0, 1)
-    if x < 0
-        negative_refcount_error(x)::Union{}
-    end
-    if x == 0
-        initialize()
+    lock(ENSURE_INITIALIZED_LOCK) do
+        x = Threads.atomic_cas!(REFCOUNT, 0, 1)
+        x > 0 && return
+        x < 0 && throw_negative_refcount_error(x)
+        try initialize()
+        catch
+            Threads.atomic_sub!(REFCOUNT, 1)
+            @assert REFCOUNT[] == 0
+            rethrow()
+        end
     end
     return nothing
 end
 
-@noinline function negative_refcount_error(x::Int)
-    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
-end
-
 @noinline function initialize()
-    @check ccall((:git_libgit2_init, :libgit2), Cint, ())
+    @check ccall((:git_libgit2_init, libgit2), Cint, ())
+
+    cert_loc = NetworkOptions.ca_roots()
+    cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
 
     atexit() do
         # refcount zero, no objects to be finalized
         if Threads.atomic_sub!(REFCOUNT, 1) == 1
-            ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+            ccall((:git_libgit2_shutdown, libgit2), Cint, ())
         end
-    end
-
-    # Look for OpenSSL env variable for CA bundle (linux only)
-    # windows and macOS use the OS native security backends
-    @static if Sys.islinux()
-        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
-            ENV["SSL_CERT_DIR"]
-        elseif "SSL_CERT_FILE" in keys(ENV)
-            ENV["SSL_CERT_FILE"]
-        else
-            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-            abspath(ccall(:jl_get_julia_bindir, Any, ()), Base.DATAROOTDIR, "julia", "cert.pem")
-        end
-        set_ssl_cert_locations(cert_loc)
     end
 end
 
 function set_ssl_cert_locations(cert_loc)
-    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
-    @check ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+    cert_file = cert_dir = Cstring(C_NULL)
+    if isdir(cert_loc) # directories
+        cert_dir = cert_loc
+    else # files, /dev/null, non-existent paths, etc.
+        cert_file = cert_loc
+    end
+    ret = @ccall libgit2.git_libgit2_opts(
+        Consts.SET_SSL_CERT_LOCATIONS::Cint;
+        cert_file::Cstring,
+        cert_dir::Cstring)::Cint
+    ret >= 0 && return ret
+    # On macOS and Windows LibGit2_jll is built without a TLS backend that supports
+    # certificate locations; don't throw on this expected error so we allow certificate
+    # location environment variables to be set for other purposes.
+    # We still try doing so to support other LibGit2 builds.
+    err = Error.GitError(ret)
+    err.class == Error.SSL &&
+        err.msg == "TLS backend doesn't support certificate locations" ||
+        throw(err)
+    return ret
+end
+
+"""
+    trace_set(level::Union{Integer,GIT_TRACE_LEVEL})
+
+Sets the system tracing configuration to the specified level.
+"""
+function trace_set(level::Union{Integer,Consts.GIT_TRACE_LEVEL}, cb=trace_cb())
+    @check @ccall libgit2.git_trace_set(level::Cint, cb::Ptr{Cvoid})::Cint
 end
 
 end # module

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
-# Reference: http://mysite.verizon.net/aesir_research/date/date0.htm
+# Reference: https://www.researchgate.net/profile/Peter-Baum/publication/316558298_Date_Algorithms/links/5f90c3f992851c14bcdb0da6/Date-Algorithms.pdf
 function yearmonthday(days)
     z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
@@ -41,12 +41,19 @@ function week(days)
     return div(w, 28) + 1
 end
 
+function quarter(days)
+    m = month(days)
+    return m < 4 ? 1 : m < 7 ? 2 : m < 10 ? 3 : 4
+end
+
+
 # Accessor functions
 value(dt::TimeType) = dt.instant.periods.value
 value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
 year(dt::TimeType) = year(days(dt))
+quarter(dt::TimeType) = quarter(days(dt))
 month(dt::TimeType) = month(days(dt))
 week(dt::TimeType) = week(days(dt))
 day(dt::TimeType) = day(days(dt))
@@ -68,11 +75,11 @@ monthday(dt::TimeType) = monthday(days(dt))
 yearmonthday(dt::TimeType) = yearmonthday(days(dt))
 
 # Documentation for exported accessors
-for func in (:year, :month)
+for func in (:year, :month, :quarter)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType)::Int64
 
         The $($name) of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
@@ -80,7 +87,7 @@ for func in (:year, :month)
 end
 
 """
-    week(dt::TimeType) -> Int64
+    week(dt::TimeType)::Int64
 
 Return the [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) of a `Date` or
 `DateTime` as an [`Int64`](@ref). Note that the first week of a year is the week that
@@ -90,13 +97,13 @@ week of 2004.
 
 # Examples
 ```jldoctest
-julia> Dates.week(Date(1989, 6, 22))
+julia> week(Date(1989, 6, 22))
 25
 
-julia> Dates.week(Date(2005, 1, 1))
+julia> week(Date(2005, 1, 1))
 53
 
-julia> Dates.week(Date(2004, 12, 31))
+julia> week(Date(2004, 12, 31))
 53
 ```
 """
@@ -106,7 +113,7 @@ for func in (:day, :dayofmonth)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType)::Int64
 
         The day of month of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
@@ -114,7 +121,7 @@ for func in (:day, :dayofmonth)
 end
 
 """
-    hour(dt::DateTime) -> Int64
+    hour(dt::DateTime)::Int64
 
 The hour of day of a `DateTime` as an [`Int64`](@ref).
 """
@@ -124,7 +131,7 @@ for func in (:minute, :second, :millisecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::DateTime) -> Int64
+            $($name)(dt::DateTime)::Int64
 
         The $($name) of a `DateTime` as an [`Int64`](@ref).
         """ $func(dt::DateTime)
@@ -148,7 +155,7 @@ for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(t::Time) -> Int64
+            $($name)(t::Time)::Int64
 
         The $($name) of a `Time` as an [`Int64`](@ref).
         """ $func(t::Time)

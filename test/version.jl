@@ -79,6 +79,12 @@ using Random
 
 @test_throws ArgumentError VersionNumber(4, 3, 2, (), ("", 1))
 
+# parse()/tryparse()
+@test parse(VersionNumber, "1.2.3") == v"1.2.3"
+@test_throws ArgumentError parse(VersionNumber, "not a version")
+@test tryparse(VersionNumber, "3.2.1") == v"3.2.1"
+@test tryparse(VersionNumber, "not a version") === nothing
+
 # show
 io = IOBuffer()
 show(io,v"4.3.2+1.a")
@@ -93,6 +99,12 @@ show(io,v"4.3.2+1.a")
 
 # construction from AbstractString
 @test VersionNumber("4.3.2+1.a") == v"4.3.2+1.a"
+
+# construct from VersionNumber
+let
+    v = VersionNumber("1.2.3")
+    @test VersionNumber(v) == v
+end
 
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
@@ -134,7 +146,7 @@ import Base: lowerbound, upperbound
 
 # advanced comparison & manipulation
 import Base: thispatch, thisminor, thismajor,
-             nextpatch, nextminor, nextmajor, check_new_version
+             nextpatch, nextminor, nextmajor
 @test v"1.2.3" == thispatch(v"1.2.3-")
 @test v"1.2.3" == thispatch(v"1.2.3-pre")
 @test v"1.2.3" == thispatch(v"1.2.3")
@@ -207,30 +219,14 @@ for major=0:3, minor=0:3, patch=0:3
     end
 end
 
-# check_new_version
-import Base.check_new_version
-@test check_new_version([v"1", v"2"], v"3") === nothing
-@test_throws AssertionError check_new_version([v"2", v"1"], v"3")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"2")
-@test check_new_version(VersionNumber[], v"0") === nothing
-@test check_new_version(VersionNumber[], v"0.0.1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"0.0.2")
-@test check_new_version(VersionNumber[], v"0.1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"0.2")
-@test check_new_version(VersionNumber[], v"1") === nothing
-@test_throws ErrorException check_new_version(VersionNumber[], v"2")
-@test_throws ErrorException check_new_version(VersionNumber[v"1", v"2", v"3"], v"2")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"4")
-@test_throws ErrorException check_new_version([v"1", v"2"], v"2-rc")
-@test check_new_version([v"1", v"2"], v"2.0.1") === nothing
-@test check_new_version([v"1", v"2"], v"2.1") === nothing
-@test check_new_version([v"1", v"2"], v"3") === nothing
-
-# banner
-import Base.banner
-io = IOBuffer()
-@test banner(io) === nothing
-@test length(String(take!(io))) > 50
+# VersionNumber has the promised fields
+let v = v"4.2.1-1.x+a.9"
+    @test v.major isa Integer
+    @test v.minor isa Integer
+    @test v.patch isa Integer
+    @test v.prerelease isa Tuple{Vararg{Union{Integer, AbstractString}}}
+    @test v.build isa Tuple{Vararg{Union{Integer, AbstractString}}}
+end
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())

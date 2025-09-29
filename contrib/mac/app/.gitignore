@@ -1,3 +1,4 @@
 julia/
 dmg/
 *.dmg
+notarize-*.xml
