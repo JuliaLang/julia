@@ -381,7 +381,7 @@ options and their priority in package loading.
 
 See also [`Base.active_project`](@ref), [`Base.set_active_project`](@ref).
 """
-function active_manifest(project_file::Union{AbstractString,Nothing}=nothing, search_load_path::Bool=true)
+function active_manifest(project_file::Union{AbstractString,Nothing}=nothing; search_load_path::Bool=true)
     # If `project_file` was specified, use that, otherwise get the active project:
     project_file === !isnothing(project_file) ? project_file : active_project(search_load_path)
     project_file === nothing && return nothing
