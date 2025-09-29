@@ -96,7 +96,7 @@ function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
     reset(io)
     return s == codeunits(prefix)
 end
-Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
+Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
@@ -1216,7 +1216,7 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     return dest
 end
 
-@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c))
+@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c)::Char)
 @inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
 @inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
@@ -1299,7 +1299,7 @@ julia> ascii("abcdefgh")
 "abcdefgh"
 ```
 """
-ascii(x::AbstractString) = ascii(String(x))
+ascii(x::AbstractString) = ascii(String(x)::String)
 
 Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
 function Base.rest(s::AbstractString, st...)

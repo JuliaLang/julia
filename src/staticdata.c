@@ -3458,8 +3458,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     return;
 }
 
-JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
-
 // Takes in a path of the form "usr/lib/julia/sys.so"
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 {
@@ -3655,29 +3653,31 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
         if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
             goto invalidated;
     }
-    if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
-        return 1;
-    jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
-    if (no_replacement)
-        goto add_backedge;
-    jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
-    if (!latest_imported_bpart)
-        return 1;
-    if (jl_atomic_load_relaxed(&latest_imported_bpart->min_world) <=
-        jl_atomic_load_relaxed(&bpart->min_world)) {
-add_backedge:
-        // Imported binding is still valid
-        if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
-                external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
-            jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+    {
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
+            return 1;
+        jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
+        jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
+        if (no_replacement)
+            goto add_backedge;
+        if (!latest_imported_bpart)
+            return 1;
+        if (jl_atomic_load_relaxed(&latest_imported_bpart->min_world) <=
+            jl_atomic_load_relaxed(&bpart->min_world)) {
+    add_backedge:
+            // Imported binding is still valid
+            if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
+                    external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
+                jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+            }
+            return 1;
         }
-        return 1;
-    }
-    else {
-        // Binding partition was invalidated
-        assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
-        jl_atomic_store_relaxed(&bpart->min_world,
-            jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+        else {
+            // Binding partition was invalidated
+            assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
+            jl_atomic_store_relaxed(&bpart->min_world,
+                jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+        }
     }
 invalidated:
     // We need to go through and re-validate any bindings in the same image that
@@ -3993,7 +3993,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     // and we overwrite the name field (field 0) now so preserve it too
                     if (dt->instance) {
                         if (dt->instance == jl_nothing)
-                            dt->instance = jl_gc_permobj(0, newdt, 0);
+                            dt->instance = jl_gc_permobj(ct->ptls, 0, newdt, 0);
                         newdt->instance = dt->instance;
                     }
                     static_assert(offsetof(jl_datatype_t, name) == 0, "");

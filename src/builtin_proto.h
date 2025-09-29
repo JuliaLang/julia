@@ -20,6 +20,7 @@ extern "C" {
     XX(_primitivetype,"_primitivetype") \
     XX(_setsuper,"_setsuper!") \
     XX(_structtype,"_structtype") \
+    XX(_svec_len,"_svec_len") \
     XX(_svec_ref,"_svec_ref") \
     XX(_typebody,"_typebody!") \
     XX(_typevar,"_typevar") \
