@@ -2330,3 +2330,31 @@ f54131 = F54131()
     @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
     @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
 end
+
+@kwdef struct T59244
+    asdf = 1
+    qwer = 2
+end
+@kwdef struct S59244{T}
+    asdf::T = 1
+    qwer::T = 2
+end
+@testset "kwarg completion of types" begin
+    s = "T59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "T59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+end
