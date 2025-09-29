@@ -200,7 +200,7 @@ resetting its pointer and size.
 This function is used to securely erase the sensitive data held in the buffer,
 reducing the potential for information leaks.
 
-# Example
+# Examples
 ```julia
 s = SecretBuffer()
 write(s, 's', 'e', 'c', 'r', 'e', 't')

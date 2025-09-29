@@ -87,6 +87,18 @@
             "summary": "ArgTools provides tools for creating consistent, flexible APIs that work with various kinds of function arguments."
         },
         {
+            "name": "LinearAlgebra.jl",
+            "SPDXID": "SPDXRef-JuliaLinearAlgebra",
+            "downloadLocation": "git+https://github.com/JuliaLang/LinearAlgebra.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://juliastats.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/LinearAlgebra.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2009-2024: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "summary": "Development repository for the LinearAlgebra standard library (stdlib) that ships with Julia."
+        },
+        {
             "name": "Tar.jl",
             "SPDXID": "SPDXRef-JuliaTar",
             "downloadLocation": "git+https://github.com/JuliaIO/Tar.jl.git",
@@ -219,16 +231,16 @@
             "summary": "libssh2 is a library implementing the SSH2 protocol, available under the revised BSD license."
         },
         {
-            "name": "mbedtls",
-            "SPDXID": "SPDXRef-mbedtls",
-            "downloadLocation": "git+https://github.com/ARMmbed/mbedtls.git",
+            "name": "OpenSSL",
+            "SPDXID": "SPDXRef-OpenSSL",
+            "downloadLocation": "git+https://github.com/openssl/openssl.git",
             "filesAnalyzed": false,
-            "homepage": "https://tls.mbed.org",
-            "sourceInfo": "The version in use can be found in the file deps/mbedtls.version",
+            "homepage": "https://www.openssl.org",
+            "sourceInfo": "The version in use can be found in the file deps/openssl.version",
             "licenseConcluded": "Apache-2.0",
             "licenseDeclared": "Apache-2.0",
-            "copyrightText": "NOASSERTION",
-            "summary": "An open source, portable, easy to use, readable and flexible SSL library."
+            "copyrightText": "Copyright (c) 1998-2024 The OpenSSL Project Authors. Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson.",
+            "summary": "OpenSSL is a robust, commercial-grade, full-featured Open Source Toolkit for the TLS (formerly SSL), DTLS and QUIC (currently client side only) protocols."
         },
         {
             "name": "mpfr",
@@ -371,6 +383,32 @@
             "summary": "utf8proc is a small, clean C library that provides Unicode normalization, case-folding, and other operations for data in the UTF-8 encoding."
         },
         {
+            "name": "LibTracyClient",
+            "SPDXID": "SPDXRef-LibTracyClient",
+            "downloadLocation": "git+https://github.com/wolfpld/tracy.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/wolfpld/tracy",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/libtracyclient.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2017-2024, Bartosz Taudul <wolf@nereid.pl>",
+            "summary": "A real time, nanosecond resolution, remote telemetry, hybrid frame and sampling profiler for games and other applications.",
+            "comment": "LibTracyClient is an optional dependency that is not built by default"
+        },
+        {
+            "name": "ittapi",
+            "SPDXID": "SPDXRef-ittapi",
+            "downloadLocation": "git+https://github.com/intel/ittapi.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/intel/ittapi",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/ittapi.version",
+            "licenseConcluded": "BSD-3-Clause AND GPL-2.0-only",
+            "licenseDeclared": "BSD-3-Clause AND GPL-2.0-only",
+            "copyrightText": "Copyright (c) 2019 Intel Corporation",
+            "summary": "The Instrumentation and Tracing Technology (ITT) API enables your application to generate and control the collection of trace data during its execution across different Intel tools.",
+            "comment": "ITTAPI is an optional dependency that is not built by default"
+        },
+        {
             "name": "7-Zip",
             "SPDXID": "SPDXRef-7zip",
             "downloadLocation": "https://sourceforge.net/projects/p7zip/files/p7zip",
@@ -393,6 +431,18 @@
             "licenseDeclared": "Zlib",
             "copyrightText": "Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler",
             "summary": "A massively spiffy yet delicately unobtrusive compression library."
+        },
+        {
+            "name": "zstd",
+            "SPDXID": "SPDXRef-zstd",
+            "downloadLocation": "git+https://github.com/facebook/zstd.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.zstd.net",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/zstd.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "GPL-2.0+ OR BSD-3-Clause",
+            "copyrightText": "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.",
+            "summary": "Zstandard, or zstd as short version, is a fast lossless compression algorithm."
         },
         {
             "name": "patchelf",
@@ -522,7 +572,7 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
-            "spdxElementId": "SPDXRef-mbedtls",
+            "spdxElementId": "SPDXRef-OpenSSL",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
@@ -582,12 +632,27 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
+            "spdxElementId": "SPDXRef-LibTracyClient",
+            "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-ittapi",
+            "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
             "spdxElementId": "SPDXRef-7zip",
             "relationshipType": "RUNTIME_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
             "spdxElementId": "SPDXRef-zlib",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-zstd",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },

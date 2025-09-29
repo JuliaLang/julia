@@ -133,7 +133,9 @@ end
             for _v in (v, uppercasefirst(v), uppercase(v))
                 ENV["testing_gbe"] = _v
                 @test Base.get_bool_env("testing_gbe", false) == true
+                @test Base.get_bool_env(() -> false, "testing_gbe") == true
                 @test Base.get_bool_env("testing_gbe", true) == true
+                @test Base.get_bool_env(() -> true, "testing_gbe") == true
             end
         end
     end
@@ -142,26 +144,34 @@ end
             for _v in (v, uppercasefirst(v), uppercase(v))
                 ENV["testing_gbe"] = _v
                 @test Base.get_bool_env("testing_gbe", true) == false
+                @test Base.get_bool_env(() -> true, "testing_gbe") == false
                 @test Base.get_bool_env("testing_gbe", false) == false
+                @test Base.get_bool_env(() -> false, "testing_gbe") == false
             end
         end
     end
     @testset "empty" begin
         ENV["testing_gbe"] = ""
         @test Base.get_bool_env("testing_gbe", true) == true
+        @test Base.get_bool_env(() -> true, "testing_gbe") == true
         @test Base.get_bool_env("testing_gbe", false) == false
+        @test Base.get_bool_env(() -> false, "testing_gbe") == false
     end
     @testset "undefined" begin
         delete!(ENV, "testing_gbe")
         @test !haskey(ENV, "testing_gbe")
         @test Base.get_bool_env("testing_gbe", true) == true
+        @test Base.get_bool_env(() -> true, "testing_gbe") == true
         @test Base.get_bool_env("testing_gbe", false) == false
+        @test Base.get_bool_env(() -> false, "testing_gbe") == false
     end
     @testset "unrecognized" begin
         for v in ("truw", "falls")
             ENV["testing_gbe"] = v
             @test Base.get_bool_env("testing_gbe", true) === nothing
+            @test_throws ArgumentError Base.get_bool_env("testing_gbe", true, throw=true)
             @test Base.get_bool_env("testing_gbe", false) === nothing
+            @test_throws ArgumentError Base.get_bool_env("testing_gbe", false, throw=true)
         end
     end
 

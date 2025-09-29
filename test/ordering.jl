@@ -51,3 +51,9 @@ struct SomeOtherOrder <: Base.Order.Ordering end
 @test ord(<, abs, false, Forward) === By(abs, Lt(<))
 @test ord(<, abs, true, Forward) === ReverseOrdering(By(abs, Lt(<)))
 @test ord(<, abs, true, Reverse) === By(abs, Lt(<))
+
+@testset "Base.Order docstrings" begin
+    undoc = Docs.undocumented_names(Base.Order)
+    @test_broken isempty(undoc)
+    @test undoc == [:DirectOrdering, :ForwardOrdering, :Order, :ordtype]
+end

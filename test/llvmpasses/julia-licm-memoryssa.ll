@@ -1,8 +1,6 @@
 ; COM: NewPM-only test, tests that memoryssa is preserved correctly
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(JuliaLICM),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK,TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(JuliaLICM),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(JuliaLICM),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -116,8 +114,6 @@ top:
 preheader:
 ; CHECK-NEXT: [[ALLOC:[0-9]+]] = MemoryDef([[PGCSTACK]])
 
-; TYPED-NEXT: %alloc = call {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 0, {} addrspace(10)* @tag)
-; TYPED-NEXT: %[[BCAST:.*]] = bitcast {} addrspace(10)* %alloc to i8 addrspace(10)*
 
 ; OPAQUE-NEXT: %alloc = call ptr addrspace(10) @julia.gc_alloc_obj(ptr %current_task, i64 0, ptr addrspace(10) @tag)
 

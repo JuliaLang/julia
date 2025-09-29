@@ -5,8 +5,6 @@ Convenience functions for metaprogramming.
 """
 module Meta
 
-using ..CoreLogging
-
 export quot,
        isexpr,
        isidentifier,
@@ -18,8 +16,122 @@ export quot,
        show_sexpr,
        @dump
 
-using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
+public parse
+
 import Base: isexpr
+
+## AST decoding helpers ##
+
+is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
+is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+
+"""
+     isidentifier(s) -> Bool
+
+Return whether the symbol or string `s` contains characters that are parsed as
+a valid ordinary identifier (not a binary/unary operator) in Julia code;
+see also [`Base.isoperator`](@ref).
+
+Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
+and macros automatically use variable names containing `#` in order to avoid
+naming collision with the surrounding code. In order for the parser to
+recognize a variable, it uses a limited set of characters (greatly extended by
+Unicode). `isidentifier()` makes it possible to query the parser directly
+whether a symbol contains valid characters.
+
+# Examples
+```jldoctest
+julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
+(true, false)
+```
+"""
+function isidentifier(s::AbstractString)
+    x = Iterators.peel(s)
+    isnothing(x) && return false
+    (s == "true" || s == "false") && return false
+    c, rest = x
+    is_id_start_char(c) || return false
+    return all(is_id_char, rest)
+end
+isidentifier(s::Symbol) = isidentifier(string(s))
+
+is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
+
+_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isoperator(s::Symbol)
+
+Return `true` if the symbol can be used as an operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.isoperator(:+), Meta.isoperator(:f)
+(true, false)
+```
+"""
+isoperator(s::Union{Symbol,AbstractString}) = _isoperator(s) || ispostfixoperator(s)
+
+"""
+    isunaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperator(:f)
+(true, true, false)
+```
+"""
+isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
+is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
+is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isbinaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a binary (infix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.isbinaryoperator(:-), Meta.isbinaryoperator(:√), Meta.isbinaryoperator(:f)
+(true, false, false)
+```
+"""
+function isbinaryoperator(s::Symbol)
+    return _isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s)) &&
+        s !== Symbol("'")
+end
+
+"""
+    ispostfixoperator(s::Union{Symbol,AbstractString})
+
+Return `true` if the symbol can be used as a postfix operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ")), Meta.ispostfixoperator(:-)
+(true, true, false)
+```
+"""
+function ispostfixoperator(s::Union{Symbol,AbstractString})
+    s = String(s)::String
+    return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
+end
+
+const keyword_syms = IdSet{Symbol}([
+    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
+    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
+    :try, :using, :while ])
+
+function is_valid_identifier(sym)
+    return (isidentifier(sym) && !(sym in keyword_syms)) ||
+        (_isoperator(sym) &&
+        !(sym in (Symbol("'"), :(::), :?)) &&
+        !is_syntactic_operator(sym)
+    )
+end
 
 """
     Meta.quot(ex)::Expr
@@ -160,7 +272,7 @@ Takes the expression `x` and returns an equivalent expression in lowered form
 for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-lower(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
+lower(m::Module, @nospecialize(x)) = Core._lower(x, m, "none", 0, typemax(Csize_t), false)[1]
 
 """
     @lower [m] x
@@ -364,11 +476,29 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         x.edges .+= slot_offset
         return x
     end
+    if isa(x, Core.UpsilonNode)
+        if !isdefined(x, :val)
+            return x
+        end
+        return Core.UpsilonNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.PhiCNode)
+        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                           slot_offset, statement_offset, boundscheck)
+    end
     if isa(x, Core.ReturnNode)
+       # Unreachable doesn't have val defined
+       if !isdefined(x, :val)
+          return x
+       else
         return Core.ReturnNode(
             _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
         )
+       end
     end
     if isa(x, Core.GotoIfNot)
         return Core.GotoIfNot(
@@ -376,6 +506,12 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                                slot_offset, statement_offset, boundscheck),
             x.dest + statement_offset,
         )
+    end
+    if isa(x, Core.EnterNode)
+        if x.catch_dest == 0
+            return x
+        end
+        return Core.EnterNode(x, x.catch_dest + statement_offset)
     end
     if isa(x, Expr)
         head = x.head
@@ -403,7 +539,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt8}})
+                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt16, Bool}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,
@@ -424,8 +560,6 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                                            static_param_values, slot_offset,
                                            statement_offset, boundscheck)
             x.args[2] += statement_offset
-        elseif head === :enter
-            x.args[1] += statement_offset
         elseif head === :isdefined
             arg = x.args[1]
             # inlining a QuoteNode or literal into `Expr(:isdefined, x)` is invalid, replace with true
@@ -450,7 +584,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 @assert isa(arg, Union{GlobalRef, Symbol})
                 return x
             end
-        elseif !Core.Compiler.is_meta_expr_head(head)
+        elseif !Base.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
@@ -459,5 +593,64 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
 end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
+
+"""
+    Meta.unblock(expr)
+
+Peel away redundant block expressions.
+
+Specifically, the following expressions are stripped by this function:
+- `:block` expressions with a single non-line-number argument.
+- Pairs of `:var"hygienic-scope"` / `:escape` expressions.
+"""
+function unblock(@nospecialize ex)
+    while isexpr(ex, :var"hygienic-scope")
+        isexpr(ex.args[1], :escape) || break
+        ex = ex.args[1].args[1]
+    end
+    isexpr(ex, :block) || return ex
+    exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
+    length(exs) == 1 || return ex
+    return unblock(exs[1])
+end
+
+"""
+    Meta.unescape(expr)
+
+Peel away `:escape` expressions and redundant block expressions (see
+[`unblock`](@ref)).
+"""
+function unescape(@nospecialize ex)
+    ex = unblock(ex)
+    while isexpr(ex, :escape) || isexpr(ex, :var"hygienic-scope")
+       ex = unblock(ex.args[1])
+    end
+    return ex
+end
+
+"""
+    Meta.reescape(unescaped_expr, original_expr)
+
+Re-wrap `unescaped_expr` with the same level of escaping as `original_expr` had.
+This is the inverse operation of [`unescape`](@ref) - if the original expression
+was escaped, the unescaped expression is wrapped in `:escape` again.
+"""
+function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
+    if isexpr(original_expr, :escape)
+        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+    elseif isexpr(original_expr, :var"hygienic-scope")
+        next, ctx... = original_expr.args
+        return reescape(Expr(:var"hygienic-scope", unescaped_expr, ctx...), next)
+    else
+        return unescaped_expr
+    end
+end
+
+"""
+    Meta.uncurly(expr)
+
+Turn `T{P...}` into just `T`.
+"""
+uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 end # module

@@ -23,6 +23,11 @@ where `T` is the type to be specialized for, and `dict` keeps track of objects c
 so far within the recursion. Within the definition, `deepcopy_internal` should be used
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
+
+!!! warning
+    It is better to avoid this function in favor of custom `copy` methods or use-case-specific
+    copying functions. `deepcopy` is slow and can easily copy too many objects, or generate an
+    object that violates invariants, since it does not respect abstraction boundaries.
 """
 function deepcopy(@nospecialize x)
     isbitstype(typeof(x)) && return x
@@ -37,7 +42,7 @@ deepcopy_internal(x::Module, stackdict::IdDict) = error("deepcopy of Modules not
 
 function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = Core.svec(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
     stackdict[x] = y
@@ -46,7 +51,7 @@ end
 
 function deepcopy_internal(x::String, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = GC.@preserve x unsafe_string(pointer(x), sizeof(x))
     stackdict[x] = y
@@ -58,14 +63,16 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     nf = nfields(x)
     if ismutable(x)
         if haskey(stackdict, x)
-            return stackdict[x]
+            return stackdict[x]::typeof(x)
         end
         y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
         stackdict[x] = y
         for i in 1:nf
             if isdefined(x, i)
                 xi = getfield(x, i)
-                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                if !isbits(xi)
+                    xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                end
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi)
             end
         end
@@ -76,7 +83,9 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
         for i in 1:nf
             if isdefined(x, i)
                 xi = getfield(x, i)
-                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                if !isbits(xi)
+                    xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+                end
                 flds[i] = xi
             else
                 nf = i - 1 # rest of tail must be undefined values
@@ -101,35 +110,38 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
     end
     dest = typeof(x)(undef, length(x))
     stackdict[x] = dest
-    xr = Core.memoryref(x)
-    dr = Core.memoryref(dest)
+    xr = memoryref(x)
+    dr = memoryref(dest)
     for i = 1:length(x)
-        xi = Core.memoryref(xr, i, false)
+        xi = Core.memoryrefnew(xr, i, false)
         if Core.memoryref_isassigned(xi, :not_atomic, false)
             xi = Core.memoryrefget(xi, :not_atomic, false)
             if !isbits(xi)
                 xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
-            di = Core.memoryref(dr, i, false)
-            di = Core.memoryrefset!(di, xi, :not_atomic, false)
+            di = Core.memoryrefnew(dr, i, false)
+            Core.memoryrefset!(di, xi, :not_atomic, false)
         end
     end
     return dest
 end
-@eval function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
+function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    stackdict[x] = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
+    y = stackdict[x] = Array{T, N}(undef, ntuple(Returns(0), Val{N}()))
+    setfield!(y, :ref, deepcopy_internal(x.ref, stackdict))
+    setfield!(y, :size, x.size)
+    y
 end
 function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
     mem = getfield(x, :mem)
-    dest = GenericMemoryRef(deepcopy_internal(mem, stackdict)::typeof(mem))
+    dest = memoryref(deepcopy_internal(mem, stackdict)::typeof(mem))
     i = memoryrefoffset(x)
-    i == 1 || (dest = Core.memoryref(dest, i, true))
+    i == 1 || (dest = Core.memoryrefnew(dest, i, true))
     return dest
 end
 
@@ -153,7 +165,7 @@ end
 
 function deepcopy_internal(x::AbstractLock, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = typeof(x)()
     stackdict[x] = y
@@ -162,7 +174,7 @@ end
 
 function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = typeof(x)(deepcopy_internal(x.lock, stackdict))
     stackdict[x] = y

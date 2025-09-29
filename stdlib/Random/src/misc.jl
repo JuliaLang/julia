@@ -97,7 +97,7 @@ end
 #  size-m subset of A where m is fixed!)
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     require_one_based_indexing(S, A)
-    0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
+    0 <= p <= 1 || _throw_argerror(LazyString("probability ", p, " not in [0,1]"))
     n = length(A)
     p == 1 && return copyto!(resize!(S, n), A)
     empty!(S)
@@ -183,6 +183,34 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 
 ## shuffle & shuffle!
 
+function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
+    # `@inline` and `@inbounds` are here to help escape analysis eliminate the `Memory` allocation
+    #
+    # * `@inline` might be necessary because escape analysis relies on everything
+    #   touching the `Memory` being inlined because there's no interprocedural escape
+    #   analysis yet, relevant WIP PR: https://github.com/JuliaLang/julia/pull/56849
+    #
+    # * `@inbounds` might be necessary because escape analysis requires any throws of
+    #   `BoundsError` to be eliminated as dead code, because `BoundsError` stores the
+    #   array itself, making the throw escape the array from the function, relevant
+    #   WIP PR: https://github.com/JuliaLang/julia/pull/56167
+    @inline let
+        # use a narrow integer type to save stack space and prevent heap allocation
+        Ind = if N ≤ typemax(UInt8)
+            UInt8
+        elseif N ≤ typemax(UInt16)
+            UInt16
+        else
+            UInt
+        end
+        mem = @inbounds randperm!(rng, Memory{Ind}(undef, N))
+        function closure(i::Int)
+            @inbounds tup[mem[i]]
+        end
+        ntuple(closure, Val{N}())
+    end
+end
+
 """
     shuffle!([rng=default_rng(),] v::AbstractArray)
 
@@ -220,15 +248,33 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
+function shuffle!(r::AbstractRNG, a::AbstractArray{Bool})
+    old_count = count(a)
+    len = length(a)
+    uncommon_value = 2old_count <= len
+    fuel = uncommon_value ? old_count : len - old_count
+    fuel == 0 && return a
+    a .= !uncommon_value
+    while fuel > 0
+        k = rand(r, eachindex(a))
+        fuel -= a[k] != uncommon_value
+        a[k] = uncommon_value
+    end
+    a
+end
+
 shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
 
 """
-    shuffle([rng=default_rng(),] v::AbstractArray)
+    shuffle([rng=default_rng(),] v::Union{NTuple,AbstractArray})
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
 To permute `v` in-place, see [`shuffle!`](@ref). To obtain randomly permuted
 indices, see [`randperm`](@ref).
+
+!!! compat "Julia 1.13"
+    Shuffling an `NTuple` value requires Julia v1.13 or above.
 
 # Examples
 ```jldoctest
@@ -246,8 +292,10 @@ julia> shuffle(Xoshiro(123), Vector(1:10))
   7
 ```
 """
+function shuffle end
+
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractArray) = shuffle(default_rng(), a)
+shuffle(a::Union{NTuple, AbstractArray}) = shuffle(default_rng(), a)
 
 shuffle(r::AbstractRNG, a::Base.OneTo) = randperm(r, last(a))
 
@@ -282,12 +330,15 @@ randperm(r::AbstractRNG, n::T) where {T <: Integer} = randperm!(r, Vector{T}(und
 randperm(n::Integer) = randperm(default_rng(), n)
 
 """
-    randperm!([rng=default_rng(),] A::Array{<:Integer})
+    randperm!([rng=default_rng(),] A::AbstractArray{<:Integer})
 
 Construct in `A` a random permutation of length `length(A)`. The
 optional `rng` argument specifies a random number generator (see
 [Random Numbers](@ref)). To randomly permute an arbitrary vector, see
 [`shuffle`](@ref) or [`shuffle!`](@ref).
+
+!!! compat "Julia 1.13"
+    `A isa Array` was required prior to Julia v1.13.
 
 # Examples
 ```jldoctest
@@ -299,8 +350,9 @@ julia> randperm!(Xoshiro(123), Vector{Int}(undef, 4))
  3
 ```
 """
-function randperm!(r::AbstractRNG, a::Array{<:Integer})
+function randperm!(r::AbstractRNG, a::AbstractArray{<:Integer})
     # keep it consistent with `shuffle!` and `randcycle!` if possible
+    Base.require_one_based_indexing(a)
     n = length(a)
     @assert n <= Int64(2)^52
     n == 0 && return a
@@ -317,7 +369,7 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
     return a
 end
 
-randperm!(a::Array{<:Integer}) = randperm!(default_rng(), a)
+randperm!(a::AbstractArray{<:Integer}) = randperm!(default_rng(), a)
 
 
 ## randcycle & randcycle!
@@ -355,7 +407,7 @@ randcycle(r::AbstractRNG, n::T) where {T <: Integer} = randcycle!(r, Vector{T}(u
 randcycle(n::Integer) = randcycle(default_rng(), n)
 
 """
-    randcycle!([rng=default_rng(),] A::Array{<:Integer})
+    randcycle!([rng=default_rng(),] A::AbstractArray{<:Integer})
 
 Construct in `A` a random cyclic permutation of length `n = length(A)`.
 The optional `rng` argument specifies a random number generator, see
@@ -366,6 +418,9 @@ If `A` is nonempty (`n > 0`), there are ``(n-1)!`` possible cyclic permutations,
 which are sampled uniformly.  If `A` is empty, `randcycle!` leaves it unchanged.
 
 [`randcycle`](@ref) is a variant of this function that allocates a new vector.
+
+!!! compat "Julia 1.13"
+    `A isa Array` was required prior to Julia v1.13.
 
 # Examples
 ```jldoctest
@@ -379,8 +434,9 @@ julia> randcycle!(Xoshiro(123), Vector{Int}(undef, 6))
  1
 ```
 """
-function randcycle!(r::AbstractRNG, a::Array{<:Integer})
+function randcycle!(r::AbstractRNG, a::AbstractArray{<:Integer})
     # keep it consistent with `shuffle!` and `randperm!` if possible
+    Base.require_one_based_indexing(a)
     n = length(a)
     @assert n <= Int64(2)^52
     n == 0 && return a
@@ -396,4 +452,4 @@ function randcycle!(r::AbstractRNG, a::Array{<:Integer})
     return a
 end
 
-randcycle!(a::Array{<:Integer}) = randcycle!(default_rng(), a)
+randcycle!(a::AbstractArray{<:Integer}) = randcycle!(default_rng(), a)

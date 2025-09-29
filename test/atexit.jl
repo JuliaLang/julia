@@ -220,7 +220,7 @@ using Test
                     # Block until the atexit hooks have all finished. We use a manual "spin
                     # lock" because task switch is disallowed inside the finalizer, below.
                     atexit_has_finished[] = 1
-                    while atexit_has_finished[] == 1 end
+                    while atexit_has_finished[] == 1; GC.safepoint(); end
                     try
                         # By the time this runs, all the atexit hooks will be done.
                         # So this will throw.
@@ -232,7 +232,7 @@ using Test
                         exit(22)
                     end
                 end
-                while atexit_has_finished[] == 0 end
+                while atexit_has_finished[] == 0; GC.safepoint(); end
             end
             # Finalizers run after the atexit hooks, so this blocks exit until the spawned
             # task above gets a chance to run.
@@ -241,7 +241,7 @@ using Test
                 # Allow the spawned task to finish
                 atexit_has_finished[] = 2
                 # Then spin forever to prevent exit.
-                while atexit_has_finished[] == 2 end
+                while atexit_has_finished[] == 2; GC.safepoint(); end
             end
             exit(0)
             """ => 22,

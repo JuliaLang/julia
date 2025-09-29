@@ -41,6 +41,7 @@ end
     @test Dates.isleapyear(-1) == false
     @test Dates.isleapyear(4) == true
     @test Dates.isleapyear(-4) == true
+    @test_throws MethodError Dates.isleapyear(Dates.Year(1992))
 end
 # Create "test" check manually
 y = Dates.Year(1)
@@ -262,7 +263,11 @@ end
 end
 
 @testset "issue #31524" begin
-    dt1 = Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
+    # Ensure the result doesn't depend on local timezone, especially on macOS
+    # where an extra internal call to `mktime` is affected by timezone settings.
+    dt1 = withenv("TZ" => "UTC") do
+        Libc.strptime("%Y-%m-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
+    end
     dt2 = Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
 
     time = Time(dt1)

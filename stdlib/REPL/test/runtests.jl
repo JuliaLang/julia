@@ -3,6 +3,10 @@
 # Make a copy of the original environment
 original_env = copy(ENV)
 
+module PrecompilationTests
+    include("precompilation.jl")
+end
+
 module REPLTests
     include("repl.jl")
 end
@@ -17,6 +21,9 @@ module DocviewTest
 end
 module TerminalMenusTest
     include("TerminalMenus/runtests.jl")
+end
+module BadHistoryStartupTest
+    include("bad_history_startup.jl")
 end
 
 # Restore the original environment
