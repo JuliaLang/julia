@@ -688,8 +688,9 @@ temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEM
 function temp_cleanup_postprocess(cleanup_dirs)
     if !isempty(cleanup_dirs)
         rmcmd = """
-        eof(stdin)
-        for path in eachline(stdin)
+        cleanuplist = readlines(stdin) # This loop won't start running until stdin is closed, which is supposed to be sequenced after the process exits
+        sleep(1) # Wait for the operating system to hopefully be ready, since the OS implementation is probably incorrect, given the history of buggy work-arounds like this that have existed for ages in dotNet and libuv
+        for path in cleanuplist
             try
                 rm(path, force=true, recursive=true)
             catch ex
@@ -699,23 +700,16 @@ function temp_cleanup_postprocess(cleanup_dirs)
         """
         cmd = Cmd(Base.cmd_gen(((Base.julia_cmd(),), ("--startup-file=no",), ("-e",), (rmcmd,))); ignorestatus = true, detach = true)
         pw = Base.PipeEndpoint()
-        rd, wr = Base.link_pipe(true, true)
-        try
-            Base.open_pipe!(pw, wr)
-        catch
-            Base.close_pipe_sync(wr)
-            rethrow()
-        end
-        run(cmd, rd, devnull, stderr; wait=false)
+        run(cmd, pw, devnull, stderr; wait=false)
         join(pw, cleanup_dirs, "\n")
-        Base.dup(wr) # intentionally leak a reference, until the process exits
+        Base.dup(Base._fd(pw)) # intentionally leak a reference, until the process exits
         close(pw)
     end
 end
 
 function temp_cleanup_atexit()
     temp_cleanup_purge_all()
-    temp_cleanup_postprocess(keys(TEMP_CLEANUP))
+    @lock TEMP_CLEANUP_LOCK temp_cleanup_postprocess(keys(TEMP_CLEANUP))
 end
 
 function __postinit__()
