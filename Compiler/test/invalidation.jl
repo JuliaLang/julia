@@ -120,13 +120,13 @@ begin
         # Base.method_instance(pr48932_callee, (Any,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
 
         # In cache due to Base.return_types(pr48932_callee, (Any,))
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller, (Int,))
@@ -150,11 +150,11 @@ begin
         # Base.method_instance(pr48932_callee, (Any,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test_broken ci.max_world == typemax(UInt)
     end
 
@@ -224,11 +224,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee_inferable))))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
@@ -249,11 +249,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test_broken ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
@@ -284,11 +284,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
@@ -309,11 +309,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world != typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world != typemax(UInt)
     end
 

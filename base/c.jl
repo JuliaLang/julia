@@ -458,6 +458,6 @@ macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
 end
 
-macro ccall_effects(effects::UInt16, expr)
-    return ccall_macro_lower((:ccall, effects), ccall_macro_parse(expr)...)
+macro ccall_effects(effects::UInt16, exprs...)
+    return ccall_macro_lower((:ccall, effects), ccall_macro_parse(exprs)...)
 end

@@ -664,8 +664,8 @@ julia> for p in workers() # start tasks on the workers to process requests in pa
        end
 
 julia> @elapsed while n > 0 # print out results
-           job_id, exec_time, where = take!(results)
-           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $where")
+           job_id, exec_time, worker_id = take!(results)
+           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $worker_id")
            global n = n - 1
        end
 1 finished in 0.18 seconds on worker 4

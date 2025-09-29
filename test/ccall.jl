@@ -1970,7 +1970,7 @@ end
 
 function gc_safe_ccall()
     # jl_rand is marked as JL_NOTSAFEPOINT
-    @ccall gc_safe=true jl_rand()::UInt64
+    Base.@assume_effects :nothrow @ccall gc_safe=true jl_rand()::UInt64
 end
 
 let llvm = sprint(code_llvm, gc_safe_ccall, ())
@@ -1978,6 +1978,29 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     @test gc_safe_ccall() isa UInt64
     # check for the gc_safe store
     @test occursin("store atomic i8 2", llvm)
+    @test Base.infer_effects(gc_safe_ccall, Tuple{}).nothrow == true
+end
+
+@testset "jl_dlfind and dlsym" begin
+    # Test that jl_dlfind finds things in the expected places.
+    @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
+    @static if !Sys.iswindows()
+        @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
+    end
+    @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "malloc") ∉ (1, 2, 3)      # Either 0 or msvcrt.dll on Windows
+    let hdl = Libdl.dlopen(libccalltest, Libdl.RTLD_GLOBAL)
+        try
+            @static if Sys.iswindows()
+                @test_throws ErrorException ccall(:get_c_int, Cint, ())
+            else
+                @test ccall(:get_c_int, Cint, ()) isa Cint
+            end
+        finally
+            Libdl.dlclose(hdl)
+        end
+    end
 end
 
 module Test57749

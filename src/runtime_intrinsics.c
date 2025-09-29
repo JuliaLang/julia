@@ -669,7 +669,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     }
     else {
         void *handle = jl_get_library((char*)jl_dlfind(f_name));
-        jl_dlsym(handle, f_name, &ptr, 1);
+        jl_dlsym(handle, f_name, &ptr, 1, 0);
     }
     JL_GC_POP();
 

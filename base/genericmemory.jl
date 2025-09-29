@@ -61,13 +61,6 @@ AtomicMemory
 
 using Core: memoryrefoffset, memoryref_isassigned # import more functions which were not essential
 
-size(a::GenericMemory, d::Int) =
-    d < 1 ? error("dimension out of range") :
-    d == 1 ? length(a) :
-    1
-size(a::GenericMemory, d::Integer) =  size(a, convert(Int, d))
-size(a::GenericMemory) = (length(a),)
-
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
 parent(ref::GenericMemoryRef) = ref.mem
