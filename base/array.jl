@@ -185,14 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = size(a, Int(d)::Int)
-function size(a::Array, d::Int)
-    d < 1 && error("arraysize: dimension out of range")
-    sz = getfield(a, :size)
-    return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
-end
-size(a::Array) = getfield(a, :size)
-
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
@@ -316,23 +308,61 @@ end
 # It is also mitigated by using a constant string.
 _throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
-copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
+_copyto2arg!(dest, src) = copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+
+copyto!(dest::Array, src::Array) = _copyto2arg!(dest, src)
+copyto!(dest::Array, src::Memory) = _copyto2arg!(dest, src)
+copyto!(dest::Memory, src::Array) = _copyto2arg!(dest, src)
 
 # also to avoid ambiguities in packages
-copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
+copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
 
-# N.B: The generic definition in multidimensional.jl covers, this, this is just here
-# for bootstrapping purposes.
-function fill!(dest::Array{T}, x) where T
+# N.B: This generic definition in for multidimensional arrays is here instead of
+# `multidimensional.jl` for bootstrapping purposes.
+"""
+    fill!(A, x)
+
+Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
+the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
+`Foo()` once.
+
+# Examples
+```jldoctest
+julia> A = zeros(2,3)
+2×3 Matrix{Float64}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> fill!(A, 2.)
+2×3 Matrix{Float64}:
+ 2.0  2.0  2.0
+ 2.0  2.0  2.0
+
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A
+3-element Vector{Vector{Int64}}:
+ [2, 1, 1]
+ [2, 1, 1]
+ [2, 1, 1]
+
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())
+3-element Vector{Int64}:
+ 1
+ 1
+ 1
+```
+"""
+function fill!(A::AbstractArray{T}, x) where T
     @inline
-    x = x isa T ? x : convert(T, x)::T
-    return _fill!(dest, x)
+    xT = x isa T ? x : convert(T, x)::T
+    return _fill!(A, xT)
 end
-function _fill!(dest::Array{T}, x::T) where T
-    for i in eachindex(dest)
-        @inbounds dest[i] = x
+function _fill!(A::AbstractArray{T}, x::T) where T
+    for i in eachindex(A)
+        A[i] = x
     end
-    return dest
+    return A
 end
 
 """
@@ -376,6 +406,7 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1)
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
+similar(::Type{Array{T,N}}, dims::Dims) where {T,N} = similar(Array{T}, dims)
 
 # T[x...] constructs Array{T,1}
 """
@@ -742,9 +773,16 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
-_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+function _collect_indices(::Tuple{}, A)
+    dest = Array{eltype(A),0}(undef)
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
+function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
+    dest = Array{eltype(A)}(undef, length.(indsA))
+    isempty(A) && return dest
+    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
@@ -896,10 +934,6 @@ function grow_to!(dest, itr, st)
     return dest
 end
 
-## Iteration ##
-
-iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
-
 ## Indexing: getindex ##
 
 """
@@ -987,7 +1021,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -2193,7 +2227,7 @@ end
 # 1d special cases of reverse(A; dims) and reverse!(A; dims):
 for (f,_f) in ((:reverse,:_reverse), (:reverse!,:_reverse!))
     @eval begin
-        $f(A::AbstractVector; dims=:) = $_f(A, dims)
+        $f(A::AbstractVector; dims::D=:) where {D} = $_f(A, dims)
         $_f(A::AbstractVector, ::Colon) = $f(A, firstindex(A), lastindex(A))
         $_f(A::AbstractVector, dim::Tuple{Integer}) = $_f(A, first(dim))
         function $_f(A::AbstractVector, dim::Integer)
@@ -3124,14 +3158,17 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function _shrink(shrinker!::F, itr, itrs) where F
+function intersect(itr, itrs...)
     T = promote_eltype(itr, itrs...)
-    keep = shrinker!(Set{T}(itr), itrs...)
+    keep = intersect!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)
 end
 
-intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
-setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)
+function setdiff(itr, itrs...)
+    T = eltype(itr)
+    keep = setdiff!(Set{T}(itr), itrs...)
+    vectorfilter(T, _shrink_filter!(keep), itr)
+end
 
 function intersect(v::AbstractVector, r::AbstractRange)
     T = promote_eltype(v, r)

@@ -148,6 +148,8 @@ gcd(a::Rational) = checked_abs(a.num) // a.den
 lcm(a::Union{Integer,Rational}) = gcd(a)
 gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
 gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
+lcm(a::Unsigned, b::Signed) = lcm(promote(a, abs(b))...)
+lcm(a::Signed, b::Unsigned) = lcm(promote(abs(a), b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
 lcm(a::Real, b::Real) = lcm(promote(a,b)...)
 gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
@@ -252,6 +254,16 @@ function gcdx(a::Real, b::Real, cs::Real...)
     d′, x, ys... = gcdx(d, cs...)
     return d′, i*x, j*x, ys...
 end
+function gcdx(a::Signed, b::Unsigned)
+    R = promote_type(typeof(a), typeof(b))
+    _a = a % signed(R) # handle the case a == typemin(typeof(a)) if R != typeof(a)
+    d, u, v = gcdx(promote(abs(_a), b)...)
+    d, flipsign(u, a), v
+end
+function gcdx(a::Unsigned, b::Signed)
+    d, v, u = gcdx(b, a)
+    d, u, v
+end
 
 # multiplicative inverse of n mod m, error if none
 
@@ -335,11 +347,6 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
-function to_power_type(x::Number)
-    T = promote_type(typeof(x), typeof(x*x))
-    convert(T, x)
-end
-to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
@@ -355,12 +362,23 @@ to_power_type(x) = oftype(x*x, x)
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
 # The * keyword supports `*=checked_mul` for `checked_pow`
 @assume_effects :terminates_locally function power_by_squaring(x_, p::Integer; mul=*)
-    x = to_power_type(x_)
+    x_squared_ = x_ * x_
+    x_squared_type = typeof(x_squared_)
+    T = if x_ isa Number
+        promote_type(typeof(x_), x_squared_type)
+    else
+        x_squared_type
+    end
+    x = convert(T, x_)
+    square_is_useful = mul === *
     if p == 1
         return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
+        if square_is_useful  # avoid performing the same multiplication a second time when possible
+            return convert(T, x_squared_)
+        end
         return mul(x, x)
     elseif p < 0
         isone(x) && return copy(x)
@@ -369,6 +387,11 @@ to_power_type(x) = oftype(x*x, x)
     end
     t = trailing_zeros(p) + 1
     p >>= t
+    if square_is_useful  # avoid performing the same multiplication a second time when possible
+        if (t -= 1) > 0
+            x = convert(T, x_squared_)
+        end
+    end
     while (t -= 1) > 0
         x = mul(x, x)
     end
@@ -749,7 +772,8 @@ function ndigits0z(x::Integer, b::Integer)
 end
 
 # Extends the definition in base/int.jl
-top_set_bit(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+# assume x >= 0. result is implementation-defined for negative values
+top_set_bit(x::Integer) = iszero(x) ? 0 : exponent(x) + 1
 
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)

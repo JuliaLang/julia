@@ -53,7 +53,7 @@ Construct an undef [`BitArray`](@ref) with the given dimensions.
 Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest; filter = r"[01]"
 julia> BitArray(undef, 2, 2)
 2×2 BitMatrix:
  0  0
@@ -103,11 +103,6 @@ end
 length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
-
-@inline function size(B::BitVector, d::Integer)
-    d < 1 && throw_boundserror(size(B), d)
-    ifelse(d == 1, B.len, 1)
-end
 
 isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 

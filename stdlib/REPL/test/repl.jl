@@ -244,8 +244,9 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
-            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] "))
+        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
+            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] "),
+            skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
         write(stdin_write, "\b")
         wait(t)
     end
@@ -1998,4 +1999,33 @@ end
 
     write(proj_file, "name = \"Bar\"\n")
     @test get_prompt("--project=$proj_file") == "(Bar) pkg> "
+end
+
+# Issue #58158 add alias for Char display in REPL
+@testset "REPL show_repl Char alias" begin
+    # Test character with a known emoji alias
+    output = sprint(REPL.show_repl, MIME("text/plain"), '😼'; context=(:color => true))
+    # Check for base info and the specific alias
+    @test occursin("'😼': Unicode U+1F63C (category So: Symbol, other)", output)
+    @test occursin(", input as ", output) # Check for the prefix text
+    @test occursin("\\:smirk_cat:<tab>", output) # Check for the alias text (may be colored)
+
+    # Test character with a known LaTeX alias
+    output = sprint(REPL.show_repl, MIME("text/plain"), 'α'; context=(:color => true))
+    # Check for base info and the specific alias
+    @test occursin("'α': Unicode U+03B1 (category Ll: Letter, lowercase)", output)
+    @test occursin(", input as ", output) # Check for the prefix text
+    @test occursin("\\alpha<tab>", output) # Check for the alias text (may be colored)
+
+    # Test character without an alias
+    output = sprint(REPL.show_repl, MIME("text/plain"), 'X'; context=(:color => true))
+    # Check for base info only
+    @test occursin("'X': ASCII/Unicode U+0058 (category Lu: Letter, uppercase)", output)
+    # Ensure alias part is *not* printed
+    @test !occursin(", input as ", output)
+
+    # Test another character without an alias (symbol)
+    output = sprint(REPL.show_repl, MIME("text/plain"), '+'; context=(:color => true))
+    @test occursin("'+': ASCII/Unicode U+002B (category Sm: Symbol, math)", output)
+    @test !occursin(", input as ", output)
 end

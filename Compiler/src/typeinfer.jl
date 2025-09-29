@@ -103,12 +103,12 @@ end
 
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
-    #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
+    edges = result_edges(interp, caller)
+    #@assert last(result.valid_worlds) <= get_world_counter() || isempty(edges)
     if caller.cache_mode === CACHE_MODE_LOCAL
         @assert !isdefined(result, :ci)
-        result.src = transform_result_for_local_cache(interp, result)
+        result.src = transform_result_for_local_cache(interp, result, edges)
     elseif isdefined(result, :ci)
-        edges = result_edges(interp, caller)
         ci = result.ci
         mi = result.linfo
         # if we aren't cached, we don't need this edge
@@ -400,7 +400,7 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
     end
 end
 
-function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
+function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
     if is_result_constabi_eligible(result)
         return nothing
     end
@@ -469,17 +469,11 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState, cycleid::Int)
     return typ
 end
 
-function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
+function adjust_effects(ipo_effects::Effects, def::Method)
     # override the analyzed effects using manually annotated effect settings
     override = decode_effects_override(def.purity)
-    valid_worlds = WorldRange(0, typemax(UInt))
     if is_effect_overridden(override, :consistent)
-        # See note on `typemax(Int)` instead of `deleted_world` in adjust_effects!
-        override_valid_worlds = WorldRange(def.primary_world, typemax(UInt))
-        if world in override_valid_worlds
-            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
-            valid_worlds = override_valid_worlds
-        end
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
     if is_effect_overridden(override, :effect_free)
         ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
@@ -507,7 +501,7 @@ function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
     if is_effect_overridden(override, :nortcall)
         ipo_effects = Effects(ipo_effects; nortcall=true)
     end
-    return (ipo_effects, valid_worlds)
+    return ipo_effects
 end
 
 function adjust_effects(sv::InferenceState)
@@ -561,8 +555,7 @@ function adjust_effects(sv::InferenceState)
     # override the analyzed effects using manually annotated effect settings
     def = sv.linfo.def
     if isa(def, Method)
-        (ipo_effects, valid_worlds) = adjust_effects(ipo_effects, def, sv.world.this)
-        update_valid_age!(sv, valid_worlds)
+        ipo_effects = adjust_effects(ipo_effects, def)
     end
 
     return ipo_effects
@@ -601,9 +594,9 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         end
     end
     result = me.result
+    result.valid_worlds = me.world.valid_worlds
     result.result = bestguess
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
-    result.valid_worlds = me.world.valid_worlds
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     me.src.rettype = widenconst(ignorelimited(bestguess))
     me.src.ssaflags = me.ssaflags
@@ -748,6 +741,13 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
 end
 
 # record the backedges
+
+function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
+    meth = isa(edge, Method) ? edge : get_ci_mi(edge).def
+    ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
+    return nothing
+end
+
 function store_backedges(caller::CodeInstance, edges::SimpleVector)
     isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
 
@@ -767,7 +767,7 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             if item isa Core.Binding
                 maybe_add_binding_backedge!(item, caller)
             elseif item isa MethodTable
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
             else
                 item::MethodInstance
                 ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
@@ -1108,13 +1108,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 update_valid_age!(caller, frame.world.valid_worlds)
                 local isinferred = is_inferred(frame)
                 local edge = isinferred ? edge_ci : nothing
-                local effects, valid_worlds
-                if isinferred
-                    effects = frame.result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
-                else
-                    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
-                    update_valid_age!(caller, valid_worlds)
-                end
+                local effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
+                    adjust_effects(effects_for_cycle(frame.ipo_effects), method)
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
@@ -1137,8 +1132,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.world.valid_worlds)
-    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
-    update_valid_age!(caller, valid_worlds)
+    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
@@ -1172,14 +1166,14 @@ end
 #### entry points for inferring a MethodInstance given a type signature ####
 
 """
-    codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, @nospecialize(val))
+    codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
 
 Return a fake CodeInfo that just contains `return \$val`. This function is used in various reflection APIs when asking
 for the code of a function that inference has found to just return a constant. For such functions, no code is actually
 stored - the constant is used directly. However, because this is an ABI implementation detail, it is nice to maintain
 consistency and just synthesize a CodeInfo when the reflection APIs ask for them - this function does that.
 """
-function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @nospecialize(val))
+function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
     method = mi.def::Method
     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     tree.code = Any[ ReturnNode(quoted(val)) ]
@@ -1190,7 +1184,9 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = [IR_FLAG_NULL]
     tree.rettype = Core.Typeof(val)
-    tree.edges = Core.svec()
+    tree.min_world = first(worlds)
+    tree.max_world = last(worlds)
+    tree.edges = edges
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree
@@ -1256,7 +1252,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
     if run_optimizer
         if result_is_constabi(interp, frame.result)
             rt = frame.result.result::Const
-            src = codeinfo_for_const(interp, frame.linfo, rt.val)
+            src = codeinfo_for_const(interp, frame.linfo, frame.world.valid_worlds, Core.svec(frame.edges...), rt.val)
         else
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
@@ -1493,16 +1489,30 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 # No dynamic dispatch to resolve / enqueue
                 continue
             end
+        elseif isexpr(stmt, :cfunction) && length(stmt.args) == 5
+            (pointer_type, f, rt, at, call_type) = stmt.args
+            linfo = ci.parent
 
-            let workqueue = invokelatest_queue
-                # make a best-effort attempt to enqueue the relevant code for the finalizer
-                mi = compileable_specialization_for_call(workqueue.interp, atype)
-                mi === nothing && continue
+            linfo isa MethodInstance || continue
+            at isa SimpleVector || continue
 
-                push!(workqueue, mi)
+            ft = argextype(f, ci, sptypes)
+            argtypes = Any[ft]
+            for i = 1:length(at)
+                push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
+            atype = argtypes_to_type(argtypes)
+        else
+            # TODO: handle other StmtInfo like OpaqueClosure?
+            continue
         end
-        # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
+        let workqueue = invokelatest_queue
+            # make a best-effort attempt to enqueue the relevant code for the dynamic invokelatest call
+            mi = compileable_specialization_for_call(workqueue.interp, atype)
+            mi === nothing && continue
+
+            push!(workqueue, mi)
+        end
     end
 end
 
@@ -1563,8 +1573,9 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, s
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
-function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
-    interp = NativeInterpreter(world)
+function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8, trim_mode::UInt8)
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    interp = NativeInterpreter(world; inf_params)
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
@@ -1591,11 +1602,11 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             invokelatest_queue === nothing && continue
             (rt::Type, sig::Type) = item
             # make a best-effort attempt to enqueue the relevant code for the ccallable
-            ptr = ccall(:jl_get_specialization1,
-                        #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
                         sig, world, #= mt_cache =# 0)
-            if ptr !== C_NULL
-                mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+            if mi !== nothing
+                mi = mi::MethodInstance
                 ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
                 ci isa CodeInstance && push!(invokelatest_queue, ci)
             end
@@ -1608,7 +1619,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             mi = get_ci_mi(callee)
             # now make sure everything has source code, if desired
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, mi, callee.rettype_const)
+                src = codeinfo_for_const(interp, mi, WorldRange(callee.min_world, callee.max_world), callee.edges, callee.rettype_const)
             else
                 src = get(interp.codegen, callee, nothing)
                 if src === nothing
@@ -1647,11 +1658,11 @@ end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
 # The trim_mode can be any of:
-const TRIM_NO = 0
-const TRIM_SAFE = 1
-const TRIM_UNSAFE = 2
-const TRIM_UNSAFE_WARN = 3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
+const TRIM_NO = 0x0
+const TRIM_SAFE = 0x1
+const TRIM_UNSAFE = 0x2
+const TRIM_UNSAFE_WARN = 0x3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative

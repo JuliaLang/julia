@@ -126,10 +126,11 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     block = block_for_inst(ir, idx)
     inline_into_block!(state, block)
 
-    if !isempty(inlinee_cfg.blocks[1].preds)
+    if length(inlinee_cfg.blocks[1].preds) > 1
         need_split_before = true
+    else
+        @assert inlinee_cfg.blocks[1].preds[1] == 0
     end
-
     last_block_idx = last(state.cfg.blocks[block].stmts)
     if false # TODO: ((idx+1) == last_block_idx && isa(ir[SSAValue(last_block_idx)], GotoNode))
         need_split = false
@@ -166,12 +167,18 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     end
     new_block_range = (length(state.new_cfg_blocks)-length(inlinee_cfg.blocks)+1):length(state.new_cfg_blocks)
 
-    # Fixup the edges of the newely added blocks
+    # Fixup the edges of the newly added blocks
     for (old_block, new_block) in enumerate(bb_rename_range)
         if old_block != 1 || need_split_before
             p = state.new_cfg_blocks[new_block].preds
             let bb_rename_range = bb_rename_range
                 map!(p, p) do old_pred_block
+                    # the meaning of predecessor 0 depends on the block we encounter it:
+                    #   - in the first block, it represents the function entry and so needs to be re-mapped
+                    if old_block == 1 && old_pred_block == 0
+                        return first(bb_rename_range) - 1
+                    end
+                    #   - elsewhere, it represents external control-flow from a caught exception which is un-affected by inlining
                     return old_pred_block == 0 ? 0 : bb_rename_range[old_pred_block]
                 end
             end
@@ -184,10 +191,6 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
                 end
             end
         end
-    end
-
-    if need_split_before
-        push!(state.new_cfg_blocks[first(bb_rename_range)].preds, first(bb_rename_range)-1)
     end
 
     any_edges = false
@@ -399,7 +402,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     else
         bb_offset, post_bb_id = popfirst!(todo_bbs)
         # This implements the need_split_before flag above
-        need_split_before = !isempty(item.ir.cfg.blocks[1].preds)
+        need_split_before = length(item.ir.cfg.blocks[1].preds) > 1
         if need_split_before
             finish_current_bb!(compact, 0)
         end
@@ -862,7 +865,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
         return compileable_specialization(edge, effects, et, info, state)
     end
 
-    src_inlining_policy(state.interp, src, info, flag) ||
+    src_inlining_policy(state.interp, mi, src, info, flag) ||
         return compileable_specialization(edge, effects, et, info, state)
 
     add_inlining_edge!(et, edge)
@@ -894,7 +897,7 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
         return nothing
     end
 
-    src_inlining_policy(state.interp, src, info, flag) || return nothing
+    src_inlining_policy(state.interp, mi, src, info, flag) || return nothing
     ir, spec_info, debuginfo = retrieve_ir_for_inlining(cached_result, src)
     add_inlining_edge!(et, cached_result)
     return InliningTodo(mi, ir, spec_info, debuginfo, effects)
@@ -1445,7 +1448,7 @@ end
 function semiconcrete_result_item(result::SemiConcreteResult,
         @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
     code = result.edge
-    mi = code.def
+    mi = get_ci_mi(code)
     et = InliningEdgeTracker(state)
 
     if (!OptimizationParams(state.interp).inlining || is_stmt_noinline(flag) ||
@@ -1455,7 +1458,7 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         (is_declared_noinline(mi.def::Method) && !is_stmt_inline(flag)))
         return compileable_specialization(code, result.effects, et, info, state)
     end
-    src_inlining_policy(state.interp, result.ir, info, flag) ||
+    src_inlining_policy(state.interp, mi, result.ir, info, flag) ||
         return compileable_specialization(code, result.effects, et, info, state)
 
     add_inlining_edge!(et, result.edge)
@@ -1599,10 +1602,8 @@ end
 
 function handle_invoke_expr!(todo::Vector{Pair{Int,Any}}, ir::IRCode,
     idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature, state::InliningState)
-    mi = stmt.args[1]
-    if !(mi isa MethodInstance)
-        mi = (mi::CodeInstance).def
-    end
+    edge = stmt.args[1]
+    mi = isa(edge, MethodInstance) ? edge : get_ci_mi(edge::CodeInstance)
     case = resolve_todo(mi, info, flag, state)
     handle_single_case!(todo, ir, idx, stmt, case, false)
     return nothing
@@ -1622,13 +1623,13 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
     todo = Pair{Int, Any}[]
 
     for idx in 1:length(ir.stmts)
-        flag = ir.stmts[idx][:flag]
+        inst = ir.stmts[idx]
+        flag = inst[:flag]
 
         simpleres = process_simple!(todo, ir, idx, flag, state)
         simpleres === nothing && continue
         stmt, sig = simpleres
-
-        info = ir.stmts[idx][:info]
+        info = inst[:info]
 
         # `NativeInterpreter` won't need this, but provide a support for `:invoke` exprs here
         # for external `AbstractInterpreter`s that may run the inlining pass multiple times

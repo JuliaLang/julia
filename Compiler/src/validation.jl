@@ -35,8 +35,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :aliasscope => 0:0,
     :popaliasscope => 0:0,
     :new_opaque_closure => 5:typemax(Int),
-    :import => 1:typemax(Int),
-    :using => 1:typemax(Int),
     :export => 1:typemax(Int),
     :public => 1:typemax(Int),
     :latestworld => 0:0,
@@ -72,11 +70,13 @@ function maybe_validate_code(mi::MethodInstance, src::CodeInfo, kind::String)
         if !isempty(errors)
             for e in errors
                 if mi.def isa Method
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for method ",
-                            mi.def, ": ", e)
+                    println(Core.stderr,
+                            "WARNING: Encountered invalid ", kind,
+                            " code for method ", mi.def, ": ", e)
                 else
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
-                            mi.def, ": ", e)
+                    println(Core.stderr,
+                            "WARNING: Encountered invalid ", kind,
+                            " code for top level expression in ", mi.def, ": ", e)
                 end
             end
             error("")

@@ -2111,3 +2111,27 @@ let src = code_typed1(()) do
     end
     @test count(iscall((src, isdefined)), src.code) == 0
 end
+# We should successfully fold the default values of a ScopedValue
+const svalconstprop = ScopedValue(1)
+foosvalconstprop() = svalconstprop[]
+
+let src = code_typed1(foosvalconstprop, ())
+    function is_constfield_load(expr)
+        iscall((src, getfield))(expr) && expr.args[3] in (:(:has_default), :(:default))
+    end
+    @test count(is_constfield_load, src.code) == 0
+end
+
+# JuliaLang/julia #59548
+# Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
+# the codegen ABI
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, xs...)
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, 1, xs...) # convert tuples represented by `PartialStruct`
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end

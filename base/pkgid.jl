@@ -32,7 +32,7 @@ function binpack(pkg::PkgId)
     uuid = pkg.uuid
     write(io, uuid === nothing ? UInt128(0) : UInt128(uuid))
     write(io, pkg.name)
-    return String(take!(io))
+    return unsafe_takestring!(io)
 end
 
 function binunpack(s::String)

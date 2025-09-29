@@ -2420,8 +2420,8 @@ end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
     for s in names(m, all = true)
-        if isdefined(m, s) && !Base.isdeprecated(m, s)
-            t = getfield(m, s)
+        if isdefinedglobal(m, s) && !Base.isdeprecated(m, s)
+            t = getglobal(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
             elseif isa(t, Module) && t !== m && nameof(t) === s && parentmodule(t) === m
@@ -2578,6 +2578,22 @@ Base.:*(x::TestNumber, y::TestNumber) = TestNumber(x.inner*y.inner)
 Base.:(==)(x::TestNumber, y::TestNumber) = x.inner == y.inner
 Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
 @test abs2(TestNumber(3+4im)) == TestNumber(25)
+
+@testset "mul_hi" begin
+    n = 1000
+    ground_truth(x, y) = ((widen(x)*y) >> (8*sizeof(typeof(x)))) % typeof(x)
+    for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
+        for trait1 in [typemin, typemax]
+            for trait2 in [typemin, typemax]
+                x, y = trait1(T), trait2(T)
+                @test Base.mul_hi(x, y) === ground_truth(x, y)
+            end
+        end
+        for (x, y) in zip(rand(T, n), rand(T, n))
+            @test Base.mul_hi(x, y) === ground_truth(x, y)
+        end
+    end
+end
 
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)

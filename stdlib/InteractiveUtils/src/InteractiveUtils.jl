@@ -53,7 +53,7 @@ function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool =
             if !isdefined(m2, v) || !occursin(pattern, string(v))
                 continue
             end
-            value = getfield(m2, v)
+            value = getglobal(m2, v)
             isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
@@ -120,7 +120,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
 
                     Note: This is an unofficial build, please report bugs to the project
                     responsible for this build and not to the Julia project unless you can
-                    reproduce the issue using official builds available at https://julialang.org/downloads
+                    reproduce the issue using official builds available at https://julialang.org
                 """
             )
         end
@@ -148,7 +148,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(chomp(String(take!(cpuio))), "\n"))
+        for (i, line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
             println(io, prefix, line)
         end
@@ -200,7 +200,7 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function]; supertypes::Bool=false])
+    methodswith(typ[, module or function]; supertypes::Bool=false)
 
 Return an array of methods with an argument of type `typ`.
 
@@ -232,8 +232,8 @@ end
 function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
-        if isdefined(m, nm)
-            f = getfield(m, nm)
+        if isdefinedglobal(m, nm)
+            f = getglobal(m, nm)
             if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
@@ -264,8 +264,8 @@ function _subtypes_in!(mods::Array, x::Type)
         m = pop!(mods)
         xt = xt::DataType
         for s in names(m, all = true)
-            if !isdeprecated(m, s) && isdefined(m, s)
-                t = getfield(m, s)
+            if !isdeprecated(m, s) && isdefinedglobal(m, s)
+                t = getglobal(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)
                     if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
