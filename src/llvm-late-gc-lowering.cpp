@@ -1913,6 +1913,9 @@ Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *
     auto &M = *builder.GetInsertBlock()->getModule();
     LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
     load->setOrdering(AtomicOrdering::Unordered);
+    // Mark as volatile to prevent optimizers from treating GC tag loads as constants
+    // since GC mark bits can change during runtime (issue #59547)
+    load->setVolatile(true);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
     auto *NullInt = ConstantInt::get(T_size, 0);

@@ -546,9 +546,9 @@ way that is compatible with C and Fortran. Saturated integer arithmetic, however
 The first and most obvious issue is that this is not the way machine integer arithmetic works,
 so implementing saturated operations requires emitting instructions after each machine integer
 operation to check for underflow or overflow and replace the result with [`typemin(Int)`](@ref)
-or [`typemax(Int)`](@ref) as appropriate. This alone expands each integer operation from a single,
-fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets
-worse – saturating integer arithmetic isn't associative. Consider this Matlab computation:
+or [`typemax(Int)`](@ref) as appropriate. This expands each integer operation from a single, fast
+instruction into a few instructions. But it gets worse – saturating integer arithmetic isn't
+associative. Consider this Matlab computation:
 
 ```
 >> n = int64(2)^62

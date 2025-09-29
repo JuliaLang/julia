@@ -2,7 +2,7 @@
 
 module ScopedValues
 
-export ScopedValue, LazyScopedValue, with, @with
+export ScopedValue, LazyScopedValue, with, @with, ScopedThunk
 public get
 
 """
@@ -324,5 +324,25 @@ function with(f, pair::Pair{<:AbstractScopedValue}, rest::Pair{<:AbstractScopedV
     @with(pair, rest..., f())
 end
 with(@nospecialize(f)) = f()
+
+macro enter_scope(scope, expr)
+    Expr(:tryfinally, esc(expr), nothing, :(Scope($(esc(scope))::Union{Nothing, Scope})))
+end
+
+"""
+    ScopedThunk(f)
+
+Create a callable that records the current dynamic scope, i.e. all current
+`ScopedValue`s, along with `f`. When the callable is invoked, it runs `f`
+in the recorded dynamic scope.
+"""
+struct ScopedThunk{F}
+    f::F
+    scope::Union{Nothing, Scope}
+
+    ScopedThunk{F}(f) where {F} = new{F}(f, Core.current_scope())
+end
+ScopedThunk(f) = ScopedThunk{typeof(f)}(f)
+(sf::ScopedThunk)() = @enter_scope sf.scope sf.f()
 
 end # module ScopedValues

@@ -1081,7 +1081,7 @@ JIT-compilation machinery to basically execute the equivalent of a switch statem
 lookup in your own code.
 
 Some run-time benchmarks comparing (1) type dispatch, (2) dictionary lookup, and (3) a "switch"
-statement can be found [on the mailing list](https://groups.google.com/forum/#!msg/julia-users/jUMu9A3QKQQ/qjgVWr7vAwAJ).
+statement can be found [on discourse](https://discourse.julialang.org/t/suggestion-updating-the-dispatch-vs-dict-switch-benchmark-link-in-the-manual/132159).
 
 Perhaps even worse than the run-time impact is the compile-time impact: Julia will compile specialized
 functions for each different `Car{Make, Model}`; if you have hundreds or thousands of such types,
@@ -1518,7 +1518,7 @@ Further, note the `Statistics` extension `SparseArraysExt` has been activated be
 tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
 
 This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
-Also the `Pkg` utility `why` can be used to report why a an indirect dependency exists.
+Also the `Pkg` utility `why` can be used to report why an indirect dependency exists.
 
 ```
 (CustomPackage) pkg> why FFMPEG_jll
@@ -1543,6 +1543,36 @@ Note the `--startup-file=no` which helps isolate the test from packages you may 
 
 More analysis of the reasons for recompilation can be achieved with the
 [`SnoopCompile`](https://github.com/timholy/SnoopCompile.jl) package.
+
+### Tracing expression evaluation
+
+If you need to understand what code is being evaluated during test or script execution,
+you can use the `--trace-eval` command-line option or the [`Base.TRACE_EVAL`](@ref) global control to trace the outermost expressions being evaluated (top-level statements). Note this does not individually report the contents of function calls or code blocks:
+
+```bash
+# Show only location information during evaluation
+julia --trace-eval=loc script.jl
+
+# Show full expressions being evaluated
+julia --trace-eval=full script.jl
+```
+
+You can also control this programmatically:
+
+```julia
+# Enable full expression tracing
+Base.TRACE_EVAL = :full
+
+# Show only locations
+Base.TRACE_EVAL = :loc
+
+# Disable tracing
+Base.TRACE_EVAL = :no
+
+# Reset to use command-line setting
+Base.TRACE_EVAL = nothing
+```
+
 
 ### Reducing precompilation time
 

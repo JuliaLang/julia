@@ -60,8 +60,8 @@ function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = tr
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
     val = Ref(Ptr{Cvoid}(0))
     symbol_found = ccall(:jl_dlsym, Cint,
-        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint),
-        hnd, s, val, Int64(throw_error)
+        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint, Cint),
+        hnd, s, val, Int64(throw_error), Int64(1)
     )
     if symbol_found == 0
         return nothing
@@ -418,8 +418,7 @@ function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
 end
 
 # Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
-# how to call `dlopen()`, during bootstrap.
-# See  `post_image_load_hooks` for non-bootstrapping.
+# how to call `dlopen()`.
 Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
 
 function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
