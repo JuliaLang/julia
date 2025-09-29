@@ -905,8 +905,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     # matching methods for abstract functions — particularly `Any` or `Function` — can
     # take many seconds to run over the thousands of possible methods. Note that
     # isabstracttype would return naively return true for common constructor calls
-    # like Array, but the REPL's introspection here may know their Type{T}.
-    isconcretetype(funct) || return false
+    # like Array, but the REPL's introspection here may infer a Type{T} that we need to unwrap.
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
