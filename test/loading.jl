@@ -709,7 +709,7 @@ mktempdir() do dir
 end
 
 old_act_proj = Base.ACTIVE_PROJECT[]
-function _with_activate(f::Function, project_file::AbstractString)
+function _with_activate(f::Function, project_file::Union{AbstractString, Nothing})
     try
         Base.ACTIVE_PROJECT[] = project_file
         f()
@@ -717,7 +717,7 @@ function _with_activate(f::Function, project_file::AbstractString)
         Base.ACTIVE_PROJECT[] = old_act_proj
     end
 end
-function _activate_and_get_active_manifest_noarg(project_file::AbstractString)
+function _activate_and_get_active_manifest_noarg(project_file::Union{AbstractString, Nothing})
     _with_activate(project_file) do
         Base.active_manifest()
     end
