@@ -3,7 +3,7 @@
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
-# NOTE: the __LINE__ numbers for these first couple tests are signifmktempdiricant, so
+# NOTE: the __LINE__ numbers for these first couple tests are significant, so
 # adding any lines here will make those tests fail
 @test (@__LINE__) == 8
 
