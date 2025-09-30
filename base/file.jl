@@ -384,12 +384,19 @@ symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` wil
 of the file or directory `src` refers to.
 Return `dst`.
 
+The timestamps, permissions, and ownership (if possible) of the destination file(s) are copied
+from those of the source file(s), similar to the Unix `cp -p` command.
+
 !!! note
     The `cp` function is different from the `cp` Unix command. The `cp` function always operates on
     the assumption that `dst` is a file, while the command does different things depending
     on whether `dst` is a directory or a file.
     Using `force=true` when `dst` is a directory will result in loss of all the contents present
     in the `dst` directory, and `dst` will become a file that has the contents of `src` instead.
+
+!!! compat "Julia 1.13"
+    Prior to Julia 1.13, the file permissions and other metadata were not necessarily
+    preserved (e.g. the permissions were modified by the current `umask` on Unix systems).
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       follow_symlinks::Bool=false)
