@@ -310,12 +310,12 @@ for stdlib in STDLIB_DOCS
 end
 # A few standard libraries need more than just the module itself in the DocTestSetup.
 # This overwrites the existing ones from above though, hence the warn=false.
-DocMeta.setdocmeta!(
-    SparseArrays,
-    :DocTestSetup,
-    maybe_revise(:(using SparseArrays, LinearAlgebra));
-    recursive=true, warn=false,
-)
+# DocMeta.setdocmeta!(
+#     SparseArrays,
+#     :DocTestSetup,
+#     maybe_revise(:(using SparseArrays, LinearAlgebra));
+#     recursive=true, warn=false,
+# )
 DocMeta.setdocmeta!(
     UUIDs,
     :DocTestSetup,
