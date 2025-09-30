@@ -47,7 +47,7 @@ version = "0.9.3"
 deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", "DocStringExtensions", "Downloads", "Git", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "MarkdownAST", "Pkg", "PrecompileTools", "REPL", "RegistryInstances", "SHA", "TOML", "Test", "Unicode"]
 git-tree-sha1 = "d0ea2c044963ed6f37703cead7e29f70cba13d7e"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "1.8.0"
+version = "1.8.1"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
