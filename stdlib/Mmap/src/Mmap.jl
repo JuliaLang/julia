@@ -9,7 +9,7 @@ import Base: OS_HANDLE, INVALID_OS_HANDLE
 
 export mmap
 
-const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
+PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
 mutable struct Anonymous <: IO
