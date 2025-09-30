@@ -26,6 +26,9 @@ cd(joinpath(@__DIR__, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
+        if dir == "SparseArrays" # Disable Sparse arrays doc
+            continue
+        end
         sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src")
         if dir in EXT_STDLIB_DOCS
             sourcefile = joinpath(sourcefile, "basedocs.md")
@@ -43,6 +46,7 @@ cd(joinpath(@__DIR__, "src")) do
         end
     end
 end
+
 
 # Because we have standard libraries that are hosted outside of the julia repo,
 # but their docs are included in the manual, we need to populate the remotes argument
@@ -306,12 +310,12 @@ for stdlib in STDLIB_DOCS
 end
 # A few standard libraries need more than just the module itself in the DocTestSetup.
 # This overwrites the existing ones from above though, hence the warn=false.
-# DocMeta.setdocmeta!(
-#     SparseArrays,
-#     :DocTestSetup,
-#     maybe_revise(:(using SparseArrays, LinearAlgebra));
-#     recursive=true, warn=false,
-# )
+DocMeta.setdocmeta!(
+    SparseArrays,
+    :DocTestSetup,
+    maybe_revise(:(using SparseArrays, LinearAlgebra));
+    recursive=true, warn=false,
+)
 DocMeta.setdocmeta!(
     UUIDs,
     :DocTestSetup,
