@@ -745,7 +745,7 @@ end
             @test _activate_and_get_active_manifest_noarg(proj) === nothing
 
             # If the project and manifest files both exist, active_manifest() should return the path to the manifest:
-            manif = joinpath(proj, "Manifest.toml")
+            manif = joinpath(dir, "Manifest.toml")
             touch(manif)
             @test _activate_and_get_active_manifest_noarg(proj) == manif
 
@@ -771,7 +771,7 @@ end
             @test Base.active_manifest(proj) === nothing
 
             # If the project and manifest files both exist, active_manifest(proj) should return the path to the manifest:
-            manif = joinpath(proj, "Manifest.toml")
+            manif = joinpath(dir, "Manifest.toml")
             touch(manif)
             @test Base.active_manifest(proj) == manif
 
