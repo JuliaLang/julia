@@ -1,4 +1,4 @@
-JULIASYNTAXHIGHLIGHTING_BRANCH = main
-JULIASYNTAXHIGHLIGHTING_SHA1 = c64204160b0f82f2ab002db9c39a25896999b8f1
-JULIASYNTAXHIGHLIGHTING_GIT_URL := https://github.com/julialang/JuliaSyntaxHighlighting.jl.git
-JULIASYNTAXHIGHLIGHTING_TAR_URL = https://api.github.com/repos/julialang/JuliaSyntaxHighlighting.jl/tarball/$1
+JULIASYNTAXHIGHLIGHTING_BRANCH = ec/js-bump
+JULIASYNTAXHIGHLIGHTING_SHA1 = 2474daf5c59c366de2311a97d2f4185a24933d89
+JULIASYNTAXHIGHLIGHTING_GIT_URL := https://github.com/mlechu/JuliaSyntaxHighlighting.jl.git
+JULIASYNTAXHIGHLIGHTING_TAR_URL = https://api.github.com/repos/mlechu/JuliaSyntaxHighlighting.jl/tarball/$1
