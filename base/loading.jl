@@ -1643,7 +1643,9 @@ end
 """
     get_extension(parent::Module, extension::Symbol)
 
-Return the module for `extension` of `parent` or return `nothing` if the extension is not loaded.
+Return the module for `extension` relative to `parent` or return `nothing` if the extension is not loaded.
+This function is private, since the arguments to it are private implementation details.
+It is provided mainly for testing and reflection purposes.
 """
 get_extension(parent::Module, ext::Symbol) = get_extension(PkgId(parent), ext)
 function get_extension(parentid::PkgId, ext::Symbol)
