@@ -54,6 +54,7 @@ public
     active_project,
 
 # Reflection and introspection
+    get_extension,
     isambiguous,
     isexpr,
     isidentifier,
