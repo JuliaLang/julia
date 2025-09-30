@@ -13,7 +13,7 @@ struct CallMeta
     exct::Any
     effects::Effects
     info::CallInfo
-    refinements # ::Union{Nothing,SlotRefinement,Vector{Any}}
+    refinements # ::Union{Nothing,SlotRefinement,Vector{SlotRefinement}}
     function CallMeta(rt::Any, exct::Any, effects::Effects, info::CallInfo,
                       refinements=nothing)
         @nospecialize rt exct info
