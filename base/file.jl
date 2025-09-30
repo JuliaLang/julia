@@ -332,8 +332,11 @@ function delayed_delete_dll(path)
     @debug "Could not delete DLL most likely because it is loaded, moving to a temporary path" path temp_path
     mkpath(delayed_delete_ref())
     io = last(mktemp(delayed_delete_ref(); cleanup=false))
-    print(io, temp_path) # record the temporary path for Pkg.gc()
-    close(io)
+    try
+        print(io, temp_path) # record the temporary path for Pkg.gc()
+    finally
+        close(io)
+    end
     rename(path, temp_path) # do not call mv which could recursively call rm(path)
 end
 
