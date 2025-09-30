@@ -5090,6 +5090,7 @@ f(x) = yt(x)
              (check-top-level e)
              (let ((val (make-ssavalue)))
                (emit `(= ,val ,e))
+               (emit `(latestworld))
                (if tail (emit-return tail val))
                val))
 
