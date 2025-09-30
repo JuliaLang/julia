@@ -701,9 +701,15 @@ JL_CALLABLE(jl_f__apply_iterate)
                 return (jl_value_t*)t;
             }
         }
-        else if (f == BUILTIN(tuple) && jl_is_tuple(args[1])) {
-            return args[1];
+        else if (f == BUILTIN(tuple)) {
+            if (jl_is_tuple(args[1]))
+                return args[1];
+            if (jl_is_svec(args[1]))
+                return jl_f_tuple(NULL, jl_svec_data(args[1]), jl_svec_len(args[1]));
         }
+        // optimization for `f(svec...)`
+        if (jl_is_svec(args[1]))
+            return jl_apply_generic(f, jl_svec_data(args[1]), jl_svec_len(args[1]));
     }
     // estimate how many real arguments we appear to have
     size_t precount = 1;
@@ -1529,6 +1535,18 @@ JL_CALLABLE(jl_f_declare_global)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_declare_const)
+{
+    JL_NARGS(declare_const, 2, 3);
+    JL_TYPECHK(declare_const, module, args[0]);
+    if (nargs == 3)
+        JL_TYPECHK(declare_const, symbol, args[1]);
+    jl_binding_t *b = jl_get_module_binding((jl_module_t *)args[0], (jl_sym_t *)args[1], 1);
+    jl_value_t *val = nargs == 3 ? args[2] : NULL;
+    jl_declare_constant_val(b, (jl_module_t *)args[0], (jl_sym_t *)args[1], val);
+    return nargs > 2 ? args[2] : jl_nothing;
+}
+
 // import, using --------------------------------------------------------------
 
 // Import binding `from.sym` as `asname` into `to`:
@@ -2168,6 +2186,14 @@ JL_CALLABLE(jl_f__compute_sparams)
     return (jl_value_t*)env;
 }
 
+JL_CALLABLE(jl_f__svec_len)
+{
+    JL_NARGS(_svec_len, 1, 1);
+    jl_svec_t *s = (jl_svec_t*)args[0];
+    JL_TYPECHK(_svec_len, simplevector, (jl_value_t*)s);
+    return jl_box_long(jl_svec_len(s));
+}
+
 JL_CALLABLE(jl_f__svec_ref)
 {
     JL_NARGS(_svec_ref, 2, 2);
@@ -2331,15 +2357,15 @@ JL_CALLABLE(jl_f__typebody)
             dt->name->mayinlinealloc = mayinlinealloc;
         }
     }
-
-    JL_TRY {
-        jl_reinstantiate_inner_types(dt);
+    {
+        JL_TRY {
+            jl_reinstantiate_inner_types(dt);
+        }
+        JL_CATCH {
+            dt->name->partial = NULL;
+            jl_rethrow();
+        }
     }
-    JL_CATCH {
-        dt->name->partial = NULL;
-        jl_rethrow();
-    }
-
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
 have_type:
@@ -2381,11 +2407,13 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     b = jl_substitute_datatype(b, dtb, dta);
     if (!jl_types_equal(a, b))
         goto no;
-    JL_TRY {
-        a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
-    }
-    JL_CATCH {
-        ok = 0;
+    {
+        JL_TRY {
+            a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
+        }
+        JL_CATCH {
+            ok = 0;
+        }
     }
     if (!ok)
         goto no;
@@ -2459,7 +2487,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 

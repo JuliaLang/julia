@@ -294,6 +294,7 @@ Base.splat
 Base.Fix
 Base.Fix1
 Base.Fix2
+Returns
 ```
 
 ## Syntax
@@ -500,6 +501,7 @@ Core.modifyglobal!
 Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
+Core.declare_const
 ```
 
 ## Documentation
