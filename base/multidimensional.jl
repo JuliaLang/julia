@@ -485,8 +485,6 @@ module IteratorsMD
 
     size(iter::CartesianIndices) = map(length, iter.indices)
 
-    length(iter::CartesianIndices) = prod(size(iter))
-
     # make CartesianIndices a multidimensional range
     Base.step(iter::CartesianIndices) = CartesianIndex(map(step, iter.indices))
 
@@ -836,7 +834,6 @@ LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
 LogicalIndex{Int}(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
-length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
 show(io::IO, r::LogicalIndex) = print(io,collect(r))
 print_array(io::IO, X::LogicalIndex) = print_array(io, collect(X))
@@ -1502,7 +1499,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,AbstractUnitRange{Int}})
+@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::D) where {D<:Union{Colon,AbstractUnitRange{Int}}}
     I0 = to_indices(B, (J0,))[1]
     @boundscheck checkbounds(B, I0)
     l0 = length(I0)
@@ -1514,7 +1511,7 @@ end
 end
 
 @inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
+        I0::DI0, I::Union{Int,AbstractUnitRange{Int},Colon}...) where {DI0<:Union{Colon,AbstractUnitRange{Int}}, }
     J = to_indices(B, (I0, I...))
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, X, J...)
@@ -1555,7 +1552,7 @@ end
 end
 
 @propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
-        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
+        I0::DI0, I::Union{Int,AbstractUnitRange{Int},Colon}...) where {DI0<:Union{Colon,AbstractUnitRange{Int}}}
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 
@@ -1750,7 +1747,7 @@ julia> unique(A, dims=3)
  0  0
 ```
 """
-unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
+unique(A::AbstractArray; dims::D = :) where {D<:Union{Colon,Integer}} = _unique_dims(A, dims)
 
 _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 

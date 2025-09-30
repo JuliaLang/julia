@@ -54,7 +54,6 @@ public
     active_project,
 
 # Reflection and introspection
-    get_extension,
     isambiguous,
     isexpr,
     isidentifier,
@@ -80,8 +79,9 @@ public
     isoperator,
     isunaryoperator,
 
-# scalar math
+# Integer math
     uabs,
+    mul_hi,
 
 # C interface
     cconvert,

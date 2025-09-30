@@ -331,7 +331,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
         abort();
     jl_ptls_t ptls;
 #if defined(_OS_WINDOWS_)
-    ptls = _aligned_malloc(sizeof(jl_tls_states_t), alignof(jl_tls_states_t));
+    ptls = (jl_ptls_t)_aligned_malloc(sizeof(jl_tls_states_t), alignof(jl_tls_states_t));
     if (ptls == NULL)
         abort();
 #else

@@ -70,80 +70,100 @@ hash(x::UInt64, h::UInt) = hash_uint64(hash_mix_linear(x, h))
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
+# IntegerCodeUnits provides a little-endian byte representation of integers
+struct IntegerCodeUnits{T<:Integer} <: AbstractVector{UInt8}
+    value::T
+    num_bytes::Int
+
+    function IntegerCodeUnits(x::T) where {T<:Integer}
+        # Calculate number of bytes needed (always pad to full byte)
+        u = abs(x)
+        num_bytes = max(cld(top_set_bit(u), 8), 1)
+        return new{T}(x, num_bytes)
+    end
+end
+
+function Base.size(units::IntegerCodeUnits)
+    return (units.num_bytes,)
+end
+
+function Base.length(units::IntegerCodeUnits)
+    return units.num_bytes
+end
+
+function Base.getindex(units::IntegerCodeUnits, i::Int)
+    @boundscheck checkbounds(units, i)
+    u = abs(units.value)
+    byte_pos = i - 1
+    return UInt8((u >>> (8 * byte_pos)) & 0xff)
+end
+
+function Base.iterate(units::IntegerCodeUnits, state::Int = 1)
+    state > units.num_bytes && return nothing
+    return units[state], state + 1
+end
+
+# Main interface function to get little-endian byte representation of integers
+codeunits(x::Integer) = IntegerCodeUnits(x)
+
+# UTF8Units provides UTF-8 byte iteration for any AbstractString
+struct UTF8Units{T<:AbstractString}
+    string::T
+end
+
+utf8units(s::AbstractString) = codeunit(s) <: UInt8 ? codeunits(s) : UTF8Units(s)
+
+# Iterator state: (char_iter_state, remaining_utf8_bytes)
+function Base.iterate(units::UTF8Units)
+    char_result = iterate(units.string)
+    char_result === nothing && return nothing
+    char, char_state = char_result
+
+    # Decode char to UTF-8 bytes (similar to the write function)
+    u = bswap(reinterpret(UInt32, char))
+
+    # Return first byte and set up state for remaining bytes
+    first_byte = u % UInt8
+    remaining_bytes = u >> 8
+    return first_byte, (char_state, remaining_bytes)
+end
+
+function Base.iterate(units::UTF8Units, state)
+    char_state, remaining_bytes = state
+    # If we have more bytes from current char, return next byte
+    if remaining_bytes != 0
+        byte = remaining_bytes % UInt8
+        new_remaining = remaining_bytes >> 8
+        return byte, (char_state, new_remaining)
+    end
+
+    # Move to next char
+    char_result = iterate(units.string, char_state)
+    char_result === nothing && return nothing
+    char, new_char_state = char_result
+
+    # Decode new char to UTF-8 bytes
+    u = bswap(reinterpret(UInt32, char))
+
+    # Return first byte and set up state for remaining bytes
+    first_byte = u % UInt8
+    remaining_bytes = u >> 8
+
+    return first_byte, (new_char_state, remaining_bytes)
+end
+
 hash_integer(x::Integer, h::UInt) = _hash_integer(x, UInt64(h)) % UInt
 function _hash_integer(
         x::Integer,
         seed::UInt64,
         secret::NTuple{4, UInt64} = HASH_SECRET
     )
+    # Handle sign by XOR-ing with seed
     seed ⊻= (x < 0)
-    u0 = abs(x) # n.b.: this hashes typemin(IntN) correctly even if abs fails
-    u = u0
-
-    # always left-pad to full byte
-    buflen = UInt(max(cld(top_set_bit(u), 8), 1))
-    seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
-
-    a = zero(UInt64)
-    b = zero(UInt64)
-    i = buflen
-
-    if buflen ≤ 16
-        if buflen ≥ 4
-            seed ⊻= buflen
-            if buflen ≥ 8
-                a = UInt64(u % UInt64)
-                b = UInt64((u >>> (8 * (buflen - 8))) % UInt64)
-            else
-                a = UInt64(u % UInt32)
-                b = UInt64((u >>> (8 * (buflen - 4))) % UInt32)
-            end
-        else # buflen > 0
-            b0 = u % UInt8
-            b1 = (u >>> (8 * div(buflen, 2))) % UInt8
-            b2 = (u >>> (8 * (buflen - 1))) % UInt8
-            a = (UInt64(b0) << 45) | UInt64(b2)
-            b = UInt64(b1)
-        end
-    else
-        if i > 48
-            see1 = seed
-            see2 = seed
-            while i > 48
-                l0 = u % UInt64; u >>>= 64
-                l1 = u % UInt64; u >>>= 64
-                l2 = u % UInt64; u >>>= 64
-                l3 = u % UInt64; u >>>= 64
-                l4 = u % UInt64; u >>>= 64
-                l5 = u % UInt64; u >>>= 64
-
-                seed = hash_mix(l0 ⊻ secret[1], l1 ⊻ seed)
-                see1 = hash_mix(l2 ⊻ secret[2], l3 ⊻ see1)
-                see2 = hash_mix(l4 ⊻ secret[3], l5 ⊻ see2)
-                i -= 48
-            end
-            seed ⊻= see1
-            seed ⊻= see2
-        end
-        if i > 16
-            l0 = u % UInt64; u >>>= 64
-            l1 = u % UInt64; u >>>= 64
-            seed = hash_mix(l0 ⊻ secret[3], l1 ⊻ seed)
-            if i > 32
-                l2 = u % UInt64; u >>>= 64
-                l3 = u % UInt64; u >>>= 64
-                seed = hash_mix(l2 ⊻ secret[3], l3 ⊻ seed)
-            end
-        end
-
-        a = (u0 >>> 8(buflen - 16)) % UInt64 ⊻ i
-        b = (u0 >>> 8(buflen - 8)) % UInt64
-    end
-
-    a = a ⊻ secret[2]
-    b = b ⊻ seed
-    b, a = mul_parts(a, b)
-    return hash_mix(a ⊻ secret[4], b ⊻ secret[2] ⊻ i)
+    # Get little-endian byte representation of absolute value
+    # and hash using the new safe hash_bytes function
+    u = abs(x) # n.b.: this hashes typemin(IntN) correctly even if abs fails
+    return hash_bytes(codeunits(u), seed, secret)
 end
 
 
@@ -619,6 +639,8 @@ end
     return hash_mix(a ⊻ secret[4], b ⊻ secret[2] ⊻ bytes_chunk)
 end
 
+hash(data::AbstractString, h::UInt) =
+    hash_bytes(utf8units(data), UInt64(h), HASH_SECRET) % UInt
 @assume_effects :total hash(data::String, h::UInt) =
     GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
 
