@@ -3017,6 +3017,13 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         return Union{}
     end
 
+    if f === Intrinsics.add_ptr || f === Intrinsics.sub_ptr
+        if !(argtypes[1] ⊑ Ptr && argtypes[2] ⊑ UInt)
+            return TypeError
+        end
+        return Union{}
+    end
+
     # The remaining intrinsics are math/bits/comparison intrinsics.
     # All the non-floating point intrinsics work on primitive values of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
