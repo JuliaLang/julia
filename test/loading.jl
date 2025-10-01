@@ -743,7 +743,7 @@ end
         for (proj, expected_man) in test_cases
             @test _activate_and_get_active_manifest_noarg(proj) == expected_man
             # Base.active_manifest() should never return a file that doesn't exist:
-            @test isfile_activate_and_get_active_manifest_noarg(proj))
+            @test isfile(_activate_and_get_active_manifest_noarg(proj))
         end
         mktempdir() do dir
             proj = joinpath(dir, "Project.toml")
