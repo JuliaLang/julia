@@ -9,7 +9,7 @@ import Base: OS_HANDLE, INVALID_OS_HANDLE
 
 export mmap
 
-const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
+pagesize() = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
 mutable struct Anonymous <: IO
@@ -200,12 +200,12 @@ function mmap(io::IO,
     end
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
     len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
-    len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
+    len < typemax(Int) - pagesize() || throw(ArgumentError("requested size must be < $(typemax(Int)-pagesize()), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
 
     # shift `offset` to start of page boundary
-    offset_page::Int64 = div(offset, PAGESIZE) * PAGESIZE
+    offset_page::Int64 = div(offset, pagesize()) * pagesize()
     # add (offset - offset_page) to `len` to get total length of memory-mapped region
     mmaplen = (offset - offset_page) + len
 
@@ -365,7 +365,7 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 """
 function sync!(m::Array, flags::Integer=MS_SYNC)
     ptr = pointer(m)
-    offset = rem(UInt(ptr), PAGESIZE)
+    offset = rem(UInt(ptr), pagesize())
     ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m @static if Sys.isunix()
@@ -428,7 +428,7 @@ Advises the kernel on the intended usage of the memory-mapped `array`, with the 
 """
 function madvise!(m::Array, flag::Integer=MADV_NORMAL)
     ptr = pointer(m)
-    offset = rem(UInt(ptr), PAGESIZE)
+    offset = rem(UInt(ptr), pagesize())
     ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m begin
