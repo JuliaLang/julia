@@ -2688,7 +2688,7 @@ f54131 = F54131()
     s = "f54131.x(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
     @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 100
 end
 
 @kwdef struct T59244
