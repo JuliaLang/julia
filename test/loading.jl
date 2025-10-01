@@ -782,8 +782,10 @@ end
     end
 
     @testset "ACTIVE_PROJECT[] is `nothing` => active_manifest() is nothing" begin
-        @test Base.active_manifest(nothing) === nothing
-        @test _activate_and_get_active_manifest_noarg(nothing) === nothing
+        _with_activate(nothing) do
+            @test Base.active_manifest() === nothing
+            @test Base.active_manifest(nothing) === nothing
+        end
     end
 
     @testset "Project file does not exist => active_manifest() is nothing" begin
