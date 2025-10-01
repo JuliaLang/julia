@@ -54,6 +54,8 @@ julia> weeksinyear(Year(2022))
 julia> weeksinyear(Year(2020))
 53
 ```
+!!! compat "Julia 1.13"
+    This function requires Julia 1.13 or later.
 """
 function weeksinyear(y::Year)
     firstday = firstdayofyear(Date(y))
@@ -76,6 +78,8 @@ julia> isoyear(Date(2022, 1, 1))
 julia> isoyear(Date(2021, 12, 31))
 2021 years
 ```
+!!! compat "Julia 1.13"
+    This function requires Julia 1.13 or later.
 """
 function isoyear(dt::DateTime)
     thisyear = Year(dt)
@@ -107,6 +111,8 @@ julia> isoweekdate(Date(2023, 03, 06))
 julia> isoweekdate(Date(2023, 01, 01))
 (2022, 52, 7)
 ```
+!!! compat "Julia 1.13"
+    This function requires Julia 1.13 or later.
 """
 isoweekdate(dt::DateTime) = (isoyear(dt).value, week(dt), dayofweek(dt))
 isoweekdate(dt::Date) = isoweekdate(DateTime(dt))
