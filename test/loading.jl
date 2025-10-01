@@ -703,6 +703,15 @@ mktempdir() do dir
     @test success(cmd)
 end
 
+function _with_empty_load_path(f::Function)
+    old_load_path = copy(Base.LOAD_PATH)
+    try
+        empty!(Base.LOAD_PATH)
+        f()
+    finally
+        append!(Base.LOAD_PATH, old_load_path)
+    end
+end
 old_act_proj = Base.ACTIVE_PROJECT[]
 function _with_activate(f::Function, project_file::Union{AbstractString, Nothing})
     try
@@ -728,6 +737,8 @@ end
     @testset "active_manifest() - no argument passed" begin
         for (proj, expected_man) in test_cases
             @test _activate_and_get_active_manifest_noarg(proj) == expected_man
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile_activate_and_get_active_manifest_noarg(proj))
         end
         mktempdir() do dir
             proj = joinpath(dir, "Project.toml")
@@ -743,6 +754,8 @@ end
             manif = joinpath(dir, "Manifest.toml")
             touch(manif)
             @test _activate_and_get_active_manifest_noarg(proj) == manif
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(_activate_and_get_active_manifest_noarg(proj))
 
             # If the manifest file exists but the project file does not, active_manifest() should return `nothing`:
             rm(proj)
@@ -754,6 +767,8 @@ end
         Base.ACTIVE_PROJECT[] = old_act_proj
         for (proj, expected_man) in test_cases
             @test Base.active_manifest(proj) == expected_man
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(Base.active_manifest(proj))
         end
         mktempdir() do dir
             proj = joinpath(dir, "Project.toml")
@@ -769,6 +784,8 @@ end
             manif = joinpath(dir, "Manifest.toml")
             touch(manif)
             @test Base.active_manifest(proj) == manif
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(Base.active_manifest(proj))
 
             # If the manifest file exists but the project file does not, active_manifest(proj) should return `nothing`:
             rm(proj)
@@ -777,10 +794,10 @@ end
     end
 
     @testset "ACTIVE_PROJECT[] is `nothing` => active_manifest() is nothing" begin
-        _with_activate(nothing) do
+        _with_activate(nothing) do; _with_empty_load_path() do
             @test Base.active_manifest() === nothing
             @test Base.active_manifest(nothing) === nothing
-        end
+        end; end
     end
 
     @testset "Project file does not exist => active_manifest() is nothing" begin
