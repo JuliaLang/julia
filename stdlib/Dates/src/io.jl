@@ -732,7 +732,7 @@ end
 function Base.print(io::IO, dt::Date)
     # don't use format - bypassing IOBuffer creation
     # saves a bit of time here.
-    y,m,d = yearmonthday(value(dt))
+    y,m,d = yearmonthday(dt)
     yy = y < 0 ? @sprintf("%05i", y) : lpad(y, 4, "0")
     mm = lpad(m, 2, "0")
     dd = lpad(d, 2, "0")
