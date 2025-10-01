@@ -864,21 +864,48 @@ if Limb === UInt64 === UInt
 
     using .Base: HASH_SECRET, hash_bytes, hash_finalizer
 
+    # UnsafeLimbView provides a safe iterator interface to BigInt limb data
+    struct UnsafeLimbView <: AbstractVector{UInt8}
+        bigint::BigInt
+        start_byte::Int
+        num_bytes::Int
+    end
+
+    function Base.size(view::UnsafeLimbView)
+        return (view.num_bytes,)
+    end
+
+    function Base.getindex(view::UnsafeLimbView, i::Int)
+        @boundscheck checkbounds(view, i)
+        GC.@preserve view begin
+            limb_index = div(view.start_byte + i - 2, 8) + 1
+            byte_in_limb = (view.start_byte + i - 2) % 8
+            limb = unsafe_load(view.bigint.d, limb_index)
+            return UInt8((limb >> (8 * byte_in_limb)) & 0xff)
+        end
+    end
+
+    function Base.iterate(view::UnsafeLimbView, state::Int = 1)
+        state > view.num_bytes && return nothing
+        return @inbounds(view[state]), state + 1
+    end
+
+    function Base.length(view::UnsafeLimbView)
+        return view.num_bytes
+    end
+
     function hash_integer(n::BigInt, h::UInt)
         iszero(n) && return hash_integer(0, h)
-        GC.@preserve n begin
-            s = n.size
-            h ⊻= (s < 0)
+        s = n.size
+        h ⊻= (s < 0)
 
-            us = abs(s)
-            leading_zero_bytes = div(leading_zeros(unsafe_load(n.d, us)), 8)
-            hash_bytes(
-                Ptr{UInt8}(n.d),
-                8 * us - leading_zero_bytes,
-                h,
-                HASH_SECRET
-            )
-        end
+        us = abs(s)
+        leading_zero_bytes = div(leading_zeros(unsafe_load(n.d, us)), 8)
+        num_bytes = 8 * us - leading_zero_bytes
+
+        # Use UnsafeLimbView for safe iterator-based access
+        limb_view = UnsafeLimbView(n, 1, num_bytes)
+        return hash_bytes(limb_view, h, HASH_SECRET)
     end
 
     function hash(x::BigInt, h::UInt)
@@ -913,12 +940,11 @@ if Limb === UInt64 === UInt
             h ⊻= (sz < 0)
             leading_zero_bytes = div(leading_zeros(unsafe_load(x.d, asz)), 8)
             trailing_zero_bytes = div(pow, 8)
-            return hash_bytes(
-                Ptr{UInt8}(x.d) + trailing_zero_bytes,
-                8 * asz - (leading_zero_bytes + trailing_zero_bytes),
-                h,
-                HASH_SECRET
-            )
+            num_bytes = 8 * asz - (leading_zero_bytes + trailing_zero_bytes)
+
+            # Use UnsafeLimbView for safe iterator-based access
+            limb_view = UnsafeLimbView(x, trailing_zero_bytes + 1, num_bytes)
+            return hash_bytes(limb_view, h, HASH_SECRET)
         end
     end
 end

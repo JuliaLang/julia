@@ -3020,6 +3020,8 @@ function isequal(A::AbstractArray, B::AbstractArray)
 end
 
 function cmp(A::AbstractVector, B::AbstractVector)
+    ai1, bi1 = firstindex(A), firstindex(B)
+    isequal(ai1, bi1) || return cmp(ai1, bi1)
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return isless(a, b) ? -1 : 1
@@ -3040,7 +3042,8 @@ end
 """
     isless(A::AbstractVector, B::AbstractVector)
 
-Return `true` when `A` is less than `B` in lexicographic order.
+Return `true` when `A` is less than `B`. Vectors are first compared by
+their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 

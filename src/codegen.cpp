@@ -881,15 +881,6 @@ static const auto jlcheckassignonce_func = new JuliaFunction<>{
             {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
-static const auto jldeclareconstval_func = new JuliaFunction<>{
-    XSTR(jl_declare_constant_val),
-    [](LLVMContext &C) {
-        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(getVoidTy(C),
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, T_prjlvalue}, false); },
-    nullptr,
-};
 static const auto jldeclareglobal_func = new JuliaFunction<>{
     XSTR(jl_declare_global),
     [](LLVMContext &C) {
@@ -6468,26 +6459,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             true,
             jl_method_type);
         return meth;
-    }
-    else if (head == jl_const_sym) {
-        assert(nargs <= 2);
-        jl_sym_t *sym = (jl_sym_t*)args[0];
-        jl_module_t *mod = ctx.module;
-        if (jl_is_globalref(sym)) {
-            mod = jl_globalref_mod(sym);
-            sym = jl_globalref_name(sym);
-        }
-        if (jl_is_symbol(sym)) {
-            jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
-            if (nargs == 2) {
-                jl_cgval_t rhs = emit_expr(ctx, args[1]);
-                ctx.builder.CreateCall(prepare_call(jldeclareconstval_func),
-                        { julia_binding_gv(ctx, bnd), literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), boxed(ctx, rhs) });
-            } else {
-                ctx.builder.CreateCall(prepare_call(jldeclareconstval_func),
-                        { julia_binding_gv(ctx, bnd), literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), ConstantPointerNull::get(cast<PointerType>(ctx.types().T_prjlvalue)) });
-            }
-        }
     }
     else if (head == jl_globaldecl_sym) {
         assert(nargs <= 2 && nargs >= 1);
