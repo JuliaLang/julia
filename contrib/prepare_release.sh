@@ -56,12 +56,6 @@ curl -L -o julia-$version-win32.exe \
   $julianightlies/winnt/x86/$majmin/julia-$majminpatch-$shashort-win32.exe
 cp julia-$version-win32.exe julia-$majmin-latest-win32.exe
 
-if [ -e codesign.sh ]; then
-  # code signing needs to run on windows, script is not checked in since it
-  # hard-codes a few things. TODO: see if signtool.exe can run in wine
-  ./codesign.sh
-fi
-
 shasum -a 256 julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.sha256
 md5sum julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.md5
 

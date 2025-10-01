@@ -17,10 +17,18 @@ abstract type Enum{T<:Integer} end
 basetype(::Type{<:Enum{T}}) where {T<:Integer} = T
 
 (::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
-Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
+Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)::T
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, basetype(T)))
 
+"""
+    _enum_hash(x::Enum, h::UInt)
+
+Compute hash for an enum value `x`. This internal method will be specialized
+for every enum type created through [`@enum`](@ref).
+"""
+_enum_hash(x::Enum, h::UInt) = invoke(hash, Tuple{Any, UInt}, x, h)
+Base.hash(x::Enum, h::UInt) = _enum_hash(x, h)
 Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
 
 Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
@@ -36,8 +44,8 @@ Base.print(io::IO, x::Enum) = print(io, _symbol(x))
 function Base.show(io::IO, x::Enum)
     sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
-        from = get(io, :module, Base.active_module())
-        def = typeof(x).name.module
+        from = get(io, :module, Main)
+        def = parentmodule(typeof(x))
         if from === nothing || !Base.isvisible(sym, def, from)
             show(io, def)
             print(io, ".")
@@ -82,7 +90,7 @@ end
 # give Enum types scalar behavior in broadcasting
 Base.broadcastable(x::Enum) = Ref(x)
 
-@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
+@noinline enum_argument_error(typename, x) = throw(ArgumentError(LazyString("invalid value for Enum ", typename, ": ", x)))
 
 """
     @enum EnumName[::BaseType] value1[=x] value2[=y]
@@ -135,7 +143,7 @@ julia> Symbol(apple)
 """
 macro enum(T::Union{Symbol,Expr}, syms...)
     if isempty(syms)
-        throw(ArgumentError("no arguments given for Enum $T"))
+        throw(ArgumentError(LazyString("no arguments given for Enum ", T)))
     end
     basetype = Int32
     typename = T
@@ -143,10 +151,11 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         typename = T.args[1]
         basetype = Core.eval(__module__, T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbitstype(basetype)
-            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
+            throw(ArgumentError(
+                LazyString("invalid base type for Enum ", typename, ", ", T, "=::", basetype, "; base type must be an integer primitive type")))
         end
     elseif !isa(T, Symbol)
-        throw(ArgumentError("invalid type expression for enum $T"))
+        throw(ArgumentError(LazyString("invalid type expression for enum ", T)))
     end
     values = Vector{basetype}()
     seen = Set{Symbol}()
@@ -161,32 +170,32 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         s isa LineNumberNode && continue
         if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(values)
-                throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
+                throw(ArgumentError(LazyString("overflow in value \"", s, "\" of Enum ", typename)))
             end
         elseif isa(s, Expr) &&
                (s.head === :(=) || s.head === :kw) &&
                length(s.args) == 2 && isa(s.args[1], Symbol)
             i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
-                throw(ArgumentError("invalid value for Enum $typename, $s; values must be integers"))
+                throw(ArgumentError(LazyString("invalid value for Enum ", typename, ", ", s, "; values must be integers")))
             end
             i = convert(basetype, i)
             s = s.args[1]
             hasexpr = true
         else
-            throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
+            throw(ArgumentError(LazyString("invalid argument for Enum ", typename, ": ", s)))
         end
         s = s::Symbol
         if !Base.isidentifier(s)
-            throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier"))
+            throw(ArgumentError(LazyString("invalid name for Enum ", typename, "; \"", s, "\" is not a valid identifier")))
         end
         if hasexpr && haskey(namemap, i)
-            throw(ArgumentError("both $s and $(namemap[i]) have value $i in Enum $typename; values must be unique"))
+            throw(ArgumentError(LazyString("both ", s, " and ", namemap[i], " have value ", i, " in Enum ", typename, "; values must be unique")))
         end
         namemap[i] = s
         push!(values, i)
         if s in seen
-            throw(ArgumentError("name \"$s\" in Enum $typename is not unique"))
+            throw(ArgumentError(LazyString("name \"", s, "\" in Enum ", typename, " is not unique")))
         end
         push!(seen, s)
         if length(values) == 1
@@ -206,8 +215,12 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        let enum_hash = hash($(esc(typename)))
-            Base.hash(x::$(esc(typename)), h::UInt) = hash(enum_hash, hash(Integer(x), h))
+        let type_hash = hash($(esc(typename)))
+            # Use internal `_enum_hash` to allow users to specialize
+            # `Base.hash` for their own enum types without overwriting the
+            # method we would define here. This avoids a warning for
+            # precompilation.
+            Enums._enum_hash(x::$(esc(typename)), h::UInt) = hash(type_hash, hash(Integer(x), h))
         end
         let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts

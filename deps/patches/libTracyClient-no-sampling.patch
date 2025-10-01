@@ -1,0 +1,79 @@
+commit 6249999153a9497b32bc84e9dc95a1537a0af714
+Author: Cody Tapscott <topolarity@tapscott.me>
+Date:   Tue Apr 4 15:20:46 2023 -0400
+
+    linux: respect `TRACY_NO_SAMPLING` for sys-tracing
+
+    This compile-time flag was being ignored on Linux. This change adds
+    gating for software-sampled stack trace sampling following the same
+    pattern as other `TRACY_NO_SAMPLE_*` options.
+
+    If `TRACY_NO_SAMPLING=1` is provided as an environment variable,
+    software stack sampling is also disabled.
+
+diff --git a/public/client/TracySysTrace.cpp b/public/client/TracySysTrace.cpp
+index 4a562eaa..af0641fe 100644
+--- a/public/client/TracySysTrace.cpp
++++ b/public/client/TracySysTrace.cpp
+@@ -770,6 +770,13 @@ bool SysTraceStart( int64_t& samplingPeriod )
+     TracyDebug( "sched_wakeup id: %i\n", wakeupId );
+     TracyDebug( "drm_vblank_event id: %i\n", vsyncId );
+
++#ifdef TRACY_NO_SAMPLING
++    const bool noSoftwareSampling = true;
++#else
++    const char* noSoftwareSamplingEnv = GetEnvVar( "TRACY_NO_SAMPLING" );
++    const bool noSoftwareSampling = noSoftwareSamplingEnv && noSoftwareSamplingEnv[0] == '1';
++#endif
++
+ #ifdef TRACY_NO_SAMPLE_RETIREMENT
+     const bool noRetirement = true;
+ #else
+@@ -839,28 +846,31 @@ bool SysTraceStart( int64_t& samplingPeriod )
+     pe.clockid = CLOCK_MONOTONIC_RAW;
+ #endif
+
+-    TracyDebug( "Setup software sampling\n" );
+-    ProbePreciseIp( pe, currentPid );
+-    for( int i=0; i<s_numCpus; i++ )
++    if( !noSoftwareSampling )
+     {
+-        int fd = perf_event_open( &pe, currentPid, i, -1, PERF_FLAG_FD_CLOEXEC );
+-        if( fd == -1 )
++        TracyDebug( "Setup software sampling\n" );
++        ProbePreciseIp( pe, currentPid );
++        for( int i=0; i<s_numCpus; i++ )
+         {
+-            pe.exclude_kernel = 1;
+-            ProbePreciseIp( pe, currentPid );
+-            fd = perf_event_open( &pe, currentPid, i, -1, PERF_FLAG_FD_CLOEXEC );
++            int fd = perf_event_open( &pe, currentPid, i, -1, PERF_FLAG_FD_CLOEXEC );
+             if( fd == -1 )
+             {
+-                TracyDebug( "  Failed to setup!\n");
+-                break;
++                pe.exclude_kernel = 1;
++                ProbePreciseIp( pe, currentPid );
++                fd = perf_event_open( &pe, currentPid, i, -1, PERF_FLAG_FD_CLOEXEC );
++                if( fd == -1 )
++                {
++                    TracyDebug( "  Failed to setup!\n");
++                    break;
++                }
++                TracyDebug( "  No access to kernel samples\n" );
++            }
++            new( s_ring+s_numBuffers ) RingBuffer( 64*1024, fd, EventCallstack );
++            if( s_ring[s_numBuffers].IsValid() )
++            {
++                s_numBuffers++;
++                TracyDebug( "  Core %i ok\n", i );
+             }
+-            TracyDebug( "  No access to kernel samples\n" );
+-        }
+-        new( s_ring+s_numBuffers ) RingBuffer( 64*1024, fd, EventCallstack );
+-        if( s_ring[s_numBuffers].IsValid() )
+-        {
+-            s_numBuffers++;
+-            TracyDebug( "  Core %i ok\n", i );
+         }
+     }

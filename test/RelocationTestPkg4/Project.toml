@@ -1,0 +1,6 @@
+name = "RelocationTestPkg4"
+uuid = "d423d817-d7e9-49ac-b245-9d9d6db0b429"
+version = "0.1.0"
+
+[deps]
+RelocationTestPkg1 = "854e1adb-5a97-46bf-a391-1cfe05ac726d"

@@ -26,7 +26,7 @@
 # 3.14159265359, -3.14159265359
 # pi/16*k +/- 0.00001 for k in [-20:20] # to cover all quadrants
 # numerators of continuous fraction approximations to pi
-#   see http://oeis.org/A002485
+#   see https://oeis.org/A002485
 #   (reason: for max cancellation, we want x = k*pi + eps for small eps, so x/k ≈ pi)
 
 testCases = [

@@ -24,7 +24,7 @@ julia> write(iob64_encode, "Hello!")
 
 julia> close(iob64_encode);
 
-julia> str = String(take!(io))
+julia> str = takestring!(io)
 "SGVsbG8h"
 
 julia> String(base64decode(str))
@@ -211,6 +211,6 @@ function base64encode(f::Function, args...; context=nothing)
         f(IOContext(b, context), args...)
     end
     close(b)
-    return String(take!(s))
+    return takestring!(s)
 end
 base64encode(args...; context=nothing) = base64encode(write, args...; context=context)
