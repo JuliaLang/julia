@@ -612,9 +612,9 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
     jl_task_t *ct = jl_current_task;
     jl_frame_t *frames = NULL;
-    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int8_t gc_state = jl_gc_safe_enter__(ct->ptls);
     int n = jl_getFunctionInfo(&frames, (uintptr_t)ip, skipC, 0);
-    jl_gc_safe_leave(ct->ptls, gc_state);
+    jl_gc_safe_leave__(ct->ptls, gc_state);
     jl_value_t *rs = (jl_value_t*)jl_alloc_svec(n);
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {

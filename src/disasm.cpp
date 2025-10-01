@@ -616,7 +616,7 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char emit_mc, const char* asm_v
 
     // Dump assembly code
     jl_ptls_t ptls = jl_current_task->ptls;
-    int8_t gc_state = jl_gc_safe_enter(ptls);
+    int8_t gc_state = jl_gc_safe_enter__(ptls);
     jl_dump_asm_internal(
             fptr, symsize, slide,
             Section, context,
@@ -624,7 +624,7 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char emit_mc, const char* asm_v
             asm_variant,
             debuginfo,
             binary);
-    jl_gc_safe_leave(ptls, gc_state);
+    jl_gc_safe_leave__(ptls, gc_state);
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
 }

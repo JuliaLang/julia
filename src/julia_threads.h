@@ -131,6 +131,11 @@ typedef struct {
 
 struct _jl_bt_element_t;
 
+typedef struct {
+    _jl_ucontext_t ctx;
+    char stack[8 * (1 << 20)]; // 8MB stack
+} jl_moving_gc_safe_state_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -166,6 +171,7 @@ typedef struct _jl_tls_states_t {
     int finalizers_inhibited;
     jl_gc_tls_states_t gc_tls; // this is very large, and the offset of the first member is baked into codegen
     jl_gc_tls_states_common_t gc_tls_common; // common tls for both GCs
+    jl_moving_gc_safe_state_t *moving_gc_safe_state;
     small_arraylist_t lazily_freed_mtarraylist_buffers;
     volatile sig_atomic_t defer_signal;
     _Atomic(struct _jl_task_t*) current_task;
@@ -361,13 +367,23 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
 // however mark a delineated region in which safepoints would be not permissible
 int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_LEAVE;
 void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_ENTER;
-int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
-void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE;
+int8_t jl_gc_safe_enter__(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
+void jl_gc_safe_leave__(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE;
 #else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_UNSAFE)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_UNSAFE))
-#define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
-#define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
+STATIC_INLINE int8_t jl_gc_safe_enter__(jl_ptls_t ptls) {
+    jl_moving_gc_safe_state_t *mgs = (jl_moving_gc_safe_state_t*)malloc_s(sizeof(jl_moving_gc_safe_state_t));
+    memset(mgs, 0, sizeof(jl_moving_gc_safe_state_t));
+    ptls->moving_gc_safe_state = mgs;
+    return jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE);
+}
+STATIC_INLINE void jl_gc_safe_leave__(jl_ptls_t ptls, int8_t state) {
+    jl_moving_gc_safe_state_t *mgs = ptls->moving_gc_safe_state;
+    free(mgs);
+    ptls->moving_gc_safe_state = NULL;
+    ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE));
+}
 #endif
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);

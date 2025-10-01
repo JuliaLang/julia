@@ -321,10 +321,10 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
         finish_params(M, params, sharedmodules);
         assert(sharedmodules.empty());
     }
-    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int8_t gc_state = jl_gc_safe_enter__(ct->ptls);
     jl_ExecutionEngine->addModule(std::move(result_m));
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
-    jl_gc_safe_leave(ct->ptls, gc_state);
+    jl_gc_safe_leave__(ct->ptls, gc_state);
     assert(Addr);
     return (void*)Addr;
 }

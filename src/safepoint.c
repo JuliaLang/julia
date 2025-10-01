@@ -300,7 +300,7 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
 // This takes the sleep lock and puts the thread in GC_SAFE
 int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
 {
-    int8_t gc_state = jl_gc_safe_enter(ptls);
+    int8_t gc_state = jl_gc_safe_enter__(ptls);
     uv_mutex_lock(&ptls->sleep_lock);
     if (jl_atomic_load_relaxed(&ptls->suspend_count)) {
         // This dance with the locks is because we are not allowed to hold both these locks at the same time

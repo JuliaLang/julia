@@ -755,7 +755,7 @@ JL_DLLEXPORT void (jl_gc_unsafe_leave)(int8_t state)
 JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
 {
     jl_task_t *ct = jl_current_task;
-    return jl_gc_safe_enter(ct->ptls);
+    return jl_gc_safe_enter__(ct->ptls);
 }
 
 /**
@@ -769,7 +769,7 @@ JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
 JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 {
     jl_task_t *ct = jl_current_task;
-    jl_gc_safe_leave(ct->ptls, state);
+    jl_gc_safe_leave__(ct->ptls, state);
 }
 #endif
 

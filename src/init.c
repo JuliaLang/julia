@@ -342,7 +342,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     if (ct)
         jl_safepoint_suspend_all_threads(ct); // Destroy other threads, so that they don't segfault
     if (ct)
-        (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
+        (void)jl_gc_safe_enter__(ct->ptls); // park in gc-safe
 
     jl_destroy_timing(); // cleans up the current timing_stack for noreturn
 #ifdef USE_TIMING_COUNTS

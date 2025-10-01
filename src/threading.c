@@ -534,7 +534,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     ptls->root_task = NULL;
     jl_free_thread_gc_state(ptls);
     // park in safe-region from here on (this may run GC again)
-    (void)jl_gc_safe_enter(ptls);
+    (void)jl_gc_safe_enter__(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
@@ -981,13 +981,13 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
             // when running under `rr`, use system mutexes rather than spin locking
             int8_t gc_state;
             if (safepoint)
-                gc_state = jl_gc_safe_enter(self->ptls);
+                gc_state = jl_gc_safe_enter__(self->ptls);
             uv_mutex_lock(&tls_lock);
             if (jl_atomic_load_relaxed(&lock->owner))
                 uv_cond_wait(&cond, &tls_lock);
             uv_mutex_unlock(&tls_lock);
             if (safepoint)
-                jl_gc_safe_leave(self->ptls, gc_state);
+                jl_gc_safe_leave__(self->ptls, gc_state);
         }
         else if (safepoint) {
             jl_gc_safepoint_(self->ptls);

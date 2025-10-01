@@ -399,9 +399,9 @@ end
             end Cvoid (Ptr{Cvoid},)
             err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, callback::Ptr{Cvoid})::Cint
             err == 0 || Base.uv_error("uv_thread_create", err)
-            gc_state = @ccall jl_gc_safe_enter()::Int8
+            gc_state = @ccall jl_gc_safe_enter__()::Int8
             err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
-            @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+            @ccall jl_gc_safe_leave__(gc_state::Int8)::Cvoid
             err == 0 || Base.uv_error("uv_thread_join", err)
             return
         end
@@ -518,9 +518,9 @@ let e = Base.Event(true),
             for i = 1:length(tids)
                 tid = Ref(tids, i)
                 tidp = Base.unsafe_convert(Ptr{UInt}, tid)::Ptr{UInt}
-                gc_state = @ccall jl_gc_safe_enter()::Int8
+                gc_state = @ccall jl_gc_safe_enter__()::Int8
                 GC.@preserve tid err = @ccall uv_thread_join(tidp::Ptr{UInt})::Cint
-                @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+                @ccall jl_gc_safe_leave__(gc_state::Int8)::Cvoid
                 err == 0 || Base.uv_error("uv_thread_join", err)
             end
             Base.unpreserve_handle(cls)
