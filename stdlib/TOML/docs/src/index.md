@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/TOML/docs/src/index.md"
+```
+
 # TOML
 
 TOML.jl is a Julia standard library for parsing and writing [TOML
@@ -36,7 +40,7 @@ none:1:16 error: failed to parse value
 ```
 
 There are other versions of the parse functions ([`TOML.tryparse`](@ref)
-and [`TOML.tryparsefile`]) that instead of throwing exceptions on parser error
+and [`TOML.tryparsefile`](@ref)) that instead of throwing exceptions on parser error
 returns a [`TOML.ParserError`](@ref) with information:
 
 ```jldoctest
@@ -62,10 +66,8 @@ julia> err.column
 The [`TOML.print`](@ref) function is used to print (or serialize) data into TOML
 format.
 
-```jldoctest
+```jldoctest; filter = r"^\s*\S+\s*=.*"m
 julia> using TOML
-
-julia> fname = tempname();
 
 julia> data = Dict(
           "names" => ["Julia", "Julio"],
@@ -75,6 +77,17 @@ julia> data = Dict(
 julia> TOML.print(data)
 names = ["Julia", "Julio"]
 age = [10, 20]
+
+julia> fname = tempname();
+
+julia> open(fname, "w") do io
+           TOML.print(io, data)
+       end
+
+julia> TOML.parsefile(fname)
+Dict{String, Any} with 2 entries:
+  "names" => ["Julia", "Julio"]
+  "age"   => [10, 20]
 ```
 
 Keys can be sorted according to some value

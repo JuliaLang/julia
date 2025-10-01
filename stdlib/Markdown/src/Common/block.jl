@@ -4,7 +4,7 @@
 # Paragraphs
 # ––––––––––
 
-mutable struct Paragraph
+mutable struct Paragraph <: MarkdownElement
     content
 end
 
@@ -21,7 +21,7 @@ function paragraph(stream::IO, md::MD)
             char == '\r' && !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
-            elseif blankline(stream) || parse(stream, md, breaking = true)
+            elseif blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, ' ')
@@ -39,7 +39,7 @@ end
 # Headers
 # –––––––
 
-mutable struct Header{level}
+mutable struct Header{level} <: MarkdownElement
     text
 end
 
@@ -61,7 +61,7 @@ function hashheader(stream::IO, md::MD)
 
         if c != '\n' # Empty header
             h = strip(readline(stream))
-            h = match(r"(.*?)( +#+)?$", h).captures[1]
+            h = (match(r"(.*?)( +#+)?$", h)::AbstractMatch).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
             push!(md.content, Header(parseinline(seek(buffer, 0), md), level))
@@ -95,7 +95,7 @@ end
 # Code
 # ––––
 
-mutable struct Code
+mutable struct Code <: MarkdownElement
     language::String
     code::String
 end
@@ -114,7 +114,7 @@ function indentcode(stream::IO, block::MD)
                 break
             end
         end
-        code = String(take!(buffer))
+        code = takestring!(buffer)
         !isempty(code) && (push!(block, Code(rstrip(code))); return true)
         return false
     end
@@ -124,7 +124,7 @@ end
 # Footnote
 # --------
 
-mutable struct Footnote
+mutable struct Footnote <: MarkdownElement
     id::String
     text
 end
@@ -136,7 +136,7 @@ function footnote(stream::IO, block::MD)
         if isempty(str)
             return false
         else
-            ref = match(regex, str).captures[1]
+            ref = (match(regex, str)::AbstractMatch).captures[1]
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
@@ -159,7 +159,7 @@ end
 # Quotes
 # ––––––
 
-mutable struct BlockQuote
+mutable struct BlockQuote <: MarkdownElement
     content
 end
 
@@ -178,7 +178,7 @@ function blockquote(stream::IO, block::MD)
         end
         empty && return false
 
-        md = String(take!(buffer))
+        md = takestring!(buffer)
         push!(block, BlockQuote(parse(md, flavor = config(block)).content))
         return true
     end
@@ -188,7 +188,7 @@ end
 # Admonitions
 # -----------
 
-mutable struct Admonition
+mutable struct Admonition <: MarkdownElement
     category::String
     title::String
     content::Vector
@@ -211,11 +211,11 @@ function admonition(stream::IO, block::MD)
                 titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
                 line     = strip(readline(stream))
                 if occursin(untitled, line)
-                    m = match(untitled, line)
+                    m = match(untitled, line)::AbstractMatch
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
                     m.captures[1], uppercasefirst(m.captures[1])
                 elseif occursin(titled, line)
-                    m = match(titled, line)
+                    m = match(titled, line)::AbstractMatch
                     # To have a blank TITLE provide an explicit empty string as TITLE.
                     m.captures[1], m.captures[2]
                 else
@@ -236,7 +236,7 @@ function admonition(stream::IO, block::MD)
             end
         end
         # Parse the nested block as markdown and create a new Admonition block.
-        nested = parse(String(take!(buffer)), flavor = config(block))
+        nested = parse(takestring!(buffer), flavor = config(block))
         push!(block, Admonition(category, title, nested.content))
         return true
     end
@@ -246,7 +246,7 @@ end
 # Lists
 # –––––
 
-mutable struct List
+mutable struct List <: MarkdownElement
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
     loose::Bool # TODO: Renderers should use this field
@@ -274,7 +274,7 @@ function list(stream::IO, block::MD)
             elseif occursin(r"^ {0,3}\d+(\.|\))( |$)", bullet)
                 # An ordered list. Either with `1. ` or `1) ` style numbering.
                 r = occursin(".", bullet) ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
-                Base.parse(Int, match(r, bullet).captures[1]), r
+                Base.parse(Int, (match(r, bullet)::AbstractMatch).captures[1]), r
             else
                 # Failed to match any bullets. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -326,13 +326,13 @@ function list(stream::IO, block::MD)
         return true
     end
 end
-pushitem!(list, buffer) = push!(list.items, parse(String(take!(buffer))).content)
+pushitem!(list, buffer) = push!(list.items, parse(takestring!(buffer)).content)
 
 # ––––––––––––––
 # HorizontalRule
 # ––––––––––––––
 
-mutable struct HorizontalRule
+mutable struct HorizontalRule <: MarkdownElement
 end
 
 function horizontalrule(stream::IO, block::MD)

@@ -24,6 +24,23 @@ function PipeServer()
     return pipe
 end
 
+function PipeServer(handle::OS_HANDLE)
+    pipe = PipeServer()
+    return Base.open_pipe!(pipe, handle)
+end
+
+function Base.open_pipe!(p::PipeServer, handle::OS_HANDLE)
+    iolock_begin()
+    if p.status != StatusInit
+        error("pipe is already in use or has been closed")
+    end
+    err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), p.handle, handle)
+    uv_error("pipe_open", err)
+    p.status = StatusOpen
+    iolock_end()
+    return p
+end
+
 ## server functions ##
 
 accept(server::PipeServer) = accept(server, PipeEndpoint())
@@ -70,6 +87,9 @@ end
     listen(path::AbstractString) -> PipeServer
 
 Create and listen on a named pipe / UNIX domain socket.
+
+!!! note
+    Path length on Unix is limited to somewhere between 92 and 108 bytes (cf. `man unix`).
 """
 function listen(path::AbstractString)
     sock = PipeServer()
@@ -83,7 +103,7 @@ function connect!(sock::PipeEndpoint, path::AbstractString)
     req = Libc.malloc(Base._sizeof_uv_connect)
     uv_req_set_data(req, C_NULL)
     ccall(:uv_pipe_connect, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), req, sock.handle, path,
-          @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint)))
+          @cfunction(uv_connectcb_pipe, Cvoid, (Ptr{Cvoid}, Cint)))
     sock.status = StatusConnecting
     iolock_end()
     return sock
@@ -93,5 +113,8 @@ end
     connect(path::AbstractString) -> PipeEndpoint
 
 Connect to the named pipe / UNIX domain socket at `path`.
+
+!!! note
+    Path length on Unix is limited to somewhere between 92 and 108 bytes (cf. `man unix`).
 """
 connect(path::AbstractString) = connect(PipeEndpoint(), path)

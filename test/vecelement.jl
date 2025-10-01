@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
+using InteractiveUtils
 make_value(::Type{T}, i::Integer) where {T<:Integer} = 3*i%T
 make_value(::Type{T},i::Integer) where {T<:AbstractFloat} = T(3*i)
 
@@ -96,7 +96,7 @@ const _llvmtypes = Dict{DataType, String}(
     ret <$(N) x $(llvmT)> %3
     """
     return quote
-        Base.@_inline_meta
+        Base.@inline
         Core.getfield(Base, :llvmcall)($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
     end
 end
@@ -119,4 +119,10 @@ for T in (Float64, Float32, Int64, Int32)
         b = f20961([a], [a])
         @test b == result
     end
+end
+@testset "vecelement overalignment" begin
+    io = IOBuffer()
+    code_llvm(io,getindex, (Array{NTuple{5, VecElement{Float64}}, 1}, Int64), optimize=false)
+    ir = String(take!(io))
+    @test match(r"align 64", ir) === nothing
 end

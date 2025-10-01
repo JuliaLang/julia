@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    Represents a Universally Unique Identifier (UUID).
-    Can be built from one `UInt128` (all byte values), two `UInt64`, or four `UInt32`.
-    Conversion from a string will check the UUID validity.
+Represents a Universally Unique Identifier (UUID).
+Can be built from one `UInt128` (all byte values), two `UInt64`, or four `UInt32`.
+Conversion from a string will check the UUID validity.
 """
 struct UUID
     value::UInt128
@@ -30,6 +30,13 @@ function convert(::Type{NTuple{4, UInt32}}, uuid::UUID)
 end
 
 UInt128(u::UUID) = u.value
+
+let
+    uuid_hash_seed = UInt === UInt64 ? 0xd06fa04f86f11b53 : 0x96a1f36d
+    Base.hash(uuid::UUID, h::UInt) = hash(uuid_hash_seed, hash(convert(NTuple{2, UInt64}, uuid), h))
+end
+
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 
 let
 @inline function uuid_kernel(s, i, u)
@@ -85,18 +92,18 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     global string
     function string(u::UUID)
         u = u.value
-        a = Base.StringVector(36)
+        a = Base.StringMemory(36)
         for i in groupings
             @inbounds a[i] = hex_chars[1 + u & 0xf]
             u >>= 4
         end
         @inbounds a[24] = a[19] = a[14] = a[9] = '-'
-        return String(a)
+        return unsafe_takestring(a)
     end
 end
 
 print(io::IO, u::UUID) = print(io, string(u))
-show(io::IO, u::UUID) = print(io, "UUID(\"", u, "\")")
+show(io::IO, u::UUID) = print(io, UUID, "(\"", u, "\")")
 
 isless(a::UUID, b::UUID) = isless(a.value, b.value)
 

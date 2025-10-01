@@ -17,24 +17,24 @@ readbyte(stream::IO=stdin) = read(stream, Char)
 # Read the next key from stdin. It is also able to read several bytes for
 #   escaped keys such as the arrow keys, home/end keys, etc.
 # Escaped keys are returned using the `Key` enum.
-readkey(stream::Base.LibuvStream=stdin) = UInt32(_readkey(stream))
-function _readkey(stream::Base.LibuvStream=stdin)
+readkey(stream::IO=stdin) = UInt32(_readkey(stream))
+function _readkey(stream::IO=stdin)
     c = readbyte(stream)
 
     # Escape characters
     if c == '\x1b'
-        stream.buffer.size < 2 && return '\x1b'
+        bytesavailable(stream) < 1 && return '\x1b'
         esc_a = readbyte(stream)
         esc_a == 'v' && return PAGE_UP  # M-v
         esc_a == '<' && return HOME_KEY # M-<
         esc_a == '>' && return END_KEY  # M->
 
-        stream.buffer.size < 3 && return '\x1b'
+        bytesavailable(stream) < 1 && return '\x1b'
         esc_b = readbyte(stream)
 
         if esc_a == '[' || esc_a == 'O'
             if esc_b >= '0' && esc_b <= '9'
-                stream.buffer.size < 4 && return '\x1b'
+                bytesavailable(stream) < 1 && return '\x1b'
                 esc_c = readbyte(stream)
                 if esc_c == '~'
                     esc_b == '1' && return HOME_KEY

@@ -1,6 +1,6 @@
 ## openlibm ##
 ifneq ($(USE_BINARYBUILDER_OPENLIBM), 1)
-OPENLIBM_GIT_URL := git://github.com/JuliaMath/openlibm.git
+OPENLIBM_GIT_URL := https://github.com/JuliaMath/openlibm.git
 OPENLIBM_TAR_URL = https://api.github.com/repos/JuliaMath/openlibm/tarball/$1
 $(eval $(call git-external,openlibm,OPENLIBM,,,$(BUILDDIR)))
 
@@ -16,7 +16,7 @@ $(eval $(call staged-install, \
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)))
 
 clean-openlibm:
-	-rm $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled $(build_libdir)/libopenlibm.a
+	-rm -f $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled $(build_libdir)/libopenlibm.a
 	-$(MAKE) -C $(BUILDDIR)/$(OPENLIBM_SRC_DIR) distclean $(OPENLIBM_FLAGS)
 
 

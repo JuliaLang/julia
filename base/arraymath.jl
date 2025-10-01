@@ -1,36 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## Unary operators ##
-
-"""
-    conj!(A)
-
-Transform an array to its complex conjugate in-place.
-
-See also [`conj`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1+im 2-im; 2+2im 3+im]
-2×2 Matrix{Complex{Int64}}:
- 1+1im  2-1im
- 2+2im  3+1im
-
-julia> conj!(A);
-
-julia> A
-2×2 Matrix{Complex{Int64}}:
- 1-1im  2+1im
- 2-2im  3-1im
-```
-"""
-conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
-
-for f in (:-, :conj, :real, :imag)
-    @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
-end
-
-
 ## Binary arithmetic operators ##
 
 for f in (:+, :-)
@@ -87,8 +56,8 @@ julia> reverse(b)
 !!! compat "Julia 1.6"
     Prior to Julia 1.6, only single-integer `dims` are supported in `reverse`.
 """
-reverse(A::AbstractArray; dims=:) = _reverse(A, dims)
-_reverse(A, dims) = reverse!(copymutable(A); dims)
+reverse(A::AbstractArray; dims::D=:) where {D} = _reverse(A, dims)
+_reverse(A, dims::D) where {D} = reverse!(copymutable(A); dims)
 
 """
     reverse!(A; dims=:)
@@ -98,17 +67,17 @@ Like [`reverse`](@ref), but operates in-place in `A`.
 !!! compat "Julia 1.6"
     Multidimensional `reverse!` requires Julia 1.6.
 """
-reverse!(A::AbstractArray; dims=:) = _reverse!(A, dims)
+reverse!(A::AbstractArray; dims::D=:) where {D} = _reverse!(A, dims)
 _reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))
 _reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
 _reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
 function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
+    dims === () && return A # nothing to reverse
     dimrev = ntuple(k -> k in dims, Val{N}()) # boolean tuple indicating reversed dims
 
     if N < M || M != sum(dimrev)
         throw(ArgumentError("invalid dimensions $dims in reverse!"))
     end
-    M == 0 && return A # nothing to reverse
 
     # swapping loop only needs to traverse ≈half of the array
     halfsz = ntuple(k -> k == dims[1] ? size(A,k) ÷ 2 : size(A,k), Val{N}())

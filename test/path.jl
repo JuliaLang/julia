@@ -9,6 +9,23 @@
         @test isabspath(S(homedir()))
         @test !isabspath(S("foo"))
     end
+    if Sys.iswindows()
+        @testset "issue #38491" begin
+            pwd_drive = uppercase(splitdrive(pwd())[1])
+            drive = (pwd_drive == "X:") ? "Y:" : "X:"
+            @test abspath("$(lowercase(drive))a\\b\\c") == "$(lowercase(drive))\\a\\b\\c"
+            @test abspath("$(uppercase(drive))a\\b\\c") == "$(uppercase(drive))\\a\\b\\c"
+            @test abspath("$(lowercase(drive))a") == "$(lowercase(drive))\\a"
+            @test abspath("$(uppercase(drive))a") == "$(uppercase(drive))\\a"
+            @test abspath(lowercase(drive)) == "$(lowercase(drive))\\"
+            @test abspath(uppercase(drive)) == "$(uppercase(drive))\\"
+
+            @test lowercase(abspath("$(pwd_drive)a\\b\\c")) == lowercase(joinpath(pwd(), "a\\b\\c"))
+            @test lowercase(abspath("$(pwd_drive)a")) == lowercase(joinpath(pwd(), "a"))
+            @test lowercase(abspath(lowercase(pwd_drive))) == lowercase("$(pwd())\\")
+            @test lowercase(abspath(uppercase(pwd_drive))) == lowercase("$(pwd())\\")
+        end
+    end
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
@@ -17,11 +34,11 @@
         @test expanduser(S("x")) == "x"
         @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
     end
-    @testset "Base.contractuser" begin
-        @test Base.contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
-        @test Base.contractuser(S(joinpath(homedir(), "x"))) ==
+    @testset "contractuser" begin
+        @test contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
+        @test contractuser(S(joinpath(homedir(), "x"))) ==
               (Sys.iswindows() ? joinpath(homedir(), "x") : "~$(sep)x")
-        @test Base.contractuser(S("/foo/bar")) == "/foo/bar"
+        @test contractuser(S("/foo/bar")) == "/foo/bar"
     end
     @testset "isdirpath" begin
         @test !isdirpath(S("foo"))
@@ -42,8 +59,13 @@
         @test joinpath(S("foo"), S(homedir())) == homedir()
         @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
 
+        for str in map(S, [sep, "a$(sep)b", "a$(sep)b$(sep)c", "a$(sep)b$(sep)c$(sep)d"])
+            @test str == joinpath(splitpath(str))
+            @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+        end
+
         if Sys.iswindows()
-            @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
+            @test joinpath(S("foo"),S("D:bar")) == "D:bar"
             @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
             @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
 
@@ -57,6 +79,11 @@
             @test joinpath(S("\\\\server"), S("share"), S("a"), S("b")) == "\\\\server\\share\\a\\b"
             @test joinpath(S("\\\\server\\share"),S("a")) == "\\\\server\\share\\a"
             @test joinpath(S("\\\\server\\share\\"), S("a")) == "\\\\server\\share\\a"
+
+            for str in map(S, ["c:\\", "c:\\a", "c:\\a\\b", "c:\\a\\b\\c", "c:\\a\\b\\c\\d"])
+                @test str == joinpath(splitpath(str))
+                @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+            end
 
         elseif Sys.isunix()
             @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"
@@ -144,6 +171,9 @@
         @test string(splitdrive(S(homedir()))...) == homedir()
         @test splitdrive("a\nb") == ("", "a\nb")
 
+        @test splitdir("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b", "c.ext")
+        @test splitext("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b/c", ".ext")
+
         if Sys.iswindows()
             @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
                 ("\\\\servername\\hello.world","\\filename.ext")
@@ -151,6 +181,9 @@
                 ("\\\\servername.com\\hello.world","\\filename.ext")
             @test splitdrive(S("C:\\foo\\bar")) ==
                 ("C:","\\foo\\bar")
+            # only single characters followed by a colon are drives
+            @test splitdrive(S("foo:bar")) ==
+                ("", "foo:bar")
         end
 
         @test splitext(S("")) == ("", "")
@@ -273,8 +306,32 @@
             # Additional cases
             @test_throws ArgumentError relpath(S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"), "")
             @test_throws ArgumentError relpath(S(""), S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"))
+
+            # issue 40237
+            path = "..$(sep)a$(sep)b$(sep)c"
+            @test relpath(abspath(path)) == path
         end
         test_relpath()
+    end
+
+    @testset "uripath" begin
+        host = if Sys.iswindows()
+            ""
+        elseif Sys.detectwsl()
+            distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
+            "wsl%24/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
+        else
+            gethostname()
+        end
+        sysdrive, uridrive = if Sys.iswindows() "C:\\", "C:/" else "/", "" end
+        @test Base.Filesystem.uripath("$(sysdrive)some$(sep)file.txt") == "file://$host/$(uridrive)some/file.txt"
+        @test Base.Filesystem.uripath("$(sysdrive)another$(sep)$(sep)folder$(sep)file.md") == "file://$host/$(uridrive)another/folder/file.md"
+        @test Base.Filesystem.uripath("$(sysdrive)some file with ^odd% chars") == "file://$host/$(uridrive)some%20file%20with%20%5Eodd%25%20chars"
+        @test Base.Filesystem.uripath("$(sysdrive)weird chars like @#&()[]{}") == "file://$host/$(uridrive)weird%20chars%20like%20%40%23%26%28%29%5B%5D%7B%7D"
+        @test Base.Filesystem.uripath("$sysdrive") == "file://$host/$uridrive"
+        @test Base.Filesystem.uripath(".") == Base.Filesystem.uripath(pwd())
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)Δεδομένα") == "file://$host/$(uridrive)unicode/%CE%94%CE%B5%CE%B4%CE%BF%CE%BC%CE%AD%CE%BD%CE%B1"
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)🧮🐛🔨") == "file://$host/$(uridrive)unicode/%F0%9F%A7%AE%F0%9F%90%9B%F0%9F%94%A8"
     end
 
     if Sys.iswindows()
