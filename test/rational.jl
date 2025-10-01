@@ -853,7 +853,9 @@ end
     end
 end
 
-@testset "Float16 comparison" begin
+@testset "Float-Rational comparison" begin
     @test Float16(6.0e-8) == big(1//16777216) == 1//16777216
     @test Float16(6.0e-8) == 1//16777216
+    @test 1.0 != big(1//0)
+    @test Inf == big(1//0)
 end

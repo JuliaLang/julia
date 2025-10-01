@@ -253,9 +253,9 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     return path
 end
 
-# Files that were requested to be deleted but can't be by the current process
-# i.e. loaded DLLs on Windows
-delayed_delete_dir() = joinpath(tempdir(), "julia_delayed_deletes")
+# Files that were requested to be deleted but can't be by the current process,
+# i.e. loaded DLLs on Windows, are listed in the directory below
+delayed_delete_ref() = joinpath(tempdir(), "julia_delayed_deletes_ref")
 
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
@@ -288,13 +288,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
                 force && err.code==Base.UV_ENOENT && return
                 @static if Sys.iswindows()
                     if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
-                        # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
-                        # but they can be moved. So move out to allow the dir to be deleted.
-                        # Pkg.gc() cleans up this dir when possible
-                        dir = mkpath(delayed_delete_dir())
-                        temp_path = tempname(dir, cleanup = false, suffix = string("_", basename(path)))
-                        @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
-                        mv(path, temp_path)
+                        delayed_delete_dll(path)
                         return
                     end
                 end
@@ -329,6 +323,22 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
     end
 end
 
+
+# Loaded DLLs cannot be deleted on Windows, even with posix delete mode but they can be renamed.
+# delayed_delete_dll(path) does so temporarily, until later cleanup by Pkg.gc().
+function delayed_delete_dll(path)
+    # in-use DLL must be kept on the same drive
+    temp_path = tempname(abspath(dirname(path)); cleanup=false, suffix=string("_", basename(path)))
+    @debug "Could not delete DLL most likely because it is loaded, moving to a temporary path" path temp_path
+    mkpath(delayed_delete_ref())
+    io = last(mktemp(delayed_delete_ref(); cleanup=false))
+    try
+        print(io, temp_path) # record the temporary path for Pkg.gc()
+    finally
+        close(io)
+    end
+    rename(path, temp_path) # do not call mv which could recursively call rm(path)
+end
 
 # The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
@@ -678,8 +688,35 @@ end
 # deprecated internal function used by some packages
 temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(false)
 
+function temp_cleanup_postprocess(cleanup_dirs)
+    if !isempty(cleanup_dirs)
+        rmcmd = """
+        cleanuplist = readlines(stdin) # This loop won't start running until stdin is closed, which is supposed to be sequenced after the process exits
+        sleep(1) # Wait for the operating system to hopefully be ready, since the OS implementation is probably incorrect, given the history of buggy work-arounds like this that have existed for ages in dotNet and libuv
+        for path in cleanuplist
+            try
+                rm(path, force=true, recursive=true)
+            catch ex
+                @warn "Failed to clean up temporary path \$(repr(path))\n\$ex" _group=:file
+            end
+        end
+        """
+        cmd = Cmd(Base.cmd_gen(((Base.julia_cmd(),), ("--startup-file=no",), ("-e",), (rmcmd,))); ignorestatus = true, detach = true)
+        pw = Base.PipeEndpoint()
+        run(cmd, pw, devnull, stderr; wait=false)
+        join(pw, cleanup_dirs, "\n")
+        Base.dup(Base._fd(pw)) # intentionally leak a reference, until the process exits
+        close(pw)
+    end
+end
+
+function temp_cleanup_atexit()
+    temp_cleanup_purge_all()
+    @lock TEMP_CLEANUP_LOCK temp_cleanup_postprocess(keys(TEMP_CLEANUP))
+end
+
 function __postinit__()
-    Base.atexit(temp_cleanup_purge_all)
+    Base.atexit(temp_cleanup_atexit)
 end
 
 const temp_prefix = "jl_"

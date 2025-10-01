@@ -139,8 +139,7 @@
 (define (toplevel-only-expr? e)
   (and (pair? e)
        (or (memq (car e) '(toplevel line module export public
-                                    error incomplete))
-           (and (memq (car e) '(global)) (every symbol? (cdr e))))))
+                                    error incomplete)))))
 
 (define *in-lowering* #f)
 
