@@ -798,3 +798,41 @@ end
     @test endswith(A, split(B, ' ')[end])
     @test endswith(A, 'g')
 end
+
+@testset "String Iterator Tests" begin
+    for S in (String, SubStr, Test.GenericString)
+        @test String(Iterators.map(c -> c+1, "abc")) == "bcd"
+        @test String(Iterators.take("hello world", 5)) == "hello"
+        @test String(Iterators.filter(c -> c != ' ', "hello world")) == "helloworld"
+        @test String(Iterators.drop("hello world", 6)) == "world"
+        @test String(Iterators.map(c -> 'a', "hello")) == "aaaaa"
+        @test String(Iterators.map(c -> c == ' ' ? ' ' : 'A', "hello world")) == "AAAAA AAAAA"
+        @test String(Iterators.map(c -> '😊', "hello")) == "😊😊😊😊😊"
+        @test String(Iterators.take("", 3)) == ""
+        @test String(Iterators.drop("", 3)) == ""
+        @test_throws MethodError String(Iterators.filter(c -> c > 128, "hello"))
+        @test_throws MethodError String(Iterators.cycle("abc"))
+        @test_throws MethodError String(19)
+        @test_throws MethodError String(3.14)
+        @test String(Iterators.map(c -> Char(c), "abc")) == "abc"
+        @test String(Iterators.flatten(Iterators.map(c -> c, ["hello", "world"]))) == "helloworld"
+        @test String(Iterators.flatten(Iterators.map(c -> "hello", 1:3))) == "hellohellohello"
+        @test String(Iterators.filter(c -> false, "hello")) == ""
+        @test String(Iterators.map(c -> ' ', "hello world")) == "           "
+        @test String(Iterators.map(c -> '😊', "hi there")) == "😊😊😊😊😊😊😊😊"
+        @test String("ÄÖÜ⻨") == "ÄÖÜ⻨"
+        @test String(Iterators.map(c -> 'A', "ÄÖÜ⻨")) == "AAAA"
+        @test String(Iterators.map(c -> c == 'Ö' ? 'O' : c, "ÄÖÜ⻨")) == "ÄOÜ⻨"
+        @test String(Iterators.take("ÄÖÜ⻨", 2)) == "ÄÖ"
+        @test String(Iterators.drop("ÄÖÜ⻨", 1)) == "ÖÜ⻨"
+    end
+    @test_throws MethodError String(Iterators.cycle("abc"))
+    @test String("valid string") == "valid string"
+    @test String("test") == "test"
+    @test String(Iterators.flatten(Iterators.map(c -> "abc", 1:3))) == "abcabcabc"
+    @test String(Iterators.flatten(Iterators.map(c -> "😊", 1:2))) == "😊😊"
+    @test String(Iterators.filter(c -> false, "hello")) == ""
+    @test String(Iterators.take("hello", 0)) == ""
+    @test String(Iterators.take("a"^1000, 500)) == "a"^500
+    @test String(Iterators.map(c -> 'a', "a"^100000)) == "a"^100000
+end
