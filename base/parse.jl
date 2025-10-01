@@ -128,13 +128,16 @@ end
 end
 
 function tryparse_internal(::Type{T}, c::AbstractChar; base::Integer, raise::Bool)
-    a::Int = (base <= 36 ? 10 : 36)
+    a::UInt8 = (base <= 36 ? 10 : 36)
     check_valid_base(base)
-    d = '0' <= c <= '9' ? c-'0'    :
-        'A' <= c <= 'Z' ? c-'A'+10 :
-        'a' <= c <= 'z' ? c-'a'+a  : raise && throw(ArgumentError("invalid digit: $(repr(c))"))
-    d < base || raise && throw(ArgumentError("invalid base $base digit $(repr(c))"))
-    convert(T, d)
+    base = base % UInt8
+    codepoint = c > 'z' ? 0xff : UInt8(c)
+    d = UInt8('0') ≤ codepoint ≤ UInt8('9') ? codepoint - UInt8('0') :
+        UInt8('A') ≤ codepoint ≤ UInt8('Z') ? codepoint - UInt8('A') + UInt8(10) :
+        UInt8('a') ≤ codepoint ≤ UInt8('z') ? codepoint - UInt8('a') + a :
+        0xff
+    d < base || (raise ? throw(ArgumentError("invalid base $base digit $(repr(char))") : return nothing)
+    convert(T, d)::T
 end
 
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
