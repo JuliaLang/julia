@@ -6,10 +6,9 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE
+using Sys: PAGESIZE
 
 export mmap
-
-PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
 mutable struct Anonymous <: IO
