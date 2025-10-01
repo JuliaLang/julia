@@ -5,7 +5,8 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 ## string to integer functions ##
 
 """
-    parse(type, str; base)
+    parse(type, str)
+    parse(<:Integer, str; base=10)
 
 Parse a string (or character) as a number. For `Integer` types, a base can be specified
 (the default is 10). For floating-point types, the string is parsed as a decimal
@@ -39,7 +40,8 @@ parse(T::Type, str; base = Int)
 parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 """
-    tryparse(type, str; base)
+    tryparse(type, str)
+    tryparse(<:Integer, str; base=10)
 
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
@@ -52,9 +54,17 @@ tryparse(T::Type, str; base = Int)
 function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     tryparse_internal(T, c, base, true)
 end
+# For consistency with parse(t, AbstractString), support a `base` argument only when T<:Integer
+function parse(::Type{T}, c::AbstractChar)
+    tryparse_internal(T, c, 10, true)
+end
 
 function tryparse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     tryparse_internal(T, c, base, false)
+end
+# For consistency with tryparse(t, AbstractString), support a `base` argument only when T<:Integer
+function tryparse(::Type{T}, c::AbstractChar)
+    tryparse_internal(T, c, 10, true)
 end
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
@@ -117,7 +127,7 @@ end
         base
 end
 
-function tryparse_internal(::Type{T}, c::AbstractChar; base::Integer, raise::Bool) where T<:Integer
+function tryparse_internal(::Type{T}, c::AbstractChar; base::Integer, raise::Bool)
     a::Int = (base <= 36 ? 10 : 36)
     check_valid_base(base)
     d = '0' <= c <= '9' ? c-'0'    :
