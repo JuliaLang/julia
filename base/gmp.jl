@@ -151,7 +151,7 @@ using ..GMP: BigInt, Limb, BITS_PER_LIMB, libgmp
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
 
-gmpz(op::Symbol) = (Symbol(:__gmpz_, op), libgmp)
+gmpz(op::Symbol) = Expr(:tuple, QuoteNode(Symbol(:__gmpz_, op)), GlobalRef(MPZ, :libgmp))
 
 init!(x::BigInt) = (ccall((:__gmpz_init, libgmp), Cvoid, (mpz_t,), x); x)
 init2!(x::BigInt, a) = (ccall((:__gmpz_init2, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
@@ -955,7 +955,7 @@ module MPQ
 import .Base: unsafe_rational, __throw_rational_argerror_zero
 import ..GMP: BigInt, MPZ, Limb, libgmp
 
-gmpq(op::Symbol) = (Symbol(:__gmpq_, op), libgmp)
+gmpq(op::Symbol) = Expr(:tuple, QuoteNode(Symbol(:__gmpq_, op)), GlobalRef(MPZ, :libgmp))
 
 mutable struct _MPQ
     num_alloc::Cint
