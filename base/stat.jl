@@ -380,7 +380,7 @@ function ispath(path::String)
     end
     return r == 0
 end
-ispath(path::AbstractString) = ispath(String(path))
+ispath(path::AbstractString) = ispath(String(path)::String)
 
 """
     isfifo(path)::Bool

@@ -664,8 +664,8 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT;
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
@@ -895,7 +895,6 @@ jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val);
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong);
@@ -1524,11 +1523,12 @@ size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_cont
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip);
-void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
+void jl_fprint_critical_error(ios_t *t, int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
-void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
-void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT;
+void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT;
+void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
 #ifdef _OS_WINDOWS_
 JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
 #endif
@@ -2035,8 +2035,8 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 //   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
 //   warning is spurious if the variable is not modified inside the JL_TRY.
 //   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
-#ifdef _COMPILER_GCC_
 #define JL_DO_PRAGMA(s) _Pragma(#s)
+#ifdef _COMPILER_GCC_
 #define JL_GCC_IGNORE_START(warning) \
     JL_DO_PRAGMA(GCC diagnostic push) \
     JL_DO_PRAGMA(GCC diagnostic ignored warning)
@@ -2046,6 +2046,24 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #define JL_GCC_IGNORE_START(w)
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
+
+#ifdef _COMPILER_CLANG_
+#define JL_CLANG_IGNORE_START(warning) \
+    JL_DO_PRAGMA(clang diagnostic push) \
+    JL_DO_PRAGMA(clang diagnostic ignored warning)
+#define JL_CLANG_IGNORE_STOP \
+    JL_DO_PRAGMA(clang diagnostic pop)
+#else
+#define JL_CLANG_IGNORE_START(w)
+#define JL_CLANG_IGNORE_STOP
+#endif // _COMPILER_CLANG_
+
+#define JL_CC_IGNORE_START(warning) \
+    JL_GCC_IGNORE_START(warning) \
+    JL_CLANG_IGNORE_START(warning)
+#define JL_CC_IGNORE_STOP \
+    JL_GCC_IGNORE_STOP \
+    JL_CLANG_IGNORE_STOP
 
 #ifdef __clang_gcanalyzer__
   // Not a safepoint (so it doesn't free other values), but an artificial use.
@@ -2093,8 +2111,8 @@ JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncod
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_method_instance_t **linfos, size_t n);
-JL_DLLIMPORT void jl_get_llvm_mis(void *native_code, size_t *num_els,
-                                  jl_method_instance_t *MIs);
+JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
+                                  jl_code_instance_t **CIs);
 JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;

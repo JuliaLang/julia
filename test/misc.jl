@@ -1540,15 +1540,40 @@ end
 # issue #41656
 run(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
 
+function treshape59278(X::AbstractArray, n, m)
+    Y = reshape(X, n, m)
+    Y .= 1.0
+    return X
+end
+
+# a function that allocates iff no constprop
+@inline maybealloc59278(n, _) = ntuple(i->rand(), n)
+
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 
     # sanity check `@allocations` returns what we expect in some very simple cases.
-    # These are inside functions because `@allocations` uses `Experimental.@force_compile`
-    # so can be affected by other code in the same scope.
     @test (() -> @allocations "a")() == 0
-    @test (() -> @allocations "a" * "b")() == 0 # constant propagation
+    "a" * Base.inferencebarrier("b")
     @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
+    # test that you can grab the value from @allocated
+    @allocated _x = 1+2
+    @test _x === 3
+
+    n, m = 10, 20
+    X = rand(n, m)
+    treshape59278(X, n, m)
+    # test that @allocated and @allocations are consistent about whether anything was
+    # allocated in a case where the compiler can sometimes remove an allocation
+    # https://github.com/JuliaLang/julia/issues/58634#issuecomment-2940840651
+    @test ((@allocated treshape59278(X, n, m))==0) == ((@allocations treshape59278(X, n, m))==0)
+    # TODO: would be nice to have but not yet reliable
+    #@test ((@allocated begin treshape59278(X, n, m) end)==0) == ((@allocations begin treshape59278(X, n, m) end)==0)
+
+    # test that all wrapped allocations are counted and constprop is not done
+    @test (@allocated @noinline maybealloc59278(10, [])) > (@allocated maybealloc59278(10, 0)) > 0
+    # but if you wrap it in another function it can be constprop'd
+    @test (@allocated (()->maybealloc59278(10, []))()) == 0
 
     _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
         _lock_conflicts = @lock_conflicts begin
