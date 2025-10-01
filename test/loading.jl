@@ -1368,34 +1368,42 @@ end
         # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
         # project path so the cache file slug will be different if the tempdir is given as a symlink
         # (which it often is on MacOS) which would break the test.
-        project_path = joinpath(realpath(depot), "project")
-        mkpath(project_path)
 
         # Create fake `Foo.jl` package with two files:
         foo_path = joinpath(depot, "dev", "Foo51989")
         mkpath(joinpath(foo_path, "src"))
-        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
-            println(io, """
+        write(joinpath(foo_path, "src", "Foo51989.jl"),
+            """
             module Foo51989
             include("internal.jl")
             end
             """)
-        end
-        open(joinpath(foo_path, "src", "internal.jl"); write=true) do io
-            println(io, "const a = \"asd\"")
-        end
-        open(joinpath(foo_path, "Project.toml"); write=true) do io
-            println(io, """
+        write(joinpath(foo_path, "src", "internal.jl"),
+            "const a = \"asd\"")
+        write(joinpath(foo_path, "Project.toml"),
+            """
             name = "Foo51989"
             uuid = "00000000-0000-0000-0000-000000000001"
             version = "1.0.0"
             """)
-        end
+        write(joinpath(foo_path, "Manifest.toml"),
+            """
+            # This file is machine-generated - editing it directly is not advised
+            julia_version = "1.13.0-DEV"
+            manifest_format = "2.0"
+            project_hash = "8699765aeeac181c3e5ddbaeb9371968e1f84d6b"
 
-        # In our depot, `dev` and then `precompile` this `Foo` package.
-        @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo51989"); Pkg.precompile(); exit(0)'`,
-            "JULIA_DEPOT_PATH" => depot))
+            [[deps.Foo51989]]
+            path = "."
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+
+        # In our depot, `precompile` this `Foo` package.
+        @test success(pipeline(addenv(
+            `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'Base.Precompilation.precompilepkgs(["Foo51989"]); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ); stdout, stderr))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
         foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
@@ -1413,10 +1421,10 @@ end
         end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
-        @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo51989; exit(0)'`,
+        @test success(pipeline(addenv(
+            `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'using Foo51989; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
-        ))
+        ); stdout, stderr))
 
         # Ensure that there is still only one `.ji` file (it got replaced
         # and the file size changed).

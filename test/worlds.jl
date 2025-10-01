@@ -598,3 +598,21 @@ function f()
 end
 end
 @test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()
+
+# issue #59429 - world age semantics with toplevel in macros
+module M59429
+using Test
+macro new_enum(T::Symbol, args...)
+   esc(quote
+      @enum $T $(args...)
+      function Base.hash(x::$T, h::UInt)
+        rand(UInt)
+      end
+    end)
+end
+
+@new_enum Foo59429 bar59429 baz59429
+
+# Test that the hash function works without world age issues
+@test hash(bar59429, UInt(0)) isa UInt
+end

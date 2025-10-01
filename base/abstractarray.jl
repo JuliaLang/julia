@@ -39,7 +39,11 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+function size(t::AbstractArray, dim)
+    d = Int(dim)::Int
+    s = size(t)
+    d <= length(s) ? s[d] : 1
+end
 
 """
     axes(A, d)
@@ -2861,7 +2865,7 @@ julia> hvcat(5, M...) |> size  # hvcat puts matrices next to each other
 (14, 15)
 ```
 """
-stack(iter; dims=:) = _stack(dims, iter)
+stack(iter; dims::D=:) where {D} = _stack(dims, iter)
 
 """
     stack(f, args...; [dims])
@@ -2890,14 +2894,14 @@ julia> stack(eachrow([1 2 3; 4 5 6]), (10, 100); dims=1) do row, n
  4.0  5.0  6.0  400.0  500.0  600.0  0.04  0.05  0.06
 ```
 """
-stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
-stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
+stack(f, iter; dims::D=:) where {D} = _stack(dims, f(x) for x in iter)
+stack(f, xs, yzs...; dims::D=:) where {D} = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
 
-_stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
+_stack(dims::D, iter) where {D<:Union{Integer, Colon}} = _stack(dims, IteratorSize(iter), iter)
 
-_stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
+_stack(dims::D, ::IteratorSize, iter) where {D} = _stack(dims, collect(iter))
 
-function _stack(dims, ::Union{HasShape, HasLength}, iter)
+function _stack(dims::D, ::Union{HasShape, HasLength}, iter) where {D}
     S = @default_eltype iter
     T = S != Union{} ? eltype(S) : Any  # Union{} occurs for e.g. stack(1,2), postpone the error
     if isconcretetype(T)
@@ -3016,6 +3020,8 @@ function isequal(A::AbstractArray, B::AbstractArray)
 end
 
 function cmp(A::AbstractVector, B::AbstractVector)
+    ai1, bi1 = firstindex(A), firstindex(B)
+    isequal(ai1, bi1) || return cmp(ai1, bi1)
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return isless(a, b) ? -1 : 1
@@ -3036,7 +3042,8 @@ end
 """
     isless(A::AbstractVector, B::AbstractVector)
 
-Return `true` when `A` is less than `B` in lexicographic order.
+Return `true` when `A` is less than `B`. Vectors are first compared by
+their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
