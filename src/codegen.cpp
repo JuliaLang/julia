@@ -6460,23 +6460,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             jl_method_type);
         return meth;
     }
-    else if (head == jl_globaldecl_sym) {
-        assert(nargs <= 2 && nargs >= 1);
-        jl_sym_t *sym = (jl_sym_t*)args[0];
-        jl_module_t *mod = ctx.module;
-        if (jl_is_globalref(sym)) {
-            mod = jl_globalref_mod(sym);
-            sym = jl_globalref_name(sym);
-        }
-        if (nargs == 2) {
-            jl_cgval_t typ = emit_expr(ctx, args[1]);
-            ctx.builder.CreateCall(prepare_call(jldeclareglobal_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), boxed(ctx, typ), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1) });
-        } else {
-            ctx.builder.CreateCall(prepare_call(jldeclareglobal_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), ConstantPointerNull::get(cast<PointerType>(ctx.types().T_prjlvalue)), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1) });
-        }
-    }
     else if (head == jl_new_sym) {
         bool is_promotable = false;
         if (ssaidx_0based >= 0) {

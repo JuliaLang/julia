@@ -20,8 +20,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :boundscheck => 0:1,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
-    :global => 1:1,
-    :globaldecl => 1:2,
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects, gc_safe), args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:2,
@@ -52,7 +50,6 @@ const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavalue
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const SSAFLAGS_MISMATCH = "not all SSAValues have a corresponding `ssaflags`"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
-const NON_TOP_LEVEL_GLOBAL = "encountered `Expr` head `:global` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 const INVALID_SIGNATURE_OPAQUE_CLOSURE = "invalid signature of method for opaque closure - `sig` field must always be set to `Tuple`"
@@ -124,7 +121,6 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
             head = x.head
             if !is_top_level
                 head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
-                head === :global && push!(errors, InvalidCodeError(NON_TOP_LEVEL_GLOBAL))
             end
             narg_bounds = get(VALID_EXPR_HEADS, head, -1:-1)
             nargs = length(x.args)
@@ -149,7 +145,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
                 head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
                 head === :leave || head === :pop_exception ||
-                head === :method || head === :global || head === :static_parameter ||
+                head === :method || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
                 validate_val!(x)
