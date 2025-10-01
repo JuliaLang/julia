@@ -9,7 +9,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :(&) => 1:1,
     :(=) => 2:2,
     :method => 1:4,
-    :const => 1:2,
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
@@ -149,7 +148,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
             elseif head === :call || head === :invoke || x.head === :invoke_modify ||
                 head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
-                head === :const || head === :leave || head === :pop_exception ||
+                head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline

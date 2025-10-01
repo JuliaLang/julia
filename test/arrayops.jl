@@ -319,6 +319,12 @@ end
     @test_throws ArgumentError dropdims(a, dims=3)
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
+
+    h1 = HeterogeneousAxisArray(rand(4, 1))
+    h2 = HeterogeneousAxisArray(rand(1, 4))
+    @test size(dropdims(h1, dims=2)) == (4,)
+    @test size(dropdims(h2, dims=1)) == (4,)
+
     @testset "insertdims" begin
         a = rand(8, 7)
         @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
@@ -1459,6 +1465,18 @@ end
     @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
     @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
     @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
+
+    x = [1, 2, 3]
+    y = OffsetVector(x, -1)
+    @test cmp(x, y) == 1
+    @test cmp(y, x) == -1
+    @test !isless(x, y)
+    @test isless(y, x)
+
+    y2 = OffsetVector([1, 2, 3], 0)
+    @test cmp(x, y2) == 0
+    @test !isless(x, y2)
+    @test !isless(y2, x)
 end
 
 @testset "sort on arrays" begin

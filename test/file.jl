@@ -2153,16 +2153,16 @@ Base.joinpath(x::URI50890) = URI50890(x.f)
 end
 
 @testset "diskstat() works" begin
-    # Sanity check assuming disk is smaller than 32PB
-    PB = Int64(2)^44
+    # Sanity check assuming disk is smaller than 32PiB
+    PiB = Int64(2)^50
 
     dstat = diskstat()
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
     @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
 end
 

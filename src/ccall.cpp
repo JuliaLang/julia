@@ -627,7 +627,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                 void *symaddr;
                 std::string iname("i");
                 iname += f_name;
-                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
+                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0, 0)) {
                     f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
                     f_name = jl_symbol_name(jl_symbol(iname.c_str()));
                 }

@@ -92,7 +92,7 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
-jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance_t **data)
+jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
 {
     jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
     auto &map = desc->jl_fvar_map;
@@ -105,7 +105,7 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     assert(*num_elements == map.size());
     size_t i = 0;
     for (auto &ci : map) {
-        data[i++] = jl_get_ci_mi(ci.first);
+        data[i++] = ci.first;
     }
 }
 
@@ -897,7 +897,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 jl_callptr_t invoke;
                 void *fptr;
                 jl_read_codeinst_invoke(this_code, &specsigflags, &invoke, &fptr, 0);
-                if (invoke != NULL && (specsigflags & 0b100)) {
+                if (invoke != NULL && (specsigflags & JL_CI_FLAGS_FROM_IMAGE)) {
                     // this codeinst is already available externally: keep it only if canPartition demands it for local use
                     // TODO: for performance, avoid generating the src code when we know it would reach here anyways?
                     if (M.withModuleDo([&](Module &M) { return !canPartition(*cast<Function>(M.getNamedValue(cfunc))); })) {
@@ -1957,8 +1957,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
                 // or it may skip emitting debug info for that file. Here set it to ./julia#N
                 DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                for (DICompileUnit *CU : M->debug_compile_units())
-                    CU->replaceOperandWith(0, topfile);
+                if (M->getNamedMetadata("llvm.dbg.cu"))
+                    for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
+                        CU->replaceOperandWith(0, topfile);
                 timers[i].construct.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);

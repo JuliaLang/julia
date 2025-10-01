@@ -990,9 +990,7 @@ end
 # Utility functions
 ==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 <=(x::BigFloat, y::BigFloat) = ccall((:mpfr_lessequal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
->=(x::BigFloat, y::BigFloat) = ccall((:mpfr_greaterequal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
->(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 
 function cmp(x::BigFloat, y::BigInt)
     isnan(x) && return 1

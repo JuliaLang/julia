@@ -485,8 +485,6 @@ module IteratorsMD
 
     size(iter::CartesianIndices) = map(length, iter.indices)
 
-    length(iter::CartesianIndices) = prod(size(iter))
-
     # make CartesianIndices a multidimensional range
     Base.step(iter::CartesianIndices) = CartesianIndex(map(step, iter.indices))
 
@@ -673,21 +671,24 @@ module IteratorsMD
         # CartesianPartition.
         mi = iter.parent.mi
         ci = iter.parent.parent
-        ax, ax1 = axes(ci), Base.axes1(ci)
-        subs = Base.ind2sub_rs(ax, mi, first(iter.indices[1]))
-        vl, fl = Base._sub2ind(tail(ax), tail(subs)...), subs[1]
-        vr, fr = divrem(last(iter.indices[1]) - 1, mi[end]) .+ (1, first(ax1))
+        ax1 = Base.axes1(ci)
+        function splitdim1(i, mi)
+            d, r = divrem(i - 1, mi)
+            d + 1, r + first(ax1)
+        end
+        vl, fl = splitdim1(first(iter.indices[1]), mi[1])
+        vr, fr = splitdim1(last(iter.indices[1]), mi[1])
+        # form the iterator for outer dimensions, equivalent to vec(oci), but mi is reused
         oci = CartesianIndices(tail(ci.indices))
-        # A fake CartesianPartition to reuse the outer iterate fallback
-        outer = @inbounds view(ReshapedArray(oci, (length(oci),), mi), vl:vr)
-        init = @inbounds dec(oci[tail(subs)...].I, oci.indices) # real init state
+        roci = ReshapedArray(oci, (length(oci),), tail(mi))
+        outer = @inbounds view(roci, vl:vr)
         # Use Generator to make inner loop branchless
         @inline function skip_len_I(i::Int, I::CartesianIndex)
             l = i == 1 ? fl : first(ax1)
             r = i == length(outer) ? fr : last(ax1)
             l - first(ax1), r - l + 1, I
         end
-        (skip_len_I(i, I) for (i, I) in Iterators.enumerate(Iterators.rest(outer, (init, 0))))
+        (skip_len_I(i, I) for (i, I) in Iterators.enumerate(outer))
     end
     @inline function simd_outer_range(iter::CartesianPartition{CartesianIndex{2}})
         # But for two-dimensional Partitions the above is just a simple one-dimensional range
@@ -833,7 +834,6 @@ LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
 LogicalIndex{Int}(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
-length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
 show(io::IO, r::LogicalIndex) = print(io,collect(r))
 print_array(io::IO, X::LogicalIndex) = print_array(io, collect(X))
@@ -1173,46 +1173,6 @@ end
 # And in general, checking the intersection is too much work
 _indicesmightoverlap(A::Tuple{Any, Vararg{Any}}, B::Tuple{Any, Vararg{Any}}) = true
 
-"""
-    fill!(A, x)
-
-Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
-the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
-`Foo()` once.
-
-# Examples
-```jldoctest
-julia> A = zeros(2,3)
-2×3 Matrix{Float64}:
- 0.0  0.0  0.0
- 0.0  0.0  0.0
-
-julia> fill!(A, 2.)
-2×3 Matrix{Float64}:
- 2.0  2.0  2.0
- 2.0  2.0  2.0
-
-julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A
-3-element Vector{Vector{Int64}}:
- [2, 1, 1]
- [2, 1, 1]
- [2, 1, 1]
-
-julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())
-3-element Vector{Int64}:
- 1
- 1
- 1
-```
-"""
-function fill!(A::AbstractArray{T}, x) where T
-    xT = convert(T, x)
-    for I in eachindex(A)
-        @inbounds A[I] = xT
-    end
-    A
-end
-
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
@@ -1539,7 +1499,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,AbstractUnitRange{Int}})
+@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::D) where {D<:Union{Colon,AbstractUnitRange{Int}}}
     I0 = to_indices(B, (J0,))[1]
     @boundscheck checkbounds(B, I0)
     l0 = length(I0)
@@ -1551,7 +1511,7 @@ end
 end
 
 @inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
+        I0::DI0, I::Union{Int,AbstractUnitRange{Int},Colon}...) where {DI0<:Union{Colon,AbstractUnitRange{Int}}, }
     J = to_indices(B, (I0, I...))
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, X, J...)
@@ -1592,7 +1552,7 @@ end
 end
 
 @propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
-        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
+        I0::DI0, I::Union{Int,AbstractUnitRange{Int},Colon}...) where {DI0<:Union{Colon,AbstractUnitRange{Int}}}
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 
@@ -1787,7 +1747,7 @@ julia> unique(A, dims=3)
  0  0
 ```
 """
-unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
+unique(A::AbstractArray; dims::D = :) where {D<:Union{Colon,Integer}} = _unique_dims(A, dims)
 
 _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 
@@ -2083,7 +2043,34 @@ function _hash_fib(A, h::UInt)
     return hash_uint(h)
 end
 
-function hash_shaped(A, h::UInt)
+"""
+    union_split(f, x, ts::Tuple{Vararg{Val}}, args...)
+
+call `f(x, args...)`, union-splitting on all the types specified by `ts`
+
+`union_split(f, x, (Val{T1}(), Val{T2}()), y, z)` is equivalent to
+
+```
+if x isa T1
+    f(x, y, z)
+elseif x isa T2
+    f(x, y, z)
+else
+    f(x, y, z)
+end
+```
+"""
+@inline function union_split(f, @nospecialize(x), ts::Tuple{Val{T}, Vararg{Val,N}}, args...) where {T, N}
+    if x isa T
+        f(x, args...)
+    else
+        union_split(f, x, Base.tail(ts), args...)
+    end
+end
+@inline union_split(f, x, ::Tuple{}, args::Vararg{Any, N}) where {N} = f(x, args...)
+
+function hash_shaped(A, h0::UInt, eltype_hint=())
+    h::UInt = h0
     # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
@@ -2093,20 +2080,20 @@ function hash_shaped(A, h::UInt)
     if len < 8
         # for the shortest arrays we chain directly
         for elt in A
-            h = hash(elt, h)
+            h = union_split(hash, elt, eltype_hint, h)
         end
         return h
     elseif len < 32768
         # separate accumulator streams, unrolled
-        @nexprs 8 i -> p_i = h
+        @nexprs 8 i -> p_i::UInt = h
         n  = 1
         limit = len - 7
         while n <= limit
-            @nexprs 8 i -> p_i = hash(A[n + i - 1], p_i)
+            @nexprs 8 i -> p_i = union_split(hash, A[n + i - 1], eltype_hint, p_i)
             n += 8
         end
         while n <= len
-            p_1 = hash(A[n], p_1)
+            p_1 = union_split(hash, A[n], eltype_hint, p_1)
             n += 1
         end
         # fold all streams back together

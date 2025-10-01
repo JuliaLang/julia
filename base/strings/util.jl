@@ -96,7 +96,7 @@ function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
     reset(io)
     return s == codeunits(prefix)
 end
-Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
+Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
@@ -232,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -240,6 +240,9 @@ See also [`chopsuffix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` prefix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -272,8 +275,16 @@ function chopprefix(s::Union{String, SubString{String}},
     end
 end
 
+function chopprefix(s::AbstractString, prefix::AbstractChar)
+    if !isempty(s) && first(s) == prefix
+        return SubString(s, nextind(s, firstindex(s)))
+    else
+        return SubString(s)
+    end
+end
+
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -281,6 +292,9 @@ See also [`chopprefix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` suffix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -315,6 +329,13 @@ function chopsuffix(s::Union{String, SubString{String}},
     end
 end
 
+function chopsuffix(s::AbstractString, suffix::AbstractChar)
+    if !isempty(s) && last(s) == suffix
+        return SubString(s, firstindex(s), prevind(s, lastindex(s)))
+    else
+        return SubString(s)
+    end
+end
 
 """
     chomp(s::AbstractString)::SubString
@@ -1195,7 +1216,7 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     return dest
 end
 
-@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c))
+@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c)::Char)
 @inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
 @inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
@@ -1278,7 +1299,7 @@ julia> ascii("abcdefgh")
 "abcdefgh"
 ```
 """
-ascii(x::AbstractString) = ascii(String(x))
+ascii(x::AbstractString) = ascii(String(x)::String)
 
 Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
 function Base.rest(s::AbstractString, st...)

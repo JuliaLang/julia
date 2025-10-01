@@ -61,8 +61,7 @@ import Base:
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
-include("Terminals.jl")
-using .Terminals
+using Base.Terminals
 
 abstract type AbstractREPL end
 
@@ -1183,7 +1182,7 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
                        !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") :
                        error("DEPOT_PATH is empty and ENV[\"JULIA_HISTORY\"] not set."))
 
-backend(r::AbstractREPL) = hasproperty(r, :backendref) ? r.backendref : nothing
+backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendref) ? r.backendref : nothing
 
 
 function eval_on_backend(ast, backend::REPLBackendRef)
