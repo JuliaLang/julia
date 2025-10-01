@@ -185,13 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = size(a, Int(d)::Int)
-function size(a::Array, d::Int)
-    d < 1 && error("arraysize: dimension out of range")
-    sz = getfield(a, :size)
-    return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
-end
-
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
@@ -2234,7 +2227,7 @@ end
 # 1d special cases of reverse(A; dims) and reverse!(A; dims):
 for (f,_f) in ((:reverse,:_reverse), (:reverse!,:_reverse!))
     @eval begin
-        $f(A::AbstractVector; dims=:) = $_f(A, dims)
+        $f(A::AbstractVector; dims::D=:) where {D} = $_f(A, dims)
         $_f(A::AbstractVector, ::Colon) = $f(A, firstindex(A), lastindex(A))
         $_f(A::AbstractVector, dim::Tuple{Integer}) = $_f(A, first(dim))
         function $_f(A::AbstractVector, dim::Integer)

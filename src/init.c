@@ -266,7 +266,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
                 jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-                jlbacktrace(); // written to STDERR_FILENO
+                jl_fprint_backtrace(ios_safe_stderr);
             }
             JL_GC_POP();
         }
@@ -315,7 +315,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                     jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
                     jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-                    jlbacktrace(); // written to STDERR_FILENO
+                    jl_fprint_backtrace(ios_safe_stderr);
                     item = next_shutdown_queue_item(item);
                 }
             }
@@ -371,7 +371,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
                 jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-                jlbacktrace(); // written to STDERR_FILENO
+                jl_fprint_backtrace(ios_safe_stderr);
             }
         }
         ct->world_age = last_age;
@@ -380,7 +380,6 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 }
 
 void post_boot_hooks(void);
-void post_image_load_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
@@ -616,9 +615,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
     }
-    else {
-        post_image_load_hooks();
-    }
     jl_start_threads();
     jl_start_gc_threads();
     uv_barrier_wait(&thread_init_done);
@@ -730,7 +726,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // Note that if we ever want to be able to unload Julia entirely, we will
     // have to dlclose() these handles.
     jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1, 0);
-    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1, 0);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_options, /* throw_err */ 1, 0);
 #ifdef _OS_WINDOWS_
     /* If this parameter is NULL, GetModuleHandle returns a handle to the file
        used to create the calling process (.exe file). */
@@ -780,12 +776,12 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
         jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
     }
     // Initialize constant objects
-    jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
+    jl_nothing = jl_gc_permobj(ptls, 0, jl_nothing_type, 0);
     jl_set_typetagof(jl_nothing, jl_nothing_tag, GC_OLD_MARKED);
-    jl_init_box_caches();
-    jl_init_common_symbols();
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    jl_init_box_caches();
+    jl_init_common_symbols();
 #pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
     _finish_jl_init_(sysimage, ptls, ct);

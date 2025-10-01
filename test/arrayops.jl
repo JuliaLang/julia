@@ -1465,6 +1465,18 @@ end
     @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
     @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
     @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
+
+    x = [1, 2, 3]
+    y = OffsetVector(x, -1)
+    @test cmp(x, y) == 1
+    @test cmp(y, x) == -1
+    @test !isless(x, y)
+    @test isless(y, x)
+
+    y2 = OffsetVector([1, 2, 3], 0)
+    @test cmp(x, y2) == 0
+    @test !isless(x, y2)
+    @test !isless(y2, x)
 end
 
 @testset "sort on arrays" begin

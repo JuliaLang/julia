@@ -16,8 +16,6 @@
 extern "C" {
 #endif
 
-jl_method_t *jl_opaque_closure_method;
-
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
     if (jl_is_svec(rt))
@@ -91,17 +89,6 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     }
 
     jl_expr_t *e = (jl_expr_t*)expr;
-    if (e->head == jl_global_sym && binding_effects) {
-        // execute the side-effects of "global x" decl immediately:
-        // creates uninitialized mutable binding in module for each global
-        jl_eval_global_expr(module, e, 1);
-        return jl_nothing;
-    }
-    if (e->head == jl_globaldecl_sym && binding_effects) {
-        assert(jl_expr_nargs(e) == 1);
-        jl_declare_global(module, jl_exprarg(e, 0), NULL, 1);
-        return jl_nothing;
-    }
     // These exprs are not fully linearized
     if (e->head == jl_assign_sym) {
         jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects));
@@ -772,6 +759,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         }
 
         if (cache || needs_cache_for_correctness) {
+            // TODO: this should poison the runtime, so that attempts to call save in staticdata afterwards will abort,
+            // since enabling `needs_cache_for_correctness` is unsound in the presence of cache files
             uninferred = (jl_code_info_t*)jl_copy_ast((jl_value_t*)func);
             ci = jl_new_codeinst_for_uninferred(mi, uninferred);
             jl_code_instance_t *cached_ci = jl_cache_uninferred(mi, cache_ci, world, ci);

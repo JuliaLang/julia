@@ -4,6 +4,7 @@ using Test, Distributed, Random, Logging, Libdl
 using REPL # testing the doc lookup function should be outside of the scope of this file, but is currently tested here
 
 include("precompile_utils.jl")
+include("tempdepot.jl")
 
 Foo_module = :Foo4b3a94a1a081a8cb
 foo_incl_dep = :foo4b3a94a1a081a8cb
@@ -641,7 +642,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile, _ = @test_logs (:debug, r"Precompiling FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
@@ -1002,11 +1003,11 @@ precompile_test_harness("code caching") do dir
 
         useflbi() = $StaleA.flbi()
 
-        # force precompilation
+        # force precompilation, force call so that inlining heuristics don't affect the result
         begin
             Base.Experimental.@force_compile
-            useA2()
-            useflbi()
+            @noinline useA2()
+            @noinline useflbi()
         end
         precompile($StaleA.fib, ())
 
@@ -1325,11 +1326,11 @@ precompile_test_harness("invoke") do dir
         end
 
         m = get_method_for_type(M.h, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = get_method_for_type(M.hnc, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callq))
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqnc))
         @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqi))
@@ -1524,11 +1525,11 @@ end
     test_workers = addprocs(1)
     push!(test_workers, myid())
     save_cwd = pwd()
-    temp_path = mktempdir()
+    temp_path = mkdepottempdir()
     try
         cd(temp_path)
         load_path = mktempdir(temp_path)
-        load_cache_path = mktempdir(temp_path)
+        load_cache_path = mkdepottempdir(temp_path)
 
         ModuleA = :Issue19960A
         ModuleB = :Issue19960B
@@ -1576,11 +1577,6 @@ end
         end
     finally
         cd(save_cwd)
-        try
-            rm(temp_path, recursive=true)
-        catch err
-            @show err
-        end
         pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
@@ -1985,16 +1981,18 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, edges, new_ext_cis, external_methods, new_method_roots, cache_sizes = sv
-    for m in external_methods
+    modules, init_order, internal_methods, new_method_roots, cache_sizes = sv
+    for m in internal_methods::Vector{Any}
+        m isa Core.MethodInstance || continue
         m = m.func::Method
         if m.name !== :f
             @test m.name == :repl_cmd && m.nargs == 1
         end
     end
-    @test new_ext_cis === nothing || any(new_ext_cis) do ci
+    @test any(internal_methods) do ci
+        ci isa Core.CodeInstance || return false
         mi = ci.def::Core.MethodInstance
-        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+        return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end
 
