@@ -2668,33 +2668,37 @@ function __require_prelocked(pkg::PkgId, env)
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
             project = active_project()
-            if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
-                parallel_precompile_attempted = true
-                unlock(require_lock)
-                try
-                    Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
-                finally
-                    lock(require_lock)
-                end
-                @goto load_from_cache
-            end
             # spawn off a new incremental pre-compile task for recursive `require` calls
             loaded = let path = path, reasons = reasons
                 maybe_cachefile_lock(pkg, path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                     m isa Module && return m
-                    triggers = get(EXT_PRIMED, pkg, nothing)
-                    loadable_exts = nothing
-                    if triggers !== nothing # extension
-                        loadable_exts = PkgId[]
-                        for (ext′, triggers′) in EXT_PRIMED
-                            if triggers′ ⊊ triggers
-                                push!(loadable_exts, ext′)
+
+                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
+
+                    unlock(require_lock)
+                    try
+                        if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
+                            parallel_precompile_attempted = true
+                            Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
+                            return
+                        end
+                        triggers = get(EXT_PRIMED, pkg, nothing)
+                        loadable_exts = nothing
+                        if triggers !== nothing # extension
+                            loadable_exts = PkgId[]
+                            for (ext′, triggers′) in EXT_PRIMED
+                                if triggers′ ⊊ triggers
+                                    push!(loadable_exts, ext′)
+                                end
                             end
                         end
+                        return compilecache(pkg, path; loadable_exts)
+                    finally
+                        lock(require_lock)
                     end
-                    return compilecache(pkg, path; reasons, loadable_exts)
                 end
             end
             loaded isa Module && return loaded
@@ -3221,18 +3225,18 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, cacheflags, reasons, loadable_exts)
+    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+                      loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3250,8 +3254,6 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
         concrete_deps = empty(_concrete_dependencies)
     end
     # run the expression and cache the result
-    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-    @logmsg verbosity "Precompiling $(repr("text/plain", pkg)) $(list_reasons(reasons))"
 
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
@@ -3949,7 +3951,7 @@ end
 record_reason(::Nothing, ::String) = nothing
 function list_reasons(reasons::Dict{String,Int})
     isempty(reasons) && return ""
-    return "(cache misses: $(join(("$k ($v)" for (k,v) in reasons), ", ")))"
+    return " (cache misses: $(join(("$k ($v)" for (k,v) in reasons), ", ")))"
 end
 list_reasons(::Nothing) = ""
 
