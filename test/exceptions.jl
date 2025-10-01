@@ -241,6 +241,18 @@ end
         end
     end)()
     @test length(Base.current_exceptions()) == 0
+
+    (()-> begin
+        while true
+            try
+                error("foo")
+            finally
+                break
+            end
+        end
+        @test length(Base.current_exceptions()) == 0
+    end)()
+    @test length(Base.current_exceptions()) == 0
 end
 
 @testset "Deep exception stacks" begin
@@ -276,7 +288,7 @@ end
             exc
         end
         yield(t)
-        @test t.state == :done
+        @test t.state === :done
         @test t.result == ErrorException("B")
         # Task exception state is preserved around task switches
         @test length(current_exceptions()) == 1
@@ -296,7 +308,7 @@ end
                 exc
             end
             yield(t)
-            @test t.state == :done
+            @test t.state === :done
             @test t.result == ErrorException("B")
             @test bt == catch_backtrace()
             rethrow()
@@ -318,7 +330,7 @@ end
                 exc
             end
             yield(t)
-            @test t.state == :done
+            @test t.state === :done
             @test t.result == ErrorException("B")
             bt = catch_backtrace()
             rethrow(ErrorException("C"))
@@ -335,7 +347,7 @@ end
         error("B")
     end
     yield(t)
-    @test t.state == :failed
+    @test t.state === :failed
     @test t.result == ErrorException("B")
     @test current_exceptions(t, backtrace=false) == [
         (exception=ErrorException("A"),backtrace=nothing),

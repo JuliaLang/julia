@@ -13,15 +13,16 @@ return both the unchecked results and a boolean value denoting the presence of a
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
-       checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+       checked_div, checked_rem, checked_fld, checked_mod, checked_cld, checked_pow,
        checked_length, add_with_overflow, sub_with_overflow, mul_with_overflow
 
-import Core.Intrinsics:
+import Core: Intrinsics
+import .Intrinsics:
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import ..no_op_err, ..@inline, ..@noinline, ..checked_length
+import Base: no_op_err, @inline, @noinline, checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -42,12 +43,12 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 
 # LLVM has several code generation bugs for checked integer arithmetic (see e.g.
 # #4905). We thus distinguish between operations that can be implemented via
-# intrinsics, and operations for which we have to provide work-arounds.
+# intrinsics, and operations for which we have to provide workarounds.
 
 # Note: As far as this code has been tested, most checked_* functions are
 # working fine in LLVM. (Note that division is still handled via `base/int.jl`,
 # which always checks for overflow, and which provides its own sets of
-# work-arounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
+# workarounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
 # and in issue #4905 are more pessimistic. For the time being, we thus retain
 # the ability to handle codegen bugs in LLVM, until the code here has been
 # tested on more systems and architectures. It also seems that things depend on
@@ -357,6 +358,19 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
+
+"""
+    Base.checked_pow(x, y)
+
+Calculates `^(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+checked_pow(x::Integer, y::Integer) = checked_power_by_squaring(x, y)
+
+checked_power_by_squaring(x_, p::Integer) = Base.power_by_squaring(x_, p; mul = checked_mul)
+# For Booleans, the default implementation covers all cases.
+checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
 
 """
     Base.checked_length(r)

@@ -2,6 +2,9 @@
 
 using Random: randcycle
 
+isdefined(Main, :ImmutableArrays) || @eval Main include("testhelpers/ImmutableArrays.jl")
+using .Main.ImmutableArrays
+
 @testset "binomial" begin
     @test binomial(5,-1) == 0
     @test binomial(5,10) == 0
@@ -16,6 +19,16 @@ using Random: randcycle
     @test binomial(Int64(67), Int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
     @test binomial(Int128(131), Int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
     @test_throws OverflowError binomial(Int64(67), Int64(30))
+
+    #Issue 48072
+    ∐ = parse(BigInt, "1" * "0"^13 * "666" * "0"^13 * "1")
+    @test binomial(∐, ∐ - 1) == ∐
+    @test binomial(∐, ∐ - 2) == 500000000000066600000000002218280000000000033300000000000000
+    @test binomial(∐, ∐ - 3) == binomial(∐, 3)
+    @test binomial(-big(2), ∐ - 3) == 1000000000000066599999999999999
+    @test_throws OverflowError binomial(big(2)^65, big(2)^64)
+    @test_throws OverflowError binomial(-big(2)^65, big(2)^64)
+    @test binomial(∐, 2 * ∐) == BigInt(0)
 end
 
 @testset "permutations" begin
@@ -34,6 +47,7 @@ end
     @test invperm((1,2)) == (1,2)
     @test invperm((2,1)) == (2,1)
     @test_throws ArgumentError invperm((1,3))
+    @test_throws ArgumentError invperm((1,1))
 
     push!(p, 1)
     @test !isperm(p)
@@ -56,20 +70,19 @@ end
         @test isperm(T) == true
         @test isperm(K) == false
     end
+
+    # issue #47847
+    p = ImmutableArrays.ImmutableArray([2,3,1])
+    @test invperm(p) == invperm([2,3,1])
 end
 
 @testset "factorial" begin
-    @test factorial(7) == 5040
-    @test factorial(Int8(7)) == 5040
-    @test factorial(UInt8(7)) == 5040
-    @test factorial(Int16(7)) == 5040
-    @test factorial(UInt16(7)) == 5040
-    @test factorial(Int32(7)) == 5040
-    @test factorial(UInt32(7)) == 5040
-    @test factorial(Int64(7)) == 5040
-    @test factorial(UInt64(7)) == 5040
-    @test factorial(Int128(7)) == 5040
-    @test factorial(UInt128(7)) == 5040
+    for T = Base.uniontypes(Union{Base.Checked.SignedInt,Base.Checked.UnsignedInt})
+        @testset let T = T
+            @test factorial(T(7)) == 5040
+            @test Core.Compiler.is_foldable(Base.infer_effects(factorial, (T,)))
+        end
+    end
     @test factorial(0) == 1
     @test_throws DomainError factorial(-1)
     @test factorial(Int64(20)) == 2432902008176640000
@@ -110,4 +123,25 @@ end
             @test factorial(oftype(factn, n)) === factn
         end
     end
+end
+
+@testset "permute!" begin
+    #simple array
+    @test permute!([1,2,3,4,5],[3,2,1,5,4]) == [3,2,1,5,4]
+    #empty array
+    @test permute!([],[]) == []
+    #single-element array
+    @test permute!([5],[1]) == [5]
+    #repeated elements in array
+    @test permute!([1,2,2,3,3,3],[2,1,3,5,4,6]) == [2,1,2,3,3,3]
+    #permutation vector contains zero
+    @test_throws BoundsError permute!([1,2,3],[0,1,2])
+    #permutation vector contains negative indices
+    @test_throws BoundsError permute!([1,2,3],[2,-1,1])
+    #permutation vector contains indices larger than array size
+    @test_throws BoundsError permute!([1,2,3],[2,4,1])
+    #permutation vector is empty
+    @test_throws DimensionMismatch permute!([1,2,3],[])
+    #array is empty
+    @test_throws BoundsError permute!([],[2,1])
 end

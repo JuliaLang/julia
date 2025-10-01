@@ -109,7 +109,7 @@ end
         rm("pidfile")
         deleted = true
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(rmtask)
+    Base.errormonitor(rmtask)
     @test isfile("pidfile")
     @test !deleted
 
@@ -146,7 +146,7 @@ end
         rm("pidfile")
         deleted = true
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(rmtask)
+    Base.errormonitor(rmtask)
     @test isfile("pidfile")
     @test !deleted
     # open the pidfile again (should wait for it to disappear first)
@@ -177,17 +177,17 @@ end
             @test Pidfile.tryrmopenfile("pidfile")
             deleted = true
         end
-        isdefined(Base, :errormonitor) && Base.errormonitor(rmtask)
+        Base.errormonitor(rmtask)
 
         t1 = time()
-        @test_throws ErrorException open_exclusive("pidfile", wait=false)
+        @test_throws Pidfile.PidlockedError open_exclusive("pidfile", wait=false)
         @test time()-t1 ≈ 0 atol=1
 
         sleep(1)
         @test !deleted
 
         t1 = time()
-        @test_throws ErrorException open_exclusive("pidfile", wait=false)
+        @test_throws Pidfile.PidlockedError open_exclusive("pidfile", wait=false)
         @test time()-t1 ≈ 0 atol=1
 
         wait(rmtask)
@@ -203,18 +203,33 @@ end
 
 @assert !ispath("pidfile")
 @testset "open_exclusive: break lock" begin
-    # test for stale_age
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-    try
-        write_pidfile(f, getpid())
-    finally
+    @testset "using stale_age without lock refreshing" begin
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10, refresh=0)::File
+        try
+            write_pidfile(f, getpid())
+        finally
+            close(f)
+        end
+        @test t < 2
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=1, refresh=0)::File
         close(f)
+        @test 20 < t < 50
+        rm("pidfile")
     end
-    @test t < 2
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=1)::File
-    close(f)
-    @test 20 < t < 50
-    rm("pidfile")
+
+    @testset "using stale_age with lock refreshing on (default)" begin
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
+        try
+            write_pidfile(f, getpid())
+        finally
+            close(f)
+        end
+        @test t < 2
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=5)::File
+        close(f)
+        @test 20 < t < 50
+        rm("pidfile")
+    end
 
     t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
     close(f)
@@ -243,10 +258,10 @@ end
             return close(lockf)
         end
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(waittask)
+    Base.errormonitor(waittask)
 
     # mkpidlock with no waiting
-    t = @elapsed @test_throws ErrorException mkpidlock("pidfile", wait=false)
+    t = @elapsed @test_throws Pidfile.PidlockedError mkpidlock("pidfile", wait=false)
     @test t ≈ 0 atol=1
 
     t = @elapsed lockf1 = mkpidlock(joinpath(dir, "pidfile"))
@@ -272,8 +287,14 @@ end
 
     # Just for coverage's sake, run a test with do-block syntax
     lock_times = Float64[]
+    synchronizer = Base.Event()
+    synchronizer2 = Base.Event()
     t_loop = @async begin
         for idx in 1:100
+            if idx == 1
+                wait(synchronizer)
+                notify(synchronizer2)
+            end
             t = @elapsed mkpidlock("do_block_pidfile") do
                 # nothing
             end
@@ -281,12 +302,14 @@ end
             push!(lock_times, t)
         end
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(t_loop)
+    Base.errormonitor(t_loop)
     mkpidlock("do_block_pidfile") do
+        notify(synchronizer)
+        wait(synchronizer2)
         sleep(3)
     end
     wait(t_loop)
-    @test maximum(lock_times) > 2
+    @test lock_times[1] >= 3
     @test minimum(lock_times) < 1
 end
 
@@ -346,7 +369,7 @@ end
     @test lockf.update === nothing
 
     sleep(1)
-    t = @elapsed @test_throws ErrorException mkpidlock("pidfile-2", wait=false, stale_age=1, poll_interval=1, refresh=0)
+    t = @elapsed @test_throws Pidfile.PidlockedError mkpidlock("pidfile-2", wait=false, stale_age=1, poll_interval=1, refresh=0)
     @test t ≈ 0 atol=1
 
     sleep(5)

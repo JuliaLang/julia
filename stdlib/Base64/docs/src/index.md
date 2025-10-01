@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Base64/docs/src/index.md"
+```
+
 # Base64
 
 ```@docs

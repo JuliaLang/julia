@@ -4,6 +4,7 @@
 
 StepRange{<:Dates.DatePeriod,<:Real}(start, step, stop) =
     throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
+Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 
 # Given a start and end date, how many steps/periods are in between
 guess(a::DateTime, b::DateTime, c) = floor(Int64, (Int128(value(b)) - Int128(value(a))) / toms(c))
@@ -42,7 +43,7 @@ function Base.steprange_last(start::T, step, stop) where T<:TimeType
         else
             diff = stop - start
             if (diff > zero(diff)) != (stop > start)
-                throw(OverflowError())
+                throw(OverflowError("Difference between stop and start overflowed"))
             end
             remain = stop - (start + step * len(start, stop, step))
             last = stop - remain

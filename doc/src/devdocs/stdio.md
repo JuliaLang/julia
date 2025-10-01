@@ -36,7 +36,7 @@ Julia's `__init__()` function (in `base/sysimg.jl`) calls `reinit_stdio()` (in `
 to create Julia objects for [`Base.stdin`](@ref), [`Base.stdout`](@ref) and [`Base.stderr`](@ref).
 
 `reinit_stdio()` uses [`ccall`](@ref) to retrieve pointers to `JL_STD*` and calls `jl_uv_handle_type()`
-to inspect the type of each stream.  It then creates a Julia `Base.IOStream`, `Base.TTY` or `Base.PipeEndpoint`
+to inspect the type of each stream. It then creates a Julia `Base.IOStream`, `Base.TTY` or `Base.PipeEndpoint`
 object to represent each stream, e.g.:
 
 ```
@@ -63,7 +63,7 @@ stream.jl: function write(s::IO, p::Ptr, nb::Integer)
 ## printf() during initialization
 
 The libuv streams relied upon by `jl_printf()` etc., are not available until midway through
-initialization of the runtime (see `init.c`, `init_stdio()`).  Error messages or warnings that
+initialization of the runtime (see `init.c`, `init_stdio()`). Error messages or warnings that
 need to be printed before this are routed to the standard C library `fwrite()` function by the
 following mechanism:
 

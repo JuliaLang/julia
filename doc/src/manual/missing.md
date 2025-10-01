@@ -88,7 +88,7 @@ true
 ```
 
 The [`isless`](@ref) operator is another exception: `missing` is considered
-as greater than any other value. This operator is used by [`sort`](@ref),
+as greater than any other value. This operator is used by [`sort!`](@ref),
 which therefore places `missing` values after all other values:
 
 ```jldoctest
@@ -325,15 +325,15 @@ julia> sum(skipmissing([1, missing]))
 This convenience function returns an iterator which filters out `missing` values
 efficiently. It can therefore be used with any function which supports iterators:
 
-```jldoctest skipmissing; setup = :(using Statistics)
+```jldoctest skipmissing
 julia> x = skipmissing([3, missing, 2, 1])
 skipmissing(Union{Missing, Int64}[3, missing, 2, 1])
 
 julia> maximum(x)
 3
 
-julia> mean(x)
-2.0
+julia> sum(x)
+6
 
 julia> mapreduce(sqrt, +, x)
 4.146264369941973
