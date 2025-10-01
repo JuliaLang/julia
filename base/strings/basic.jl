@@ -362,10 +362,6 @@ end
 
 isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
-# hashing
-
-hash(s::AbstractString, h::UInt) = hash(String(s)::String, h)
-
 ## character index arithmetic ##
 
 """

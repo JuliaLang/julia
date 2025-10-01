@@ -581,15 +581,19 @@ add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
 
-@nospecs function _svec_len_tfunc(𝕃::AbstractLattice, s)
+@nospecs function _svec_len_tfunc(::AbstractLattice, s)
     if isa(s, Const) && isa(s.val, SimpleVector)
         return Const(length(s.val))
     end
     return Int
 end
 add_tfunc(Core._svec_len, 1, 1, _svec_len_tfunc, 1)
+@nospecs function _svec_len_nothrow(𝕃::AbstractLattice, s)
+    ⊑ = partialorder(𝕃)
+    return s ⊑ SimpleVector
+end
 
-@nospecs function _svec_ref_tfunc(𝕃::AbstractLattice, s, i)
+@nospecs function _svec_ref_tfunc(::AbstractLattice, s, i)
     if isa(s, Const) && isa(i, Const)
         s, i = s.val, i.val
         if isa(s, SimpleVector) && isa(i, Int)
@@ -599,7 +603,7 @@ add_tfunc(Core._svec_len, 1, 1, _svec_len_tfunc, 1)
     return Any
 end
 add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
-@nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
+@nospecs function typevar_tfunc(::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
     ub_certain = lb_certain = true
@@ -2338,7 +2342,7 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return compilerbarrier_nothrow(argtypes[1], nothing)
     elseif f === Core._svec_len
         na == 1 || return false
-        return _svec_len_tfunc(𝕃, argtypes[1]) isa Const
+        return _svec_len_nothrow(𝕃, argtypes[1])
     elseif f === Core._svec_ref
         na == 2 || return false
         return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const

@@ -385,7 +385,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         // might still need to be optimized.
         return;
     }
-    else if (head == jl_const_sym || head == jl_copyast_sym) {
+    else if (head == jl_copyast_sym) {
         // Note: `copyast` is included here since it indicates the presence of
         // `quote` and probably `eval`.
         *has_defs = 1;
@@ -425,7 +425,8 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_ccall = 1;
             }
-            if (called == BUILTIN(_typebody)) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
+            // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
+            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const)) {
                 *has_defs = 1;
             }
         }
@@ -486,7 +487,6 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_thunk_sym ||
          ((jl_expr_t*)e)->head == jl_global_sym ||
          ((jl_expr_t*)e)->head == jl_globaldecl_sym ||
-         ((jl_expr_t*)e)->head == jl_const_sym ||
          ((jl_expr_t*)e)->head == jl_toplevel_sym ||
          ((jl_expr_t*)e)->head == jl_error_sym ||
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
@@ -503,7 +503,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
         head == jl_incomplete_sym || head == jl_method_sym) {
         return 0;
     }
-    if (head == jl_global_sym || head == jl_const_sym) {
+    if (head == jl_global_sym) {
         size_t i, l = jl_array_nrows(ex->args);
         for (i = 0; i < l; i++) {
             jl_value_t *a = jl_exprarg(ex, i);
@@ -585,23 +585,6 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val)
 {
     return jl_declare_constant_val2(b, mod, var, val, val ? PARTITION_KIND_CONST : PARTITION_KIND_UNDEF_CONST);
-}
-
-JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val)
-{
-    jl_module_t *gm;
-    jl_sym_t *gs;
-    if (jl_is_globalref(arg)) {
-        gm = jl_globalref_mod(arg);
-        gs = jl_globalref_name(arg);
-    }
-    else {
-        assert(jl_is_symbol(arg));
-        gm = m;
-        gs = (jl_sym_t*)arg;
-    }
-    jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
-    jl_declare_constant_val(b, gm, gs, val);
 }
 
 static jl_value_t *jl_eval_toplevel_stmts(jl_module_t *JL_NONNULL m, jl_array_t *stmts, int fast, int need_value, const char **toplevel_filename, int *toplevel_lineno)
@@ -722,11 +705,6 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_value_t *arg = jl_exprarg(ex, i);
             jl_declare_global(m, arg, NULL, 0);
         }
-        JL_GC_POP();
-        return jl_nothing;
-    }
-    else if (head == jl_const_sym) {
-        jl_eval_const_decl(m, jl_exprarg(ex, 0), NULL);
         JL_GC_POP();
         return jl_nothing;
     }

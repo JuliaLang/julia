@@ -1479,3 +1479,5 @@ let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do sve
     @test !Compiler.is_nothrow(effects)
     @test Compiler.is_terminates(effects)
 end
+
+@test Compiler.is_nothrow(Base.infer_effects(length, (Core.SimpleVector,)))

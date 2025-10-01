@@ -1518,6 +1518,18 @@ JL_CALLABLE(jl_f_setglobalonce)
     return old == NULL ? jl_true : jl_false;
 }
 
+JL_CALLABLE(jl_f_declare_const)
+{
+    JL_NARGS(declare_const, 2, 3);
+    JL_TYPECHK(declare_const, module, args[0]);
+    if (nargs == 3)
+        JL_TYPECHK(declare_const, symbol, args[1]);
+    jl_binding_t *b = jl_get_module_binding((jl_module_t *)args[0], (jl_sym_t *)args[1], 1);
+    jl_value_t *val = nargs == 3 ? args[2] : NULL;
+    jl_declare_constant_val(b, (jl_module_t *)args[0], (jl_sym_t *)args[1], val);
+    return nargs > 2 ? args[2] : jl_nothing;
+}
+
 // import, using --------------------------------------------------------------
 
 // Import binding `from.sym` as `asname` into `to`:

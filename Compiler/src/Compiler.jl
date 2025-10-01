@@ -41,9 +41,8 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
-    typename, unsafe_write, write
+    typename, unsafe_write, write, stdout, stderr
 
-using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
     PARTITION_FLAG_DEPWARN,
@@ -68,8 +67,10 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
     get_ci_mi, get_methodtable, morespecific, specializations, has_image_globalref,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
-    BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions
+    BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions,
+    devnull, devnull as stdin
 
+using Base
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
