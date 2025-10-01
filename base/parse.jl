@@ -50,23 +50,11 @@ or [`nothing`](@ref) if the string does not contain a valid number.
 tryparse(T::Type, str; base = Int)
 
 function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
-    a::Int = (base <= 36 ? 10 : 36)
-    check_valid_base(base)
-    d = '0' <= c <= '9' ? c-'0'    :
-        'A' <= c <= 'Z' ? c-'A'+10 :
-        'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
-    d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
-    convert(T, d)
+    tryparse_internal(T, c, base, true)
 end
 
 function tryparse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
-    a::Int = (base <= 36 ? 10 : 36)
-    check_valid_base(base)
-    d = '0' <= c <= '9' ? c-'0'    :
-        'A' <= c <= 'Z' ? c-'A'+10 :
-        'a' <= c <= 'z' ? c-'a'+a  : return nothing
-    d < base || return nothing
-    convert(T, d)
+    tryparse_internal(T, c, base, false)
 end
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
@@ -129,6 +117,15 @@ end
         base
 end
 
+function tryparse_internal(::Type{T}, c::AbstractChar; base::Integer, raise::Bool) where T<:Integer
+    a::Int = (base <= 36 ? 10 : 36)
+    check_valid_base(base)
+    d = '0' <= c <= '9' ? c-'0'    :
+        'A' <= c <= 'Z' ? c-'A'+10 :
+        'a' <= c <= 'z' ? c-'a'+a  : raise && throw(ArgumentError("invalid digit: $(repr(c))"))
+    d < base || raise && throw(ArgumentError("invalid base $base digit $(repr(c))"))
+    convert(T, d)
+end
 
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
