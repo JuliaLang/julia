@@ -95,7 +95,7 @@ julia> String(Iterators.map(c -> c+1, "Hello, world"))
 julia> String(Iterators.take("Hello, world", 5))
 "Hello"  # Takes the first 5 characters of the string and converts it to a string.
 """
-String(x) = sprint(io -> foreach(c -> write(io, Char(c)::Char), x))
+String(x::AbstractIterator) = sprint(io -> foreach(c -> write(io, Char(c)::Char), x))
 
 """
     unsafe_takestring(m::Memory{UInt8})::String
