@@ -18,6 +18,9 @@ If the string does not contain a valid number, an error is raised.
 !!! compat "Julia 1.1"
     `parse(Bool, str)` requires at least Julia 1.1.
 
+!!! compat "Julia 1.13"
+    `parse(type, AbstractChar)` requires at least Julia 1.13 for non-integer types.
+
 # Examples
 ```jldoctest
 julia> parse(Int, "1234")
