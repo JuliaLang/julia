@@ -31,18 +31,20 @@ julia> String(base64decode(str))
 "Hello!"
 ```
 """
-struct Base64EncodePipe <: IO
-    io::IO
+struct Base64EncodePipe{T <: IO} <: IO
+    io::T
     buffer::Buffer
 
-    function Base64EncodePipe(io::IO)
+    function Base64EncodePipe{T}(io::T) where {T <: IO}
         # The buffer size must be at least 3.
         buffer = Buffer(512)
-        pipe = new(io, buffer)
+        pipe = new{T}(io, buffer)
         finalizer(_ -> close(pipe), buffer)
         return pipe
     end
 end
+
+Base64EncodePipe(io::IO) = Base64EncodePipe{IO}(io)
 
 Base.isreadable(::Base64EncodePipe) = false
 Base.iswritable(pipe::Base64EncodePipe) = iswritable(pipe.io)
