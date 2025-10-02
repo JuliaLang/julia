@@ -259,7 +259,7 @@ function showerror(io::IO, ex::MethodError)
     is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param::SimpleVector = (unwrap_unionall(arg_types)::DataType).parameters
-    san_arg_types_param = Any[rewrap_unionall(a, arg_types) for a in arg_types_param]
+    san_arg_types_param = Any[rewrap_unionall(arg_types_param[i], arg_types) for i in 1:length(arg_types_param)]
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if isa(meth, MethodList) && length(meth) > 1
@@ -423,10 +423,10 @@ function showerror_ambiguous(io::IO, meths, f, args::Type)
         sigfix = typeintersect(m.sig, sigfix)
     end
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
-        let sigfix=sigfix
-            if all(m->morespecific(sigfix, m.sig), meths)
+        let sigfix=Core.Box(sigfix)
+            if all(m->morespecific(sigfix.contents, m.sig), meths)
                 print(io, "\nPossible fix, define\n  ")
-                show_tuple_as_call(io, :function,  sigfix)
+                show_tuple_as_call(io, :function,  sigfix.contents)
             else
                 print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
                 print(io, "adding a new method more specific than any of the existing applicable methods.")
@@ -511,10 +511,10 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = (unwrapva(unwrap_unionall(sig[i])), "...")
+                    sigstr = Core.svec(unwrapva(unwrap_unionall(sig[i])), "...")
                     j = length(t_i)
                 else
-                    sigstr = (sig[i],)
+                    sigstr = Core.svec(sig[i],)
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
@@ -560,9 +560,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                     sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                     if Base.isvarargtype(sigtype)
-                        sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
+                        sigstr = Core.svec(unwrapva(sigtype::Core.TypeofVararg), "...")
                     else
-                        sigstr = (sigtype,)
+                        sigstr = Core.svec(sigtype,)
                     end
                     if !((min(length(t_i), length(sig)) == 0) && k==1)
                         print(iob, ", ")

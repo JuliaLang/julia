@@ -367,8 +367,11 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     }
 #endif
                     // bail out and show the error if file actually exists
-                    if (jl_stat(path.buf, (char*)&stbuf) == 0)
-                        goto notfound;
+                    if (jl_stat(path.buf, (char *)&stbuf) == 0) {
+                        if (!S_ISDIR(stbuf.st_mode)) {
+                            goto notfound;
+                        }
+                    }
                 }
             }
         }
@@ -390,8 +393,11 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         break; // LoadLibrary already tested the rest
 #else
         // bail out and show the error if file actually exists
-        if (jl_stat(path.buf, (char*)&stbuf) == 0)
-            break;
+        if (jl_stat(path.buf, (char *)&stbuf) == 0) {
+            if (!S_ISDIR(stbuf.st_mode)) {
+                break;
+            }
+        }
 #endif
     }
 

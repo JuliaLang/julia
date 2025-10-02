@@ -315,6 +315,7 @@ the handler for that type.
     This interface is experimental and subject to change or removal without notice.
 """
 function show_error_hints(io, ex, args...)
+    @nospecialize
     hinters = get(_hint_handlers, typeof(ex), nothing)
     isnothing(hinters) && return
     for handler in hinters
