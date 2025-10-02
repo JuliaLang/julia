@@ -3482,9 +3482,13 @@ function refine_partial_type(@nospecialize t)
     return t
 end
 
-abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::IRInterpretationState) = nothing
+abstract_eval_nonlinearized_foreigncall_name(
+        ::AbstractInterpreter, @nospecialize(e), ::StatementState, ::IRInterpretationState
+    ) = nothing
 
-function abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::AbsIntState)
+function abstract_eval_nonlinearized_foreigncall_name(
+        interp::AbstractInterpreter, @nospecialize(e), sstate::StatementState, sv::InferenceState
+    )
     if isexpr(e, :call)
         n = length(e.args)
         argtypes = Vector{Any}(undef, n)
