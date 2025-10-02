@@ -55,7 +55,7 @@ function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     tryparse_internal(T, c, base, true)
 end
 # For consistency with parse(t, AbstractString), support a `base` argument only when T<:Integer
-function parse(::Type{T}, c::AbstractChar)
+function parse(::Type{T}, c::AbstractChar) where T
     tryparse_internal(T, c, 10, true)
 end
 
@@ -63,8 +63,8 @@ function tryparse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integ
     tryparse_internal(T, c, base, false)
 end
 # For consistency with tryparse(t, AbstractString), support a `base` argument only when T<:Integer
-function tryparse(::Type{T}, c::AbstractChar)
-    tryparse_internal(T, c, 10, true)
+function tryparse(::Type{T}, c::AbstractChar) where T
+    tryparse_internal(T, c, 10, false)
 end
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
@@ -127,7 +127,7 @@ end
         base
 end
 
-function tryparse_internal(::Type{T}, c::AbstractChar, base::Integer, raise::Bool)
+function tryparse_internal(::Type{T}, c::AbstractChar, base::Integer, raise::Bool) where T
     a::UInt8 = (base <= 36 ? 10 : 36)
     check_valid_base(base)
     base = base % UInt8
@@ -137,7 +137,7 @@ function tryparse_internal(::Type{T}, c::AbstractChar, base::Integer, raise::Boo
         UInt8('a') ≤ codepoint ≤ UInt8('z') ? codepoint - UInt8('a') + a :
         0xff
     if d > base
-        raise ? throw(ArgumentError("invalid base $base digit $(repr(char))")) : return nothing
+        raise ? throw(ArgumentError("invalid base $base digit $(repr(c))")) : return nothing
     end
     convert(T, d)::T
 end
