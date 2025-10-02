@@ -613,7 +613,7 @@ function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, recommended_size)
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     start_offset = ptr - 1
-    nb = min(length(buffer.data) - start_offset, buffer.maxsize - (start_offset - get_offset(buffer)))
+    nb = max(0, min(length(buffer.data) - start_offset, buffer.maxsize - (start_offset - get_offset(buffer))))
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
