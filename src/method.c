@@ -89,17 +89,6 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     }
 
     jl_expr_t *e = (jl_expr_t*)expr;
-    if (e->head == jl_global_sym && binding_effects) {
-        // execute the side-effects of "global x" decl immediately:
-        // creates uninitialized mutable binding in module for each global
-        jl_eval_global_expr(module, e, 1);
-        return jl_nothing;
-    }
-    if (e->head == jl_globaldecl_sym && binding_effects) {
-        assert(jl_expr_nargs(e) == 1);
-        jl_declare_global(module, jl_exprarg(e, 0), NULL, 1);
-        return jl_nothing;
-    }
     // These exprs are not fully linearized
     if (e->head == jl_assign_sym) {
         jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects));
