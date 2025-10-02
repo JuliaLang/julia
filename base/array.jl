@@ -2502,7 +2502,7 @@ function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::Abst
     return i1 + oftype(i1, p.x - first(r))
 end
 
-function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T<:Number,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
     d = p.x - first(r)
