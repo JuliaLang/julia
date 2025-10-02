@@ -812,7 +812,7 @@ The function `sqrt` exists, but no method is defined for this combination of arg
 [...]
 ```
 
-Use `rethrow()` as above to continue unwinding the stack with the original exception so that
+Use [`rethrow`](@ref) as above to continue unwinding the stack with the original exception so that
 higher-level exception handlers can deal with the exception. When filtering by exception type
 as above, it is often important to include `else rethrow()` so that other types of exceptions
 are not hidden from the caller.
@@ -839,7 +839,7 @@ end
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
-is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref), [`catch_backtrace`](@ref)
+is desirable. Julia provides the [`backtrace`](@ref), [`catch_backtrace`](@ref)
 and [`current_exceptions`](@ref) functions for more advanced error handling.
 
 ### `else` Clauses
