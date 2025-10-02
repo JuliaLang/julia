@@ -26,7 +26,7 @@ end
 ```
 
 In general, Cartesian allows you to write generic code that contains repetitive elements, like
-the nested loops in this example.  Other applications include repeated expressions (e.g., loop
+the nested loops in this example. Other applications include repeated expressions (e.g., loop
 unwinding) or creating function calls with variable numbers of arguments without using the "splat"
 construct (`i...`).
 
@@ -71,7 +71,7 @@ DocTestSetup = nothing
 
 The first argument to both of these macros is the number of expressions, which must be an integer.
 When you're writing a function that you intend to work in multiple dimensions, this may not be
-something you want to hard-code. The recommended approach is to use a `@generated function`.  Here's
+something you want to hard-code. The recommended approach is to use a `@generated function`. Here's
 an example:
 
 ```julia
@@ -91,7 +91,7 @@ Naturally, you can also prepare expressions or perform calculations before the `
 ### Anonymous-function expressions as macro arguments
 
 Perhaps the single most powerful feature in `Cartesian` is the ability to supply anonymous-function
-expressions that get evaluated at parsing time.  Let's consider a simple example:
+expressions that get evaluated at parsing time. Let's consider a simple example:
 
 ```julia
 @nexprs 2 j->(i_j = 1)
@@ -106,8 +106,8 @@ i_2 = 1
 ```
 
 In each generated statement, an "isolated" `j` (the variable of the anonymous function) gets replaced
-by values in the range `1:2`. Generally speaking, Cartesian employs a LaTeX-like syntax.  This
-allows you to do math on the index `j`.  Here's an example computing the strides of an array:
+by values in the range `1:2`. Generally speaking, Cartesian employs a LaTeX-like syntax. This
+allows you to do math on the index `j`. Here's an example computing the strides of an array:
 
 ```julia
 s_1 = 1

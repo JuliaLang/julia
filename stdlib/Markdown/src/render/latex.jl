@@ -33,6 +33,9 @@ function latex(io::IO, header::Header{l}) where l
 end
 
 function latex(io::IO, code::Code)
+    if code.language == "styled"
+        code = Code("", String(styled(code.code)))
+    end
     occursin("\\end{verbatim}", code.code) && error("Cannot include \"\\end{verbatim}\" in a latex code block")
     wrapblock(io, "verbatim") do
         println(io, code.code)

@@ -7,7 +7,7 @@ On Julia 1.10 or higher, you might see the following message:
 This may repeat. If it continues to repeat with no hints that it will
 resolve itself, you may have a "precompilation hang" that requires
 fixing. Even if it's transient, you might prefer to resolve it so that
-users will not be bothered by this warning.  This page walks you
+users will not be bothered by this warning. This page walks you
 through how to analyze and fix such issues.
 
 If you follow the advice and hit `Ctrl-C`, you might see
@@ -51,7 +51,7 @@ Use a binary search to identify the problematic dependency: start by commenting 
 
 Once you've identified a suspect (here we'll call it `ThePackageYouThinkIsCausingTheProblem`), first try precompiling that package. If it also hangs during precompilation, continue chasing the problem backwards.
 
-However, most likely `ThePackageYouThinkIsCausingTheProblem` will precompile fine. This suggests it's in the function `ThePackageYouThinkIsCausingTheProblem.__init__`, which does not run during precompilation of `ThePackageYouThinkIsCausingTheProblem` but *does* in any package that loads `ThePackageYouThinkIsCausingTheProblem`.  To test this theory, set up a minimal working example (MWE), something like
+However, most likely `ThePackageYouThinkIsCausingTheProblem` will precompile fine. This suggests it's in the function `ThePackageYouThinkIsCausingTheProblem.__init__`, which does not run during precompilation of `ThePackageYouThinkIsCausingTheProblem` but *does* in any package that loads `ThePackageYouThinkIsCausingTheProblem`. To test this theory, set up a minimal working example (MWE), something like
 
 ```julia
 (@v1.10) pkg> generate MWE

@@ -4,8 +4,8 @@
 
 baremodule LibUV_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 # NOTE: This file is currently empty, as we link libuv statically for now.
+is_available() = true
 
 end  # module LibUV_jll

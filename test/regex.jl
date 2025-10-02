@@ -101,15 +101,34 @@
         @test haskey(m, 3)
         @test !haskey(m, 44)
         @test (m[1], m[2], m[3]) == ("x", "y", "z")
+        @test Tuple(m) == ("x", "y", "z")
+        @test NamedTuple(m) == (var"1"="x", var"2"="y", var"3"="z")
+        @test Dict(m) == Dict([1=>"x", 2=>"y", 3=>"z"])
         @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
     end
 
     # Named subpatterns
+    let m = match(r"(?<a>.)(?<c>.)(?<b>.)", "xyz")
+        @test haskey(m, :a)
+        @test haskey(m, "b")
+        @test !haskey(m, "foo")
+        @test (m[:a], m[:c], m["b"]) == ("x", "y", "z")
+        @test Tuple(m) == ("x", "y", "z")
+        @test NamedTuple(m) == (a="x", c="y", b="z")
+        @test Dict(m) == Dict(["a"=>"x", "c"=>"y", "b"=>"z"])
+        @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", c=\"y\", b=\"z\")"
+        @test keys(m) == ["a", "c", "b"]
+    end
+
+    # Named and unnamed subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
         @test haskey(m, :a)
         @test haskey(m, "b")
         @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
+        @test Tuple(m) == ("x", "y", "z")
+        @test NamedTuple(m) == (a="x", var"2"="y", b="z")
+        @test Dict(m) == Dict(["a"=>"x", 2=>"y", "b"=>"z"])
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
         @test keys(m) == ["a", 2, "b"]
     end
@@ -194,7 +213,7 @@
 
         r = r"" * raw"a\Eb|c"
         @test match(r, raw"a\Eb|c").match == raw"a\Eb|c"
-        @test match(r, raw"c") == nothing
+        @test match(r, raw"c") === nothing
 
         # error for really incompatible options
         @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS & ~Base.PCRE.UCP, Base.DEFAULT_MATCH_OPTS)
