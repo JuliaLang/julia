@@ -109,7 +109,7 @@ public
 
 # Strings
     escape_raw_string,
-    shread!,
+    shred!,
 
 # IO
     # types
