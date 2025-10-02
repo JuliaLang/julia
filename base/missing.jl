@@ -106,7 +106,7 @@ for f in (:zero, :one, :oneunit)
     @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
 end
-for f in (:float, :complex)
+for f in (:float, :real, :complex)
     @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
 end
