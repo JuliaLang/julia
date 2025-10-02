@@ -108,7 +108,7 @@ for f in (:zero, :one, :oneunit)
 end
 for f in (:float, :complex)
     @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-    @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype_checked(T)), Missing}
+    @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
 end
 
 # Binary operators/functions
