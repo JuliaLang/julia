@@ -3309,6 +3309,12 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     if kind == PARTITION_KIND_BACKDATED_CONST
         print(io, "backdated constant binding to ")
         print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_BACKDATED_IMPORT
+        print(io, "backdated explicit `import` from ")
+        print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_BACKDATED_GLOBAL
+        print(io, "backdated global variable with type ")
+        print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))

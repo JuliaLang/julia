@@ -308,15 +308,20 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                     goto check_type;
                 }
                 check_safe_newbinding(gm, gs);
+                jl_binding_partition_t *new_bpart = NULL;
                 if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
                     bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
                     bpart->restriction = global_type;
                     if (global_type)
                         jl_gc_wb(bpart, global_type);
-                    continue;
+                    new_bpart = bpart;
                 } else {
-                    jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
+                    new_bpart = jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
                 }
+
+                // Backdate globals similar to constants and imports
+                // Only overwrite guard partitions, not implicit imports
+                jl_backdate_binding_partition(b, bpart, new_bpart, global_type, PARTITION_KIND_BACKDATED_GLOBAL, new_world);
                 break;
             } else if (set_type) {
                 if (jl_bkind_is_some_constant(kind)) {

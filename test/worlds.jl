@@ -616,3 +616,89 @@ end
 # Test that the hash function works without world age issues
 @test hash(bar59429, UInt(0)) isa UInt
 end
+
+# Backdating tests
+module BackdateConstTest
+    using Test
+    const world_before = Base.get_world_counter()
+    f() = BACKDATED_CONST  # defined in old world
+    const world_after_f = Base.get_world_counter()
+    const BACKDATED_CONST = 42  # defined in new world
+    @test BACKDATED_CONST == 42
+    if Base.JLOptions().depwarn <= 1
+        # depwarn=no or yes: backdating works, emits warning
+        # Call f from the old world (before BACKDATED_CONST was defined)
+        @test_warn "Detected access to binding `BackdateConstTest.BACKDATED_CONST`" Base.invoke_in_world(world_after_f, f)
+        @test Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :BACKDATED_CONST)
+    else
+        # depwarn=error: backdating disabled
+        @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :BACKDATED_CONST)
+        @test_throws UndefVarError Base.invoke_in_world(world_after_f, f)
+    end
+end
+
+module BackdateImportTest
+    using Test
+    module Source
+        exported_value = 42  # Use a value, not a function
+    end
+    const world_before = Base.get_world_counter()
+    g() = exported_value  # defined in old world
+    const world_after_g = Base.get_world_counter()
+    import .Source: exported_value  # import in new world
+    @test exported_value == 42
+    if Base.JLOptions().depwarn <= 1
+        @test_warn "Detected access to binding `BackdateImportTest.exported_value`" Base.invoke_in_world(world_after_g, g)
+        @test Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :exported_value)
+    else
+        @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :exported_value)
+        @test_throws UndefVarError Base.invoke_in_world(world_after_g, g)
+    end
+end
+
+module BackdateGlobalTest
+    using Test
+    const world_before = Base.get_world_counter()
+    h() = backdated_global  # defined in old world
+    const world_after_h = Base.get_world_counter()
+    global backdated_global::Int = 123  # defined in new world
+    @test backdated_global == 123
+    if Base.JLOptions().depwarn <= 1
+        @test_warn "Detected access to binding `BackdateGlobalTest.backdated_global`" Base.invoke_in_world(world_after_h, h)
+        @test Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :backdated_global)
+    else
+        @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :backdated_global)
+        @test_throws UndefVarError Base.invoke_in_world(world_after_h, h)
+    end
+end
+
+# Test case from issue #58511
+module BackdateIssue58511
+    using Test
+    function foo()
+        eval(:(a = 42))
+        return a
+    end
+    if Base.JLOptions().depwarn <= 1
+        @test_warn "Detected access to binding `BackdateIssue58511.a`" foo()
+    else
+        @test_throws UndefVarError foo()
+    end
+end
+
+# Test that implicit imports are NOT backdated
+module BackdateNoImplicitTest
+    using Test
+    module Source1
+        export shared_name
+        shared_name() = 1
+    end
+    module Source2
+        export shared_name
+        shared_name() = 2
+    end
+    const world_before = Base.get_world_counter()
+    using .Source1, .Source2
+    @test_throws UndefVarError shared_name()
+    @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :shared_name)
+end
