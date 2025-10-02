@@ -340,12 +340,12 @@ mutable struct InferenceState
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
         edges = []
-        stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
+        stmt_info = CallInfo[ NoCallInfo() for _ = 1:nstmts ]
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
-        bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
-        bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
+        bb_saw_latestworld = Bool[false for _ = 1:length(cfg.blocks)]
+        bb_vartables = Union{Nothing,VarTable}[ nothing for _ = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
         argtypes = result.argtypes
 
@@ -360,7 +360,7 @@ mutable struct InferenceState
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
         end
-        src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for _ = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)
 
         unreachable = BitSet()
@@ -549,7 +549,7 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
                         l += 1
                     end
                     cur_hand = cur_stacks[1]
-                    for i = 1:l
+                    for _ = 1:l
                         cur_hand = handler_at[get_enter_idx(handlers[cur_hand])][1]
                     end
                     cur_stacks = (cur_hand, cur_stacks[2])
