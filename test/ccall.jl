@@ -2003,6 +2003,23 @@ end
     end
 end
 
+# issue #51293: Ensure we can load libraries even when a directory with the same name exists
+@testset "dlload with directory collision" begin
+    mktempdir() do dir
+        # Create a subdirectory with the same name as our test library
+        libdir = joinpath(dir, "libccalltest")
+        mkdir(libdir)
+
+        # Try to load libccalltest from within this directory
+        cd(dir) do
+            # This should successfully load the library from DL_LOAD_PATH, not fail due to the directory
+            hdl = Libdl.dlopen(libccalltest)
+            @test hdl != C_NULL
+            Libdl.dlclose(hdl)
+        end
+    end
+end
+
 module Test57749
 using Test, Zstd_jll
 const prefix = "Zstd version: "

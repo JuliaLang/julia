@@ -359,6 +359,9 @@ end
     @test powermod(2, big(3), -5) == -2
     @inferred  powermod(2, -2, -5)
     @inferred  powermod(big(2), -2, UInt(5))
+
+    @test powermod(-3, 0x80, 7) === 2
+    @test powermod(0x03, 0x80, 0x07) === 0x02
 end
 
 @testset "nextpow/prevpow" begin
