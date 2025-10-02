@@ -120,7 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{Union{}}, slurp...) = Union{}(im)
+real(::Type{Union{}}, slurp...) = Union{}
 
 """
     isreal(x)::Bool
@@ -188,6 +188,7 @@ Union{Missing, Complex{Int64}}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
+complex(::Type{Union{}}, slurp...) = Union{}
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
