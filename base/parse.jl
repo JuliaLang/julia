@@ -44,14 +44,15 @@ end
 
 @noinline _invalid_digit(base, char) = throw(ArgumentError("invalid base $base digit $(repr(char))"))
 
-function parse_char(::Type{T}, c::AbstractChar, base::Integer, throw::Bool) where {T <: Integer}
+function parse_char(::Type{T}, c::AbstractChar, base::Integer, throw::Bool) where T
     a::UInt8 = (base <= 36 ? 10 : 36)
-    (2 <= base <= 62) || (throw ? _invalid_base(base) : return nothing)
+    (2 <= base <= 62) || _invalid_base(base)
     base = base % UInt8
-    codepoint = c > 'z' ? 0xff : UInt8(c)
-    d = UInt8('0') ≤ codepoint ≤ UInt8('9') ? codepoint - UInt8('0') :
-        UInt8('A') ≤ codepoint ≤ UInt8('Z') ? codepoint - UInt8('A') + UInt8(10) :
-        UInt8('a') ≤ codepoint ≤ UInt8('z') ? codepoint - UInt8('a') + a :
+    cp = codepoint(c)
+    cp = cp > 0x7a ? 0xff : cp % UInt8
+    d = UInt8('0') ≤ cp ≤ UInt8('9') ? cp - UInt8('0') :
+        UInt8('A') ≤ cp ≤ UInt8('Z') ? cp - UInt8('A') + UInt8(10) :
+        UInt8('a') ≤ cp ≤ UInt8('z') ? cp - UInt8('a') + a :
         0xff
     d < base || (throw ? _invalid_digit(base, c) : return nothing)
     convert(T, d)::T
@@ -64,6 +65,10 @@ end
 function tryparse(::Type{T}, c::AbstractChar; base::Integer=10) where {T <: Integer}
     @inline parse_char(T, c, base, false)
 end
+
+# For consistency with parse(t, AbstractString), support a `base` argument only when T<:Integer
+parse(::Type{T}, c::AbstractChar) where T = @inline parse_char(T, c, 10, true)
+tryparse(::Type{T}, c::AbstractChar) where T = @inline parse_char(T, c, 10, false)
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
@@ -133,8 +138,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         return nothing
     end
     if !(2 <= base <= 62)
-        raise && throw(ArgumentError(LazyString("invalid base: base must be 2 ≤ base ≤ 62, got ", base)))
-        return nothing
+        raise ? _invalid_base(base) : return nothing
     end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
@@ -253,7 +257,7 @@ end
     if 2 <= base <= 62
         return base
     end
-    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    _invalid_base(base)
 end
 
 """
