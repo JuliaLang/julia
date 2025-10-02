@@ -145,8 +145,8 @@ end
 
 function _promote_mixed_signs(a::Signed, b::Unsigned)
     # handle the case a == typemin(typeof(a)) if R != typeof(a)
-    R = promote_type(typeof(a), typeof(b))
-   promote(abs(a % signed(R)), b)
+    R = promote_typeof(a, b)
+    promote(abs(a % signed(R)), b)
 end
 
 gcd(a::Integer) = checked_abs(a)
@@ -265,10 +265,11 @@ function gcdx(a::Real, b::Real, cs::Real...)
     return d′, i*x, j*x, ys...
 end
 
-gcdx(a::Integer, b::Integer) = gcdx(promote(a, b)...)
 function gcdx(a::Signed, b::Unsigned)
-    d, u, v = gcdx(_promote_mixed_signs(a, b)...)
-    d, flipsign(u, a), v
+    R = promote_typeof(a, b)
+    d, u, v = gcdx(promote(abs(a % signed(R)), b)...)
+    flip_typemin = isnegative(a) & (R <: Signed)
+    d, flipsign(u, a - flip_typemin), v
 end
 function gcdx(a::Unsigned, b::Signed)
     d, v, u = gcdx(b, a)
