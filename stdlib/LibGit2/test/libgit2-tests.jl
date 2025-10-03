@@ -1147,6 +1147,20 @@ mktempdir() do dir
                 @test !LibGit2.isdirty(repo, cached=true)
                 @test !LibGit2.isdiff(repo, "HEAD", cached=true)
             end
+
+            LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+                diff_str = "diff --git a/test.txt b/test.txt\nindex 0000000..1111111 100644\n"
+                @test_throws LibGit2.GitError LibGit2.GitDiff(diff_str)
+
+                tree1 = LibGit2.GitTree(repo, "HEAD~1^{tree}")
+                tree2 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                diff = LibGit2.diff_tree(repo, tree1, tree2)
+                idx = LibGit2.apply_to_tree(repo, tree1, diff)
+                @test idx isa LibGit2.GitIndex
+                oid = LibGit2.write_tree_to!(repo, idx)
+                @test oid isa LibGit2.GitHash
+                close(idx)
+            end
         end
     end
 
