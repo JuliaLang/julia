@@ -331,7 +331,7 @@ for (func, fast_func, base) in ((:exp2,  :exp2_fast,  Val(2)),
     end
 end
 
-@doc """
+"""
     exp(x)
 
 Compute the natural base exponential of `x`, in other words ``ℯ^x``.
@@ -346,7 +346,8 @@ julia> exp(1.0)
 julia> exp(im * pi) ≈ cis(pi)
 true
 ```
-""" exp(x::Real)
+"""
+exp(x::Real)
 
 """
     exp2(x)

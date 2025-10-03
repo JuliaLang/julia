@@ -18,7 +18,6 @@ using .Base:
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
     afoldl, mod1, @default_eltype
 using .Core
-using Core: @doc
 
 using Base:
     cld, fld, resize!, IndexCartesian, Checked
@@ -1370,7 +1369,7 @@ true
 """
 flatmap(f, c...) = flatten(map(f, c...))
 
-@doc """
+"""
     partition(collection, n)
 
 Iterate over a collection `n` elements at a time.
@@ -1383,7 +1382,8 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
  [3, 4]
  [5]
 ```
-""" function partition(c, n::Integer)
+"""
+function partition(c, n::Integer)
     n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
     return PartitionIterator(c, Int(n))
 end
@@ -1451,7 +1451,7 @@ function iterate(itr::PartitionIterator, state...)
     return resize!(v, i), y === nothing ? IterationCutShort() : y[2]
 end
 
-@doc """
+"""
     Stateful(itr)
 
 There are several different ways to think about this iterator wrapper:
