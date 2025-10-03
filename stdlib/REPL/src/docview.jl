@@ -256,7 +256,7 @@ doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
-function lookup_doc(ex)
+function lookup_doc(@nospecialize(ex))
     if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
         # handle syntactic operators, e.g. +=, ::, .=
         ex = ex.head
@@ -284,7 +284,13 @@ function lookup_doc(ex)
             end
         end
     end
-    binding = esc(bindingexpr(namify(ex)))
+    name = namify(ex)
+    # If namify couldn't extract a meaningful name and returned an Expr
+    # that can't be converted to a binding, treat it like a value
+    if isa(name, Expr) && !isexpr(name, :(.))
+        return :($(doc)($(typeof)($(esc(ex)))))
+    end
+    binding = esc(bindingexpr(name))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
         :($(doc)($binding, $sig))
@@ -579,7 +585,6 @@ isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isem
 repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief, mod, internal_accesses)
 repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = :(apropos($io, $str))
 repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:(@doc $other)) # TODO: track internal_accesses
-#repl(io::IO, other) = lookup_doc(other) # TODO
 
 repl(x; brief::Bool=true, mod::Module=Main) = repl(stdout, x; brief, mod)
 
