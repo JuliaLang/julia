@@ -1451,7 +1451,7 @@ end
 # Recursive function that fetches backtraces for any and all errors
 # or failures the testset and its children encountered
 function filter_errors(ts::DefaultTestSet)
-    efs = Any[]
+    efs = Union{Fail, Error}[]
     for t in ts.results
         if isa(t, DefaultTestSet)
             append!(efs, filter_errors(t))
