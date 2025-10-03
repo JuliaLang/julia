@@ -519,6 +519,14 @@ end
 # the middle of a pass.
 const CompileHints = Base.ImmutableDict{Symbol,Any}
 
+function CompileHints(d::Dict{Symbol, Any})
+    id = CompileHints()
+    for (k, v) in d
+        id = CompileHints(id, k, v)
+    end
+    id
+end
+
 function setmeta!(ex::SyntaxTree; kws...)
     @assert length(kws) == 1 # todo relax later ?
     key = first(keys(kws))

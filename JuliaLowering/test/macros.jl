@@ -362,4 +362,48 @@ end
     @test test_mod.X1 isa Enum
 end
 
+@testset "macros producing meta forms" begin
+    function find_method_ci(thunk)
+        ci = thunk.args[1]::Core.CodeInfo
+        m = findfirst(x->(x isa Expr && x.head === :method && length(x.args) === 3), ci.code)
+        ci.code[m].args[3]
+    end
+    jlower_e(s) = JuliaLowering.to_lowered_expr(
+        JuliaLowering.lower(
+            test_mod, JuliaLowering.parsestmt(
+                JuliaLowering.SyntaxTree, s);
+            expr_compat_mode=true))
+
+    prog = "Base.@assume_effects :foldable function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).purity === find_method_ci(our).purity
+
+    prog = "Base.@inline function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
+
+    prog = "Base.@noinline function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
+
+    prog = "Base.@constprop :none function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).constprop === find_method_ci(our).constprop
+
+    prog = "Base.@nospecializeinfer function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).nospecializeinfer === find_method_ci(our).nospecializeinfer
+
+    prog = "Base.@propagate_inbounds function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).propagate_inbounds === find_method_ci(our).propagate_inbounds
+
+end
+
 end
