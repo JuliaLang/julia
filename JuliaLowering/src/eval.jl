@@ -331,8 +331,10 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"core"
         name = ex.name_val
         if name == "cglobal"
-            # cglobal isn't a true name within core - instead it's a builtin
-            :cglobal
+            # Inference expects cglobal as call argument to be `GlobalRef`,
+            # so we resolve that name as a symbol of `Core.Intrinsics` here.
+            # https://github.com/JuliaLang/julia/blob/7a8cd6e202f1d1216a6c0c0b928fb43a123cada8/Compiler/src/validation.jl#L87
+            GlobalRef(Core.Intrinsics, :cglobal)
         elseif name == "nothing"
             # Translate Core.nothing into literal `nothing`s (flisp uses a
             # special form (null) for this during desugaring, etc)
