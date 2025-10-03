@@ -843,8 +843,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 if single_requested_pkg && (liveprinting || !isempty(str))
                     @lock print_lock begin
                         if !liveprinting
-                            printpkgstyle(io, :Info, "Given $(pkg.name) was explicitly requested, output will be shown live $ansi_cleartoendofline",
-                                color = Base.info_color())
                             liveprinting = true
                             pkg_liveprinted[] = pkg
                         end
