@@ -80,7 +80,7 @@ end
 strides(x::CodeUnits{<:Any, <:Union{String, SubString{String}}}) = (1,)
 
 _checkcontiguous(::Type{Bool}, A::CodeUnits{UInt8, String}) = true
-_checkcontiguous(::Type{Bool}, A::CodeUnits{UInt8, <:Substring}) = _checkcontiguous(Bool, A.string)
+_checkcontiguous(::Type{Bool}, A::CodeUnits{UInt8, <:SubString}) = _checkcontiguous(Bool, A.string)
 
 function String(s::SubString{String})
     parent = s.string
