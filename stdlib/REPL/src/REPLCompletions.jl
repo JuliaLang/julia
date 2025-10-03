@@ -605,7 +605,7 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
-                                     result.edgecycle, result.edgelimited, result.volatile_inf_result)
+                                     result.edgecycle, result.edgelimited, result.call_result)
     end
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
