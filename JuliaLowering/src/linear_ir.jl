@@ -78,6 +78,7 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     finally_handlers::Vector{FinallyHandler{GraphType}}
     symbolic_jump_targets::Dict{String,JumpTarget{GraphType}}
     symbolic_jump_origins::Vector{JumpOrigin{GraphType}}
+    meta::Dict{Symbol, Any}
     mod::Module
 end
 
@@ -89,7 +90,7 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
                     is_toplevel_thunk, lambda_bindings, rett,
                     Dict{String,JumpTarget{GraphType}}(), SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{GraphType}}(), Dict{String,JumpTarget{GraphType}}(),
-                    Vector{JumpOrigin{GraphType}}(), ctx.mod)
+                    Vector{JumpOrigin{GraphType}}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -807,7 +808,17 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             nothing
         end
     elseif k == K"meta"
-        emit(ctx, ex)
+        @chk numchildren(ex) >= 1
+        if ex[1].name_val in ("inline", "noinline", "propagate_inbounds",
+                              "nospecializeinfer", "aggressive_constprop", "no_constprop")
+            for c in children(ex)
+                ctx.meta[Symbol(c.name_val)] = true
+            end
+        elseif ex[1].name_val === "purity"
+            ctx.meta[Symbol(ex[1].name_val)] = ex[2].value::Base.EffectsOverride
+        else
+            emit(ctx, ex)
+        end
         if needs_value
             val = @ast ctx ex "nothing"::K"core"
             if in_tail_pos
@@ -1099,10 +1110,9 @@ function compile_lambda(outer_ctx, ex)
         @assert info.kind == :static_parameter
         slot_rewrites[id] = i
     end
-    # @info "" @ast ctx ex [K"block" ctx.code...]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     @ast ctx ex [K"code_info"(is_toplevel_thunk=ex.is_toplevel_thunk,
-                              slots=slots)
+                              slots=slots, meta=CompileHints(ctx.meta))
         [K"block"(ex[3])
             code...
         ]
@@ -1131,7 +1141,8 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
                            SyntaxList(graph), SyntaxList(graph),
                            Vector{FinallyHandler{GraphType}}(),
                            Dict{String, JumpTarget{GraphType}}(),
-                           Vector{JumpOrigin{GraphType}}(), ctx.mod)
+                           Vector{JumpOrigin{GraphType}}(),
+                           Dict{Symbol, Any}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     _ctx, res
 end

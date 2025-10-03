@@ -218,7 +218,7 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-function to_code_info(ex::SyntaxTree, slots::Vector{Slot})
+function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     stmts = Any[]
 
     current_codelocs_stack = ir_debug_info_state(ex)
@@ -267,18 +267,22 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot})
     # - call site @assume_effects
     ssaflags = zeros(UInt32, length(stmts))
 
-    # TODO: Set true for @propagate_inbounds
-    propagate_inbounds  = false
+    propagate_inbounds =
+        get(meta, :propagate_inbounds, false)
     # TODO: Set true if there's a foreigncall
-    has_fcall           = false
-    # TODO: Set for @nospecializeinfer
-    nospecializeinfer   = false
-    # TODO: Set based on @inline -> 0x01 or @noinline -> 0x02
-    inlining            = 0x00
-    # TODO: Set based on @constprop :aggressive -> 0x01 or @constprop :none -> 0x02
-    constprop           = 0x00
-    # TODO: Set based on Base.@assume_effects
-    purity              = 0x0000
+    has_fcall = false
+    nospecializeinfer =
+        get(meta, :nospecializeinfer, false)
+    inlining =
+        get(meta, :inline, false) ? 0x01 :
+        get(meta, :noinline, false) ? 0x02 : 0x00
+    constprop =
+        get(meta, :aggressive_constprop, false) ? 0x01 :
+        get(meta, :no_constprop, false) ? 0x02 : 0x00
+    purity =
+        let eo = get(meta, :purity, nothing)
+            isnothing(eo) ? 0x0000 : Base.encode_effects_override(eo)
+        end
 
     # The following CodeInfo fields always get their default values for
     # uninferred code.
@@ -367,7 +371,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         e1 = ex[1]
         getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
     elseif k == K"code_info"
-        ir = to_code_info(ex[1], ex.slots)
+        ir = to_code_info(ex[1], ex.slots, ex.meta)
         if ex.is_toplevel_thunk
             Expr(:thunk, ir) # TODO: Maybe nice to just return a CodeInfo here?
         else
