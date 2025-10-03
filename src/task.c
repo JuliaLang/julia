@@ -37,6 +37,10 @@
 #include "threading.h"
 #include "julia_assert.h"
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -307,12 +311,19 @@ CFI_NORETURN
 #endif
 
 /* Rooted by the base module */
-static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
+static _Atomic(jl_value_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
 void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
+    if (ct->metrics_enabled) {
+        // [task] user_time -finished-> wait_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->finished_at, now);
+        jl_atomic_fetch_add_relaxed(&ct->running_time_ns, now - jl_atomic_load_relaxed(&ct->last_started_running_at));
+    }
     if (jl_atomic_load_relaxed(&ct->_isexception))
         jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
     else
@@ -326,9 +337,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     ct->ptls->in_pure_callback = 0;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
-    jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
+    jl_value_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        done = (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
@@ -341,36 +352,8 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
             jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
-}
-
-JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid)
-{
-    size_t off = 0;
-#ifndef _OS_WINDOWS_
-    jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (ptls0->root_task == task) {
-        // See jl_init_root_task(). The root task of the main thread
-        // has its buffer enlarged by an artificial 3000000 bytes, but
-        // that means that the start of the buffer usually points to
-        // inaccessible memory. We need to correct for this.
-        off = ROOT_TASK_STACK_ADJUSTMENT;
-    }
-#endif
-    jl_ptls_t ptls2 = task->ptls;
-    *ptid = -1;
-    if (ptls2) {
-        *ptid = jl_atomic_load_relaxed(&task->tid);
-#ifdef COPY_STACKS
-        if (task->ctx.copy_stack) {
-            *size = ptls2->stacksize;
-            return (char *)ptls2->stackbase - *size;
-        }
-#endif
-    }
-    *size = task->ctx.bufsz - off;
-    return (void *)((char *)task->ctx.stkbuf + off);
 }
 
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
@@ -749,10 +732,38 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     if (!e)
         e = jl_current_exception(ct);
 
-    jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
-    jl_static_show((JL_STREAM*)STDERR_FILENO, e);
-    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-    jlbacktrace(); // written to STDERR_FILENO
+    // Write error to memory first
+    ios_t s;
+    ios_mem(&s, 1024);
+    jl_safe_fprintf(&s, "fatal: error thrown and no exception handler available.\n");
+    jl_static_show((JL_STREAM*)&s, e);
+    jl_safe_fprintf(&s, "\n");
+    jl_fprint_backtrace(&s);
+
+    // Then to STDERR
+    ios_write_direct(ios_stderr, &s);
+
+    // Finally write to system log (if supported)
+#ifdef _OS_WINDOWS_
+    HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
+    if (event_source != INVALID_HANDLE_VALUE) {
+        ios_putc('\0', &s);
+        const wchar_t *strings[] = { ios_utf8_to_wchar(s.buf) };
+        ReportEventW(
+            event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
+           /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
+        );
+        free((void *)strings[0]);
+
+        if (jl_options.alert_on_critical_error) {
+            MessageBoxW(NULL, /* message */ L"fatal: error thrown and no exception handler available\n\n"
+                                            L"See Application log in Event Viewer for more information.",
+                        /* title */ L"fatal error in libjulia", MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
+        }
+    }
+#endif
+
+    ios_close(&s);
     if (ct == NULL)
         jl_raise(6);
     jl_exit(1);
@@ -1014,7 +1025,7 @@ the xoshiro256 state. There are two problems with that fix, however:
    need four variations of the internal RNG stream for the four xoshiro256
    registers. That means we'd have to apply the PCG finalizer, add it to
    our dot product accumulator field in the child task, then apply the
-   MurmurHash3 finalizer to that dot product and use the result to purturb
+   MurmurHash3 finalizer to that dot product and use the result to perturb
    the main RNG state.
 
 We avoid both problems by recognizing that the mixing function can be much less
@@ -1090,7 +1101,7 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
     }
 }
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
@@ -1143,6 +1154,11 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    t->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    jl_atomic_store_relaxed(&t->first_enqueued_at, 0);
+    jl_atomic_store_relaxed(&t->last_started_running_at, 0);
+    jl_atomic_store_relaxed(&t->running_time_ns, 0);
+    jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
 
     if (t->ctx.copy_stack)
@@ -1241,6 +1257,12 @@ CFI_NORETURN
 #endif
 
     ct->ctx.started = 1;
+    if (ct->metrics_enabled) {
+        // [task] wait_time -started-> user_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        assert(jl_atomic_load_relaxed(&ct->last_started_running_at) == 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, jl_hrtime());
+    }
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1268,7 +1290,7 @@ skip_pop_exception:;
     ct->result = res;
     jl_gc_wb(ct, ct->result);
     jl_finish_task(ct);
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
@@ -1491,6 +1513,14 @@ CFI_NORETURN
                     // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_RISCV64_)
+    asm volatile(
+        " mv sp, %0;\n"
+        " mv ra, zero;\n" // Clear return address register
+        " mv fp, zero;\n" // Clear frame pointer
+        " jr %1;\n" // call `fn` with fake stack frame
+        " ebreak" // abort
+        : : "r"(stk), "r"(fn) : "memory" );
 #elif defined(_CPU_PPC64_)
     // N.B.: There is two iterations of the PPC64 ABI.
     // v2 is current and used here. Make sure you have the
@@ -1536,8 +1566,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     } bootstrap_task = {0};
     jl_set_pgcstack(&bootstrap_task.value.gcstack);
     bootstrap_task.value.ptls = ptls;
-    if (jl_nothing == NULL) // make a placeholder
-        jl_nothing = jl_gc_permobj(0, jl_nothing_type);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));
@@ -1584,6 +1612,19 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
+    jl_atomic_store_relaxed(&ct->running_time_ns, 0);
+    jl_atomic_store_relaxed(&ct->finished_at, 0);
+    ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    if (ct->metrics_enabled) {
+        // [task] created -started-> user_time
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, now);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, now);
+    }
+    else {
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
+    }
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);

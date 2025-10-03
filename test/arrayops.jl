@@ -100,6 +100,18 @@ using Dates
     @test Array{eltype(a)}(a) !== a
     @test Vector(a) !== a
 end
+@testset "effect inference for `reshape` for `Array`" begin
+    for Arr ∈ (Array{<:Any, 0}, Vector, Matrix, Array{<:Any, 3})
+        for Shape ∈ (Tuple{Int}, Tuple{Int, Int})
+            effects = Base.infer_effects(reshape, Tuple{Arr{Float32}, Shape})
+            @test Base.Compiler.is_effect_free(effects)
+            @test Base.Compiler.is_terminates(effects)
+            @test Base.Compiler.is_notaskstate(effects)
+            @test Base.Compiler.is_noub(effects)
+            @test Base.Compiler.is_nortcall(effects)
+        end
+    end
+end
 @testset "reshaping SubArrays" begin
     a = Array(reshape(1:5, 1, 5))
     @testset "linearfast" begin
@@ -308,33 +320,45 @@ end
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
 
+    h1 = HeterogeneousAxisArray(rand(4, 1))
+    h2 = HeterogeneousAxisArray(rand(1, 4))
+    @test size(dropdims(h1, dims=2)) == (4,)
+    @test size(dropdims(h2, dims=1)) == (4,)
 
-    a = rand(8, 7)
-    @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
-    @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
-    @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
-    @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
-
-    @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
-    @test_throws UndefKeywordError insertdims(a)
-    @test_throws ArgumentError insertdims(a, dims=0)
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
-    @test_throws ArgumentError insertdims(a, dims=4)
-    @test_throws ArgumentError insertdims(a, dims=6)
-
-    # insertdims and dropdims are inverses
-    b = rand(1,1,1,5,1,1,7)
-    for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
-        @test dropdims(insertdims(a; dims); dims) == a
-        @test insertdims(dropdims(b; dims); dims) == b
+    @testset "insertdims" begin
+        a = rand(8, 7)
+        @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
+        @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
+        @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
+        @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
+        @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
+        @test_throws UndefKeywordError insertdims(a)
+        @test_throws ArgumentError insertdims(a, dims=0)
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
+        @test_throws ArgumentError insertdims(a, dims=4)
+        @test_throws ArgumentError insertdims(a, dims=6)
+        A = reshape(1:6, 2, 3)
+        @test_throws ArgumentError insertdims(A, dims=(2, 2))
+        D = insertdims(A, dims=())
+        @test size(D) == size(A)
+        @test D == A
+        E = ones(2, 3, 4)
+        F = insertdims(E, dims=(2, 4, 6))
+        @test size(F) == (2, 1, 3, 1, 4, 1)
+        # insertdims and dropdims are inverses
+        b = rand(1,1,1,5,1,1,7)
+        for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
+            @test dropdims(insertdims(a; dims); dims) == a
+            @test insertdims(dropdims(b; dims); dims) == b
+        end
     end
 
     sz = (5,8,7)
@@ -496,6 +520,11 @@ end
         @test vc == [v[1:(i-1)]; 5; v[i:end]]
     end
     @test_throws BoundsError insert!(v, 5, 5)
+
+    # test that data is copied when there is plenty of room to do so
+    v = empty!(collect(1:100))
+    pushfirst!(v, 1)
+    @test length(v.ref.mem) == 100
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -1223,6 +1252,18 @@ end
         @test setdiff((1, 2), (3, 2)) == [1]
         @test symdiff((1, 2), (3, 2)) == [1, 3]
     end
+
+    @testset "setdiff preserves element type of first argument" begin
+        @test setdiff([1, 2, 3], [1.0, 2.0]) isa Vector{Int}
+        @test setdiff([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test setdiff(['a', 'b', 'c'], [98]) isa Vector{Char}
+        @test setdiff([1, 2], [1.0, 2.0]) isa Vector{Int}
+    end
+    @testset "intersect promotes element types of arguments" begin
+        @test intersect([1, 2, 3], [1.0, 2.0]) isa Vector{Float64}
+        @test intersect([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test intersect(['a', 'b', 'c'], Int[]) isa Vector{Any}
+    end
 end
 
 @testset "mapslices" begin
@@ -1404,6 +1445,14 @@ end
 end
 
 @testset "lexicographic comparison" begin
+    @testset "zero-dimensional" begin
+        vals = (0, 0.0, 1, 1.0)
+        for l ∈ vals
+            for r ∈ vals
+                @test cmp(fill(l), fill(r)) == cmp(l, r)
+            end
+        end
+    end
     @test cmp([1.0], [1]) == 0
     @test cmp([1], [1.0]) == 0
     @test cmp([1, 1], [1, 1]) == 0
@@ -1416,6 +1465,18 @@ end
     @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
     @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
     @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
+
+    x = [1, 2, 3]
+    y = OffsetVector(x, -1)
+    @test cmp(x, y) == 1
+    @test cmp(y, x) == -1
+    @test !isless(x, y)
+    @test isless(y, x)
+
+    y2 = OffsetVector([1, 2, 3], 0)
+    @test cmp(x, y2) == 0
+    @test !isless(x, y2)
+    @test !isless(y2, x)
 end
 
 @testset "sort on arrays" begin
@@ -1740,6 +1801,12 @@ end
         @test reverse(A, dims=(1,3)) == reverse!(reverse(A, dims=1), dims=3)
         @test reverse(A, dims=(2,3)) == reverse!(reverse(A, dims=2), dims=3)
     end
+end
+
+@testset "reverse zero dims" begin
+    a = fill(3)
+    @test a == reverse(a)
+    @test a === reverse!(a)
 end
 
 @testset "isdiag, istril, istriu" begin
@@ -2178,7 +2245,7 @@ end
 
 # All we really care about is that we have an optimized
 # implementation, but the seed is a useful way to check that.
-@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed ⊻ Base.HASH_SEED
 @test hash(CartesianIndex(1, 2)) != hash((1, 2))
 
 @testset "itr, iterate" begin
@@ -2365,7 +2432,7 @@ end
     M = [1 2 3; 4 5 6; 7 8 9]
     @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
-    @test_throws DimensionMismatch eachslice(M, dims = 4)
+    @test eachslice(M, dims = 4) == [[1 2 3; 4 5 6; 7 8 9;;;]]
 
     SR = @inferred eachrow(M)
     @test SR[2] isa eltype(SR)
@@ -2430,6 +2497,32 @@ end
         @test_throws BoundsError A[2,3] = [4,5]
         @test_throws BoundsError A[2,3] .= [4,5]
     end
+
+    @testset "trailing dimensions" begin
+        v = collect(1:3)
+
+        S2  = eachslice(v; dims = 2, drop=true)
+        @test S2 isa AbstractSlices{<:AbstractVector, 1}
+        @test size(S2) == (1,)
+        @test S2[1] == v
+
+        S2K = eachslice(v; dims = 2, drop=false)
+        @test S2K isa AbstractSlices{<:AbstractVector, 2}
+        @test size(S2K) == (1,1)
+        @test S2K[1,1] == v
+
+        M = reshape(1:6, 2, 3)
+
+        S13 = eachslice(M; dims = (1,3))
+        @test size(S13) == (2,1)
+        @test S13[2,1] == M[2,:,1]
+
+        S13K = eachslice(M; dims = (1,3), drop=false)
+        @test size(S13K) == (2,1,1)
+        @test S13K[1,1,1] == M[1,:]
+        @test S13K[2,1,1] == M[2,:]
+    end
+
 end
 
 ###
@@ -2595,9 +2688,9 @@ end
 @inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
-mutable struct OOB_Functor{T}; a::T; end
-(f::OOB_Functor)(i::Int) = f.a[i]
-let f = OOB_Functor([1,2])
+mutable struct OOB_Callable{T}; a::T; end
+(f::OOB_Callable)(i::Int) = f.a[i]
+let f = OOB_Callable([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
 
@@ -2651,34 +2744,36 @@ function f15894(d)
     s
 end
 @test f15894(fill(1, 100)) == 100
+@test (@nexprs 2 i -> "_i_: $i") == "_i_: 2"
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C, D, E
-    A = [-10,0,3]
-    B = [-10.0,0.0,3.0]
-    C = [1,im,0]
+    let A, B, C, D, E # Suppress :latestworld to get good inference for the allocations test
+        A = [-10,0,3]
+        B = [-10.0,0.0,3.0]
+        C = [1,im,0]
 
-    @test sign.(A) == [-1,0,1]
-    @test sign.(B) == [-1,0,1]
-    @test typeof(sign.(A)) == Vector{Int}
-    @test typeof(sign.(B)) == Vector{Float64}
+        @test sign.(A) == [-1,0,1]
+        @test sign.(B) == [-1,0,1]
+        @test typeof(sign.(A)) == Vector{Int}
+        @test typeof(sign.(B)) == Vector{Float64}
 
-    @test conj(A) == A
-    @test conj!(copy(A)) == A
-    @test conj(B) == A
-    @test conj(C) == [1,-im,0]
-    @test typeof(conj(A)) == Vector{Int}
-    @test typeof(conj(B)) == Vector{Float64}
-    @test typeof(conj(C)) == Vector{Complex{Int}}
-    D = [C copy(C); copy(C) copy(C)]
-    @test conj(D) == conj!(copy(D))
-    E = [D, copy(D)]
-    @test conj(E) == conj!(copy(E))
-    @test (@allocations conj!(E)) == 0
+        @test conj(A) == A
+        @test conj!(copy(A)) == A
+        @test conj(B) == A
+        @test conj(C) == [1,-im,0]
+        @test typeof(conj(A)) == Vector{Int}
+        @test typeof(conj(B)) == Vector{Float64}
+        @test typeof(conj(C)) == Vector{Complex{Int}}
+        D = [C copy(C); copy(C) copy(C)]
+        @test conj(D) == conj!(copy(D))
+        E = [D, copy(D)]
+        @test conj(E) == conj!(copy(E))
+        @test (@allocations conj!(E)) == 0
 
-    @test .~A == [9,-1,-4]
-    @test typeof(.~A) == Vector{Int}
+        @test .~A == [9,-1,-4]
+        @test typeof(.~A) == Vector{Int}
+    end
 end
 
 # @inbounds is expression-like, returning its value; #15558
@@ -2928,7 +3023,7 @@ end
 
 Base.ArithmeticStyle(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-Float64(x::F21666) = Float64(x.x)
+Base.Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
@@ -3206,6 +3301,28 @@ end
     showerror(b, err)
     @test String(take!(b)) ==
         "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
+end
+
+@testset "return type inference of function that calls `length(::Array)`" begin
+    f(x) = length(x)
+    @test Int === Base.infer_return_type(f, Tuple{Array})
+end
+
+@testset "return type inference of `sizeof(::Array)`" begin
+    @test isconcretetype(Base.infer_return_type(sizeof, Tuple{Array}))
+end
+
+@testset "return type inference of `getindex(::Array, ::Colon)`" begin
+    f = a -> a[:]
+    @test Vector == Base.infer_return_type(f, Tuple{Array})
+    @test Vector{Float32} === Base.infer_return_type(f, Tuple{Array{Float32}})
+end
+
+@testset "return type inference of linear `eachindex` for `Array` and `Memory`" begin
+    f = a -> eachindex(IndexLinear(), a)
+    for typ in (Array, Memory, Union{Array, Memory})
+        @test isconcretetype(Base.infer_return_type(f, Tuple{typ}))
+    end
 end
 
 @testset "inference of Union{T,Nothing} arrays 26771" begin

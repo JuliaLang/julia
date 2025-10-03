@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> String
+    pwd()::String
 
 Get the current working directory.
 
@@ -128,7 +128,7 @@ julia> pwd()
 "/home/JuliaUser"
 
 julia> cd(readdir, "/home/JuliaUser/Projects/julia")
-34-element Array{String,1}:
+34-element Vector{String}:
  ".circleci"
  ".freebsdci.sh"
  ".git"
@@ -164,7 +164,7 @@ required intermediate directories.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest; setup = :(curdir = pwd(); testdir = mktempdir(); cd(testdir)), teardown = :(cd(curdir); rm(testdir, recursive=true)), filter = r"^\\".*testingdir\\"\$"
 julia> mkdir("testingdir")
 "testingdir"
 
@@ -211,17 +211,17 @@ julia> mkpath("my/test/dir") # creates three directories
 "my/test/dir"
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "my"
 
 julia> cd("my")
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "test"
 
 julia> readdir("test")
-1-element Array{String,1}:
+1-element Vector{String}:
  "dir"
 
 julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directories
@@ -253,9 +253,9 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     return path
 end
 
-# Files that were requested to be deleted but can't be by the current process
-# i.e. loaded DLLs on Windows
-delayed_delete_dir() = joinpath(tempdir(), "julia_delayed_deletes")
+# Files that were requested to be deleted but can't be by the current process,
+# i.e. loaded DLLs on Windows, are listed in the directory below
+delayed_delete_ref() = joinpath(tempdir(), "julia_delayed_deletes_ref")
 
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
@@ -288,13 +288,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
                 force && err.code==Base.UV_ENOENT && return
                 @static if Sys.iswindows()
                     if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
-                        # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
-                        # but they can be moved. So move out to allow the dir to be deleted.
-                        # Pkg.gc() cleans up this dir when possible
-                        dir = mkpath(delayed_delete_dir())
-                        temp_path = tempname(dir, cleanup = false, suffix = string("_", basename(path)))
-                        @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
-                        mv(path, temp_path)
+                        delayed_delete_dll(path)
                         return
                     end
                 end
@@ -329,6 +323,22 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
     end
 end
 
+
+# Loaded DLLs cannot be deleted on Windows, even with posix delete mode but they can be renamed.
+# delayed_delete_dll(path) does so temporarily, until later cleanup by Pkg.gc().
+function delayed_delete_dll(path)
+    # in-use DLL must be kept on the same drive
+    temp_path = tempname(abspath(dirname(path)); cleanup=false, suffix=string("_", basename(path)))
+    @debug "Could not delete DLL most likely because it is loaded, moving to a temporary path" path temp_path
+    mkpath(delayed_delete_ref())
+    io = last(mktemp(delayed_delete_ref(); cleanup=false))
+    try
+        print(io, temp_path) # record the temporary path for Pkg.gc()
+    finally
+        close(io)
+    end
+    rename(path, temp_path) # do not call mv which could recursively call rm(path)
+end
 
 # The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
@@ -516,7 +526,7 @@ If the file does not exist a new file is created.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest; setup = :(curdir = pwd(); testdir = mktempdir(); cd(testdir)), teardown = :(cd(curdir); rm(testdir, recursive=true)), filter = r"[\\d\\.]+e[\\+\\-]?\\d+"
 julia> write("my_little_file", 2);
 
 julia> mtime("my_little_file")
@@ -678,8 +688,35 @@ end
 # deprecated internal function used by some packages
 temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(false)
 
+function temp_cleanup_postprocess(cleanup_dirs)
+    if !isempty(cleanup_dirs)
+        rmcmd = """
+        cleanuplist = readlines(stdin) # This loop won't start running until stdin is closed, which is supposed to be sequenced after the process exits
+        sleep(1) # Wait for the operating system to hopefully be ready, since the OS implementation is probably incorrect, given the history of buggy work-arounds like this that have existed for ages in dotNet and libuv
+        for path in cleanuplist
+            try
+                rm(path, force=true, recursive=true)
+            catch ex
+                @warn "Failed to clean up temporary path \$(repr(path))\n\$ex" _group=:file
+            end
+        end
+        """
+        cmd = Cmd(Base.cmd_gen(((Base.julia_cmd(),), ("--startup-file=no",), ("-e",), (rmcmd,))); ignorestatus = true, detach = true)
+        pw = Base.PipeEndpoint()
+        run(cmd, pw, devnull, stderr; wait=false)
+        join(pw, cleanup_dirs, "\n")
+        Base.dup(Base._fd(pw)) # intentionally leak a reference, until the process exits
+        close(pw)
+    end
+end
+
+function temp_cleanup_atexit()
+    temp_cleanup_purge_all()
+    @lock TEMP_CLEANUP_LOCK temp_cleanup_postprocess(keys(TEMP_CLEANUP))
+end
+
 function __postinit__()
-    Base.atexit(temp_cleanup_purge_all)
+    Base.atexit(temp_cleanup_atexit)
 end
 
 const temp_prefix = "jl_"
@@ -758,7 +795,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir(); cleanup=true, suffix="") -> String
+    tempname(parent=tempdir(); cleanup=true, suffix="")::String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
@@ -921,7 +958,7 @@ end
     readdir(dir::AbstractString=pwd();
         join::Bool = false,
         sort::Bool = true,
-    ) -> Vector{String}
+    )::Vector{String}
 
 Return the names in the directory `dir` or the current working directory if not
 given. When `join` is false, `readdir` returns just the names in the directory
@@ -943,7 +980,7 @@ See also: [`walkdir`](@ref).
 julia> cd("/home/JuliaUser/dev/julia")
 
 julia> readdir()
-30-element Array{String,1}:
+30-element Vector{String}:
  ".appveyor.yml"
  ".git"
  ".gitattributes"
@@ -953,7 +990,7 @@ julia> readdir()
  "usr-staging"
 
 julia> readdir(join=true)
-30-element Array{String,1}:
+30-element Vector{String}:
  "/home/JuliaUser/dev/julia/.appveyor.yml"
  "/home/JuliaUser/dev/julia/.git"
  "/home/JuliaUser/dev/julia/.gitattributes"
@@ -963,7 +1000,7 @@ julia> readdir(join=true)
  "/home/JuliaUser/dev/julia/usr-staging"
 
 julia> readdir("base")
-145-element Array{String,1}:
+145-element Vector{String}:
  ".gitignore"
  "Base.jl"
  "Enums.jl"
@@ -973,7 +1010,7 @@ julia> readdir("base")
  "weakkeydict.jl"
 
 julia> readdir("base", join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "base/.gitignore"
  "base/Base.jl"
  "base/Enums.jl"
@@ -983,7 +1020,7 @@ julia> readdir("base", join=true)
  "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "/home/JuliaUser/dev/julia/base/.gitignore"
  "/home/JuliaUser/dev/julia/base/Base.jl"
  "/home/JuliaUser/dev/julia/base/Enums.jl"
@@ -1043,7 +1080,7 @@ isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.pat
 realpath(obj::DirEntry) = realpath(obj.path)
 
 """
-    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    _readdirx(dir::AbstractString=pwd(); sort::Bool = true)::Vector{DirEntry}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
@@ -1100,7 +1137,7 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
 end
 
 """
-    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+    walkdir(dir = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
 
 Return an iterator that walks the directory tree of a directory.
 
@@ -1117,6 +1154,9 @@ resume where the last left off, like [`Iterators.Stateful`](@ref).
 
 See also: [`readdir`](@ref).
 
+!!! compat "Julia 1.12"
+    `pwd()` as the default directory was added in Julia 1.12.
+
 # Examples
 ```julia
 for (path, dirs, files) in walkdir(".")
@@ -1131,7 +1171,7 @@ for (path, dirs, files) in walkdir(".")
 end
 ```
 
-```julia-repl
+```jldoctest; setup = :(prevdir = pwd(); tmpdir = mktempdir(); cd(tmpdir)), teardown = :(cd(prevdir); rm(tmpdir, recursive=true))
 julia> mkpath("my/test/dir");
 
 julia> itr = walkdir("my");
@@ -1146,7 +1186,7 @@ julia> (path, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(path; topdown=true, follow_symlinks=false, onerror=throw)
+function walkdir(path = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
     function _walkdir(chnl, path)
         tryf(f, p) = try
                 f(p)
@@ -1351,7 +1391,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> String
+    readlink(path::AbstractString)::String
 
 Return the target location a symbolic link `path` points to.
 """

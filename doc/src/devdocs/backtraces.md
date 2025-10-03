@@ -128,4 +128,4 @@ Note that this is only works on Linux. The blog post on [Time Travelling Bug Rep
 A few terms have been used as shorthand in this guide:
 
   * `<julia_root>` refers to the root directory of the Julia source tree; e.g. it should contain folders
-    such as `base`, `deps`, `src`, `test`, etc.....
+    such as `base`, `deps`, `src`, `test`, etc.

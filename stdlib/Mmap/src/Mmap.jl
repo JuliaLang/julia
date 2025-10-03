@@ -187,19 +187,19 @@ like HDF5 (which can be used with memory-mapping).
 """
 function mmap(io::IO,
               ::Type{Array{T,N}}=Vector{UInt8},
-              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),Base.aligned_sizeof(T)),),
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
-    len = sizeof(T)
+    len = Base.aligned_sizeof(T)
     for l in dims
         len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
-        overflow && throw(ArgumentError("requested size prod($((sizeof(T), dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
+        overflow && throw(ArgumentError("requested size prod($((len, dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
     end
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
+    len == 0 && return Array{T}(undef, dims)
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -213,9 +213,7 @@ function mmap(io::IO,
     szfile = convert(Csize_t, len + offset)
     requestedSizeLarger = false
     if !(io isa Mmap.Anonymous)
-        @static if !Sys.isapple()
-            requestedSizeLarger = szfile > filesize(io)
-        end
+        requestedSizeLarger = szfile > filesize(io)
     end
     # platform-specific mmapping
     @static if Sys.isunix()
@@ -230,9 +228,6 @@ function mmap(io::IO,
             else
                 throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
             end
-        end
-        @static if Sys.isapple()
-            iswrite && grow && grow!(io, offset, len)
         end
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
@@ -272,7 +267,7 @@ end
 
 mmap(file::AbstractString,
      ::Type{T}=Vector{UInt8},
-     dims::NTuple{N,Integer}=(div(filesize(file),sizeof(eltype(T))),),
+     dims::NTuple{N,Integer}=(div(filesize(file),Base.aligned_sizeof(eltype(T))),),
      offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array,N} =
     open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Array{eltype(T),N}
 

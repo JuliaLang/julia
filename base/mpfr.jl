@@ -18,14 +18,18 @@ import
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
-        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask
+        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
+        ispositive, isnegative
+
+import .Core: AbstractFloat
+import .Base: Rational, Float16, Float32, Float64, Bool
 
 using .Base.Libc
 import ..Rounding: Rounding,
     rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
     tie_breaker_is_to_even, correct_rounding_requires_increment
 
-import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt
 
 import ..FastMath.sincos_fast
 
@@ -142,7 +146,10 @@ struct BigFloat <: AbstractFloat
 
     # Not recommended for general use:
     # used internally by, e.g. deepcopy
-    global _BigFloat(d::Memory{Limb}) = new(d)
+    global function _BigFloat(d::Memory{Limb})
+        Base.unsafe_convert(Ref{BigFloat}, BigFloatData(d)) # force early initialization of pointer field of z.d
+        return new(d)
+    end
 
     function BigFloat(; precision::Integer=_precision_with_base_2(BigFloat))
         precision < 1 && throw(DomainError(precision, "`precision` cannot be less than 1."))
@@ -150,14 +157,17 @@ struct BigFloat <: AbstractFloat
         nl = (nb + offset_p + sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
         d = Memory{Limb}(undef, nl % Int)
         # ccall-based version, inlined below
-        z = _BigFloat(d) # initialize to +NAN
         #ccall((:mpfr_custom_init,libmpfr), Cvoid, (Ptr{Limb}, Clong), BigFloatData(d), prec) # currently seems to be a no-op in mpfr
         #NAN_KIND = Cint(0)
         #ccall((:mpfr_custom_init_set,libmpfr), Cvoid, (Ref{BigFloat}, Cint, Clong, Ptr{Limb}), z, NAN_KIND, prec, BigFloatData(d))
-        z.prec = Clong(precision)
-        z.sign = one(Cint)
-        z.exp = mpfr_special_exponent_nan
-        return z
+        p = Base.unsafe_convert(Ptr{Limb}, d)
+        GC.@preserve d begin # initialize to +NAN
+            unsafe_store!(Ptr{Clong}(p) + offset_prec, Clong(precision))
+            unsafe_store!(Ptr{Cint}(p) + offset_sign, one(Cint))
+            unsafe_store!(Ptr{Clong}(p) + offset_exp, mpfr_special_exponent_nan)
+            unsafe_store!(Ptr{Ptr{Limb}}(p) + offset_d, p + offset_p)
+        end
+        return new(d)
     end
 end
 
@@ -186,16 +196,16 @@ end
     end
 end
 
+# While BigFloat (like all Numbers) is considered immutable, for practical reasons
+# of writing the algorithms on it we allow mutating sign, exp, and the contents of d
 @inline function Base.setproperty!(x::BigFloat, s::Symbol, v)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
-    if s === :prec
-        return GC.@preserve d unsafe_store!(Ptr{Clong}(p) + offset_prec, v)
-    elseif s === :sign
+    if s === :sign
         return GC.@preserve d unsafe_store!(Ptr{Cint}(p) + offset_sign, v)
     elseif s === :exp
         return GC.@preserve d unsafe_store!(Ptr{Clong}(p) + offset_exp, v)
-    #elseif s === :d # not mutable
+    #elseif s === :d || s === :prec # not mutable
     else
         return throw(FieldError(x, s))
     end
@@ -205,10 +215,16 @@ end
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = error("not compatible with mpfr")
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = error("not compatible with mpfr")
 Base.cconvert(::Type{Ref{BigFloat}}, x::BigFloat) = x.d # BigFloatData is the Ref type for BigFloat
+Base.cconvert(::Type{Ref{BigFloat}}, x::Number) = convert(BigFloat, x).d # avoid default conversion to Ref(BigFloat(x))
+Base.cconvert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = x[].d
 function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
-    GC.@preserve d unsafe_store!(Ptr{Ptr{Limb}}(p) + offset_d, p + offset_p, :monotonic) # :monotonic ensure that TSAN knows that this isn't a data race
+    dptrptr = Ptr{Ptr{Limb}}(p) + offset_d
+    dptr = p + offset_p
+    GC.@preserve d if unsafe_load(dptrptr, :monotonic) != dptr # make sure this pointer value was recomputed after any deserialization or copying
+        unsafe_store!(dptrptr, dptr, :monotonic) # :monotonic ensure that TSAN knows that this isn't a data race
+    end
     return Ptr{BigFloat}(p)
 end
 Base.unsafe_convert(::Type{Ptr{Limb}}, fd::BigFloatData) = Base.unsafe_convert(Ptr{Limb}, getfield(fd, :d)) + offset_p
@@ -228,7 +244,7 @@ Base.copyto!(fd::BigFloatData, limbs) = copyto!(getfield(fd, :d), offset_p_limbs
 
 include("rawbigfloats.jl")
 
-rounding_raw(::Type{BigFloat}) = something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
+rounding_raw(::Type{BigFloat}) = @something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 function setrounding_raw(f::Function, ::Type{BigFloat}, r::MPFRRoundingMode)
     Base.ScopedValues.@with(CURRENT_ROUNDING_MODE => r, f())
@@ -376,11 +392,17 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); 
     BigFloat(Float64(x), r; precision=precision)
 
 function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
+    r_den = _opposite_round(r)
     setprecision(BigFloat, precision) do
         setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
+            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x), r_den)::BigFloat
         end
     end
+end
+function _opposite_round(r::MPFRRoundingMode)
+    r == MPFRRoundUp && return MPFRRoundDown
+    r == MPFRRoundDown && return MPFRRoundUp
+    return r
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
@@ -968,9 +990,7 @@ end
 # Utility functions
 ==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 <=(x::BigFloat, y::BigFloat) = ccall((:mpfr_lessequal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
->=(x::BigFloat, y::BigFloat) = ccall((:mpfr_greaterequal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
->(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 
 function cmp(x::BigFloat, y::BigInt)
     isnan(x) && return 1
@@ -1029,7 +1049,7 @@ _convert_precision_from_base(precision::Integer, base::Integer) =
     base == 2 ? precision : ceil(Int, precision * log2(base))
 
 _precision_with_base_2(::Type{BigFloat}) =
-    Int(something(Base.ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
+    Int(@something(Base.ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int; base=2)
@@ -1120,6 +1140,10 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 iszero(x::BigFloat) = x.exp == mpfr_special_exponent_zero
 isone(x::BigFloat) = x == Clong(1)
 
+# In theory, `!iszero(x) && !isnan(x)` should be the same as `x.exp > mpfr_special_exponent_nan`, but this is safer.
+ispositive(x::BigFloat) = !signbit(x) && !iszero(x) && !isnan(x)
+isnegative(x::BigFloat) = signbit(x) && !iszero(x) && !isnan(x)
+
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
@@ -1163,9 +1187,29 @@ Often used as `setprecision(T, precision) do ... end`
 Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
 `setprecision`.
 
+!!! warning
+    There is a fallback implementation of this method that calls `precision`
+    and `setprecision`, but it should no longer be relied on. Instead, you
+    should define the 3-argument form directly in a way that uses `ScopedValue`,
+    or recommend that callers use `ScopedValue` and `@with` themselves.
+
 !!! compat "Julia 1.8"
     The `base` keyword requires at least Julia 1.8.
 """
+function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
+    depwarn("""
+            The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
+            implement their own specialization using `ScopedValue` instead.
+            """, :setprecision)
+    old_prec = precision(T)
+    setprecision(T, prec; kws...)
+    try
+        return f()
+    finally
+        setprecision(T, old_prec)
+    end
+end
+
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
     Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
@@ -1214,7 +1258,7 @@ function _prettify_bigfloat(s::String)::String
             string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else
-        string(mantissa, 'e', exponent)
+        string(mantissa, 'e', expo)
     end
 end
 

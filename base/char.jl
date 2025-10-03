@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: AbstractChar, Char
+
 """
 The `AbstractChar` type is the supertype of all character implementations
 in Julia. A character represents a Unicode code point, and can be converted
@@ -45,14 +47,14 @@ represents a valid Unicode character.
 """
 Char
 
-@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
+@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x)::UInt32)
 @constprop :aggressive AbstractChar(x::Number) = Char(x)
 @constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 @constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
 """
-    ncodeunits(c::Char) -> Int
+    ncodeunits(c::Char)::Int
 
 Return the number of code units required to encode a character as UTF-8.
 This is the number of bytes which will be printed if the character is written
@@ -72,7 +74,7 @@ function ncodeunits(c::Char)
 end
 
 """
-    codepoint(c::AbstractChar) -> Integer
+    codepoint(c::AbstractChar)::Integer
 
 Return the Unicode codepoint (an unsigned integer) corresponding
 to the character `c` (or throw an exception if `c` does not represent
@@ -112,7 +114,7 @@ end
 #           not to support malformed or overlong encodings.
 
 """
-    ismalformed(c::AbstractChar) -> Bool
+    ismalformed(c::AbstractChar)::Bool
 
 Return `true` if `c` represents malformed (non-Unicode) data according to the
 encoding used by `c`. Defaults to `false` for non-`Char` types.
@@ -122,7 +124,7 @@ See also [`show_invalid`](@ref).
 ismalformed(c::AbstractChar) = false
 
 """
-    isoverlong(c::AbstractChar) -> Bool
+    isoverlong(c::AbstractChar)::Bool
 
 Return `true` if `c` represents an overlong UTF-8 sequence. Defaults
 to `false` for non-`Char` types.
@@ -147,7 +149,7 @@ isoverlong(c::AbstractChar) = false
 end
 
 """
-    decode_overlong(c::AbstractChar) -> Integer
+    decode_overlong(c::AbstractChar)::Integer
 
 When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns
 the Unicode codepoint value of `c`. `AbstractChar` implementations
@@ -203,7 +205,7 @@ size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
-IteratorSize(::Type{Char}) = HasShape{0}()
+IteratorSize(::Type{<:AbstractChar}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c
@@ -220,15 +222,12 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
-
-first_utf8_byte(c::Char) = (bitcast(UInt32, c) >> 24) % UInt8
-first_utf8_byte(c::AbstractChar) = first_utf8_byte(Char(c)::Char)
+    hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
-isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
-==(x::AbstractChar, y::AbstractChar) = Char(x) == Char(y)
-hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
+isless(x::AbstractChar, y::AbstractChar) = isless(Char(x)::Char, Char(y)::Char)
+==(x::AbstractChar, y::AbstractChar) = Char(x)::Char == Char(y)::Char
+hash(x::AbstractChar, h::UInt) = hash(Char(x)::Char, h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
 @inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
@@ -258,7 +257,7 @@ end
 # (Packages may implement other IO subtypes to specify different encodings.)
 # In contrast, `write(io, c)` outputs a `c` in an encoding determined by typeof(c).
 print(io::IO, c::Char) = (write(io, c); nothing)
-print(io::IO, c::AbstractChar) = print(io, Char(c)) # fallback: convert to output UTF-8
+print(io::IO, c::AbstractChar) = print(io, Char(c)::Char) # fallback: convert to output UTF-8
 
 const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',

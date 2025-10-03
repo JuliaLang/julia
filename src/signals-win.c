@@ -96,9 +96,33 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
+
+        ios_t s;
+        ios_mem(&s, 0);
         if (sig == SIGILL)
-            jl_show_sigill(&Context);
-        jl_critical_error(sig, 0, &Context, jl_get_current_task());
+            jl_fprint_sigill(&s, &Context);
+        jl_fprint_critical_error(&s, sig, 0, &Context, jl_get_current_task());
+
+        // First write to stderr
+        ios_write_direct(ios_safe_stderr, &s);
+
+        // Then write to Application log
+        HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
+        if (event_source != INVALID_HANDLE_VALUE) {
+            ios_putc('\0', &s);
+            const wchar_t *strings[] = { ios_utf8_to_wchar(s.buf) };
+            ReportEventW(
+                event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
+               /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
+            );
+            free((void *)strings[0]);
+
+            if (jl_options.alert_on_critical_error) {
+                MessageBoxW(NULL, /* message */ L"error: libjulia received a fatal signal.\n\n"
+                                                L"See Application log in Event Viewer for more information.",
+                            /* title */ L"fatal error in libjulia", MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
+            }
+        }
         raise(sig);
     }
 }
@@ -256,7 +280,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             break;
         case EXCEPTION_ACCESS_VIOLATION:
             if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-                jl_set_gc_and_wait();
+                jl_set_gc_and_wait(ct);
                 // Do not raise sigint on worker thread
                 if (ptls->tid != 0)
                     return EXCEPTION_CONTINUE_EXECUTION;
@@ -283,59 +307,91 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             break;
         }
     }
+    ios_t full_error, summary;
+    ios_mem(&full_error, 0);
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
-        jl_safe_printf("\n");
-        jl_show_sigill(ExceptionInfo->ContextRecord);
+        jl_safe_fprintf(&full_error, "\n");
+        jl_fprint_sigill(&full_error, ExceptionInfo->ContextRecord);
     }
-    jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
+    jl_safe_fprintf(&full_error, "\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\n");
+    ios_mem(&summary, 128);
+    jl_safe_fprintf(&summary, "Exception: ");
     switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
     case EXCEPTION_ACCESS_VIOLATION:
-        jl_safe_printf("EXCEPTION_ACCESS_VIOLATION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_ACCESS_VIOLATION"); break;
     case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-        jl_safe_printf("EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
     case EXCEPTION_BREAKPOINT:
-        jl_safe_printf("EXCEPTION_BREAKPOINT"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_BREAKPOINT"); break;
     case EXCEPTION_DATATYPE_MISALIGNMENT:
-        jl_safe_printf("EXCEPTION_DATATYPE_MISALIGNMENT"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_DATATYPE_MISALIGNMENT"); break;
     case EXCEPTION_FLT_DENORMAL_OPERAND:
-        jl_safe_printf("EXCEPTION_FLT_DENORMAL_OPERAND"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_DENORMAL_OPERAND"); break;
     case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-        jl_safe_printf("EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
     case EXCEPTION_FLT_INEXACT_RESULT:
-        jl_safe_printf("EXCEPTION_FLT_INEXACT_RESULT"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_INEXACT_RESULT"); break;
     case EXCEPTION_FLT_INVALID_OPERATION:
-        jl_safe_printf("EXCEPTION_FLT_INVALID_OPERATION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_INVALID_OPERATION"); break;
     case EXCEPTION_FLT_OVERFLOW:
-        jl_safe_printf("EXCEPTION_FLT_OVERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_OVERFLOW"); break;
     case EXCEPTION_FLT_STACK_CHECK:
-        jl_safe_printf("EXCEPTION_FLT_STACK_CHECK"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_STACK_CHECK"); break;
     case EXCEPTION_FLT_UNDERFLOW:
-        jl_safe_printf("EXCEPTION_FLT_UNDERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_FLT_UNDERFLOW"); break;
     case EXCEPTION_ILLEGAL_INSTRUCTION:
-        jl_safe_printf("EXCEPTION_ILLEGAL_INSTRUCTION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_ILLEGAL_INSTRUCTION"); break;
     case EXCEPTION_IN_PAGE_ERROR:
-        jl_safe_printf("EXCEPTION_IN_PAGE_ERROR"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_IN_PAGE_ERROR"); break;
     case EXCEPTION_INT_DIVIDE_BY_ZERO:
-        jl_safe_printf("EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
     case EXCEPTION_INT_OVERFLOW:
-        jl_safe_printf("EXCEPTION_INT_OVERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_INT_OVERFLOW"); break;
     case EXCEPTION_INVALID_DISPOSITION:
-        jl_safe_printf("EXCEPTION_INVALID_DISPOSITION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_INVALID_DISPOSITION"); break;
     case EXCEPTION_NONCONTINUABLE_EXCEPTION:
-        jl_safe_printf("EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
     case EXCEPTION_PRIV_INSTRUCTION:
-        jl_safe_printf("EXCEPTION_PRIV_INSTRUCTION"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_PRIV_INSTRUCTION"); break;
     case EXCEPTION_SINGLE_STEP:
-        jl_safe_printf("EXCEPTION_SINGLE_STEP"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_SINGLE_STEP"); break;
     case EXCEPTION_STACK_OVERFLOW:
-        jl_safe_printf("EXCEPTION_STACK_OVERFLOW"); break;
+        jl_safe_fprintf(&summary, "EXCEPTION_STACK_OVERFLOW"); break;
     default:
-        jl_safe_printf("UNKNOWN"); break;
+        jl_safe_fprintf(&summary, "UNKNOWN"); break;
     }
-    jl_safe_printf(" at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-    jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_safe_fprintf(&summary, " at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_fprint_native_codeloc(&summary, (uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    ios_write(&full_error, summary.buf, ios_pos(&summary));
+    ios_puts("\nSee Application log in Event Viewer for more information.\n", &summary);
 
-    jl_critical_error(0, 0, ExceptionInfo->ContextRecord, ct);
+    jl_fprint_critical_error(&full_error, 0, 0, ExceptionInfo->ContextRecord, ct);
+
+    // First print to STDERR
+    ios_write_direct(ios_safe_stderr, &full_error);
+
+    // Secondly print to Application log
+    HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
+    if (event_source != INVALID_HANDLE_VALUE) {
+        ios_putc('\0', &full_error);
+        const wchar_t *strings[] = { ios_utf8_to_wchar(full_error.buf) };
+        ReportEventW(
+            event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
+           /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
+        );
+        free((void *)strings[0]);
+
+        if (jl_options.alert_on_critical_error) {
+            ios_putc('\0', &summary);
+            const wchar_t *message = ios_utf8_to_wchar(summary.buf);
+            MessageBoxW(NULL, message, /* title */ L"fatal error in libjulia",
+                        MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
+            free((void *)message);
+        }
+    }
+
+    ios_close(&summary);
+    ios_close(&full_error);
     static int recursion = 0;
     if (recursion++)
         exit(1);
@@ -383,18 +439,23 @@ void jl_thread_resume(int tid)
     }
 }
 
-int jl_lock_stackwalk(void)
+void jl_lock_stackwalk(void)
 {
     uv_mutex_lock(&jl_in_stackwalk);
     jl_lock_profile();
-    return 0;
 }
 
-void jl_unlock_stackwalk(int lockret)
+void jl_unlock_stackwalk(void)
 {
-    (void)lockret;
     jl_unlock_profile();
     uv_mutex_unlock(&jl_in_stackwalk);
+}
+
+void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
+{
+    jl_lock_stackwalk();
+    f(ctx);
+    jl_unlock_stackwalk();
 }
 
 
@@ -404,44 +465,49 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
-        if (running) {
+        if (profile_running) {
             if (jl_profile_is_buffer_full()) {
                 jl_profile_stop_timer(); // does not change the thread state
                 SuspendThread(GetCurrentThread());
                 continue;
             }
+            else if (profile_all_tasks) {
+                // Don't take the stackwalk lock here since it's already taken in `jl_rec_backtrace`
+                jl_profile_task();
+            }
             else {
                 // TODO: bring this up to parity with other OS by adding loop over tid here
-                int lockret = jl_lock_stackwalk();
+                jl_lock_stackwalk();
                 CONTEXT ctxThread;
                 if (!jl_thread_suspend_and_get_state(0, 0, &ctxThread)) {
-                    jl_unlock_stackwalk(lockret);
+                    jl_unlock_stackwalk();
                     fputs("failed to suspend main thread. aborting profiling.", stderr);
                     jl_profile_stop_timer();
                     break;
                 }
                 // Get backtrace data
-                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                        bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
+                profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                        profile_bt_size_max - profile_bt_size_cur - 1, &ctxThread, NULL);
 
                 jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
 
                 // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = ptls->tid + 1;
 
                 // META_OFFSET_TASKID store task id (never null)
-                bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
                 // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
-                bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
 
-                // META_OFFSET_SLEEPSTATE store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
+                // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+                int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
 
                 // Mark the end of this block with two 0's
-                bt_data_prof[bt_size_cur++].uintptr = 0;
-                bt_data_prof[bt_size_cur++].uintptr = 0;
-                jl_unlock_stackwalk(lockret);
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+                jl_unlock_stackwalk();
                 jl_thread_resume(0);
                 jl_check_profile_autostop();
             }
@@ -455,7 +521,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 
 static volatile TIMECAPS timecaps;
 
-JL_DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
     if (hBtThread == NULL) {
 
@@ -483,20 +549,24 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
             return -2;
         }
     }
-    if (running == 0) {
+    if (profile_running == 0) {
         // Failure to change the timer resolution is not fatal. However, it is important to
         // ensure that the timeBeginPeriod/timeEndPeriod is paired.
         if (TIMERR_NOERROR != timeBeginPeriod(timecaps.wPeriodMin))
             timecaps.wPeriodMin = 0;
     }
-    running = 1; // set `running` finally
+    profile_all_tasks = all_tasks;
+    profile_running = 1; // set `profile_running` finally
     return 0;
 }
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    if (running && timecaps.wPeriodMin)
+    uv_mutex_lock(&bt_data_prof_lock);
+    if (profile_running && timecaps.wPeriodMin)
         timeEndPeriod(timecaps.wPeriodMin);
-    running = 0;
+    profile_running = 0;
+    profile_all_tasks = 0;
+    uv_mutex_unlock(&bt_data_prof_lock);
 }
 
 void jl_install_default_signal_handlers(void)

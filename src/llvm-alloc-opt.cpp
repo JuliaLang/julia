@@ -224,8 +224,11 @@ void Optimizer::optimizeAll()
         checkInst(orig);
         if (use_info.escaped) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+                    << "GC allocation escaped " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -233,8 +236,11 @@ void Optimizer::optimizeAll()
         }
         if (use_info.haserror || use_info.returned) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
+                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -243,8 +249,11 @@ void Optimizer::optimizeAll()
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
-                    << "GC allocation removed " << ore::NV("GC Allocation", orig);
+                    << "GC allocation removed " << ore::NV("GC Allocation", StringRef(str));
             });
             // No one took the address, no one reads anything and there's no meaningful
             // preserve of fields (either no preserve/ccall or no object reference fields)
@@ -270,8 +279,11 @@ void Optimizer::optimizeAll()
         }
         if (has_refaggr) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -279,8 +291,11 @@ void Optimizer::optimizeAll()
         }
         if (!use_info.hasunknownmem && !use_info.addrescaped) {
             REMARK([&](){
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
-                    << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation split on stack " << ore::NV("GC Allocation", StringRef(str));
             });
             // No one actually care about the memory layout of this object, split it.
             splitOnStack(orig);
@@ -292,16 +307,22 @@ void Optimizer::optimizeAll()
         // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
         if (has_unboxed && has_ref) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation could not be split since it contains both boxed and unboxed values, unable to move to stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation could not be split since it contains both boxed and unboxed values, unable to move to stack " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
         REMARK([&](){
+            std::string str;
+            llvm::raw_string_ostream rso(str);
+            orig->print(rso);
             return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
-                << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
+                << "GC allocation moved to stack " << ore::NV("GC Allocation", StringRef(str));
         });
         // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref, use_info.allockind);
@@ -380,7 +401,10 @@ void Optimizer::checkInst(CallInst *I)
         std::string suse_info;
         llvm::raw_string_ostream osuse_info(suse_info);
         use_info.dump(osuse_info);
-        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", I) << "\n" << ore::NV("UseInfo", osuse_info.str());
+        std::string str;
+        llvm::raw_string_ostream rso(str);
+        I->print(rso);
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", StringRef(str)) << "\n" << ore::NV("UseInfo", osuse_info.str());
     });
 }
 
@@ -403,12 +427,20 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
+#if JL_LLVM_VERSION >= 200000
+    CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
+#else
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
+#endif
 }
 
 void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 {
+#if JL_LLVM_VERSION >= 200000
+    CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
+#else
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
+#endif
     BasicBlock *def_bb = orig->getParent();
     std::set<BasicBlock*> bbs{def_bb};
     auto &DT = getDomTree();
@@ -603,10 +635,18 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         assert(matchvararg);
         (void)matchvararg;
     }
+#if JL_LLVM_VERSION >= 200000
+    auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
+#else
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+#endif
     assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
+#if JL_LLVM_VERSION >= 200000
+    auto newCall = CallInst::Create(newF, args, "", call->getIterator());
+#else
     auto newCall = CallInst::Create(newF, args, "", call);
+#endif
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
     newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
@@ -622,14 +662,9 @@ void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, 
         return;
     assert(!buff->isArrayAllocation());
     Type *T = buff->getAllocatedType();
-    Value *Init = UndefValue::get(T);
-    if ((allockind & AllocFnKind::Zeroed) != AllocFnKind::Unknown)
-        Init = Constant::getNullValue(T); // zero, as described
-    else if (allockind == AllocFnKind::Unknown)
-        Init = Constant::getNullValue(T); // assume zeroed since we didn't find the attribute
-    else
-        Init = prolog_builder.CreateFreeze(UndefValue::get(T)); // assume freeze, since LLVM does not natively support this case
-    prolog_builder.CreateStore(Init, buff);
+    const DataLayout &DL = F.getParent()->getDataLayout();
+    prolog_builder.CreateMemSet(buff, ConstantInt::get(Type::getInt8Ty(prolog_builder.getContext()), 0), DL.getTypeAllocSize(T), buff->getAlign());
+
 }
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
@@ -723,7 +758,9 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     auto replace_inst = [&] (Instruction *user) {
         Instruction *orig_i = cur.orig_i;
         Instruction *new_i = cur.new_i;
-        if (isa<LoadInst>(user) || isa<StoreInst>(user)) {
+        if (isa<LoadInst>(user) || isa<StoreInst>(user) ||
+            isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            // TODO: these atomics are likely removable if the user is the first argument
             user->replaceUsesOfWith(orig_i, new_i);
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
@@ -733,11 +770,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 call->eraseFromParent();
                 return;
             }
-            //if (pass.gc_loaded_func == callee) {
-            //    call->replaceAllUsesWith(new_i);
-            //    call->eraseFromParent();
-            //    return;
-            //}
+            if (pass.gc_loaded_func == callee) {
+                // TODO: handle data pointer forwarding, length forwarding, and fence removal
+                user->replaceUsesOfWith(orig_i, Constant::getNullValue(orig_i->getType()));
+                return;
+            }
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
@@ -776,7 +813,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             SmallVector<Value *, 4> IdxOperands(gep->idx_begin(), gep->idx_end());
             auto new_gep = GetElementPtrInst::Create(gep->getSourceElementType(),
                                                      new_i, IdxOperands,
+#if JL_LLVM_VERSION >= 200000
+                                                     gep->getName(), gep->getIterator());
+#else
                                                      gep->getName(), gep);
+#endif
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
             new_gep->copyMetadata(*gep);
@@ -905,8 +946,11 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
                 REMARK([&](){
+                    std::string str;
+                    llvm::raw_string_ostream rso(str);
+                    orig_inst->print(rso);
                     return OptimizationRemark(DEBUG_TYPE, "typeof", call)
-                        << "removed typeof call for GC allocation " << ore::NV("Alloc", orig_inst);
+                        << "removed typeof call for GC allocation " << ore::NV("Alloc", StringRef(str));
                 });
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to
@@ -1089,6 +1133,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            // TODO: Downgrade atomics here potentially
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1216,7 +1261,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 bundle = OperandBundleDef("jl_roots", std::move(operands));
                 break;
             }
+#if JL_LLVM_VERSION >= 200000
+            auto new_call = CallInst::Create(call, bundles, call->getIterator());
+#else
             auto new_call = CallInst::Create(call, bundles, call);
+#endif
             new_call->takeName(call);
             call->replaceAllUsesWith(new_call);
             call->eraseFromParent();
@@ -1261,8 +1310,16 @@ bool AllocOpt::doInitialization(Module &M)
 
     DL = &M.getDataLayout();
 
+#if JL_LLVM_VERSION >= 200000
+    lifetime_start = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#else
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#endif
+#if JL_LLVM_VERSION >= 200000
+    lifetime_end = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#else
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#endif
 
     return true;
 }
