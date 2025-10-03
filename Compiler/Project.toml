@@ -1,0 +1,15 @@
+name = "Compiler"
+uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
+version = "0.1.1"
+
+[compat]
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[targets]
+test = ["Test", "InteractiveUtils", "Random", "Libdl"]

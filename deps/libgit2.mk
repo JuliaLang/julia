@@ -1,21 +1,35 @@
 ## libgit2
 ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
-LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
+LIBGIT2_GIT_URL := https://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
 $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
+$(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted: export MSYS=$(MSYS_NONEXISTENT_SYMLINK_TARGET_FIX)
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2
 endif
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
+ifeq ($(USE_SYSTEM_PCRE), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/pcre
+endif
+
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=OFF -DUSE_SSH=ON -DREGEX_BACKEND=pcre2 -DBUILD_CLI=OFF -DBUILD_TESTS=OFF
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+LIBGIT2_OPTS += -DLIBSSH2_LIBRARIES=libssh2.dll
+LIBGIT2_OPTS += -DLIBSSH2_LIBRARY_DIRS=$(build_prefix)/lib
+LIBGIT2_OPTS += -DLIBSSH2_INCLUDE_DIRS=$(build_prefix)/include
+endif # USE_SYSTEM_LIBSSH2=0
 ifneq ($(ARCH),x86_64)
 ifneq ($(USECLANG),1)
 LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-mincoming-stack-boundary=2"
@@ -24,49 +38,25 @@ endif
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
+LIBGIT2_OPTS += -DBUILD_TESTS=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 endif
+ifeq ($(OS),OpenBSD)
+# iconv.h is third-party
+LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-I/usr/local/include"
+endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
+LIBGIT2_OPTS += -DUSE_HTTPS="OpenSSL" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
-$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
-	echo 1 > $@
-
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5685 lands
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-incdir.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-hostkey.patch
-	echo 1 > $@
-
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5740 lands
-$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-continue-zlib.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied
-
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(LIBGIT2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
@@ -94,8 +84,8 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
-	-rm $(build_datarootdir)/julia/cert.pem
-	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
+	-rm -f $(build_datarootdir)/julia/cert.pem
+	-rm -f $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
 get-libgit2: $(LIBGIT2_SRC_FILE)

@@ -7,11 +7,11 @@ Date:   Tue Aug 27 15:01:22 2013 -0400
 
 ---
 diff --git a/libunwind/include/libunwind.h b/libunwind/include/libunwind.h
-index 23ef47f4ac83..ea6c5cb86438 100644
+index b2dae8f..fc37afb 100644
 --- a/libunwind/include/libunwind.h
 +++ b/libunwind/include/libunwind.h
-@@ -102,6 +102,7 @@ extern "C" {
- 
+@@ -108,6 +108,7 @@ extern "C" {
+
  extern int unw_getcontext(unw_context_t *) LIBUNWIND_AVAIL;
  extern int unw_init_local(unw_cursor_t *, unw_context_t *) LIBUNWIND_AVAIL;
 +extern int unw_init_local_dwarf(unw_cursor_t *, unw_context_t *) LIBUNWIND_AVAIL;
@@ -19,10 +19,10 @@ index 23ef47f4ac83..ea6c5cb86438 100644
  extern int unw_get_reg(unw_cursor_t *, unw_regnum_t, unw_word_t *) LIBUNWIND_AVAIL;
  extern int unw_get_fpreg(unw_cursor_t *, unw_regnum_t, unw_fpreg_t *) LIBUNWIND_AVAIL;
 diff --git a/libunwind/src/UnwindCursor.hpp b/libunwind/src/UnwindCursor.hpp
-index f346c720d22c..e44f22a91513 100644
+index 7753936..26ca486 100644
 --- a/libunwind/src/UnwindCursor.hpp
 +++ b/libunwind/src/UnwindCursor.hpp
-@@ -436,6 +436,9 @@ public:
+@@ -453,6 +453,9 @@ public:
    virtual bool isSignalFrame() {
      _LIBUNWIND_ABORT("isSignalFrame not implemented");
    }
@@ -32,7 +32,7 @@ index f346c720d22c..e44f22a91513 100644
    virtual bool getFunctionName(char *, size_t, unw_word_t *) {
      _LIBUNWIND_ABORT("getFunctionName not implemented");
    }
-@@ -891,6 +894,7 @@ public:
+@@ -944,6 +947,7 @@ public:
    virtual void        getInfo(unw_proc_info_t *);
    virtual void        jumpto();
    virtual bool        isSignalFrame();
@@ -40,23 +40,23 @@ index f346c720d22c..e44f22a91513 100644
    virtual bool        getFunctionName(char *buf, size_t len, unw_word_t *off);
    virtual void        setInfoBasedOnIPRegister(bool isReturnAddress = false);
    virtual const char *getRegisterName(int num);
-@@ -938,7 +942,7 @@ private:
+@@ -1031,7 +1035,7 @@ private:
                                              const UnwindInfoSections &sects);
-   int stepWithCompactEncoding() {
-   #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
+   int stepWithCompactEncoding(bool stage2 = false) {
+ #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 -    if ( compactSaysUseDwarf() )
 +    if ( _forceDwarf || compactSaysUseDwarf() )
-       return stepWithDwarfFDE();
-   #endif
+       return stepWithDwarfFDE(stage2);
+ #endif
      R dummy;
-@@ -1173,13 +1177,14 @@ private:
-   unw_proc_info_t  _info;
-   bool             _unwindInfoMissing;
-   bool             _isSignalFrame;
+@@ -1317,13 +1321,14 @@ private:
+ #if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN)
+   bool             _isSigReturn = false;
+ #endif
 +  bool             _forceDwarf;
  };
- 
- 
+
+
  template <typename A, typename R>
  UnwindCursor<A, R>::UnwindCursor(unw_context_t *context, A &as)
      : _addressSpace(as), _registers(context), _unwindInfoMissing(false),
@@ -64,9 +64,9 @@ index f346c720d22c..e44f22a91513 100644
 +      _isSignalFrame(false), _forceDwarf(false) {
    static_assert((check_fit<UnwindCursor<A, R>, unw_cursor_t>::does_fit),
                  "UnwindCursor<> does not fit in unw_cursor_t");
-   memset(&_info, 0, sizeof(_info));
-@@ -1187,7 +1192,8 @@ UnwindCursor<A, R>::UnwindCursor(unw_context_t *context, A &as)
- 
+   static_assert((alignof(UnwindCursor<A, R>) <= alignof(unw_cursor_t)),
+@@ -1333,7 +1338,8 @@ UnwindCursor<A, R>::UnwindCursor(unw_context_t *context, A &as)
+
  template <typename A, typename R>
  UnwindCursor<A, R>::UnwindCursor(A &as, void *)
 -    : _addressSpace(as), _unwindInfoMissing(false), _isSignalFrame(false) {
@@ -75,18 +75,18 @@ index f346c720d22c..e44f22a91513 100644
    memset(&_info, 0, sizeof(_info));
    // FIXME
    // fill in _registers from thread arg
-@@ -1243,6 +1249,10 @@ template <typename A, typename R> bool UnwindCursor<A, R>::isSignalFrame() {
+@@ -1396,6 +1402,10 @@ template <typename A, typename R> bool UnwindCursor<A, R>::isSignalFrame() {
    return _isSignalFrame;
  }
- 
+
 +template <typename A, typename R> void UnwindCursor<A, R>::setForceDWARF(bool force) {
 +  _forceDwarf = force;
 +}
 +
  #endif // defined(_LIBUNWIND_SUPPORT_SEH_UNWIND)
- 
+
  #if defined(_LIBUNWIND_ARM_EHABI)
-@@ -1895,7 +1905,13 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
+@@ -2611,7 +2621,12 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
          // record that we have no unwind info.
          if (_info.format == 0)
            _unwindInfoMissing = true;
@@ -96,15 +96,14 @@ index f346c720d22c..e44f22a91513 100644
 +  #else
          return;
 +  #endif
-+
        }
      }
  #endif // defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
 diff --git a/libunwind/src/libunwind.cpp b/libunwind/src/libunwind.cpp
-index fd079da30895..206afcbbaf78 100644
+index 217dde9..8e9a77a 100644
 --- a/libunwind/src/libunwind.cpp
 +++ b/libunwind/src/libunwind.cpp
-@@ -69,6 +69,7 @@ _LIBUNWIND_HIDDEN int __unw_init_local(unw_cursor_t *cursor,
+@@ -86,6 +86,7 @@ _LIBUNWIND_HIDDEN int __unw_init_local(unw_cursor_t *cursor,
    new (reinterpret_cast<UnwindCursor<LocalAddressSpace, REGISTER_KIND> *>(cursor))
        UnwindCursor<LocalAddressSpace, REGISTER_KIND>(
            context, LocalAddressSpace::sThisAddressSpace);
@@ -112,10 +111,10 @@ index fd079da30895..206afcbbaf78 100644
  #undef REGISTER_KIND
    AbstractUnwindCursor *co = (AbstractUnwindCursor *)cursor;
    co->setInfoBasedOnIPRegister();
-@@ -77,6 +78,54 @@ _LIBUNWIND_HIDDEN int __unw_init_local(unw_cursor_t *cursor,
+@@ -109,6 +110,54 @@ _LIBUNWIND_HIDDEN int __unw_get_reg(unw_cursor_t *cursor, unw_regnum_t regNum,
  }
- _LIBUNWIND_WEAK_ALIAS(__unw_init_local, unw_init_local)
- 
+ _LIBUNWIND_WEAK_ALIAS(__unw_get_reg, unw_get_reg)
+
 +_LIBUNWIND_HIDDEN int __unw_init_local_dwarf(unw_cursor_t *cursor,
 +                                       unw_context_t *context) {
 +  _LIBUNWIND_TRACE_API("__unw_init_local_dwarf(cursor=%p, context=%p)",
@@ -164,15 +163,15 @@ index fd079da30895..206afcbbaf78 100644
 +}
 +_LIBUNWIND_WEAK_ALIAS(__unw_init_local_dwarf, unw_init_local_dwarf)
 +
- /// Get value of specified register at cursor position in stack frame.
- _LIBUNWIND_HIDDEN int __unw_get_reg(unw_cursor_t *cursor, unw_regnum_t regNum,
-                                     unw_word_t *value) {
+ /// Set value of specified register at cursor position in stack frame.
+ _LIBUNWIND_HIDDEN int __unw_set_reg(unw_cursor_t *cursor, unw_regnum_t regNum,
+                                     unw_word_t value) {
 diff --git a/libunwind/src/libunwind_ext.h b/libunwind/src/libunwind_ext.h
-index 316dee298246..5b9f7e2f56cd 100644
+index 28db43a..c4f9767 100644
 --- a/libunwind/src/libunwind_ext.h
 +++ b/libunwind/src/libunwind_ext.h
 @@ -25,6 +25,7 @@ extern "C" {
- 
+
  extern int __unw_getcontext(unw_context_t *);
  extern int __unw_init_local(unw_cursor_t *, unw_context_t *);
 +extern int __unw_init_local_dwarf(unw_cursor_t *, unw_context_t *);

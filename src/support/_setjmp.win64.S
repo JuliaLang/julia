@@ -6,8 +6,10 @@
  * and update gs:[0x1478] to contain the address of the stack
  */
 
-#define CNAME jl_setjmp
+#define CNAME ijl_setjmp
 #include "ENTRY.amd64.h"
+.globl jl_setjmp
+jl_setjmp:
     mov    rdx,QWORD PTR [rsp] // rta
     mov    rax,QWORD PTR gs:[0] // SEH
     mov    QWORD PTR [rcx+0],rax
@@ -37,8 +39,10 @@
 #include "END.h"
 
 
-#define CNAME jl_longjmp
+#define CNAME ijl_longjmp
 #include "ENTRY.amd64.h"
+.globl jl_longjmp
+jl_longjmp:
     mov    rax,QWORD PTR [rcx+0]
     mov    rbx,QWORD PTR [rcx+8]
     mov    rsp,QWORD PTR [rcx+16]
@@ -63,15 +67,17 @@
     mov    QWORD PTR gs:[0],rax
     mov    eax,edx // move arg2 to return
     test   eax,eax
-    jne    a
+    jne    1f
     inc    eax
-a:  mov    QWORD PTR [rsp],r8
+1:  mov    QWORD PTR [rsp],r8
     ret
 #include "END.h"
 
 
-#define CNAME jl_swapcontext
+#define CNAME ijl_swapcontext
 #include "ENTRY.amd64.h"
+.globl jl_swapcontext
+jl_swapcontext:
     // save stack registers
     mov    r8,QWORD PTR gs:[16] // stack top (low)
     mov    rax,QWORD PTR gs:[8] // stack bottom (high)
@@ -109,8 +115,10 @@ a:  mov    QWORD PTR [rsp],r8
 #include "END.h"
 
 
-#define CNAME jl_setcontext
+#define CNAME ijl_setcontext
 #include "ENTRY.amd64.h"
+.globl jl_setcontext
+jl_setcontext:
     // restore stack registers
     mov    r8,QWORD PTR [rcx+0]
     mov    rax,QWORD PTR [rcx+8]

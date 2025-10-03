@@ -1,0 +1,2 @@
+CompileFlags:
+  Add: [-I., -I.., -Iflisp, -Isupport, -I../support, -I../usr/include, -I../../usr/include, -Wall,]

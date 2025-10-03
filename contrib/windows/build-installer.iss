@@ -103,7 +103,8 @@ Name: "addtopath"; Description: "Add {#AppName} to PATH"; GroupDescription: "{cm
 
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; Excludes: "{#AppMainExeName}"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs;
+Source: "{#SourceDir}\{#AppMainExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion sign;
 
 
 [Icons]
@@ -149,6 +150,9 @@ begin
   case CurPageID of
     wpWelcome: WizardForm.Color := WizardForm.WelcomePage.Color;
     wpFinished: WizardForm.Color := WizardForm.FinishedPage.Color;
+
+    //change button text from "next" to "install" when ReadyPage is disabled.
+    wpSelectTasks: WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall);
   else
     WizardForm.Color := WizardForm.InnerPage.Color;
   end;

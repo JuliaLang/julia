@@ -87,7 +87,7 @@ end
 @test goto_test5_3()
 
 
-@test Expr(:error, "goto from a try/finally block is not permitted") ==
+@test Expr(:error, "goto from a try/finally block is not permitted around $(@__FILE__):$(3 + @__LINE__)") ==
     Meta.lower(@__MODULE__, quote
         function goto_test6()
             try

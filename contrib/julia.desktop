@@ -1,8 +1,17 @@
+# To use uxterm, change to these values.
+#
+# Exec=uxterm -e julia
+# Terminal=false
+#
+# To use a .png icon specify the full path and file extension.
+#
+# Icon=/usr/share/icons/hicolor/48x48/apps/julia.png
+#
 [Desktop Entry]
 Name=Julia
-Comment=High-level, high-performance dynamic language for technical computing
+Comment=High-performance language for technical computing
 Exec=julia
 Icon=julia
 Terminal=true
 Type=Application
-Categories=Development;ComputerScience;Building;Science;Math;NumericalAnalysis;ParallelComputing;DataVisualization;ConsoleOnly;
+Categories=Development;

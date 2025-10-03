@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: AbstractChar, Char
+
 """
 The `AbstractChar` type is the supertype of all character implementations
 in Julia. A character represents a Unicode code point, and can be converted
@@ -45,14 +47,14 @@ represents a valid Unicode character.
 """
 Char
 
-@aggressive_constprop (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
-@aggressive_constprop AbstractChar(x::Number) = Char(x)
-@aggressive_constprop (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
-@aggressive_constprop (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
+@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x)::UInt32)
+@constprop :aggressive AbstractChar(x::Number) = Char(x)
+@constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
+@constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
 """
-    ncodeunits(c::Char) -> Int
+    ncodeunits(c::Char)::Int
 
 Return the number of code units required to encode a character as UTF-8.
 This is the number of bytes which will be printed if the character is written
@@ -62,10 +64,17 @@ to an output stream, or `ncodeunits(string(c))` but computed efficiently.
     This method requires at least Julia 1.1. In Julia 1.0 consider
     using `ncodeunits(string(c))`.
 """
-ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
+function ncodeunits(c::Char)
+    u = reinterpret(UInt32, c)
+    # We care about how many trailing bytes are all zero
+    # subtract that from the total number of bytes
+    n_nonzero_bytes = sizeof(UInt32) - div(trailing_zeros(u), 0x8)
+    # Take care of '\0', which has an all-zero bitpattern
+    n_nonzero_bytes + iszero(u)
+end
 
 """
-    codepoint(c::AbstractChar) -> Integer
+    codepoint(c::AbstractChar)::Integer
 
 Return the Unicode codepoint (an unsigned integer) corresponding
 to the character `c` (or throw an exception if `c` does not represent
@@ -75,7 +84,7 @@ return a different-sized integer (e.g. `UInt8`).
 """
 function codepoint end
 
-@aggressive_constprop codepoint(c::Char) = UInt32(c)
+@constprop :aggressive codepoint(c::Char) = UInt32(c)
 
 struct InvalidCharError{T<:AbstractChar} <: Exception
     char::T
@@ -105,24 +114,26 @@ end
 #           not to support malformed or overlong encodings.
 
 """
-    ismalformed(c::AbstractChar) -> Bool
+    ismalformed(c::AbstractChar)::Bool
 
 Return `true` if `c` represents malformed (non-Unicode) data according to the
-encoding used by `c`.  Defaults to `false` for non-`Char` types.  See also
-[`show_invalid`](@ref).
+encoding used by `c`. Defaults to `false` for non-`Char` types.
+
+See also [`show_invalid`](@ref).
 """
 ismalformed(c::AbstractChar) = false
 
 """
-    isoverlong(c::AbstractChar) -> Bool
+    isoverlong(c::AbstractChar)::Bool
 
 Return `true` if `c` represents an overlong UTF-8 sequence. Defaults
-to `false` for non-`Char` types.  See also [`decode_overlong`](@ref)
-and [`show_invalid`](@ref).
+to `false` for non-`Char` types.
+
+See also [`decode_overlong`](@ref) and [`show_invalid`](@ref).
 """
 isoverlong(c::AbstractChar) = false
 
-@aggressive_constprop function UInt32(c::Char)
+@constprop :aggressive function UInt32(c::Char)
     # TODO: use optimized inline LLVM
     u = bitcast(UInt32, c)
     u < 0x80000000 && return u >> 24
@@ -138,7 +149,7 @@ isoverlong(c::AbstractChar) = false
 end
 
 """
-    decode_overlong(c::AbstractChar) -> Integer
+    decode_overlong(c::AbstractChar)::Integer
 
 When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns
 the Unicode codepoint value of `c`. `AbstractChar` implementations
@@ -146,7 +157,7 @@ that support overlong encodings should implement `Base.decode_overlong`.
 """
 function decode_overlong end
 
-@aggressive_constprop function decode_overlong(c::Char)
+@constprop :aggressive function decode_overlong(c::Char)
     u = bitcast(UInt32, c)
     l1 = leading_ones(u)
     t0 = trailing_zeros(u) & 56
@@ -156,7 +167,7 @@ function decode_overlong end
     ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
-@aggressive_constprop function Char(u::UInt32)
+@constprop :aggressive function Char(u::UInt32)
     u < 0x80 && return bitcast(Char, u << 24)
     u < 0x00200000 || throw_code_point_err(u)
     c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
@@ -167,21 +178,21 @@ end
     bitcast(Char, c)
 end
 
-@aggressive_constprop @noinline UInt32_cold(c::Char) = UInt32(c)
-@aggressive_constprop function (T::Union{Type{Int8},Type{UInt8}})(c::Char)
+@constprop :aggressive @noinline UInt32_cold(c::Char) = UInt32(c)
+@constprop :aggressive function (T::Union{Type{Int8},Type{UInt8}})(c::Char)
     i = bitcast(Int32, c)
     i ≥ 0 ? ((i >>> 24) % T) : T(UInt32_cold(c))
 end
 
-@aggressive_constprop @noinline Char_cold(b::UInt32) = Char(b)
-@aggressive_constprop function Char(b::Union{Int8,UInt8})
+@constprop :aggressive @noinline Char_cold(b::UInt32) = Char(b)
+@constprop :aggressive function Char(b::Union{Int8,UInt8})
     0 ≤ b ≤ 0x7f ? bitcast(Char, (b % UInt32) << 24) : Char_cold(UInt32(b))
 end
 
 convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
-convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)
-convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)
-convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)
+convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)::T
+convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)::T
+convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)::T
 convert(::Type{T}, c::T) where {T<:AbstractChar} = c
 
 rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(codepoint(x), T)
@@ -194,7 +205,7 @@ size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
-IteratorSize(::Type{Char}) = HasShape{0}()
+IteratorSize(::Type{<:AbstractChar}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c
@@ -211,14 +222,12 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
-
-first_utf8_byte(c::Char) = (bitcast(UInt32, c) >> 24) % UInt8
+    hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
-isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
-==(x::AbstractChar, y::AbstractChar) = Char(x) == Char(y)
-hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
+isless(x::AbstractChar, y::AbstractChar) = isless(Char(x)::Char, Char(y)::Char)
+==(x::AbstractChar, y::AbstractChar) = Char(x)::Char == Char(y)::Char
+hash(x::AbstractChar, h::UInt) = hash(Char(x)::Char, h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
 @inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
@@ -248,7 +257,7 @@ end
 # (Packages may implement other IO subtypes to specify different encodings.)
 # In contrast, `write(io, c)` outputs a `c` in an encoding determined by typeof(c).
 print(io::IO, c::Char) = (write(io, c); nothing)
-print(io::IO, c::AbstractChar) = print(io, Char(c)) # fallback: convert to output UTF-8
+print(io::IO, c::AbstractChar) = print(io, Char(c)::Char) # fallback: convert to output UTF-8
 
 const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
@@ -316,7 +325,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
     show(io, c)
-    get(io, :compact, false) && return
+    get(io, :compact, false)::Bool && return
     if !ismalformed(c)
         print(io, ": ")
         if isoverlong(c)

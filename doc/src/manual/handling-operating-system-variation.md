@@ -27,15 +27,16 @@ Complex blocks:
 ```julia
 @static if Sys.islinux()
     linux_specific_thing(a)
+elseif Sys.isapple()
+    apple_specific_thing(a)
 else
     generic_thing(a)
 end
 ```
 
-When chaining conditionals (including `if`/`elseif`/`end`), the `@static` must be repeated for
-each level (parentheses optional, but recommended for readability):
+When nesting conditionals, the `@static` must be repeated for each level
+(parentheses optional, but recommended for readability):
 
 ```julia
 @static Sys.iswindows() ? :a : (@static Sys.isapple() ? :b : :c)
 ```
-

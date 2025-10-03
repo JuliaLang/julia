@@ -1,0 +1,4 @@
+name = "ProjectPathDep"
+uuid = "f18633fc-8799-43ff-aa06-99ed830dc572"
+version = "0.1.0"
+entryfile = "CustomPath.jl"

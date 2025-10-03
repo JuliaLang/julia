@@ -29,7 +29,7 @@ $
 """x
 
 """
-    version() -> VersionNumber
+    version()::VersionNumber
 
 Return the version of libgit2 in use, as a [`VersionNumber`](@ref man-version-number-literals).
 """
@@ -37,7 +37,7 @@ function version()
     major = Ref{Cint}(0)
     minor = Ref{Cint}(0)
     patch = Ref{Cint}(0)
-    @check ccall((:git_libgit2_version, :libgit2), Cint,
+    @check ccall((:git_libgit2_version, libgit2), Cint,
                  (Ref{Cint}, Ref{Cint}, Ref{Cint}), major, minor, patch)
     return VersionNumber(major[], minor[], patch[])
 end
@@ -72,7 +72,7 @@ Return a list of git features the current version of libgit2 supports, such as
 threading or using HTTPS or SSH.
 """
 function features()
-    feat = ccall((:git_libgit2_features, :libgit2), Cint, ())
+    feat = ccall((:git_libgit2_features, libgit2), Cint, ())
     res = Consts.GIT_FEATURE[]
     for f in instances(Consts.GIT_FEATURE)
         isset(feat, Cuint(f)) && Base.push!(res, f)
@@ -93,7 +93,7 @@ elseif Sys.isunix()
 end
 
 """
-    LibGit2.git_url(; kwargs...) -> String
+    LibGit2.git_url(; kwargs...)::String
 
 Create a string based upon the URL components provided. When the `scheme` keyword is not
 provided the URL produced will use the alternative [scp-like syntax](https://git-scm.com/docs/git-clone#_git_urls_a_id_urls_a).
@@ -162,7 +162,7 @@ function git_url(;
     end
     seekstart(io)
 
-    return String(take!(io))
+    return takestring!(io)
 end
 
 function credential_identifier(scheme::AbstractString, host::AbstractString)
@@ -171,7 +171,7 @@ end
 
 function credential_identifier(url::AbstractString)
     m = match(URL_REGEX, url)
-    scheme = something(m[:scheme], "")
-    host = m[:host]
+    scheme = something(m[:scheme], SubString(""))
+    host = something(m[:host])
     credential_identifier(scheme, host)
 end

@@ -51,7 +51,7 @@ static void execJuliaInTerminal(NSURL *_Nonnull julia);
 
 @end
 
-/// Location of an installed variant of Julia (frameowrk or nix hier).
+/// Location of an installed variant of Julia (framework or nix hier).
 @interface JuliaVariant : NSObject
 @property(readonly, nullable) NSBundle *bundle;
 @property(readonly, nonnull) NSURL *juliaexe;

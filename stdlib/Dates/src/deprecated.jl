@@ -65,3 +65,6 @@ for op in (:+, :-)
         end
     end
 end
+
+@deprecate argerror(msg::String) ArgumentError(msg) false
+@deprecate argerror() nothing false

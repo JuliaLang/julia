@@ -31,7 +31,7 @@ export
     IPv4,
     IPv6
 
-import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
+import Base: isless, show, print, parse, bind, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
     notify_error, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
@@ -97,7 +97,7 @@ end
 function TCPSocket(fd::OS_HANDLE)
     tcp = TCPSocket()
     iolock_begin()
-    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
+    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), tcp.handle, fd)
     uv_error("tcp_open", err)
     tcp.status = StatusOpen
     iolock_end()
@@ -106,6 +106,8 @@ end
 if OS_HANDLE != RawFD
     TCPSocket(fd::RawFD) = TCPSocket(Libc._get_osfhandle(fd))
 end
+
+Base.fd(sock::TCPSocket) = Base._fd(sock)
 
 
 mutable struct TCPServer <: LibuvServer
@@ -139,8 +141,7 @@ function TCPServer(; delay=true)
     return tcp
 end
 
-isreadable(io::TCPSocket) = isopen(io) || bytesavailable(io) > 0
-iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
+Base.fd(server::TCPServer) = Base._fd(server)
 
 """
     accept(server[, client])
@@ -202,8 +203,9 @@ end
 
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
+Base.fd(sock::UDPSocket) = Base._fd(sock)
+
 function _uv_hook_close(sock::UDPSocket)
-    sock.handle = C_NULL
     lock(sock.cond)
     try
         sock.status = StatusClosed
@@ -218,7 +220,7 @@ end
 # Disables dual stack mode.
 const UV_TCP_IPV6ONLY = 1
 
-# Disables dual stack mode. Only available when using ipv6 binf
+# Disables dual stack mode. Only available when using ipv6 bind
 const UV_UDP_IPV6ONLY = 1
 
 # Indicates message was truncated because read buffer was too small. The
@@ -454,7 +456,7 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -472,9 +474,19 @@ end
 
 
 #from `connect`
-function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
+function uv_connectcb_tcp(conn::Ptr{Cvoid}, status::Cint)
     hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
-    sock = @handle_as hand LibuvStream
+    sock = @handle_as hand TCPSocket
+    connectcb(conn, status, hand, sock)
+end
+
+function uv_connectcb_pipe(conn::Ptr{Cvoid}, status::Cint)
+    hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
+    sock = @handle_as hand PipeEndpoint
+    connectcb(conn, status, hand, sock)
+end
+
+function connectcb(conn::Ptr{Cvoid}, status::Cint, hand::Ptr{Cvoid}, sock::LibuvStream)
     lock(sock.cond)
     try
         if status >= 0 # success
@@ -506,7 +518,7 @@ function connect!(sock::TCPSocket, host::Union{IPv4, IPv6}, port::Integer)
     end
     host_in = Ref(hton(host.host))
     uv_error("connect", ccall(:jl_tcp_connect, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cint),
-                              sock, host_in, hton(UInt16(port)), @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint)),
+                              sock, host_in, hton(UInt16(port)), @cfunction(uv_connectcb_tcp, Cvoid, (Ptr{Cvoid}, Cint)),
                               host isa IPv6))
     sock.status = StatusConnecting
     iolock_end()
@@ -571,18 +583,22 @@ end
 """
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
-Enables or disables Nagle's algorithm on a given TCP server or socket.
+Nagle's algorithm batches multiple small TCP packets into larger
+ones. This can improve throughput but worsen latency. Nagle's algorithm
+is enabled by default. This function sets whether Nagle's algorithm is
+active on a given TCP server or socket. The opposite option is called
+`TCP_NODELAY` in other languages.
 
 !!! compat "Julia 1.3"
     This function requires Julia 1.3 or later.
 """
 function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     # disable or enable Nagle's algorithm on all OSes
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     err = ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(!enable))
     # TODO: check err
-    Sockets.iolock_end()
+    iolock_end()
     return err
 end
 
@@ -592,15 +608,15 @@ end
 On Linux systems, the TCP_QUICKACK is disabled or enabled on `socket`.
 """
 function quickack(sock::Union{TCPServer, TCPSocket}, enable::Bool)
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     @static if Sys.islinux()
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(enable)) < 0
             @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
-    Sockets.iolock_end()
+    iolock_end()
     nothing
 end
 
@@ -629,7 +645,7 @@ listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(localhost, port
 listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host, port); backlog=backlog)
 
 function listen(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
-    uv_error("listen", trylisten(sock))
+    uv_error("listen", trylisten(sock; backlog=backlog))
     return sock
 end
 
@@ -713,16 +729,17 @@ end
 const localhost = ip"127.0.0.1"
 
 """
-    listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
+    listenany([host::IPAddr,] port_hint; backlog::Integer=BACKLOG_DEFAULT) -> (UInt16, TCPServer)
 
 Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
 actual port that the server was created on and the server itself.
+The backlog argument defines the maximum length to which the queue of pending connections for sockfd may grow.
 """
-function listenany(host::IPAddr, default_port)
+function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
     addr = InetAddr(host, default_port)
     while true
         sock = TCPServer()
-        if bind(sock, addr) && trylisten(sock) == 0
+        if bind(sock, addr) && trylisten(sock; backlog) == 0
             if default_port == 0
                 _addr, port = getsockname(sock)
                 return (port, sock)
@@ -730,14 +747,14 @@ function listenany(host::IPAddr, default_port)
             return (addr.port, sock)
         end
         close(sock)
-        addr = InetAddr(addr.host, addr.port + 1)
+        addr = InetAddr(addr.host, addr.port + UInt16(1))
         if addr.port == default_port
             error("no ports available")
         end
     end
 end
 
-listenany(default_port) = listenany(localhost, default_port)
+listenany(default_port; backlog::Integer=BACKLOG_DEFAULT) = listenany(localhost, default_port; backlog)
 
 function udp_set_membership(sock::UDPSocket, group_addr::String,
                             interface_addr::Union{Nothing, String}, operation)
@@ -773,7 +790,7 @@ end
 """
     leave_multicast_group(sock::UDPSocket, group_addr, interface_addr = nothing)
 
-Remove a socket from  a particular multicast group defined by `group_addr`.
+Remove a socket from a particular multicast group defined by `group_addr`.
 If `interface_addr` is given, specifies a particular interface for multi-homed
 systems.  Use `join_multicast_group()` to enable reception of a group.
 """
@@ -806,6 +823,7 @@ socket is connected to. Valid only for connected TCP sockets.
 getpeername(sock::TCPSocket) = _sockname(sock, false)
 
 function _sockname(sock, self=true)
+    sock.status == StatusInit || check_open(sock)
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)
     rfamily = Ref{Cuint}(0)

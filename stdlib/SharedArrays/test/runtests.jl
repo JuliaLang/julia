@@ -176,6 +176,12 @@ d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test fill(1., 100, 10) == reshape(d,(100,10))
 d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test_throws DimensionMismatch reshape(d,(50,))
+# issue #40249, reshaping on another process
+let m = SharedArray{ComplexF64}(10, 20, 30)
+    m2 = remotecall_fetch(() -> reshape(m, (100, :)), id_other)
+    @test size(m2) == (100, 60)
+    @test m2 isa SharedArray
+end
 
 # rand, randn
 d = SharedArrays.shmem_rand(dims)
@@ -318,3 +324,7 @@ end
 @test SharedMatrix([0.1 0.2; 0.3 0.4]) == [0.1 0.2; 0.3 0.4]
 @test_throws MethodError SharedVector(rand(4,4))
 @test_throws MethodError SharedMatrix(rand(4))
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(SharedArrays))
+end

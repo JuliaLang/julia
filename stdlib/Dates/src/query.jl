@@ -87,16 +87,16 @@ dayofweek(days) = mod1(days, 7)
 
 # Number of days in year
 """
-    daysinyear(dt::TimeType) -> Int
+    daysinyear(dt::TimeType)::Int
 
 Return 366 if the year of `dt` is a leap year, otherwise return 365.
 
 # Examples
 ```jldoctest
-julia> Dates.daysinyear(1999)
+julia> daysinyear(1999)
 365
 
-julia> Dates.daysinyear(2000)
+julia> daysinyear(2000)
 366
 ```
 """
@@ -108,13 +108,13 @@ dayofyear(y, m, d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 
 ### Days of the Week
 """
-    dayofweek(dt::TimeType) -> Int64
+    dayofweek(dt::TimeType)::Int64
 
 Return the day of the week as an [`Int64`](@ref) with `1 = Monday, 2 = Tuesday, etc.`.
 
 # Examples
 ```jldoctest
-julia> Dates.dayofweek(Date("2000-01-01"))
+julia> dayofweek(Date("2000-01-01"))
 6
 ```
 """
@@ -151,18 +151,18 @@ dayname(day::Integer; locale::AbstractString="english") = dayname(day, LOCALES[l
 dayabbr(day::Integer; locale::AbstractString="english") = dayabbr(day, LOCALES[locale])
 
 """
-    dayname(dt::TimeType; locale="english") -> String
-    dayname(day::Integer; locale="english") -> String
+    dayname(dt::TimeType; locale="english")::String
+    dayname(day::Integer; locale="english")::String
 
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
 the given `locale`. Also accepts `Integer`.
 
 # Examples
 ```jldoctest
-julia> Dates.dayname(Date("2000-01-01"))
+julia> dayname(Date("2000-01-01"))
 "Saturday"
 
-julia> Dates.dayname(4)
+julia> dayname(4)
 "Thursday"
 ```
 """
@@ -171,18 +171,18 @@ function dayname(dt::TimeType;locale::AbstractString="english")
 end
 
 """
-    dayabbr(dt::TimeType; locale="english") -> String
-    dayabbr(day::Integer; locale="english") -> String
+    dayabbr(dt::TimeType; locale="english")::String
+    dayabbr(day::Integer; locale="english")::String
 
 Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
 in the given `locale`. Also accepts `Integer`.
 
 # Examples
 ```jldoctest
-julia> Dates.dayabbr(Date("2000-01-01"))
+julia> dayabbr(Date("2000-01-01"))
 "Sat"
 
-julia> Dates.dayabbr(3)
+julia> dayabbr(3)
 "Wed"
 ```
 """
@@ -201,7 +201,7 @@ issunday(dt::TimeType) = dayofweek(dt) == Sun
 
 # i.e. 1st Monday? 2nd Monday? 3rd Wednesday? 5th Sunday?
 """
-    dayofweekofmonth(dt::TimeType) -> Int
+    dayofweekofmonth(dt::TimeType)::Int
 
 For the day of week of `dt`, return which number it is in `dt`'s month. So if the day of
 the week of `dt` is Monday, then `1 = First Monday of the month, 2 = Second Monday of the
@@ -209,13 +209,13 @@ month, etc.` In the range 1:5.
 
 # Examples
 ```jldoctest
-julia> Dates.dayofweekofmonth(Date("2000-02-01"))
+julia> dayofweekofmonth(Date("2000-02-01"))
 1
 
-julia> Dates.dayofweekofmonth(Date("2000-02-08"))
+julia> dayofweekofmonth(Date("2000-02-08"))
 2
 
-julia> Dates.dayofweekofmonth(Date("2000-02-15"))
+julia> dayofweekofmonth(Date("2000-02-15"))
 3
 ```
 """
@@ -231,7 +231,7 @@ const THIRTY = BitSet([1, 2, 8, 9, 15, 16, 22, 23, 29, 30])
 const THIRTYONE = BitSet([1, 2, 3, 8, 9, 10, 15, 16, 17, 22, 23, 24, 29, 30, 31])
 
 """
-    daysofweekinmonth(dt::TimeType) -> Int
+    daysofweekinmonth(dt::TimeType)::Int
 
 For the day of week of `dt`, return the total number of that day of the week in `dt`'s
 month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week
@@ -240,10 +240,10 @@ function.
 
 # Examples
 ```jldoctest
-julia> Dates.daysofweekinmonth(Date("2005-01-01"))
+julia> daysofweekinmonth(Date("2005-01-01"))
 5
 
-julia> Dates.daysofweekinmonth(Date("2005-01-04"))
+julia> daysofweekinmonth(Date("2005-01-04"))
 4
 ```
 """
@@ -561,18 +561,18 @@ monthname(month::Integer; locale::AbstractString="english") = monthname(month, L
 monthabbr(month::Integer; locale::AbstractString="english") = monthabbr(month, LOCALES[locale])
 
 """
-    monthname(dt::TimeType; locale="english") -> String
-    monthname(month::Integer, locale="english") -> String
+    monthname(dt::TimeType; locale="english")::String
+    monthname(month::Integer, locale="english")::String
 
 
 Return the full name of the month of the `Date` or `DateTime` or `Integer` in the given `locale`.
 
 # Examples
 ```jldoctest
-julia> Dates.monthname(Date("2005-01-04"))
+julia> monthname(Date("2005-01-04"))
 "January"
 
-julia> Dates.monthname(2)
+julia> monthname(2)
 "February"
 ```
 """
@@ -581,14 +581,14 @@ function monthname(dt::TimeType; locale::AbstractString="english")
 end
 
 """
-    monthabbr(dt::TimeType; locale="english") -> String
-    monthabbr(month::Integer, locale="english") -> String
+    monthabbr(dt::TimeType; locale="english")::String
+    monthabbr(month::Integer, locale="english")::String
 
 Return the abbreviated month name of the `Date` or `DateTime` or `Integer` in the given `locale`.
 
 # Examples
 ```jldoctest
-julia> Dates.monthabbr(Date("2005-01-04"))
+julia> monthabbr(Date("2005-01-04"))
 "Jan"
 
 julia> monthabbr(2)
@@ -600,19 +600,19 @@ function monthabbr(dt::TimeType; locale::AbstractString="english")
 end
 
 """
-    daysinmonth(dt::TimeType) -> Int
+    daysinmonth(dt::TimeType)::Int
 
 Return the number of days in the month of `dt`. Value will be 28, 29, 30, or 31.
 
 # Examples
 ```jldoctest
-julia> Dates.daysinmonth(Date("2000-01"))
+julia> daysinmonth(Date("2000-01"))
 31
 
-julia> Dates.daysinmonth(Date("2001-02"))
+julia> daysinmonth(Date("2001-02"))
 28
 
-julia> Dates.daysinmonth(Date("2000-02"))
+julia> daysinmonth(Date("2000-02"))
 29
 ```
 """
@@ -620,23 +620,23 @@ daysinmonth(dt::TimeType) = ((y, m) = yearmonth(dt); return daysinmonth(y, m))
 
 ### Years
 """
-    isleapyear(dt::TimeType) -> Bool
+    isleapyear(dt::TimeType)::Bool
 
 Return `true` if the year of `dt` is a leap year.
 
 # Examples
 ```jldoctest
-julia> Dates.isleapyear(Date("2004"))
+julia> isleapyear(Date("2004"))
 true
 
-julia> Dates.isleapyear(Date("2005"))
+julia> isleapyear(Date("2005"))
 false
 ```
 """
 isleapyear(dt::TimeType) = isleapyear(year(dt))
 
 """
-    dayofyear(dt::TimeType) -> Int
+    dayofyear(dt::TimeType)::Int
 
 Return the day of the year for `dt` with January 1st being day 1.
 """
@@ -646,7 +646,7 @@ daysinyear(dt::TimeType) = 365 + isleapyear(dt)
 
 ### Quarters
 """
-    quarterofyear(dt::TimeType) -> Int
+    quarterofyear(dt::TimeType)::Int
 
 Return the quarter that `dt` resides in. Range of value is 1:4.
 """
@@ -655,7 +655,7 @@ quarterofyear(dt::TimeType) = quarter(dt)
 const QUARTERDAYS = (0, 31, 59, 0, 30, 61, 0, 31, 62, 0, 31, 61)
 
 """
-    dayofquarter(dt::TimeType) -> Int
+    dayofquarter(dt::TimeType)::Int
 
 Return the day of the current quarter of `dt`. Range of value is 1:92.
 """

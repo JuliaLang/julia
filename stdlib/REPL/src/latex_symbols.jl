@@ -4,7 +4,7 @@
 # This is used for tab substitution in the REPL.
 
 # The initial symbol listing was generated from the W3C symbol mapping file:
-#         http://www.w3.org/Math/characters/unicode.xml
+#         https://www.w3.org/Math/characters/unicode.xml
 # by the following Julia script:
 #=
 import REPL
@@ -110,12 +110,54 @@ const latex_symbols = Dict(
     "\\backpprime" => "‶",
     "\\backppprime" => "‷",
     "\\xor" => "⊻",
+    "\\nand" => "⊼",
+    "\\nor" => "⊽",
     "\\iff" => "⟺",
     "\\implies" => "⟹",
     "\\impliedby" => "⟸",
     "\\to" => "→",
     "\\euler" => "ℯ",
     "\\ohm" => "Ω",
+
+    # Music Symbols
+    # Music Symbols - Accidentals
+    "\\flatflat" => "𝄫",
+    "\\sharpsharp" => "𝄪",
+    # Music Symbols - Codas
+    "\\leftrepeatsign" => "𝄆",
+    "\\rightrepeatsign" => "𝄇",
+    "\\dalsegno" => "𝄉",
+    "\\dacapo" => "𝄊",
+    "\\segno" => "𝄋",
+    "\\coda" => "𝄌",
+    # Music Symbols - Clefs
+    "\\clefg" => "𝄞",
+    "\\clefg8va" => "𝄟",
+    "\\clefg8vb" => "𝄠",
+    "\\clefc" => "𝄡",
+    "\\cleff" => "𝄢",
+    "\\cleff8va" => "𝄣",
+    "\\cleff8vb" => "𝄤",
+     # Music Symbols - Rests
+    "\\restmulti" => "𝄺",
+    "\\restwhole" => "𝄻",
+    "\\resthalf" => "𝄼",
+    "\\restquarter" => "𝄽",
+    "\\rest8th" => "𝄾",
+    "\\rest16th" => "𝄿",
+    "\\rest32th" => "𝅀",
+    "\\rest64th" => "𝅁",
+    "\\rest128th" => "𝅂",
+    # Music Symbols - Notes
+    "\\notedoublewhole" => "𝅜",
+    "\\notewhole" => "𝅝",
+    "\\notehalf" => "𝅗𝅥",
+    "\\notequarter" => "𝅘𝅥",
+    "\\note8th" => "𝅘𝅥𝅮",
+    "\\note16th" => "𝅘𝅥𝅯",
+    "\\note32th" => "𝅘𝅥𝅰",
+    "\\note64th" => "𝅘𝅥𝅱",
+    "\\note128th" => "𝅘𝅥𝅲",
 
     # Superscripts
     "\\^0" => "⁰",
@@ -149,6 +191,7 @@ const latex_symbols = Dict(
     "\\^n" => "ⁿ",
     "\\^o" => "ᵒ",
     "\\^p" => "ᵖ",
+    "\\^q" => "𐞥",
     "\\^r" => "ʳ",
     "\\^s" => "ˢ",
     "\\^t" => "ᵗ",
@@ -205,6 +248,8 @@ const latex_symbols = Dict(
     "\\_+" => "₊",
     "\\_-" => "₋",
     "\\_=" => "₌",
+    "\\_<" => "˱",
+    "\\_>" => "˲",
     "\\_(" => "₍",
     "\\_)" => "₎",
     "\\_a" => "ₐ",
@@ -430,8 +475,10 @@ const latex_symbols = Dict(
     "\\pertenthousand" => "‱",
     "\\prime" => "′",
     "\\backprime" => "‵",
-    "\\guilsinglleft" => "‹",
+    "\\guilsinglleft" => "‹", # note: \guil* quote names follow the LaTeX csquotes package
     "\\guilsinglright" => "›",
+    "\\guillemotleft" => "«",
+    "\\guillemotright" => "»",
     "\\nolinebreak" => "\u2060",
     "\\pes" => "₧",
     "\\dddot" => "⃛",
@@ -471,6 +518,7 @@ const latex_symbols = Dict(
     "\\mapsto" => "↦",
     "\\hookleftarrow" => "↩",
     "\\hookrightarrow" => "↪",
+    "\\hookunderrightarrow" => "🢲",
     "\\looparrowleft" => "↫",
     "\\looparrowright" => "↬",
     "\\leftrightsquigarrow" => "↭",
@@ -594,6 +642,7 @@ const latex_symbols = Dict(
     "\\triangleq" => "≜",
     "\\questeq" => "≟",
     "\\ne" => "≠",
+    "\\neq" => "≠",
     "\\equiv" => "≡",
     "\\nequiv" => "≢",
     "\\le" => "≤",
@@ -669,8 +718,13 @@ const latex_symbols = Dict(
     "\\dashv" => "⊣",
     "\\top" => "⊤",
     "\\bot" => "⊥",
+    "\\Top" => "⫪",
+    "\\Bot" => "⫫",
+    "\\indep" => "⫫",
     "\\models" => "⊧",
     "\\vDash" => "⊨",
+    "\\downvDash" => "⫪",
+    "\\upvDash" => "⫫",
     "\\Vdash" => "⊩",
     "\\Vvdash" => "⊪",
     "\\VDash" => "⊫",
@@ -718,7 +772,6 @@ const latex_symbols = Dict(
     "\\gtreqless" => "⋛",
     "\\curlyeqprec" => "⋞",
     "\\curlyeqsucc" => "⋟",
-    "\\sqspne" => "⋥",
     "\\lnsim" => "⋦",
     "\\gnsim" => "⋧",
     "\\precnsim" => "⋨",
@@ -975,17 +1028,16 @@ const latex_symbols = Dict(
     "\\droang" => "̚",  # left angle above (non-spacing)
     "\\wideutilde" => "̰",  # under tilde accent (multiple characters and non-spacing)
     "\\not" => "̸",  # combining long solidus overlay
-    "\\upMu" => "Μ",  # capital mu, greek
-    "\\upNu" => "Ν",  # capital nu, greek
-    "\\upOmicron" => "Ο",  # capital omicron, greek
-    "\\upepsilon" => "ε",  # rounded small epsilon, greek
-    "\\upomicron" => "ο",  # small omicron, greek
-    "\\upvarbeta" => "ϐ",  # rounded small beta, greek
-    "\\upoldKoppa" => "Ϙ",  # greek letter archaic koppa
-    "\\upoldkoppa" => "ϙ",  # greek small letter archaic koppa
-    "\\upstigma" => "ϛ",  # greek small letter stigma
-    "\\upkoppa" => "ϟ",  # greek small letter koppa
-    "\\upsampi" => "ϡ",  # greek small letter sampi
+    "\\Mu" => "Μ",  # capital mu, greek
+    "\\Nu" => "Ν",  # capital nu, greek
+    "\\Omicron" => "Ο",  # capital omicron, greek
+    "\\omicron" => "ο",  # small omicron, greek
+    "\\varbeta" => "ϐ",  # rounded small beta, greek
+    "\\oldKoppa" => "Ϙ",  # greek letter archaic koppa
+    "\\oldkoppa" => "ϙ",  # greek small letter archaic koppa
+    "\\stigma" => "ϛ",  # greek small letter stigma
+    "\\koppa" => "ϟ",  # greek small letter koppa
+    "\\sampi" => "ϡ",  # greek small letter sampi
     "\\tieconcat" => "⁀",  # character tie, z notation sequence concatenation
     "\\leftharpoonaccent" => "⃐",  # combining left harpoon above
     "\\rightharpoonaccent" => "⃑",  # combining right harpoon above
@@ -1119,6 +1171,7 @@ const latex_symbols = Dict(
     "\\nsqsubseteq" => "⋢",  # not, square subset, equals
     "\\nsqsupseteq" => "⋣",  # not, square superset, equals
     "\\sqsubsetneq" => "⋤",  # square subset, not equals
+    "\\sqsupsetneq" => "⋥",  # square superset, not equals
     "\\disin" => "⋲",  # element of with long horizontal stroke
     "\\varisins" => "⋳",  # element of with vertical bar at end of horizontal stroke
     "\\isins" => "⋴",  # small element of with vertical bar at end of horizontal stroke
@@ -1281,6 +1334,7 @@ const latex_symbols = Dict(
     "\\bsolhsub" => "\u27c8",  # reverse solidus preceding subset
     "\\suphsol" => "\u27c9",  # superset preceding solidus
     "\\wedgedot" => "⟑",  # and with dot
+    "\\veedot" => "⟇",  # or with dot
     "\\upin" => "⟒",  # element of opening upwards
     "\\bigbot" => "⟘",  # large up tack
     "\\bigtop" => "⟙",  # large down tack
@@ -1561,7 +1615,9 @@ const latex_symbols = Dict(
     "\\bsimilarleftarrow" => "\u2b41",  # reverse tilde operator above leftwards arrow
     "\\leftarrowbackapprox" => "\u2b42",  # leftwards arrow above reverse almost equal to
     "\\rightarrowgtr" => "\u2b43",  # rightwards arrow through greater-than
-    "\\rightarrowsupset" => "\u2b44",  # rightwards arrow through subset
+    "\\leftarrowless" => "\u2977",  # leftwards arrow through less-than
+    "\\rightarrowsupset" => "\u2b44",  # rightwards arrow through superset
+    "\\leftarrowsubset" => "\u297a",  # leftwards arrow through subset
     "\\LLeftarrow" => "\u2b45",  # leftwards quadruple arrow
     "\\RRightarrow" => "\u2b46",  # rightwards quadruple arrow
     "\\bsimilarrightarrow" => "\u2b47",  # reverse tilde operator above rightwards arrow
@@ -2610,10 +2666,10 @@ const latex_symbols = Dict(
     "\\4/5" => "⅘", # vulgar fraction four fifths
     "\\1/6" => "⅙", # vulgar fraction one sixth
     "\\5/6" => "⅚", # vulgar fraction five sixths
-    "\\1/8" => "⅛", # vulgar fraction one eigth
-    "\\3/8" => "⅜", # vulgar fraction three eigths
-    "\\5/8" => "⅝", # vulgar fraction five eigths
-    "\\7/8" => "⅞", # vulgar fraction seventh eigths
+    "\\1/8" => "⅛", # vulgar fraction one eighth
+    "\\3/8" => "⅜", # vulgar fraction three eighths
+    "\\5/8" => "⅝", # vulgar fraction five eighths
+    "\\7/8" => "⅞", # vulgar fraction seventh eighths
     "\\1/" => "⅟", # fraction numerator one
     "\\0/3" => "↉", # vulgar fraction zero thirds
     "\\1/4" => "¼", # vulgar fraction one quarter
@@ -2622,13 +2678,14 @@ const latex_symbols = Dict(
 
 # Canonical reverse mapping for symbols that have several completions (#39148).
 #
-# These duplicate mappings can be investigated with the folllowing commands:
+# These duplicate mappings can be investigated with the following commands:
 #=
 ls = REPL.REPLCompletions.latex_symbols; symbols = values(ls)
 duplicates = [v for v in unique(symbols) if count(==(v), symbols) > 1]
 [(v, REPL.symbol_latex(v)) => findall(==(v), ls) for v in duplicates]
 =#
 const symbols_latex_canonical = Dict(
+    "⫫" => "\\Bot",
     "ð" => "\\dh",
     "…" => "\\ldots",
     "∅" => "\\emptyset",
@@ -2649,6 +2706,10 @@ const symbols_latex_canonical = Dict(
     "√" => "\\sqrt",
     "̶" => "\\sout",
     "→" => "\\to",
+    "⫪" => "\\Top",
     "ε" => "\\varepsilon",
     "⊻" => "\\xor",
+    "⊼" => "\\nand",
+    "⊽" => "\\nor",
+    "≠" => "\\ne",
 )

@@ -41,7 +41,7 @@ hello
 ```
 
 The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
-successfully, the run method throws an [`ErrorException`](@ref).
+successfully, the run method throws an [`ProcessFailedException`](@ref).
 
 If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
 can be used instead:
@@ -77,6 +77,18 @@ julia> collect(`echo "foo bar"`)
 
 julia> `echo "foo bar"`[2]
 "foo bar"
+```
+
+You can also pass a `IOBuffer`, and later read from it:
+
+```jldoctest
+julia> io = PipeBuffer(); # PipeBuffer is a type of IOBuffer
+
+julia> run(`echo world`, devnull, io, stderr);
+
+julia> readlines(io)
+1-element Vector{String}:
+ "world"
 ```
 
 ## [Interpolation](@id command-interpolation)
@@ -320,11 +332,13 @@ will attempt to store the data in the kernel's buffers while waiting for a reade
 Another common solution is to separate the reader and writer of the pipeline into separate [`Task`](@ref)s:
 
 ```julia
-writer = @async write(process, "data")
-reader = @async do_compute(read(process, String))
+writer = Threads.@spawn write(process, "data")
+reader = Threads.@spawn do_compute(read(process, String))
 wait(writer)
 fetch(reader)
 ```
+
+(commonly also, reader is not a separate task, since we immediately `fetch` it anyways).
 
 ### Complex Example
 
@@ -374,11 +388,36 @@ saturated throughput.
 We strongly encourage you to try all these examples to see how they work.
 
 ## `Cmd` Objects
-The syntax introduced above creates objects of type [`Cmd`](@ref). Such object may also be constructed directly:
+The backtick syntax create an object of type [`Cmd`](@ref). Such object may also be constructed directly from
+an existing `Cmd` or list of arguments:
 
 ```julia
 run(Cmd(`pwd`, dir=".."))
+run(Cmd(["pwd"], detach=true, ignorestatus=true))
 ```
 
-This way, they may be customized with the `dir` keyword to set the working directory,
-`detach` keyword to run the command in a new process group, and `env` keyword to set environment variables.
+This allows you to specify several aspects of the `Cmd`'s execution environment via keyword arguments. For
+example, the `dir` keyword provides control over the `Cmd`'s working directory:
+
+```jldoctest
+julia> run(Cmd(`pwd`, dir="/"));
+/
+```
+
+And the `env` keyword allows you to set execution environment variables:
+
+```jldoctest
+julia> run(Cmd(`sh -c "echo foo \$HOWLONG"`, env=("HOWLONG" => "ever!",)));
+foo ever!
+```
+
+See [`Cmd`](@ref) for additional keyword arguments. The [`setenv`](@ref) and [`addenv`](@ref) commands
+provide another means for replacing or adding to the `Cmd` execution environment variables, respectively:
+
+```jldoctest
+julia> run(setenv(`sh -c "echo foo \$HOWLONG"`, ("HOWLONG" => "ever!",)));
+foo ever!
+
+julia> run(addenv(`sh -c "echo foo \$HOWLONG"`, "HOWLONG" => "ever!"));
+foo ever!
+```
