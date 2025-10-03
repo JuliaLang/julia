@@ -260,7 +260,7 @@ struct LoadingCache
     identified::Dict{String, Union{Nothing, Tuple{PkgId, String}}}
     located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{String, String}, Nothing}}
 end
-const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
+const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing) # n.b.: all access to and through this are protected by require_lock
 LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
 
 
@@ -302,10 +302,12 @@ end
 
 # Used by Pkg but not used in loading itself
 function find_package(arg) # ::Union{Nothing,String}
+    @lock require_lock begin
     pkgenv = identify_package_env(arg)
     pkgenv === nothing && return nothing
     pkg, env = pkgenv
     return locate_package(pkg, env)
+    end
 end
 
 # is there a better/faster ground truth?
@@ -332,6 +334,7 @@ is also returned, except when the identity is not identified.
 """
 identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
 function identify_package_env(where::PkgId, name::String)
+    assert_havelock(require_lock)
     cache = LOADING_CACHE[]
     if cache !== nothing
         pkg_env = get(cache.identified_where, (where, name), missing)
@@ -364,6 +367,7 @@ function identify_package_env(where::PkgId, name::String)
     return pkg_env
 end
 function identify_package_env(name::String)
+    assert_havelock(require_lock)
     cache = LOADING_CACHE[]
     if cache !== nothing
         pkg_env = get(cache.identified, name, missing)
@@ -426,11 +430,12 @@ julia> using LinearAlgebra
 julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
 ```
 """
-identify_package(where::Module, name::String) = _nothing_or_first(identify_package_env(where, name))
-identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
-identify_package(name::String)                = _nothing_or_first(identify_package_env(name))
+identify_package(where::Module, name::String) = @lock require_lock _nothing_or_first(identify_package_env(where, name))
+identify_package(where::PkgId, name::String)  = @lock require_lock _nothing_or_first(identify_package_env(where, name))
+identify_package(name::String)                = @lock require_lock _nothing_or_first(identify_package_env(name))
 
 function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,Tuple{String,String}}
+    assert_havelock(require_lock)
     cache = LOADING_CACHE[]
     if cache !== nothing
         pathenv = get(cache.located, (pkg, stopenv), missing)
@@ -508,7 +513,7 @@ julia> Base.locate_package(pkg)
 ```
 """
 function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,String}
-    _nothing_or_first(locate_package_env(pkg, stopenv))
+    @lock require_lock _nothing_or_first(locate_package_env(pkg, stopenv))
 end
 
 """
@@ -1824,51 +1829,60 @@ function show(io::IO, it::ImageTarget)
 end
 
 # should sync with the types of arguments of `stale_cachefile`
-const StaleCacheKey = Tuple{PkgId, UInt128, String, String}
+const StaleCacheKey = Tuple{PkgId, UInt128, String, String, Bool, CacheFlags}
 
-function compilecache_path(pkg::PkgId;
+function compilecache_freshest_path(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
         cachepath_cache::Dict{PkgId, Vector{String}}=Dict{PkgId, Vector{String}}(),
-        cachepaths::Vector{String}=get!(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
+        cachepaths::Vector{String}=get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
         sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
         flags::CacheFlags=CacheFlags())
-    path = nothing
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
-    for path_to_try in cachepaths
-        staledeps = stale_cachefile(sourcepath, path_to_try; ignore_loaded, requested_flags=flags)
-        if staledeps === true
-            continue
-        end
-        staledeps, _, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
-        # finish checking staledeps module graph
-        for dep in staledeps
-            dep isa Module && continue
-            modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
-            modpaths = get!(() -> find_all_in_cache_path(modkey), cachepath_cache, modkey)
-            for modpath_to_try in modpaths::Vector{String}
-                stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try)::StaleCacheKey
-                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded, requested_flags=flags) === true,
-                        stale_cache, stale_cache_key)
-                    continue
+    try_build_ids = UInt128[UInt128(0)]
+    if !ignore_loaded
+        let loaded = get(loaded_precompiles, pkg, nothing)
+            if loaded !== nothing
+                for mod in loaded # try these in reverse original load order to see if one is already valid
+                    pushfirst!(try_build_ids, module_build_id(mod))
                 end
-                @goto check_next_dep
             end
-            @goto check_next_path
-            @label check_next_dep
         end
-        try
-            # update timestamp of precompilation file so that it is the first to be tried by code loading
-            touch(path_to_try)
-        catch ex
-            # file might be read-only and then we fail to update timestamp, which is fine
-            ex isa IOError || rethrow()
-        end
-        path = path_to_try
-        break
-        @label check_next_path
     end
-    return path
+    for build_id in try_build_ids
+        for path_to_try in cachepaths
+            staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; ignore_loaded, requested_flags=flags)
+            if staledeps === true
+                continue
+            end
+            staledeps, _, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            # finish checking staledeps module graph
+            for dep in staledeps
+                dep isa Module && continue
+                modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
+                modpaths = get(() -> find_all_in_cache_path(modkey), cachepath_cache, modkey)
+                for modpath_to_try in modpaths::Vector{String}
+                    stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try, ignore_loaded, flags)::StaleCacheKey
+                    if get!(() -> stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try; ignore_loaded, requested_flags=flags) === true,
+                            stale_cache, stale_cache_key)
+                        continue
+                    end
+                    @goto check_next_dep
+                end
+                @goto check_next_path
+                @label check_next_dep
+            end
+            try
+                # update timestamp of precompilation file so that it is the first to be tried by code loading
+                touch(path_to_try)
+            catch ex
+                # file might be read-only and then we fail to update timestamp, which is fine
+                ex isa IOError || rethrow()
+            end
+            return path_to_try
+            @label check_next_path
+        end
+    end
 end
 
 """
@@ -1884,14 +1898,8 @@ fresh julia session specify `ignore_loaded=true`.
 !!! compat "Julia 1.10"
     This function requires at least Julia 1.10.
 """
-function isprecompiled(pkg::PkgId;
-        ignore_loaded::Bool=false,
-        stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
-        cachepath_cache::Dict{PkgId, Vector{String}}=Dict{PkgId, Vector{String}}(),
-        cachepaths::Vector{String}=get!(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
-        sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
-        flags::CacheFlags=CacheFlags())
-    path = compilecache_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags)
+function isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
+    path = compilecache_freshest_path(pkg; ignore_loaded)
     return !isnothing(path)
 end
 
@@ -1905,7 +1913,7 @@ associated cache is relocatable.
     This function requires at least Julia 1.11.
 """
 function isrelocatable(pkg::PkgId)
-    path = compilecache_path(pkg)
+    path = compilecache_freshest_path(pkg)
     isnothing(path) && return false
     io = open(path, "r")
     try
@@ -1923,6 +1931,23 @@ function isrelocatable(pkg::PkgId)
         close(io)
     end
     return true
+end
+
+function parse_cache_buildid(cachepath::String)
+    f = open(cachepath, "r")
+    try
+        checksum = isvalid_cache_header(f)
+        iszero(checksum) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        flags = read(f, UInt8)
+        n = read(f, Int32)
+        n == 0 && error("no module defined in $cachefile")
+        skip(f, n) # module name
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = (UInt128(checksum) << 64) | read(f, UInt64)
+        return build_id, uuid
+    finally
+        close(f)
+    end
 end
 
 # search for a precompile cache file to load, after some various checks
@@ -2682,8 +2707,19 @@ function __require_prelocked(pkg::PkgId, env)
                     try
                         if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
                             parallel_precompile_attempted = true
-                            Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
-                            return
+                            precompiled = Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
+                            # prcompiled returns either nothing, indicating it needs serial precompile,
+                            # or the entry(ies) that it found would be best to load (possibly because it just created it)
+                            # or an empty set of entries (indicating the precompile should be skipped)
+                            if precompiled !== nothing
+                                isempty(precompiled) && return PrecompilableError() # oops, Precompilation forgot to report what this might actually be
+                                local cachefile = precompiled[1]
+                                local ocachefile = nothing
+                                if JLOptions().use_pkgimages == 1
+                                    ocachefile = ocachefile_from_cachefile(cachefile)
+                                end
+                                return cachefile, ocachefile
+                            end
                         end
                         triggers = get(EXT_PRIMED, pkg, nothing)
                         loadable_exts = nothing

@@ -35,7 +35,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     str = read(joinpath(bindir, "bindinginfo_libsimple.json"), String)
 
     # The log should parse as valid JSON
-    abi = JSON.Parser.parse(str)
+    abi = JSON.parse(str)
 
     # `copyto_and_sum` should have been exported
     @test any(Bool[func["symbol"] == "copyto_and_sum" for func in abi["functions"]])
