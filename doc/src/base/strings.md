@@ -15,6 +15,7 @@ Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
+Base.unsafe_substring
 Base.LazyString
 Base.@lazy_str
 Base.transcode
@@ -110,4 +111,5 @@ Base.AnnotatedChar
 Base.annotatedstring
 Base.annotations
 Base.annotate!
+Base.unannotate
 ```
