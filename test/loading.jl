@@ -1017,7 +1017,7 @@ end
             write(joinpath(tmp, "Env1", "Manifest.toml"), """
             """)
             # Package in current env not present in manifest
-            pkg, env = Base.identify_package_env("Baz")
+            pkg, env = @lock Base.require_lock Base.identify_package_env("Baz")
             @test Base.locate_package(pkg, env) === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
@@ -1710,7 +1710,8 @@ end
         Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
         oldBase64 = Base.unreference_module(Base64_key)
         cc = Base.compilecache(Base64_key)
-        @test Base.isprecompiled(Base64_key, cachepaths=String[cc[1]])
+        sourcepath = Base.locate_package(Base64_key)
+        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcepath, cc[1]) !== true
         empty!(DEPOT_PATH)
         Base.require_stdlib(Base64_key)
         push!(DEPOT_PATH, depot_path)

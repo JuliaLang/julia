@@ -604,7 +604,8 @@ end
     end
     # The fast path here usually checks there is already room, then does nothing.
     # When append is true, new data is added after io.size, not io.ptr
-    existing_space = min(lastindex(io.data), io.maxsize + get_offset(io)) - (io.append ? io.size : io.ptr - 1)
+    start_offset = io.append ? io.size : io.ptr - 1
+    existing_space = min(lastindex(io.data) - start_offset, io.maxsize - (start_offset - get_offset(io)))
     if existing_space < nshort % Int
         # Outline this function to make it more likely that ensureroom inlines itself
         return ensureroom_slowpath(io, nshort, existing_space)
@@ -898,12 +899,13 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     append = to.append
     ptr = append ? size+1 : to.ptr
     data = to.data
-    to_write = min(nb, (min(Int(length(data))::Int, to.maxsize + get_offset(to)) - ptr + 1) % UInt) % Int
+    start_offset = ptr - 1
+    to_write = max(0, min(nb, (min(Int(length(data))::Int - start_offset, to.maxsize - (start_offset - get_offset(to)))) % UInt) % Int)
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
     # the previous size. Otherwise, we just overwrote existing data
-    to.size = max(size, ptr + to_write - 1)
+    to.size = max(size, start_offset + to_write)
     # If to.append, we only update size, not ptr.
     if !append
         to.ptr = ptr + to_write
@@ -941,7 +943,7 @@ end
     ptr = (to.append ? to.size+1 : to.ptr)
     # We have just ensured there is room for 1 byte, EXCEPT if we were to exceed
     # maxsize. So, we just need to check that here.
-    if ptr > to.maxsize + get_offset(to)
+    if ptr - get_offset(to) > to.maxsize
         return 0
     else
         to.data[ptr] = a
