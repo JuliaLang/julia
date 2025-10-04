@@ -1245,7 +1245,15 @@ function _redirect_io_libc(stream, unix_fd::Int)
                 -10 - unix_fd, Libc._get_osfhandle(posix_fd))
         end
     end
-    dup(posix_fd, RawFD(unix_fd))
+    GC.@preserve stream dup(posix_fd, RawFD(unix_fd))
+    nothing
+end
+function _redirect_io_cglobal(handle::Union{LibuvStream, IOStream, Nothing}, unix_fd::Int)
+    c_sym = unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
+            unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
+            unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
+            C_NULL
+    c_sym == C_NULL || unsafe_store!(c_sym, handle === nothing ? Ptr{Cvoid}(unix_fd) : handle.handle)
     nothing
 end
 function _redirect_io_global(io, unix_fd::Int)
@@ -1256,11 +1264,7 @@ function _redirect_io_global(io, unix_fd::Int)
 end
 function (f::RedirectStdStream)(handle::Union{LibuvStream, IOStream})
     _redirect_io_libc(handle, f.unix_fd)
-    c_sym = f.unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
-            f.unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
-            f.unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
-            C_NULL
-    c_sym == C_NULL || unsafe_store!(c_sym, handle.handle)
+    _redirect_io_cglobal(handle, f.unix_fd)
     _redirect_io_global(handle, f.unix_fd)
     return handle
 end
@@ -1269,6 +1273,7 @@ function (f::RedirectStdStream)(::DevNull)
     handle = open(nulldev, write=f.writable)
     _redirect_io_libc(handle, f.unix_fd)
     close(handle) # handle has been dup'ed in _redirect_io_libc
+    _redirect_io_cglobal(nothing, f.unix_fd)
     _redirect_io_global(devnull, f.unix_fd)
     return devnull
 end
