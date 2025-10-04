@@ -49,6 +49,7 @@ Build system changes
 
 New library functions
 ---------------------
+* `findextrema(f, itr; [dims])` which computes `findmin(f, itr; [dims]), findmax(f, itr; [dims])` in a single pass. ([#45783])
 
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 * The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
