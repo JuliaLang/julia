@@ -1141,7 +1141,6 @@ function _growbeg!(a::Vector, delta::Integer)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
-    mem = ref.mem
     len = length(a)
     offset = memoryrefoffset(ref)
     newlen = len + delta
@@ -1420,7 +1419,6 @@ append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
-    i = lastindex(a)
     sizehint!(a, length(a) + n; shrink=false)
     for item in iter
         push!(a, item)
@@ -1764,7 +1762,6 @@ function pushfirst!(a::Vector{Any}, @nospecialize x)
 end
 function pushfirst!(a::Vector{Any}, @nospecialize x...)
     @_terminates_locally_meta
-    na = length(a)
     nx = length(x)
     _growbeg!(a, nx)
     @_safeindex for i = 1:nx
@@ -1878,7 +1875,6 @@ function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
     if eltype(r) === Bool
         return invoke(deleteat!, Tuple{Vector, AbstractVector{Bool}}, a, r)
     else
-        n = length(a)
         f = first(r)
         f isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
         isempty(r) || _deleteat!(a, f, length(r))
