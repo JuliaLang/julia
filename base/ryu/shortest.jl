@@ -378,11 +378,7 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
         else
             pointoff = olength - abs(nexp)
             # shift bytes after pointoff to make room for decchar
-            buf_cconv = Base.cconvert(Ptr{UInt8}, buf)
-            GC.@preserve buf_cconv begin
-                ptr = Base.unsafe_convert(Ptr{UInt8}, buf_cconv)
-                memmove(ptr + pos + pointoff, ptr + pos + pointoff - 1, olength - pointoff + 1)
-            end
+            Base.unsafe_copyto!(buf, pos + pointoff + 1, buf, pos + pointoff, olength - pointoff + 1)
             @inbounds buf[pos + pointoff] = decchar
             pos += olength + 1
             precision -= olength
