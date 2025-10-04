@@ -298,24 +298,21 @@ julia> invmod(5, 6)
 ```
 """
 function invmod(n::Integer, m::Integer)
+    # The postcondition is: mod(widemul(result, n), m) == mod(one(T), m) && iszero(div(result, m))
     iszero(m) && throw(DomainError(m, "`m` must not be 0."))
-    if n isa Signed && hastypemax(typeof(n))
-        T = promote_type(typeof(n), typeof(m))
-        t = typemin(T)
-        (m == t) && (iszero(n) || n == t) &&
-            throw(DomainError((n, m), LazyString("Greatest common divisor is ", m, ".")))
-
+    R = promote_typeof(n, m)
+    if R <: Signed
+        g, x, _ = gcdx(n, m)
+        g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
+        return mod(x, m)
+    else
+        # since gcdx only promises bezout w.r.t overflow for unsigned ints,
+        # we have to widen to a signed type
+        W = widen(signed(R))
+        t = invmod(n % W, m % W)
+        isnegative(m) && (t -= m)
+        return mod(t % R, m)
     end
-    g, x, y = gcdx(n, m)
-    g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
-    # Note that m might be negative here.
-    if x isa Unsigned && hastypemax(typeof(x)) && x > typemax(x)>>1
-        # x might have wrapped if it would have been negative
-        # adding back m forces a correction
-        x += m
-    end
-    # The postcondition is: mod(result * n, m) == mod(T(1), m) && div(result, m) == 0
-    return mod(x, m)
 end
 
 """
