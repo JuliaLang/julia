@@ -691,10 +691,10 @@ precompile_test_harness(false) do dir
         Base.require(Main, :FooBar2)
         error("the \"break me\" test failed")
     catch exc
-        isa(exc, Base.Precompilation.PkgPrecompileError) || rethrow()
-        occursin("Failed to precompile FooBar2", exc.msg) || rethrow()
-        # The LoadError is printed to stderr in the precompilepkgs worker and captured in the PkgPrecompileError msg
-        occursin("LoadError: break me", exc.msg) || rethrow()
+        isa(exc, LoadError) || rethrow()
+        exc = exc.error
+        isa(exc, ErrorException) || rethrow()
+        "break me" == exc.msg || rethrow()
     end
 
     # Test that trying to eval into closed modules during precompilation is an error
@@ -710,7 +710,9 @@ precompile_test_harness(false) do dir
         try
             Base.require(Main, :FooBar3)
         catch exc
-            isa(exc, Base.Precompilation.PkgPrecompileError) || rethrow()
+            isa(exc, LoadError) || rethrow()
+            exc = exc.error
+            isa(exc, ErrorException) || rethrow()
             occursin("Evaluation into the closed module `Base` breaks incremental compilation", exc.msg) || rethrow()
         end
     end
@@ -2141,9 +2143,6 @@ precompile_test_harness("Test flags") do load_path
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
-    id = Base.identify_package("TestFlags")
-    @test Base.isprecompiled(id, ;flags=modified_flags)
-    @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
 if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarch64)
