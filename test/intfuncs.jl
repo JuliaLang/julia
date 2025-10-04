@@ -307,6 +307,12 @@ end
     # Verify issue described in PR 58010 is fixed
     @test invmod(UInt8(3), UInt16(50000)) === 0x411b
 
+    @test invmod(0x00000001, Int8(-128)) === Int32(-127)
+    @test invmod(0xffffffff, Int8(-38)) === Int32(-15)
+    @test invmod(Int8(-1), 0xffffffff) === 0xfffffffe
+    @test invmod(Int32(-1), typemin(Int64)) === Int64(-1)
+    @test invmod(0x3e81, Int16(-5716)) === Int16(-2407)
+
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
             for m in typemin(T):typemax(T)
