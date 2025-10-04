@@ -289,6 +289,7 @@ Base.invokelatest
 Base.@invokelatest
 new
 Base.:(|>)
+Base.TypeWrapper
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
