@@ -248,7 +248,11 @@ Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Int
         s0, s1 = s1, s0 - q*s1
         t0, t1 = t1, t0 - q*t1
     end
-    a < 0 ? (checked_abs(a), -s0, -t0) : (a, s0, t0)
+    if isnegative(a) && isnegative(abs(a))
+        throw(DomainError((a, b), LazyString("gcd not representable in ", T)))
+    else
+        return isnegative(a) ? (abs(a), -s0, -t0) : (a, s0, t0)
+    end
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
