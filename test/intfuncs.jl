@@ -218,9 +218,9 @@ end
     @test x*u + y*v == d
 
     for T in (Int8, Int16, Int32, Int64, Int128)
-        @test_throws OverflowError gcdx(typemin(T), typemin(T))
-        @test_throws OverflowError gcdx(typemin(T), T(0))
-        @test_throws OverflowError gcdx(T(0), typemin(T))
+        @test_throws DomainError gcdx(typemin(T), typemin(T))
+        @test_throws DomainError gcdx(typemin(T), T(0))
+        @test_throws DomainError gcdx(T(0), typemin(T))
         d, u, v = gcdx(typemin(T), T(-1))
         @test d == T(1)
         @test typemin(T) * u + T(-1) * v == T(1)
