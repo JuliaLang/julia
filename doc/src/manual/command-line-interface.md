@@ -61,7 +61,7 @@ file, despite there being no explicit call to `(@main)`.
 The return value of the `(@main)` function is the exit code, and must be a value convertible to `Cint`
 (`nothing` will be replaced by `Cint(0)`):
 ```
-$ julia -e "(@main)(args=ARGS) = return nothing"; echo $?0
+$ julia -e "(@main)(args) = nothing"; echo $?0
 0
 $ julia -e "(@main)(args=ARGS) = return 1"; echo $?
 1
