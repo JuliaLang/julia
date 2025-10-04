@@ -335,8 +335,109 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+    # Test bad arguments for comprehensions
+    @test_throws ArgumentError @macroexpand(@threads [i for i in 1:10] 2) # wrong number of args
+    @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
+    @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for or comprehension
 end
 
+@testset "@threads comprehensions" begin
+    # Test simple array comprehensions
+    @testset "simple comprehensions" begin
+        n = 1000
+        # Test default scheduling
+        result = @threads [i^2 for i in 1:n]
+        @test length(result) == n
+        @test all(result[i] == i^2 for i in 1:n)
+        @test issorted(result)  # should be ordered for default scheduling
+
+        # Test static scheduling
+        result_static = @threads :static [i^2 for i in 1:n]
+        @test length(result_static) == n
+        @test all(result_static[i] == i^2 for i in 1:n)
+        @test issorted(result_static)  # should be ordered for static scheduling
+
+        # Test dynamic scheduling
+        result_dynamic = @threads :dynamic [i^2 for i in 1:n]
+        @test length(result_dynamic) == n
+        @test all(result_dynamic[i] == i^2 for i in 1:n)
+        @test issorted(result_dynamic)  # should be ordered for dynamic scheduling
+
+        # Test greedy scheduling (may not preserve order)
+        result_greedy = @threads :greedy [i^2 for i in 1:n]
+        @test length(result_greedy) == n
+        @test sort(result_greedy) == [i^2 for i in 1:n]  # same elements but potentially different order
+    end
+
+    # Test filtered comprehensions
+    @testset "filtered comprehensions" begin
+        n = 100
+
+        # Test default scheduling with filter
+        result = @threads [i^2 for i in 1:n if iseven(i)]
+        expected = [i^2 for i in 1:n if iseven(i)]
+        @test length(result) == length(expected)
+        @test result == expected  # should preserve order
+
+        # Test static scheduling with filter
+        result_static = @threads :static [i^2 for i in 1:n if iseven(i)]
+        @test length(result_static) == length(expected)
+        @test result_static == expected  # should preserve order
+
+        # Test dynamic scheduling with filter
+        result_dynamic = @threads :dynamic [i^2 for i in 1:n if iseven(i)]
+        @test length(result_dynamic) == length(expected)
+        @test result_dynamic == expected  # should preserve order
+
+        # Test greedy scheduling with filter
+        result_greedy = @threads :greedy [i^2 for i in 1:n if iseven(i)]
+        @test length(result_greedy) == length(expected)
+        @test sort(result_greedy) == sort(expected)  # same elements but potentially different order
+
+        # Test with more complex filter
+        result_complex = @threads [i for i in 1:100 if i % 3 == 0 && i > 20]
+        expected_complex = [i for i in 1:100 if i % 3 == 0 && i > 20]
+        @test result_complex == expected_complex
+    end
+
+    # Test edge cases
+    @testset "edge cases" begin
+        # Empty range
+        result_empty = @threads [i for i in 1:0]
+        @test result_empty == []
+
+        # Single element
+        result_single = @threads [i^2 for i in 1:1]
+        @test result_single == [1]
+
+        # Filter that excludes all elements
+        result_none = @threads [i for i in 1:10 if i > 20]
+        @test result_none == []
+
+        # Large range to test thread distribution
+        n = 10000
+        result_large = @threads [i for i in 1:n]
+        @test length(result_large) == n
+        @test result_large == collect(1:n)
+    end
+
+    # Test with side effects (should work but order may vary with greedy)
+    @testset "side effects" begin
+        # Test with atomic operations
+        counter = Threads.Atomic{Int}(0)
+        result = @threads [begin
+            Threads.atomic_add!(counter, 1)
+            i
+        end for i in 1:100]
+        @test counter[] == 100
+        @test sort(result) == collect(1:100)
+
+        # Test with thread-local computation
+        result_tid = @threads [Threads.threadid() for i in 1:100]
+        @test length(result_tid) == 100
+        @test all(1 <= tid <= Threads.nthreads() for tid in result_tid)
+    end
+end
 @testset "rand_ptls underflow" begin
     @test Base.Partr.cong(UInt32(0)) == 0
 end
