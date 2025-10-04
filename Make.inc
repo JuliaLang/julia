@@ -818,7 +818,7 @@ SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan
 endif
 ifeq ($(SANITIZE_THREAD),1)
-SANITIZE_OPTS += -fsanitize=thread
+SANITIZE_OPTS += -fsanitize=thread -fsanitize-ignorelist=$(JULIAHOME)/contrib/tsan/ignorelist.txt
 SANITIZE_LDFLAGS += -fsanitize=thread
 ifneq ($(CROSS_BOOTSTRAP_JULIA),)
 bootstrap_julia_flags += --target-sanitize=thread
