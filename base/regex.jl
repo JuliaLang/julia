@@ -334,6 +334,9 @@ See also [`occursin`](@ref) and [`endswith`](@ref).
 julia> startswith("JuliaLang", r"Julia|Romeo")
 true
 ```
+# See also
+[`endswith`](@ref), [`occursin`](@ref), [`match`](@ref)
+
 """
 function startswith(s::AbstractString, r::Regex)
     compile(r)
@@ -366,6 +369,9 @@ See also [`occursin`](@ref) and [`startswith`](@ref).
 julia> endswith("JuliaLang", r"Lang|Roberts")
 true
 ```
+# See also
+[`startswith`](@ref), [`occursin`](@ref), [`match`](@ref)
+
 """
 function endswith(s::AbstractString, r::Regex)
     compile(r)
@@ -421,6 +427,9 @@ julia> m.match
 julia> match(rx, "cabac", 3) === nothing
 true
 ```
+# See also
+[`eachmatch`](@ref), [`occursin`](@ref), [`findfirst`](@ref)
+
 """
 function match end
 
@@ -558,6 +567,9 @@ julia> count(r"a(.)a", "cabacabac", overlap=true)
 julia> count(r"a(.)a", "cabacabac")
 2
 ```
+# See also
+[`eachmatch`](@ref), [`occursin`](@ref), [`findall`](@ref)
+
 """
 function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
@@ -789,6 +801,9 @@ julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
  RegexMatch("a2a")
  RegexMatch("a3a")
 ```
+# See also
+[`match`](@ref), [`findall`](@ref), [`count`](@ref)
+
 """
 eachmatch(re::Regex, str::AbstractString; overlap = false) =
     RegexMatchIterator(re, str, overlap)
