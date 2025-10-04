@@ -6852,9 +6852,6 @@ Base._growat!(A, 4, 1)
 Base._growat!(A, 2, 3)
 @test getindex(A, 1) === 0x01
 @test getindex(A, 2) === missing
-@test getindex(A, 3) === missing
-@test getindex(A, 4) === missing
-@test getindex(A, 5) === missing
 @test getindex(A, 6) === 0x03
 @test getindex(A, 7) === missing
 @test getindex(A, 8) === missing

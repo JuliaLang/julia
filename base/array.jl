@@ -1087,14 +1087,14 @@ end
 # Specifically we are wasting ~10% of memory for small arrays
 # by not picking memory sizes that max out a GC pool
 function overallocation(maxsize)
-    maxsize < 8 && return 8;
-    # compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
+    # compute maxsize = maxsize + 3*maxsize^(7/8) + maxsize/8
     # for small n, we grow faster than O(n)
     # for large n, we grow at O(n/8)
     # and as we reach O(memory) for memory>>1MB,
     # this means we end by adding about 10% of memory each time
+    # most commonly, this will take steps of 0-3-9-34 or 1-4-16-66 or 2-8-33
     exp2 = sizeof(maxsize) * 8 - Core.Intrinsics.ctlz_int(maxsize)
-    maxsize += (1 << div(exp2 * 7, 8)) * 4 + div(maxsize, 8)
+    maxsize += (1 << div(exp2 * 7, 8)) * 3 + div(maxsize, 8)
     return maxsize
 end
 
