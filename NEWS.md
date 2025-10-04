@@ -80,6 +80,9 @@ New library features
   `OncePerProcess{T}` callback, allowing for lazy initialization of the default value. `AbstractScopedValue` is
   now the abstract base type for both `ScopedValue` and `LazyScopedValue`. ([#59372])
 
+* `match(regex, string, idx)` now supports updating `idx::Ref{Int}` to
+  point at the first character after a successful match ([#51429])
+
 Standard library changes
 ------------------------
 
