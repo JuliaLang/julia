@@ -1257,7 +1257,10 @@ end
 function _deletebeg!(a::Vector, delta::Integer)
     delta = Int(delta)
     len = length(a)
-    0 <= delta <= len || throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    # See comment in _deleteend!
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    end
     for i in 1:delta
         @inbounds _unsetindex!(a, i)
     end
@@ -1272,7 +1275,12 @@ end
 function _deleteend!(a::Vector, delta::Integer)
     delta = Int(delta)
     len = length(a)
-    0 <= delta <= len || throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    # Do the comparison unsigned, to so the compiler knows `len` cannot be negative.
+    # This works because if delta is negative, it will overflow and still trigger.
+    # This enables the compiler to skip the check sometimes.
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    end
     newlen = len - delta
     for i in newlen+1:len
         @inbounds _unsetindex!(a, i)
@@ -1525,7 +1533,10 @@ function resize!(a::Vector, nl_::Integer)
     nl = Int(nl_)::Int
     l = length(a)
     if nl > l
-        _growend!(a, nl-l)
+        # Since l is positive, if nl > l, both are positive, and so nl-l is also
+        # positive. But the compiler does not know that, so we mask out top bit.
+        # This allows the compiler to skip the check
+        _growend!(a, (nl-l) & typemax(Int))
     elseif nl != l
         if nl < 0
             _throw_argerror("new length must be ≥ 0")
