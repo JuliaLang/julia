@@ -979,6 +979,9 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b J
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world) JL_GLOBALLY_ROOTED;
+jl_binding_partition_t *jl_backdate_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT,
+    jl_binding_partition_t *bpart, jl_binding_partition_t *new_bpart,
+    jl_value_t *restriction, enum jl_partition_kind backdated_kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
@@ -998,11 +1001,11 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
 STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
+    return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED || kind == PARTITION_KIND_BACKDATED_IMPORT;
 }
 
 STATIC_INLINE int jl_bkind_is_some_explicit_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
+    return kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED || kind == PARTITION_KIND_BACKDATED_IMPORT;
 }
 
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
@@ -1023,6 +1026,10 @@ STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_N
 
 STATIC_INLINE int jl_bkind_is_real_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
     return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT;
+}
+
+STATIC_INLINE int jl_bkind_is_backdated(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_BACKDATED_CONST || kind == PARTITION_KIND_BACKDATED_IMPORT || kind == PARTITION_KIND_BACKDATED_GLOBAL;
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_GLOBALLY_ROOTED;
@@ -1052,6 +1059,21 @@ STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partit
 {
     while (1) {
         enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
+            return;
+        *bnd = (jl_binding_t*)(*bpart)->restriction;
+        *bpart = jl_get_binding_partition(*bnd, world);
+    }
+}
+
+extern void check_backdated_binding(jl_binding_t *b, enum jl_partition_kind kind) JL_NOTSAFEPOINT;
+
+STATIC_INLINE void jl_walk_binding_inplace_stop_at_backdated(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int stop_at_backdated) JL_NOTSAFEPOINT
+{
+    while (1) {
+        enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (stop_at_backdated && jl_bkind_is_backdated(kind))
+            return;
         if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
             return;
         *bnd = (jl_binding_t*)(*bpart)->restriction;
