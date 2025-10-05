@@ -264,16 +264,16 @@ Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc)
 
 Base.ndims(bc::Broadcasted) = ndims(typeof(bc))
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, 2))
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(argtype(BC))
 function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N}
-    N isa Int ? N : _maxndims(fieldtype(BC, 2))
+    N isa Int ? N : _maxndims(argtype(BC))
 end
-
 _maxndims(::Type{Tuple{}}) = 0
 _maxndims(::Type{Tuple{T}}) where {T} = T <: Tuple ? 1 : Int(ndims(T))::Int
-function _maxndims(Args::Type{<:Tuple{T,Vararg{Any}}}) where {T}
-    Argstail = Tuple{ntuple(i -> fieldtype(Args, i + 1), fieldcount(Args) - 1)...}
-    max(_maxndims(Tuple{T}), _maxndims(Argstail))
+function _maxndims(Args::Type{<:Tuple{T,Vararg}}) where {T}
+    m = T <: Tuple ? 1 : Int(ndims(T))::Int
+    n = _maxndims(Base.tuple_type_tail(Args))
+    max(m, n)
 end
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
