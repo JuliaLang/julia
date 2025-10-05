@@ -69,7 +69,7 @@ julia> unsafe_string(path)
 
 In practice, especially when providing reusable functionality, one generally wraps `@ccall`
 uses in Julia functions that set up arguments and then check for errors in whatever manner the
-C or Fortran function specifies. And if an error occurs it is thrown as a normal Julia exception. This is especially
+C or Fortran function specifies. If an error occurs it is thrown as a normal Julia exception. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
@@ -224,7 +224,7 @@ julia> A
 ```
 
 As the example shows, the original Julia array `A` has now been sorted: `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
-[takes care of converting the array to a `Ptr{Cdouble}`](@ref automatic-type-conversion)), computing
+[takes care of converting the array to a `Ptr{Cdouble}`](@ref automatic-type-conversion), computing
 the size of the element type in bytes, and so on.
 
 For fun, try inserting a `println("mycompare($a, $b)")` line into `mycompare`, which will allow
@@ -357,7 +357,7 @@ an `Int` in Julia).
 | `unsigned long long`                                    |                          | `Culonglong`         | `UInt64`                                                                                                       |
 | `intmax_t`                                              |                          | `Cintmax_t`          | `Int64`                                                                                                        |
 | `uintmax_t`                                             |                          | `Cuintmax_t`         | `UInt64`                                                                                                       |
-| `float`                                                 | `REAL*4i`                | `Cfloat`             | `Float32`                                                                                                      |
+| `float`                                                 | `REAL*4`                 | `Cfloat`             | `Float32`                                                                                                      |
 | `double`                                                | `REAL*8`                 | `Cdouble`            | `Float64`                                                                                                      |
 | `complex float`                                         | `COMPLEX*8`              | `ComplexF32`         | `Complex{Float32}`                                                                                             |
 | `complex double`                                        | `COMPLEX*16`             | `ComplexF64`         | `Complex{Float64}`                                                                                             |
@@ -1015,7 +1015,7 @@ be a calling convention specifier (the `@ccall` macro currently does not support
 giving a calling convention). Without any specifier, the platform-default C
 calling convention is used. Other supported conventions are: `stdcall`, `cdecl`,
 `fastcall`, and `thiscall` (no-op on 64-bit Windows). For example (from
-`base/libc.jl`) we see the same `gethostname``ccall` as above, but with the
+`base/libc.jl`) we see the same `gethostname` `ccall` as above, but with the
 correct signature for Windows:
 
 ```julia

@@ -176,7 +176,12 @@ julia> dump(Array{Int,1}.name)
 TypeName
   name: Symbol Array
   module: Module Core
-  names: empty SimpleVector
+  singletonname: Symbol Array
+  names: SimpleVector
+    1: Symbol ref
+    2: Symbol size
+  atomicfields: Ptr{Nothing}(0x0000000000000000)
+  constfields: Ptr{Nothing}(0x0000000000000000)
   wrapper: UnionAll
     var: TypeVar
       name: Symbol T
@@ -188,21 +193,20 @@ TypeName
         lb: Union{}
         ub: abstract type Any
       body: mutable struct Array{T, N} <: DenseArray{T, N}
+  Typeofwrapper: abstract type Type{Array} <: Any
   cache: SimpleVector
     ...
-
   linearcache: SimpleVector
     ...
-
-  hash: Int64 -7900426068641098781
-  mt: MethodTable
-    name: Symbol Array
-    defs: Nothing nothing
-    cache: Nothing nothing
-    max_args: Int64 0
-    module: Module Core
-    : Int64 0
-    : Int64 0
+  hash: Int64 2594190783455944385
+  backedges: #undef
+  partial: #undef
+  max_args: Int32 0
+  n_uninitialized: Int32 0
+  flags: UInt8 0x02
+  cache_entry_count: UInt8 0x00
+  max_methods: UInt8 0x00
+  constprop_heuristic: UInt8 0x00
 ```
 
 In this case, the relevant field is `wrapper`, which holds a reference to the top-level type used

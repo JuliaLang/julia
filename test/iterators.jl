@@ -5,6 +5,9 @@ using Random
 using Base: IdentityUnitRange
 using Dates: Date, Day
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @test (@inferred Base.IteratorSize(Any)) isa Base.SizeUnknown
 
 # zip and filter iterators
@@ -240,6 +243,23 @@ end
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
     @test (@inferred Base.IteratorEltype(typeof(dropwhile(<(4),Iterators.map(identity, 1:10))))) isa Base.EltypeUnknown
+end
+
+# findeach
+# ----------------
+@testset "Iterators.findeach" begin
+    let findeach = Iterators.findeach
+        f = findeach(isnumeric, "abc257wf")
+        @test !(f isa AbstractArray) # it's lazy
+        @test collect(f) == [4,5,6]
+
+        f = findeach(isodd, Dict(1 => 2, 2 => 4, 3 => 6))
+        @test isempty(f)
+        @test isnothing(iterate(f)) # test isempty works correctly
+
+        f = findeach(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
+        @test only(f) == 2
+    end
 end
 
 # cycle
@@ -988,6 +1008,12 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
+@testset "issue #58109" begin
+    i = Iterators.map(identity, 3)
+    j = Iterators.map(sqrt, 7)
+    @test (@inferred Base.IteratorSize(i)) === @inferred Base.IteratorSize(eltype([i, j]))
+end
+
 @testset "IteratorSize trait for zip" begin
     @test (@inferred Base.IteratorSize(zip())) == Base.IsInfinite()                     # for zip of empty tuple
     @test (@inferred Base.IteratorSize(zip((1,2,3), repeated(0)))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
@@ -1064,6 +1090,7 @@ end
 @testset "last for iterators" begin
     @test last(Iterators.map(identity, 1:3)) == 3
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
+    @test last(enumerate(Iterators.flatten((1,2,3)))) == (3,3)
 end
 
 @testset "isempty and isdone for Generators" begin
@@ -1133,6 +1160,91 @@ end
     end
 end
 
+@testset "nth" begin
+    Z = Array{Int,0}(undef)
+    Z[] = 17
+    it_result_pairs = Dict(
+        (Z, 1) => 17,
+        (collect(1:100), 23) => 23,
+        (10:6:1000, 123) => 10 + 6 * 122,
+        ("∀ϵ>0", 3) => '>',
+        ((1, 3, 5, 10, 78), 2) => 3,
+        (reshape(1:30, (5, 6)), 21) => 21,
+        (3, 1) => 3,
+        (true, 1) => true,
+        ('x', 1) => 'x',
+        (4 => 5, 2) => 5,
+        (view(Z), 1) => 17,
+        (view(reshape(1:30, (5, 6)), 2:4, 2:6), 10) => 22,
+        ((x^2 for x in 1:10), 9) => 81,
+        (Iterators.Filter(isodd, 1:10), 3) => 5,
+        (Iterators.flatten((1:10, 50:60)), 15) => 54,
+        (pairs(50:60), 7) => 7 => 56,
+        (zip(1:10, 21:30, 51:60), 6) => (6, 26, 56),
+        (Iterators.product(1:3, 10:12), 3) => (3, 10),
+        (Iterators.repeated(3.14159, 5), 4) => 3.14159,
+        ((a=2, b=3, c=5, d=7, e=11), 4) => 7,
+        (Iterators.cycle(collect(1:100)), 9999) => 99,
+        (Iterators.cycle([1, 2, 3, 4, 5], 5), 25) => 5,
+        (Iterators.cycle("String", 10), 16) => 'i',
+        (Iterators.cycle(((),)), 1000) => ()
+    )
+
+    @testset "iter: $IT" for (IT, n) in keys(it_result_pairs)
+        @test it_result_pairs[(IT, n)] == nth(IT, n)
+        @test_throws BoundsError nth(IT, -42)
+
+        IT isa Iterators.Cycle && continue # cycles are infinite so never OOB
+        @test_throws BoundsError nth(IT, 999999999)
+    end
+
+    empty_cycle = Iterators.cycle([])
+    @test_throws BoundsError nth(empty_cycle, 42)
+
+    # test the size unknown branch for cycles
+    # only generate odd numbers so we know the actual length
+    # but the iterator is still SizeUnknown()
+    it_size_unknown = Iterators.filter(isodd, 1:2:10)
+    @test Base.IteratorSize(it_size_unknown) isa Base.SizeUnknown
+    @test length(collect(it_size_unknown)) == 5
+
+    cycle_size_unknown = Iterators.cycle(it_size_unknown)
+    finite_cycle_size_unknown = Iterators.cycle(it_size_unknown, 5)
+    @test nth(cycle_size_unknown, 2) == 3
+    @test nth(cycle_size_unknown, 20) == 9 # mod1(20, 5) = 5, wraps 4 times
+    @test nth(finite_cycle_size_unknown, 2) == 3
+    @test nth(finite_cycle_size_unknown, 20) == 9
+    @test_throws BoundsError nth(finite_cycle_size_unknown, 30) # only wraps 5 times, max n is 5 * 5 = 25
+end
+
 @testset "Iterators docstrings" begin
     @test isempty(Docs.undocumented_names(Iterators))
+end
+
+# Filtered list comprehension (`Filter` construct) type inference
+@test Base.infer_return_type((Vector{Any},)) do xs
+    [x for x in xs if x isa Int]
+end == Vector{Int}
+
+@testset "issue #58922" begin
+    # `last` short circuits correctly
+    @test last(zip(1:10, 2:11)) == (10, 11)  # same length
+    @test last(zip(1:3, 2:11)) == (3, 4)     # different length
+
+    # Finite-guarded zip iterator: one iterator bounded and the other is not
+    @test last(zip(1:3, Iterators.countfrom(2))) == (3, 4)
+    @test last(zip(1:3, Iterators.cycle(('x', 'y')))) == (3, 'x')
+    @test last(zip(1:3, Iterators.repeated('x'))) == (3, 'x')
+    @test last(zip(OffsetArray(1:10, 2), OffsetArray(1:10, 3))) == (10, 10)
+
+    # Cannot statically know length of zipped iterator if any of its components are of
+    # unknown length
+    @test_throws MethodError last(zip(1:3, Iterators.filter(x -> x > 0, -5:5))) # (3, 3)
+    @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), 1:3)) # (3, 3)
+    @test_throws MethodError last(zip(1:10, Iterators.filter(x -> x > 0, -5:5))) # (5, 5)
+
+    # We also can't know the length of zipped iterators when all constituents are of an
+    # unknown length.  In this test, the answer is (5, 4), but we can't know that without
+    # a greedy algorithm
+    @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), Iterators.filter(x -> x % 2 == 0, -5:5)))  # (5, 4)
 end

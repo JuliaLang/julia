@@ -548,4 +548,17 @@ let interp = InvokeInterp()
     mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
     ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
     @test invoke(f, ci, args...) == 2
+
+    f = error
+    args = "test"
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
+    result = nothing
+    try
+        invoke(f, ci, args...)
+    catch e
+        result = sprint(Base.show_backtrace, catch_backtrace())
+    end
+    @test isa(result, String)
+    @test contains(result, "[1] error(::Char, ::Char, ::Char, ::Char)")
 end

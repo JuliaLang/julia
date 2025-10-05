@@ -113,7 +113,9 @@ set_inlineable!(src::CodeInfo, val::Bool) =
 function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
-    return convert(InlineCostType, x)
+    x = ccall(:jl_encode_inlining_cost, UInt8, (InlineCostType,), x)
+    x = ccall(:jl_decode_inlining_cost, InlineCostType, (UInt8,), x)
+    return x
 end
 
 const SRC_FLAG_DECLARED_INLINE = 0x1
@@ -130,7 +132,18 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 #####################
 
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
-function src_inlining_policy(interp::AbstractInterpreter,
+
+function src_inlining_policy(interp::AbstractInterpreter, mi::MethodInstance,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    # If we have a generator, but we can't invoke it (because argument type information is lacking),
+    # don't inline so we defer its invocation to runtime where we'll have precise type information.
+    if isa(mi.def, Method) && hasgenerator(mi)
+        may_invoke_generator(mi) || return false
+    end
+    return src_inlining_policy(interp, src, info, stmt_flag)
+end
+
+function src_inlining_policy(::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     isa(src, OptimizationState) && (src = src.src)
     if isa(src, MaybeCompressed)
@@ -225,7 +238,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
-        src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
+        src.ssavaluetypes = Any[ Any for _ = 1:nssavalues ]
     else
         nssavalues = length(src.ssavaluetypes::Vector{Any})
     end
@@ -233,9 +246,9 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     nslots = length(src.slotflags)
     slottypes = src.slottypes
     if slottypes === nothing
-        slottypes = Any[ Any for i = 1:nslots ]
+        slottypes = Any[ Any for _ = 1:nslots ]
     end
-    stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
+    stmt_info = CallInfo[ NoCallInfo() for _ = 1:nssavalues ]
     # cache some useful state computations
     def = mi.def
     mod = isa(def, Method) ? def.module : def
@@ -245,7 +258,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     cfg = compute_basic_blocks(src.code)
     unreachable = BitSet()
     bb_vartables = Union{VarTable,Nothing}[]
-    for block = 1:length(cfg.blocks)
+    for _ = 1:length(cfg.blocks)
         push!(bb_vartables, VarState[
             VarState(slottypes[slot], src.slotflags[slot] & SLOT_USEDUNDEF != 0)
             for slot = 1:nslots
@@ -541,7 +554,7 @@ abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = typ
 
 Called at the end of optimization to store the resulting IR back into the OptimizationState.
 """
-function finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
+function finishopt!(::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
     opt.optresult = OptimizationResult(ir, ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src), false)
     return nothing
 end
@@ -718,7 +731,9 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
     f === nothing && return false
     if f === getfield
         nargs = 4
-    elseif f === memoryrefnew || f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefnew
+        nargs= 3
+    elseif f === memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5
@@ -998,7 +1013,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
             check_inconsistentcy!(sv, scanner)
         else
             # No longer any dataflow concerns, just scan the flags
-            scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
+            scan!(scanner, false) do inst::Instruction, ::Int, ::Int
                 scan_non_dataflow_flags!(inst, sv)
                 # bail out early if there are no possibilities to refine the effects
                 if !any_refinable(sv)
@@ -1322,7 +1337,6 @@ end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
-    svdef = sv.linfo.def
     @zone "CC: DOMTREE_1" domtree = construct_domtree(ir)
     defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)

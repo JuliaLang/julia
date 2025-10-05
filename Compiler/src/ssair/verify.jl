@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-irshow_was_loaded() = invokelatest(isdefined, Compiler.IRShow, :debuginfo_firstline)
+irshow_was_loaded() = invokelatest(isdefinedglobal, Compiler.IRShow, :debuginfo_firstline)
 function maybe_show_ir(ir::IRCode)
     if irshow_was_loaded()
         # ensure we use I/O that does not yield, as this gets called during compilation
@@ -25,7 +25,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || head === :thunk
+is_toplevel_expr_head(head::Symbol) = head === :method || head === :thunk
 is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
