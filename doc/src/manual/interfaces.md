@@ -418,17 +418,17 @@ This function assumes the element type `isbitstype` and the indices are inbounds
 
 ```jldoctest
 julia> function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
-    A_cconv = Base.cconvert(Ptr{T}, A)
-    GC.@preserve A_cconv begin
-        A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
-        for d in 1:N
-            stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
-            first_idx = first(axes(A, d))
-            A_ptr += (I[d] - first_idx) * stride_in_bytes
-        end
-        unsafe_load(A_ptr)
-    end
-end;
+           A_cconv = Base.cconvert(Ptr{T}, A)
+           GC.@preserve A_cconv begin
+               A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+               for d in 1:N
+                   stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+                   first_idx = first(axes(A, d))
+                   A_ptr += (I[d] - first_idx) * stride_in_bytes
+               end
+               unsafe_load(A_ptr)
+           end
+       end;
 
 julia> A = [1 5; 2 6; 3 7; 4 8];
 
