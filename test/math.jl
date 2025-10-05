@@ -442,6 +442,15 @@ end
     @test isnan(exp(reinterpret(Float64, 0x7ffbb14880000000)))
 end
 
+@testset "issue #57463" begin
+    for T in (Int16, Int32, Int64, Int128)
+        @test iszero(1.1^typemin(T))
+        @test iszero(0.9^typemax(T))
+        @test isinf(1.1^typemax(T))
+        @test isinf(0.9^typemin(T))
+    end
+end
+
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA')/2.
