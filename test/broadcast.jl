@@ -938,7 +938,7 @@ let
 
     @test @inferred(Base.IteratorSize(Base.broadcasted(randn))) === Base.HasShape{0}()
 
-    @test @inferred(Base.IteratorSize(Base.broadcasted(randn))) === Base.HasShape{0}()
+    @test @inferred(Base.IteratorSize(convert(Broadcast.Broadcasted{Nothing}, Base.broadcasted(randn)))) === Base.HasShape{0}()
 
     # inference on nested
     bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)), AD1(randn(3)))
