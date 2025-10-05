@@ -2181,6 +2181,10 @@ end
     @test nextfloat(Inf32) === Inf32
     @test prevfloat(-Inf32) === -Inf32
     @test isequal(nextfloat(NaN32), NaN32)
+    @test nextfloat(1.0, UInt(5)) == nextfloat(1.0, 5)
+    @test prevfloat(1.0, UInt(5)) == prevfloat(1.0, 5)
+    @test nextfloat(0.0, typemax(UInt64)) == Inf
+    @test prevfloat(0.0, typemax(UInt64)) == -Inf
 end
 @testset "issue #16206" begin
     @test prevfloat(Inf) == 1.7976931348623157e308
