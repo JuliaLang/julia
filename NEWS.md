@@ -17,7 +17,9 @@ Language changes
 * `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
 is considered a bug fix ([#47102])
 
-  - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
+* The `hash` algorithm and its values have changed for certain types, most notably AbstractString. Any `hash` specializations for equal types to those that changed, such as some third-party string packages, may need to be deleted. ([#57509], [#59691])
+
+* The `hash(::AbstractString)` function is now a zero-copy / zero-cost function, based upon providing a correct implementation of the `codeunit` and `iterate` functions. Third-party string packages should migrate to the new algorithm by deleting their existing overrides of the `hash` function. ([#59691])
 
 * Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
 

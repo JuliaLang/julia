@@ -66,33 +66,37 @@ let include_result = Base.include(Main, ARGS[1])
             end
         end
     end
-    #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
-    #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
-    entrypoint(Base.task_done_hook, (Task,))
-    entrypoint(Base.wait, ())
-    entrypoint(Base.wait_forever, ())
-    entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
-    entrypoint(Base.checktaskempty, ())
-    if ARGS[3] == "true"
-        Base.Compiler.add_ccallable_entrypoints!()
-    end
-
-    # Export info about entrypoints and structs needed to create header files
-    if length(ARGS) >= 4
-        abi_export = ARGS[4]
-        open(abi_export, "w") do io
-            write_abi_metadata(io)
-        end
-    end
 end
 
 # Run the verifier in the current world (before build-script modifications),
 # so that error messages and types print in their usual way.
 Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
 
+# Apply hacks
+
 if Base.JLOptions().trim != 0
     include(joinpath(@__DIR__, "juliac-trim-base.jl"))
     include(joinpath(@__DIR__, "juliac-trim-stdlib.jl"))
+end
+
+#entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
+#entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
+entrypoint(Base.task_done_hook, (Task,))
+entrypoint(Base.wait, ())
+entrypoint(Base.wait_forever, ())
+entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
+entrypoint(Base.checktaskempty, ())
+
+if ARGS[3] == "true"
+    Base.Compiler.add_ccallable_entrypoints!()
+end
+
+# Export info about entrypoints and structs needed to create header files
+if length(ARGS) >= 4
+    abi_export = ARGS[4]
+    open(abi_export, "w") do io
+        write_abi_metadata(io)
+    end
 end
 
 empty!(Core.ARGS)

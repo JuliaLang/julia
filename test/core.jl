@@ -9,6 +9,8 @@ const Bottom = Union{}
 # For curmod_*
 include("testenv.jl")
 
+include("tempdepot.jl")
+
 ## tests that `const` field declarations
 
 # sanity tests that our built-in types are marked correctly for const fields
@@ -8443,7 +8445,7 @@ end
 
 # precompilation
 let load_path = mktempdir()
-    depot_path = mktempdir()
+    depot_path = mkdepottempdir()
     try
         pushfirst!(LOAD_PATH, load_path)
         pushfirst!(DEPOT_PATH, depot_path)
@@ -8485,11 +8487,6 @@ let load_path = mktempdir()
         filter!((≠)(load_path), LOAD_PATH)
         filter!((≠)(depot_path), DEPOT_PATH)
         rm(load_path, recursive=true, force=true)
-        try
-            rm(depot_path, force=true, recursive=true)
-        catch err
-            @show err
-        end
     end
 end
 
