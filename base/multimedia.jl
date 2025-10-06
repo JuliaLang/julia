@@ -205,6 +205,31 @@ for mime in ["application/atom+xml", "application/ecmascript",
     global istextmime(::MIME{Symbol(mime)}) = true
 end
 
+"""
+    struct MIMEData{mime<:MIME}
+        data
+    end
+
+    MIMEData(mime::Union{MIME,AbstractString}, data)
+
+A wrapper around `data` that causes [`show`](@ref)` to [`write`](@ref) it as
+raw data of the given [`MIME`](@ref) type.
+
+That is, when `show(io, mime, d)` is called on `d::MIMEData{mime}`, it simply
+calls `write(io, d.data)`.
+
+Can be constructed with `MIMEData(mime, data)` where `mime` is either a MIME
+type (an instance of `MIME`) or a string such as `"text/plain"` (which gets
+converted to a `MIME` instance).
+"""
+struct MIMEData{mime<:MIME}
+    data
+end
+MIMEData(::MIME{mime}, data) where {mime} = MIMEData{MIME{mime}}(data)
+MIMEData(mime::AbstractString, data) = MIMEData{MIME{Symbol(mime)}}(data)
+show(io::IO, ::MIME"text/plain", data::MIMEData{MIME"text/plain"}) = write(io, data.data)
+show(io::IO, ::MIME{mime}, data::MIMEData{MIME{mime}}) where {mime} = write(io, data.data)
+
 ###########################################################################
 # We have an abstract AbstractDisplay class that can be subclassed in order to
 # define new rich-display output devices.  A typical subclass should
