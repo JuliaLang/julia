@@ -620,14 +620,11 @@ module BackdateConstTest
     const world_after_f = Base.get_world_counter()
     const BACKDATED_CONST = 42  # defined in new world
     @test BACKDATED_CONST == 42
+    @test isdefinedglobal(@__MODULE__, :BACKDATED_CONST)
+    @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :BACKDATED_CONST)
     if Base.JLOptions().depwarn <= 1
-        # depwarn=no or yes: backdating works, emits warning
-        # Call f from the old world (before BACKDATED_CONST was defined)
         @test_warn "Detected access to binding `BackdateConstTest.BACKDATED_CONST`" Base.invoke_in_world(world_after_f, f)
-        @test Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :BACKDATED_CONST)
     else
-        # depwarn=error: backdating disabled
-        @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :BACKDATED_CONST)
         @test_throws UndefVarError Base.invoke_in_world(world_after_f, f)
     end
 end
@@ -642,11 +639,11 @@ module BackdateImportTest
     const world_after_g = Base.get_world_counter()
     import .Source: exported_value  # import in new world
     @test exported_value == 42
+    @test isdefinedglobal(@__MODULE__, :exported_value)
+    @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :exported_value)
     if Base.JLOptions().depwarn <= 1
         @test_warn "Detected access to binding `BackdateImportTest.exported_value`" Base.invoke_in_world(world_after_g, g)
-        @test Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :exported_value)
     else
-        @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :exported_value)
         @test_throws UndefVarError Base.invoke_in_world(world_after_g, g)
     end
 end
@@ -658,11 +655,11 @@ module BackdateGlobalTest
     const world_after_h = Base.get_world_counter()
     global backdated_global::Int = 123  # defined in new world
     @test backdated_global == 123
+    @test isdefinedglobal(@__MODULE__, :backdated_global)
+    @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :backdated_global)
     if Base.JLOptions().depwarn <= 1
         @test_warn "Detected access to binding `BackdateGlobalTest.backdated_global`" Base.invoke_in_world(world_after_h, h)
-        @test Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :backdated_global)
     else
-        @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :backdated_global)
         @test_throws UndefVarError Base.invoke_in_world(world_after_h, h)
     end
 end
@@ -680,8 +677,7 @@ module BackdateIssue58511
         @test_throws UndefVarError foo()
     end
 end
-
-# Test that implicit imports are NOT backdated
+# Test that conflicting imports are still detected and handled
 module BackdateNoImplicitTest
     using Test
     module Source1
@@ -693,7 +689,22 @@ module BackdateNoImplicitTest
         shared_name() = 2
     end
     const world_before = Base.get_world_counter()
-    using .Source1, .Source2
-    @test_throws UndefVarError shared_name()
+    @test_throws UndefVarError shared_name
+    using .Source1
+    @test shared_name === Source1.shared_name
+    @test shared_name() === 1
+    if Base.JLOptions().depwarn <= 1
+        @test Source1.shared_name === @test_warn "Detected access to binding `BackdateNoImplicitTest.shared_name`" Base.invoke_in_world(world_before, getglobal, @__MODULE__, :shared_name)
+    else
+        @test_throws UndefVarError Base.invoke_in_world(world_before, getglobal, @__MODULE__, :shared_name)
+    end
+    @test isdefinedglobal(@__MODULE__, :shared_name)
+    @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :shared_name)
+
+    using.Source2
+    @test_throws UndefVarError shared_name
+    @test !isdefinedglobal(@__MODULE__, :shared_name)
+    @test_throws UndefVarError Base.invoke_in_world(world_before, getglobal, @__MODULE__, :shared_name)
+    @test !isdefinedglobal(@__MODULE__, :shared_name)
     @test !Base.invoke_in_world(world_before, isdefinedglobal, @__MODULE__, :shared_name)
 end
