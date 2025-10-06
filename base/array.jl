@@ -1141,16 +1141,16 @@ function _growbeg!(a::Vector, delta::Integer)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
-    mem = ref.mem
     len = length(a)
     offset = memoryrefoffset(ref)
     newlen = len + delta
-    setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
+        setfield!(a, :size, (newlen,))
     else
         @noinline _growbeg_internal!(a, delta, len)
+        setfield!(a, :size, (newlen,))
     end
     return
 end
@@ -1200,11 +1200,11 @@ function _growend!(a::Vector, delta::Integer)
     len = length(a)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline _growend_internal!(a, delta, len)
     end
+    setfield!(a, :size, (newlen,))
     return
 end
 
@@ -1222,7 +1222,6 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
     memlen = length(mem)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
 
     # which side would we rather grow into?
@@ -1232,11 +1231,13 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         newref = @inbounds memoryref(mem, offset - delta)
         unsafe_copyto!(newref, ref, i)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
     elseif !prefer_start && memlen >= newmemlen
         unsafe_copyto!(mem, offset - 1 + delta + i, mem, offset - 1 + i, len - i + 1)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
@@ -1250,6 +1251,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
     end
 end
 
@@ -1265,11 +1267,11 @@ function _deletebeg!(a::Vector, delta::Integer)
         @inbounds _unsetindex!(a, i)
     end
     newlen = len - delta
+    setfield!(a, :size, (newlen,))
     if newlen != 0 # if newlen==0 we could accidentally index past the memory
         newref = @inbounds memoryref(a.ref, delta + 1)
         setfield!(a, :ref, newref)
     end
-    setfield!(a, :size, (newlen,))
     return
 end
 function _deleteend!(a::Vector, delta::Integer)
@@ -1417,7 +1419,6 @@ append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
-    i = lastindex(a)
     sizehint!(a, length(a) + n; shrink=false)
     for item in iter
         push!(a, item)
@@ -1761,7 +1762,6 @@ function pushfirst!(a::Vector{Any}, @nospecialize x)
 end
 function pushfirst!(a::Vector{Any}, @nospecialize x...)
     @_terminates_locally_meta
-    na = length(a)
     nx = length(x)
     _growbeg!(a, nx)
     @_safeindex for i = 1:nx
@@ -1875,7 +1875,6 @@ function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
     if eltype(r) === Bool
         return invoke(deleteat!, Tuple{Vector, AbstractVector{Bool}}, a, r)
     else
-        n = length(a)
         f = first(r)
         f isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
         isempty(r) || _deleteat!(a, f, length(r))
