@@ -557,9 +557,8 @@ struct FooBackdated
 
     FooBackdated() = new(FooBackdated[])
 end
-# With world counter retry, `isdefinedglobal` will retry with current world counter
-# and successfully find the binding regardless of depwarn setting.
-@test Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
+@test isdefinedglobal(@__MODULE__, :FooBackdated)
+@test !Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
 
 # Test that ambiguous binding intersect the using'd binding's world ranges
 module AmbigWorldTest

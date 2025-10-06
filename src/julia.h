@@ -792,7 +792,8 @@ enum jl_binding_flags {
     BINDING_FLAG_PUBLICP                              = 0x2,
     // Set if any methods defined in this module implicitly reference
     // this binding. If not, invalidation is optimized.
-    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x4
+    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x4,
+    BINDING_FLAG_DID_PRINT_INVOKELATEST_ADMONITION    = 0x8
 };
 
 typedef struct _jl_binding_t {

@@ -111,42 +111,70 @@ module Rebinding
     # Test world counter retry for newly defined bindings
     @testset "invokelatest for guard bindings" begin
         test_func_1 = (x) -> (@eval const new_binding_1 = $x; @isdefined(new_binding_1))
-        @test Base.invokelatest(test_func_1, 1)
+        @test !Base.invokelatest(test_func_1, 1)
         @test Base.invokelatest(test_func_1, 2)
         Base.delete_binding(Rebinding, :new_binding_1)
-        @test Base.invokelatest(test_func_1, 3)
+        @test !Base.invokelatest(test_func_1, 3)
 
         test_func_2 = (x) -> (@eval const new_binding_2 = $x; new_binding_2)
-        @test Base.invokelatest(test_func_2, 3) === 3
+        if Base.JLOptions().depwarn <= 1
+            @test 3 === @test_warn "Detected access to binding `Rebinding.new_binding_2`" Base.invokelatest(test_func_2, 3)
+        else
+            @test_throws UndefVarError Base.invokelatest(test_func_2, 3)
+        end
         @test Base.invokelatest(test_func_2, 4) === 3
         @test Base.invokelatest(test_func_2, 5) === 4
         Base.delete_binding(Rebinding, :new_binding_2)
-        @test Base.invokelatest(test_func_2, 6) === 6
+        if Base.JLOptions().depwarn <= 1
+            @test 6 === @test_warn "Detected access to binding `Rebinding.new_binding_2`" Base.invokelatest(test_func_2, 6)
+        else
+            @test_throws UndefVarError Base.invokelatest(test_func_2, 6)
+        end
 
         test_func_3 = (x) -> (@eval new_binding_3 = $x; @isdefined(new_binding_3))
-        @test Base.invokelatest(test_func_3, 5)
+        @test !Base.invokelatest(test_func_3, 5)
         @test Base.invokelatest(test_func_3, 6)
         Base.delete_binding(Rebinding, :new_binding_3)
-        @test Base.invokelatest(test_func_3, 7)
+        @test !Base.invokelatest(test_func_3, 7)
 
         test_func_4 = (x) -> (@eval new_binding_4 = $x; new_binding_4)
-        @test Base.invokelatest(test_func_4, 7) === 7
+        if Base.JLOptions().depwarn <= 1
+            @test 7 === @test_warn "Detected access to binding `Rebinding.new_binding_4`" Base.invokelatest(test_func_4, 7)
+        else
+            @test_throws UndefVarError Base.invokelatest(test_func_4, 7)
+        end
         @test Base.invokelatest(test_func_4, 8) === 8
         @test Base.invokelatest(test_func_4, 9) === 9
         Base.delete_binding(Rebinding, :new_binding_4)
-        @test Base.invokelatest(test_func_4, 10) === 10
+        if Base.JLOptions().depwarn <= 1
+            @test 10 === @test_warn "Detected access to binding `Rebinding.new_binding_4`" Base.invokelatest(test_func_4, 10)
+        else
+            @test_throws UndefVarError Base.invokelatest(test_func_4, 10)
+        end
 
         test_func_5 = (x) -> (@eval using Base: $x as new_import_1; @isdefined(new_import_1))
-        @test Base.invokelatest(test_func_5, :sin)
+        @test !Base.invokelatest(test_func_5, :sin)
         Base.delete_binding(Rebinding, :new_import_1)
-        @test Base.invokelatest(test_func_5, :cos)
+        @test !Base.invokelatest(test_func_5, :cos)
 
         test_func_6 = (x) -> (@eval using Base: $x as new_import_2; new_import_2)
-        @test Base.invokelatest(test_func_6, :sin) === Base.sin
+        if Base.JLOptions().depwarn <= 1
+            @test Base.sin === @test_warn "Detected access to binding `Rebinding.new_import_2`" Base.invokelatest(test_func_6, :sin)
+        else
+            @test_throws UndefVarError Base.invokelatest(test_func_6, :sin)
+        end
         Base.delete_binding(Rebinding, :new_import_2)
-        @test Base.invokelatest(test_func_6, :cos) === Base.cos
+        if Base.JLOptions().depwarn <= 1
+            @test Base.cos === @test_warn "Detected access to binding `Rebinding.new_import_2`" Base.invokelatest(test_func_6, :cos)
+        else
+            @test_throws UndefVarError Base.invokelatest(test_func_6, :cos)
+        end
         Base.delete_binding(Rebinding, :new_import_2)
-        @test Base.invokelatest(test_func_6, :tan) === Base.tan
+        if Base.JLOptions().depwarn <= 1
+            @test Base.tan === @test_warn "Detected access to binding `Rebinding.new_import_2`" Base.invokelatest(test_func_6, :tan)
+        else
+            @test_throws UndefVarError Base.invokelatest(test_func_6, :tan)
+        end
 
         @generated function test_generated_future(x)
             return future_generated_binding
