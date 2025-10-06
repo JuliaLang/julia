@@ -525,6 +525,12 @@ end
     v = empty!(collect(1:100))
     pushfirst!(v, 1)
     @test length(v.ref.mem) == 100
+
+    # test that insert! at position 1 doesn't allocate for empty arrays with capacity (issue #58640)
+    v = empty!(Vector{Int}(undef, 5))
+    insert!(v, 1, 10)
+    @test v == [10]
+    @test length(v.ref.mem) == 5
 end
 
 @testset "popat!(::Vector, i, [default])" begin
