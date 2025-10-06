@@ -11,7 +11,7 @@ const HASH_SECRET = (
 """
     hash(x[, h::UInt])::UInt
 
-Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
+Compute an integer hash code such that `isequal(x,y)` implies `isequal(hash(x), hash(y))`. The
 optional second argument `h` is another hash code to be mixed with the result.
 
 New types should implement the 2-argument form, typically by calling the 2-argument `hash`
@@ -629,7 +629,3 @@ hash(data::AbstractString, h::UInt) =
     hash_bytes(utf8units(data), UInt64(h), HASH_SECRET) % UInt
 @assume_effects :total hash(data::String, h::UInt) =
     GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
-
-# no longer used in Base, but a lot of packages access these internals
-const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
-const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
