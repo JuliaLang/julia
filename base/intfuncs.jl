@@ -306,17 +306,30 @@ function invmod(n::Integer, m::Integer)
     iszero(m) && throw(DomainError(m, "`m` must not be 0."))
     R = promote_typeof(n, m)
     if R <: Signed
-        g, x, _ = gcdx(n, m)
-        g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
+        x = _bezout_coef(n, m)
         return mod(x, m)
     else
-        # since gcdx only promises bezout w.r.t overflow for unsigned ints,
-        # we have to widen to a signed type
-        W = widen(signed(R))
-        t = invmod(n % W, m % W)
-        isnegative(m) && (t -= m)
-        return mod(t % R, m)
+        S = signed(R)
+        if !hastypemax(S) || (n <= typemax(S)) && (m <= typemax(S))
+            x = _bezout_coef(n % S, m % S)
+            isnegative(x) && (x += abs(m))
+            return mod(x % R, m)
+        else
+            # since gcdx only promises bezout w.r.t overflow for unsigned ints,
+            # we have to widen to a signed type
+            W = widen(S)
+            x = _bezout_coef(n % W, m % W)
+            t = mod(x, m % W)
+            isnegative(m) && (t -= m)
+            return mod(t % R, m)
+        end
     end
+end
+
+function _bezout_coef(n, m)
+    g, x, _ = gcdx(n, m)
+    g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
+    return x
 end
 
 """
