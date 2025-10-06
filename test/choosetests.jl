@@ -165,7 +165,6 @@ function choosetests(choices = [])
     filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")
-    filter!(!contains("SparseArrays/fixed"), tests) # temporarily disable SparseArrays/fixed
 
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
@@ -228,7 +227,7 @@ function choosetests(choices = [])
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(tests), unhandled)
     filter!(!in(skip_tests), tests)
-
+    filter!(!contains("SparseArrays/fixed"), tests) # temporarily disable SparseArrays/fixed
     if !isempty(unhandled)
         @warn "Not skipping tests: $(join(unhandled, ", "))"
     end
