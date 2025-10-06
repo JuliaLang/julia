@@ -2640,7 +2640,48 @@ function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Unio
 end
 
 # load a serialized file directly from append_bundled_depot_path for uuidkey without stalechecks
-function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
+"""
+    require_stdlib(package_uuidkey::PkgId, [ext::String, from::Module])
+
+!!! warning "May load duplicate copies of stdlib packages."
+
+    This requires that all stdlib packages loaded are compatible with having concurrent
+    copies of themselves loaded into memory. It also places additional restrictions on
+    the kinds of type-piracy that are allowed in stdlibs, since type-piracy can cause the
+    dispatch table to become visibly "torn" across multiple different packages.
+
+    The specific requirements are:
+
+      The import side (caller of `require_stdlib`) must not leak any stdlib types, esp.
+      to any context that may have a conflicting copy of the stdlib(s) (or vice-versa).
+         - e.g., if an output is forwarded to user code, it must contain only Base types.
+         - e.g., if an output contains types from the stdlib, it must be consumed "internally"
+                 before reaching user code.
+
+      The imported code (loaded stdlibs) must be very careful about type piracy:
+         - It must not access any global state that may differ between stdlib copies in
+           type-pirated methods.
+         - It must not return any stdlib types from any type-pirated public methods (since
+           a loaded duplicate would overwrite the Base method again, returning different
+           types that don't correspond to the user-accessible copy of the stdlib).
+         - It must not pass / discriminate stdlib types in type-pirated methods, except
+           indirectly via methods defined in Base and implemented (w/o type-piracy) in
+           all copies of the stdlib over their respective types.
+
+      The idea behind the above restrictions is that any type-pirated methods in the stdlib
+      must return a result that is simultaneously correct for all of the stdlib's loaded
+      copies, including accounting for global state differences and split type identities.
+
+      Furthermore, any imported code must not leak any stdlib types to globals and containers
+      (e.g. Vectors and mutable structs) in upstream Modules, since this will also lead to
+      type-confusion when the type is later pulled out in user / stdlib code.
+
+    For examples of issues like the above, see:
+      [1] https://github.com/JuliaLang/Pkg.jl/issues/4017#issuecomment-2377589989
+      [2] https://github.com/JuliaLang/StyledStrings.jl/issues/91#issuecomment-2379602914
+"""
+require_stdlib(package_uuidkey::PkgId) = require_stdlib(package_uuidkey, nothing, Base)
+function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, from::Module)
     if generating_output(#=incremental=#true)
         # Otherwise this would lead to awkward dependency issues by loading a package that isn't in the Project/Manifest
         error("This interactive function requires a stdlib to be loaded, and package code should instead use it directly from that stdlib.")
@@ -2652,35 +2693,33 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=noth
     if newm isa Module
         return newm
     end
-    # first since this is a stdlib, try to look there directly first
     env = Sys.STDLIB
-    #sourcepath = ""
-    if ext === nothing
-        sourcepath = normpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
-    else
-        sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
-    end
-    #mbypath = manifest_uuid_path(env, this_uuidkey)
-    #if mbypath isa String && isfile_casesensitive(mbypath)
-    #    sourcepath = mbypath
-    #else
-    #    # if the user deleted the stdlib folder, we next try using their environment
-    #    sourcepath = locate_package_env(this_uuidkey)
-    #    if sourcepath !== nothing
-    #        sourcepath, env = sourcepath
-    #    end
-    #end
-    #if sourcepath === nothing
-    #    throw(ArgumentError("""
-    #        Package $(repr("text/plain", this_uuidkey)) is required but does not seem to be installed.
-    #        """))
-    #end
-    set_pkgorigin_version_path(this_uuidkey, sourcepath)
-    depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
-    newm = start_loading(this_uuidkey, UInt128(0), true)
-    newm === nothing || return newm
     try
-        newm = _require_search_from_serialized(this_uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
+        depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
+        from_stdlib = true # set to false if `from` is a normal package so we do not want the internal loader for the extension either
+        if ext isa String
+            from_uuid = PkgId(from)
+            from_m = get(loaded_modules, from_uuid, nothing)
+            if from_m === from
+                # if from_uuid is either nothing or points to something else, assume we should use require_stdlib
+                # otherwise check cachepath for from to see if it looks like it is from depot_path, since try_build_ids
+                cachepath = get(PkgOrigin, pkgorigins, from_uuid).cachepath
+                entrypath, entryfile = cache_file_entry(from_uuid)
+                from_stdlib = any(x -> startswith(entrypath, x), depot_path)
+            end
+        end
+        if from_stdlib
+            # first since this is a stdlib, try to look there directly first
+            if ext === nothing
+                sourcepath = normpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
+            else
+                sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
+            end
+            set_pkgorigin_version_path(this_uuidkey, sourcepath)
+            newm = start_loading(this_uuidkey, UInt128(0), true)
+            newm === nothing || return newm
+            newm = _require_search_from_serialized(this_uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
+        end
     finally
         end_loading(this_uuidkey, newm)
     end
@@ -2690,10 +2729,12 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=noth
         run_package_callbacks(this_uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
+        # if it is an extension, we first need to indicate where to find its parant via EXT_PRIMED
+        ext isa String && (EXT_PRIMED[this_uuidkey] = PkgId[package_uuidkey])
         newm = _require_prelocked(this_uuidkey)
     end
     return newm
-    end
+    end # release lock
 end
 
 
