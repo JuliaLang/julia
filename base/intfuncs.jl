@@ -313,6 +313,10 @@ function invmod(n::Integer, m::Integer)
         S = signed(R)
         if !hastypemax(S) || (n <= typemax(S)) && (m <= typemax(S))
             x = _bezout_coef(n % S, m % S)
+
+            # this branch is only hit if R <: Unsigned, so we don't have
+            # to worry about abs(typemin(::Signed)) overflow. If `m` is
+            # signed then `x` must be unsigned, and thus never negative
             isnegative(x) && (x += abs(m))
             return mod(x % R, m)
         else
