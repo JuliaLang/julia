@@ -487,8 +487,9 @@ void CloneCtx::prepare_vmap(ValueToValueMapTy &vmap)
     // The `DISubprogram` cloning on LLVM 5.0 handles this
     // but it doesn't hurt to enforce the identity either.
     auto &MD = vmap.MD();
-    for (auto cu: M.debug_compile_units()) {
-        MD[cu].reset(cu);
+    if (M.getNamedMetadata("llvm.dbg.cu"))
+        for (auto cu: M.getNamedMetadata("llvm.dbg.cu")->operands()) {
+            MD[cu].reset(cu);
     }
 }
 

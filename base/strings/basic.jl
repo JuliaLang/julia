@@ -362,10 +362,6 @@ end
 
 isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
-# hashing
-
-hash(s::AbstractString, h::UInt) = hash(String(s)::String, h)
-
 ## character index arithmetic ##
 
 """
@@ -791,9 +787,8 @@ struct CodeUnits{T,S<:AbstractString} <: DenseVector{T}
     CodeUnits(s::S) where {S<:AbstractString} = new{codeunit(s),S}(s)
 end
 
-length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
-size(s::CodeUnits) = (length(s),)
+size(s::CodeUnits) = (ncodeunits(s.s),)
 elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
