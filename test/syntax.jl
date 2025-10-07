@@ -2602,6 +2602,15 @@ end
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
 end
 
+module M59008 # dotop with global LHS in macro
+using Test
+global a = 1
+macro counter()
+    :(a += 1)
+end
+@test @counter() === 2 === a
+end
+
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
 

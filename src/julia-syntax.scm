@@ -1906,7 +1906,7 @@
                    ,(expand-update-operator op op= (car e) rhs T))))
         (else
          (if (and (pair? lhs) (eq? op= '=)
-                  (not (memq (car lhs) '(|.| tuple vcat ncat typed_hcat typed_vcat typed_ncat))))
+                  (not (memq (car lhs) '(|.| globalref tuple vcat ncat typed_hcat typed_vcat typed_ncat))))
              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
          (expand-update-operator- op op= lhs rhs declT))))
 
