@@ -24,10 +24,6 @@ end
 
 # Dict
 
-# These can be changed, to trade off better performance for space
-const global maxallowedprobe = 16
-const global maxprobeshift   = 6
-
 """
     Dict([itr])
 
@@ -69,22 +65,19 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     vals::Memory{V}
     ndel::Int
     count::Int
-    age::UInt
-    idxfloor::Int  # an index <= the indices of all used slots
-    maxprobe::Int
+    age::UInt32
 
     function Dict{K,V}() where V where K
         n = 0
         slots = Memory{UInt8}(undef,n)
         fill!(slots, 0x0)
-        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0)
+        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
-        new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
-            d.idxfloor, d.maxprobe)
+        new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age)
     end
-    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int) where {K, V}
-        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt32) where {K, V}
+        new(slots, keys, vals, ndel, count, age)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -142,7 +135,6 @@ end
     sz = length(olds)
     newsz = _tablesz(newsz)
     h.age += 1
-    h.idxfloor = 1
     if h.count == 0
         # TODO: tryresize
         h.slots = Memory{UInt8}(undef, newsz)
@@ -150,7 +142,6 @@ end
         h.keys = Memory{K}(undef, newsz)
         h.vals = Memory{V}(undef, newsz)
         h.ndel = 0
-        h.maxprobe = 0
         return h
     end
 
@@ -160,7 +151,6 @@ end
     vals = Memory{V}(undef, newsz)
     age0 = h.age
     count = 0
-    maxprobe = 0
 
     for i = 1:sz
         @inbounds if (olds[i] & 0x80) != 0
@@ -171,8 +161,6 @@ end
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
-            probe = (index - index0) & (newsz-1)
-            probe > maxprobe && (maxprobe = probe)
             slots[index] = olds[i]
             keys[index] = k
             vals[index] = v
@@ -187,7 +175,6 @@ end
     h.vals = vals
     h.count = count
     h.ndel = 0
-    h.maxprobe = maxprobe
     return h
 end
 
@@ -197,7 +184,7 @@ function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)
     # need at least 1.5n space to hold n elements
-    newsz = _tablesz(cld(3 * newsz, 2))
+    newsz = _tablesz(cld(5 * newsz, 4))
     return (shrink ? newsz == oldsz : newsz <= oldsz) ? d : rehash!(d, newsz)
 end
 
@@ -228,9 +215,7 @@ function empty!(h::Dict{K,V}) where V where K
     end
     h.ndel = 0
     h.count = 0
-    h.maxprobe = 0
     h.age += 1
-    h.idxfloor = max(1, sz)
     return h
 end
 
@@ -239,12 +224,10 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
-    maxprobe = h.maxprobe
-    maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
     index, sh = hashindex(key, sz)
     keys = h.keys
 
-    @assume_effects :terminates_locally :noub @inbounds while true
+    @assume_effects :terminates_locally :noub @inbounds for _ in 1:sz
         isslotempty(h,index) && return -1
         if sh == h.slots[index]
             k = keys[index]
@@ -254,7 +237,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
         end
 
         index = (index & (sz-1)) + 1
-        (iter += 1) > maxprobe && return -1
+        iter += 1
     end
     # This line is unreachable
 end
@@ -272,7 +255,6 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
         return -index, sh
     end
     iter = 0
-    maxprobe = h.maxprobe
     index, sh = hashindex(key, sz)
     avail = 0
     keys = h.keys
@@ -297,25 +279,7 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
 
         index = (index & (sz-1)) + 1
         iter += 1
-        iter > maxprobe && break
     end
-
-    avail < 0 && return avail, sh
-
-    maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
-    # Check if key is not present, may need to keep searching to find slot
-    @inbounds while iter < maxallowed
-        if !isslotfilled(h,index)
-            h.maxprobe = iter
-            return -index, sh
-        end
-        index = (index & (sz-1)) + 1
-        iter += 1
-    end
-
-    rehash!(h, h.count > 64000 ? sz*2 : sz*4)
-
-    return ht_keyindex2_shorthash!(h, key)
 end
 
 # Only for better backward compatibility. It can be removed in the future.
@@ -328,14 +292,11 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     h.vals[index] = v
     h.count += 1
     h.age += 1
-    if index < h.idxfloor
-        h.idxfloor = index
-    end
 
     sz = length(h.keys)
     # Rehash now if necessary
-    if (h.count + h.ndel)*3 > sz*2
-        # > 2/3 full (including tombstones)
+    if (h.count + h.ndel)*5 > sz*4
+        # > 4/5 full (including tombstones)
         rehash!(h, h.count > 64000 ? h.count*2 : max(h.count*4, 4))
     end
     nothing
@@ -616,7 +577,7 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = skip_deleted_floor!(h)
+    idx = skip_deleted!(h,1 )
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
@@ -690,17 +651,14 @@ function skip_deleted(h::Dict, i)
     end
     return 0
 end
-function skip_deleted_floor!(h::Dict)
-    idx = skip_deleted(h, h.idxfloor)
-    if idx != 0
-        h.idxfloor = idx
-    end
-    idx
-end
 
-@propagate_inbounds _iterate_dict(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
+@propagate_inbounds function _iterate_dict(t::Dict{K,V}, i) where {K,V}
+    # overflow check not needed on i+1 because a dict that large would more than fill memory
+    return i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+end
 @propagate_inbounds function iterate(t::Dict)
-    _iterate_dict(t, skip_deleted(t, t.idxfloor))
+    isempty(t) && return nothing
+    _iterate_dict(t, t.count==0 ? 0 : skip_deleted(t, 1))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate_dict(t, skip_deleted(t, i))
 
@@ -709,16 +667,25 @@ length(t::Dict) = t.count
 
 @propagate_inbounds Iterators.only(t::Dict) = Iterators._only(t, first)
 
-@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
-    i == 0 && return nothing
+@propagate_inbounds function iterate(v::T) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+    isempty(v) && return nothing
+    i = skip_deleted(v.dict, 1)
+    vals = T <: KeySet ? v.dict.keys : v.dict.vals
+    # overflow check not needed on i+1 because a dict that large would more than fill memory
+    (@inbounds vals[i], i+1)
+end
+
+
+@propagate_inbounds function iterate(v::T, i::Int) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
     i = skip_deleted(v.dict, i)
     i == 0 && return nothing
     vals = T <: KeySet ? v.dict.keys : v.dict.vals
-    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
+    # overflow check not needed on i+1 because a dict that large would more than fill memory
+    (@inbounds vals[i], i+1)
 end
 
 function filter!(pred, h::Dict{K,V}) where {K,V}
-    h.count == 0 && return h
+    isempty(h) && return h
     @inbounds for i=1:length(h.slots)
         if ((h.slots[i] & 0x80) != 0) && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
@@ -737,7 +704,7 @@ function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
     # @inbounds is here so that it gets propagated to isslotfilled
-    @inbounds for i = dict.idxfloor:lastindex(vals)
+    @inbounds for i = eachindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
         end
