@@ -54,7 +54,9 @@ to open an [issue](https://github.com/JuliaLang/julia/issues) or
 [pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
 into a public API. However, we do not discourage the attempt to create packages that expose
 stable public interfaces while relying on non-public implementation details of Julia and
-buffering the differences across different Julia versions.
+buffering the differences across different Julia versions. Such packages should use tilde
+(`julia = "~1.10"`) or equals (`julia = "=1.10.5"`) specifiers in their Julia `[compat]` entries,
+instead of the default (caret) specifier.
 
 ### The documentation is not accurate enough. Can I rely on the existing behavior?
 
