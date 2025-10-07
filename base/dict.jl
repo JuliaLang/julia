@@ -573,7 +573,7 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = skip_deleted!(h,1 )
+    idx = skip_deleted(h, 1)
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
@@ -654,7 +654,7 @@ end
 end
 @propagate_inbounds function iterate(t::Dict)
     isempty(t) && return nothing
-    _iterate_dict(t, t.count==0 ? 0 : skip_deleted(t, 1))
+    _iterate_dict(t, skip_deleted(t, 1))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate_dict(t, skip_deleted(t, i))
 
