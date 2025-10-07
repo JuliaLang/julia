@@ -11,7 +11,7 @@ const HASH_SECRET = (
 """
     hash(x[, h::UInt])::UInt
 
-Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
+Compute an integer hash code such that `isequal(x,y)` implies `isequal(hash(x), hash(y))`. The
 optional second argument `h` is another hash code to be mixed with the result.
 
 New types should implement the 2-argument form, typically by calling the 2-argument `hash`
@@ -72,36 +72,22 @@ hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(
 
 # IntegerCodeUnits provides a little-endian byte representation of integers
 struct IntegerCodeUnits{T<:Integer} <: AbstractVector{UInt8}
-    value::T
+    uvalue::T
     num_bytes::Int
 
     function IntegerCodeUnits(x::T) where {T<:Integer}
         # Calculate number of bytes needed (always pad to full byte)
         u = abs(x)
         num_bytes = max(cld(top_set_bit(u), 8), 1)
-        return new{T}(x, num_bytes)
+        return new{T}(u, num_bytes)
     end
 end
+size(units::IntegerCodeUnits) = (units.num_bytes,)
+length(units::IntegerCodeUnits) = units.num_bytes
+@inline getindex(units::IntegerCodeUnits, i::Int) = (units.uvalue >>> (8 * (i - 1))) % UInt8
+@inline load_le_array(::Type{UInt64}, units::IntegerCodeUnits, idx) = (units.uvalue >>> (8 * (idx - 1))) % UInt64
+@inline load_le_array(::Type{UInt32}, units::IntegerCodeUnits, idx) = (units.uvalue >>> (8 * (idx - 1))) % UInt32
 
-function Base.size(units::IntegerCodeUnits)
-    return (units.num_bytes,)
-end
-
-function Base.length(units::IntegerCodeUnits)
-    return units.num_bytes
-end
-
-function Base.getindex(units::IntegerCodeUnits, i::Int)
-    @boundscheck checkbounds(units, i)
-    u = abs(units.value)
-    byte_pos = i - 1
-    return UInt8((u >>> (8 * byte_pos)) & 0xff)
-end
-
-function Base.iterate(units::IntegerCodeUnits, state::Int = 1)
-    state > units.num_bytes && return nothing
-    return units[state], state + 1
-end
 
 # Main interface function to get little-endian byte representation of integers
 codeunits(x::Integer) = IntegerCodeUnits(x)
@@ -114,7 +100,7 @@ end
 utf8units(s::AbstractString) = codeunit(s) <: UInt8 ? codeunits(s) : UTF8Units(s)
 
 # Iterator state: (char_iter_state, remaining_utf8_bytes)
-function Base.iterate(units::UTF8Units)
+function iterate(units::UTF8Units)
     char_result = iterate(units.string)
     char_result === nothing && return nothing
     char, char_state = char_result
@@ -128,7 +114,7 @@ function Base.iterate(units::UTF8Units)
     return first_byte, (char_state, remaining_bytes)
 end
 
-function Base.iterate(units::UTF8Units, state)
+function iterate(units::UTF8Units, state)
     char_state, remaining_bytes = state
     # If we have more bytes from current char, return next byte
     if remaining_bytes != 0
@@ -643,7 +629,3 @@ hash(data::AbstractString, h::UInt) =
     hash_bytes(utf8units(data), UInt64(h), HASH_SECRET) % UInt
 @assume_effects :total hash(data::String, h::UInt) =
     GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
-
-# no longer used in Base, but a lot of packages access these internals
-const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
-const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81

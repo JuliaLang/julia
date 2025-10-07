@@ -201,7 +201,8 @@ function code_warntype(io::IO, arginfo::ArgInfo;
 end
 code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...) = code_warntype(io, ArgInfo(f, tt); kwargs...)
 code_warntype(io::IO, @nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...) = code_warntype(io, ArgInfo(argtypes); kwargs...)
-code_warntype(args...; kwargs...) = (@nospecialize; code_warntype(stdout, args...; kwargs...))
+code_warntype(f; kwargs...) = (@nospecialize; code_warntype(stdout, f; kwargs...))
+code_warntype(f, argtypes; kwargs...) = (@nospecialize; code_warntype(stdout, f, argtypes; kwargs...))
 
 using Base: CodegenParams
 

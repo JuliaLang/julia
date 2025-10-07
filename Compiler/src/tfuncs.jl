@@ -581,15 +581,19 @@ add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
 
-@nospecs function _svec_len_tfunc(𝕃::AbstractLattice, s)
+@nospecs function _svec_len_tfunc(::AbstractLattice, s)
     if isa(s, Const) && isa(s.val, SimpleVector)
         return Const(length(s.val))
     end
     return Int
 end
 add_tfunc(Core._svec_len, 1, 1, _svec_len_tfunc, 1)
+@nospecs function _svec_len_nothrow(𝕃::AbstractLattice, s)
+    ⊑ = partialorder(𝕃)
+    return s ⊑ SimpleVector
+end
 
-@nospecs function _svec_ref_tfunc(𝕃::AbstractLattice, s, i)
+@nospecs function _svec_ref_tfunc(::AbstractLattice, s, i)
     if isa(s, Const) && isa(i, Const)
         s, i = s.val, i.val
         if isa(s, SimpleVector) && isa(i, Int)
@@ -599,7 +603,7 @@ add_tfunc(Core._svec_len, 1, 1, _svec_len_tfunc, 1)
     return Any
 end
 add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
-@nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
+@nospecs function typevar_tfunc(::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
     ub_certain = lb_certain = true
@@ -2338,7 +2342,7 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return compilerbarrier_nothrow(argtypes[1], nothing)
     elseif f === Core._svec_len
         na == 1 || return false
-        return _svec_len_tfunc(𝕃, argtypes[1]) isa Const
+        return _svec_len_nothrow(𝕃, argtypes[1])
     elseif f === Core._svec_ref
         na == 2 || return false
         return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
@@ -2746,9 +2750,8 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     return false
 end
 
-function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
+function current_scope_tfunc(::AbstractInterpreter, sv::InferenceState)
     pc = sv.currpc
-    handler_info = sv.handler_info
     while true
         pchandler = gethandler(sv, pc)
         if pchandler === nothing
@@ -2770,7 +2773,7 @@ function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
         pc = pchandler.enter_idx
     end
 end
-current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
+current_scope_tfunc(::AbstractInterpreter, ::IRInterpretationState) = Any
 
 hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
 
@@ -2960,7 +2963,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     end
 
     if f === Intrinsics.bitcast
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         xty = widenconst(argtypes[2])
         if !isconcrete
             return Union{ErrorException, TypeError}
@@ -2976,7 +2979,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
              Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
         # If !isconcrete, `ty` may be Union{} at runtime even if we have
         # isprimitivetype(ty).
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
@@ -3006,8 +3009,15 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     end
 
     if f === Intrinsics.have_fma
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         if !(isconcrete && isprimitivetype(ty))
+            return TypeError
+        end
+        return Union{}
+    end
+
+    if f === Intrinsics.add_ptr || f === Intrinsics.sub_ptr
+        if !(argtypes[1] ⊑ Ptr && argtypes[2] ⊑ UInt)
             return TypeError
         end
         return Union{}
@@ -3129,7 +3139,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
     tt = Core.Box(tt)
-    return Future{CallMeta}(call, interp, sv) do call, interp, sv
+    return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
         end
@@ -3207,7 +3217,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     else
         return CallMeta(Any, Any, Effects(), NoCallInfo())
     end
-    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
+    (types, isexact, _, _) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
     isexact || return CallMeta(Bool, Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
     if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
@@ -3284,7 +3294,7 @@ add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)
 
 const FOREIGNCALL_ARG_START = 6
 
-function foreigncall_effects(@nospecialize(abstract_eval), e::Expr)
+function foreigncall_effects(@nospecialize(abstract_eval), ::Expr)
     # `:foreigncall` can potentially perform all sorts of operations, including calling
     # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
     # concern that the method calls that potentially occur within the `:foreigncall` will
@@ -3307,7 +3317,7 @@ function new_genericmemory_nothrow(@nospecialize(abstract_eval), args::Vector{An
     0 < dimval < typemax(Int) || return false
     tot, ovflw = Intrinsics.checked_smul_int(dimval, elsz)
     ovflw && return false
-    isboxed = 1; isunion = 2
+    isunion = 2
     tot, ovflw = Intrinsics.checked_sadd_int(tot, arrayelem == isunion ? 1 + dimval : 1)
     ovflw && return false
     return true
