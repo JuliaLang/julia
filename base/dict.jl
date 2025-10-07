@@ -223,7 +223,6 @@ end
 function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
-    iter = 0
     index, sh = hashindex(key, sz)
     keys = h.keys
 
@@ -237,7 +236,6 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
         end
 
         index = (index & (sz-1)) + 1
-        iter += 1
     end
     # This line is unreachable
 end
@@ -254,7 +252,6 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
         index, sh = hashindex(key, length(h.keys))
         return -index, sh
     end
-    iter = 0
     index, sh = hashindex(key, sz)
     avail = 0
     keys = h.keys
@@ -278,7 +275,6 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
         end
 
         index = (index & (sz-1)) + 1
-        iter += 1
     end
 end
 
