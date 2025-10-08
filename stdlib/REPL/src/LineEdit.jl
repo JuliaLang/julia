@@ -4,9 +4,12 @@ module LineEdit
 
 import ..REPL
 using ..REPL: AbstractREPL, Options
+using ..REPL.StylingPasses: StylingPass, SyntaxHighlightPass, RegionHighlightPass, EnclosingParenHighlightPass, StylingContext, apply_styling_passes, merge_annotations
 
 using ..Terminals
 import ..Terminals: raw!, width, height, clear_line, beep
+
+using StyledStrings
 
 import Base: ensureroom, show, AnyDict, position
 using Base: something
@@ -611,6 +614,39 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         reader isa Base.TTY && !Base.ispty(reader)::Bool
     else false end
 
+    enable_style_input = false
+    if prompt isa PromptState
+        enable_style_input = options(prompt).style_input
+    elseif prompt isa PrefixSearchState # When using e.g. up/down arrows to scroll through history
+        if isdefined(prompt, :parent) && prompt.parent isa Prompt && isdefined(prompt.parent, :repl)
+            enable_style_input = prompt.parent.repl.options.style_input
+        end
+    end
+
+    styled_buffer = AnnotatedString("")
+    # Skip styling for excessively large inputs (performance)
+    max_highlight_size = 100_000 # bytes
+    if buf.size > 0 && buf.size <= max_highlight_size
+        full_input = String(buf.data[1:buf.size])
+        if !isempty(full_input)
+            passes = StylingPass[]
+            context = StylingContext(buf_pos, regstart, regstop)
+
+            if enable_style_input
+                push!(passes, SyntaxHighlightPass())
+                push!(passes, EnclosingParenHighlightPass())
+            end
+
+            if region_active
+                push!(passes, RegionHighlightPass())
+            end
+
+            if !isempty(passes)
+                styled_buffer = apply_styling_passes(full_input, passes, context)
+            end
+        end
+    end
+
     # Now go through the buffer line by line
     seek(buf, 0)
     moreinput = true # add a blank line if there is a trailing newline on the last line
@@ -619,6 +655,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
                      # Note: when there are too many lines for rows, we still print the first lines
                      # even if they are going to not be visible in the end: for simplicity, but
                      # also because it does the 'right thing' when the window is resized
+    styled_idx = firstindex(styled_buffer)
     while moreinput
         line = readline(buf, keep=true)
         moreinput = endswith(line, "\n")
@@ -636,12 +673,45 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         llength = textwidth(line)
         slength = sizeof(line)
         cur_row += 1
-        # lwrite: what will be written to termbuf
-        lwrite = region_active ? highlight_region(line, regstart, regstop, written, slength) :
-                                 line
+
+        # Extract the portion of styled_buffer corresponding to this line.
+        # styled_buffer contains the entire input with styling annotations, but we write
+        # line-by-line to the terminal. We track our position in styled_buffer and extract
+        # substrings matching each line's byte count.
+        if !isempty(styled_buffer) && styled_idx <= lastindex(styled_buffer)
+            # Find the end index by advancing through the styled string
+            # We need to consume the same number of bytes as in line
+            line_bytes = sizeof(line)
+            end_idx = styled_idx
+            bytes_consumed = 0
+
+            while bytes_consumed < line_bytes && end_idx <= lastindex(styled_buffer)
+                next_idx = nextind(styled_buffer, end_idx)
+                bytes_consumed += next_idx - end_idx
+                if bytes_consumed <= line_bytes
+                    end_idx = next_idx
+                end
+            end
+
+            # end_idx is now one past the last character we want, so go back
+            if bytes_consumed > 0
+                end_idx = prevind(styled_buffer, end_idx)
+            end
+
+            if styled_idx <= end_idx && end_idx <= lastindex(styled_buffer)
+                lwrite = SubString(styled_buffer, styled_idx, end_idx)
+                styled_idx = nextind(styled_buffer, end_idx)
+            else
+                lwrite = line
+            end
+        else
+            lwrite = line
+        end
+
         written += slength
         cmove_col(termbuf, lindent + 1)
-        write(termbuf, lwrite)
+
+        write(IOContext(termbuf, :color => hascolor(terminal)), lwrite)
         # We expect to be line after the last valid output line (due to
         # the '\n' at the end of the previous line)
         if curs_row == -1
@@ -690,18 +760,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     cmove_col(termbuf, curs_pos + 1)
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
-end
-
-function highlight_region(lwrite::Union{String,SubString{String}}, regstart::Int, regstop::Int, written::Int, slength::Int)
-    if written <= regstop <= written+slength
-        i = thisind(lwrite, regstop-written)
-        lwrite = lwrite[1:i] * Base.disable_text_style[:reverse] * lwrite[nextind(lwrite, i):end]
-    end
-    if written <= regstart <= written+slength
-        i = thisind(lwrite, regstart-written)
-        lwrite = lwrite[1:i] * Base.text_colors[:reverse] * lwrite[nextind(lwrite, i):end]
-    end
-    return lwrite
 end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
@@ -999,7 +1057,9 @@ function edit_insert(s::PromptState, c::StringLike)
         offset += position(buf) - beginofline(buf) # size of current line
         spinner = '\0'
         delayup = !eof(buf) || old_wait
-        if offset + textwidth(str) <= w && !(after == 0 && delayup)
+        # Disable fast path when syntax highlighting is enabled
+        use_fast_path = offset + textwidth(str) <= w && !(after == 0 && delayup) && !options(s).style_input
+        if use_fast_path
             # Avoid full update when appending characters to the end
             # and an update of curs_row isn't necessary (conservatively estimated)
             write(termbuf, str)

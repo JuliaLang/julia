@@ -66,6 +66,8 @@ using Base.Terminals
 abstract type AbstractREPL end
 
 include("options.jl")
+include("StylingPasses.jl")
+using .StylingPasses
 
 include("LineEdit.jl")
 using .LineEdit
