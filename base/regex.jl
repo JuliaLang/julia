@@ -324,7 +324,7 @@ Return `true` if `s` starts with the regex pattern, `prefix`.
     `match_option` to PCRE. If compile time is amortized,
     `occursin(r"^...", s)` is faster than `startswith(s, r"...")`.
 
-See also [`occursin`](@ref), [`endswith`](@ref), [`endswith`](@ref), [`occursin`](@ref), [`match`](@ref)
+See also [`occursin`](@ref), [`endswith`](@ref), [`match`](@ref)
 
 !!! compat "Julia 1.2"
     This method requires at least Julia 1.2.
@@ -356,7 +356,7 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
     `match_option` to PCRE. If compile time is amortized,
     `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
 
-See also [`occursin`](@ref), [`startswith`](@ref), [`startswith`](@ref), [`occursin`](@ref), [`match`](@ref)
+See also [`occursin`](@ref), [`startswith`](@ref), [`match`](@ref)
 
 !!! compat "Julia 1.2"
     This method requires at least Julia 1.2.
