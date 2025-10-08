@@ -2016,7 +2016,7 @@ JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym
 
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s);
