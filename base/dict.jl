@@ -166,7 +166,7 @@ end
         @inbounds if (olds[i] & 0x80) != 0
             k = oldk[i]
             v = oldv[i]
-            index, sh = hashindex(k, newsz)
+            index, _ = hashindex(k, newsz)
             index0 = index
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1

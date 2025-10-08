@@ -1770,6 +1770,27 @@ end
         @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
         @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
     end
+    @testset "issue  #49450" begin
+        @test div(514, Float16(0.75)) === Float16(685)
+        @test fld(514, Float16(0.75)) === Float16(685)
+        @test cld(515, Float16(0.75)) === Float16(687)
+
+        @test cld(1, Float16(0.000999)) === Float16(1001)
+        @test cld(2, Float16(0.001999)) === Float16(1001)
+        @test cld(3, Float16(0.002934)) === Float16(1023)
+        @test cld(4, Float16(0.003998)) === Float16(1001)
+        @test fld(5, Float16(0.004925)) === Float16(1015)
+
+        @test div(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test fld(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test cld(4_194_308, Float32(0.75)) === Float32(5_592_411)
+
+        @test fld(5, Float32(6.556511e-7)) === Float32(7_626_007)
+        @test fld(10, Float32(1.3113022e-6)) === Float32(7_626_007)
+        @test fld(11, Float32(1.4305115e-6)) === Float32(7_689_557)
+        @test cld(16, Float32(2.8014183e-6)) === Float32(5_711_393)
+        @test cld(17, Float32(2.2053719e-6)) === Float32(7_708_451)
+    end
 end
 @testset "return types" begin
     for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
@@ -2191,6 +2212,10 @@ end
     @test nextfloat(Inf32) === Inf32
     @test prevfloat(-Inf32) === -Inf32
     @test isequal(nextfloat(NaN32), NaN32)
+    @test nextfloat(1.0, UInt(5)) == nextfloat(1.0, 5)
+    @test prevfloat(1.0, UInt(5)) == prevfloat(1.0, 5)
+    @test nextfloat(0.0, typemax(UInt64)) == Inf
+    @test prevfloat(0.0, typemax(UInt64)) == -Inf
 end
 @testset "issue #16206" begin
     @test prevfloat(Inf) == 1.7976931348623157e308
