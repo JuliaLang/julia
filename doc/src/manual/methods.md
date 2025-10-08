@@ -1168,6 +1168,52 @@ reduced likelihood of ambiguities. Moreover, it extends the "public"
 `myfilter` interface: a user who wants to control the padding
 explicitly can call the `NoPad` variant directly.
 
+### [Play nicely with other packages in the ecosystem](@id man-method-design-ambiguities-other-packages)
+
+Suppose:
+* there is a generic function, say `f`
+* `f` is intended to have methods added to it from packages with unrelated ownership
+* a newly defined method may take more than one argument
+* the argument types of the method may be heterogeneous, such that one argument type comes from a different package than another, and these packages have unrelated ownership
+
+Some examples of such functions that this advice applies to:
+* [`==`](@ref)
+* [`isequal`](@ref)
+* [`<`](@ref)
+* [`isless`](@ref)
+* [`Base.promote_rule`](@ref)
+
+Then:
+* Do not add a method to `f` such that the type of either argument is not constrained (type `Any`). For example, this is not valid:
+  ```julia
+  struct A end
+  Base.:(==)(::A, ::Any) = ...  # do not do add such a method to a function like `==`
+  ```
+* Furthermore, generalizing the previous bullet point, assuming there are types `A` and `B` such that:
+  * `A` is a strict subtype of `B`: `(A <: B) && !(B <: A)`
+  * `B` is available for subtyping by types with an unrelated (package) owner
+
+  ... do not define a method of this function such that one of the arguments is constrained to `A` while the other argument is constrained to `B`. For example, this is not valid:
+  ```julia
+  struct A <: Number end
+  Base.:(==)(::A, ::Number) = ...  # do not do add such a method to a function like `==`
+  ```
+
+The reason that defining such a method is a bad idea is the fact that another package doing likewise (but with order of `A` and `B` swapped) will lead to method ambiguity in dispatch.
+
+Furthermore, not following this advice will also lead to method ambiguity with respect to a *polite* package, that does nothing of the sort. For example:
+* in one (ill-mannered) package:
+  ```julia
+  struct X <: Integer end
+  function Base.:(==)(::X, ::Real) end  # offending method (the method body is not relevant here)
+  ```
+* in another (polite) package:
+  ```julia
+  struct Y <: AbstractFloat end
+  function Base.:(==)(::Integer, ::Y) end
+  ```
+* then a call like `==(X(), Y())` is ambiguous
+
 ## Defining methods in local scope
 
 You can define methods within a [local scope](@ref scope-of-variables), for example
