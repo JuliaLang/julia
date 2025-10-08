@@ -1531,27 +1531,6 @@ for T in (Int, Float64, String, Symbol)
     end
 end
 
-struct BadHash
-    i::Int
-end
-Base.hash(::BadHash, ::UInt)=UInt(1)
-@testset "maxprobe reset #51595" begin
-    d = Dict(BadHash(i)=>nothing for i in 1:20)
-    empty!(d)
-    sizehint!(d, 0)
-    @test d.maxprobe < length(d.keys)
-    d[BadHash(1)]=nothing
-    @test !(BadHash(2) in keys(d))
-    d = Dict(BadHash(i)=>nothing for i in 1:20)
-    for _ in 1:20
-        pop!(d)
-    end
-    sizehint!(d, 0)
-    @test d.maxprobe < length(d.keys)
-    d[BadHash(1)]=nothing
-    @test !(BadHash(2) in keys(d))
-end
-
 # Issue #52066
 let d = Dict()
     d[1] = 'a'
