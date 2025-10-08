@@ -3509,11 +3509,11 @@ end
 struct MixedKeyDict{T<:Tuple} #<: AbstractDict{Any,Any}
     dicts::T
 end
-Base.merge(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
-Base.merge(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.mergewith(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.mergewith(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
 function _merge(f, res, d, others...)
     ofsametype, remaining = _alloftype(Base.heads(d), ((),), others...)
-    return _merge(f, (res..., merge(f, ofsametype...)), Base.tail(d), remaining...)
+    return _merge(f, (res..., mergewith(f, ofsametype...)), Base.tail(d), remaining...)
 end
 _merge(f, res, ::Tuple{}, others...) = _merge(f, res, others...)
 _merge(f, res, d) = MixedKeyDict((res..., d...))
@@ -3537,9 +3537,9 @@ _alloftype(ofdesiredtype, accumulated) = ofdesiredtype, Base.front(accumulated)
 let
     d = MixedKeyDict((Dict(1 => 3), Dict(4. => 2)))
     e = MixedKeyDict((Dict(1 => 7), Dict(5. => 9)))
-    @test merge(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
+    @test mergewith(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
     f = MixedKeyDict((Dict(2 => 7), Dict(5. => 11)))
-    @test merge(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
+    @test mergewith(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
 end
 
 # Issue #31974
