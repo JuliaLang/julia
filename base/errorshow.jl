@@ -91,6 +91,9 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif isa(ex.context, Core.GlobalRef)
+            gr = ex.context
+            ctx = "in $(ex.func) of global binding `$(gr.mod).$(gr.name)`"
         elseif ex.func === :var"keyword argument"
             ctx = "in keyword argument $(ex.context)"
         else
