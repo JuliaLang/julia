@@ -11,7 +11,7 @@ const HASH_SECRET = (
 """
     hash(x[, h::UInt])::UInt
 
-Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
+Compute an integer hash code such that `isequal(x,y)` implies `isequal(hash(x), hash(y))`. The
 optional second argument `h` is another hash code to be mixed with the result.
 
 New types should implement the 2-argument form, typically by calling the 2-argument `hash`
