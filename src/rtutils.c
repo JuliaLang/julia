@@ -126,6 +126,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_global(const char *fname, jl_module_
                                                jl_value_t *got JL_MAYBE_UNROOTED)
 {
     jl_value_t *gr = jl_module_globalref(mod, sym);
+    JL_GC_PUSH2(&expected, &got);
     jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname), gr, expected, got);
     jl_throw(ex);
 }
