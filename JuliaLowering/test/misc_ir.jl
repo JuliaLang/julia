@@ -513,3 +513,32 @@ include("hi.jl")
 3   latestworld
 4   (return %₂)
 
+########################################
+# Const function assignment syntax (legacy)
+const f(x::Int)::Int = x+1
+#---------------------
+1   TestMod.f
+2   TestMod.x
+3   TestMod.Int
+4   (call core.typeassert %₂ %₃)
+5   (call %₁ %₄)
+6   TestMod.Int
+7   (call core.typeassert %₅ %₆)
+8   (return %₇)
+
+########################################
+# Error: Destructuring assignment method definitions (broken, legacy)
+f(x)::Int, g() = [1.0, 2.0]
+#---------------------
+LoweringError:
+f(x)::Int, g() = [1.0, 2.0]
+└──┘ ── invalid assignment location
+
+########################################
+# Error: Destructuring assignment typdef, variable, and function (broken, legacy)
+T{U}, (x::Float64, g()) = [Bool, (1, 2)]
+#---------------------
+LoweringError:
+T{U}, (x::Float64, g()) = [Bool, (1, 2)]
+#                  └─┘ ── invalid assignment location
+

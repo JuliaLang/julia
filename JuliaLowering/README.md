@@ -898,8 +898,6 @@ In the current Julia runtime,
   * `:import`
   * `:public`
   * `:export`
-  * `:global`
-  * `:const`
   * `:toplevel`
   * `:error`
   * `:incomplete`

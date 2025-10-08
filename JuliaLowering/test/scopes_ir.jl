@@ -166,7 +166,7 @@ begin
     @islocal(x)
 end
 #---------------------
-1   (global TestMod.x)
+1   (call core.declare_global TestMod :x false)
 2   latestworld
 3   (return false)
 
@@ -179,7 +179,7 @@ begin
 end
 #---------------------
 1   (newvar slot₁/y)
-2   (global TestMod.x)
+2   (call core.declare_global TestMod :x false)
 3   latestworld
 4   (call core.apply_type top.Dict core.Symbol core.Any)
 5   (call %₄)
@@ -428,4 +428,106 @@ end
 2   (= slot₁/x %₁)
 3   (call core.isdefinedglobal TestMod :y false)
 4   (return %₃)
+
+########################################
+# Global function defined inside let (let over lambda)
+let x = 1
+    global f(y) = x = y
+    global g() = x
+end
+#---------------------
+1   1
+2   (= slot₁/x (call core.Box))
+3   slot₁/x
+4   (call core.setfield! %₃ :contents %₁)
+5   (call core.declare_global TestMod :f false)
+6   latestworld
+7   (method TestMod.f)
+8   latestworld
+9   TestMod.f
+10  (call core.Typeof %₉)
+11  (call core.svec %₁₀ core.Any)
+12  (call core.svec)
+13  SourceLocation::2:12
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  --- code_info
+    slots: [slot₁/#self#(!read) slot₂/y]
+    1   slot₂/y
+    2   (captured_local 1)
+    3   (call core.setfield! %₂ :contents %₁)
+    4   (return %₁)
+16  slot₁/x
+17  (call core.svec %₁₆)
+18  (call JuliaLowering.replace_captured_locals! %₁₅ %₁₇)
+19  --- method core.nothing %₁₄ %₁₈
+20  latestworld
+21  (call core.declare_global TestMod :g false)
+22  latestworld
+23  (method TestMod.g)
+24  latestworld
+25  TestMod.g
+26  (call core.Typeof %₂₅)
+27  (call core.svec %₂₆)
+28  (call core.svec)
+29  SourceLocation::3:12
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- code_info
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
+    1   (captured_local 1)
+    2   (call core.isdefined %₁ :contents)
+    3   (gotoifnot %₂ label₅)
+    4   (goto label₇)
+    5   (newvar slot₂/x)
+    6   slot₂/x
+    7   (call core.getfield %₁ :contents)
+    8   (return %₇)
+32  slot₁/x
+33  (call core.svec %₃₂)
+34  (call JuliaLowering.replace_captured_locals! %₃₁ %₃₃)
+35  --- method core.nothing %₃₀ %₃₄
+36  latestworld
+37  TestMod.g
+38  (return %₃₇)
+
+########################################
+# Modify assignment operator on closure variable
+let x = 1
+    global f() = x += 1
+end
+#---------------------
+1   1
+2   (= slot₁/x (call core.Box))
+3   slot₁/x
+4   (call core.setfield! %₃ :contents %₁)
+5   (call core.declare_global TestMod :f false)
+6   latestworld
+7   (method TestMod.f)
+8   latestworld
+9   TestMod.f
+10  (call core.Typeof %₉)
+11  (call core.svec %₁₀)
+12  (call core.svec)
+13  SourceLocation::2:12
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  --- code_info
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
+    1   TestMod.+
+    2   (captured_local 1)
+    3   (call core.isdefined %₂ :contents)
+    4   (gotoifnot %₃ label₆)
+    5   (goto label₈)
+    6   (newvar slot₂/x)
+    7   slot₂/x
+    8   (call core.getfield %₂ :contents)
+    9   (call %₁ %₈ 1)
+    10  (captured_local 1)
+    11  (call core.setfield! %₁₀ :contents %₉)
+    12  (return %₉)
+16  slot₁/x
+17  (call core.svec %₁₆)
+18  (call JuliaLowering.replace_captured_locals! %₁₅ %₁₇)
+19  --- method core.nothing %₁₄ %₁₈
+20  latestworld
+21  TestMod.f
+22  (return %₂₁)
 

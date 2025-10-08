@@ -25,7 +25,8 @@ function expr_to_syntaxtree(@nospecialize(e), lnn::Union{LineNumberNode, Nothing
         kind=Kind, syntax_flags=UInt16,
         source=SourceAttrType, var_id=Int, value=Any,
         name_val=String, is_toplevel_thunk=Bool,
-        scope_layer=LayerId, meta=CompileHints)
+        scope_layer=LayerId, meta=CompileHints,
+        toplevel_pure=Bool)
     expr_to_syntaxtree(graph, e, lnn)
 end
 

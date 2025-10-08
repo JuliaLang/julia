@@ -142,7 +142,7 @@ X{T} = Y{T,T}
 6   slot₁/T
 7   (call core.apply_type %₄ %₅ %₆)
 8   (call core.UnionAll %₃ %₇)
-9   (constdecl TestMod.X %₈)
+9   (call core.declare_const TestMod :X %₈)
 10  latestworld
 11  (return %₈)
 

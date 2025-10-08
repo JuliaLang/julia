@@ -193,7 +193,7 @@ abstract type A end
 4   (call core._setsuper! %₂ core.Any)
 5   slot₁/A
 6   (call core._typebody! false %₅)
-7   (global TestMod.A)
+7   (call core.declare_global TestMod :A false)
 8   latestworld
 9   (call core.isdefinedglobal TestMod :A false)
 10  (gotoifnot %₉ label₁₅)
@@ -201,7 +201,7 @@ abstract type A end
 12  (call core._equiv_typedef %₁₁ %₂)
 13  (gotoifnot %₁₂ label₁₅)
 14  (goto label₁₇)
-15  (constdecl TestMod.A %₂)
+15  (call core.declare_const TestMod :A %₂)
 16  latestworld
 17  (return core.nothing)
 
@@ -216,7 +216,7 @@ abstract type A <: B end
 5   (call core._setsuper! %₂ %₄)
 6   slot₁/A
 7   (call core._typebody! false %₆)
-8   (global TestMod.A)
+8   (call core.declare_global TestMod :A false)
 9   latestworld
 10  (call core.isdefinedglobal TestMod :A false)
 11  (gotoifnot %₁₀ label₁₆)
@@ -224,7 +224,7 @@ abstract type A <: B end
 13  (call core._equiv_typedef %₁₂ %₂)
 14  (gotoifnot %₁₃ label₁₆)
 15  (goto label₁₈)
-16  (constdecl TestMod.A %₂)
+16  (call core.declare_const TestMod :A %₂)
 17  latestworld
 18  (return core.nothing)
 
@@ -243,7 +243,7 @@ abstract type A{X, Y <: X} end
 9   (call core._setsuper! %₇ core.Any)
 10  slot₁/A
 11  (call core._typebody! false %₁₀)
-12  (global TestMod.A)
+12  (call core.declare_global TestMod :A false)
 13  latestworld
 14  (call core.isdefinedglobal TestMod :A false)
 15  (gotoifnot %₁₄ label₂₀)
@@ -251,7 +251,7 @@ abstract type A{X, Y <: X} end
 17  (call core._equiv_typedef %₁₆ %₇)
 18  (gotoifnot %₁₇ label₂₀)
 19  (goto label₂₂)
-20  (constdecl TestMod.A %₇)
+20  (call core.declare_const TestMod :A %₇)
 21  latestworld
 22  (return core.nothing)
 
@@ -301,7 +301,7 @@ primitive type P 8 end
 4   (call core._setsuper! %₂ core.Any)
 5   slot₁/P
 6   (call core._typebody! false %₅)
-7   (global TestMod.P)
+7   (call core.declare_global TestMod :P false)
 8   latestworld
 9   (call core.isdefinedglobal TestMod :P false)
 10  (gotoifnot %₉ label₁₅)
@@ -309,7 +309,7 @@ primitive type P 8 end
 12  (call core._equiv_typedef %₁₁ %₂)
 13  (gotoifnot %₁₂ label₁₅)
 14  (goto label₁₇)
-15  (constdecl TestMod.P %₂)
+15  (call core.declare_const TestMod :P %₂)
 16  latestworld
 17  (return core.nothing)
 
@@ -328,7 +328,7 @@ primitive type P{X,Y} <: Z 32 end
 9   (call core._setsuper! %₆ %₈)
 10  slot₁/P
 11  (call core._typebody! false %₁₀)
-12  (global TestMod.P)
+12  (call core.declare_global TestMod :P false)
 13  latestworld
 14  (call core.isdefinedglobal TestMod :P false)
 15  (gotoifnot %₁₄ label₂₀)
@@ -336,7 +336,7 @@ primitive type P{X,Y} <: Z 32 end
 17  (call core._equiv_typedef %₁₆ %₆)
 18  (gotoifnot %₁₇ label₂₀)
 19  (goto label₂₂)
-20  (constdecl TestMod.P %₆)
+20  (call core.declare_const TestMod :P %₆)
 21  latestworld
 22  (return core.nothing)
 
@@ -352,7 +352,7 @@ primitive type P P_nbits() end
 6   (call core._setsuper! %₄ core.Any)
 7   slot₁/P
 8   (call core._typebody! false %₇)
-9   (global TestMod.P)
+9   (call core.declare_global TestMod :P false)
 10  latestworld
 11  (call core.isdefinedglobal TestMod :P false)
 12  (gotoifnot %₁₁ label₁₇)
@@ -360,7 +360,7 @@ primitive type P P_nbits() end
 14  (call core._equiv_typedef %₁₃ %₄)
 15  (gotoifnot %₁₄ label₁₇)
 16  (goto label₁₉)
-17  (constdecl TestMod.P %₄)
+17  (call core.declare_const TestMod :P %₄)
 18  latestworld
 19  (return core.nothing)
 
@@ -369,7 +369,7 @@ primitive type P P_nbits() end
 struct X
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec)
@@ -393,7 +393,7 @@ end
 22  (gotoifnot %₁₅ label₂₃)
 23  (call core.svec)
 24  (call core._typebody! %₂₁ %₆ %₂₃)
-25  (constdecl TestMod.X %₂₄)
+25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
 28  (call core.apply_type core.Type %₂₇)
@@ -415,7 +415,7 @@ struct X
     X() = new()
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec)
@@ -439,7 +439,7 @@ end
 22  (gotoifnot %₁₅ label₂₃)
 23  (call core.svec)
 24  (call core._typebody! %₂₁ %₆ %₂₃)
-25  (constdecl TestMod.X %₂₄)
+25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
 28  (call core.apply_type core.Type %₂₇)
@@ -463,7 +463,7 @@ struct X
     c
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :a :b :c)
@@ -488,7 +488,7 @@ end
 23  TestMod.T
 24  (call core.svec core.Any %₂₃ core.Any)
 25  (call core._typebody! %₂₁ %₆ %₂₄)
-26  (constdecl TestMod.X %₂₅)
+26  (call core.declare_const TestMod :X %₂₅)
 27  latestworld
 28  TestMod.T
 29  (call core.=== core.Any %₂₈)
@@ -535,7 +535,7 @@ end
 struct X{U, S <: V <: T} <: Z
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (= slot₂/U (call core.TypeVar :U))
 4   TestMod.S
@@ -576,7 +576,7 @@ end
 39  (= slot₃/V (call core.getfield %₃₈ 1))
 40  (call core.svec)
 41  (call core._typebody! %₂₈ %₁₂ %₄₀)
-42  (constdecl TestMod.X %₄₁)
+42  (call core.declare_const TestMod :X %₄₁)
 43  latestworld
 44  slot₂/U
 45  slot₃/V
@@ -606,7 +606,7 @@ struct X
     const @atomic c
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :a :b :c)
@@ -630,7 +630,7 @@ end
 22  (gotoifnot %₁₅ label₂₃)
 23  (call core.svec core.Any core.Any core.Any)
 24  (call core._typebody! %₂₁ %₆ %₂₃)
-25  (constdecl TestMod.X %₂₄)
+25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
 28  (call core.apply_type core.Type %₂₇)
@@ -658,7 +658,7 @@ struct X
     b
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :a :b)
@@ -682,7 +682,7 @@ end
 22  (gotoifnot %₁₅ label₂₃)
 23  (call core.svec core.Any core.Any)
 24  (call core._typebody! %₂₁ %₆ %₂₃)
-25  (constdecl TestMod.X %₂₄)
+25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
 28  (call core.apply_type core.Type %₂₇)
@@ -713,7 +713,7 @@ struct X{U}
     x::U
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (= slot₁/U (call core.TypeVar :U))
 4   slot₁/U
@@ -745,7 +745,7 @@ end
 30  slot₁/U
 31  (call core.svec %₃₀)
 32  (call core._typebody! %₂₃ %₈ %₃₁)
-33  (constdecl TestMod.X %₃₂)
+33  (call core.declare_const TestMod :X %₃₂)
 34  latestworld
 35  slot₁/U
 36  TestMod.X
@@ -797,7 +797,7 @@ struct X{T, S <: Vector{T}}
     v::Vector{S}
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (= slot₃/T (call core.TypeVar :T))
 4   TestMod.Vector
@@ -841,7 +841,7 @@ end
 42  (call core.apply_type %₄₀ %₄₁)
 43  (call core.svec %₄₂)
 44  (call core._typebody! %₂₈ %₁₃ %₄₃)
-45  (constdecl TestMod.X %₄₄)
+45  (call core.declare_const TestMod :X %₄₄)
 46  latestworld
 47  slot₃/T
 48  slot₂/S
@@ -908,7 +908,7 @@ struct X
 end
 #---------------------
 1   (= slot₂/f (call core.Box))
-2   (global TestMod.X)
+2   (call core.declare_global TestMod :X false)
 3   latestworld
 4   (call core.svec)
 5   (call core.svec :x)
@@ -932,7 +932,7 @@ end
 23  (gotoifnot %₁₆ label₂₄)
 24  (call core.svec core.Any)
 25  (call core._typebody! %₂₂ %₇ %₂₄)
-26  (constdecl TestMod.X %₂₅)
+26  (call core.declare_const TestMod :X %₂₅)
 27  latestworld
 28  (call core.svec)
 29  (call core.svec)
@@ -1037,7 +1037,7 @@ struct X{S,T}
 end
 #---------------------
 1   (newvar slot₅/f)
-2   (global TestMod.X)
+2   (call core.declare_global TestMod :X false)
 3   latestworld
 4   (= slot₂/S (call core.TypeVar :S))
 5   (= slot₃/T (call core.TypeVar :T))
@@ -1075,7 +1075,7 @@ end
 37  (= slot₃/T (call core.getfield %₃₆ 1))
 38  (call core.svec core.Any)
 39  (call core._typebody! %₂₆ %₁₁ %₃₈)
-40  (constdecl TestMod.X %₃₉)
+40  (call core.declare_const TestMod :X %₃₉)
 41  latestworld
 42  TestMod.X
 43  TestMod.A
@@ -1142,7 +1142,7 @@ struct X
     X(xs) = new(xs...)
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x :y)
@@ -1166,7 +1166,7 @@ end
 22  (gotoifnot %₁₅ label₂₃)
 23  (call core.svec core.Any core.Any)
 24  (call core._typebody! %₂₁ %₆ %₂₃)
-25  (constdecl TestMod.X %₂₄)
+25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
 28  (call core.apply_type core.Type %₂₇)
@@ -1191,7 +1191,7 @@ struct X{T}
     X{T}(xs) where {T} = new(xs...)
 end
 #---------------------
-1   (global TestMod.X)
+1   (call core.declare_global TestMod :X false)
 2   latestworld
 3   (= slot₁/T (call core.TypeVar :T))
 4   slot₁/T
@@ -1224,7 +1224,7 @@ end
 31  TestMod.A
 32  (call core.svec %₃₀ %₃₁)
 33  (call core._typebody! %₂₃ %₈ %₃₂)
-34  (constdecl TestMod.X %₃₃)
+34  (call core.declare_const TestMod :X %₃₃)
 35  latestworld
 36  (= slot₃/T (call core.TypeVar :T))
 37  TestMod.X

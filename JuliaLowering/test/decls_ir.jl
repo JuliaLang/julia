@@ -53,7 +53,7 @@ end
 # Global declaration allowed in tail position
 global x
 #---------------------
-1   (global TestMod.x)
+1   (call core.declare_global TestMod :x false)
 2   latestworld
 3   (return core.nothing)
 
@@ -63,7 +63,7 @@ begin
     global x
 end
 #---------------------
-1   (global TestMod.x)
+1   (call core.declare_global TestMod :x false)
 2   latestworld
 3   (return core.nothing)
 
@@ -92,7 +92,7 @@ y = global x
 const xx = 10
 #---------------------
 1   10
-2   (constdecl TestMod.xx %₁)
+2   (call core.declare_const TestMod :xx %₁)
 3   latestworld
 4   (return %₁)
 
@@ -110,26 +110,34 @@ const xx::T = 10
 8   (call top.convert %₁ %₇)
 9   (= slot₁/tmp (call core.typeassert %₈ %₁))
 10  slot₁/tmp
-11  (constdecl TestMod.xx %₁₀)
+11  (call core.declare_const TestMod :xx %₁₀)
 12  latestworld
 13  (return %₁₀)
 
 ########################################
-# Error: Const tuple
+# Const tuple
 const xxx,xxxx,xxxxx = 10,20,30
 #---------------------
-LoweringError:
-const xxx,xxxx,xxxxx = 10,20,30
-#    └─────────────┘ ── Lowering TODO: `const` tuple assignment desugaring
+1   10
+2   (call core.declare_const TestMod :xxx %₁)
+3   latestworld
+4   20
+5   (call core.declare_const TestMod :xxxx %₄)
+6   latestworld
+7   30
+8   (call core.declare_const TestMod :xxxxx %₇)
+9   latestworld
+10  (call core.tuple 10 20 30)
+11  (return %₁₀)
 
 ########################################
 # Const in chain: only first is const
 const c0 = v0 = v1 = 123
 #---------------------
 1   123
-2   (constdecl TestMod.c0 %₁)
+2   (call core.declare_const TestMod :c0 %₁)
 3   latestworld
-4   (globaldecl TestMod.v0)
+4   (call core.declare_global TestMod :v0 true)
 5   latestworld
 6   (call core.get_binding_type TestMod :v0)
 7   (= slot₁/tmp %₁)
@@ -141,7 +149,7 @@ const c0 = v0 = v1 = 123
 13  (= slot₁/tmp (call top.convert %₆ %₁₂))
 14  slot₁/tmp
 15  (call core.setglobal! TestMod :v0 %₁₄)
-16  (globaldecl TestMod.v1)
+16  (call core.declare_global TestMod :v1 true)
 17  latestworld
 18  (call core.get_binding_type TestMod :v1)
 19  (= slot₂/tmp %₁)
@@ -159,7 +167,7 @@ const c0 = v0 = v1 = 123
 # Global assignment
 xx = 10
 #---------------------
-1   (globaldecl TestMod.xx)
+1   (call core.declare_global TestMod :xx true)
 2   latestworld
 3   (call core.get_binding_type TestMod :xx)
 4   (= slot₁/tmp 10)
@@ -177,23 +185,24 @@ xx = 10
 # Typed global assignment
 global xx::T = 10
 #---------------------
-1   (globaldecl TestMod.xx TestMod.T)
+1   (call core.declare_global TestMod :xx false)
 2   latestworld
-3   (global TestMod.xx)
-4   latestworld
-5   (globaldecl TestMod.xx)
-6   latestworld
-7   (call core.get_binding_type TestMod :xx)
-8   (= slot₁/tmp 10)
-9   slot₁/tmp
-10  (call core.isa %₉ %₇)
-11  (gotoifnot %₁₀ label₁₃)
-12  (goto label₁₅)
-13  slot₁/tmp
-14  (= slot₁/tmp (call top.convert %₇ %₁₃))
-15  slot₁/tmp
-16  (call core.setglobal! TestMod :xx %₁₅)
-17  (return 10)
+3   TestMod.T
+4   (call core.declare_global TestMod :xx true %₃)
+5   latestworld
+6   (call core.declare_global TestMod :xx true)
+7   latestworld
+8   (call core.get_binding_type TestMod :xx)
+9   (= slot₁/tmp 10)
+10  slot₁/tmp
+11  (call core.isa %₁₀ %₈)
+12  (gotoifnot %₁₁ label₁₄)
+13  (goto label₁₆)
+14  slot₁/tmp
+15  (= slot₁/tmp (call top.convert %₈ %₁₄))
+16  slot₁/tmp
+17  (call core.setglobal! TestMod :xx %₁₆)
+18  (return 10)
 
 ########################################
 # Error: x declared twice
@@ -206,7 +215,7 @@ LoweringError:
 begin
     local x::T = 1
     local x::S = 1
-#         └──┘ ── multiple type declarations found for `x`
+#        └───────┘ ── multiple type declarations found for `x`
 end
 
 ########################################
@@ -286,6 +295,6 @@ end
 LoweringError:
 function f()
     global x::Int = 1
-#          └────┘ ── type declarations for global variables must be at top level, not inside a function
+#         └─────────┘ ── type declarations for global variables must be at top level, not inside a function
 end
 

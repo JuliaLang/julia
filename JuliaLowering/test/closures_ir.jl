@@ -755,7 +755,7 @@ slots: [slot₁/#self#(!read) slot₂/T(!read) slot₃/tmp(!read)]
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)
-@ast_ [K"lambda"(is_toplevel_thunk=false)
+@ast_ [K"lambda"(is_toplevel_thunk=false, toplevel_pure=false)
     [K"block"]
     [K"block"]
     [K"->" [K"tuple"] [K"block"]]
