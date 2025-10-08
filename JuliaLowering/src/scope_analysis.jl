@@ -43,17 +43,21 @@ function _find_scope_vars!(ctx, assignments, locals, destructured_args, globals,
             _insert_if_not_present!(locals, NameKey(ex[1]), ex)
         end
     elseif k == K"global"
-        _insert_if_not_present!(globals, NameKey(ex[1]), ex)
+        if !(kind(ex[1]) == K"Value" && ex[1].value isa GlobalRef)
+            _insert_if_not_present!(globals, NameKey(ex[1]), ex)
+        end
     elseif k == K"assign_or_constdecl_if_global"
         # like v = val, except that if `v` turns out global(either implicitly or
         # by explicit `global`), it gains an implicit `const`
         _insert_if_not_present!(assignments, NameKey(ex[1]), ex)
     elseif k == K"=" || k == K"constdecl"
         v = decl_var(ex[1])
-        if !(kind(v) in KSet"BindingId globalref Placeholder")
+        if !(kind(v) in KSet"BindingId globalref Value Placeholder")
             _insert_if_not_present!(assignments, NameKey(v), v)
         end
-        _find_scope_vars!(ctx, assignments, locals, destructured_args, globals, used_names, used_bindings, ex[2])
+        if k != K"constdecl" || numchildren(ex) == 2
+            _find_scope_vars!(ctx, assignments, locals, destructured_args, globals, used_names, used_bindings, ex[2])
+        end
     elseif k == K"function_decl"
         v = ex[1]
         kv = kind(v)
@@ -473,7 +477,8 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         pop!(ctx.scope_stack)
 
         @ast ctx ex [K"lambda"(lambda_bindings=scope.lambda_bindings,
-                               is_toplevel_thunk=is_toplevel_thunk)
+                               is_toplevel_thunk=is_toplevel_thunk,
+                               toplevel_pure=false)
             arg_bindings
             sparm_bindings
             [K"block"
@@ -720,10 +725,12 @@ function analyze_variables!(ctx, ex)
         end
     elseif k == K"constdecl"
         id = ex[1]
-        if lookup_binding(ctx, id).kind == :local
-            throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
+        if kind(id) == K"BindingId"
+            if lookup_binding(ctx, id).kind == :local
+                throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
+            end
+            update_binding!(ctx, id; is_const=true)
         end
-        update_binding!(ctx, id; is_const=true)
     elseif k == K"call"
         name = ex[1]
         if kind(name) == K"BindingId"
@@ -786,7 +793,7 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
     if kind(ex) != K"lambda"
         # Wrap in a top level thunk if we're not already expanding a lambda.
         # (Maybe this should be done elsewhere?)
-        ex = @ast ctx ex [K"lambda"(is_toplevel_thunk=true)
+        ex = @ast ctx ex [K"lambda"(is_toplevel_thunk=true, toplevel_pure=false)
             [K"block"]
             [K"block"]
             ex

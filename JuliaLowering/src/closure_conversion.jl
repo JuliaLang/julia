@@ -18,6 +18,11 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     # True if we're in a section of code which preserves top-level sequencing
     # such that closure types can be emitted inline with other code.
     is_toplevel_seq_point::Bool
+    # True if this expression should not have toplevel effects, namely, it
+    # should not declare the globals it references.  This allows generated
+    # functions to refer to globals that have already been declared, without
+    # triggering the "function body AST not pure" error.
+    toplevel_pure::Bool
     toplevel_stmts::SyntaxList{GraphType}
     closure_infos::Dict{IdTag,ClosureInfo{GraphType}}
 end
@@ -27,7 +32,8 @@ function ClosureConversionCtx(graph::GraphType, bindings::Bindings,
                               lambda_bindings::LambdaBindings) where {GraphType}
     ClosureConversionCtx{GraphType}(
         graph, bindings, mod, closure_bindings, nothing,
-        lambda_bindings, false, SyntaxList(graph), Dict{IdTag,ClosureInfo{GraphType}}())
+        lambda_bindings, false, true, SyntaxList(graph),
+        Dict{IdTag,ClosureInfo{GraphType}}())
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -117,10 +123,39 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
     ]
 end
 
+# TODO: Avoid producing redundant calls to declare_global
+function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing; ret_nothing=false)
+    if !ctx.toplevel_pure
+        decl = @ast ctx src_ex [K"block"
+            [K"call"
+                "declare_global"::K"core"
+                mod::K"Value" name::K"Symbol" strong::K"Bool"
+                if type !== nothing
+                    type
+                end
+            ]
+            [K"latestworld"]
+            @ast ctx src_ex [K"removable" "nothing"::K"core"]
+        ]
+        if ctx.is_toplevel_seq_point
+            return decl
+        else
+            push!(ctx.toplevel_stmts, decl)
+        end
+    end
+    if ret_nothing
+        nothing
+    else
+        @ast ctx src_ex [K"removable" "nothing"::K"core"]
+    end
+end
+
 function convert_global_assignment(ctx, ex, var, rhs0)
     binfo = lookup_binding(ctx, var)
     @assert binfo.kind == :global
     stmts = SyntaxList(ctx)
+    decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true; ret_nothing=true)
+    decl !== nothing && push!(stmts, decl)
     rhs1 = if is_simple_atom(ctx, rhs0)
         rhs0
     else
@@ -147,7 +182,6 @@ function convert_global_assignment(ctx, ex, var, rhs0)
     end
     push!(stmts, @ast ctx ex [K"=" var rhs])
     @ast ctx ex [K"block"
-        [K"globaldecl" var]
         stmts...
         rhs1
     ]
@@ -296,7 +330,7 @@ function map_cl_convert(ctx::ClosureConversionCtx, ex, toplevel_preserving)
         toplevel_stmts = SyntaxList(ctx)
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                     ctx.closure_bindings, ctx.capture_rewriting, ctx.lambda_bindings,
-                                    false, toplevel_stmts, ctx.closure_infos)
+                                    false, ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos)
         res = mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)
         if isempty(toplevel_stmts)
             res
@@ -352,16 +386,24 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         @assert kind(ex[1]) == K"BindingId"
         binfo = lookup_binding(ctx, ex[1])
         if binfo.kind == :global
-            @ast ctx ex [K"block"
-                # flisp has this, but our K"assert" handling is in a previous pass
-                # [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
-                [K"globaldecl"
-                    ex[1]
-                    _convert_closures(ctx, ex[2])]
-                "nothing"::K"core"]
+            # flisp has this, but our K"assert" handling is in a previous pass
+            # [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
+            make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
         else
             makeleaf(ctx, ex, K"TOMBSTONE")
         end
+    elseif k == K"global"
+        # Leftover `global` forms become weak globals.
+        mod, name = if kind(ex[1]) == K"BindingId"
+            binfo = lookup_binding(ctx, ex[1])
+            @assert binfo.kind == :global
+            binfo.mod, binfo.name
+        else
+            # See note about using eval on Expr(:global/:const, GlobalRef(...))
+            @assert ex[1].value isa GlobalRef
+            ex[1].value.mod, String(ex[1].value.name)
+        end
+        @ast ctx ex [K"unused_only" make_globaldecl(ctx, ex, mod, name, false)]
     elseif k == K"local"
         var = ex[1]
         binfo = lookup_binding(ctx, var)
@@ -453,7 +495,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         cap_rewrite = is_closure ? ctx.closure_infos[name.var_id] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                     ctx.closure_bindings, cap_rewrite, ctx.lambda_bindings, 
-                                    ctx.is_toplevel_seq_point, ctx.toplevel_stmts, ctx.closure_infos)
+                                    ctx.is_toplevel_seq_point, ctx.toplevel_pure, ctx.toplevel_stmts,
+                                    ctx.closure_infos)
         body = map_cl_convert(ctx2, ex[2], false)
         if is_closure
             if ctx.is_toplevel_seq_point
@@ -478,7 +521,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
 
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                     ctx.closure_bindings, capture_rewrites, ctx.lambda_bindings, 
-                                    false, ctx.toplevel_stmts, ctx.closure_infos)
+                                    false, ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos)
 
         init_closure_args = SyntaxList(ctx)
         for id in field_orig_bindings
@@ -521,7 +564,8 @@ function closure_convert_lambda(ctx, ex)
     end
     ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                 ctx.closure_bindings, cap_rewrite, lambda_bindings,
-                                ex.is_toplevel_thunk, ctx.toplevel_stmts, ctx.closure_infos)
+                                ex.is_toplevel_thunk, ctx.toplevel_pure && ex.toplevel_pure,
+                                ctx.toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
     args = ex[1]
     push!(lambda_children, args)

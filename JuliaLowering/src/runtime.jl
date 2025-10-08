@@ -189,7 +189,7 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, 
                             false,
                             length(field_names))
     Core._setsuper!(type, Core.Function)
-    @ccall jl_set_const(mod::Module, closure_type_name::Symbol, type::Any)::Cvoid
+    Core.declare_const(mod, closure_type_name, type)
     Core._typebody!(false, type, Core.svec(field_types...))
     type
 end
@@ -331,7 +331,8 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     graph = ensure_attributes(ensure_macro_attributes(graph),
                               # Additional attribute for resolve_scopes, for
                               # adding our custom lambda below
-                              is_toplevel_thunk=Bool
+                              is_toplevel_thunk=Bool,
+                              toplevel_pure=Bool,
                               )
 
     __module__ = source.module
@@ -367,7 +368,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     ctx2, ex2 = expand_forms_2(ctx1, ex1)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false)
+    ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
         [K"block"
             (string(n)::K"Identifier" for n in g.argnames)...
         ]

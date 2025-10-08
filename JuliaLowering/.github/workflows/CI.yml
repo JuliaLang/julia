@@ -19,7 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '~1.12.0-rc1'
           - 'nightly'
         os:
           - ubuntu-latest

@@ -15,7 +15,8 @@ function DesugaringContext(ctx, expr_compat_mode::Bool)
                               value=Any, name_val=String,
                               scope_type=Symbol, # :hard or :soft
                               var_id=IdTag,
-                              is_toplevel_thunk=Bool)
+                              is_toplevel_thunk=Bool,
+                              toplevel_pure=Bool)
     DesugaringContext(graph,
                       ctx.bindings,
                       ctx.scope_layers,
@@ -108,9 +109,10 @@ end
 # constructed followed by destructuring. In particular, any side effects due to
 # evaluating the individual terms in the right hand side tuple must happen in
 # order.
-function tuple_to_assignments(ctx, ex)
+function tuple_to_assignments(ctx, ex, is_const)
     lhs = ex[1]
     rhs = ex[2]
+    wrap(asgn) = is_const ? (@ast ctx ex [K"const" asgn]) : asgn
 
     # Tuple elimination aims to turn assignments between tuples into lists of assignments.
     #
@@ -187,12 +189,12 @@ function tuple_to_assignments(ctx, ex)
                 # (x, ys...) = (a,b,c)
                 # (x, ys...) = (a,bs...)
                 # (ys...)    = ()
-                push!(stmts, @ast ctx ex [K"=" lh[1] middle])
+                push!(stmts, wrap(@ast ctx ex [K"=" lh[1] middle]))
             else
                 # (x, ys..., z) = (a, b, c, d)
                 # (x, ys..., z) = (a, bs...)
                 # (xs..., y)    = (a, bs...)
-                push!(stmts, @ast ctx ex [K"=" [K"tuple" lhs[il:jl]...] middle])
+                push!(stmts, wrap(@ast ctx ex [K"=" [K"tuple" lhs[il:jl]...] middle]))
             end
             # Continue with the remainder of the list of non-splat terms
             il = jl
@@ -200,10 +202,10 @@ function tuple_to_assignments(ctx, ex)
         else
             rh = rhs_tmps[ir]
             if kind(rh) == K"..."
-                push!(stmts, @ast ctx ex [K"=" [K"tuple" lhs[il:end]...] rh[1]])
+                push!(stmts, wrap(@ast ctx ex [K"=" [K"tuple" lhs[il:end]...] rh[1]]))
                 break
             else
-                push!(stmts, @ast ctx ex [K"=" lh rh])
+                push!(stmts, wrap(@ast ctx ex [K"=" lh rh]))
             end
         end
     end
@@ -275,23 +277,24 @@ end
 # Destructuring in this context is done via the iteration interface, though
 # calls `Base.indexed_iterate()` to allow for a fast path in cases where the
 # right hand side is directly indexable.
-function _destructure(ctx, assignment_srcref, stmts, lhs, rhs)
+function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
     n_lhs = numchildren(lhs)
     if n_lhs > 0
         iterstate = new_local_binding(ctx, rhs, "iterstate")
     end
 
     end_stmts = SyntaxList(ctx)
+    wrap(asgn) = is_const ? (@ast ctx assignment_srcref [K"const" asgn]) : asgn
 
     i = 0
     for lh in children(lhs)
         i += 1
         if kind(lh) == K"..."
-            lh1 = if is_identifier_like(lh[1])
+            lh1 = if is_identifier_like(lh[1]) && !is_const
                 lh[1]
             else
                 lhs_tmp = ssavar(ctx, lh[1], "lhs_tmp")
-                push!(end_stmts, expand_forms_2(ctx, @ast ctx lh[1] [K"=" lh[1] lhs_tmp]))
+                push!(end_stmts, expand_forms_2(ctx, wrap(@ast ctx lh[1] [K"=" lh[1] lhs_tmp])))
                 lhs_tmp
             end
             if i == n_lhs
@@ -341,12 +344,12 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs)
         else
             # Normal case, eg, for `y` in
             #   (x, y, z) = rhs
-            lh1 = if is_identifier_like(lh)
+            lh1 = if is_identifier_like(lh) && !is_const
                 lh
             # elseif is_eventually_call(lh) (TODO??)
             else
                 lhs_tmp = ssavar(ctx, lh, "lhs_tmp")
-                push!(end_stmts, expand_forms_2(ctx, @ast ctx lh [K"=" lh lhs_tmp]))
+                push!(end_stmts, expand_forms_2(ctx, wrap(@ast ctx lh [K"=" lh lhs_tmp])))
                 lhs_tmp
             end
             push!(stmts,
@@ -374,7 +377,7 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs)
 end
 
 # Expands cases of property destructuring
-function expand_property_destruct(ctx, ex)
+function expand_property_destruct(ctx, ex, is_const)
     @assert numchildren(ex) == 2
     lhs = ex[1]
     @assert kind(lhs) == K"tuple"
@@ -405,7 +408,7 @@ end
 
 # Expands all cases of general tuple destructuring, eg
 #   (x,y) = (a,b)
-function expand_tuple_destruct(ctx, ex)
+function expand_tuple_destruct(ctx, ex, is_const)
     lhs = ex[1]
     @assert kind(lhs) == K"tuple"
     rhs = ex[2]
@@ -426,7 +429,7 @@ function expand_tuple_destruct(ctx, ex)
 
         if !any_assignment(children(rhs)) && !has_parameters(rhs) &&
                 _tuple_sides_match(children(lhs), children(rhs))
-            return expand_forms_2(ctx, tuple_to_assignments(ctx, ex))
+            return expand_forms_2(ctx, tuple_to_assignments(ctx, ex, is_const))
         end
     end
 
@@ -439,7 +442,7 @@ function expand_tuple_destruct(ctx, ex)
     else
         emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
     end
-    _destructure(ctx, ex, stmts, lhs, rhs1)
+    _destructure(ctx, ex, stmts, lhs, rhs1, is_const)
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
     makenode(ctx, ex, K"block", stmts)
 end
@@ -1218,7 +1221,11 @@ function expand_assignment(ctx, ex, is_const=false)
     lhs = ex[1]
     rhs = ex[2]
     kl = kind(lhs)
-    if kl == K"curly"
+    if kind(ex) == K"function"
+        # `const f() = ...` - The `const` here is inoperative, but the syntax
+        # happened to work in earlier versions, so simply strip `const`.
+        expand_forms_2(ctx, ex[1])
+    elseif kl == K"curly"
         expand_unionall_def(ctx, ex, lhs, rhs, is_const)
     elseif kind(rhs) == K"="
         # Expand chains of assignments
@@ -1284,9 +1291,9 @@ function expand_assignment(ctx, ex, is_const=false)
         ]
     elseif kl == K"tuple"
         if has_parameters(lhs)
-            expand_property_destruct(ctx, ex)
+            expand_property_destruct(ctx, ex, is_const)
         else
-            expand_tuple_destruct(ctx, ex)
+            expand_tuple_destruct(ctx, ex, is_const)
         end
     elseif kl == K"ref"
         # a[i1, i2] = rhs
@@ -2119,35 +2126,37 @@ end
 #-------------------------------------------------------------------------------
 # Expand local/global/const declarations
 
-# Strip variable type declarations from within a `local` or `global`, returning
-# the stripped expression. Works recursively with complex left hand side
-# assignments containing tuple destructuring. Eg, given
+# Create local/global declarations, and possibly type declarations for each name
+# on an assignment LHS.  Works recursively with complex left hand side
+# assignments containing tuple destructuring.  Eg, given
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
 #   and return (x, (y, z))
-function strip_decls!(ctx, stmts, declkind, declmeta, ex)
+function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
     k = kind(ex)
-    if k == K"Identifier"
+    if k == K"Identifier" || k == K"Value" && ex.value isa GlobalRef
+        # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
+        # other Exprs that cannot be produced by the parser (tested by
+        # test/precompile.jl #50538).
         if !isnothing(declmeta)
             push!(stmts, makenode(ctx, ex, declkind, ex; meta=declmeta))
         else
             push!(stmts, makenode(ctx, ex, declkind, ex))
         end
-        ex
     elseif k == K"Placeholder"
-        ex
-    elseif k == K"::"
-        @chk numchildren(ex) == 2
-        name = ex[1]
-        @chk kind(name) == K"Identifier"
-        push!(stmts, makenode(ctx, ex, K"decl", name, ex[2]))
-        strip_decls!(ctx, stmts, declkind, declmeta, ex[1])
-    elseif k == K"tuple" || k == K"parameters"
-        cs = SyntaxList(ctx)
-        for e in children(ex)
-            push!(cs, strip_decls!(ctx, stmts, declkind, declmeta, e))
+        nothing
+    elseif (k === K"::" && numchildren(ex) === 2) || k in KSet"call curly where"
+        if type_decls
+            @chk numchildren(ex) == 2
+            name = ex[1]
+            @chk kind(name) == K"Identifier"
+            push!(stmts, makenode(ctx, ex, K"decl", name, ex[2]))
         end
-        makenode(ctx, ex, k, cs)
+        make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
+    elseif k == K"tuple" || k == K"parameters"
+        for e in children(ex)
+            make_lhs_decls(ctx, stmts, declkind, declmeta, e, type_decls)
+        end
     else
         throw(LoweringError(ex, "invalid kind $k in $declkind declaration"))
     end
@@ -2162,13 +2171,16 @@ function expand_decls(ctx, ex)
     bindings = children(ex)
     stmts = SyntaxList(ctx)
     for binding in bindings
-        kb = kind(binding)
-        if is_prec_assignment(kb)
+        if is_prec_assignment(kind(binding))
             @chk numchildren(binding) == 2
-            lhs = strip_decls!(ctx, stmts, declkind, declmeta, binding[1])
-            push!(stmts, expand_assignment(ctx, @ast ctx binding [kb lhs binding[2]]))
-        elseif is_sym_decl(binding)
-            strip_decls!(ctx, stmts, declkind, declmeta, binding)
+            # expand_assignment will create the type decls
+            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
+            push!(stmts, expand_assignment(ctx, binding))
+        elseif is_sym_decl(binding) || kind(binding) == K"Value"
+            make_lhs_decls(ctx, stmts, declkind, declmeta, binding, true)
+        elseif kind(binding) == K"function"
+            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
+            push!(stmts, expand_forms_2(ctx, binding))
         else
             throw(LoweringError(ex, "invalid syntax in variable declaration"))
         end
@@ -2198,7 +2210,7 @@ function expand_const_decl(ctx, ex)
     k = kind(ex[1])
     if k == K"global"
         asgn = ex[1][1]
-        @chk (kind(asgn) == K"=") (ex, "expected assignment after `const`")
+        @chk (kind(asgn) == K"=" || kind(asgn) == K"function") (ex, "expected assignment after `const`")
         globals = SyntaxList(ctx)
         foreach_lhs_name(asgn[1]) do x
             push!(globals, @ast ctx ex [K"global" x])
@@ -2207,13 +2219,17 @@ function expand_const_decl(ctx, ex)
             globals...
             expand_assignment(ctx, asgn, true)
         ]
-    elseif k == K"="
-        if numchildren(ex[1]) >= 1 && kind(ex[1][1]) == K"tuple"
-            TODO(ex[1][1], "`const` tuple assignment desugaring")
-        end
+    elseif k == K"=" || k == K"function"
         expand_assignment(ctx, ex[1], true)
     elseif k == K"local"
         throw(LoweringError(ex, "unsupported `const local` declaration"))
+    elseif k == K"Identifier" || k == K"Value"
+        # Expr(:const, v) where v is a Symbol or a GlobalRef is an unfortunate
+        # remnant from the days when const-ness was a flag that could be set on
+        # any global.  It creates a binding with kind PARTITION_KIND_UNDEF_CONST.
+        # TODO: deprecate and delete this "feature"
+        @chk numchildren(ex) == 1
+        @ast ctx ex [K"constdecl" ex[1]]
     else
         throw(LoweringError(ex, "expected assignment after `const`"))
     end
@@ -2326,7 +2342,7 @@ function method_def_expr(ctx, srcref, callex_srcref, method_table,
         [K"method"
             isnothing(method_table) ? "nothing"::K"core" : method_table
             method_metadata
-            [K"lambda"(body, is_toplevel_thunk=false)
+            [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
                 [K"block" arg_names...]
                 [K"block" typevar_names...]
                 body
@@ -3238,7 +3254,7 @@ function expand_opaque_closure(ctx, ex)
         nargs::K"Integer"
         is_va::K"Bool"
         ::K"SourceLocation"(func_expr)
-        [K"lambda"(func_expr, is_toplevel_thunk=false)
+        [K"lambda"(func_expr, is_toplevel_thunk=false, toplevel_pure=false)
             [K"block" arg_names...]
             [K"block"]
             [K"block"

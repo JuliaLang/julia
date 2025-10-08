@@ -431,12 +431,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
                k == K"new"       ? :new        :
                k == K"splatnew"  ? :splatnew   :
                k == K"="         ? :(=)        :
-               k == K"global"    ? :global     :
-               k == K"constdecl" ? :const      :
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
                k == K"latestworld"       ? :latestworld       :
-               k == K"globaldecl"        ? :globaldecl        :
                k == K"pop_exception"     ? :pop_exception     :
                k == K"captured_local"    ? :captured_local    :
                k == K"gc_preserve_begin" ? :gc_preserve_begin :

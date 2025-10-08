@@ -93,8 +93,29 @@ end
 # Tuple/destructuring assignments
 @test JuliaLowering.include_string(test_mod, "(a0, a1, a2) = [1,2,3]") == [1,2,3]
 
+@test JuliaLowering.include_string(test_mod, "const a,b,c = 1,2,3") === (1, 2, 3)
 
-# Unsupported for now
-@test_throws LoweringError JuliaLowering.include_string(test_mod, "const a,b,c = 1,2,3")
+test_mod_2 = Module()
+@testset "toplevel-preserving syntax" begin
+    JuliaLowering.include_string(test_mod_2, "if true; global v1::Bool; else const v1 = 1; end")
+    @test !isdefined(test_mod_2, :v1)
+    @test Base.binding_kind(test_mod_2, :v1) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(test_mod_2, :v1) == Bool
+
+    JuliaLowering.include_string(test_mod_2, "if false; global v2::Bool; else const v2 = 2; end")
+    @test test_mod_2.v2 === 2
+    @test Base.binding_kind(test_mod_2, :v2) == Base.PARTITION_KIND_CONST
+
+    JuliaLowering.include_string(test_mod_2, "v3 = if true; global v4::Bool; 4 else const v4 = 5; 6; end")
+    @test test_mod_2.v3 == 4
+    @test !isdefined(test_mod_2, :v4)
+    @test Base.binding_kind(test_mod_2, :v4) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(test_mod_2, :v4) == Bool
+
+    JuliaLowering.include_string(test_mod_2, "v5 = if false; global v6::Bool; 4 else const v6 = 5; 6; end")
+    @test test_mod_2.v5 === 6
+    @test test_mod_2.v6 === 5
+    @test Base.binding_kind(test_mod_2, :v6) == Base.PARTITION_KIND_CONST
+end
 
 end
