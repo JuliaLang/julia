@@ -1331,7 +1331,11 @@ function setup_interface(
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
-        on_enter = return_callback)
+        on_enter = return_callback,
+        styling_passes = StylingPasses.StylingPass[
+            StylingPasses.SyntaxHighlightPass(),
+            StylingPasses.EnclosingParenHighlightPass()
+        ])
 
     # Setup help mode
     help_mode = Prompt(contextual_prompt(repl, HELP_PROMPT),

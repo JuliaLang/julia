@@ -61,6 +61,7 @@ mutable struct Prompt <: TextInterface
     on_done::Function
     hist::HistoryProvider  # TODO?: rename this `hp` (consistency with other TextInterfaces), or is the type-assert useful for mode(s)?
     sticky::Bool
+    styling_passes::Vector{StylingPass}  # Styling passes to apply to input
 end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
@@ -614,12 +615,13 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         reader isa Base.TTY && !Base.ispty(reader)::Bool
     else false end
 
-    enable_style_input = false
+    # Get the styling passes from the prompt
+    prompt_obj = nothing
     if prompt isa PromptState
-        enable_style_input = options(prompt).style_input
-    elseif prompt isa PrefixSearchState # When using e.g. up/down arrows to scroll through history
-        if isdefined(prompt, :parent) && prompt.parent isa Prompt && isdefined(prompt.parent, :repl)
-            enable_style_input = prompt.parent.repl.options.style_input
+        prompt_obj = prompt.p
+    elseif prompt isa PrefixSearchState
+        if isdefined(prompt, :parent) && prompt.parent isa Prompt
+            prompt_obj = prompt.parent
         end
     end
 
@@ -632,9 +634,13 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
             passes = StylingPass[]
             context = StylingContext(buf_pos, regstart, regstop)
 
-            if enable_style_input
-                push!(passes, SyntaxHighlightPass())
-                push!(passes, EnclosingParenHighlightPass())
+            # Add prompt-specific styling passes if the prompt has them and styling is enabled
+            enable_style_input = prompt_obj === nothing ? false :
+                (isdefined(prompt_obj, :repl) && prompt_obj.repl !== nothing ?
+                    prompt_obj.repl.options.style_input : false)
+
+            if enable_style_input && prompt_obj !== nothing
+                append!(passes, prompt_obj.styling_passes)
             end
 
             if region_active
@@ -2883,10 +2889,11 @@ function Prompt(prompt
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider(),
-    sticky = false)
+    sticky = false,
+    styling_passes = StylingPass[])
 
     return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
-                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
+                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky, styling_passes)
 end
 
 run_interface(::Prompt) = nothing
