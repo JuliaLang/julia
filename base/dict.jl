@@ -586,6 +586,9 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     sz = length(slots)
     _unsetindex!(h.keys, index)
     _unsetindex!(h.vals, index)
+    if max(16, h.count*8) <= sz # if <1/8th full and not tiny, resize to 1/2 full
+        return rehash!(h, h.count*2)
+    end
     # if the next slot is empty we don't need a tombstone
     # and can remove all tombstones that were required by the element we just deleted
     ndel = 1
