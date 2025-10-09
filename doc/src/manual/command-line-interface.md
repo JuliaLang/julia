@@ -58,8 +58,8 @@ end
 Executing the above script with `julia script.jl "Buddy"` will automatically run `(@main)` and create the `out.log`
 file, despite there being no explicit call to `(@main)`.
 
-The return value of the `(@main)` function is the exit code, and must be a value convertible to `Cint`
-(`nothing` will be replaced by `Cint(0)`):
+The return value of the `(@main)` function must either be `nothing`, resulting in exit code
+`0`, or convertible to a `Cint` which will be the exit code:
 ```
 $ julia -e "(@main)(args) = nothing"; echo $?0
 0
