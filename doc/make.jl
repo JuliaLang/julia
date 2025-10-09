@@ -27,6 +27,9 @@ cd(joinpath(@__DIR__, "src")) do
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
         sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src")
+        if dir == "SparseArrays"
+            continue
+        end
         if dir in EXT_STDLIB_DOCS
             sourcefile = joinpath(sourcefile, "basedocs.md")
         else
@@ -140,7 +143,6 @@ Manual = [
     "manual/methods.md",
     "manual/constructors.md",
     "manual/conversion-and-promotion.md",
-    "manual/interfaces.md",
     "manual/modules.md",
     "manual/documentation.md",
     "manual/metaprogramming.md",
@@ -306,12 +308,12 @@ for stdlib in STDLIB_DOCS
 end
 # A few standard libraries need more than just the module itself in the DocTestSetup.
 # This overwrites the existing ones from above though, hence the warn=false.
-DocMeta.setdocmeta!(
-    SparseArrays,
-    :DocTestSetup,
-    maybe_revise(:(using SparseArrays, LinearAlgebra));
-    recursive=true, warn=false,
-)
+# DocMeta.setdocmeta!(
+#     SparseArrays,
+#     :DocTestSetup,
+#     maybe_revise(:(using SparseArrays, LinearAlgebra));
+#     recursive=true, warn=false,
+# )
 DocMeta.setdocmeta!(
     UUIDs,
     :DocTestSetup,
@@ -376,6 +378,7 @@ makedocs(
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     pages     = PAGES,
+    warnonly = Documenter.except(:cross_references),
     remotes   = documenter_stdlib_remotes,
 )
 

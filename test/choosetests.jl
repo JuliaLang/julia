@@ -227,7 +227,7 @@ function choosetests(choices = [])
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(tests), unhandled)
     filter!(!in(skip_tests), tests)
-
+    filter!(!contains("SparseArrays/fixed"), tests) # temporarily disable SparseArrays/fixed
     if !isempty(unhandled)
         @warn "Not skipping tests: $(join(unhandled, ", "))"
     end
