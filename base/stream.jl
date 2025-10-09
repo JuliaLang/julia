@@ -1062,6 +1062,14 @@ uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(
 
 # caller must have acquired the iolock
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    nwritten = uv_try_write(s, p, n)
+    if nwritten == n
+        iolock_end()
+        return Int(n)
+    elseif nwritten > 0
+        p += nwritten
+        n -= UInt(nwritten)
+    end
     uvw = uv_write_async(s, p, n)
     ct = current_task()
     preserve_handle(ct)
@@ -1096,6 +1104,19 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         throw(_UVError("write", status))
     end
     return Int(n)
+end
+
+function uv_try_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    check_open(s)
+    nwrite = min(n, MAX_OS_WRITE) # split up the write into chunks the OS can handle.
+    nwritten = ccall(:jl_uv_try_write,
+                Int32,
+                (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
+                s, p, nwrite)
+    if nwritten < 0
+        uv_error("write", err)
+    end
+    return nwritten
 end
 
 # helper function for uv_write that returns the uv_write_t struct for the write
