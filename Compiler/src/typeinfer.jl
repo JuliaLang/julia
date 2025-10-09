@@ -1311,13 +1311,22 @@ function ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
     return ci_has_source(interp, code)
 end
 
-function ci_get_source(interp::AbstractInterpreter, code::CodeInstance)
+# TODO This utility is incomplete and should be removed in the future.
+# For external abstract interpreters that don't provide `codegen_cache`,
+# it should look up the local inference cache and complement cases where there's no source
+# in the global cache, as we do by looking up `codegen_cache` for `NativeInterpreter`.
+# Also, `codegen_cache` itself should perhaps be cleaned up and replaced by making good
+# use of the local inference cache.
+function ci_get_source(interp::NativeInterpreter, code::CodeInstance)
     codegen = codegen_cache(interp)
     codegen === nothing && return nothing
     use_const_api(code) &&
         return codeinfo_for_const(interp, get_ci_mi(code), WorldRange(code.min_world, code.max_world), code.edges, code.rettype_const)
     inf = get(codegen, code, nothing)
     inf === nothing || return inf
+    return @atomic :monotonic code.inferred
+end
+function ci_get_source(interp::AbstractInterpreter, code::CodeInstance)
     return @atomic :monotonic code.inferred
 end
 

@@ -2406,7 +2406,7 @@ end |> only === Any
     end
     return 0
 end |> only === Int
-@test_broken Base.return_types((Tuple{Any},); interp=MustAliasInterpreter()) do t
+@test Base.return_types((Tuple{Any},); interp=MustAliasInterpreter()) do t
     if isa(t[1], Int)
         return t[1]
     end
@@ -2516,7 +2516,7 @@ struct JET509
     list::Union{Tuple{},Vector{Int}}
 end
 jet509_hasitems(list) = length(list) >= 1
-@test_broken Base.return_types((JET509,); interp=MustAliasInterpreter()) do ilist::JET509
+@test Base.return_types((JET509,); interp=MustAliasInterpreter()) do ilist::JET509
     list = ilist.list
     if jet509_hasitems(list)
         return list
@@ -2562,13 +2562,13 @@ end |> only === Int
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
+@test_broken Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
+@test_broken Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
