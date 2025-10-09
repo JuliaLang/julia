@@ -37,19 +37,23 @@ function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
     return result
 end
 
-function apply_styling_passes(input::AbstractString, passes::Vector, context::StylingContext)
+function apply_style(pass::StylingPass, input::String, context::StylingContext)
+    return pass(input, context)::AnnotatedString{String}
+end
+
+function apply_styling_passes(input::String, passes::Vector{StylingPass}, context::StylingContext)
     if isempty(passes)
         return AnnotatedString(input)
     end
 
-    results = [pass(input, context) for pass in passes]
+    results = [apply_style(pass, input, context) for pass in passes]
     return merge_annotations(results)
 end
 
 # Applies Julia syntax highlighting
 struct SyntaxHighlightPass <: StylingPass end
 
-function (::SyntaxHighlightPass)(input::AbstractString, ::StylingContext)
+function (::SyntaxHighlightPass)(input::String, ::StylingContext)
     try
         return JuliaSyntaxHighlighting.highlight(input)
     catch e
@@ -62,7 +66,7 @@ end
 # Applies inverse video styling to the selected region
 struct RegionHighlightPass <: StylingPass end
 
-function (::RegionHighlightPass)(input::AbstractString, context::StylingContext)
+function (::RegionHighlightPass)(input::String, context::StylingContext)
     result = AnnotatedString(input)
 
     if context.region_start > 0 && context.region_stop >= context.region_start
@@ -76,9 +80,13 @@ function (::RegionHighlightPass)(input::AbstractString, context::StylingContext)
 end
 
 # Applies bold styling to parentheses that enclose the cursor position
-struct EnclosingParenHighlightPass <: StylingPass end
+struct EnclosingParenHighlightPass <: StylingPass
+    face::Face
+end
 
-function (::EnclosingParenHighlightPass)(input::AbstractString, context::StylingContext)
+EnclosingParenHighlightPass() = EnclosingParenHighlightPass(Face(weight=:bold, underline=true))
+
+function (pass::EnclosingParenHighlightPass)(input::String, context::StylingContext)
     result = AnnotatedString(input)
 
     if isempty(input) || context.cursor_pos < 1
@@ -90,8 +98,8 @@ function (::EnclosingParenHighlightPass)(input::AbstractString, context::Styling
         paren_pairs = find_enclosing_parens(input, ast, context.cursor_pos)
 
         for (open_pos, close_pos) in paren_pairs
-            annotate!(result, open_pos:open_pos, :face, Face(weight=:bold, underline=true))
-            annotate!(result, close_pos:close_pos, :face, Face(weight=:bold, underline=true))
+            annotate!(result, open_pos:open_pos, :face, pass.face)
+            annotate!(result, close_pos:close_pos, :face, pass.face)
         end
     catch e
         e isa InterruptException && rethrow()
@@ -112,7 +120,7 @@ function paren_type(k)
     end
 end
 
-function find_enclosing_parens(content::AbstractString, ast, cursor_pos::Int)
+function find_enclosing_parens(content::String, ast, cursor_pos::Int)
     innermost_pairs = Dict{Symbol,Tuple{Int,Int}}()
     paren_stack = Tuple{Int,Int,Symbol}[]  # (open_pos, depth, type)
 
@@ -143,7 +151,7 @@ function find_enclosing_parens(content::AbstractString, ast, cursor_pos::Int)
     return collect(values(innermost_pairs))
 end
 
-function walk_tree(f::Function, node, content::AbstractString, offset::Int)
+function walk_tree(f::Function, node, content::String, offset::Int)
     f(node, offset)
 
     if JuliaSyntax.numchildren(node) > 0
