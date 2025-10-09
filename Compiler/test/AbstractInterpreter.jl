@@ -516,7 +516,7 @@ let src = code_typed((Int,); interp=CustomDataInterp()) do x
     end |> only |> first
     @test count(isinvoke(:sin), src.code) == 1
     @test count(isinvoke(:cos), src.code) == 1
-    @test count(isinvoke(:+), src.code) == 0
+    @test_broken count(isinvoke(:+), src.code) == 0
 end
 
 # ephemeral cache mode

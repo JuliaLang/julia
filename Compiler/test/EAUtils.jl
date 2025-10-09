@@ -11,8 +11,8 @@ using .Compiler: EscapeAnalysis as EA
 
 # imports
 import .Compiler:
-    AbstractInterpreter, NativeInterpreter, WorldRange, InferenceParams,
-    OptimizationParams, get_world_counter, get_inference_cache, ipo_dataflow_analysis!
+    AbstractInterpreter, InferenceParams, OptimizationParams,
+    get_world_counter, get_inference_cache, ipo_dataflow_analysis!
 # usings
 using Core.IR
 using .Compiler: InferenceResult, InferenceState, OptimizationState, IRCode

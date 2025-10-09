@@ -53,6 +53,7 @@ end
 struct MethodMatchTarget
     match::MethodMatch
     edges::Vector{Union{Nothing,CodeInstance}}
+    call_results::Vector{Union{Nothing,InferredCallResult}}
     edge_idx::Int
 end
 
@@ -93,17 +94,15 @@ mutable struct CallInferenceState
     rettype
     exctype
     all_effects::Effects
-    const_results::Union{Nothing,Vector{Union{Nothing,ConstResult}}} # keeps the results of inference with the extended lattice elements (if happened)
     conditionals::Union{Nothing,Tuple{Vector{Any},Vector{Any}}} # keeps refinement information of call argument types when the return type is boolean
     slotrefinements::Union{Nothing,Vector{Any}} # keeps refinement information on slot types obtained from call signature
 
     # some additional fields for untyped objects (just to avoid capturing)
-    func
-    matches::Union{MethodMatches,UnionSplitMethodMatches}
+    const func
+    const matches::Union{MethodMatches,UnionSplitMethodMatches}
     function CallInferenceState(@nospecialize(func), matches::Union{MethodMatches,UnionSplitMethodMatches})
         return new(#=inferidx=#1, #=rettype=#Bottom, #=exctype=#Bottom, #=all_effects=#EFFECTS_TOTAL,
-            #=const_results=#nothing, #=conditionals=#nothing, #=slotrefinements=#nothing,
-            func, matches)
+            #=conditionals=#nothing, #=slotrefinements=#nothing, func, matches)
     end
 end
 
@@ -146,7 +145,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         local napplicable = length(applicable)
         local multiple_matches = napplicable > 1
         while state.inferidx <= napplicable
-            (; match, edges, edge_idx) = applicable[state.inferidx]
+            (; match, edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
             local sig = match.spec_types
             if bail_out_call(interp, InferenceLoopState(state.rettype, state.all_effects), sv)
@@ -166,7 +165,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             #end
             mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)::Future
             function handle1(interp, sv)
-                local (; rt, exct, effects, edge, volatile_inf_result) = mresult[]
+                local (; rt, exct, effects, edge, call_result) = mresult[]
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
@@ -177,11 +176,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 this_arginfo = ArgInfo(arginfo.fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp,
                     mresult[], state.func, this_arginfo, si, match, sv)
-                const_result = volatile_inf_result
                 if const_call_result !== nothing
                     this_const_conditional = ignorelimited(const_call_result.rt)
                     this_const_rt = widenwrappedconditional(const_call_result.rt)
-                    const_edge = nothing
+                    const_result = const_edge = nothing
                     if this_const_rt ⊑ₚ this_rt
                         # As long as the const-prop result we have is not *worse* than
                         # what we found out on types, we'd like to use it. Even if the
@@ -210,16 +208,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                         edge = const_edge
                         update_valid_age!(sv, world_range(const_edge))
                     end
+                    if const_result !== nothing
+                        call_result = const_result
+                    end
                 end
 
                 state.all_effects = merge_effects(state.all_effects, effects)
-                if const_result !== nothing
-                    local const_results = state.const_results
-                    if const_results === nothing
-                        const_results = state.const_results = fill!(Vector{Union{Nothing,ConstResult}}(undef, napplicable), nothing)
-                    end
-                    const_results[state.inferidx] = const_result
-                end
                 @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
                 if can_propagate_conditional(this_conditional, argtypes)
                     # The only case where we need to keep this in rt is where
@@ -245,6 +239,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     end
                 end
                 edges[edge_idx] = edge
+                call_results[edge_idx] = call_result
 
                 state.inferidx += 1
                 return true
@@ -260,11 +255,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         seenall = state.inferidx > napplicable
         retinfo = state.matches.info
         if seenall # small optimization to skip some work that is already implied
-            local const_results = state.const_results
-            if const_results !== nothing
-                @assert napplicable == nmatches(retinfo) == length(const_results)
-                retinfo = ConstCallInfo(retinfo, const_results)
-            end
             if !fully_covering(state.matches) || any_ambig(state.matches)
                 # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
                 state.all_effects = Effects(state.all_effects; nothrow=false)
@@ -297,7 +287,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             # there is unanalyzed candidate, widen type and effects to the top
             state.rettype = state.exctype = Any
             state.all_effects = Effects()
-            state.const_results = nothing
         end
 
         # Also considering inferring the compilation signature for this method, so
@@ -373,7 +362,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
         push!(infos, thisinfo)
         for idx = 1:length(thismatches)
-            push!(applicable, MethodMatchTarget(thismatches[idx], thisinfo.edges, idx))
+            push!(applicable, MethodMatchTarget(thismatches[idx], thisinfo.edges, thisinfo.call_results, idx))
             push!(applicable_argtypes, arg_n)
         end
     end
@@ -392,7 +381,7 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
     mt = Core.methodtable
     info = MethodMatchInfo(matches, mt, atype, fullmatch)
-    applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges, idx) for idx = 1:length(matches)]
+    applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges, info.call_results, idx) for idx = 1:length(matches)]
     return MethodMatches(applicable, info, matches.valid_worlds)
 end
 
@@ -835,11 +824,11 @@ struct MethodCallResult
     edge::Union{Nothing,CodeInstance}
     edgecycle::Bool
     edgelimited::Bool
-    volatile_inf_result::Union{Nothing,VolatileInferenceResult}
+    call_result::Union{Nothing,InferredCallResult}
     function MethodCallResult(@nospecialize(rt), @nospecialize(exct), effects::Effects,
                               edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
-                              volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
-        return new(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
+                              call_result::Union{Nothing,InferredCallResult} = nothing)
+        return new(rt, exct, effects, edge, edgecycle, edgelimited, call_result)
     end
 end
 
@@ -851,12 +840,12 @@ end
 struct ConstCallResult
     rt::Any
     exct::Any
-    const_result::ConstResult
+    const_result::InferredConstCallResult
     effects::Effects
     const_edge::Union{Nothing,CodeInstance}
     function ConstCallResult(
         @nospecialize(rt), @nospecialize(exct),
-        const_result::ConstResult, effects::Effects,
+        const_result::InferredConstCallResult, effects::Effects,
         const_edge::Union{Nothing,CodeInstance})
         return new(rt, exct, const_result, effects, const_edge)
     end
@@ -1258,6 +1247,9 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
     mi_cache = code_cache(interp)
     codeinst = get(mi_cache, mi, nothing)
     if codeinst !== nothing
+        # TODO propagate a specific `CallInfo` that conveys information about this call
+        inferred = ci_get_source(interp, codeinst)
+        src_inlining_policy(interp, mi, inferred, NoCallInfo(), IR_FLAG_NULL) || return nothing # hack to work-around test failures caused by #58183 until both it and #48913 are fixed
         irsv = IRInterpretationState(interp, codeinst, mi, arginfo.argtypes)
         if irsv !== nothing
             assign_parentchild!(irsv, sv)
@@ -1309,9 +1301,9 @@ function const_prop_call(interp::AbstractInterpreter,
     𝕃ᵢ = typeinf_lattice(interp)
     forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
     # use `cache_argtypes` that has been constructed for fresh regular inference if available
-    volatile_inf_result = result.volatile_inf_result
-    if volatile_inf_result !== nothing
-        cache_argtypes = volatile_inf_result.inf_result.argtypes
+    call_result = result.call_result
+    if call_result isa VolatileInferenceResult
+        cache_argtypes = call_result.inf_result.argtypes
     else
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
@@ -2290,7 +2282,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     lookupsig_box = Core.Box(lookupsig)
     invokecall = InvokeCall(types)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, effects, edge, volatile_inf_result) = result
+        (; rt, exct, effects, edge, call_result) = result
         local ft′ = ft′_box.contents
         sig = match.spec_types
         argtypes′ = invoke_rewrite(arginfo.argtypes)
@@ -2307,9 +2299,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         f = singleton_type(ft′)
         const_call_result = abstract_call_method_with_const_args(interp,
             result, f, arginfo′, si, match, sv, invokecall)
-        const_result = volatile_inf_result
         if const_call_result !== nothing
-            const_edge = nothing
+            const_result = const_edge = nothing
             if const_call_result.rt ⊑ rt
                 (; rt, effects, const_result, const_edge) = const_call_result
             end
@@ -2320,9 +2311,12 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 edge = const_edge
                 update_valid_age!(sv, world_range(const_edge))
             end
+            if const_result !== nothing
+                call_result = const_result
+            end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo′, sig)
-        info = InvokeCallInfo(edge, match, const_result, lookupsig_box.contents)
+        info = InvokeCallInfo(edge, match, call_result, lookupsig_box.contents)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
@@ -2819,15 +2813,14 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, effects, volatile_inf_result, edge, edgecycle) = result
+        (; rt, exct, effects, call_result, edge, edgecycle) = result
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
-        const_result = volatile_inf_result
         if !edgecycle
             const_call_result = abstract_call_method_with_const_args(interp, result,
                 #=f=#nothing, arginfo, si, match, sv)
             if const_call_result !== nothing
-                const_edge = nothing
+                const_result = const_edge = nothing
                 if const_call_result.rt ⊑ rt
                     (; rt, effects, const_result, const_edge) = const_call_result
                 end
@@ -2837,6 +2830,9 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
                 if const_edge !== nothing
                     edge = const_edge
                     update_valid_age!(sv, world_range(const_edge))
+                end
+                if const_result !== nothing
+                    call_result = const_result
                 end
             end
         end
@@ -2850,7 +2846,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
-        info = OpaqueClosureCallInfo(edge, match, const_result)
+        info = OpaqueClosureCallInfo(edge, match, call_result)
         return CallMeta(rt, exct, effects, info)
     end
 end
