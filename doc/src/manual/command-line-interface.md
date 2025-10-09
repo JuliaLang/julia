@@ -63,7 +63,7 @@ The return value of the `(@main)` function must either be `nothing`, resulting i
 ```
 $ julia -e "(@main)(args) = nothing"; echo $?0
 0
-$ julia -e "(@main)(args=ARGS) = return 1"; echo $?
+$ julia -e "(@main)(args) = 1"; echo $?
 1
 ```
 Typically exit codes are in the range `0:255`, although the interpretation of the return value might be OS dependent.
