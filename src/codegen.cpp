@@ -1602,6 +1602,11 @@ static bool jl_is_pointerfree(jl_value_t* t)
     return layout && layout->npointers == 0;
 }
 
+static bool allpointers(jl_datatype_t *typ)
+{
+    return jl_datatype_size(typ) == typ->layout->npointers * sizeof(void*);
+}
+
 // these queries are usually related, but we split them out here
 // for convenience and clarity (and because it changes the calling convention)
 // n.b. this must include jl_is_datatype_singleton (ghostType) and primitive types
@@ -1610,7 +1615,7 @@ static bool deserves_stack(jl_value_t* t)
     if (!jl_is_concrete_immutable(t))
         return false;
     jl_datatype_t *dt = (jl_datatype_t*)t;
-    return jl_is_datatype_singleton(dt) || jl_datatype_isinlinealloc(dt, 0);
+    return jl_is_datatype_singleton(dt) || jl_datatype_isinlinealloc(dt, /* (require) pointerfree */ 0);
 }
 static bool deserves_argbox(jl_value_t* t)
 {
@@ -1619,6 +1624,10 @@ static bool deserves_argbox(jl_value_t* t)
 static bool deserves_retbox(jl_value_t* t)
 {
     return deserves_argbox(t);
+}
+static bool deserves_unionbox(jl_value_t* t)
+{
+    return !deserves_stack(t);
 }
 static bool deserves_sret(jl_value_t *dt, Type *T)
 {
@@ -1805,6 +1814,28 @@ struct jl_cgval_t {
         else {
             assert(isboxed || v.typ == typ || tindex);
         }
+        // discard roots that do not apply anymore
+        // or drop this whole value if there are not enough roots to populate it
+        if (!inline_roots.empty() && tindex == nullptr) {
+            size_t inline_roots_count;
+            if (!deserves_stack(typ)) {
+                inline_roots_count = 0;
+            }
+            else {
+                const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
+                inline_roots_count = layout ? layout->npointers : 0;
+            }
+            assert(v.TIndex || inline_roots.size() == inline_roots_count);
+            if (v.V == nullptr && v.constant == nullptr && !isghost && (inline_roots_count == 0 || !allpointers((jl_datatype_t*)typ)))
+                *this = jl_cgval_t(); // no data to populate this value
+            else if (inline_roots_count < inline_roots.size())
+                inline_roots.truncate(inline_roots_count);
+            else if (inline_roots_count > inline_roots.size())
+                *this = jl_cgval_t(); // not enough roots to populate this value
+            // drop data if all of the content is in the roots
+            if (inline_roots_count > 0 && allpointers((jl_datatype_t*)typ))
+                V = nullptr;
+        }
     }
     explicit jl_cgval_t() : // undef / unreachable constructor
         V(nullptr),
@@ -1828,6 +1859,7 @@ struct jl_varinfo_t {
     jl_cgval_t value; // a stack slot or constant value
     Value *pTIndex; // i8* stack slot for the value.TIndex tag describing `value.V`
     AllocaInst *inline_roots; // stack roots for the inline_roots array, if needed
+    size_t inline_roots_count;
     DILocalVariable *dinfo;
     // if the variable might be used undefined and is not boxed
     // this i1 flag is true when it is defined
@@ -1842,6 +1874,7 @@ struct jl_varinfo_t {
                      value(jl_cgval_t()),
                      pTIndex(nullptr),
                      inline_roots(nullptr),
+                     inline_roots_count(0),
                      dinfo(nullptr),
                      defFlag(nullptr),
                      isSA(false),
@@ -2340,13 +2373,13 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
         if (jl_is_datatype(utyp)) {
             bool alwaysboxed;
             if (jl_is_concrete_type(utyp))
-                alwaysboxed = !jl_is_pointerfree(utyp);
+                alwaysboxed = deserves_unionbox(utyp);
             else
                 alwaysboxed = !((jl_datatype_t*)utyp)->name->abstract && ((jl_datatype_t*)utyp)->name->mutabl;
             if (alwaysboxed) {
                 // discovered that this union-split type must actually be isboxed
                 if (v.Vboxed) {
-                    return jl_cgval_t(v.Vboxed, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), v.inline_roots);
+                    return jl_cgval_t(v.Vboxed, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
                 }
                 else {
                     // type mismatch (there weren't any boxed values in the union)
@@ -2361,7 +2394,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
     Type *T = julia_type_to_llvm(ctx, typ);
     if (type_is_ghost(T))
         return ghostValue(ctx, typ);
-    else if (v.TIndex && v.V == NULL) {
+    else if (v.TIndex && v.V == NULL && v.inline_roots.empty()) {
         // type mismatch (there weren't any non-ghost values in the union)
         CreateTrap(ctx.builder);
         return jl_cgval_t();
@@ -2569,23 +2602,28 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
             }
             Value *slotv;
             MDNode *tbaa;
-            if (v.V == NULL) {
-                // v.V might be NULL if it was all ghost objects before
-                slotv = NULL;
+            if (v.V == nullptr) {
+                // v.V might be NULL if it was all constants before
+                slotv = nullptr;
                 tbaa = ctx.tbaa().tbaa_const;
             }
-            else {
+            else if (!v.inline_roots.empty() || v.ispointer()) {
                 Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
-                jl_cgval_t oldv = value_to_pointer(ctx, v);
-                slotv = oldv.V;
-                tbaa = oldv.tbaa;
+                slotv = v.V;
+                tbaa = v.tbaa;
                 slotv = ctx.builder.CreateSelect(isboxv,
                             decay_derived(ctx, boxv),
                             decay_derived(ctx, slotv));
             }
+            else {
+                jl_cgval_t oldv = value_to_pointer(ctx, v.V, v.typ, v.TIndex);
+                slotv = oldv.V;
+                tbaa = oldv.tbaa;
+            }
             jl_cgval_t newv = jl_cgval_t(slotv, false, typ, new_tindex, tbaa, v.inline_roots);
             assert(boxv->getType() == ctx.types().T_prjlvalue);
             newv.Vboxed = boxv;
+            newv.constant = v.constant;
             return newv;
         }
     }
@@ -2616,12 +2654,12 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
                 CreateTrap(ctx.builder);
             return jl_cgval_t();
         }
-        bool mustbox_union = v.TIndex && !jl_is_pointerfree(typ);
+        assert(jl_is_datatype(typ));
+        bool mustbox_union = v.TIndex && deserves_unionbox(typ);
         if (v.Vboxed && (v.isboxed || mustbox_union)) {
-            if (skip) {
-                *skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, v, (jl_datatype_t*)typ, true));
-            }
-            return jl_cgval_t(v.Vboxed, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), v.inline_roots);
+            if (skip)
+                *skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, v, (jl_datatype_t *)typ, true));
+            return jl_cgval_t(v.Vboxed, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
         }
         if (mustbox_union) {
             // type mismatch: there weren't any boxed values in the union
@@ -2630,6 +2668,29 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
             else
                 CreateTrap(ctx.builder);
             return jl_cgval_t();
+        }
+        if (v.TIndex) {
+            size_t inline_roots_count = 0;
+            if (deserves_stack(typ) && ((jl_datatype_t *)typ)->layout->first_ptr >= 0)
+                inline_roots_count = ((jl_datatype_t *)typ)->layout->npointers;
+
+            // mustbox_union case above handles the situation when `v` is (always) boxed,
+            // so here `v` is (maybe) unboxed and should always have sufficient roots
+            assert(inline_roots_count <= v.inline_roots.size());
+            jl_cgval_t result(v, typ, /* TIndex */ nullptr);
+
+            // `v` is (maybe) unboxed, but `result` is statically unboxed (it has no runtime
+            // "isboxed" bit and expects its roots to always be valid), so dynamically extract
+            // the roots if boxed
+            if (inline_roots_count > 0) {
+                Value *isboxed = ctx.builder.CreateICmpNE(
+                    ctx.builder.CreateAnd(v.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
+                    ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
+                emit_guarded_test(ctx, isboxed, result.inline_roots, [&] {
+                    return extract_gc_roots(ctx, v.Vboxed, (jl_datatype_t *)typ, inline_roots_count, ctx.tbaa().tbaa_value);
+                });
+            }
+            return result;
         }
     }
     else {
@@ -2770,8 +2831,8 @@ static bool uses_specsig(jl_value_t *sig, bool needsparams, jl_value_t *rettype,
         return true;
     if (jl_is_uniontype(rettype)) {
         bool allunbox;
-        size_t nbytes, align, min_align;
-        union_alloca_type((jl_uniontype_t*)rettype, allunbox, nbytes, align, min_align);
+        size_t nbytes, align, min_align, return_roots;
+        union_alloca_type((jl_uniontype_t*)rettype, allunbox, nbytes, align, min_align, return_roots);
         if (nbytes > 0)
             return true; // some elements of the union could be returned unboxed avoiding allocation
     }
@@ -3327,7 +3388,7 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
     });
 }
 
-static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2);
+static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2);
 
 static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
@@ -3378,7 +3439,7 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
     return phi;
 }
 
-static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2)
+static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
     ++EmittedBitsCompares;
     jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
@@ -3391,16 +3452,16 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
 
     if (at->isIntegerTy() || at->isPointerTy() || at->isFloatingPointTy()) {
         Type *at_int = INTT(at, ctx.emission_context.DL);
-        Value *varg1 = emit_unbox(ctx, at_int, arg1, argty);
-        Value *varg2 = emit_unbox(ctx, at_int, arg2, argty);
+        Value *varg1 = emit_unbox(ctx, at_int, arg1);
+        Value *varg2 = emit_unbox(ctx, at_int, arg2);
         return ctx.builder.CreateICmpEQ(varg1, varg2);
     }
 
     if (at->isVectorTy()) {
         jl_svec_t *types = ((jl_datatype_t*)argty)->types;
         Value *answer = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
-        Value *varg1 = emit_unbox(ctx, at, arg1, argty);
-        Value *varg2 = emit_unbox(ctx, at, arg2, argty);
+        Value *varg1 = emit_unbox(ctx, at, arg1);
+        Value *varg2 = emit_unbox(ctx, at, arg2);
         for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
             jl_value_t *fldty = jl_svecref(types, i);
             Value *subAns, *fld1, *fld2;
@@ -4481,7 +4542,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         jl_cgval_t va_ary( // fake instantiation of a cgval, in order to call emit_bounds_check (it only checks the `.V` field)
                                 emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*)),
                                 NULL, NULL);
-                        Value *idx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                        Value *idx = emit_unbox(ctx, ctx.types().T_size, fld);
                         idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen, boundscheck);
                         idx = ctx.builder.CreateAdd(idx, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                         Instruction *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, idx), Align(sizeof(void*)));
@@ -4509,13 +4570,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     }
                     else {
                         // unknown index
-                        Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                        Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld);
                         if (emit_getfield_unknownidx(ctx, ret, obj, vidx, utt, boundscheck, order)) {
                             return true;
                         }
                     }
                 }
-                Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld);
                 if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(utt->parameters, true)) {
                     // For tuples, we can emit code even if we don't know the exact
                     // type (e.g. because we don't know the length). This is possible
@@ -4685,7 +4746,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *tyv = boxed(ctx, typ);
                 Value *types_svec = emit_datatype_types(ctx, tyv);
                 Value *types_len = emit_datatype_nfields(ctx, tyv);
-                Value *idx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+                Value *idx = emit_unbox(ctx, ctx.types().T_size, fld);
                 jl_value_t *boundscheck = (nargs == 3 ? argv[3].constant : jl_true);
                 if (nargs == 3)
                     emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "fieldtype");
@@ -4826,7 +4887,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 isdefined_unknown_idx:
             if (nargs == 3 || fld.typ != (jl_value_t*)jl_long_type)
                 return false;
-            Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+            Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld);
             vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(ctx.types().T_size, 1));
             Value *isd = ctx.builder.CreateCall(prepare_call(jlfieldisdefinedchecked_func), { boxed(ctx, obj), vidx });
             isd = ctx.builder.CreateTrunc(isd, getInt8Ty(ctx.builder.getContext()));
@@ -5008,8 +5069,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 
     AllocaInst *return_roots = nullptr;
     if (returninfo.return_roots) {
-        assert(returninfo.cc == jl_returninfo_t::SRet);
         return_roots = emit_static_roots(ctx, returninfo.return_roots);
+        setName(ctx.emission_context, return_roots, "return_roots");
         argvals[idx] = return_roots;
         idx++;
     }
@@ -5076,7 +5137,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                 }
             }
             else {
-                Value *val = emit_unbox(ctx, et, arg, jt);
+                Value *val = emit_unbox(ctx, et, arg);
                 if (!val) {
                     // There was a type mismatch of some sort - exit early
                     emit_error(ctx, "(INTERNAL ERROR - IR Validity): Argument type mismatch in Expr(:invoke)");
@@ -5103,7 +5164,11 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             break;
         case jl_returninfo_t::SRet:
             assert(result);
-            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_gcframe, load_gc_roots(ctx, return_roots, returninfo.return_roots, ctx.tbaa().tbaa_gcframe));
+            retval = mark_julia_slot(result,
+                                     jlretty,
+                                     NULL,
+                                     ctx.tbaa().tbaa_gcframe,
+                                     load_gc_roots(ctx, return_roots, returninfo.return_roots, ctx.tbaa().tbaa_gcframe));
             break;
         case jl_returninfo_t::Union: {
             Value *box = ctx.builder.CreateExtractValue(call, 0);
@@ -5118,7 +5183,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             retval = mark_julia_slot(derived,
                                      jlretty,
                                      tindex,
-                                     ctx.tbaa().tbaa_stack);
+                                     ctx.tbaa().tbaa_stack,
+                                     load_gc_roots(ctx, return_roots, returninfo.return_roots, ctx.tbaa().tbaa_gcframe));
             retval.Vboxed = box;
             break;
         }
@@ -5428,7 +5494,7 @@ static jl_cgval_t emit_specsig_oc_call(jl_codectx_t &ctx, jl_value_t *oc_type, j
     // Load specptr
     jl_cgval_t &theArg = argv[0];
     jl_cgval_t closure_specptr = emit_getfield_knownidx(ctx, theArg, 4, (jl_datatype_t*)oc_type, jl_memory_order_notatomic);
-    Value *specptr = emit_unbox(ctx, ctx.types().T_size, closure_specptr, (jl_value_t*)jl_long_type);
+    Value *specptr = emit_unbox(ctx, ctx.types().T_size, update_julia_type(ctx, closure_specptr, (jl_value_t*)jl_voidpointer_type));
     specptr = emit_inttoptr(ctx, specptr, ctx.types().T_ptr);
     JL_GC_PUSH1(&sigtype);
     jl_cgval_t r = emit_call_specfun_other(ctx, true, sigtype, oc_rett, specptr, "", NULL, argv, nargs,
@@ -5645,7 +5711,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
         }
         if (vi.inline_roots) {
             AllocaInst *varslot = vi.inline_roots;
-            size_t nroots = cast<ConstantInt>(varslot->getArraySize())->getZExtValue();
+            size_t nroots = vi.inline_roots_count;
             auto T_prjlvalue = varslot->getAllocatedType();
             if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
                 nroots *= AT->getNumElements();
@@ -5725,14 +5791,16 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
         // This check should probably mostly catch the relevant situations.
         if (vi.value.V != nullptr ? vi.value.V != rval_info.V : vi.inline_roots != nullptr) {
             MDNode *tbaa = ctx.tbaa().tbaa_stack; // Use vi.value.tbaa ?
-            if (rval_info.TIndex)
-                emit_unionmove(ctx, vi.value.V, tbaa, rval_info, /*skip*/isboxed, vi.isVolatile);
+            auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            if (rval_info.TIndex) {
+                Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
+                SmallVector<Value*,0> inline_roots(vi.inline_roots_count, Vnull);
+                emit_unionmove(ctx, vi.value.V, vi.value.typ, MutableArrayRef(inline_roots), tbaa, rval_info, /*skip*/isboxed, vi.isVolatile);
+                store_all_roots(ctx, inline_roots, vi.inline_roots, roots_ai, vi.isVolatile);
+            }
             else {
                 Align align(julia_alignment(rval_info.typ));
-                if (vi.inline_roots)
-                    split_value_into(ctx, rval_info, align, vi.value.V, align, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe), vi.isVolatile);
-                else
-                    emit_unbox_store(ctx, rval_info, vi.value.V, tbaa, align, align, vi.isVolatile);
+                split_value_into(ctx, rval_info, align, vi.value.V, align, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.inline_roots, roots_ai, vi.isVolatile);
             }
         }
     }
@@ -5766,8 +5834,17 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     // used. Hopefully LLVM will be able to fold this back where legal.
     if (jl_is_uniontype(phiType)) {
         bool allunbox;
-        size_t min_align, nbytes;
-        dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align, nbytes);
+        size_t min_align, nbytes, inline_roots;
+        dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align, nbytes, inline_roots);
+        if (inline_roots) {
+            assert(dest || allunbox);
+            roots.resize(inline_roots);
+            for (size_t nr = 0; nr < inline_roots; nr++) {
+                auto root_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "root_phi");
+                root_phi->insertInto(BB, InsertPt);
+                roots[nr] = root_phi;
+            }
+        }
         if (dest) {
             AllocaInst *phi = cast<AllocaInst>(dest->clone());
             phi->insertAfter(dest);
@@ -5783,7 +5860,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 decay_derived(ctx, ptr_phi),
                 decay_derived(ctx, phi));
-            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, best_tbaa(ctx.tbaa(), phiType));
+            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, best_tbaa(ctx.tbaa(), phiType),
+                roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, roots, r));
             ctx.SAvalues[idx] = val;
@@ -5793,7 +5871,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         else if (allunbox) {
             PHINode *Tindex_phi = PHINode::Create(getInt8Ty(ctx.builder.getContext()), jl_array_nrows(edges), "tindex_phi");
             Tindex_phi->insertInto(BB, InsertPt);
-            jl_cgval_t val = mark_julia_slot(NULL, phiType, Tindex_phi, ctx.tbaa().tbaa_stack);
+            jl_cgval_t val = mark_julia_slot(NULL, phiType, Tindex_phi, ctx.tbaa().tbaa_stack,
+                roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, (PHINode*)nullptr, roots, r));
             ctx.SAvalues[idx] = val;
             ctx.ssavalue_assigned[idx] = true;
@@ -6033,7 +6112,7 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
             if (vi.inline_roots) {
                 // memory optimization: make gc pointers re-initialized to NULL
                 AllocaInst *ssaroots = vi.inline_roots;
-                size_t nroots = cast<ConstantInt>(ssaroots->getArraySize())->getZExtValue();
+                size_t nroots = vi.inline_roots_count;
                 auto T_prjlvalue = ssaroots->getAllocatedType();
                 if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
                     nroots *= AT->getNumElements();
@@ -6065,7 +6144,7 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const T
         emit_typecheck(ctx, condV, (jl_value_t*)jl_bool_type, msg);
     }
     if (isbool) {
-        Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), condV, (jl_value_t*)jl_bool_type);
+        Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), update_julia_type(ctx, condV, (jl_value_t*)jl_bool_type));
         return ctx.builder.CreateNot(cond);
     }
     if (condV.isboxed) {
@@ -6356,7 +6435,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_throw_undef_if_not_sym) {
         assert(nargs == 2);
         jl_sym_t *var = (jl_sym_t*)args[0];
-        Value *cond = ctx.builder.CreateTrunc(emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type), getInt1Ty(ctx.builder.getContext()));
+        Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), update_julia_type(ctx, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type));
         if (var == jl_getfield_undefref_sym) {
             raise_exception_unless(ctx, cond,
                 literal_pointer_val(ctx, jl_undefref_exception));
@@ -6815,7 +6894,7 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
     jl_cgval_t ret = emit_invoke(ctx, modifyop, argv, 3, (jl_value_t*)jl_any_type, true);
     emit_typecheck(ctx, ret, jltype, fname);
     ret = update_julia_type(ctx, ret, jltype);
-    ctx.builder.CreateRet(emit_unbox(ctx, elty, ret, jltype));
+    ctx.builder.CreateRet(emit_unbox(ctx, elty, ret));
     if (ctx.topalloca->use_empty()) {
       ctx.topalloca->eraseFromParent();
       ctx.topalloca = nullptr;
@@ -6978,28 +7057,33 @@ static void emit_specsig_to_specsig(
             ctx.builder.CreateRetVoid();
         }
         else {
-            ctx.builder.CreateRet(emit_unbox(ctx, gfrt, gf_retval, rettype));
+            ctx.builder.CreateRet(emit_unbox(ctx, gfrt, gf_retval));
         }
         break;
     }
     case jl_returninfo_t::SRet: {
         Value *sret = &*gf_thunk->arg_begin();
         Align align(julia_alignment(rettype));
-        if (return_roots) {
-            Value *roots = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
-            split_value_into(ctx, gf_retval, align, sret, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
-        }
-        else {
-            emit_unbox_store(ctx, gf_retval, sret, ctx.tbaa().tbaa_stack, align, align);
-        }
+        Value *roots = return_roots ? gf_thunk->arg_begin() + 1 : nullptr; // root1 has type [n x {}*]*
+        split_value_into(ctx, gf_retval, align, sret, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
         ctx.builder.CreateRetVoid();
         break;
     }
     case jl_returninfo_t::Union: {
-        Value *gf_ret = boxed(ctx, gf_retval); // TODO: this is not the most optimal way to emit this
         Type *retty = gf_thunk->getReturnType();
-        Value *retval = UndefValue::get(retty);
         Value *tindex = compute_box_tindex(ctx, emit_typeof(ctx, gf_retval, false, true), (jl_value_t*)jl_any_type, rettype);
+        Value *gf_ret = boxed(ctx, gf_retval); // TODO: this is not the most optimal way to emit this
+        if (return_roots) {
+            Value *skip = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x00));
+            Argument *sret = gf_thunk->arg_begin();
+            Argument *roots = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
+            auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
+            SmallVector<Value*,0> inline_roots(return_roots, Vnull);
+            emit_unionmove(ctx, sret, rettype, MutableArrayRef(inline_roots), ctx.tbaa().tbaa_stack, gf_retval, /*skip*/skip);
+            store_all_roots(ctx, inline_roots, roots, roots_ai, false);
+        }
+        Value *retval = Constant::getNullValue(retty);
         tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
         retval = ctx.builder.CreateInsertValue(retval, gf_ret, 0);
         retval = ctx.builder.CreateInsertValue(retval, tindex, 1);
@@ -7520,7 +7604,7 @@ static Function *gen_cfun_wrapper(
     else if (!type_is_ghost(sig.lrt)) {
         Type *prt = sig.prt;
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
-        Value *v = emit_unbox(ctx, sig.lrt, retval, retval.typ);
+        Value *v = emit_unbox(ctx, sig.lrt, retval);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
         if (sig.sret) {
             ctx.builder.CreateStore(r, sretPtr);
@@ -7883,6 +7967,8 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     Type *rt = NULL;
     Type *srt = NULL;
     Type *T_prjlvalue = PointerType::get(M->getContext(), AddressSpace::Tracked);
+    bool all_roots = false;
+    uint64_t tracked_count = 0;
     if (jlrettype == (jl_value_t*)jl_bottom_type) {
         rt = getVoidTy(M->getContext());
         props.cc = jl_returninfo_t::Register;
@@ -7893,13 +7979,18 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     }
     else if (jl_is_uniontype(jlrettype)) {
         bool allunbox;
-        union_alloca_type((jl_uniontype_t*)jlrettype, allunbox, props.union_bytes, props.union_align, props.union_minalign);
-        if (props.union_bytes) {
+        // TODO: optimize for case where sret is exactly the needed set of return_roots
+        size_t return_roots;
+        union_alloca_type((jl_uniontype_t*)jlrettype, allunbox, props.union_bytes, props.union_align,
+                props.union_minalign, return_roots);
+        props.return_roots = (int) return_roots;
+        if (props.union_bytes || props.return_roots) {
             props.cc = jl_returninfo_t::Union;
             fsig.push_back(PointerType::getUnqual(M->getContext()));
             argnames.push_back("union_bytes_return");
             Type *pair[] = { T_prjlvalue, getInt8Ty(M->getContext()) };
             rt = StructType::get(M->getContext(), ArrayRef<Type*>(pair));
+            tracked_count = props.return_roots;
         }
         else if (allunbox) {
             props.cc = jl_returninfo_t::Ghosts;
@@ -7916,6 +8007,8 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         if (rt != getVoidTy(M->getContext()) && deserves_sret(jlrettype, rt)) {
             auto tracked = CountTrackedPointers(rt, true);
             assert(!tracked.derived);
+            all_roots = tracked.all;
+            tracked_count = tracked.count;
             if (tracked.count && !tracked.all) {
                 props.return_roots = tracked.count;
                 assert(props.return_roots == ((jl_datatype_t*)jlrettype)->layout->npointers);
@@ -7943,6 +8036,10 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         assert(srt);
         AttrBuilder param(M->getContext());
         param.addStructRetAttr(srt);
+        if (all_roots) {
+            assert(!props.return_roots);
+            param.addAttribute("julia.return_roots", std::to_string(tracked_count));
+        }
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
@@ -7963,6 +8060,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
+        param.addAttribute("julia.return_roots", std::to_string(props.return_roots));
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(getPointerTy(M->getContext()));
         argnames.push_back("return_roots");
@@ -8605,8 +8703,8 @@ static jl_llvm_functions_t
         }
         else if (jl_is_uniontype(jt)) {
             bool allunbox;
-            size_t align, nbytes;
-            Value *lv = try_emit_union_alloca(ctx, (jl_uniontype_t*)jt, allunbox, align, nbytes);
+            size_t align, nbytes, inline_roots;
+            Value *lv = try_emit_union_alloca(ctx, (jl_uniontype_t*)jt, allunbox, align, nbytes, inline_roots);
             if (lv) {
                 lv->setName(jl_symbol_name(s));
                 varinfo.value = mark_julia_slot(lv, jt, NULL, ctx.tbaa().tbaa_stack);
@@ -8625,6 +8723,11 @@ static jl_llvm_functions_t
             }
             if (lv || allunbox)
                 alloc_def_flag(ctx, varinfo);
+            if (inline_roots) {
+                AllocaInst *roots = emit_static_roots(ctx, inline_roots);
+                varinfo.inline_roots = roots;
+                varinfo.inline_roots_count = inline_roots;
+            }
             if (allunbox)
                 return;
         }
@@ -8636,6 +8739,7 @@ static jl_llvm_functions_t
             if (roots) roots->setName(StringRef(".roots.") + jl_symbol_name(s));
             varinfo.value = mark_julia_slot(bits, jt, NULL, ctx.tbaa().tbaa_stack, None);
             varinfo.inline_roots = roots;
+            varinfo.inline_roots_count = sizes.second;
             alloc_def_flag(ctx, varinfo);
             if (debug_enabled && varinfo.dinfo) {
                 assert((Metadata*)varinfo.dinfo->getType() != debugcache.jl_pvalue_dillvmt);
@@ -9232,39 +9336,48 @@ static jl_llvm_functions_t
                 if (type_is_ghost(retty))
                     retval = NULL;
                 else
-                    retval = emit_unbox(ctx, retty, retvalinfo, jlrettype);
+                    retval = emit_unbox(ctx, retty, retvalinfo);
                 break;
             case jl_returninfo_t::SRet:
                 retval = NULL;
                 break;
             case jl_returninfo_t::Union: {
-                Value *data, *tindex;
+                Value *tindex;
+                Value *data = nullptr;
                 if (retvalinfo.TIndex) {
                     tindex = retvalinfo.TIndex;
-                    data = Constant::getNullValue(ctx.types().T_prjlvalue);
-                    if (retvalinfo.V == NULL) {
-                        // treat this as a simple Ghosts
-                        sret = NULL;
+                    if (!returninfo.return_roots) {
+                        if (retvalinfo.V == NULL) {
+                            // treat this as a simple Ghosts
+                            sret = NULL;
+                        }
+                        else if (retvalinfo.Vboxed) {
+                            // also need to account for the possibility the return object is boxed
+                            // and avoid / skip attempting to copy it to the stack
+                            isboxed_union = ctx.builder.CreateICmpNE(
+                                ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
+                                ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
+                        }
                     }
-                    else if (retvalinfo.Vboxed) {
-                        // also need to account for the possibility the return object is boxed
-                        // and avoid / skip copying it to the stack
-                        isboxed_union = ctx.builder.CreateICmpNE(
-                            ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
-                            ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
-                        data = ctx.builder.CreateSelect(isboxed_union, retvalinfo.Vboxed, data);
+                    else {
+                        isboxed_union = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
                     }
+                    data = retvalinfo.Vboxed;
                 }
                 else {
                     // treat this as a simple boxed returninfo
                     //assert(retvalinfo.isboxed);
                     tindex = compute_tindex_unboxed(ctx, retvalinfo, jlrettype);
+                    if (!returninfo.return_roots)
+                        sret = NULL; // skip all
+                    else
+                        isboxed_union = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
                     tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
                     data = boxed(ctx, retvalinfo);
-                    sret = NULL;
                 }
-                retval = UndefValue::get(retty);
-                retval = ctx.builder.CreateInsertValue(retval, data, 0);
+                retval = Constant::getNullValue(retty);
+                if (data)
+                    retval = ctx.builder.CreateInsertValue(retval, data, 0);
                 retval = ctx.builder.CreateInsertValue(retval, tindex, 1);
                 break;
             }
@@ -9272,34 +9385,31 @@ static jl_llvm_functions_t
                 retval = compute_tindex_unboxed(ctx, retvalinfo, jlrettype);
                 break;
             }
+            auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
             if (sret) {
-                Align align(returninfo.union_align);
-                if (!returninfo.return_roots && !retvalinfo.inline_roots.empty()) {
-                    assert(retvalinfo.V == nullptr);
-                    assert(returninfo.cc == jl_returninfo_t::SRet);
-                    split_value_into(ctx, retvalinfo, align, nullptr, align,
-                            jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), sret, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
-                }
-                else if (returninfo.return_roots) {
-                    assert(returninfo.cc == jl_returninfo_t::SRet);
+                if (returninfo.return_roots) {
                     Value *return_roots = f->arg_begin() + 1;
-                    split_value_into(ctx, retvalinfo, align, sret, align,
-                            jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), return_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
+                    Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
+                    SmallVector<Value*,0> inline_roots(returninfo.return_roots, Vnull);
+                    emit_unionmove(ctx, sret, jlrettype, MutableArrayRef(inline_roots), ctx.tbaa().tbaa_stack, retvalinfo, /*skip*/isboxed_union);
+                    store_all_roots(ctx, inline_roots, return_roots, roots_ai, false);
+                }
+                else if (retvalinfo.V == nullptr && !retvalinfo.inline_roots.empty()) {
+                    // not returning into roots and don't have a value: might just have roots (might also be all ghost)
+                    store_all_roots(ctx, ArrayRef(retvalinfo.inline_roots).slice(0, std::min(retvalinfo.inline_roots.size(), (size_t)returninfo.union_bytes / sizeof(void*))),
+                            sret, roots_ai, false);
                 }
                 else if (retvalinfo.ispointer()) {
-                    if (returninfo.cc == jl_returninfo_t::SRet) {
-                        assert(jl_is_concrete_type(jlrettype));
-                        emit_memcpy(ctx, sret, jl_aliasinfo_t::fromTBAA(ctx, nullptr), retvalinfo,
-                                    jl_datatype_size(jlrettype), align, align);
-                    }
-                    else { // must be jl_returninfo_t::Union
-                        emit_unionmove(ctx, sret, nullptr, retvalinfo, /*skip*/isboxed_union);
-                    }
+                    emit_unionmove(ctx, sret, jlrettype, /*inline_roots*/MutableArrayRef<Value*>(), /*tbaa_dst*/nullptr, retvalinfo, /*skip*/isboxed_union);
                 }
                 else {
+                    Align align(returninfo.union_align);
                     ctx.builder.CreateAlignedStore(retvalinfo.V, sret, align);
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
+            }
+            else {
+                assert(!returninfo.return_roots);
             }
 
             mallocVisitStmt(sync_bytes, have_dbg_update);
@@ -9518,7 +9628,7 @@ static jl_llvm_functions_t
                         // load of val) if the runtime type of val isn't phiType
                         Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                         V = emit_guarded_test(ctx, isvalid, undef_value_for_type(VN->getType()), [&] {
-                            return emit_unbox(ctx, VN->getType(), val, phiType);
+                            return emit_unbox(ctx, VN->getType(), update_julia_type(ctx, val, phiType));
                         });
                     }
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
@@ -9538,10 +9648,7 @@ static jl_llvm_functions_t
                         SmallVector<Value*,0> mayberoots(tracked, Constant::getNullValue(ctx.types().T_prjlvalue));
                         if (typedval.typ != jl_bottom_type) {
                             Align align(julia_alignment(phiType));
-                            if (tracked)
-                                split_value_into(ctx, typedval, align, dest, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), mayberoots);
-                            else
-                                emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, align, align);
+                            split_value_into(ctx, typedval, align, dest, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), false, mayberoots);
                         }
                         return mayberoots;
                     });
@@ -9549,9 +9656,9 @@ static jl_llvm_functions_t
                         roots[nr]->addIncoming(incomingroots[nr], ctx.builder.GetInsertBlock());
                 }
                 else if (!roots.empty()) {
-                    Value *V = Constant::getNullValue(ctx.types().T_prjlvalue);
+                    Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
                     for (size_t nr = 0; nr < roots.size(); nr++)
-                        roots[nr]->addIncoming(V, ctx.builder.GetInsertBlock());
+                        roots[nr]->addIncoming(Vnull, ctx.builder.GetInsertBlock());
                 }
             }
             else {
@@ -9560,7 +9667,8 @@ static jl_llvm_functions_t
                 // `V` is always initialized when it is used.
                 // Ref https://gcc.gnu.org/bugzilla/show_bug.cgi?id=96629
                 Value *V = nullptr;
-                assert(roots.empty());
+                Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
+                SmallVector<Value*,0> lroots(roots.size(), Vnull);
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
                     if (VN)
                         V = undef_value_for_type(VN->getType());
@@ -9576,10 +9684,10 @@ static jl_llvm_functions_t
                     else {
                         if (VN)
                             V = Constant::getNullValue(ctx.types().T_prjlvalue);
-                        if (dest) {
-                            Align align(julia_alignment(val.typ));
-                            emit_unbox_store(ctx, val, dest, ctx.tbaa().tbaa_stack, align, align);
-                        }
+                        if (dest)
+                            emit_unionmove(ctx, dest, phiType, MutableArrayRef(lroots), ctx.tbaa().tbaa_stack, val, nullptr);
+                        else
+                            assert(VN == nullptr); // allunbox
                         RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex);
                     }
                 }
@@ -9603,14 +9711,23 @@ static jl_llvm_functions_t
                         V = new_union.Vboxed ? new_union.Vboxed : Constant::getNullValue(ctx.types().T_prjlvalue);
                     if (dest) { // basically, if !ghost union
                         if (new_union.Vboxed != nullptr) {
-                            Value *isboxed = ctx.builder.CreateICmpNE( // if UNION_BOX_MARKER is set, we won't select this slot anyways
+                            Value *isboxed;
+                            if (roots.size())
+                                isboxed = ctx.builder.CreateICmpEQ(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
+                            else
+                                isboxed = ctx.builder.CreateICmpNE( // if UNION_BOX_MARKER is set, we won't select this slot anyways
                                     ctx.builder.CreateAnd(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                                     ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
                             skip = skip ? ctx.builder.CreateOr(isboxed, skip) : isboxed;
                         }
-                        emit_unionmove(ctx, dest, ctx.tbaa().tbaa_arraybuf, new_union, skip);
+                        emit_unionmove(ctx, dest, phiType, MutableArrayRef(lroots), ctx.tbaa().tbaa_arraybuf, new_union, skip);
+                    }
+                    else {
+                        assert(VN == nullptr); // allunbox
                     }
                 }
+                for (size_t nr = 0; nr < roots.size(); nr++)
+                    roots[nr]->addIncoming(lroots[nr], ctx.builder.GetInsertBlock());
                 if (VN)
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                 if (TindexN)
