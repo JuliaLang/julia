@@ -569,6 +569,8 @@ function maybe_show_hint(s::PromptState)
     return nothing
 end
 
+max_highlight_size::Int = 5000 # bytes
+
 function refresh_multi_line(s::PromptState; kw...)
     if s.refresh_wait !== nothing
         close(s.refresh_wait)
@@ -626,8 +628,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     end
 
     styled_buffer = AnnotatedString("")
-    # Skip styling for excessively large inputs (performance)
-    max_highlight_size = 100_000 # bytes
     if buf.size > 0 && buf.size <= max_highlight_size
         full_input = String(buf.data[1:buf.size])
         if !isempty(full_input)
