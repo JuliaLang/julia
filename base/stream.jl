@@ -1069,6 +1069,8 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     elseif nwritten > 0
         p += nwritten
         n -= UInt(nwritten)
+    elseif nwritten < 0 && nwritten != UV_EAGAIN && nwritten != UV_EINTR
+        uv_error("write", nwritten)
     end
     uvw = uv_write_async(s, p, n)
     ct = current_task()
@@ -1113,9 +1115,6 @@ function uv_try_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
                 Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                 s, p, nwrite)
-    if nwritten < 0
-        uv_error("write", nwritten)
-    end
     return nwritten
 end
 
