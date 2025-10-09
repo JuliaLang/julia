@@ -602,6 +602,10 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         if writer isa Base.TTY && !Base.ispty(writer)::Bool
             _reset_console_mode(writer.handle)
         end
+        reader = Terminals.pipe_reader(terminal)
+        if reader isa Base.TTY && !Base.ispty(reader)::Bool
+            _enable_virtual_terminal_input(reader.handle)
+        end
     end
     # Write out the prompt string
     lindent = write_prompt(termbuf, prompt, hascolor(terminal))::Int
@@ -1689,11 +1693,15 @@ end
 if Sys.iswindows()
 
 #= Get/SetConsoleMode flags =#
+# Output flags
 const ENABLE_PROCESSED_OUTPUT            = UInt32(0x0001)
 const ENABLE_WRAP_AT_EOL_OUTPUT          = UInt32(0x0002)
 const ENABLE_VIRTUAL_TERMINAL_PROCESSING = UInt32(0x0004)
 const DISABLE_NEWLINE_AUTO_RETURN        = UInt32(0x0008)
 const ENABLE_LVB_GRID_WORLDWIDE          = UInt32(0x0010)
+
+# Input flags
+const ENABLE_VIRTUAL_TERMINAL_INPUT      = UInt32(0x0200)
 
 #= libuv flags =#
 const UV_TTY_SUPPORTED = 0
@@ -1712,6 +1720,24 @@ function _reset_console_mode(handle::Ptr{Cvoid})
     # Expected to fail (benignly) with ERROR_INVALID_HANDLE if the provided handle does not
     # allow setting the console mode
     ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), handle, mode)
+
+    return nothing
+end
+
+function _enable_virtual_terminal_input(handle::Ptr{Cvoid})
+    # Enable virtual terminal input mode for bracketed paste support on Windows Terminal
+    # See https://github.com/JuliaLang/julia/issues/53763
+    # Query libuv to see whether it expects the console to support virtual terminal sequences
+    vterm_state = Ref{Cint}()
+    ccall(:uv_tty_get_vterm_state, Cint, (Ref{Cint},), vterm_state)
+
+    if vterm_state[] == UV_TTY_SUPPORTED
+        mode = Ref{UInt32}()
+        if ccall(:GetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, Ref{UInt32}), handle, mode) != 0
+            mode[] |= ENABLE_VIRTUAL_TERMINAL_INPUT
+            ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), handle, mode[])
+        end
+    end
 
     return nothing
 end
@@ -2938,6 +2964,13 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         status ∈ (:ok, :ignore) || break
     end
     raw!(term, true)
+    @static if Sys.iswindows()
+        # Enable virtual terminal input mode for bracketed paste support on Windows Terminal
+        reader = Terminals.pipe_reader(term)
+        if reader isa Base.TTY
+            _enable_virtual_terminal_input(reader.handle)
+        end
+    end
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
