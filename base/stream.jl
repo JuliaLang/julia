@@ -1114,7 +1114,7 @@ function uv_try_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
                 (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                 s, p, nwrite)
     if nwritten < 0
-        uv_error("write", err)
+        uv_error("write", nwritten)
     end
     return nwritten
 end
