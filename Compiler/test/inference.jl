@@ -6458,7 +6458,7 @@ end
 global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
-end == ErrorException
+end == TypeError
 
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
