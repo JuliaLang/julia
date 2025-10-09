@@ -32,11 +32,15 @@ The syntax for [`@ccall`](@ref) to generate a call to the library function is:
 @ccall $function_pointer(argvalue1::argtype1, ...)::returntype
 ```
 
-where `library` is a string constant or literal (but see [Non-constant Function
-Specifications](@ref) below). The library may be omitted, in which case the
-function name is resolved in the current process. This form can be used to call
-C library functions, functions in the Julia runtime, or functions in an
-application linked to Julia. The full path to the library may also be specified.
+where `library` is a string constant or global variable name (see [Non-constant
+Function -Specifications](@ref) below). The library can be just a name, or it
+can specify a full path to the library. The library may be omitted, in which
+case the function name is resolved in the current executable, the current libc,
+or libjulia(-internal). This form can be used to call C library functions,
+functions in the Julia runtime, or functions in an application linked to Julia.
+Omitting the library *cannot* be used to call a function in any library (like
+specifying `RTLD_DEFAULT` to `dlsym`) as such behavior is slow, complicated,
+and not implemented on all platforms.
 Alternatively, `@ccall` may also be used to call a function pointer
 `$function_pointer`, such as one returned by `Libdl.dlsym`. The `argtype`s
 corresponds to the C-function signature and the `argvalue`s are the actual
@@ -848,13 +852,17 @@ it must be handled in other ways.
 
 ## Non-constant Function Specifications
 
-In some cases, the exact name or path of the needed library is not known in advance and must
-be computed at run time. To handle such cases, the library component
-specification can be a function call, e.g. `find_blas().dgemm`. The call expression will
-be executed when the `ccall` itself is executed. However, it is assumed that the library
-location does not change once it is determined, so the result of the call can be cached and
-reused. Therefore, the number of times the expression executes is unspecified, and returning
-different values for multiple calls results in unspecified behavior.
+In some cases, the exact name or path of the needed library is not known in
+advance and must be computed at run time. To handle such cases, the library
+component specification can be a value such as `Libdl.LazyLibrary`. For
+example, in `@ccall blas.dgemm()`, there can be a global defined as `const blas
+= LazyLibrary("libblas")`. The runtime will call `dlsym(:dgemm, dlopen(blas))`
+when the `@ccall` itself is executed. The `Libdl.dlopen` function can be
+overloaded for custom types to provide alternate behaviors. However, it is
+assumed that the library location does not change once it is determined, so the
+result of the call can be cached and reused. Therefore, the number of times the
+expression executes is unspecified, and returning different values for multiple
+calls results in unspecified behavior.
 
 If even more flexibility is needed, it is possible
 to use computed values as function names by staging through [`eval`](@ref) as follows:
@@ -990,11 +998,38 @@ The arguments to [`ccall`](@ref) are:
 
 
 !!! note
-    The `(:function, "library")` pair, return type, and input types must be literal constants
-    (i.e., they can't be variables, but see [Non-constant Function Specifications](@ref)).
+    The `(:function, "library")` pair and the input type list must be syntactic tuples
+    (i.e., they can't be variables or values with a type of Tuple.
 
-    The remaining parameters are evaluated at compile-time, when the containing method is defined.
+    The rettype and argument type values are evaluated at when the containing method is
+    defined, not runtime.
 
+!!! note "Function Name vs Pointer Syntax"
+    The syntax of the first argument to `ccall` determines whether you're calling by **name** or by **pointer**:
+    * **Name-based calls** (tuple literal syntax):
+    - Both the function and library names can be a quoted Symbol, a String, a
+      variable name (a GlobalRef), or a dotted expression ending with a variable
+      name.
+    - Single name: `(:function_name,)` or `"function_name"` - uses default library lookup.
+    - Name with library: `(:function_name, "library")` - specifies both function and library.
+    - Symbol, string, and tuple literal constants (not expressions that evaluate to those constants,
+      but actual literals) are automatically normalized to tuple form.
+    * **Pointer-based calls** (non-tuple syntax):
+    - Anything that is not a literal tuple expression specified above is assumed to be an
+      expression that evaluates to a function pointers at runtime.
+    - Function pointer variables: `fptr` where `fptr` is a runtime pointer value.
+    - Function pointer computations: `dlsym(:something)` where the result is computed at
+      runtime every time (usually along with some caching logic).
+    * **Library name expressions**:
+    - When given as a variable, the library name can resolve to a `Symbol`, a `String`, or
+      any other value. The runtime will call `Libdl.dlopen(name)` on the value an
+      unspecified number of times, caching the result. The result is not invalidated if the
+      value of the binding changes or if it becomes undefined, as long as there exists any
+      value for that binding in any past or future worlds, that value may be used.
+    - Dot expressions, such as `A.B().c`, will be executed at method definition
+      time up to the final `c`. The first part must resolve to a Module, and the
+      second part to a quoted symbol. The value of that global will be resolved at
+      runtime when the `ccall` is first executed.
 
 A table of translations between the macro and function interfaces is given below.
 
