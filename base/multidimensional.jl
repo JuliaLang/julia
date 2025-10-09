@@ -1955,18 +1955,19 @@ julia> sortslices(reshape([5; 4; 3; 2; 1], (1,1,5)), dims=3, by=x->x[1,1])
 ```
 """
 function sortslices(A::AbstractArray; dims::Union{Integer, Tuple{Vararg{Integer}}}, kws...)
-    if A isa Matrix && dims isa Integer && dims == 1
-        # TODO: remove once the generic version becomes as fast or faster
-        perm = sortperm(eachslice(A; dims); kws...)
-        return A[perm, :]
-    end
-
+    dims isa Integer && return _sortslices_linear(A, Val{dims}(); kws...)
+        
     B = similar(A)
-    _sortslices!(B, A, Val{dims}(); kws...)
+    _sortslices_multidim!(B, A, Val{dims}(); kws...)
     B
 end
 
-function _sortslices!(B, A, ::Val{dims}; kws...) where dims
+function _sortslices_linear(A::AbstractArray{<:Any, N}, ::Val{dims}; kws...)::typeof(A) where {N, dims}
+    perm = sortperm(eachslice(A; dims); kws...)
+    A[ntuple(i -> i == dims ? perm : :, Val{N}())...]
+end
+
+function _sortslices_multidim!(B, A, ::Val{dims}; kws...) where dims
     ves = vec(eachslice(A; dims))
     perm = sortperm(ves; kws...)
     bes = eachslice(B; dims)
