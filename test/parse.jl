@@ -29,6 +29,18 @@
     @test parse(Int, 'a', base=16) == 10
     @test_throws ArgumentError parse(Int, 'a')
     @test_throws ArgumentError parse(Int,typemax(Char))
+
+    @test tryparse(Int, '8') === 8
+    @test tryparse(Int, 'a') === nothing
+    @test tryparse(Int, 'a'; base=11) === 10
+    @test tryparse(Int32, 'a'; base=11) === Int32(10)
+    @test tryparse(UInt8, 'f'; base=16) === 0x0f
+    @test tryparse(UInt8, 'f'; base=15) === nothing
+
+    @test_throws ArgumentError parse(Int, 'a'; base=63)
+    @test_throws ArgumentError tryparse(Int, 'a'; base=63)
+    @test_throws ArgumentError parse(Int, "a"; base=63)
+    @test_throws ArgumentError tryparse(Int, "a"; base=63)
 end
 
 # Issue 29451
@@ -264,6 +276,19 @@ end
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
+
+@testset "parse Chars to non-integer types" begin
+    for T in (Float64, Float32, Float16, Complex)
+        @test parse(T, '3') === T(3)
+        @test_throws ArgumentError parse(T, 'a')
+        @test tryparse(T, '3') === T(3)
+        @test tryparse(T, 'a') === nothing
+
+        # for consistency with parse(T, str), `base` is not a valid argument
+        @test_throws MethodError parse(T, '3'; base=11)
+        @test_throws MethodError tryparse(T, '3'; base=11)
+    end
+end
 
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
