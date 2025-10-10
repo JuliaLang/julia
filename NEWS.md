@@ -21,7 +21,7 @@ Language changes
 * The `hash(::AbstractString)` function is now a zero-copy / zero-cost function, based upon providing a correct implementation of the `codeunit` and `iterate` functions. Third-party string packages should migrate to the new algorithm by deleting their existing overrides of the `hash` function. ([#59691])
 
 * Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
-* Parsing characters is now faster and characters can be parsed to more number types; `tryparse` now accepts characters as well as strings ([#59603])
+* Characters can be parsed to more number types; `tryparse` now accepts characters as well as strings ([#59603])
 
 Compiler/Runtime improvements
 -----------------------------
