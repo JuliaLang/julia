@@ -2688,8 +2688,54 @@ f54131 = F54131()
 
     s = "f54131.x(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
-    @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 100
+end
+
+@kwdef struct T59244
+    asdf = 1
+    qwer = 2
+end
+@kwdef struct S59244{T}
+    asdf::T = 1
+    qwer::T = 2
+end
+@testset "kwarg completion of types" begin
+    s = "T59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "T59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Int}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Int}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Any}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Any}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
 end
 
 # Completion inside string interpolation
