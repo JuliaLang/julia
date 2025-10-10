@@ -861,10 +861,14 @@ function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
     if iscall_with_boundscheck(stmt, sv)
-        for i = 1:(length(stmt.args)-1)
+        for i = 1:length(stmt.args)
             val = stmt.args[i]
+            # SSAValue should be the only permitted argument type which can be inconsistent found here.
+            # Others (e.g. GlobalRef) should have been moved to statement position. See stmt_effect_flags.
             if isa(val, SSAValue)
-                stmt_inconsistent |= val.id in inconsistent
+                if i < length(stmt.args)  # not the boundscheck argument (which is last)
+                    stmt_inconsistent |= val.id in inconsistent
+                end
                 count!(tpdum, val)
             end
         end
@@ -891,7 +895,7 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     if isa(stmt, EnterNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
-        return nothing
+        return true # don't bail out early -- can cause tpdum counts to be off
     end
 
     scan_non_dataflow_flags!(inst, sv)
@@ -937,10 +941,11 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
         end
     end
 
-    # bail out early if there are no possibilities to refine the effects
-    if !any_refinable(sv)
-        return nothing
-    end
+    # Do not bail out early, as this can cause tpdum counts to be off.
+    # # bail out early if there are no possibilities to refine the effects
+    # if !any_refinable(sv)
+    #     return nothing
+    # end
 
     return true
 end
@@ -948,25 +953,24 @@ end
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     (; ir, inconsistent, tpdum) = sv
 
+    sv.all_retpaths_consistent || return
     scan!(ScanStmt(sv), scanner, false)
+    sv.all_retpaths_consistent || return
     complete!(tpdum); push!(scanner.bb_ip, 1)
     populate_def_use_map!(tpdum, scanner)
 
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
     for def in inconsistent
-        for use in tpdum[def]
-            if !(use in inconsistent)
-                push!(inconsistent, use)
-                append!(stmt_ip, tpdum[use])
-            end
-        end
-    end
+        append!(stmt_ip, tpdum[def])
+   end
     lazydomtree = LazyDomtree(ir)
     while !isempty(stmt_ip)
         idx = popfirst!(stmt_ip)
+        idx in inconsistent && continue # already processed
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
         if iscall_with_boundscheck(stmt, sv)
+            # recompute inconsistent flags for call while skipping boundscheck (last) argument
             any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
@@ -978,19 +982,18 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             any_non_boundscheck_inconsistent || continue
         elseif isa(stmt, ReturnNode)
             sv.all_retpaths_consistent = false
+            return
         elseif isa(stmt, GotoIfNot)
             bb = block_for_inst(ir, idx)
             cfg = ir.cfg
             blockliveness = BlockLiveness(cfg.blocks[bb].succs, nothing)
             for succ in iterated_dominance_frontier(cfg, blockliveness, get!(lazydomtree))
                 visit_bb_phis!(ir, succ) do phiidx::Int
-                    push!(inconsistent, phiidx)
-                    push!(stmt_ip, phiidx)
+                    phiidx in inconsistent || push!(stmt_ip, phiidx)
                 end
             end
         end
-        sv.all_retpaths_consistent || break
-        append!(inconsistent, tpdum[idx])
+        push!(inconsistent, idx)
         append!(stmt_ip, tpdum[idx])
     end
 end
@@ -1009,9 +1012,9 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
     completed_scan = scan!(ScanStmt(sv), scanner, true)
 
     if !completed_scan
-        if sv.all_retpaths_consistent
-            check_inconsistentcy!(sv, scanner)
-        else
+        # finish scanning for all_retpaths_consistent computation
+        check_inconsistentcy!(sv, scanner)
+        if !sv.all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
             scan!(scanner, false) do inst::Instruction, ::Int, ::Int
                 scan_non_dataflow_flags!(inst, sv)
