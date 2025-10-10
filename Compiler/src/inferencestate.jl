@@ -364,12 +364,12 @@ mutable struct InferenceState
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
         edges = []
-        stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
+        stmt_info = CallInfo[ NoCallInfo() for _ = 1:nstmts ]
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
-        bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
-        bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
+        bb_saw_latestworld = Bool[false for _ = 1:length(cfg.blocks)]
+        bb_vartables = Union{Nothing,VarTable}[ nothing for _ = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
         argtypes = result.argtypes
 
@@ -393,7 +393,7 @@ mutable struct InferenceState
             end
         end
 
-        src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for _ = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)
 
         unreachable = BitSet()
