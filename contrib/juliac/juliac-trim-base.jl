@@ -77,7 +77,6 @@ end
             print(io, T.var.name)
         end
     end
-    show_type_name(io::IO, tn::Core.TypeName) = print(io, tn.name)
 
     mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) where {F, F2} =
     _mapreduce_dim(f, op, init, A, dims)

@@ -176,7 +176,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     end
     nothing
 end
-code_warntype(args...; kwargs...) = (@nospecialize; code_warntype(stdout, args...; kwargs...))
+code_warntype(f; kwargs...) = (@nospecialize; code_warntype(stdout, f; kwargs...))
+code_warntype(f, argtypes; kwargs...) = (@nospecialize; code_warntype(stdout, f, argtypes; kwargs...))
 
 using Base: CodegenParams
 

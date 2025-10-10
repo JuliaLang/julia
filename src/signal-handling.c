@@ -636,6 +636,9 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
             jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
             jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+        if (sig == SIGQUIT) {
+            jl_print_task_backtraces(0);
+        }
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {
