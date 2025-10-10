@@ -24,6 +24,43 @@ end
 struct NoCallInfo <: CallInfo end
 add_edges_impl(::Vector{Any}, ::NoCallInfo) = nothing
 
+abstract type InferredCallResult end
+
+struct CachedCallResult <: InferredCallResult
+    src
+    effects::Effects
+    edge::CodeInstance
+end
+
+struct VolatileInferenceResult <: InferredCallResult
+    inf_result::InferenceResult
+end
+
+struct LocalInferenceResult <: InferredCallResult
+    inf_result::InferenceResult
+end
+
+abstract type InferredConstCallResult <: InferredCallResult end
+
+struct ConstPropResult <: InferredConstCallResult
+    result::InferenceResult
+end
+
+struct ConcreteResult <: InferredConstCallResult
+    edge::CodeInstance
+    effects::Effects
+    result
+    ConcreteResult(edge::CodeInstance, effects::Effects) = new(edge, effects)
+    ConcreteResult(edge::CodeInstance, effects::Effects, @nospecialize val) = new(edge, effects, val)
+end
+
+struct SemiConcreteResult <: InferredConstCallResult
+    edge::CodeInstance
+    ir::IRCode
+    effects::Effects
+    spec_info::SpecInfo
+end
+
 """
     info::MethodMatchInfo <: CallInfo
 
@@ -38,10 +75,12 @@ struct MethodMatchInfo <: CallInfo
     atype
     fullmatch::Bool
     edges::Vector{Union{Nothing,CodeInstance}}
+    call_results::Vector{Union{Nothing,InferredCallResult}}
     function MethodMatchInfo(
         results::MethodLookupResult, mt::MethodTable, @nospecialize(atype), fullmatch::Bool)
         edges = fill!(Vector{Union{Nothing,CodeInstance}}(undef, length(results)), nothing)
-        return new(results, mt, atype, fullmatch, edges)
+        call_results = fill!(Vector{Union{Nothing,InferredCallResult}}(undef, length(results)), nothing)
+        return new(results, mt, atype, fullmatch, edges, call_results)
     end
 end
 add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo) = _add_edges_impl(edges, info)
@@ -137,7 +176,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
 end
 nsplit_impl(::MethodMatchInfo) = 1
 getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
-getresult_impl(::MethodMatchInfo, ::Int) = nothing
+getresult_impl(info::MethodMatchInfo, idx::Int) = info.call_results[idx]
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -157,52 +196,16 @@ _add_edges_impl(edges::Vector{Any}, info::UnionSplitInfo, mi_edge::Bool=false) =
     for split in info.split; _add_edges_impl(edges, split, mi_edge); end
 nsplit_impl(info::UnionSplitInfo) = length(info.split)
 getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit(info.split[idx], 1)
-getresult_impl(::UnionSplitInfo, ::Int) = nothing
-
-abstract type ConstResult end
-
-struct ConstPropResult <: ConstResult
-    result::InferenceResult
+function getresult_impl(info::UnionSplitInfo, idx::Int)
+    for split in info.split
+        n = length(split.call_results)
+        if idx ≤ n
+            return split.call_results[idx]
+        else
+            idx -= n
+        end
+    end
 end
-
-struct ConcreteResult <: ConstResult
-    edge::CodeInstance
-    effects::Effects
-    result
-    ConcreteResult(edge::CodeInstance, effects::Effects) = new(edge, effects)
-    ConcreteResult(edge::CodeInstance, effects::Effects, @nospecialize val) = new(edge, effects, val)
-end
-
-struct SemiConcreteResult <: ConstResult
-    edge::CodeInstance
-    ir::IRCode
-    effects::Effects
-    spec_info::SpecInfo
-end
-
-# XXX Technically this does not represent a result of constant inference, but rather that of
-#     regular edge inference. It might be more appropriate to rename `ConstResult` and
-#     `ConstCallInfo` to better reflect the fact that they represent either of local or
-#     volatile inference result.
-struct VolatileInferenceResult <: ConstResult
-    inf_result::InferenceResult
-end
-
-"""
-    info::ConstCallInfo <: CallInfo
-
-The precision of this call was improved using constant information.
-In addition to the original call information `info.call`, this info also keeps the results
-of constant inference `info.results::Vector{Union{Nothing,ConstResult}}`.
-"""
-struct ConstCallInfo <: CallInfo
-    call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,ConstResult}}
-end
-add_edges_impl(edges::Vector{Any}, info::ConstCallInfo) = add_edges!(edges, info.call)
-nsplit_impl(info::ConstCallInfo) = nsplit(info.call)
-getsplit_impl(info::ConstCallInfo, idx::Int) = getsplit(info.call, idx)
-getresult_impl(info::ConstCallInfo, idx::Int) = info.results[idx]
 
 """
     info::MethodResultPure <: CallInfo
@@ -291,7 +294,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 struct InvokeCallInfo <: CallInfo
     edge::Union{Nothing,CodeInstance}
     match::MethodMatch
-    result::Union{Nothing,ConstResult}
+    result::Union{Nothing,InferredCallResult}
     atype # ::Type
 end
 add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo) =
@@ -397,7 +400,6 @@ getsplit_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; MethodLookupR
     WorldRange(typemin(UInt), typemax(UInt)), false))
 getresult_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; info.result)
 
-
 """
     info::OpaqueClosureCallInfo
 
@@ -408,7 +410,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 struct OpaqueClosureCallInfo <: CallInfo
     edge::Union{Nothing,CodeInstance}
     match::MethodMatch
-    result::Union{Nothing,ConstResult}
+    result::Union{Nothing,InferredCallResult}
 end
 function add_edges_impl(edges::Vector{Any}, info::OpaqueClosureCallInfo)
     edge = info.edge
