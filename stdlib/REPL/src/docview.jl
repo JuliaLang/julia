@@ -640,7 +640,7 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
     docs = esc(:(@doc $x))
     docs = if isfield(x)
         quote
-            if isa($(esc(x.args[1])), DataType)
+            if $(esc(x.args[1])) isa Type
                 fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
             else
                 $docs
@@ -684,6 +684,7 @@ function fielddoc(binding::Binding, field::Symbol)
 end
 
 # As with the additional `doc` methods, this converts an object to a `Binding` first.
+fielddoc(obj::UnionAll, field::Symbol) = fielddoc(Base.unwrap_unionall(obj), field)
 fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), field)
 
 

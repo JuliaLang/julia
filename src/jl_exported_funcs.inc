@@ -178,6 +178,7 @@
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
+    XX(jl_declare_constant_val) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
@@ -190,6 +191,7 @@
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_get_sysimage_cpu_target) \
     XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
@@ -292,7 +294,6 @@
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
-    XX(jl_macroexpand1) \
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \
@@ -329,6 +330,10 @@
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
+    XX(jl_begin_new_module) \
+    XX(jl_end_new_module) \
+    XX(jl_new_opaque_closure_from_code_info) \
+    XX(jl_new_opaque_closure_from_code_info_in_world) \
     XX(jl_new_primitivetype) \
     XX(jl_new_struct) \
     XX(jl_new_structt) \
@@ -339,8 +344,6 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_method_match_to_mi) \
-    XX(jl_get_unspecialized) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -420,6 +423,7 @@
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
     XX(jl_static_show) \
+    XX(jl_safe_static_show) \
     XX(jl_static_show_func_sig) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
@@ -518,7 +522,7 @@
     YY(jl_get_llvm_gvs) \
     YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
-    YY(jl_get_llvm_mis) \
+    YY(jl_get_llvm_cis) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

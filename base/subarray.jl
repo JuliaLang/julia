@@ -65,6 +65,7 @@ viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 size(V::SubArray) = (@inline; map(length, axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
+similar(::Type{TA}, dims::Dims) where {T,N,P,TA<:SubArray{T,N,P}} = similar(P, dims)
 
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
@@ -172,7 +173,8 @@ Calling [`getindex`](@ref) or [`setindex!`](@ref) on the returned value
 (often a [`SubArray`](@ref)) computes the indices to access or modify the
 parent array on the fly.  The behavior is undefined if the shape of the parent array is
 changed after `view` is called because there is no bound check for the parent array; e.g.,
-it may cause a segmentation fault.
+it may cause a segmentation fault. It is likewise undefined behavior to modify the `inds`
+array(s) after construction of the view.
 
 Some immutable parent arrays (like ranges) may choose to simply
 recompute a new array in some circumstances instead of returning

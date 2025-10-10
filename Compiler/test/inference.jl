@@ -3764,8 +3764,14 @@ f31974(n::Int) = f31974(1:n)
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
 
-f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
-@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+# Issue #33472
+struct WrapperWithUnionall33472{T<:Real}
+    x::T
+end
+
+f_overly_abstract33472() = WrapperWithUnionall33472(Base.inferencebarrier(1)::Number)
+# Check that this doesn't infer as `WrapperWithUnionall33472{T<:Number}`.
+@test Base.return_types(f_overly_abstract33472, Tuple{}) == [WrapperWithUnionall33472]
 
 # Issue 26724
 const IntRange = AbstractUnitRange{<:Integer}
@@ -5428,11 +5434,11 @@ end
 @testset "#45956: non-linearized cglobal needs special treatment for stmt effects" begin
     function foo()
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end
     @test only(code_typed() do
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end)[2] === Nothing
 end
 
@@ -6667,7 +6673,7 @@ end
 global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
-end == ErrorException
+end == TypeError
 
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
@@ -6723,5 +6729,12 @@ end <: Bool
 @test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
     Core.get_binding_type(m, n, xs...)
 end <: Type
+
+# issue #59269
+function haskey_inference_test()
+    kwargs = Core.compilerbarrier(:const, Base.pairs((; item = false)))
+    return haskey(kwargs, :item) ? nothing : Any[]
+end
+@inferred haskey_inference_test()
 
 end # module inference

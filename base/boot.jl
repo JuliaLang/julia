@@ -410,7 +410,7 @@ struct TypeError <: Exception
     # `context` optionally adds extra detail, e.g. the name of the type parameter
     # that got a bad value.
     func::Symbol
-    context::Union{AbstractString,Symbol}
+    context::Union{AbstractString,GlobalRef,Symbol}
     expected::Type
     got
     TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
@@ -746,7 +746,7 @@ end
 
 # module providing the IR object model
 # excluding types already exported by Core (GlobalRef, QuoteNode, Expr, LineNumberNode)
-# any type beyond these is self-quoting (see also Base.is_ast_node)
+# any type beyond these is self-quoting (see also Base.isa_ast_node)
 module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,

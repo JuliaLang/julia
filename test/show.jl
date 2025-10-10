@@ -877,6 +877,10 @@ else
     @test occursin("https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 end
 
+@testset "method show: method url return type inference" begin
+    @test isconcretetype(Base.infer_return_type(Base.url))
+end
+
 # Method location correction (Revise integration)
 dummyloc(m::Method) = :nofile, Int32(123456789)
 Base.methodloc_callback[] = dummyloc
@@ -1450,7 +1454,7 @@ test_repr("(:).a")
 @test repr(@NamedTuple{var"#"::Int64}) == "@NamedTuple{var\"#\"::Int64}"
 
 # Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
-@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
+@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Nothing, @NamedTuple{init::$Int}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "Tuple{:A, :A, :A, :A}"

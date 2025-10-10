@@ -597,7 +597,7 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
                         l += 1
                     end
                     cur_hand = cur_stacks[1]
-                    for i = 1:l
+                    for _ = 1:l
                         cur_hand = handler_at[get_enter_idx(handlers[cur_hand])][1]
                     end
                     cur_stacks = (cur_hand, cur_stacks[2])
@@ -635,7 +635,8 @@ end
 _should_instrument(loc::Symbol) = is_file_tracked(loc)
 _should_instrument(loc::Method) = _should_instrument(loc.file)
 _should_instrument(loc::MethodInstance) = _should_instrument(loc.def)
-_should_instrument(loc::Module) = false
+_should_instrument(::Module) = false
+_should_instrument(::Nothing) = false
 function _should_instrument(info::DebugInfo)
     linetable = info.linetable
     linetable === nothing || (_should_instrument(linetable) && return true)
@@ -914,7 +915,7 @@ end
 
 function IRInterpretationState(interp::AbstractInterpreter,
     codeinst::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
-    @assert codeinst.def === mi "method instance is not synced with code instance"
+    @assert get_ci_mi(codeinst) === mi "method instance is not synced with code instance"
     src = @atomic :monotonic codeinst.inferred
     if isa(src, String)
         src = _uncompressed_ir(codeinst, src)

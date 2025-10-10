@@ -148,6 +148,8 @@ gcd(a::Rational) = checked_abs(a.num) // a.den
 lcm(a::Union{Integer,Rational}) = gcd(a)
 gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
 gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
+lcm(a::Unsigned, b::Signed) = lcm(promote(a, abs(b))...)
+lcm(a::Signed, b::Unsigned) = lcm(promote(abs(a), b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
 lcm(a::Real, b::Real) = lcm(promote(a,b)...)
 gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
@@ -251,6 +253,16 @@ function gcdx(a::Real, b::Real, cs::Real...)
     d, i, j = gcdx(a, b)
     d′, x, ys... = gcdx(d, cs...)
     return d′, i*x, j*x, ys...
+end
+function gcdx(a::Signed, b::Unsigned)
+    R = promote_type(typeof(a), typeof(b))
+    _a = a % signed(R) # handle the case a == typemin(typeof(a)) if R != typeof(a)
+    d, u, v = gcdx(promote(abs(_a), b)...)
+    d, flipsign(u, a), v
+end
+function gcdx(a::Unsigned, b::Signed)
+    d, v, u = gcdx(b, a)
+    d, u, v
 end
 
 # multiplicative inverse of n mod m, error if none
@@ -477,18 +489,20 @@ julia> powermod(5, 3, 19)
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     p == 0 && return mod(one(m),m)
     # When the concrete type of p is signed and has the lowest value,
-    # `p != 0 && p == -p` is equivalent to `p == typemin(typeof(p))` for 2's complement representation.
+    # `p < 0 && p == -p` is equivalent to `p == typemin(typeof(p))` for 2's complement representation.
     # but will work for integer types like `BigInt` that don't have `typemin` defined
     # It needs special handling otherwise will cause overflow problem.
-    if p == -p
-        imod = invmod(x, m)
-        rhalf = powermod(imod, -(p÷2), m)
-        r::T = mod(widemul(rhalf, rhalf), m)
-        isodd(p) && (r = mod(widemul(r, imod), m))
-        #else odd
-        return r
-    elseif p < 0
-        return powermod(invmod(x, m), -p, m)
+    if p < 0
+        if p == -p
+            imod = invmod(x, m)
+            rhalf = powermod(imod, -(p÷2), m)
+            r::T = mod(widemul(rhalf, rhalf), m)
+            isodd(p) && (r = mod(widemul(r, imod), m))
+            #else odd
+            return r
+        else
+            return powermod(invmod(x, m), -p, m)
+        end
     end
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
@@ -760,7 +774,8 @@ function ndigits0z(x::Integer, b::Integer)
 end
 
 # Extends the definition in base/int.jl
-top_set_bit(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+# assume x >= 0. result is implementation-defined for negative values
+top_set_bit(x::Integer) = iszero(x) ? 0 : exponent(x) + 1
 
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)

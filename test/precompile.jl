@@ -4,6 +4,7 @@ using Test, Distributed, Random, Logging, Libdl
 using REPL # testing the doc lookup function should be outside of the scope of this file, but is currently tested here
 
 include("precompile_utils.jl")
+include("tempdepot.jl")
 
 Foo_module = :Foo4b3a94a1a081a8cb
 foo_incl_dep = :foo4b3a94a1a081a8cb
@@ -641,7 +642,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile, _ = @test_logs (:debug, r"Precompiling FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
@@ -686,13 +687,15 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_warn r"LoadError: break me\nStacktrace:\n[ ]*\[1\] [\e01m\[]*error" try
-            Base.require(Main, :FooBar2)
-            error("the \"break me\" test failed")
-        catch exc
-            isa(exc, ErrorException) || rethrow()
-            occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
-        end
+    try
+        Base.require(Main, :FooBar2)
+        error("the \"break me\" test failed")
+    catch exc
+        isa(exc, LoadError) || rethrow()
+        exc = exc.error
+        isa(exc, ErrorException) || rethrow()
+        "break me" == exc.msg || rethrow()
+    end
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -704,11 +707,14 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
-                Base.require(Main, :FooBar3)
-            catch exc
-                isa(exc, ErrorException) || rethrow()
-            end
+        try
+            Base.require(Main, :FooBar3)
+        catch exc
+            isa(exc, LoadError) || rethrow()
+            exc = exc.error
+            isa(exc, ErrorException) || rethrow()
+            occursin("Evaluation into the closed module `Base` breaks incremental compilation", exc.msg) || rethrow()
+        end
     end
 
     # Test transitive dependency for #21266
@@ -999,11 +1005,11 @@ precompile_test_harness("code caching") do dir
 
         useflbi() = $StaleA.flbi()
 
-        # force precompilation
+        # force precompilation, force call so that inlining heuristics don't affect the result
         begin
             Base.Experimental.@force_compile
-            useA2()
-            useflbi()
+            @noinline useA2()
+            @noinline useflbi()
         end
         precompile($StaleA.fib, ())
 
@@ -1052,9 +1058,9 @@ precompile_test_harness("code caching") do dir
         const glbi = LogBindingInvalidation(2.0)
     end)
     @eval using $StaleC
-    invalidations = Base.StaticData.debug_method_invalidation(true)
+    invalidations = Base.ReinferUtils.debug_method_invalidation(true)
     @eval using $StaleB
-    Base.StaticData.debug_method_invalidation(false)
+    Base.ReinferUtils.debug_method_invalidation(false)
     invokelatest() do
         MB = getfield(@__MODULE__, StaleB)
         MC = getfield(@__MODULE__, StaleC)
@@ -1322,11 +1328,11 @@ precompile_test_harness("invoke") do dir
         end
 
         m = get_method_for_type(M.h, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = get_method_for_type(M.hnc, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callq))
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqnc))
         @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqi))
@@ -1521,11 +1527,11 @@ end
     test_workers = addprocs(1)
     push!(test_workers, myid())
     save_cwd = pwd()
-    temp_path = mktempdir()
+    temp_path = mkdepottempdir()
     try
         cd(temp_path)
         load_path = mktempdir(temp_path)
-        load_cache_path = mktempdir(temp_path)
+        load_cache_path = mkdepottempdir(temp_path)
 
         ModuleA = :Issue19960A
         ModuleB = :Issue19960B
@@ -1573,11 +1579,6 @@ end
         end
     finally
         cd(save_cwd)
-        try
-            rm(temp_path, recursive=true)
-        catch err
-            @show err
-        end
         pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
@@ -1884,8 +1885,8 @@ end
 
 @testset "Precompile external abstract interpreter" begin
     dir = @__DIR__
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint1.jl`; dir); stdout, stderr))
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint2.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr))
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -1982,16 +1983,18 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, edges, new_ext_cis, external_methods, new_method_roots, cache_sizes = sv
-    for m in external_methods
+    modules, init_order, internal_methods, new_method_roots, cache_sizes = sv
+    for m in internal_methods::Vector{Any}
+        m isa Core.MethodInstance || continue
         m = m.func::Method
         if m.name !== :f
             @test m.name == :repl_cmd && m.nargs == 1
         end
     end
-    @test new_ext_cis === nothing || any(new_ext_cis) do ci
+    @test any(internal_methods) do ci
+        ci isa Core.CodeInstance || return false
         mi = ci.def::Core.MethodInstance
-        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+        return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end
 
@@ -2140,9 +2143,6 @@ precompile_test_harness("Test flags") do load_path
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
-    id = Base.identify_package("TestFlags")
-    @test Base.isprecompiled(id, ;flags=modified_flags)
-    @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
 if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarch64)
@@ -2420,7 +2420,7 @@ precompile_test_harness("llvmcall validation") do load_path
         using LLVMCall
         LLVMCall.do_llvmcall2()
     """
-    @test readchomp(`$(Base.julia_cmd()) --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
     # Now the regular way
     @eval using LLVMCall
     invokelatest() do
@@ -2493,6 +2493,46 @@ precompile_test_harness("Package top-level load itself") do load_path
     end
 end
 
+precompile_test_harness("Package precompilation works without manifest") do load_path
+    pkg_dir = joinpath(load_path, "TestPkgNoManifest")
+    mkpath(pkg_dir)
+
+    # Create Project.toml with stdlib dependencies
+    write(joinpath(pkg_dir, "Project.toml"), """
+        name = "TestPkgNoManifest"
+        uuid = "f47a8e44-5f82-4c5c-9076-4b4e8b7e8e8e"
+        version = "0.1.0"
+
+        [deps]
+        Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+        Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+        """)
+
+    # Create src directory and main module file
+    src_dir = joinpath(pkg_dir, "src")
+    mkpath(src_dir)
+    write(joinpath(src_dir, "TestPkgNoManifest.jl"), """
+        module TestPkgNoManifest
+        end
+        """)
+
+    old_active_project = Base.active_project()
+    try
+        # Activate the new package environment
+        Base.set_active_project(joinpath(pkg_dir, "Project.toml"))
+
+        # Ensure there's no manifest file (this is the key to the test)
+        manifest_path = joinpath(pkg_dir, "Manifest.toml")
+        isfile(manifest_path) && rm(manifest_path)
+
+        # This should work without errors - precompiling a package with no manifest
+        @eval using TestPkgNoManifest
+    finally
+        # Restore original load path and active project
+        Base.set_active_project(old_active_project)
+    end
+end
+
 # Verify that inference / caching was not performed for any macros in the sysimage
 let m = only(methods(Base.var"@big_str"))
     @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
@@ -2500,7 +2540,7 @@ end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference
 let io = IOBuffer()
-    run(pipeline(`$(Base.julia_cmd()) --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
+    run(pipeline(`$(Base.julia_cmd()) --startup-file=no --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
     @test isempty(String(take!(io)))
 end
 

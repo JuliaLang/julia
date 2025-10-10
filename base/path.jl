@@ -40,7 +40,7 @@ elseif Sys.iswindows()
         # Not a slash in either direction.
         N = raw"[^\\/]"
         # Drive letter, e.g. `C:`
-        drive = "$(N)+:"
+        drive = "$(N):"
         # UNC path, e.g. `\\server\share`
         unc = "$(S)$(S)$(N)+$(S)$(N)+"
         # Long drive letter, e.g. `\\?\C:`
@@ -253,7 +253,7 @@ julia> splitpath("/home/myuser/example.jl")
  "example.jl"
 ```
 """
-splitpath(p::AbstractString) = splitpath(String(p))
+splitpath(p::AbstractString) = splitpath(String(p)::String)
 
 function splitpath(p::String)
     drive, p = splitdrive(p)
@@ -357,7 +357,7 @@ the join of the preceding paths, then prior components are dropped.
 Note on Windows since there is a current directory for each drive, `joinpath("c:", "foo")`
 represents a path relative to the current directory on drive "c:" so this is equal to "c:foo",
 not "c:\\foo". Furthermore, `joinpath` treats this as a non-absolute path and ignores the drive
-letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
+letter casing, hence `joinpath("C:\\\\A","c:b") = "C:\\\\A\\\\b"`.
 
 # Examples
 ```jldoctest
@@ -608,10 +608,10 @@ function relpath(path::String, startpath::String = ".")
     return isempty(relpath_) ? curdir :  relpath_
 end
 relpath(path::AbstractString, startpath::AbstractString) =
-    relpath(String(path), String(startpath))
+    relpath(String(path)::String, String(startpath)::String)
 
 for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
-    @eval $f(path::AbstractString) = $f(String(path))
+    @eval $f(path::AbstractString) = $f(String(path)::String)
 end
 
 # RFC3986 Section 2.1
@@ -665,4 +665,4 @@ else
     end
 end
 
-uripath(path::AbstractString) = uripath(String(path))
+uripath(path::AbstractString) = uripath(String(path)::String)

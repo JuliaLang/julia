@@ -1145,8 +1145,8 @@ JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *var)
     return b && jl_binding_kind(bpart) == PARTITION_KIND_IMPORTED;
 }
 
-extern const char *jl_filename;
-extern int jl_lineno;
+extern _Atomic(const char *) jl_filename;
+extern _Atomic(int) jl_lineno;
 
 static char const dep_message_prefix[] = "_dep_message_";
 
@@ -1597,7 +1597,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
     jl_checked_assignment(bp, m, var, val);
 }
 
-JL_DLLEXPORT void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
+void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
 {
     // this function is only valid during initialization, so there is no risk of data races her are not too important to use
     int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
@@ -1627,14 +1627,14 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
 
 void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *invalidated_bpart, jl_binding_partition_t *new_bpart, size_t new_world)
 {
-    static jl_value_t *invalidate_code_for_globalref = NULL;
-    if (invalidate_code_for_globalref == NULL && jl_base_module != NULL)
+    jl_value_t *invalidate_code_for_globalref = NULL;
+    if (jl_base_module != NULL)
         invalidate_code_for_globalref = jl_get_global(jl_base_module, jl_symbol("invalidate_code_for_globalref!"));
     if (!invalidate_code_for_globalref)
         jl_error("Binding invalidation is not permitted during bootstrap.");
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 5);
-    fargs[0] = (jl_function_t*)invalidate_code_for_globalref;
+    fargs[0] = (jl_value_t*)invalidate_code_for_globalref;
     fargs[1] = (jl_value_t*)ref;
     fargs[2] = (jl_value_t*)invalidated_bpart;
     fargs[3] = (jl_value_t*)new_bpart;
@@ -1872,8 +1872,8 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
     jl_binding_dep_message(b);
 
     if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR) {
-        if (jl_lineno != 0) {
-            jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
+        if (jl_atomic_load_relaxed(&jl_lineno) != 0) {
+            jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
         }
     }
 
@@ -1886,7 +1886,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
 
 // For a generally writable binding (checked using jl_check_binding_currently_writable in this world age), check whether
 // we can actually write the value `rhs` to it.
-jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED)
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, const char *msg)
 {
     JL_GC_PUSH1(&rhs); // callee-rooted
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
@@ -1894,10 +1894,8 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
     assert(kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_GLOBAL);
     jl_value_t *old_ty = kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
     JL_GC_PROMISE_ROOTED(old_ty);
-    if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty) {
-        if (!jl_isa(rhs, old_ty))
-            jl_errorf("cannot assign an incompatible value to the global %s.%s.",
-                        jl_symbol_name(mod->name), jl_symbol_name(var));
+    if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty && !jl_isa(rhs, old_ty)) {
+        jl_type_error_global(msg, mod, var, old_ty, rhs);
     }
     JL_GC_POP();
     return old_ty;
@@ -1905,7 +1903,7 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
-    if (jl_check_binding_assign_value(b, mod, var, rhs) != NULL) {
+    if (jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!") != NULL) {
         jl_atomic_store_release(&b->value, rhs);
         jl_gc_wb(b, rhs);
     }
@@ -1913,7 +1911,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
 
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
-    jl_check_binding_assign_value(b, mod, var, rhs);
+    jl_check_binding_assign_value(b, mod, var, rhs, "swapglobal!");
     jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     jl_gc_wb(b, rhs);
     if (__unlikely(old == NULL))
@@ -1923,7 +1921,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_s
 
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs)
 {
-    jl_value_t *ty = jl_check_binding_assign_value(b, mod, var, rhs);
+    jl_value_t *ty = jl_check_binding_assign_value(b, mod, var, rhs, "replaceglobal!");
     return replace_value(ty, &b->value, (jl_value_t*)b, expected, rhs, 1, mod, var);
 }
 
@@ -1937,12 +1935,12 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
                   jl_symbol_name(mod->name), jl_symbol_name(var));
     jl_value_t *ty = bpart->restriction;
     JL_GC_PROMISE_ROOTED(ty);
-    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, mod, var);
+    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, b, mod, var);
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs )
 {
-    jl_check_binding_assign_value(b, mod, var, rhs);
+    jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
     jl_value_t *old = NULL;
     if (jl_atomic_cmpswap(&b->value, &old, rhs))
         jl_gc_wb(b, rhs);

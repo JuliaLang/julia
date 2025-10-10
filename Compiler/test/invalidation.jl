@@ -120,13 +120,13 @@ begin
         # Base.method_instance(pr48932_callee, (Any,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
 
         # In cache due to Base.return_types(pr48932_callee, (Any,))
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller, (Int,))
@@ -150,11 +150,11 @@ begin
         # Base.method_instance(pr48932_callee, (Any,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test_broken ci.max_world == typemax(UInt)
     end
 
@@ -224,11 +224,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee_inferable))))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
@@ -249,11 +249,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test_broken ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
@@ -284,11 +284,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
     let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
@@ -309,11 +309,11 @@ begin take!(GLOBAL_BUFFER)
     let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
-        @test ci.owner === nothing
+        @test ci.owner === InvalidationTesterToken()
         @test ci.max_world != typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
+        @test ci.owner === nothing
         @test ci.max_world != typemax(UInt)
     end
 
@@ -325,3 +325,39 @@ end
 # This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
 # manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
 @test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)
+
+# Test drop_all_caches functionality
+@testset "drop_all_caches" begin
+    # Run in subprocess to avoid disrupting the main test process
+    script = """
+        # Define test functions
+        drop_cache_test_f(x) = x + 1
+        drop_cache_test_g(x) = drop_cache_test_f(x) * 2
+
+        # Compile the functions and capture stderr
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "==DROPPING ALL CACHES==")
+
+        # Drop all caches
+        Base.drop_all_caches()
+
+        # Functions should still work (but will be recompiled on next call)
+        drop_cache_test_g(5) == 12 || error("failure")
+
+        println(stderr, "SUCCESS: drop_all_caches test passed")
+        exit(0)
+    """
+
+    io = Pipe()
+    # Run the test in a subprocess because Base.drop_all_caches() is extreme
+    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io))
+    close(io.in)
+    err = read(io, String)
+    # println(err)
+    @test success(result)
+    err_before, err_after = split(err, "==DROPPING ALL CACHES==")
+    @test occursin("SUCCESS: drop_all_caches test passed", err_after)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
+    @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int}) # recompile", err_after)
+end
