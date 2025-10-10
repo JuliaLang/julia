@@ -2544,4 +2544,160 @@ let io = IOBuffer()
     @test isempty(String(take!(io)))
 end
 
+# Test --compiled-modules=strict in precompilepkgs
+@testset "compiled-modules=strict with dependencies" begin
+    mkdepottempdir() do depot
+        # Create three packages: one that fails to precompile, one that loads it, one that doesn't
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+
+        # Create FailPkg - a package that can't be precompiled
+        fail_pkg_path = joinpath(depot, "dev", "FailPkg")
+        mkpath(joinpath(fail_pkg_path, "src"))
+        write(joinpath(fail_pkg_path, "Project.toml"),
+              """
+              name = "FailPkg"
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+        write(joinpath(fail_pkg_path, "src", "FailPkg.jl"),
+              """
+              module FailPkg
+              print("FailPkg precompiling.\n")
+              error("fail")
+              end
+              """)
+
+        # Create LoadsFailPkg - depends on and loads FailPkg (should fail with strict)
+        loads_pkg_path = joinpath(depot, "dev", "LoadsFailPkg")
+        mkpath(joinpath(loads_pkg_path, "src"))
+        write(joinpath(loads_pkg_path, "Project.toml"),
+              """
+              name = "LoadsFailPkg"
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(loads_pkg_path, "src", "LoadsFailPkg.jl"),
+              """
+              module LoadsFailPkg
+              print("LoadsFailPkg precompiling.\n")
+              import FailPkg
+              print("unreachable\n")
+              end
+              """)
+
+        # Create DependsOnly - depends on FailPkg but doesn't load it (should succeed)
+        depends_pkg_path = joinpath(depot, "dev", "DependsOnly")
+        mkpath(joinpath(depends_pkg_path, "src"))
+        write(joinpath(depends_pkg_path, "Project.toml"),
+              """
+              name = "DependsOnly"
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depends_pkg_path, "src", "DependsOnly.jl"),
+              """
+              module DependsOnly
+              # Has FailPkg as a dependency but doesn't load it
+              print("DependsOnly precompiling.\n")
+              end
+              """)
+
+        # Create main project with all packages
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              LoadsFailPkg = "20000000-0000-0000-0000-000000000002"
+              DependsOnly = "30000000-0000-0000-0000-000000000003"
+              """)
+        write(joinpath(project_path, "Manifest.toml"),
+              """
+              julia_version = "1.13.0"
+              manifest_format = "2.0"
+
+              [[DependsOnly]]
+              deps = ["FailPkg"]
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [[FailPkg]]
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+
+              [[LoadsFailPkg]]
+              deps = ["FailPkg"]
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.DependsOnly]]
+              deps = ["FailPkg"]
+              path = "../dev/DependsOnly/"
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [[deps.FailPkg]]
+              path = "../dev/FailPkg/"
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+
+              [[deps.LoadsFailPkg]]
+              deps = ["FailPkg"]
+              path = "../dev/LoadsFailPkg/"
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+              """)
+
+        # Call precompilepkgs with output redirected to a file
+        LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
+        DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            loadsfailpkg = open(LoadsFailPkg_output, "w") do io
+                # set internal_call to bypass buggy code
+                Base.Precompilation.precompilepkgs(["LoadsFailPkg"]; io, fancyprint=true, internal_call=true)
+            end
+            @test isempty(loadsfailpkg::Vector{String})
+            dependsonly = open(DependsOnly_output, "w") do io
+                # set internal_call to bypass buggy code
+                Base.Precompilation.precompilepkgs(["DependsOnly"]; io, fancyprint=true, internal_call=true)
+            end
+            @test length(dependsonly::Vector{String}) == 1
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+
+        output = read(LoadsFailPkg_output, String)
+        # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
+        @test_broken count(output, "ERROR: fail") > 0
+        @test_broken count(output, "ERROR: fail") == 1
+        @test count("✗ FailPkg", output) > 0
+        @test count("✗ LoadsFailPkg", output) > 0
+        @test count("FailPkg precompiling.", output) > 0
+        @test_broken count("FailPkg precompiling.", output) == 1
+        @test 0 < count("LoadsFailPkg precompiling.", output) <= 2
+        @test_broken count("LoadsFailPkg precompiling.", output) == 1
+        @test !contains(output, "DependsOnly precompiling.")
+
+        # DependsOnly should succeed because it doesn't actually load FailPkg
+        output = read(DependsOnly_output, String)
+        @test_broken count(output, "ERROR: fail") > 0
+        @test_broken count(output, "ERROR: fail") == 1
+        @test count("✗ FailPkg", output) > 0
+        @test count("Precompiling DependsOnly finished.", output) == 1
+        @test_broken count("FailPkg precompiling.", output) > 0
+        @test_broken count("FailPkg precompiling.", output) == 1
+        @test count("DependsOnly precompiling.", output) == 1
+    end
+end
+
 finish_precompile_test!()

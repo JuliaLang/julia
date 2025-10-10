@@ -471,6 +471,73 @@ function collect_all_deps(direct_deps, dep, alldeps=Set{Base.PkgId}())
 end
 
 
+"""
+    precompilepkgs(pkgs; kwargs...)
+
+Precompile packages and their dependencies, with support for parallel compilation,
+progress tracking, and various compilation configurations.
+
+`pkgs::Union{Vector{String}, Vector{PkgId}}`: Packages to precompile. When
+empty (default), precompiles all project dependencies. When specified,
+precompiles only the given packages and their dependencies (unless
+`manifest=true`).
+
+# Keyword Arguments
+- `internal_call::Bool`: Indicates this is an automatic/internal precompilation call
+  (e.g., triggered by package loading). When `true`, errors are handled gracefully: in
+  interactive sessions, errors are stored in `Base.MainInclude.err` instead of throwing;
+  in non-interactive sessions, errors are printed but not thrown. Default: `false`.
+
+- `strict::Bool`: Controls error reporting scope. When `false` (default), only reports
+  errors for direct project dependencies.
+
+- `warn_loaded::Bool`: When `true` (default), checks for and warns about packages that are
+  precompiled but already loaded with a different version. Displays a warning that Julia
+  needs to be restarted to use the newly precompiled versions.
+
+- `timing::Bool`: When `true` (not default), displays timing information for
+  each package compilation, but only if compilation might have succeeded.
+  Disables fancy progress bar output (timing is shown in simple text mode).
+
+- `_from_loading::Bool`: Internal flag indicating the call originated from the
+  package loading system. When `true` (not default): returns early instead of
+  throwing when packages are not found; suppresses progress messages when not
+  in an interactive session; allows packages outside the current environment to
+  be added as serial precompilation jobs; skips LOADING_CACHE initialization;
+  and changes cachefile locking behavior.
+
+- `configs::Union{Config,Vector{Config}}`: Compilation configurations to use. Each Config
+  is a `Pair{Cmd, Base.CacheFlags}` specifying command flags and cache flags. When
+  multiple configs are provided, each package is precompiled for each configuration.
+
+- `io::IO`: Output stream for progress messages, warnings, and errors. Can be
+  redirected (e.g., to `devnull` when called from loading in non-interactive mode).
+
+- `fancyprint::Bool`: Controls output format. When `true`, displays an animated progress
+  bar with spinners. When `false`, instead enables `timing` mode. Automatically
+  disabled when `timing=true` or when called from loading in non-interactive mode.
+
+- `manifest::Bool`: Controls the scope of packages to precompile. When `false` (default),
+  precompiles only packages specified in `pkgs` and their dependencies. When `true`,
+  precompiles all packages in the manifest (workspace mode), typically used by Pkg for
+  workspace precompile requests.
+
+- `ignore_loaded::Bool`: Controls whether already-loaded packages affect cache
+  freshness checks. When `false` (not default), loaded package versions are considered when
+  determining if cache files are fresh.
+
+# Return
+- `Vector{String}`: Paths to cache files for the requested packages.
+- `Nothing`: precompilation should be skipped
+
+# Notes
+- Packages in circular dependency cycles are skipped with a warning.
+- Packages with `__precompile__(false)` are skipped if they are from loading to
+  avoid repeated work on every session.
+- Parallel compilation is controlled by `JULIA_NUM_PRECOMPILE_TASKS` environment variable
+  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows).
+- Extensions are precompiled when all their triggers are available in the environment.
+"""
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -745,8 +812,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             pkg_names = [pkg.name for pkg in project_deps]
         end
         keep = Set{Base.PkgId}()
-        for dep in direct_deps
-            dep_pkgid = first(dep)
+        for dep_pkgid in keys(direct_deps)
             if dep_pkgid.name in pkg_names
                 push!(keep, dep_pkgid)
                 collect_all_deps(direct_deps, dep_pkgid, keep)
@@ -990,8 +1056,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 notify(was_processed[pkg_config])
                 continue
             end
-            # Heuristic for when precompilation is disabled
-            if occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
+            # Heuristic for when precompilation is disabled, which must not over-estimate however for any dependent
+            # since it will also block precompilation of all dependents
+            if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
+                Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
                 notify(was_processed[pkg_config])
                 continue
             end
@@ -1035,7 +1103,13 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             end
                             # for extensions, any extension in our direct dependencies is one we have a right to load
                             # for packages, we may load any extension (all possible triggers are accounted for above)
-                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), direct_deps[pkg]) : nothing
+                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), deps) : nothing
+                            if !isempty(deps)
+                                # if deps is empty, either it doesn't have any (so compiled-modules is
+                                # irrelevant) or we couldn't compute them (so we actually should attempt
+                                # serial compile, as the dependencies are not in the parallel list)
+                                flags = `$flags --compiled-modules=strict`
+                            end
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
@@ -1223,18 +1297,18 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             pluralde = n_direct_errs == 1 ? "y" : "ies"
             direct = strict ? "" : "direct "
             err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(String(take!(err_str)))"
-            if internal_call # aka. auto-precompilation
-                if isinteractive()
+            if internal_call # aka. decide which untested code path to run that does some unsafe behavior
+                if isinteractive() # XXX: this test is incorrect
                     plural1 = length(failed_deps) == 1 ? "y" : "ies"
                     println(io, "  ", color_string("$(length(failed_deps))", Base.error_color()), " dependenc$(plural1) errored.")
                     println(io, "  For a report of the errors see `julia> err`. To retry use `pkg> precompile`")
-                    setglobal!(Base.MainInclude, :err, PkgPrecompileError(err_msg))
+                    setglobal!(Base.MainInclude, :err, PkgPrecompileError(err_msg)) # XXX: this call is dangerous
                 else
                     # auto-precompilation shouldn't throw but if the user can't easily access the
                     # error messages, just show them
                     print(io, "\n", err_msg)
                 end
-            else
+            else # XXX: crashing is wrong
                 println(io)
                 throw(PkgPrecompileError(err_msg))
             end
