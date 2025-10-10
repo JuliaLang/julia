@@ -5,9 +5,10 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 ## string to integer functions ##
 
 """
-    parse(type, str; base)
+    parse(type, str)
+    parse(<:Integer, str; base=10)
 
-Parse a string as a number. For `Integer` types, a base can be specified
+Parse a string (or character) as a number. For `Integer` types, a base can be specified
 (the default is 10). For floating-point types, the string is parsed as a decimal
 floating-point number.  `Complex` types are parsed from decimal strings
 of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"` can also be
@@ -16,6 +17,9 @@ If the string does not contain a valid number, an error is raised.
 
 !!! compat "Julia 1.1"
     `parse(Bool, str)` requires at least Julia 1.1.
+
+!!! compat "Julia 1.13"
+    `parse(type, AbstractChar)` requires at least Julia 1.13 for non-integer types.
 
 # Examples
 ```jldoctest
@@ -37,6 +41,18 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 """
 parse(T::Type, str; base = Int)
 parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
+
+"""
+    tryparse(type, str)
+    tryparse(<:Integer, str; base=10)
+
+Like [`parse`](@ref), but returns either a value of the requested type,
+or [`nothing`](@ref) if the string does not contain a valid number.
+
+!!! compat "Julia 1.13"
+    `tryparse(type, AbstractChar)` requires at least Julia 1.13.
+"""
+tryparse(T::Type, str; base = Int)
 
 @noinline function _invalid_base(base)
     throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
