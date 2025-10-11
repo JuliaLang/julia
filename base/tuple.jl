@@ -261,7 +261,9 @@ function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     return a[begin:end-n], a[end-n+1:end]
 end
 
-@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:end-n], t[end-n+1:end]))
+@eval _split_tuple(t::Tuple, n::Int, i::Int=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:n], t[n+1:end]))
+
+@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); _split_tuple(t, length(t)-n, Int(i)))
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
