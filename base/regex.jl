@@ -324,7 +324,7 @@ Return `true` if `s` starts with the regex pattern, `prefix`.
     `match_option` to PCRE. If compile time is amortized,
     `occursin(r"^...", s)` is faster than `startswith(s, r"...")`.
 
-See also [`occursin`](@ref) and [`endswith`](@ref).
+See also [`occursin`](@ref), [`endswith`](@ref), [`match`](@ref)
 
 !!! compat "Julia 1.2"
     This method requires at least Julia 1.2.
@@ -356,7 +356,7 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
     `match_option` to PCRE. If compile time is amortized,
     `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
 
-See also [`occursin`](@ref) and [`startswith`](@ref).
+See also [`occursin`](@ref), [`startswith`](@ref), [`match`](@ref)
 
 !!! compat "Julia 1.2"
     This method requires at least Julia 1.2.
@@ -421,6 +421,9 @@ julia> m.match
 julia> match(rx, "cabac", 3) === nothing
 true
 ```
+# See also
+[`eachmatch`](@ref), [`occursin`](@ref), [`findfirst`](@ref)
+
 """
 function match end
 
@@ -558,6 +561,9 @@ julia> count(r"a(.)a", "cabacabac", overlap=true)
 julia> count(r"a(.)a", "cabacabac")
 2
 ```
+# See also
+[`eachmatch`](@ref), [`occursin`](@ref), [`findall`](@ref)
+
 """
 function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
@@ -789,6 +795,9 @@ julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
  RegexMatch("a2a")
  RegexMatch("a3a")
 ```
+# See also
+[`match`](@ref), [`findall`](@ref), [`count`](@ref)
+
 """
 eachmatch(re::Regex, str::AbstractString; overlap = false) =
     RegexMatchIterator(re, str, overlap)
