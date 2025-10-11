@@ -249,7 +249,7 @@ isequal(z::Real, w::Complex) = isequal(z,real(w))::Bool & isequal(zero(z),imag(w
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
-const h_imag = 0x32a7a07f3e7cd1f % UInt
+const h_imag = 0x32a7a07f3e7cd1f9 % UInt
 const hash_0_imag = 0x153e9f914f9b5b92 % UInt
 
 function hash(z::Complex, h::UInt)
