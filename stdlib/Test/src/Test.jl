@@ -1235,7 +1235,14 @@ mutable struct DefaultTestSet <: AbstractTestSet
     results_lock::ReentrantLock
     results::Vector{Any}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = something(Base.ScopedValues.get(VERBOSE_TESTSETS)), showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
+function DefaultTestSet(desc::AbstractString;
+                        verbose::Bool = something(Base.ScopedValues.get(VERBOSE_TESTSETS)),
+                        showtiming::Bool = true,
+                        failfast::Union{Nothing,Bool} = nothing,
+                        source = nothing,
+                        time_start::Float64 = time(),
+                        rng = nothing,
+                        )
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1247,7 +1254,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = something(Base.Sco
     end
     return DefaultTestSet(String(desc)::String,
         verbose, showtiming, failfast, extract_file(source),
-        time(), rng, 0, 0., 0x00, ReentrantLock(), Any[])
+        time_start, rng, 0, 0., 0x00, ReentrantLock(), Any[])
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
 extract_file(file::Symbol) = string(file)
