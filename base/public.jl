@@ -2,7 +2,6 @@
 
 public
 # Modules
-    Cartesian,
     Checked,
     Filesystem,
     Order,
