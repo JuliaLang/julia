@@ -1439,8 +1439,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         return params.inline_nonleaf_penalty
     elseif head === :foreigncall
         foreigncall = ex.args[1]
-        if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
-            return 1
+        if isexpr(foreigncall, :tuple, 1)
+            foreigncall = foreigncall.args[1]
+            if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
+                return 1
+            end
         end
         return 20
     elseif head === :invoke || head === :invoke_modify

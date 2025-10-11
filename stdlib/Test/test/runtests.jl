@@ -24,6 +24,10 @@ import Logging: Debug, Info, Warn, with_logger
     @test isapprox(1, 1; [(:atol, 0)]...)
     @test isapprox(1, 2; atol)
     @test isapprox(1, 3; a.atol)
+    # Test custom .. operator (not a broadcast operator)
+    ..(x, y) = x == y
+    @test 'a' .. 'a'
+    @test !('a' .. 'b')
 end
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
@@ -1950,6 +1954,8 @@ end
         @test _escape_call(:(Main.f.(x, y))) == (; func=:(Broadcast.BroadcastFunction($(esc(:(Main.f))))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(Main.f))))
         @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
+        # Test that .. operator is not treated as a broadcast operator
+        @test _escape_call(:(x .. y)) == (; func=esc(:(..)), args, kwargs, quoted_func=:(:..))
     end
 end
 

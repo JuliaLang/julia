@@ -631,7 +631,9 @@ function _escape_call(@nospecialize ex)
         # Update broadcast comparison calls to the function call syntax
         # (e.g. `1 .== 1` becomes `(==).(1, 1)`)
         func_str = string(ex.args[1])
-        escaped_func = if first(func_str) == '.'
+        # Check if this is a broadcast operator (starts with '.' and has more characters that aren't '.')
+        is_broadcast = length(func_str) >= 2 && first(func_str) == '.' && any(c -> c != '.', func_str[2:end])
+        escaped_func = if is_broadcast
             esc(Expr(:., Symbol(func_str[2:end])))
         else
             esc(ex.args[1])
