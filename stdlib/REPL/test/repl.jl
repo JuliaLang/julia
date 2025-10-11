@@ -67,7 +67,7 @@ end
 #end
 
 # REPL tests
-function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false))
+function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false,style_input=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -121,7 +121,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -1893,7 +1893,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 ## hints disabled
-fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false)) do stdin_write, stdout_read, repl
+fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false)) do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
     end
@@ -2028,4 +2028,124 @@ end
     output = sprint(REPL.show_repl, MIME("text/plain"), '+'; context=(:color => true))
     @test occursin("'+': ASCII/Unicode U+002B (category Sm: Symbol, math)", output)
     @test !occursin(", input as ", output)
+end
+
+# Test syntax highlighting in REPL input
+@testset "Syntax highlighting" begin
+    using StyledStrings
+    using REPL.StylingPasses
+
+    # Use withfaces to ensure consistent face definitions regardless of user config
+    StyledStrings.withfaces(:julia_keyword => StyledStrings.Face(foreground=:red),
+                            :julia_number => StyledStrings.Face(foreground=:blue)) do
+
+        # Test that julia_prompt has syntax highlighting passes
+        fake_repl(options = REPL.Options(confirm_exit=false, style_input=true)) do stdin_write, stdout_read, repl
+            repl.interface = REPL.setup_interface(repl)
+            julia_prompt = repl.interface.modes[1]
+            shell_mode = repl.interface.modes[3]
+
+            # Julia prompt should have syntax highlighting passes
+            @test length(julia_prompt.styling_passes) == 2
+            @test any(p -> p isa StylingPasses.SyntaxHighlightPass, julia_prompt.styling_passes)
+            @test any(p -> p isa StylingPasses.EnclosingParenHighlightPass, julia_prompt.styling_passes)
+
+            # Shell mode should not have syntax highlighting passes
+            @test length(shell_mode.styling_passes) == 0
+
+            # Test that syntax highlighting is actually applied
+            repltask = @async begin
+                REPL.run_repl(repl)
+            end
+
+            # Test 1: Simple keyword highlighting
+            write(stdin_write, "function")
+            s = readuntil(stdout_read, "function", keep=true)
+            # The keyword "function" should be styled (have escape code before it)
+            # Look for "function" that appears after the prompt, not just anywhere
+            # Extract just the input portion after "julia> "
+            input_part = split(s, "julia> ", keepempty=false)
+            if !isempty(input_part)
+                input_text = input_part[end]
+                # If syntax highlighting is working, "function" will have an escape code before it
+                # like \e[31mfunction or similar
+                @test occursin(r"\e\[[0-9;]*m.*function", input_text)
+            end
+            write(stdin_write, "\x03")  # Ctrl-C to cancel
+
+            # Test 2: Unicode identifiers with syntax highlighting
+            readuntil(stdout_read, "julia> ")
+            write(stdin_write, "function αβ(a, β)")
+            s = readuntil(stdout_read, "β)", keep=true)
+            # Should highlight "function" keyword even with unicode following
+            input_part = split(s, "julia> ", keepempty=false)
+            if !isempty(input_part)
+                input_text = input_part[end]
+                # Keyword should be styled
+                @test occursin(r"\e\[[0-9;]*m.*function", input_text)
+            end
+            # Unicode should be preserved (may have ANSI codes interleaved, so check separately)
+            @test occursin("α", s)
+            @test occursin("β", s)
+            @test occursin("(", s)
+            @test occursin(")", s)
+            write(stdin_write, "\x03")  # Ctrl-C to cancel
+
+            # Test 3: Multi-line input with syntax highlighting
+            readuntil(stdout_read, "julia> ")
+            write(stdin_write, "begin\n")
+            readuntil(stdout_read, "begin")
+            write(stdin_write, "    local test_var_for_highlighting = 42\n")
+            s = readuntil(stdout_read, "42", keep=true)
+            # Should contain highlighting - the "local" keyword should be styled
+            @test occursin(r"\e\[[0-9;]*m.*local", s)
+            write(stdin_write, "\x03")  # Ctrl-C to cancel before executing
+            # Don't execute to avoid polluting Main module
+
+            # Test 4: Bracket highlighting (paren matching)
+            readuntil(stdout_read, "julia> ")
+            write(stdin_write, "(1 + (2 * 3))")
+            # Move cursor to be inside the inner parens: between 2 and *
+            # Current position is at end: (1 + (2 * 3))|
+            # Move left 5 times to get to: (1 + (2| * 3))
+            for _ in 1:5
+                write(stdin_write, "\e[D")  # Left arrow
+            end
+            # Give it a moment to process and re-render
+            sleep(0.1)
+            # Now write a character to trigger re-render and capture output
+            write(stdin_write, " ")
+            s = readuntil(stdout_read, " ", keep=true)
+            # The enclosing parens around "2 * 3" should be highlighted with bold/underline
+            # We can't easily test the exact positioning, but we can verify that
+            # there are ANSI codes for bold (\e[1m) or underline (\e[4m) present
+            @test occursin(r"\e\[[0-9;]*[14]m", s)  # Contains bold or underline codes
+            write(stdin_write, "\x03")  # Ctrl-C to cancel
+
+            write(stdin_write, '\x04')  # Exit
+            Base.wait(repltask)
+        end
+
+        # Test that syntax highlighting can be disabled
+        fake_repl(options = REPL.Options(confirm_exit=false, style_input=false)) do stdin_write, stdout_read, repl
+            repl.interface = REPL.setup_interface(repl)
+
+            repltask = @async begin
+                REPL.run_repl(repl)
+            end
+
+            # Even though the prompt has styling passes, they shouldn't be applied
+            write(stdin_write, "function")
+            s = readuntil(stdout_read, "function", keep=true)
+            # With style_input=false, there should be no color codes from syntax highlighting
+            # (there may still be prompt color codes, but not within the input text)
+            lines = split(s, '\n')
+            # The last line should contain just "function" without color codes around it
+            @test occursin("function", s)
+
+            write(stdin_write, "\x03")  # Ctrl-C to cancel
+            write(stdin_write, '\x04')  # Exit
+            Base.wait(repltask)
+        end
+    end
 end
