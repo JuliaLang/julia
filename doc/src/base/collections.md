@@ -5,21 +5,29 @@
 Sequential iteration is implemented by the [`iterate`](@ref) function.
 The general `for` loop:
 
-```julia
-for i in iter   # or  "for i = iter"
-    # body
-end
+```jldoctest
+julia> iter = 1:3
+1:3
+
+julia> for i in iter   # or  "for i = iter"
+         # body
+       end
 ```
 
 is translated into:
 
-```julia
-next = iterate(iter)
-while next !== nothing
-    (i, state) = next
-    # body
-    next = iterate(iter, state)
-end
+```jldoctest
+julia> iter = 1:3
+1:3
+
+julia> next = iterate(iter)
+(1,1)
+
+julia> while next !== nothing
+          (i, state) = next
+          # body
+          next = iterate(iter, state)
+       end
 ```
 
 The `state` object may be anything, and should be chosen appropriately for each iterable type.
