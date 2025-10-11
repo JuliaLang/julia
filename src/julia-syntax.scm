@@ -4063,14 +4063,12 @@ f(x) = yt(x)
     (and vi (vinfo:nospecialize vi))))
 
 (define (toplevel-preserving? e)
-  (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
+  (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse = const))))
 
 (define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack (globals (table)) (locals (table)))
   (if toplevel
       (map (lambda (x)
-             (let ((tl (lift-toplevel (cl-convert x fname lam namemap defined
-                                                  (and toplevel (toplevel-preserving? x))
-                                                  interp opaq toplevel-pure parsed-method-stack globals locals))))
+             (let ((tl (lift-toplevel (cl-convert x fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))))
                (if (null? (cdr tl))
                    (car tl)
                    `(block ,@(cdr tl) ,(car tl)))))
@@ -4473,7 +4471,7 @@ f(x) = yt(x)
            (cl-convert (cadr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))
           (else
            (cons (car e)
-                 (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))))))))
+                 (map-cl-convert (cdr e) fname lam namemap defined (and toplevel (toplevel-preserving? e)) interp opaq toplevel-pure parsed-method-stack globals locals))))))))
 
 ;; wrapper for `cl-convert-`
 (define (cl-convert e fname lam namemap defined toplevel interp opaq toplevel-pure (parsed-method-stack '()) (globals (table)) (locals (table)))
