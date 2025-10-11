@@ -2020,7 +2020,7 @@ end
     io = IOBuffer()
 
     # Create a testset with passing and failing tests
-    ts = Test.DefaultTestSet("IO Test")
+    ts = Test.DefaultTestSet("IO Test"; time_start=1.36071654e9)
     Test.record(ts, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(1), false))
     fail = Test.Fail(:test, "1 == 2", nothing, nothing, LineNumberNode(2, Symbol("test.jl")))
     push!(ts.results, fail)
