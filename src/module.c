@@ -1482,9 +1482,10 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // u
         return 0;
     if (jl_bkind_is_defined_constant(kind)) {
         if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST)) {
-            return !(jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR);
+            if (jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+                return 0;
+            check_backdated_binding(b, kind);
         }
-        // N.B.: No backdated admonition for isdefined
         return 1;
     }
     return jl_atomic_load(&b->value) != NULL;
