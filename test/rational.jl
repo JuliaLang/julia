@@ -852,3 +852,10 @@ end
         @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
     end
 end
+
+@testset "Float-Rational comparison" begin
+    @test Float16(6.0e-8) == big(1//16777216) == 1//16777216
+    @test Float16(6.0e-8) == 1//16777216
+    @test 1.0 != big(1//0)
+    @test Inf == big(1//0)
+end

@@ -39,7 +39,11 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+function size(t::AbstractArray, dim)
+    d = Int(dim)::Int
+    s = size(t)
+    d <= length(s) ? s[d] : 1
+end
 
 """
     axes(A, d)
@@ -1601,7 +1605,7 @@ parts can specialize this method to return the concatenation of the `dataids` of
 their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
-dataids(A::AbstractArray) = (UInt(objectid(A)),)
+dataids(A::AbstractArray) = (objectid(A),)
 dataids(A::Memory) = (UInt(A.ptr),)
 dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
@@ -1680,8 +1684,8 @@ typed_hcat(::Type{T}) where {T} = Vector{T}()
 ## cat: special cases
 vcat(X::T...) where {T}         = T[ X[i] for i=eachindex(X) ]
 vcat(X::T...) where {T<:Number} = T[ X[i] for i=eachindex(X) ]
-hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=eachindex(X) ]
-hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=eachindex(X) ]
+hcat(X::T...) where {T}         = T[ X[j] for _=1:1, j=eachindex(X) ]
+hcat(X::T...) where {T<:Number} = T[ X[j] for _=1:1, j=eachindex(X) ]
 
 vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
 hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
@@ -1823,7 +1827,7 @@ function cat_shape(dims, shapes::Tuple)
     return out_shape
 end
 # The new way to compute the shape (more inferable than combining cat_size & cat_shape, due to Varargs + issue#36454)
-cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
+cat_size_shape(dims) = ntuple(Returns(0), Val(length(dims)))
 @inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
 _cat_size_shape(dims, shape) = shape
 @inline _cat_size_shape(dims, shape, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, shape, cat_size(X)), tail...)
@@ -1877,7 +1881,7 @@ end
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 
 # Why isn't this called `__cat!`?
-__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(zero, length(shape)), X...)
+__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
 
 function __cat_offset!(A, shape, catdims, offsets, x, X...)
     # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
@@ -2384,13 +2388,13 @@ _typed_hvncat_0d_only_one() =
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    return Array{T, N}(undef, ntuple(x -> 0, Val(N)))
+    return Array{T, N}(undef, ntuple(Returns(0), Val(N)))
 end
 
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
+    A = cat_similar(xs[1], T, (ntuple(Returns(1), Val(N - 1))..., length(xs)))
     hvncat_fill!(A, false, xs)
     return A
 end
@@ -2404,7 +2408,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         throw(ArgumentError("concatenation dimension must be non-negative"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
-            return _typed_hvncat(T, (ntuple(x -> 1, Val(N - 1))..., length(as), 1), false, as...)
+            return _typed_hvncat(T, (ntuple(Returns(1), Val(N - 1))..., length(as), 1), false, as...)
             # the extra 1 is to avoid an infinite cycle
     end
 
@@ -2419,7 +2423,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         end
     end
 
-    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
+    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(Returns(1), nd - N)...))
     k = 1
     for a ∈ as
         for i ∈ eachindex(a)
@@ -2446,7 +2450,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         end
     end
 
-    A = Array{T, nd}(undef, ntuple(x -> 1, Val(N - 1))..., Ndim, ntuple(x -> 1, nd - N)...)
+    A = Array{T, nd}(undef, ntuple(Returns(1), Val(N - 1))..., Ndim, ntuple(Returns(1), nd - N)...)
 
     k = 1
     for a ∈ as
@@ -2514,7 +2518,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
-                for j ∈ 1:nc
+                for _ ∈ 1:nc
                     @inbounds A[Ai] = xs[k]
                     k += 1
                     Ai += nr
@@ -2531,7 +2535,7 @@ end
 function _typed_hvncat(T::Type, dims::NTuple{N, Int}, row_first::Bool, as...) where {N}
     # function barrier after calculating the max is necessary for high performance
     nd = max(maximum(cat_ndims(a) for a ∈ as), N)
-    return _typed_hvncat_dims(T, (dims..., ntuple(x -> 1, nd - N)...), row_first, as)
+    return _typed_hvncat_dims(T, (dims..., ntuple(Returns(1), nd - N)...), row_first, as)
 end
 
 function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as::Tuple) where {T, N}
@@ -2640,7 +2644,7 @@ end
 function _typed_hvncat(T::Type, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {N}
     # function barrier after calculating the max is necessary for high performance
     nd = max(maximum(cat_ndims(a) for a ∈ as), N)
-    return _typed_hvncat_shape(T, (shape..., ntuple(x -> shape[end], nd - N)...), row_first, as)
+    return _typed_hvncat_shape(T, (shape..., ntuple(Returns(shape[end]), nd - N)...), row_first, as)
 end
 
 function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::Tuple) where {T, N}
@@ -2861,7 +2865,7 @@ julia> hvcat(5, M...) |> size  # hvcat puts matrices next to each other
 (14, 15)
 ```
 """
-stack(iter; dims=:) = _stack(dims, iter)
+stack(iter; dims::D=:) where {D} = _stack(dims, iter)
 
 """
     stack(f, args...; [dims])
@@ -2890,14 +2894,14 @@ julia> stack(eachrow([1 2 3; 4 5 6]), (10, 100); dims=1) do row, n
  4.0  5.0  6.0  400.0  500.0  600.0  0.04  0.05  0.06
 ```
 """
-stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
-stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
+stack(f, iter; dims::D=:) where {D} = _stack(dims, f(x) for x in iter)
+stack(f, xs, yzs...; dims::D=:) where {D} = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
 
-_stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
+_stack(dims::D, iter) where {D<:Union{Integer, Colon}} = _stack(dims, IteratorSize(iter), iter)
 
-_stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
+_stack(dims::D, ::IteratorSize, iter) where {D} = _stack(dims, collect(iter))
 
-function _stack(dims, ::Union{HasShape, HasLength}, iter)
+function _stack(dims::D, ::Union{HasShape, HasLength}, iter) where {D}
     S = @default_eltype iter
     T = S != Union{} ? eltype(S) : Any  # Union{} occurs for e.g. stack(1,2), postpone the error
     if isconcretetype(T)
@@ -2972,8 +2976,8 @@ _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(len
 end
 
 function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
-    before = ntuple(d -> Colon(), dims - 1)
-    after = ntuple(d -> Colon(), ndims(B) - dims)
+    before = ntuple(Returns(Colon()), dims - 1)
+    after = ntuple(Returns(Colon()), ndims(B) - dims)
 
     i = firstindex(B, dims)
     copyto!(view(B, before..., i, after...), x1)
@@ -3016,6 +3020,8 @@ function isequal(A::AbstractArray, B::AbstractArray)
 end
 
 function cmp(A::AbstractVector, B::AbstractVector)
+    ai1, bi1 = firstindex(A), firstindex(B)
+    isequal(ai1, bi1) || return cmp(ai1, bi1)
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return isless(a, b) ? -1 : 1
@@ -3036,7 +3042,8 @@ end
 """
     isless(A::AbstractVector, B::AbstractVector)
 
-Return `true` when `A` is less than `B` in lexicographic order.
+Return `true` when `A` is less than `B`. Vectors are first compared by
+their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
@@ -3158,8 +3165,7 @@ _sub2ind_vec(i, I1, I...) = (@inline; (I1[i], _sub2ind_vec(i, I...)...))
 _sub2ind_vec(i) = ()
 
 function _ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
-    M = length(ind)
-    t = ntuple(n->similar(ind),Val(N))
+    t = ntuple(_->similar(ind),Val(N))
     for (i,idx) in pairs(IndexLinear(), ind)
         sub = _ind2sub(inds, idx)
         for j = 1:N
