@@ -306,3 +306,509 @@ end
         [("𝟏", [(:face, :red)]),
          ("x", [])]
 end
+
+@testset "Replacement" begin
+    astr(s::String, faceregions::Tuple{UnitRange{Int}, Symbol}...) =
+        Base.AnnotatedString(s, [(r, :face, f) for (r, f) in faceregions])
+
+    @testset "Basic Transformations" begin
+        @testset "Deletion" begin
+            @test replace(astr("hello world", (1:5, :red)), "hello" => "hi") ==
+                astr("hi world")
+            @test replace(astr("foofoo", (1:3, :red), (4:6, :green)), "foo" => "x") ==
+                astr("xx")
+            @test replace(astr("foofoo", (1:3, :red), (4:6, :green)), "foo" => "x", count=1) ==
+                astr("xfoo", (2:4, :green))
+            @test replace(astr("abcdef", (1:6, :red), (3:4, :green)), "cd" => "X") ==
+                astr("abXef", (1:2, :red), (4:5, :red))
+            @test replace(astr("a b c", (1:1, :red), (3:3, :green), (5:5, :blue)),
+                         "a" => "x", "b" => "y", "c" => "z") ==
+                astr("x y z")
+        end
+
+        @testset "Shifting" begin
+            @test replace(astr("hello world", (7:11, :red)), "hello" => "hi") ==
+                astr("hi world", (4:8, :red))
+            @test replace(astr("hello world", (7:11, :red)), "hello" => "greetings") ==
+                astr("greetings world", (11:15, :red))
+            @test replace(astr("a b c", (3:3, :red)), "a" => "xxx", "c" => "y") ==
+                astr("xxx b y", (5:5, :red))
+            @test replace(astr("abc def", (5:7, :green)), "abc" => "x") ==
+                astr("x def", (3:5, :green))
+            @test replace(astr("a b c d", (3:3, :red), (5:5, :green), (7:7, :blue)), "a" => "AA") ==
+                astr("AA b c d", (4:4, :red), (6:6, :green), (8:8, :blue))
+            @test replace(astr("hello world", (7:11, :green)), " world" => " Julia") ==
+                astr("hello Julia")
+        end
+
+        @testset "Splitting" begin
+            @test replace(astr("hello world", (1:11, :red)), " " => "_") ==
+                astr("hello_world", (1:5, :red), (7:11, :red))
+            @test replace(astr("a b c", (1:5, :red)), " " => "_") ==
+                astr("a_b_c", (1:1, :red), (3:3, :red), (5:5, :red))
+            @test replace(astr("foobarbaz", (1:9, :green)), "o" => "0", "a" => "A") ==
+                astr("f00bArbAz", (1:1, :green), (4:4, :green), (6:7, :green), (9:9, :green))
+            @test replace(astr("a b c", (1:5, :red)), " " => "_", count=1) ==
+                astr("a_b c", (1:1, :red), (3:5, :red))
+            @test replace(astr("abcde", (2:4, :red)), "c" => "X") ==
+                astr("abXde", (2:2, :red), (4:4, :red))
+            @test replace(astr("a a a a", (1:7, :blue)), "a" => "b") ==
+                astr("b b b b", (2:2, :blue), (4:4, :blue), (6:6, :blue))
+        end
+
+        @testset "Addition" begin
+            @test replace(astr("hello world"), "world" => astr("Julia", (1:5, :red))) ==
+                astr("hello Julia", (7:11, :red))
+            @test replace(astr("hello"), "hello" => astr("hi there", (1:2, :red), (4:8, :green))) ==
+                astr("hi there", (1:2, :red), (4:8, :green))
+            @test replace(astr("hello world", (7:11, :green)), "hello" => astr("hi", (1:2, :red))) ==
+                astr("hi world", (4:8, :green), (1:2, :red))
+            @test replace(astr("a b", (1:3, :yellow)), " " => astr("_", (1:1, :red))) ==
+                astr("a_b", (1:1, :yellow), (3:3, :yellow), (2:2, :red))
+            @test replace(astr("a b"), "a" => astr("X", (1:1, :red)), "b" => astr("Y", (1:1, :blue))) ==
+                astr("X Y", (1:1, :red), (3:3, :blue))
+        end
+
+        @testset "Combinations" begin
+            @test replace(astr("a b c", (1:1, :red), (5:5, :blue)), "b" => "B") ==
+                astr("a B c", (1:1, :red), (5:5, :blue))
+            @test replace(astr("a b", (1:3, :red)), " " => astr("_", (1:1, :blue))) ==
+                astr("a_b", (1:1, :red), (3:3, :red), (2:2, :blue))
+            @test replace(astr("foo bar baz", (1:3, :red), (5:7, :green), (9:11, :blue)),
+                         "foo" => "F", "a" => astr("A", (1:1, :yellow))) ==
+                astr("F bAr bAz", (3:3, :green), (5:5, :green), (7:7, :blue), (9:9, :blue),
+                     (4:4, :yellow), (8:8, :yellow))
+        end
+    end
+
+    @testset "Pattern Types" begin
+        @testset "Char" begin
+            @test replace(astr("hello", (1:5, :red)), 'l' => 'L') ==
+                astr("heLLo", (1:2, :red), (5:5, :red))
+            @test replace(astr("hello"), 'o' => astr("O", (1:1, :red))) ==
+                astr("hellO", (5:5, :red))
+            @test replace(astr("aaa", (1:3, :red)), 'a' => 'b') ==
+                astr("bbb")
+            @test replace(astr("aaa", (1:3, :red)), 'a' => 'b', count=2) ==
+                astr("bba", (3:3, :red))
+            @test replace(astr("café", (1:5, :green)), 'é' => 'e') ==
+                astr("cafe", (1:3, :green))
+            @test replace(astr("test"), 't' => astr("TTT", (1:3, :blue))) ==
+                astr("TTTesTTT", (1:3, :blue), (6:8, :blue))
+            @test replace(astr("hello", (1:5, :red)), 'l' => Base.AnnotatedChar('L', [(label=:face, value=:blue)])) ==
+                astr("heLLo", (1:2, :red), (5:5, :red), (3:4, :blue))
+            @test replace(astr("abc", (1:3, :green)), 'b' => Base.AnnotatedChar('B', [(label=:face, value=:bold)])) ==
+                astr("aBc", (1:1, :green), (3:3, :green), (2:2, :bold))
+        end
+
+        @testset "Regex" begin
+            @test replace(astr("foo bar", (1:7, :green)), r"o+" => "0") ==
+                astr("f0 bar", (1:1, :green), (3:6, :green))
+            @test replace(astr("hello"), r"l+" => astr("L", (1:1, :red))) ==
+                astr("heLo", (3:3, :red))
+            @test replace(astr("ab", (1:2, :red)), r"" => "^") ==
+                astr("^a^b^", (2:2, :red), (4:4, :red))
+            @test replace(astr("abc", (1:3, :red)), r"b?" => "X") ==
+                astr("XaXcX", (2:2, :red), (4:4, :red))
+            @test replace(astr("aaa", (1:3, :red)), r"a+" => "b") ==
+                astr("b")
+        end
+
+        @testset "Predicate" begin
+            @test replace(astr("abc", (1:3, :red)), islowercase => 'X') ==
+                astr("XXX")
+        end
+
+        @testset "Count" begin
+            @test replace(astr("hello", (1:5, :red)), "l" => "L", count=0) ==
+                astr("hello", (1:5, :red))
+            @test replace(astr("a b c", (5:5, :red)), "a" => "A", count=1) ==
+                astr("A b c", (5:5, :red))
+            @test replace(astr("a b c", (1:5, :red)), " " => "_", count=1) ==
+                astr("a_b c", (1:1, :red), (3:5, :red))
+            @test replace(astr("a b"), "a" => astr("X", (1:1, :red)),
+                         "b" => astr("Y", (1:1, :blue)), count=1) ==
+                astr("X b", (1:1, :red))
+            @test replace(astr("abc", (1:3, :red)), "x" => "y", count=10) ==
+                astr("abc", (1:3, :red))
+        end
+
+        @testset "AnnotatedChar" begin
+            @test replace(astr("test", (1:4, :red)), 't' => Base.AnnotatedChar('T', [(label=:face, value=:blue)])) ==
+                astr("TesT", (2:3, :red), (1:1, :blue), (4:4, :blue))
+            @test replace(astr("hello"), 'l' => Base.AnnotatedChar('L', [(label=:face, value=:bold), (label=:face, value=:red)])) ==
+                astr("heLLo", (3:4, :bold), (3:4, :red))
+            @test replace(astr("a b c", (1:5, :green)), ' ' => Base.AnnotatedChar('_', [(label=:face, value=:underline)])) ==
+                astr("a_b_c", (1:1, :green), (3:3, :green), (5:5, :green), (2:2, :underline), (4:4, :underline))
+        end
+
+        @testset "SubString" begin
+            source = astr("WORLD", (1:5, :blue))
+            @test replace(astr("hello world", (1:11, :red)), "world" => SubString(source, 1:5)) ==
+                astr("hello WORLD", (1:6, :red), (7:11, :blue))
+            source2 = astr("TEST", (1:2, :green), (3:4, :cyan))
+            @test replace(astr("foo bar"), "bar" => SubString(source2, 1:4)) ==
+                astr("foo TEST", (5:6, :green), (7:8, :cyan))
+            source3 = astr("annotation", (1:10, :emphasis))
+            @test replace(astr("replace me", (1:10, :red)), "me" => SubString(source3, 1:2)) ==
+                astr("replace an", (1:8, :red), (9:10, :emphasis))
+        end
+    end
+
+    @testset "Multiple Replacements" begin
+        @test replace(astr("foo bar baz", (1:3, :red), (5:7, :green), (9:11, :blue)),
+                     "foo" => "F", "bar" => "B", "baz" => "Z") ==
+            astr("F B Z")
+        @test replace(astr("foo bar"), "foo" => astr("F", (1:1, :red)), "bar" => "B") ==
+            astr("F B", (1:1, :red))
+        @test replace(astr("abc", (1:3, :red)), "a" => "A", "b" => "B", "c" => "C") ==
+            astr("ABC")
+        @test replace(astr("foo bar foo", (1:3, :red), (9:11, :green)),
+                     "foo" => "F", "bar" => "B", count=2) ==
+            astr("F B foo", (5:7, :green))
+        @test replace(astr("a b c", (5:5, :cyan)),
+                     "a" => astr("X", (1:1, :red)), "b" => astr("Y", (1:1, :blue))) ==
+            astr("X Y c", (5:5, :cyan), (1:1, :red), (3:3, :blue))
+        @test replace(astr("xaybzc", (2:2, :red), (4:4, :green), (6:6, :blue)),
+                     "x" => "X", "y" => "Y", "z" => "Z") ==
+            astr("XaYbZc", (2:2, :red), (4:4, :green), (6:6, :blue))
+        @test replace(astr("foo123bar", (1:3, :red), (7:9, :green)),
+                     r"(\d+)" => astr("NUM", (1:3, :blue))) ==
+            astr("fooNUMbar", (1:3, :red), (7:9, :green), (4:6, :blue))
+
+        @testset "Pattern type combinations" begin
+            @test replace(astr("a1b2c", (1:5, :red)), 'a' => "A", r"\d" => "X") ==
+                astr("AXbXc", (3:3, :red), (5:5, :red))
+            @test replace(astr("HeLLo", (1:5, :green)), isuppercase => 'x', "LL" => "ll") ==
+                astr("xexxo", (2:2, :green), (5:5, :green))
+            @test replace(astr("test123", (1:7, :blue)), isdigit => 'X', "test" => "TEST") ==
+                astr("TESTXXX")
+        end
+
+        @testset "Overlapping patterns" begin
+            @test replace(astr("aaaa", (1:4, :red)), "aa" => "b") ==
+                astr("bb")
+            @test replace(astr("abcabc", (1:3, :red), (4:6, :green)), "abc" => "X", "bc" => "Y") ==
+                astr("XX")
+        end
+
+        @testset "Count with multiple patterns" begin
+            @test replace(astr("a b a b", (1:7, :red)), "a" => "A", "b" => "B", count=3) ==
+                astr("A B A b", (2:2, :red), (4:4, :red), (6:7, :red))
+            @test replace(astr("x o x o x o", (1:11, :blue)), 'x' => "X", 'o' => "O", count=4) ==
+                astr("X O X O x o", (2:2, :blue), (4:4, :blue), (6:6, :blue), (8:11, :blue))
+        end
+    end
+
+    @testset "Edge Cases" begin
+        @testset "Boundaries" begin
+            @test replace(astr("abcdef", (4:6, :red)), "abc" => "x") ==
+                astr("xdef", (2:4, :red))
+            @test replace(astr("abcdef", (1:3, :red)), "def" => "x") ==
+                astr("abcx", (1:3, :red))
+            @test replace(astr("abcdef", (3:6, :red)), "abcd" => "X") ==
+                astr("Xef", (2:3, :red))
+            @test replace(astr("abcdef", (1:4, :red)), "cdef" => "X") ==
+                astr("abX", (1:2, :red))
+            @test replace(astr("abc", (2:2, :red)), "b" => "B") ==
+                astr("aBc")
+            @test replace(astr("abc", (3:3, :red)), "a" => "A") ==
+                astr("Abc", (3:3, :red))
+            @test replace(astr("foobar", (1:3, :red)), "foo" => "x") ==
+                astr("xbar")
+            @test replace(astr("foobar", (4:6, :red)), "bar" => "x") ==
+                astr("foox")
+        end
+
+        @testset "Empty" begin
+            @test replace(astr("hello", (1:5, :red)), "x" => "y") ==
+                astr("hello", (1:5, :red))
+            @test replace(astr(""), "x" => "y") == astr("")
+            @test replace(astr("", (1:0, :red)), "" => "x") == astr("x")
+            @test replace(astr("ab", (1:2, :red)), "" => "^") ==
+                astr("^a^b^", (2:2, :red), (4:4, :red))
+            @test replace(astr("hello", (1:5, :red)), "l" => "") ==
+                astr("heo", (1:2, :red), (3:3, :red))
+            @test replace(astr("hello world", (7:11, :green)), "hello " => astr("")) ==
+                astr("world", (1:5, :green))
+        end
+
+        @testset "Unicode" begin
+            @test replace(astr("føø bar", (1:4, :red)), "føø" => "foo") ==
+                astr("foo bar")
+            @test replace(astr("hello", (1:5, :red)), "llo" => "ḻḻø") ==
+                astr("heḻḻø", (1:2, :red))
+            @test replace(astr("foo"), "foo" => astr("ƀäṙ", (1:6, :red))) ==
+                astr("ƀäṙ", (1:6, :red))
+            @test replace(astr("a𝟏b", (1:6, :red)), "𝟏" => "1") ==
+                astr("a1b", (1:1, :red), (3:3, :red))
+            @test replace(astr("ḟøø bär", (1:12, :green)), " " => "_") ==
+                astr("ḟøø_bär", (1:7, :green), (9:12, :green))
+            @test replace(astr("a𝟏b𝟏c", (1:9, :red)), "𝟏" => "1") ==
+                astr("a1b1c", (1:1, :red), (3:3, :red))
+        end
+
+        @testset "Special characters" begin
+            @test replace(astr("a\nb", (1:3, :red)), "\n" => " ") ==
+                astr("a b", (1:1, :red), (3:3, :red))
+            @test replace(astr("a\tb", (1:3, :red)), "\t" => " ") ==
+                astr("a b", (1:1, :red), (3:3, :red))
+            @test replace(astr("a\0b", (1:3, :red)), "\0" => "x") ==
+                astr("axb", (1:1, :red), (3:3, :red))
+        end
+
+        @testset "Annotation edge cases" begin
+            @test replace(astr("hello", (1:5, :blue)), "l" => "L") ==
+                astr("heLLo", (1:2, :blue), (5:5, :blue))
+            @test replace(astr("aabb", (1:4, :red)), "a" => "x", "b" => "y") ==
+                astr("xxyy")
+            @test replace(astr("hello", (1:3, :red), (2:4, :green)), "el" => "X") ==
+                astr("hXlo", (1:1, :red), (3:3, :green))
+            str_multi = astr("test", (1:4, :red), (1:4, :en))
+            @test replace(str_multi, "test" => "ok") == astr("ok")
+            str2 = astr("a b", (1:3, :red), (1:3, :bold))
+            result = replace(str2, " " => "_")
+            @test String(result) == "a_b"
+            @test length(Base.annotations(result)) == 4
+            str3 = astr("hi world", (4:8, :red), (4:8, :bold))
+            result2 = replace(str3, "hi" => "hello")
+            @test String(result2) == "hello world"
+            @test length(Base.annotations(result2)) == 2
+
+            str_triple = astr("abc", (1:3, :red), (1:3, :bold), (1:3, :italic))
+            @test replace(str_triple, "b" => "B") ==
+                astr("aBc", (1:1, :red), (3:3, :red),
+                     (1:1, :bold), (3:3, :bold),
+                     (1:1, :italic), (3:3, :italic))
+
+            str_nested = astr("abcde", (1:5, :outer), (2:4, :middle), (3:3, :inner))
+            @test replace(str_nested, "c" => "X") ==
+                astr("abXde", (1:2, :outer), (4:5, :outer), (2:2, :middle), (4:4, :middle))
+
+            str_same_label = astr("test", (1:2, :val1), (3:4, :val2))
+            @test replace(str_same_label, "es" => "X") ==
+                astr("tXt", (1:1, :val1), (3:3, :val2))
+        end
+
+        @testset "Size variations" begin
+            @test replace(astr("hello", (1:5, :red)), "hello" => "world") ==
+                astr("world")
+            @test replace(astr("hi", (1:2, :red)), "hi" => "hello") ==
+                astr("hello")
+            @test replace(astr("hello", (1:5, :red)), "hello" => "hi") ==
+                astr("hi")
+            @test replace(astr("a b c", (1:1, :red), (3:3, :green), (5:5, :blue)), "b" => "B") ==
+                astr("a B c", (1:1, :red), (5:5, :blue))
+            @test replace(astr("hello world", (1:5, :red)), "world" => "there") ==
+                astr("hello there", (1:5, :red))
+            @test replace(astr("hello world", (7:11, :green)), "hello" => "hi") ==
+                astr("hi world", (4:8, :green))
+            @test replace(astr("hi"), "hi" => astr("hello world", (1:5, :red), (7:11, :green))) ==
+                astr("hello world", (1:5, :red), (7:11, :green))
+            @test replace(astr("hello world"), "hello world" => astr("hi", (1:2, :red))) ==
+                astr("hi", (1:2, :red))
+            @test replace(astr("aabbcc", (1:6, :red)), "a" => "x", "b" => "y", "c" => "z") ==
+                astr("xxyyzz")
+            @test replace(astr("hello", (1:5, :red)), "hello" => astr("hello", (1:5, :blue))) ==
+                astr("hello", (1:5, :blue))
+        end
+
+        @testset "Complex" begin
+            @test replace(astr("a b c d", (1:7, :red)), " " => "_") ==
+                astr("a_b_c_d", (1:1, :red), (3:3, :red), (5:5, :red), (7:7, :red))
+            annots = [(i:i, :red) for i in 1:2:9]
+            @test replace(astr("a b c d e", annots...), " " => "_") ==
+                astr("a_b_c_d_e", (1:1, :red), (3:3, :red), (5:5, :red), (7:7, :red), (9:9, :red))
+            @test replace(astr("abcdefgh", (1:8, :red)), "cd" => "X") ==
+                astr("abXefgh", (1:2, :red), (4:7, :red))
+            @test replace(astr("hello world"), "world" => "Julia") ==
+                astr("hello Julia")
+            @test replace(astr("hello", (1:5, :red)), "ello" => uppercase) ==
+                astr("hELLO", (1:1, :red))
+
+            str_code = astr("function test()", (1:8, :keyword), (10:13, :identifier))
+            @test replace(str_code, "test" => "demo", "(" => "[", ")" => "]") ==
+                astr("function demo[]", (1:8, :keyword))
+
+            str_markdown = astr("This is *bold* text", (9:13, :emphasis))
+            @test replace(str_markdown, "*" => "", "bold" => astr("BOLD", (1:4, :strong))) ==
+                astr("This is BOLD text", (9:12, :strong))
+
+            str_chain = astr("aaa", (1:3, :red))
+            str_chain = replace(str_chain, "a" => astr("b", (1:1, :green)))
+            str_chain = replace(str_chain, "b" => astr("c", (1:1, :blue)))
+            @test String(str_chain) == "ccc"
+            @test length(Base.annotations(str_chain)) == 1
+
+            str_interleaved = astr("a1b2c3", (1:1, :red), (3:3, :green), (5:5, :blue))
+            @test replace(str_interleaved, r"\d" => astr("X", (1:1, :yellow))) ==
+                astr("aXbXcX", (1:1, :red), (3:3, :green), (5:5, :blue),
+                     (2:2, :yellow), (4:4, :yellow), (6:6, :yellow))
+        end
+
+
+
+        @testset "Overlapping annotations" begin
+            # Annotations that overlap on the same text
+            str_overlap = astr("hello world", (1:5, :red), (3:9, :bold))
+            @test replace(str_overlap, "ll" => "LL") ==
+                astr("heLLo world", (1:2, :red), (5:5, :red), (5:9, :bold))
+            # Multiple overlapping annotations
+            str_multi = astr("testing", (1:7, :outer), (2:6, :middle), (3:5, :inner))
+            @test replace(str_multi, "es" => "ES") ==
+                astr("tESting", (1:1, :outer), (4:7, :outer),
+                     (4:6, :middle),
+                     (4:5, :inner))
+        end
+
+        @testset "Multiple annotations same region" begin
+            # Same region with different labels
+            str = astr("test", (1:4, :red), (1:4, :bold), (2:3, :italic))
+            @test replace(str, "es" => "ES") ==
+                astr("tESt", (1:1, :red), (4:4, :red),
+                     (1:1, :bold), (4:4, :bold))
+            # Same label, different values on different regions
+            str2 = astr("test", (1:2, :red), (3:4, :blue))
+            @test replace(str2, "es" => "ES") ==
+                astr("tESt", (1:1, :red), (4:4, :blue))
+        end
+
+        @testset "Annotation merging" begin
+            # Adjacent replacements with same annotations should merge
+            str = astr("abc", (1:3, :red))
+            result = replace(str, 'a' => astr("A", (1:1, :red)), 'b' => astr("B", (1:1, :red)), 'c' => astr("C", (1:1, :red)))
+            @test String(result) == "ABC"
+            @test Base.annotations(result) == [(region=1:3, label=:face, value=:red)]
+
+            # Non-adjacent should not merge
+            str2 = astr("axbxc", (1:5, :green))
+            result2 = replace(str2, 'a' => astr("A", (1:1, :red)), 'c' => astr("C", (1:1, :red)))
+            @test String(result2) == "AxbxC"
+            # The middle section should be green, ends should be red (not merged)
+            @test length(Base.annotations(result2)) >= 2
+        end
+
+        @testset "Pattern with itself" begin
+            # Replace pattern with itself but different annotations
+            @test replace(astr("test", (1:4, :red)), "t" => astr("t", (1:1, :blue))) ==
+                astr("test", (2:3, :red), (1:1, :blue), (4:4, :blue))
+            # Same length, same content, different annotation
+            @test replace(astr("hello", (1:5, :red)), "hello" => astr("hello", (1:5, :blue))) ==
+                astr("hello", (1:5, :blue))
+        end
+
+        @testset "Many replacements" begin
+            # Many occurrences of same pattern
+            str = astr("a" * "b"^20, (1:21, :red))
+            result = replace(str, "b" => "B")
+            @test String(result) == "a" * "B"^20
+            @test Base.annotations(result) == [(region=1:1, label=:face, value=:red)]
+
+            # Multiple different patterns
+            str2 = astr("ababababab", (1:10, :green))
+            result2 = replace(str2, "a" => "A", "b" => "B")
+            @test String(result2) == "ABABABABAB"
+            @test Base.annotations(result2) == []
+        end
+
+        @testset "Annotation spanning replacements" begin
+            # Annotation covers entire string with multiple replacements
+            @test replace(astr("a-b-c-d", (1:7, :red)), "-" => "_") ==
+                astr("a_b_c_d", (1:1, :red), (3:3, :red), (5:5, :red), (7:7, :red))
+            # Multiple replacements at different positions
+            str = astr("abcdefgh", (1:8, :blue))
+            @test replace(str, "b" => "B", "d" => "D", "f" => "F") ==
+                astr("aBcDeFgh", (1:1, :blue), (3:3, :blue), (5:5, :blue), (7:8, :blue))
+        end
+
+        @testset "edge annotation regions" begin
+            # Empty region (0:0) outside string bounds gets filtered out
+            str_empty = astr("test", (0:0, :red))
+            @test replace(str_empty, "t" => "T") == astr("TesT")
+
+            # Backward range within bounds is preserved (even though it's empty)
+            str_backward = astr("test", (3:2, :red))
+            @test replace(str_backward, "t" => "T") == astr("TesT", (3:2, :red))
+
+            # Backward range outside bounds gets filtered out
+            str_backward_out = astr("test", (5:3, :red))
+            @test replace(str_backward_out, "t" => "T") == astr("TesT")
+        end
+    end
+
+    @testset "IO" begin
+        buf = Base.AnnotatedIOBuffer()
+        replace(buf, astr("hello", (1:5, :red)), "l" => "L")
+        result = read(seekstart(buf), Base.AnnotatedString)
+        @test result == astr("heLLo", (1:2, :red), (5:5, :red))
+
+        buf = Base.AnnotatedIOBuffer()
+        replace(buf, astr("a", (1:1, :red)), "a" => "x")
+        replace(buf, astr("b", (1:1, :blue)), "b" => "y")
+        result = read(seekstart(buf), Base.AnnotatedString)
+        @test result == astr("xy")
+
+        buf = IOBuffer()
+        replace(buf, astr("hello", (1:5, :red)), "l" => "L")
+        @test String(take!(buf)) == "heLLo"
+
+        buf = Base.AnnotatedIOBuffer()
+        write(buf, "prefix ")
+        replace(buf, astr("test", (1:4, :green)), "t" => "T")
+        result = read(seekstart(buf), Base.AnnotatedString)
+        @test String(result) == "prefix TesT"
+        @test Base.annotations(result) == [(region=9:10, label=:face, value=:green)]
+
+        buf = Base.AnnotatedIOBuffer()
+        replace(buf, astr("line1", (1:5, :red)), "1" => "A")
+        write(buf, "\n")
+        replace(buf, astr("line2", (1:5, :blue)), "2" => "B")
+        result = read(seekstart(buf), Base.AnnotatedString)
+        @test String(result) == "lineA\nlineB"
+
+        buf = Base.AnnotatedIOBuffer()
+        replace(buf, astr("test", (1:4, :green)), "t" => "T")
+        truncate(buf, 4)
+        result = read(seekstart(buf), Base.AnnotatedString)
+        @test String(result) == "TesT"
+
+        @testset "Non-appending operations" begin
+            # Write, seek back, then replace (matches standard IOBuffer behavior - no truncation)
+            buf = Base.AnnotatedIOBuffer()
+            write(buf, astr("original", (1:8, :red)))
+            seekstart(buf)
+            replace(buf, astr("test", (1:4, :blue)), "t" => "T")
+            result = read(seekstart(buf), Base.AnnotatedString)
+            # Standard IOBuffer doesn't truncate, so we get "TesTinal" not "TesT"
+            @test String(result) == "TesTinal"
+            # Annotations in the replaced region should be cleared, old ones shifted
+            @test Base.annotations(result) == [(region=5:8, label=:face, value=:red),
+                                                (region=2:3, label=:face, value=:blue)]
+
+            # Multiple sequential replacements to same buffer (appending)
+            buf2 = Base.AnnotatedIOBuffer()
+            replace(buf2, astr("first", (1:5, :red)), "i" => "I")
+            write(buf2, " ")
+            replace(buf2, astr("second", (1:6, :blue)), "e" => "E")
+            result2 = read(seekstart(buf2), Base.AnnotatedString)
+            @test String(result2) == "fIrst sEcond"
+            # Check annotations are present and positioned correctly
+            red_annots = filter(a -> a.value == :red, Base.annotations(result2))
+            blue_annots = filter(a -> a.value == :blue, Base.annotations(result2))
+            @test !isempty(red_annots)
+            @test !isempty(blue_annots)
+
+            # Writing at different positions within buffer
+            buf3 = Base.AnnotatedIOBuffer()
+            write(buf3, "start ")
+            pos = position(buf3)
+            replace(buf3, astr("middle", (1:6, :green)), "d" => "D")
+            write(buf3, " end")
+            result3 = read(seekstart(buf3), Base.AnnotatedString)
+            @test String(result3) == "start miDDle end"
+            # Check that green annotation is offset correctly
+            green_annots = filter(a -> a.value == :green, Base.annotations(result3))
+            @test all(a -> first(a.region) >= pos + 1, green_annots)
+        end
+    end
+end
