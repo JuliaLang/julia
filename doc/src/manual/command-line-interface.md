@@ -50,7 +50,7 @@ To see this feature in action, consider the following definition:
 ```jldoctest
 (@main)(args) = println("Hello $(args[1])!")
 ```
-Executing the above script with `julia script.jl "Buddy"` will automatically run `(@main)` and print "Hello Buddy!", 
+Executing the above script with `julia script.jl "Buddy"` will automatically run `(@main)` and print "Hello Buddy!",
 despite there being no explicit call to `(@main)`.
 
 The return value of the `(@main)` function must either be `nothing`, resulting in exit code
