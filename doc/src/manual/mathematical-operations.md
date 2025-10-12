@@ -423,6 +423,9 @@ Julia applies the following order and associativity of operations, from highest 
     The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
     c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
 
+Parsing is primarily determined by operator precedence. For operators with identical
+operator precedence parsing depends on their associativity.
+
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm). Note that some of the operators there are not defined
 in the `Base` module but may be given definitions by standard libraries, packages or user code.
