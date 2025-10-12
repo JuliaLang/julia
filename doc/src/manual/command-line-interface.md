@@ -48,15 +48,10 @@ by using the `@main` macro.
 
 To see this feature in action, consider the following definition:
 ```jldoctest
-function (@main)(ARGS)
-    open("out.log", "w") do io
-        println(io, "My pet is $(ARGS[1])")
-    end
-    return nothing
-end
+(@main)(args) = println("Hello $(args[1])!")
 ```
-Executing the above script with `julia script.jl "Buddy"` will automatically run `(@main)` and create the `out.log`
-file, despite there being no explicit call to `(@main)`.
+Executing the above script with `julia script.jl "Buddy"` will automatically run `(@main)` and print "Hello Buddy!", 
+despite there being no explicit call to `(@main)`.
 
 The return value of the `(@main)` function must either be `nothing`, resulting in exit code
 `0`, or convertible to a `Cint` which will be the exit code:
