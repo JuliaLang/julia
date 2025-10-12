@@ -308,7 +308,8 @@ kind_sym(x) = Symbol(Base.JuliaSyntax._kind_int_to_str[x])
 iscolonoperator(op) = kind_int(":") < kind_int(op) <= kind_int("END_COLON")
 isconditionaloperator(op) = kind_int("BEGIN_CONDITIONAL") <= kind_int(op) <= kind_int("END_CONDITIONAL")
 iswordoperator(op) = op |> string |> Base.JuliaSyntax.Kind |> Base.JuliaSyntax.is_word_operator
-isclosedbinaryoperator(op) = !isunaryoperator(op) && !iscolonoperator(op) && !isconditionaloperator(op) && string(op) ∉ ("op=", "'", ".'")
+isclosedbinaryoperator(op) = !Base.isunaryoperator(op) && !iscolonoperator(op) &&
+                             !isconditionaloperator(op) && string(op) ∉ ("op=", "'", ".'")
 space(op) = iswordoperator(op) || op == :🢲 ? Symbol(" $op ") : op
 
 function test_associativity(op)
