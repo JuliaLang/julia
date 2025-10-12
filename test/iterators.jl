@@ -306,13 +306,33 @@ let i = 0
         i <= 10 || break
     end
 end
-@test (@inferred eltype(repeated(0)))    == Int
-@test (@inferred eltype(repeated(0, 5))) == Int
 @test (@inferred Base.IteratorSize(repeated(0)))      == Base.IsInfinite()
 @test (@inferred Base.IteratorSize(repeated(0, 5)))   == Base.HasLength()
-@test (@inferred Base.IteratorEltype(repeated(0)))    == Base.HasEltype()
-@test (@inferred Base.IteratorEltype(repeated(0, 5))) == Base.HasEltype()
 @test (@inferred Base.IteratorSize(zip(repeated(0), repeated(0)))) == Base.IsInfinite()
+
+# called
+# ------
+let i = 0
+    for j = called(Returns(1), 10)
+        @test j == 1
+        i += 1
+    end
+    @test i == 10
+end
+let i = 0
+    for j = called(Returns(1))
+        @test j == 1
+        i += 1
+        i <= 10 || break
+    end
+end
+@test (@inferred eltype(called(Returns(1))))    == Int
+@test (@inferred eltype(called(() -> Dict{Any, Any}(), 5))) == Dict{Any, Any}
+@test (@inferred Base.IteratorSize(called(Returns(1))))      == Base.IsInfinite()
+@test (@inferred Base.IteratorSize(called(Returns(1), 5)))   == Base.HasLength()
+@test (@inferred Base.IteratorEltype(called(Returns(1))))    == Base.HasEltype()
+@test (@inferred Base.IteratorEltype(called(Returns(1), 5))) == Base.HasEltype()
+@test (@inferred Base.IteratorSize(zip(called(Returns(1)), called(Returns(1))))) == Base.IsInfinite()
 
 # product
 # -------

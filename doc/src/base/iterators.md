@@ -13,6 +13,7 @@ Base.Iterators.dropwhile
 Base.Iterators.findeach
 Base.Iterators.cycle
 Base.Iterators.repeated
+Base.Iterators.called
 Base.Iterators.product
 Base.Iterators.flatten
 Base.Iterators.flatmap
