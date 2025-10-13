@@ -14,8 +14,7 @@ New language features
 
 Language changes
 ----------------
-* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
-is considered a bug fix ([#47102])
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and is considered a bug fix ([#47102])
 
 * The `hash` algorithm and its values have changed for certain types, most notably AbstractString. Any `hash` specializations for equal types to those that changed, such as some third-party string packages, may need to be deleted. ([#57509], [#59691])
 
