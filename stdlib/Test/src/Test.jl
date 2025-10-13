@@ -631,7 +631,9 @@ function _escape_call(@nospecialize ex)
         # Update broadcast comparison calls to the function call syntax
         # (e.g. `1 .== 1` becomes `(==).(1, 1)`)
         func_str = string(ex.args[1])
-        escaped_func = if first(func_str) == '.'
+        # Check if this is a broadcast operator (starts with '.' and has more characters that aren't '.')
+        is_broadcast = length(func_str) >= 2 && first(func_str) == '.' && any(c -> c != '.', func_str[2:end])
+        escaped_func = if is_broadcast
             esc(Expr(:., Symbol(func_str[2:end])))
         else
             esc(ex.args[1])
@@ -1233,7 +1235,14 @@ mutable struct DefaultTestSet <: AbstractTestSet
     results_lock::ReentrantLock
     results::Vector{Any}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = something(Base.ScopedValues.get(VERBOSE_TESTSETS)), showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
+function DefaultTestSet(desc::AbstractString;
+                        verbose::Bool = something(Base.ScopedValues.get(VERBOSE_TESTSETS)),
+                        showtiming::Bool = true,
+                        failfast::Union{Nothing,Bool} = nothing,
+                        source = nothing,
+                        time_start::Float64 = time(),
+                        rng = nothing,
+                        )
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1245,7 +1254,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = something(Base.Sco
     end
     return DefaultTestSet(String(desc)::String,
         verbose, showtiming, failfast, extract_file(source),
-        time(), rng, 0, 0., 0x00, ReentrantLock(), Any[])
+        time_start, rng, 0, 0., 0x00, ReentrantLock(), Any[])
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
 extract_file(file::Symbol) = string(file)
@@ -1451,7 +1460,7 @@ end
 # Recursive function that fetches backtraces for any and all errors
 # or failures the testset and its children encountered
 function filter_errors(ts::DefaultTestSet)
-    efs = Any[]
+    efs = Union{Fail, Error}[]
     for t in ts.results
         if isa(t, DefaultTestSet)
             append!(efs, filter_errors(t))

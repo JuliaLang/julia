@@ -664,8 +664,8 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT;
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
@@ -882,7 +882,7 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
 jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t *parent, jl_value_t *rhs, enum atomic_kind isatomic);
 jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name);
 jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, enum atomic_kind isatomic);
-jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name);
+jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_binding_t *b, jl_module_t *mod, jl_sym_t *name);
 jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic);
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
@@ -895,9 +895,8 @@ jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val);
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, const char *msg);
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
-void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong);
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
@@ -944,6 +943,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
 JL_DLLEXPORT int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
                                        jl_module_t *inmodule, const char *file, int line);
+int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world, jl_value_t *_mt);
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
@@ -1524,11 +1524,12 @@ size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_cont
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip);
-void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
+void jl_fprint_critical_error(ios_t *t, int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
-void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
-void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT;
+void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT;
+void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
 #ifdef _OS_WINDOWS_
 JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
 #endif
@@ -1654,7 +1655,7 @@ JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
 void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
-JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
+JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name);
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),
@@ -1944,7 +1945,6 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(generated_sym) \
     XX(getfield_undefref_sym) \
     XX(global_sym) \
-    XX(globaldecl_sym) \
     XX(globalref_sym) \
     XX(goto_ifnot_sym) \
     XX(goto_sym) \
@@ -2035,8 +2035,8 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 //   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
 //   warning is spurious if the variable is not modified inside the JL_TRY.
 //   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
-#ifdef _COMPILER_GCC_
 #define JL_DO_PRAGMA(s) _Pragma(#s)
+#ifdef _COMPILER_GCC_
 #define JL_GCC_IGNORE_START(warning) \
     JL_DO_PRAGMA(GCC diagnostic push) \
     JL_DO_PRAGMA(GCC diagnostic ignored warning)
@@ -2046,6 +2046,24 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #define JL_GCC_IGNORE_START(w)
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
+
+#ifdef _COMPILER_CLANG_
+#define JL_CLANG_IGNORE_START(warning) \
+    JL_DO_PRAGMA(clang diagnostic push) \
+    JL_DO_PRAGMA(clang diagnostic ignored warning)
+#define JL_CLANG_IGNORE_STOP \
+    JL_DO_PRAGMA(clang diagnostic pop)
+#else
+#define JL_CLANG_IGNORE_START(w)
+#define JL_CLANG_IGNORE_STOP
+#endif // _COMPILER_CLANG_
+
+#define JL_CC_IGNORE_START(warning) \
+    JL_GCC_IGNORE_START(warning) \
+    JL_CLANG_IGNORE_START(warning)
+#define JL_CC_IGNORE_STOP \
+    JL_GCC_IGNORE_STOP \
+    JL_CLANG_IGNORE_STOP
 
 #ifdef __clang_gcanalyzer__
   // Not a safepoint (so it doesn't free other values), but an artificial use.
@@ -2093,8 +2111,8 @@ JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncod
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_method_instance_t **linfos, size_t n);
-JL_DLLIMPORT void jl_get_llvm_mis(void *native_code, size_t *num_els,
-                                  jl_method_instance_t *MIs);
+JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
+                                  jl_code_instance_t **CIs);
 JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;

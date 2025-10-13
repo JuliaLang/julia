@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance)
+function matching_cache_argtypes(::AbstractLattice, mi::MethodInstance)
     (; def, specTypes) = mi
     return most_general_argtypes(isa(def, Method) ? def : nothing, specTypes)
 end
@@ -16,7 +16,7 @@ struct WidenedArgtypes
     argtypes::Vector{Any}
 end
 
-function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
+function matching_cache_argtypes(𝕃::AbstractLattice, ::MethodInstance,
                                  simple_argtypes::Union{SimpleArgtypes, WidenedArgtypes},
                                  cache_argtypes::Vector{Any})
     (; argtypes) = simple_argtypes

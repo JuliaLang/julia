@@ -121,6 +121,17 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *co
     jl_throw(ex);
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_type_error_global(const char *fname, jl_module_t *mod, jl_sym_t *sym,
+                                               jl_value_t *expected JL_MAYBE_UNROOTED,
+                                               jl_value_t *got JL_MAYBE_UNROOTED)
+{
+    jl_value_t *gr = jl_module_globalref(mod, sym);
+    JL_GC_PUSH2(&expected, &got);
+    jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname), gr, expected, got);
+    jl_throw(ex);
+}
+
+
 // with function name or description only
 JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
                                             jl_value_t *expected JL_MAYBE_UNROOTED,
@@ -243,7 +254,7 @@ JL_DLLEXPORT void __stack_chk_fail(void)
 {
     /* put your panic function or similar in here */
     fprintf(stderr, "fatal error: stack corruption detected\n");
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
 }
 #endif
@@ -1565,6 +1576,23 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         n += jl_printf(s, "}");
     }
     return n;
+}
+
+JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *s, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
+    jl_jmp_buf buf;
+    jl_set_safe_restore(&buf);
+    volatile size_t sz = 0;
+    if (!jl_setjmp(buf, 0)) {
+        sz += jl_static_show(s, (jl_value_t*)v);
+        sz += jl_printf(s, "\n");
+    }
+    else {
+        sz += jl_printf(s, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
+    }
+    jl_set_safe_restore(old_buf);
+    return sz;
 }
 
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT
