@@ -266,6 +266,9 @@ end |> Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{String}()[]
 end |> Compiler.is_consistent
+@test Base.infer_effects() do
+    Maybe{Some{Base.RefValue{Int}}}()
+end |> Compiler.is_consistent
 let f() = Maybe{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
