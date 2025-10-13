@@ -1280,7 +1280,7 @@ static const auto jldlsym_func = new JuliaFunction<>{
 static const auto jllazydlsym_func = new JuliaFunction<>{
     XSTR(jl_lazy_load_and_lookup),
     [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
-            {JuliaType::get_prjlvalue_ty(C), getPointerTy(C)}, false); },
+            {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); },
     nullptr,
 };
 static const auto jltypeassert_func = new JuliaFunction<>{
@@ -3231,8 +3231,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
                 if (!ismodifyglobal) {
-                    // TODO: use typeassert in jl_check_binding_assign_value too
-                    emit_typecheck(ctx, rval, ty, "typeassert");
+                    emit_typecheck(ctx, rval, ty, fname.c_str());
                     rval = update_julia_type(ctx, rval, ty);
                     if (rval.typ == jl_bottom_type)
                         return jl_cgval_t();
