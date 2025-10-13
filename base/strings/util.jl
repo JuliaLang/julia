@@ -377,7 +377,7 @@ end
     end
     off = s isa String ? 0 : s.offset
     par = s isa String ? s : s.string
-    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+    @inbounds unsafe_substring(s, 1, len)
 end
 """
     lstrip([pred=isspace,] str::AbstractString)::SubString
