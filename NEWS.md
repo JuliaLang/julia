@@ -59,7 +59,7 @@ New library functions
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 * `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
-* `Iterators.findeach` is a lazy version of `findall` ([#54124])
+* `Iterators.findeach` is a lazy version of `findall` ([#54124]).
 
 New library features
 --------------------
