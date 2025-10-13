@@ -126,6 +126,9 @@ public
 # filesystem operations
     rename,
 
+# promotion
+    promote_typejoin,
+
 # misc
     notnothing,
     runtests,
