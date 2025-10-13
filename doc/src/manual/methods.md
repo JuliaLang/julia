@@ -582,7 +582,7 @@ However, future calls to `tryeval` will continue to see the definition of `newfu
 
 You may want to try this for yourself to see how it works.
 
-The implementation of this behavior is a "world age counter", which is further described in the [Worldage](@ref man-worldage)
+The implementation of this behavior is a "world age counter", which is further described in the [World Age](@ref World-age-in-general)
 manual chapter.
 
 ## Design Patterns with Parametric Methods
