@@ -92,7 +92,7 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
-jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance_t **data)
+jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
 {
     jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
     auto &map = desc->jl_fvar_map;
@@ -105,7 +105,7 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     assert(*num_elements == map.size());
     size_t i = 0;
     for (auto &ci : map) {
-        data[i++] = jl_get_ci_mi(ci.first);
+        data[i++] = ci.first;
     }
 }
 
@@ -897,7 +897,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 jl_callptr_t invoke;
                 void *fptr;
                 jl_read_codeinst_invoke(this_code, &specsigflags, &invoke, &fptr, 0);
-                if (invoke != NULL && (specsigflags & 0b100)) {
+                if (invoke != NULL && (specsigflags & JL_CI_FLAGS_FROM_IMAGE)) {
                     // this codeinst is already available externally: keep it only if canPartition demands it for local use
                     // TODO: for performance, avoid generating the src code when we know it would reach here anyways?
                     if (M.withModuleDo([&](Module &M) { return !canPartition(*cast<Function>(M.getNamedValue(cfunc))); })) {
@@ -1196,7 +1196,6 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
-    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -1207,7 +1206,6 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
-    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -1957,8 +1955,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
                 // or it may skip emitting debug info for that file. Here set it to ./julia#N
                 DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                for (DICompileUnit *CU : M->debug_compile_units())
-                    CU->replaceOperandWith(0, topfile);
+                if (M->getNamedMetadata("llvm.dbg.cu"))
+                    for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
+                        CU->replaceOperandWith(0, topfile);
                 timers[i].construct.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
@@ -2004,12 +2003,6 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
 #endif
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
         return 1;
-    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
-    // for any of our other symbols that we insert during compilation.
-    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
-        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
-        return 1;
-    }
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {

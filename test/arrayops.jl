@@ -319,6 +319,12 @@ end
     @test_throws ArgumentError dropdims(a, dims=3)
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
+
+    h1 = HeterogeneousAxisArray(rand(4, 1))
+    h2 = HeterogeneousAxisArray(rand(1, 4))
+    @test size(dropdims(h1, dims=2)) == (4,)
+    @test size(dropdims(h2, dims=1)) == (4,)
+
     @testset "insertdims" begin
         a = rand(8, 7)
         @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
@@ -519,6 +525,12 @@ end
     v = empty!(collect(1:100))
     pushfirst!(v, 1)
     @test length(v.ref.mem) == 100
+
+    # test that insert! at position 1 doesn't allocate for empty arrays with capacity (issue #58640)
+    v = empty!(Vector{Int}(undef, 5))
+    insert!(v, 1, 10)
+    @test v == [10]
+    @test length(v.ref.mem) == 5
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -1459,6 +1471,18 @@ end
     @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
     @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
     @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
+
+    x = [1, 2, 3]
+    y = OffsetVector(x, -1)
+    @test cmp(x, y) == 1
+    @test cmp(y, x) == -1
+    @test !isless(x, y)
+    @test isless(y, x)
+
+    y2 = OffsetVector([1, 2, 3], 0)
+    @test cmp(x, y2) == 0
+    @test !isless(x, y2)
+    @test !isless(y2, x)
 end
 
 @testset "sort on arrays" begin
@@ -3379,4 +3403,11 @@ end
     mem = Memory{Float32}(undef, 3)
     ref = memoryref(mem, 2)
     @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 2
+
+    # Test for zero-sized structs
+    mem = Memory{Nothing}(undef, 10)
+    ref = memoryref(mem, 8)
+    @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 8
 end

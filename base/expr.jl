@@ -1833,7 +1833,7 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
                     Expr(:block,
                          LineNumberNode(Int(source.line), source.file),
                          Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, body),
+                         Expr(:return, Expr(:toplevel_pure, body)),
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
     return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),

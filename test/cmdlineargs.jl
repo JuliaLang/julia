@@ -74,6 +74,32 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
+if Sys.isunix()
+    @testset "SIGQUIT prints task backtraces" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            write(stdout, "r")
+            wait()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+        errp = PipeBuffer()
+        # disable coredumps for this process
+        p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
+        @test read(p, UInt8) == UInt8('r')
+        Base.kill(p, Base.SIGQUIT)
+        wait(p)
+        err_s = readchomp(errp)
+        @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
+        @test occursin("==== Thread ", err_s)
+        @test occursin("==== Done", err_s)
+    end
+end
+
 @testset "julia_cmd" begin
     julia_basic = Base.julia_cmd()
     function get_julia_cmd(arg)
@@ -889,6 +915,64 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             stderr=io)
         _stderr = String(take!(io))
         @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
+    # --trace-eval
+    let
+        # Test --trace-eval=loc (location only)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)
+            @test success
+            @test occursin("eval: #=", err)
+            @test !occursin("eval: \$(Expr(:toplevel", err)  # Should not show full expressions
+        end
+    end
+
+    let
+        # Test --trace-eval=full (full expressions)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=full $testfile`)
+            @test success
+            @test occursin("eval: \$(Expr(:toplevel", err)  # Should show full expressions
+            @test occursin("x = 1 + 1", err)
+        end
+    end
+
+    let
+        # Test --trace-eval=no (disabled)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=no $testfile`)
+            @test success
+            @test !occursin("eval:", err)  # Should not show any eval traces
+        end
+    end
+
+    let
+        # Test Base.TRACE_EVAL global control takes priority
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, """
+                Base.TRACE_EVAL = :full
+                x = 1 + 1
+                Base.TRACE_EVAL = :no
+                y = x * 2
+                """)
+            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)  # Command line says :loc, but code overrides
+            @test success
+            # Should show full expression for x = 1 + 1 (Base.TRACE_EVAL = :full)
+            @test occursin("eval: \$(Expr(:toplevel", err)
+            @test occursin("x = 1 + 1", err)
+            # Should not show trace for y = x * 2 (Base.TRACE_EVAL = :no)
+            lines = split(err, '\n')
+            y_lines = filter(line -> occursin("y = x * 2", line), lines)
+            @test length(y_lines) == 0  # No eval trace for y assignment
+        end
     end
 
     # test passing arguments

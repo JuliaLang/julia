@@ -9,6 +9,8 @@ const Bottom = Union{}
 # For curmod_*
 include("testenv.jl")
 
+include("tempdepot.jl")
+
 ## tests that `const` field declarations
 
 # sanity tests that our built-in types are marked correctly for const fields
@@ -35,7 +37,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :flags, :precompile, :time_compile]),
         (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
         (Core.MethodInstance, [:cache, :flags, :dispatch_status]),
         (Core.MethodTable, [:defs]),
@@ -2815,6 +2817,14 @@ f24460(x::Int, y::Int) = "3"
 const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
+
+@testset "invoke with builtins" begin
+    @test invoke(getfield, Tuple{Any, Symbol}, (a = 42,), :a) == 42
+    @test invoke(setfield!, Tuple{Any, Symbol, Any},  Base.RefValue(1), :x, 2) == 2
+    @test invoke(isdefined, Tuple{Any, Symbol}, (a = 1,), :a) == true
+    @test invoke(isdefined, Tuple{Any, Symbol}, (a = 1,), :b) == false
+    @test invoke(invoke, Tuple{Any, Type, Vararg}, sin, Tuple{Real}, 0) == 0.0
+end
 
 # issue #30679
 @noinline function f30679(::DataType)
@@ -6842,9 +6852,6 @@ Base._growat!(A, 4, 1)
 Base._growat!(A, 2, 3)
 @test getindex(A, 1) === 0x01
 @test getindex(A, 2) === missing
-@test getindex(A, 3) === missing
-@test getindex(A, 4) === missing
-@test getindex(A, 5) === missing
 @test getindex(A, 6) === 0x03
 @test getindex(A, 7) === missing
 @test getindex(A, 8) === missing
@@ -8146,7 +8153,10 @@ end
     setglobal!(m, :x, 2, :release)
     @test m.x === 2
     @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
-    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+    @test_throws TypeError setglobal!(m, :x, 4., :release)
+
+    f_set_bad_type(m) = setglobal!(m, :x, 4., :release)
+    @test_throws TypeError f_set_bad_type(m)
 
     m.x = 1
     @test m.x === 1
@@ -8435,7 +8445,7 @@ end
 
 # precompilation
 let load_path = mktempdir()
-    depot_path = mktempdir()
+    depot_path = mkdepottempdir()
     try
         pushfirst!(LOAD_PATH, load_path)
         pushfirst!(DEPOT_PATH, depot_path)
@@ -8477,11 +8487,6 @@ let load_path = mktempdir()
         filter!((≠)(load_path), LOAD_PATH)
         filter!((≠)(depot_path), DEPOT_PATH)
         rm(load_path, recursive=true, force=true)
-        try
-            rm(depot_path, force=true, recursive=true)
-        catch err
-            @show err
-        end
     end
 end
 
@@ -8614,6 +8619,11 @@ module M57638_3
     export x
 end
 @test M57638_3.x === 1
+
+@testset "no unnecessary methods for comparison functions with generically correct and performant fallback methods" begin
+    @test (isone ∘ length ∘ methods)(>, Tuple{Any, Any})
+    @test (isone ∘ length ∘ methods)(>=, Tuple{Any, Any})
+end
 
 module GlobalBindingMulti
     module M
