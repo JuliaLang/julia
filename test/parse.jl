@@ -278,7 +278,7 @@ end
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
 @testset "parse Chars to non-integer types" begin
-    for T in (Float64, Float32, Float16, Complex)
+    for T in (Float64, Float32, Float16, Complex{Int})
         @test parse(T, '3') === T(3)
         @test_throws ArgumentError parse(T, 'a')
         @test tryparse(T, '3') === T(3)
