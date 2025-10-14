@@ -198,11 +198,11 @@ copysign(x::Signed, y::Real)    = copysign(x, -oftype(x, signbit(y)))
 
 The absolute value of `x`.
 
-When `abs` is applied to signed integers, overflow may occur,
+When `abs` is applied to (negative) signed integers, overflow may occur,
 resulting in the return of a negative value. This overflow occurs only
 when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
-not `-x` as might be expected.
+not `-x` as might be expected. This never happens with `Base.uabs`.
 
 See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
 
