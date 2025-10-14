@@ -2,6 +2,8 @@
 
 # extensions to Core types to add features in Base
 
+public VecElement
+
 """
     VecElement{T}
 
