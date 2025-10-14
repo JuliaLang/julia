@@ -1069,8 +1069,8 @@ try
 catch e
     if isa(e, EOFError)
         @warn "The operation failed - EOF."
-    elseif isa(e, IOError)
-        @warn "The operation failed - IO Error."
+    elseif isa(e, OutOfMemoryError)
+        @warn "The operation failed - OOM."
     else
         rethrow() # ensure other exceptions can bubble up the call stack
     end
