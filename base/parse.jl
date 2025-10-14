@@ -154,8 +154,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         return nothing
     end
     if !(2 <= base <= 62)
-        raise && throw(ArgumentError(LazyString("invalid base: base must be 2 ≤ base ≤ 62, got ", base)))
-        return nothing
+        raise ? _invalid_base(base) : return nothing
     end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
@@ -274,7 +273,7 @@ end
     if 2 <= base <= 62
         return base
     end
-    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    _invalid_base(base)
 end
 
 """
