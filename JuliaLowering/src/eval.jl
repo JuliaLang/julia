@@ -475,8 +475,9 @@ function _eval(mod, iter)
             break
         elseif type == :begin_module
             push!(modules, mod)
+            filename = something(thunk[4].file, :none)
             mod = @ccall jl_begin_new_module(mod::Any, thunk[2]::Symbol, thunk[3]::Cint,
-                                             thunk[4].file::Cstring, thunk[4].line::Cint)::Module
+                                             filename::Cstring, thunk[4].line::Cint)::Module
             new_mod = mod
         elseif type == :end_module
             @ccall jl_end_new_module(mod::Module)::Cvoid
