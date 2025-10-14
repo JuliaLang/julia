@@ -55,7 +55,36 @@ or [`nothing`](@ref) if the string does not contain a valid number.
 tryparse(T::Type, str; base = Int)
 
 @noinline function _invalid_base(base)
-    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))end
+    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+end
+
+@noinline _invalid_digit(base, char) = throw(ArgumentError("invalid base $base digit $(repr(char))"))
+
+function parse_char(::Type{T}, c::AbstractChar, base::Integer, throw::Bool) where T
+    a::UInt8 = (base <= 36 ? 10 : 36)
+    (2 <= base <= 62) || _invalid_base(base)
+    base = base % UInt8
+    u = reinterpret(UInt32, Char(c)::Char)
+    cp = u > 0x7a000000 ? 0xff : (u >> 24) % UInt8
+    d = UInt8('0') ≤ cp ≤ UInt8('9') ? cp - UInt8('0') :
+        UInt8('A') ≤ cp ≤ UInt8('Z') ? cp - UInt8('A') + UInt8(10) :
+        UInt8('a') ≤ cp ≤ UInt8('z') ? cp - UInt8('a') + a :
+        0xff
+    d < base || (throw ? _invalid_digit(base, c) : return nothing)
+    convert(T, d)::T
+end
+
+function parse(::Type{T}, c::AbstractChar; base::Integer=10) where {T <: Integer}
+    @inline parse_char(T, c, base, true)
+end
+
+function tryparse(::Type{T}, c::AbstractChar; base::Integer=10) where {T <: Integer}
+    @inline parse_char(T, c, base, false)
+end
+
+# For consistency with parse(t, AbstractString), support a `base` argument only when T<:Integer
+parse(::Type{T}, c::AbstractChar) where T = @inline parse_char(T, c, 10, true)
+tryparse(::Type{T}, c::AbstractChar) where T = @inline parse_char(T, c, 10, false)
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
