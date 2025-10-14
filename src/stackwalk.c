@@ -1257,26 +1257,13 @@ return 0;
 #endif
 }
 
-typedef struct {
-    int16_t old;
-    bt_context_t *c;
-    int success;
-} suspend_t;
-static void suspend(void *ctx)
-{
-    suspend_t *suspenddata = (suspend_t*)ctx;
-    suspenddata->success = jl_thread_suspend_and_get_state(suspenddata->old, 1, suspenddata->c);
-}
-
 JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
 {
     int16_t tid = ptls2->tid;
     jl_task_t *t = NULL;
     bt_context_t *context = NULL;
     bt_context_t c;
-    suspend_t suspenddata = {tid, &c};
-    jl_with_stackwalk_lock(suspend, &suspenddata);
-    if (!suspenddata.success) {
+    if (!jl_thread_suspend(tid, &c)) {
         return 0;
     }
     // thread is stopped, safe to read the task it was running before we stopped it
@@ -1309,9 +1296,7 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     int16_t old;
     for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
-        suspend_t suspenddata = {old, &c};
-        jl_with_stackwalk_lock(suspend, &suspenddata);
-        if (!suspenddata.success) {
+        if (!jl_thread_suspend(old, &c)) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
             return result;

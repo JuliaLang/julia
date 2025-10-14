@@ -240,7 +240,6 @@ JL_DLLEXPORT int jl_lock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_unlock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 JL_DLLEXPORT int jl_lock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
-void jl_with_stackwalk_lock(void (*f)(void*) JL_NOTSAFEPOINT, void *ctx) JL_NOTSAFEPOINT;
 
 arraylist_t *jl_get_all_tasks_arraylist(void) JL_NOTSAFEPOINT;
 typedef struct {
@@ -1533,8 +1532,8 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_data) JL_NOTSAFEPO
 #ifdef _OS_WINDOWS_
 JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
 #endif
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT;
 void jl_thread_resume(int tid) JL_NOTSAFEPOINT;
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx) JL_NOTSAFEPOINT;
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 STATIC_INLINE char *jl_copy_str(char **to, const char *from) JL_NOTSAFEPOINT
