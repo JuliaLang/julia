@@ -316,3 +316,9 @@ end
         end
     end
 end
+
+@testset "nextfloat can be defined without prevfloat for signed step sizes" begin
+    struct MyFloat59661<:AbstractFloat x end
+    Base.nextfloat(x::MyFloat59661, d::Integer) = nextfloat(x.x, d)
+    @test prevfloat(MyFloat59661(1.0), 1) == prevfloat(1.0, 1)
+end
