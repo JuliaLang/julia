@@ -573,6 +573,13 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
+    # if <1/8th full and not tiny, resize to 1/2 full
+    # we need to do this to keep pop! O(1) amortized, and it needs to be
+    # here rather than in _delete! since then filter! could cause rehashes
+    # while deleting which would be bad.
+    if max(16, h.count*8) <= sz
+        return rehash!(h, h.count*2)
+    end
     idx = skip_deleted(h, 1)
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
@@ -586,9 +593,6 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     sz = length(slots)
     _unsetindex!(h.keys, index)
     _unsetindex!(h.vals, index)
-    if max(16, h.count*8) <= sz # if <1/8th full and not tiny, resize to 1/2 full
-        return rehash!(h, h.count*2)
-    end
     # if the next slot is empty we don't need a tombstone
     # and can remove all tombstones that were required by the element we just deleted
     ndel = 1
