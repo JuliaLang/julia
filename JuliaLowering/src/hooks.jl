@@ -18,6 +18,12 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
     local st0 = nothing
     try
         st0 = code isa Expr ? expr_to_syntaxtree(code, LineNumberNode(line, file)) : code
+        if kind(st0) in KSet"toplevel module"
+            return Core.svec(code)
+        elseif kind(st0) === K"doc" && numchildren(st0) >= 2 && kind(st0[2]) === K"module"
+            # TODO: this ignores module docstrings for now
+            return Core.svec(Expr(st0[2]))
+        end
         ctx1, st1 = expand_forms_1(  mod,  st0, true, world)
         ctx2, st2 = expand_forms_2(  ctx1, st1)
         ctx3, st3 = resolve_scopes(  ctx2, st2)

@@ -46,14 +46,38 @@ const JL = JuliaLowering
             @test isdefined(test_mod.M, :x)
 
             # Tricky cases with symbols
-            out = jeval("""module M
+            out = jeval("""module M2
                 Base.@constprop :aggressive function f(x); x; end
                 const what = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), Core.nothing)
             end""")
             @test out isa Module
-            @test isdefined(test_mod, :M)
-            @test isdefined(test_mod.M, :f)
-            @test isdefined(test_mod.M, :what)
+            @test isdefined(test_mod, :M2)
+            @test isdefined(test_mod.M2, :f)
+            @test isdefined(test_mod.M2, :what)
+
+            out = jeval(""" "docstring" module M3 end """)
+            @test out isa Module
+            @test isdefined(test_mod, :M3)
+
+            # Macros may produce toplevel expressions.  Note that julia handles
+            # this case badly (macro expansion replaces M5_inner with a
+            # globalref) and we handle esc(:M5_inner) badly
+            out = jeval("""module M5
+            macro newmod()
+                return quote
+                    let a = 1
+                        $(Expr(:toplevel,
+                               Expr(:module, true, :M5_inner,
+                                    Expr(:block, :(global asdf = 1)))))
+                    end
+                end
+            end
+            @newmod()
+            end""")
+            @test out isa Module
+            @test isdefined(test_mod, :M5)
+            @test isdefined(test_mod.M5, :M5_inner)
+            @test isdefined(test_mod.M5.M5_inner, :asdf)
 
             # TODO: broken, commented to prevent error logging
             # @test jeval("Base.@propagate_inbounds @inline meta_double_quote_issue(x) = x") isa Function
