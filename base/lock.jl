@@ -704,6 +704,9 @@ calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -794,7 +797,7 @@ end
 
 
 # share a lock/condition, since we just need it briefly, so some contention is okay
-const PerThreadLock = ThreadSynchronizer()
+const PerThreadLock = Threads.SpinLock()
 """
     OncePerThread{T}(init::Function)() -> T
 
@@ -813,6 +816,9 @@ if that behavior is correct within your library's threading-safety design.
     task after the call might not be the same as the one at the start of the call.
 
 See also: [`OncePerTask`](@ref).
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
 ## Example
 
@@ -895,7 +901,15 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 state = @atomic :monotonic ss[tid]
                 while state == PerStateConcurrent
                     # lost race, wait for notification this is done running elsewhere
-                    wait(PerThreadLock) # wait for initializer to finish without releasing this thread
+                    # without releasing this thread
+                    unlock(PerThreadLock)
+                    while state == PerStateConcurrent
+                        # spin loop until ready
+                        ss = @atomic :acquire once.ss
+                        state = @atomic :monotonic ss[tid]
+                        GC.safepoint()
+                    end
+                    lock(PerThreadLock)
                     ss = @atomic :monotonic once.ss
                     state = @atomic :monotonic ss[tid]
                 end
@@ -909,7 +923,6 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                         lock(PerThreadLock)
                         ss = @atomic :monotonic once.ss
                         @atomic :release ss[tid] = PerStateErrored
-                        notify(PerThreadLock)
                         rethrow()
                     end
                     # store result and notify waiters
@@ -918,7 +931,6 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                     @atomic :release xs[tid] = result
                     ss = @atomic :monotonic once.ss
                     @atomic :release ss[tid] = PerStateHasrun
-                    notify(PerThreadLock)
                 elseif state == PerStateErrored
                     error("OncePerThread initializer failed previously")
                 elseif state != PerStateHasrun
@@ -941,6 +953,9 @@ Calling a `OncePerTask` object returns a value of type `T` by running the functi
 exactly once per Task. All future calls in the same Task will return exactly the same value.
 
 See also: [`task_local_storage`](@ref).
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
 ## Example
 

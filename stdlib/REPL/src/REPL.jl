@@ -61,8 +61,7 @@ import Base:
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
-include("Terminals.jl")
-using .Terminals
+using Base.Terminals
 
 abstract type AbstractREPL end
 
@@ -578,7 +577,11 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     return nothing
 end
 
-function repl_display_error(errio::IO, @nospecialize errval)
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+__repl_entry_display(val) = Base.invokelatest(display, val)
+__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base.invokelatest(display, specialdisplay, val)
+
+function __repl_entry_display_error(errio::IO, @nospecialize errval)
     # this will be set to true if types in the stacktrace are truncated
     limitflag = Ref(false)
     errio = IOContext(errio, :stacktrace_types_limited => limitflag)
@@ -593,51 +596,57 @@ end
 function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
-    while true
+    if !iserr
+        # display result
         try
-            Base.sigatomic_end()
-            if iserr
-                val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                repl_display_error(errio, val)
-            else
-                if val !== nothing && show_value
-                    val2, iserr = if specialdisplay === nothing
-                        # display calls may require being run on the main thread
-                        call_on_backend(backend) do
-                            Base.invokelatest(display, val)
-                        end
-                    else
-                        call_on_backend(backend) do
-                            Base.invokelatest(display, specialdisplay, val)
-                        end
+            if val !== nothing && show_value
+                Base.sigatomic_end() # allow display to be interrupted
+                val2, iserr = if specialdisplay === nothing
+                    # display calls may require being run on the main thread
+                    call_on_backend(backend) do
+                        __repl_entry_display(val)
                     end
-                    if iserr
-                        println(errio, "Error showing value of type ", typeof(val), ":")
-                        throw(val2)
+                else
+                    call_on_backend(backend) do
+                        __repl_entry_display(specialdisplay, val)
                     end
                 end
-            end
-            break
-        catch ex
-            if iserr
-                println(errio) # an error during printing is likely to leave us mid-line
-                println(errio, "SYSTEM (REPL): showing an error caused an error")
-                try
-                    excs = Base.scrub_repl_backtrace(current_exceptions())
-                    setglobal!(Base.MainInclude, :err, excs)
-                    repl_display_error(errio, excs)
-                catch e
-                    # at this point, only print the name of the type as a Symbol to
-                    # minimize the possibility of further errors.
+                Base.sigatomic_begin()
+                if iserr
                     println(errio)
-                    println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
-                            " while trying to handle a nested exception; giving up")
+                    println(errio, "Error showing value of type ", typeof(val), ":")
+                    val = val2
                 end
-                break
             end
+        catch ex
+            println(errio)
+            println(errio, "SYSTEM (REPL): showing a value caused an error")
             val = current_exceptions()
             iserr = true
+        end
+    end
+    if iserr
+        # print error
+        iserr = false
+        while true
+            try
+                Base.sigatomic_end() # allow stacktrace printing to be interrupted
+                val = Base.scrub_repl_backtrace(val)
+                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
+                __repl_entry_display_error(errio, val)
+                break
+            catch ex
+                println(errio) # an error during printing is likely to leave us mid-line
+                if !iserr
+                    println(errio, "SYSTEM (REPL): showing an error caused an error")
+                    val = current_exceptions()
+                    iserr = true
+                else
+                    println(errio, "SYSTEM (REPL): caught exception of type ", typeof(ex).name.name,
+                        " while trying to print an exception; giving up")
+                    break
+                end
+            end
         end
     end
     Base.sigatomic_end()
@@ -1173,7 +1182,7 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
                        !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") :
                        error("DEPOT_PATH is empty and ENV[\"JULIA_HISTORY\"] not set."))
 
-backend(r::AbstractREPL) = hasproperty(r, :backendref) ? r.backendref : nothing
+backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendref) ? r.backendref : nothing
 
 
 function eval_on_backend(ast, backend::REPLBackendRef)
@@ -1836,25 +1845,10 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return Expr(:toplevel, get_usings!([], x)..., quote
-        let __temp_val_a72df459 = $x
-            $capture_result($n, __temp_val_a72df459)
-            __temp_val_a72df459
-        end
-    end)
-end
-
-function get_usings!(usings, ex)
-    ex isa Expr || return usings
-    # get all `using` and `import` statements which are at the top level
-    for (i, arg) in enumerate(ex.args)
-        if Base.isexpr(arg, :toplevel)
-            get_usings!(usings, arg)
-        elseif Base.isexpr(arg, [:using, :import])
-            push!(usings, popat!(ex.args, i))
-        end
-    end
-    return usings
+    return Expr(:block, # avoid line numbers or scope that would leak into the output and change the meaning of x
+        :(local __temp_val_a72df459 = $x),
+        Expr(:call, capture_result, n, :__temp_val_a72df459),
+        :__temp_val_a72df459)
 end
 
 function create_global_out!(mod)
@@ -1866,7 +1860,7 @@ function create_global_out!(mod)
         end
         return out
     end
-    return getglobal(mod, Out)
+    return getglobal(mod, :Out)
 end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))
@@ -1883,10 +1877,10 @@ end
 
 function set_prompt(repl::LineEditREPL, n::Ref{Int})
     julia_prompt = repl.interface.modes[1]
-    julia_prompt.prompt = function()
+    julia_prompt.prompt = REPL.contextual_prompt(repl, function()
         n[] = repl_eval_counter(julia_prompt.hist)+1
         string("In [", n[], "]: ")
-    end
+    end)
     nothing
 end
 

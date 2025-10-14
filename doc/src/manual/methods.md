@@ -288,13 +288,17 @@ Such specializations are *not* listed by `methods`, as this doesn't create new `
 
 For example, if you create a method
 
-```
+```jldoctest mysum_example; output = false
 mysum(x::Real, y::Real) = x + y
+
+# output
+
+mysum (generic function with 1 method)
 ```
 
 you've given the function `mysum` one new method (possibly its only method), and that method takes any pair of `Real` number inputs. But if you then execute
 
-```julia-repl
+```jldoctest mysum_example
 julia> mysum(1, 2)
 3
 
@@ -578,7 +582,7 @@ However, future calls to `tryeval` will continue to see the definition of `newfu
 
 You may want to try this for yourself to see how it works.
 
-The implementation of this behavior is a "world age counter", which is further described in the [Worldage](@ref man-worldage)
+The implementation of this behavior is a "world age counter", which is further described in the [World Age](@ref World-age-in-general)
 manual chapter.
 
 ## Design Patterns with Parametric Methods
@@ -911,7 +915,7 @@ with keyword arguments processed after the matching method is identified.
 ## Function-like objects
 
 Methods are associated with types, so it is possible to make any arbitrary Julia object "callable"
-by adding methods to its type. (Such "callable" objects are sometimes called "functors.")
+by adding methods to its type.
 
 For example, you can define a type that stores the coefficients of a polynomial, but behaves like
 a function evaluating the polynomial:

@@ -1440,6 +1440,11 @@ let effects = Base.infer_effects(Core.Intrinsics.pointerset, Tuple{Vararg{Any}})
     @test Compiler.is_consistent(effects)
     @test !Compiler.is_effect_free(effects)
 end
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[Ptr{Int}, UInt])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[Ptr{Int}, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[UInt, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[UInt, UInt])
+@test Compiler.is_nothrow(Base.infer_effects(+, Tuple{Ptr{UInt8}, UInt}))
 # effects modeling for atomic intrinsics
 # these functions especially need to be marked !effect_free since they imply synchronization
 for atomicfunc = Any[
@@ -1474,8 +1479,10 @@ end
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
         Core._svec_ref(svec, i)
     end
-    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_consistent(effects)
     @test Compiler.is_effect_free(effects)
     @test !Compiler.is_nothrow(effects)
     @test Compiler.is_terminates(effects)
 end
+
+@test Compiler.is_nothrow(Base.infer_effects(length, (Core.SimpleVector,)))

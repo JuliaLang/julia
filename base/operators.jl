@@ -288,12 +288,11 @@ orderings such as [`isless`](@ref).
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
 """
-isunordered(x) = false
+isunordered(_) = false
 isunordered(x::AbstractFloat) = isnan(x)
-isunordered(x::Missing) = true
+isunordered(::Missing) = true
 
 ==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
-!=(T::Type, S::Type) = (@_total_meta; !(T == S))
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 
@@ -453,6 +452,14 @@ const ≤ = <=
     ≥(x,y)
 
 Greater-than-or-equals comparison operator. Falls back to `y <= x`.
+
+# Implementation
+
+New types should prefer to implement [`<=`](@ref) instead of this function,
+and rely on the fallback definition `>=(x, y) = y <= x`.
+
+Furthermore, in many cases it is enough to implement just [`<`](@ref) and
+[`==`](@ref), relying on the fallback definitions of both `<=` and `>=`.
 
 # Examples
 ```jldoctest

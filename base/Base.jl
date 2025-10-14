@@ -30,12 +30,14 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# metaprogramming
+include("meta.jl")
+
 # subarrays
 include("subarray.jl")
 include("views.jl")
 
 # numeric operations
-include("hashing.jl")
 include("div.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -86,6 +88,9 @@ include("strings/string.jl")
 include("strings/substring.jl")
 include("strings/cstring.jl")
 
+include("cartesian.jl")
+using .Cartesian
+include("hashing.jl")
 include("osutils.jl")
 
 # Core I/O
@@ -112,8 +117,6 @@ include("arrayshow.jl")
 include("methodshow.jl")
 
 # multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
 include("multidimensional.jl")
 
 include("broadcast.jl")
@@ -157,9 +160,6 @@ include("weakkeydict.jl")
 # ScopedValues
 include("scopedvalues.jl")
 
-# metaprogramming
-include("meta.jl")
-
 # Logging
 include("logging/logging.jl")
 using .CoreLogging
@@ -180,6 +180,7 @@ using .Filesystem
 include("cmd.jl")
 include("process.jl")
 include("terminfo.jl")
+include("Terminals.jl") # Moved from REPL to reduce invalidations
 include("secretbuffer.jl")
 
 # core math functions
@@ -267,7 +268,6 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
-include("staticdata.jl")
 include("loading.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.

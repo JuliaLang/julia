@@ -34,9 +34,11 @@ The basic syntax is simple: any string appearing just before an object
 the documented object. Here is a basic example:
 
 ```julia
-"Tell whether there are too foo items in the array."
+"Tell whether there are too many foo items in the array."
 foo(xs::Array) = ...
 ```
+!!! note "Reminder"
+    Any empty lines between the docstring and the object being documented detach the former from the latter, making the docstring ineffective.
 
 Documentation is interpreted as [Markdown](https://en.wikipedia.org/wiki/Markdown), so you can
 use indentation and code fences to delimit code examples from text. Technically, any object can

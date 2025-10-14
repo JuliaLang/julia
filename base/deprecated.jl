@@ -24,9 +24,10 @@ const __internal_changes_list = (
     :invertedlinetables,
     :codeinforefactor,
     :miuninferredrm,
-    :codeinfonargs,  # #54341
+    :codeinfonargs, #54341
     :ocnopartial,
     :printcodeinfocalls,
+    :syntacticccall, #59165
     # Add new change names above this line
 )
 
@@ -556,5 +557,12 @@ true
     The function now always returns `true`.
 """
 isbindingresolved
+
+# Some packages call this function
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 
 # END 1.12 deprecations

@@ -14,7 +14,7 @@ using ..Compiler:
      argextype, empty!, error, get, get_ci_mi, get_world_counter, getindex, getproperty,
      hasintersect, haskey, in, isdispatchelem, isempty, isexpr, iterate, length, map!, max,
      pop!, popfirst!, push!, pushfirst!, reinterpret, reverse!, reverse, setindex!,
-     setproperty!, similar, singleton_type, sptypes_from_meth_instance,
+     setproperty!, similar, singleton_type, sptypes_from_meth_instance, sp_type_rewrap,
      unsafe_pointer_to_objref, widenconst, isconcretetype,
      # misc
      @nospecialize, @assert, C_NULL
@@ -117,7 +117,7 @@ function verify_print_error(io::IOContext{IO}, desc::CallMissing, parents::Paren
     nothing
 end
 
-function verify_print_error(io::IOContext{IO}, desc::CCallableMissing, parents::ParentMap)
+function verify_print_error(io::IOContext{IO}, desc::CCallableMissing, ::ParentMap)
     print(io, desc.desc, " for ", desc.sig, " => ", desc.rt, "\n\n")
     nothing
 end
@@ -256,14 +256,40 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 warn = true # downgrade must-throw calls to be only a warning
             end
         elseif isexpr(stmt, :cfunction)
+            length(stmt.args) != 5 && continue # required by IR legality
+            f, at = stmt.args[2], stmt.args[4]
+
+            at isa SimpleVector || continue  # required by IR legality
+            ft = argextype(f, codeinfo, sptypes)
+            argtypes = Any[ft]
+            for i = 1:length(at)
+                push!(argtypes, sp_type_rewrap(at[i], get_ci_mi(codeinst), #= isreturn =# false))
+            end
+            atype = argtypes_to_type(argtypes)
+
+            mi = compileable_specialization_for_call(interp, atype)
+            if mi !== nothing
+                # n.b.: Codegen may choose unpredictably to emit this `@cfunction` as a dynamic invoke or a full
+                # dynamic call, but in either case it guarantees that the required adapter(s) are emitted. All
+                # that we are required to verify here is that the callee CodeInstance is covered.
+                ci = get(caches, mi, nothing)
+                ci isa CodeInstance && continue
+            end
+
             error = "unresolved cfunction"
-            #TODO: parse the cfunction expression to check the target is defined
-            warn = true
         elseif isexpr(stmt, :foreigncall)
             foreigncall = stmt.args[1]
-            if foreigncall isa QuoteNode
-                if foreigncall.value in runtime_functions
-                    error = "disallowed ccall into a runtime function"
+            if isexpr(foreigncall, :tuple, 1)
+                foreigncall = foreigncall.args[1]
+                if foreigncall isa String
+                    foreigncall = QuoteNode(Symbol(foreigncall))
+                end
+                if foreigncall isa QuoteNode
+                    if foreigncall.value in runtime_functions
+                        error = "disallowed ccall into a runtime function"
+                    end
+                else
+                    error = "disallowed ccall with non-constant name and no library"
                 end
             end
         elseif isexpr(stmt, :new_opaque_closure)
@@ -306,12 +332,12 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         elseif item isa SimpleVector
             rt = item[1]::Type
             sig = item[2]::Type
-            ptr = ccall(:jl_get_specialization1,
-                        #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
                         sig, this_world, #= mt_cache =# 0)
             asrt = Any
-            valid = if ptr !== C_NULL
-                mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+            valid = if mi !== nothing
+                mi = mi::MethodInstance
                 ci = get(caches, mi, nothing)
                 if ci isa CodeInstance
                     # TODO: should we find a way to indicate to the user that this gets called via ccallable?

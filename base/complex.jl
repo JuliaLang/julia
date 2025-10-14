@@ -120,7 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{Union{}}, slurp...) = Union{}(im)
+real(::Type{Union{}}, slurp...) = Union{}
 
 """
     isreal(x)::Bool
@@ -188,6 +188,7 @@ Union{Missing, Complex{Int64}}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
+complex(::Type{Union{}}, slurp...) = Union{}
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -195,16 +196,16 @@ function show(io::IO, z::Complex)
     r, i = reim(z)
     compact = get(io, :compact, false)::Bool
     show(io, r)
-    if signbit(i) && !isnan(i)
+    bufio = IOBuffer()
+    show(IOContext(bufio, io), i)
+    seekstart(bufio)
+    if peek(bufio) === UInt8('-')
+        seek(bufio, 1)
         print(io, compact ? "-" : " - ")
-        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
-            show(io, -widen(i))
-        else
-            show(io, -i)
-        end
+        write(io, bufio)
     else
         print(io, compact ? "+" : " + ")
-        show(io, i)
+        write(io, bufio)
     end
     if !(isa(i,Signed) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
@@ -248,12 +249,8 @@ isequal(z::Real, w::Complex) = isequal(z,real(w))::Bool & isequal(zero(z),imag(w
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
-if UInt === UInt64
-    const h_imag = 0x32a7a07f3e7cd1f9
-else
-    const h_imag = 0x3e7cd1f9
-end
-const hash_0_imag = hash(0, h_imag)
+const h_imag = 0x32a7a07f3e7cd1f % UInt
+const hash_0_imag = 0x153e9f914f9b5b92 % UInt
 
 function hash(z::Complex, h::UInt)
     # TODO: with default argument specialization, this would be better:
@@ -1141,3 +1138,9 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+## Machine epsilon for complex ##
+
+eps(z::Complex{<:AbstractFloat}) = hypot(eps(real(z)), eps(imag(z)))
+
+eps(::Type{Complex{T}}) where {T<:AbstractFloat} = sqrt(2*one(T))*eps(T)
