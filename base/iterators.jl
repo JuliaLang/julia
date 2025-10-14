@@ -1116,7 +1116,7 @@ called(f, n::Integer) = take(called(f), Int(n))
 
 IteratorSize(::Type{<:Called}) = IsInfinite()
 
-iterate(it::Called{T, F}, state...) where {T, F} = (it.f()::T, nothing)
+iterate(it::Called{F}, state...) where {F} = (it.f(), nothing)
 
 reverse(it::Union{Called, Take{<:Called}}) = it
 
