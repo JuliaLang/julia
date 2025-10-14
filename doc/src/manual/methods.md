@@ -988,8 +988,7 @@ f(x::Int, y::Int) = 3
 This is often the right strategy; however, there are circumstances
 where following this advice mindlessly can be counterproductive. In
 particular, the more methods a generic function has, the more
-possibilities there are for ambiguities. When your method hierarchies
-get more complicated than this simple example, it may be worthwhile to consider alternative strategies.
+possibilities there are for ambiguities. When your method hierarchies become more complex than this simple example, it may be worthwhile to consider alternative strategies.
 
 Below we discuss particular challenges and some alternative ways to resolve such issues.
 
