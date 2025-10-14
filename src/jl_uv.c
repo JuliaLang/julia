@@ -1182,7 +1182,7 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     if (handle->type != UV_TTY) return 0;
     uv_tty_mode_t mode_enum = UV_TTY_MODE_NORMAL;
     if (mode)
-        mode_enum = UV_TTY_MODE_RAW;
+        mode_enum = UV_TTY_MODE_RAW_VT;
     // TODO: do we need lock?
     return uv_tty_set_mode(handle, mode_enum);
 }
