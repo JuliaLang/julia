@@ -989,8 +989,7 @@ This is often the right strategy; however, there are circumstances
 where following this advice mindlessly can be counterproductive. In
 particular, the more methods a generic function has, the more
 possibilities there are for ambiguities. When your method hierarchies
-get more complicated than this simple example, it can be worth your
-while to think carefully about alternative strategies.
+get more complicated than this simple example, it may be worthwhile to consider alternative strategies.
 
 Below we discuss particular challenges and some alternative ways to resolve such issues.
 
