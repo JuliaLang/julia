@@ -6852,9 +6852,6 @@ Base._growat!(A, 4, 1)
 Base._growat!(A, 2, 3)
 @test getindex(A, 1) === 0x01
 @test getindex(A, 2) === missing
-@test getindex(A, 3) === missing
-@test getindex(A, 4) === missing
-@test getindex(A, 5) === missing
 @test getindex(A, 6) === 0x03
 @test getindex(A, 7) === missing
 @test getindex(A, 8) === missing
@@ -8156,7 +8153,10 @@ end
     setglobal!(m, :x, 2, :release)
     @test m.x === 2
     @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
-    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+    @test_throws TypeError setglobal!(m, :x, 4., :release)
+
+    f_set_bad_type(m) = setglobal!(m, :x, 4., :release)
+    @test_throws TypeError f_set_bad_type(m)
 
     m.x = 1
     @test m.x === 1

@@ -47,7 +47,7 @@ Options(;
         auto_indent_tmp_off = false,
         auto_indent_bracketed_paste = false,
         auto_indent_time_threshold = 0.005,
-        auto_refresh_time_delay = Sys.iswindows() ? 0.05 : 0.0,
+        auto_refresh_time_delay = 0.0, # this no longer seems beneficial
         hint_tab_completes = true,
         iocontext = Dict{Symbol,Any}()) =
             Options(hascolor, extra_keymap, tabwidth,
