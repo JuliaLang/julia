@@ -871,7 +871,7 @@ applications of [`nextfloat`](@ref) if `n < 0`.
 prevfloat(x::AbstractFloat, d::Integer) = _nextfloat(x, ispositive(d), uabs(d))
 
 # this method improves backwards compatibility for types only specializing
-# nextfloat and relying on an implicit prevfloat 
+# nextfloat and relying on an implicit prevfloat
 prevfloat(x::AbstractFloat, d::T) where {T<:Signed} = nextfloat(x, -d)
 
 """
