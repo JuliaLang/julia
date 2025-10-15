@@ -3809,7 +3809,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_tupletype_t *ti, jl_s
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT)
 {
     jl_method_t *def = mi->def.method;
-    if (!jl_is_method(def) || !jl_is_datatype(mi->specTypes))
+    if (!jl_is_method(def) || !jl_is_datatype(mi->specTypes) || def->is_for_opaque_closure)
         return mi;
     jl_value_t *compilationsig = jl_normalize_to_compilable_sig((jl_datatype_t*)mi->specTypes, mi->sparam_vals, def, 1);
     if (compilationsig == jl_nothing || jl_egal(compilationsig, mi->specTypes))

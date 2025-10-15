@@ -77,10 +77,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position
-        if isforeigncall && arg_idx == 1 && op.head === :call
-            # Allow a tuple in symbol position for foreigncall - this isn't actually
-            # a real call - it's interpreted in global scope by codegen. However,
-            # we do need to keep this a real use, because it could also be a pointer.
+        if isforeigncall && arg_idx == 1 && op.head === :tuple
+            # Allow a tuple literal in symbol position for foreigncall - this
+            # is syntax for a literal value or globalref - it is interpreted in
+            # global scope by codegen.
         elseif !is_value_pos_expr_head(op.head)
             if !allow_frontend_forms || op.head !== :opaque_closure_method
                 @verify_error "Expr not allowed in value position"
