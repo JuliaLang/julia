@@ -24,19 +24,21 @@ function select_keymap(events::Channel{Symbol})
     REPL.LineEdit.keymap([
         Dict{Any, Any}(
             # Up Arrow
-            "\e[A" => Event(events, :uparrow),
-            "^P" => Event(events, :uparrow),
+            "\e[A" => Event(events, :up),
+            "^P" => Event(events, :up),
+            "^K" => Event(events, :up),
             # Down Arrow
-            "\e[B" => Event(events, :downarrow),
-            "^B" => Event(events, :downarrow),
-            "^F" => Event(events, :downarrow),
-            "^N" => Event(events, :downarrow),
+            "\e[B" => Event(events, :down),
+            "^N" => Event(events, :down),
+            "^J" => Event(events, :down),
             # Tab
             '\t' => Event(events, :tab),
             # Page up
             "\e[5~" => Event(events, :pageup),
+            "^B" => Event(events, :pageup),
             # Page down
             "\e[6~" => Event(events, :pagedown),
+            "^F" => Event(events, :pagedown),
             # Meta + < / >
             "\e<" => Event(events, :jumpfirst),
             "\e>" => Event(events, :jumplast),
@@ -48,6 +50,7 @@ function select_keymap(events::Channel{Symbol})
             "^G" => Returns(:abort),
             "\e\e" => Returns(:abort),
             "^S" => Returns(:save),
+            "^Y" => Returns(:clipboard),
         ),
         REPL.LineEdit.default_keymap,
         REPL.LineEdit.escape_defaults])
@@ -111,11 +114,11 @@ function runprompt!((; term, prompt, pstate, istate), events::Channel{Symbol})
                 print("\e[F")
                 push!(events, :confirm)
                 break
-            elseif status === :save
+            elseif status ∈ (:save, :clipboard)
                 print("\e[1G\e[J")
                 REPL.LineEdit.raw!(term, false) &&
                     REPL.LineEdit.disable_bracketed_paste(term)
-                push!(events, :save)
+                push!(events, status)
                 break
             else
                 push!(events, :abort)

@@ -18,7 +18,6 @@ function runsearch(histfile::HistoryFile)
     fullselection(fetch(dtask))
 end
 
-
 """
     fullselection(state::SelectorState) -> (; mode::Symbol, text::String)
 
@@ -38,10 +37,6 @@ function fullselection(state::SelectorState)
     join(text, Iterators.map(e -> e.content, entries), '\n')
     (mode = mainmode, text = String(take!(text)))
 end
-
-# const THROTTLE_TIME = 0.05
-# const DEBOUNCE_TIME = 0.1
-
 
 """
     run_display!((; term,pstate), events::Channel{Symbol}, hist::Vector{HistEntry})
@@ -81,13 +76,13 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             print(out, "\e[H\e[2J")
             redisplay_all(out, EMPTY_STATE, state, pstate; buf)
             continue
-        elseif event ∈ (:uparrow, :downarrow, :pageup, :pagedown)
-            prevstate, state = state, movehover(state, event ∈ (:uparrow, :pageup), event ∈ (:pageup, :pagedown))
+        elseif event ∈ (:up, :down, :pageup, :pagedown)
+            prevstate, state = state, movehover(state, event ∈ (:up, :pageup), event ∈ (:pageup, :pagedown))
             @lock events begin
                 nextevent = if !isempty(events) first(events.data) end
-                while nextevent ∈ (:uparrow, :downarrow, :pageup, :pagedown)
+                while nextevent ∈ (:up, :down, :pageup, :pagedown)
                     take!(events)
-                    state = movehover(state, nextevent ∈ (:uparrow, :pageup), event ∈ (:pageup, :pagedown))
+                    state = movehover(state, nextevent ∈ (:up, :pageup), event ∈ (:pageup, :pagedown))
                     nextevent = if !isempty(events) first(events.data) end
                 end
             end
@@ -164,11 +159,15 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             end
             redisplay_all(out, prevstate, state, pstate; buf)
             continue
-        elseif event === :save
+        elseif event ∈ (:save, :clipboard)
             print(out, "\e[1G\e[J")
             content = fullselection(state).text
             isempty(content) && return EMPTY_STATE
-            savetext(term, content)
+            if event === :save
+                saveprompt(term, content)
+            elseif event === :clipboard
+                saveclipboard(content)
+            end
             return EMPTY_STATE
         else
             error("Unknown event: $event")
@@ -326,11 +325,11 @@ function addcache!(cache::Vector{T}, state::Unsigned, new::T) where {T}
 end
 
 """
-    savetext(term::Base.Terminals.TTYTerminal, content::String)
+    saveprompt(term::Base.Terminals.TTYTerminal, content::String)
 
 Prompt the user to save `content` to clipboard or file.
 """
-function savetext(term::Base.Terminals.TTYTerminal, content_::String)
+function saveprompt(term::Base.Terminals.TTYTerminal, content_::String)
     content = strip(content_)
     out = term.out_stream
     clipsave = true
@@ -356,36 +355,38 @@ function savetext(term::Base.Terminals.TTYTerminal, content_::String)
         print(out, get(Base.current_terminfo(), :cursor_visible, ""))
         Base.Terminals.raw!(term, false)
     end
+    clipsave && return saveclipboard(content)
     nlines = count('\n', content) + 1
-    if clipsave
-        clipboard(content)
-        println(out, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
-                        $(ifelse(nlines == 1, \"line\", \"lines\")) to clipboard}\n")
-    else
-        print(out, S"\e[1G\e[2K{grey,bold:history>} {bold,emphasis:save file: }")
-        filename = try
-            readline(term.in_stream)
-        catch err
-            if err isa InterruptException
-                ""
-            else
-                rethrow()
-            end
+    print(out, S"\e[1G\e[2K{grey,bold:history>} {bold,emphasis:save file: }")
+    filename = try
+        readline(term.in_stream)
+    catch err
+        if err isa InterruptException
+            ""
+        else
+            rethrow()
         end
-        isempty(filename) && (println(out, S"\e[F\e[2K{light,grey:{bold:history>} {red:×} History selection aborted}\n"); return)
-        open(filename, "w") do io
-            seekend(io)
-            if iszero(position(io))
-                write(io, "# Julia REPL history excerpt\n\n")
-            else
-                seek(io, position(io) - 1)
-                lastchar = read(io, UInt8)
-                seekend(io)
-                lastchar == UInt8('\n') || write(io, '\n')
-            end
-            write(io, content, '\n')
-        end
-        println(out, S"\e[F\e[2K{grey,bold:history>} {shadow:Wrote $nlines selected \
-                        $(ifelse(nlines == 1, \"line\", \"lines\")) to {underline,link=$(abspath(filename)):$filename}}\n")
     end
+    isempty(filename) && (println(out, S"\e[F\e[2K{light,grey:{bold:history>} {red:×} History selection aborted}\n"); return)
+    open(filename, "w") do io
+        seekend(io)
+        if iszero(position(io))
+            write(io, "# Julia REPL history excerpt\n\n")
+        else
+            seek(io, position(io) - 1)
+            lastchar = read(io, UInt8)
+            seekend(io)
+            lastchar == UInt8('\n') || write(io, '\n')
+        end
+        write(io, content, '\n')
+    end
+    println(out, S"\e[F\e[2K{grey,bold:history>} {shadow:Wrote $nlines selected \
+                    $(ifelse(nlines == 1, \"line\", \"lines\")) to {underline,link=$(abspath(filename)):$filename}}\n")
+end
+
+function saveclipboard(content::String)
+    nlines = count('\n', content) + 1
+    clipboard(content)
+    println(out, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
+                   $(ifelse(nlines == 1, \"line\", \"lines\")) to clipboard}\n")
 end

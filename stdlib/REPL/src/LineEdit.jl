@@ -622,7 +622,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     prompt_obj = nothing
     if prompt isa PromptState
         prompt_obj = prompt.p
-    elseif prompt isa PrefixSearchState || prompt isa SearchState
+    elseif prompt isa PrefixSearchState
         if isdefined(prompt, :parent) && prompt.parent isa Prompt
             prompt_obj = prompt.parent
         end
@@ -2446,7 +2446,6 @@ end
 function edit_insert_last_word(s::MIState)
     hist = mode(s).hist.history
     isempty(hist) && return 0
-    update!(hist)
     isempty(hist.records) && return 0
     edit_insert(s, get_last_word(IOBuffer(hist[end].content)))
 end
