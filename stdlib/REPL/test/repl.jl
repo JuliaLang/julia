@@ -67,7 +67,7 @@ end
 #end
 
 # REPL tests
-function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false,style_input=false))
+function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false,style_input=false,auto_insert_closing_bracket=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -121,7 +121,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=false)) do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=false,auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -1893,7 +1893,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 ## hints disabled
-fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false)) do stdin_write, stdout_read, repl
+fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false,auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
     end
@@ -2040,7 +2040,7 @@ end
                             :julia_number => StyledStrings.Face(foreground=:blue)) do
 
         # Test that julia_prompt has syntax highlighting passes
-        fake_repl(options = REPL.Options(confirm_exit=false, style_input=true)) do stdin_write, stdout_read, repl
+        fake_repl(options = REPL.Options(confirm_exit=false, style_input=true, auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
             repl.interface = REPL.setup_interface(repl)
             julia_prompt = repl.interface.modes[1]
             shell_mode = repl.interface.modes[3]
@@ -2128,7 +2128,7 @@ end
         end
 
         # Test that syntax highlighting can be disabled
-        fake_repl(options = REPL.Options(confirm_exit=false, style_input=false)) do stdin_write, stdout_read, repl
+        fake_repl(options = REPL.Options(confirm_exit=false, style_input=false, auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
             repl.interface = REPL.setup_interface(repl)
 
             repltask = @async begin

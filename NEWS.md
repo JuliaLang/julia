@@ -98,6 +98,7 @@ Standard library changes
 
 * The Julia REPL now support bracketed paste on Windows which should significantly speed up pasting large code blocks into the REPL ([#59825])
 * The REPL now provides syntax highlighting for input as you type. See the REPL docs for more info about customization.
+* The REPL now supports automatic insertion of closing brackets, parentheses, and quotes. See the REPL docs for more info about customization.
 * The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
 * Display of repeated frames and cycles in stack traces has been improved by bracketing them in the trace and treating them consistently ([#55841]).
 
