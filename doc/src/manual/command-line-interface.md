@@ -47,7 +47,7 @@ but at the conclusion of executing a script or expression, `julia` will attempt 
 by using the `@main` macro.
 
 To see this feature in action, consider the following definition:
-```jldoctest
+```julia
 (@main)(args) = println("Hello $(args[1])!")
 ```
 Executing the above script with `julia script.jl "Buddy"` will automatically run `(@main)` and print "Hello Buddy!",
