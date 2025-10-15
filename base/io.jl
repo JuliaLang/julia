@@ -3,6 +3,13 @@
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
 """
+    IO
+
+Abstract supertype for input/output types.
+"""
+IO
+
+"""
     EOFError()
 
 No more data was available to read from a file or stream.

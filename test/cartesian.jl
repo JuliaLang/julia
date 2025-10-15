@@ -4,7 +4,7 @@
 ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
 @test ex.args[2] == QuoteNode(:x)
 
-@test Base.Cartesian.lreplace!("val_col", Base.Cartesian.LReplace{String}(:col, "col", 1)) == "val_1"
+@test Base.Cartesian.lreplace_string!("val_col", Base.Cartesian.LReplace{String}(:col, "col", 1)) == "val_1"
 @test Base.setindex(CartesianIndex(1,5,4),3,2) == CartesianIndex(1, 3, 4)
 @testset "Expression Resolve" begin
     @test Base.Cartesian.exprresolve(:(1 + 3)) == 4
@@ -587,4 +587,43 @@ end
     I = CartesianIndex(3,4)
     @test I[begin] == I[1]
     @test I[end] == I[2]
+end
+
+@testset "in for a CartesianIndex StepRangeLen" begin
+    @testset for l in [0, 1, 4], r in Any[
+            StepRangeLen(CartesianIndex(), CartesianIndex(), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(0), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(1), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(4), l),
+            StepRangeLen(CartesianIndex(1), CartesianIndex(-4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, 4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(0, -4), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, 2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, 2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(4, -2), l),
+            StepRangeLen(CartesianIndex(-1, 2), CartesianIndex(-4, -2), l),
+            StepRangeLen(CartesianIndex(-1, 2, 0), CartesianIndex(0, 0, 0), l),
+            StepRangeLen(CartesianIndex(-1, 2, 0), CartesianIndex(0, 0, -2), l),
+            ]
+
+        if length(r) == 0
+            @test !(first(r) in r)
+            @test !(last(r) in r)
+        end
+        for x in r
+            @test x in r
+            if step(r) != oneunit(x)
+                @test !((x + oneunit(x)) in r)
+            end
+        end
+        @test !(CartesianIndex(ntuple(x->0, ndims(r))) in r)
+        @test !(CartesianIndex(ntuple(x->typemax(Int), ndims(r))) in r)
+        @test !(CartesianIndex(ntuple(x->typemin(Int), ndims(r))) in r)
+        if ndims(r) > 1
+            @test !(CartesianIndex(ntuple(x->0, ndims(r)-1)...) in r)
+        end
+    end
 end

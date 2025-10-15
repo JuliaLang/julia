@@ -49,18 +49,18 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     if !fully_covering(info)
         exists = false
         for i in 2:length(edges)
-            if edges[i] === Core.GlobalMethods && edges[i-1] == info.atype
+            if edges[i] === Core.methodtable && edges[i-1] == info.atype
                 exists = true
                 break
             end
         end
         if !exists
             push!(edges, info.atype)
-            push!(edges, Core.GlobalMethods)
+            push!(edges, Core.methodtable)
         end
     end
     nmatches = length(info.results)
-    if nmatches == length(info.edges) == 1
+    if nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
         # but the forward edge will maintain the precision
@@ -78,13 +78,15 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
     end
     # add check for whether this lookup already existed in the edges list
+    # encode nmatches as negative if fully_covers is false
+    encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
     for i in 1:length(edges)
-        if edges[i] === nmatches && edges[i+1] == info.atype
+        if edges[i] === encoded_nmatches && edges[i+1] == info.atype
             # TODO: must also verify the CodeInstance match too
             return nothing
         end
     end
-    push!(edges, nmatches, info.atype)
+    push!(edges, encoded_nmatches, info.atype)
     for i = 1:nmatches
         edge = info.edges[i]
         m = info.results[i]
@@ -101,7 +103,7 @@ function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
     i = 1
     while i <= length(edges)
         edgeᵢ = edges[i]
-        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
+        edgeᵢ isa Int && (i += 2 + abs(edgeᵢ); continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge && !(i > 1 && edges[i-1] isa Type)
@@ -116,7 +118,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
     i = 1
     while i <= length(edges)
         edgeᵢ_orig = edgeᵢ = edges[i]
-        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
+        edgeᵢ isa Int && (i += 2 + abs(edgeᵢ); continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge.def && !(i > 1 && edges[i-1] isa Type)
@@ -133,7 +135,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
     push!(edges, edge)
     nothing
 end
-nsplit_impl(info::MethodMatchInfo) = 1
+nsplit_impl(::MethodMatchInfo) = 1
 getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
 getresult_impl(::MethodMatchInfo, ::Int) = nothing
 
@@ -277,7 +279,7 @@ struct InvokeCICallInfo <: CallInfo
 end
 add_edges_impl(edges::Vector{Any}, info::InvokeCICallInfo) =
     add_inlining_edge!(edges, info.edge)
-nsplit_impl(info::InvokeCICallInfo) = 0
+nsplit_impl(::InvokeCICallInfo) = 0
 
 """
     info::InvokeCallInfo
@@ -390,7 +392,7 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
     nothing
 end
 
-nsplit_impl(info::InvokeCallInfo) = 1
+nsplit_impl(::InvokeCallInfo) = 1
 getsplit_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; MethodLookupResult(Core.MethodMatch[info.match],
     WorldRange(typemin(UInt), typemax(UInt)), false))
 getresult_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; info.result)

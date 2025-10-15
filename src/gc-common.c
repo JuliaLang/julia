@@ -367,10 +367,11 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_task_t *ct, int on)
         JL_CATCH {
             jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: GC finalizers already enabled on this thread.\n");
             // Only print the backtrace once, to avoid spamming the logs
-            static int backtrace_printed = 0;
-            if (backtrace_printed == 0) {
-                backtrace_printed = 1;
-                jlbacktrace(); // written to STDERR_FILENO
+            static _Atomic(int) backtrace_printed = 0;
+            if (jl_atomic_load_relaxed(&backtrace_printed) == 0) {
+              if (jl_atomic_exchange_relaxed(&backtrace_printed, 1) == 0) {
+                  jlbacktrace(); // written to STDERR_FILENO
+              }
             }
         }
         return;
@@ -460,7 +461,7 @@ JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTS
     jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 3), f);
 }
 
-JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT
 {
     if (__unlikely(jl_typetagis(f, jl_voidpointer_type))) {
         jl_gc_add_ptr_finalizer(ptls, v, jl_unbox_voidpointer(f));
@@ -470,7 +471,7 @@ JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_funct
     }
 }
 
-JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
+JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_value_t *f)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_add_finalizer_th(ptls, v, f);

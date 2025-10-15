@@ -220,7 +220,7 @@ static void gc_sync_cache(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) JL_NOTSA
 }
 
 // No other threads can be running marking at the same time
-static void gc_sync_all_caches(jl_ptls_t ptls)
+static void gc_sync_all_caches(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads);
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
@@ -364,7 +364,7 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls, jl_value_t *valu
     return wr;
 }
 
-static void clear_weak_refs(void)
+static void clear_weak_refs(void) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
@@ -381,7 +381,7 @@ static void clear_weak_refs(void)
     }
 }
 
-static void sweep_weak_refs(void)
+static void sweep_weak_refs(void) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
@@ -818,20 +818,28 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 
 // sweep phase
 
-gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
+JL_DLLEXPORT gc_fragmentation_stat_t jl_gc_page_fragmentation_stats[JL_GC_N_POOLS];
 JL_DLLEXPORT double jl_gc_page_utilization_stats[JL_GC_N_MAX_POOLS];
 
-STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_update_fragmentation_data_for_size_class(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
-    gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[pg->pool_n];
+    gc_fragmentation_stat_t *stats = &jl_gc_page_fragmentation_stats[pg->pool_n];
     jl_atomic_fetch_add_relaxed(&stats->n_freed_objs, pg->nfree);
     jl_atomic_fetch_add_relaxed(&stats->n_pages_allocd, 1);
 }
 
-STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_reset_fragmentation_data_for_size_classes(void) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
-        gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[i];
+        jl_atomic_store_relaxed(&jl_gc_page_fragmentation_stats[i].n_freed_objs, 0);
+        jl_atomic_store_relaxed(&jl_gc_page_fragmentation_stats[i].n_pages_allocd, 0);
+    }
+}
+
+STATIC_INLINE void gc_compute_utilization_data_for_size_classes(void) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        gc_fragmentation_stat_t *stats = &jl_gc_page_fragmentation_stats[i];
         double utilization = 1.0;
         size_t n_freed_objs = jl_atomic_load_relaxed(&stats->n_freed_objs);
         size_t n_pages_allocd = jl_atomic_load_relaxed(&stats->n_pages_allocd);
@@ -839,8 +847,6 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
             utilization -= ((double)n_freed_objs * (double)jl_gc_sizeclasses[i]) / (double)n_pages_allocd / (double)GC_PAGE_SZ;
         }
         jl_gc_page_utilization_stats[i] = utilization;
-        jl_atomic_store_relaxed(&stats->n_freed_objs, 0);
-        jl_atomic_store_relaxed(&stats->n_pages_allocd, 0);
     }
 }
 
@@ -948,7 +954,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
 
 done:
     if (re_use_page) {
-        gc_update_page_fragmentation_data(pg);
+        gc_update_fragmentation_data_for_size_class(pg);
         push_lf_back(allocd, pg);
     }
     else {
@@ -1147,7 +1153,7 @@ static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_
 
 // pre-scan pages to check whether there are enough pages so that's worth parallelizing
 // also sweeps pages that don't need to be linearly scanned
-int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_scratch)
+int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_scratch) JL_NOTSAFEPOINT
 {
     // 4MB worth of pages is worth parallelizing
     const int n_pages_worth_parallel_sweep = (int)(4 * (1 << 20) / GC_PAGE_SZ);
@@ -1204,7 +1210,7 @@ int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_sc
 }
 
 // wake up all threads to sweep the pages
-void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_scratch)
+void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_scratch) JL_NOTSAFEPOINT
 {
     int parallel_sweep_worthwhile = gc_sweep_prescan(ptls, new_gc_allocd_scratch);
     if (parallel_sweep_worthwhile && !page_profile_enabled) {
@@ -1240,7 +1246,7 @@ void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_a
 }
 
 // wait for all threads to finish sweeping
-void gc_sweep_wait_for_all_pages(void)
+void gc_sweep_wait_for_all_pages(void) JL_NOTSAFEPOINT
 {
     jl_atomic_store(&gc_allocd_scratch, NULL);
     while (jl_atomic_load_acquire(&gc_n_threads_sweeping_pools) != 0) {
@@ -1249,7 +1255,7 @@ void gc_sweep_wait_for_all_pages(void)
 }
 
 // sweep all pools
-void gc_sweep_pool_parallel(jl_ptls_t ptls)
+void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, 1);
     jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
@@ -1300,7 +1306,7 @@ void gc_sweep_pool_parallel(jl_ptls_t ptls)
 }
 
 // free all pages (i.e. through `madvise` on Linux) that were lazily freed
-void gc_free_pages(void)
+void gc_free_pages(void) JL_NOTSAFEPOINT
 {
     size_t n_pages_seen = 0;
     jl_gc_page_stack_t tmp;
@@ -1338,7 +1344,7 @@ void gc_free_pages(void)
 }
 
 // setup the data-structures for a sweep over all memory pools
-static void gc_sweep_pool(void)
+static void gc_sweep_pool(void) JL_NOTSAFEPOINT
 {
     gc_time_pool_start();
 
@@ -1388,6 +1394,7 @@ static void gc_sweep_pool(void)
         // the actual sweeping
         jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) calloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
         jl_ptls_t ptls = jl_current_task->ptls;
+        gc_reset_fragmentation_data_for_size_classes();
         gc_sweep_wake_all_pages(ptls, new_gc_allocd_scratch);
         gc_sweep_pool_parallel(ptls);
         gc_sweep_wait_for_all_pages();
@@ -1455,11 +1462,11 @@ static void gc_sweep_pool(void)
 #else
     gc_free_pages();
 #endif
-    gc_dump_page_utilization_data();
+    gc_compute_utilization_data_for_size_classes();
     gc_time_pool_end(current_sweep_full);
 }
 
-static void gc_sweep_perm_alloc(void)
+static void gc_sweep_perm_alloc(void) JL_NOTSAFEPOINT
 {
     uint64_t t0 = jl_hrtime();
     gc_sweep_sysimg();
@@ -1561,15 +1568,16 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
         return;
     }
     if (__unlikely(!jl_is_datatype((jl_datatype_t *)child_vt) || ((jl_datatype_t *)child_vt)->smalltag)) {
-        jl_safe_printf("GC error (probable corruption)\n");
-        jl_gc_debug_print_status();
-        jl_safe_printf("Parent %p\n", (void *)parent);
-        jl_safe_printf("of type:\n");
-        jl_(jl_typeof(parent));
-        jl_safe_printf("While marking child at %p\n", (void *)child);
-        jl_safe_printf("of type:\n");
-        jl_(child_vtag);
-        jl_gc_debug_critical_error();
+        ios_t *const s = ios_safe_stderr;
+        jl_safe_fprintf(s, "GC error (probable corruption)\n");
+        jl_gc_debug_fprint_status(s);
+        jl_safe_fprintf(s, "Parent %p\n", (void *)parent);
+        jl_safe_fprintf(s, "of type:\n");
+        jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)jl_typeof(parent));
+        jl_safe_fprintf(s, "While marking child at %p\n", (void *)child);
+        jl_safe_fprintf(s, "of type:\n");
+        jl_safe_static_show(s, (jl_value_t *)child_vtag);
+        jl_gc_debug_fprint_critical_error(s);
         abort();
     }
 #endif
@@ -1643,21 +1651,22 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
 // Dump mark queue on critical error
 JL_NORETURN NOINLINE void gc_dump_queue_and_abort(jl_ptls_t ptls, jl_datatype_t *vt) JL_NOTSAFEPOINT
 {
-    jl_safe_printf("GC error (probable corruption)\n");
-    jl_gc_debug_print_status();
-    jl_(vt);
-    jl_gc_debug_critical_error();
+    ios_t *const s = ios_safe_stderr;
+    jl_safe_fprintf(s, "GC error (probable corruption)\n");
+    jl_gc_debug_fprint_status(s);
+    jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)vt);
+    jl_gc_debug_fprint_critical_error(s);
     if (jl_n_gcthreads == 0) {
-        jl_safe_printf("\n");
+        jl_safe_fprintf(s, "\n");
         jl_value_t *new_obj;
         jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
-        jl_safe_printf("thread %d ptr queue:\n", ptls->tid);
-        jl_safe_printf("~~~~~~~~~~ ptr queue top ~~~~~~~~~~\n");
+        jl_safe_fprintf(s, "thread %d ptr queue:\n", ptls->tid);
+        jl_safe_fprintf(s, "~~~~~~~~~~ ptr queue top ~~~~~~~~~~\n");
         while ((new_obj = gc_ptr_queue_steal_from(mq)) != NULL) {
-            jl_(new_obj);
-            jl_safe_printf("==========\n");
+            jl_safe_static_show((JL_STREAM*)s, new_obj);
+            jl_safe_fprintf(s, "==========\n");
         }
-        jl_safe_printf("~~~~~~~~~~ ptr queue bottom ~~~~~~~~~~\n");
+        jl_safe_fprintf(s, "~~~~~~~~~~ ptr queue bottom ~~~~~~~~~~\n");
     }
     abort();
 }
@@ -2230,7 +2239,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 
 // Enqueue and mark all outgoing references from `new_obj` which have not been marked yet.
 // `_new_obj` has its lowest bit tagged if it's in the remset (in which case we shouldn't update page metadata)
-FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj)
+FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj) JL_NOTSAFEPOINT
 {
     int meta_updated = (uintptr_t)_new_obj & GC_REMSET_PTR_TAG;
     jl_value_t *new_obj = (jl_value_t *)((uintptr_t)_new_obj & ~(uintptr_t)GC_REMSET_PTR_TAG);
@@ -2506,7 +2515,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
 }
 
 // Used in gc-debug
-void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
+void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     while (1) {
         void *new_obj = (void *)gc_ptr_queue_pop(&ptls->gc_tls.mark_queue);
@@ -2519,7 +2528,7 @@ void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 }
 
 // Drain items from worker's own chunkqueue
-void gc_drain_own_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
+void gc_drain_own_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     jl_gc_chunk_t c = {.cid = GC_empty_chunk};
     do {
@@ -2535,13 +2544,13 @@ void gc_drain_own_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 // is used to keep track of processed items. Maintaining this stack (instead of
 // native one) avoids stack overflow when marking deep objects and
 // makes it easier to implement parallel marking via work-stealing
-JL_EXTENSION NOINLINE void gc_mark_loop_serial(jl_ptls_t ptls)
+JL_EXTENSION NOINLINE void gc_mark_loop_serial(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     gc_mark_loop_serial_(ptls, &ptls->gc_tls.mark_queue);
     gc_drain_own_chunkqueue(ptls, &ptls->gc_tls.mark_queue);
 }
 
-void gc_mark_and_steal(jl_ptls_t ptls)
+void gc_mark_and_steal(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     int master_tid = jl_atomic_load(&gc_master_tid);
     assert(master_tid != -1);
@@ -2663,7 +2672,7 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * the mark-loop after `gc_n_threads_marking` reaches zero.
  */
 
-int gc_should_mark(void)
+int gc_should_mark(void) JL_NOTSAFEPOINT
 {
     int should_mark = 0;
     uv_mutex_lock(&gc_queue_observer_lock);
@@ -2696,14 +2705,14 @@ int gc_should_mark(void)
     return should_mark;
 }
 
-void gc_wake_all_for_marking(jl_ptls_t ptls)
+void gc_wake_all_for_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&gc_threads_lock);
     uv_cond_broadcast(&gc_threads_cond);
     uv_mutex_unlock(&gc_threads_lock);
 }
 
-void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
+void gc_mark_loop_parallel(jl_ptls_t ptls, int master) JL_NOTSAFEPOINT
 {
     if (master) {
         jl_atomic_store(&gc_master_tid, ptls->tid);
@@ -2722,7 +2731,7 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
     }
 }
 
-void gc_mark_loop(jl_ptls_t ptls)
+void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     if (jl_n_markthreads == 0 || gc_heap_snapshot_enabled) {
         gc_mark_loop_serial(ptls);
@@ -2732,13 +2741,13 @@ void gc_mark_loop(jl_ptls_t ptls)
     }
 }
 
-void gc_mark_loop_barrier(void)
+void gc_mark_loop_barrier(void) JL_NOTSAFEPOINT
 {
     assert(jl_atomic_load_relaxed(&gc_n_threads_marking) == 0);
     jl_atomic_store_relaxed(&gc_master_tid, -1);
 }
 
-void gc_mark_clean_reclaim_sets(void)
+void gc_mark_clean_reclaim_sets(void) JL_NOTSAFEPOINT
 {
     // Clean up `reclaim-sets`
     for (int i = 0; i < gc_n_threads; i++) {
@@ -2881,7 +2890,7 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
 // this must happen last in the mark phase.
-static void sweep_finalizer_list(arraylist_t *list)
+static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
 {
     void **items = list->items;
     size_t len = list->len;
@@ -2987,7 +2996,7 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
     return live_bytes;
 }
 
-uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
+uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor) JL_NOTSAFEPOINT
 {
     double est = factor * old_val + (1 - factor) * new_val;
     if (est <= 1)
@@ -2999,7 +3008,7 @@ uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
 
 // an overallocation curve inspired by array allocations
 // grows very fast initially, then much slower at large heaps
-static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val)
+static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val) JL_NOTSAFEPOINT
 {
     // compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
     // for small n, we grow much faster than O(n)
@@ -3148,7 +3157,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
     // we either free some space or get an OOM error.
-    if (gc_sweep_always_full) {
+    if (jl_options.gc_sweep_always_full) {
         sweep_full = 1;
         gc_count_full_sweep_reason(FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL);
     }
@@ -3214,7 +3223,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     uint64_t target_heap;
     const char *reason = ""; (void)reason; // for GC_TIME output stats
     old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-    if (collection == JL_GC_AUTO) {
+    if (collection == JL_GC_AUTO && jl_options.hard_heap_limit == 0) {
         // update any heuristics only when the user does not force the GC
         // but still update the timings, since GC was run and reset, even if it was too early
         uint64_t target_allocs = 0.0;
@@ -3293,6 +3302,27 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     }
     else {
         target_heap = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
+    }
+
+    // Kill the process if we are above the hard heap limit
+    if (jl_options.hard_heap_limit != 0) {
+        if (heap_size > jl_options.hard_heap_limit) {
+            // Can't use `jl_errorf` here, because it will try to allocate memory
+            // and we are already at the hard limit.
+            jl_safe_printf("Heap size exceeded hard limit of %" PRIu64 " bytes.\n",
+                           jl_options.hard_heap_limit);
+            abort();
+        }
+    }
+    // Ignore heap limit computation from MemBalancer-like heuristics
+    // if the heap target increment goes above the value specified through
+    // `--heap-target-increment`.
+    // Note that if we reach this code, we can guarantee that the heap size
+    // is less than the hard limit, so there will be some room to grow the heap
+    // until the next GC without hitting the hard limit.
+    if (jl_options.heap_target_increment != 0) {
+        target_heap = heap_size + jl_options.heap_target_increment;
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
     }
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
@@ -3692,6 +3722,9 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
+    if (jl_options.hard_heap_limit != 0) {
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
+    }
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -3705,7 +3738,7 @@ void jl_gc_init(void)
     if (jl_options.heap_size_hint == 0) {
         char *cp = getenv(HEAP_SIZE_HINT);
         if (cp)
-            hint = parse_heap_size_hint(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
+            hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"", 1);
     }
 #ifdef _P64
     total_mem = uv_get_total_memory();
@@ -3926,7 +3959,7 @@ void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
     return p;
 }
 
-jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
+jl_value_t *jl_gc_permobj(jl_ptls_t _ptls, size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (align == 0) {
@@ -3959,7 +3992,7 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
     }
 }
 
-JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void)
+JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void) JL_NOTSAFEPOINT
 {
     return jl_atomic_load(&support_conservative_marking);
 }
@@ -3993,56 +4026,58 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             // case 1: full page; `cell` must be an object
             goto valid_object;
         }
-        jl_gc_pool_t *pool =
-            gc_all_tls_states[meta->thread_n]->gc_tls.heap.norm_pools +
-            meta->pool_n;
-        if (meta->fl_begin_offset == UINT16_MAX) {
-            // case 2: this is a page on the newpages list
-            jl_taggedvalue_t *newpages = pool->newpages;
-            // Check if the page is being allocated from via newpages
-            if (!newpages)
-                return NULL;
-            char *data = gc_page_data(newpages);
-            if (data != meta->data) {
-                // Pages on newpages form a linked list where only the
-                // first one is allocated from (see gc_reset_page()).
-                // All other pages are empty.
-                return NULL;
+        {
+            jl_gc_pool_t *pool =
+                gc_all_tls_states[meta->thread_n]->gc_tls.heap.norm_pools +
+                meta->pool_n;
+            if (meta->fl_begin_offset == UINT16_MAX) {
+                // case 2: this is a page on the newpages list
+                jl_taggedvalue_t *newpages = pool->newpages;
+                // Check if the page is being allocated from via newpages
+                if (!newpages)
+                    return NULL;
+                char *data = gc_page_data(newpages);
+                if (data != meta->data) {
+                    // Pages on newpages form a linked list where only the
+                    // first one is allocated from (see gc_reset_page()).
+                    // All other pages are empty.
+                    return NULL;
+                }
+                // This is the first page on the newpages list, where objects
+                // are allocated from.
+                if ((char *)cell >= (char *)newpages) // past allocation pointer
+                    return NULL;
+                goto valid_object;
             }
-            // This is the first page on the newpages list, where objects
-            // are allocated from.
-            if ((char *)cell >= (char *)newpages) // past allocation pointer
-                return NULL;
-            goto valid_object;
+            // case 3: this is a page with a freelist
+            // marked or old objects can't be on the freelist
+            if (cell->bits.gc)
+                goto valid_object;
+            // When allocating from a freelist, three subcases are possible:
+            // * The freelist of a page has been exhausted; this was handled
+            //   under case 1, as nfree == 0.
+            // * The freelist of the page has not been used, and the age bits
+            //   reflect whether a cell is on the freelist or an object.
+            // * The freelist is currently being allocated from. In this case,
+            //   pool->freelist will point to the current page; any cell with
+            //   a lower address will be an allocated object, and for cells
+            //   with the same or a higher address, the corresponding age
+            //   bit will reflect whether it's on the freelist.
+            // Age bits are set in sweep_page() and are 0 for freelist
+            // entries and 1 for live objects. The above subcases arise
+            // because allocating a cell will not update the age bit, so we
+            // need extra logic for pages that have been allocated from.
+            // We now distinguish between the second and third subcase.
+            // Freelist entries are consumed in ascending order. Anything
+            // before the freelist pointer was either live during the last
+            // sweep or has been allocated since.
+            if (gc_page_data(cell) == gc_page_data(pool->freelist)
+                && (char *)cell < (char *)pool->freelist)
+                goto valid_object;
+            // already skipped marked or old objects above, so here
+            // the age bits are 0, thus the object is on the freelist
+            return NULL;
         }
-        // case 3: this is a page with a freelist
-        // marked or old objects can't be on the freelist
-        if (cell->bits.gc)
-            goto valid_object;
-        // When allocating from a freelist, three subcases are possible:
-        // * The freelist of a page has been exhausted; this was handled
-        //   under case 1, as nfree == 0.
-        // * The freelist of the page has not been used, and the age bits
-        //   reflect whether a cell is on the freelist or an object.
-        // * The freelist is currently being allocated from. In this case,
-        //   pool->freelist will point to the current page; any cell with
-        //   a lower address will be an allocated object, and for cells
-        //   with the same or a higher address, the corresponding age
-        //   bit will reflect whether it's on the freelist.
-        // Age bits are set in sweep_page() and are 0 for freelist
-        // entries and 1 for live objects. The above subcases arise
-        // because allocating a cell will not update the age bit, so we
-        // need extra logic for pages that have been allocated from.
-        // We now distinguish between the second and third subcase.
-        // Freelist entries are consumed in ascending order. Anything
-        // before the freelist pointer was either live during the last
-        // sweep or has been allocated since.
-        if (gc_page_data(cell) == gc_page_data(pool->freelist)
-            && (char *)cell < (char *)pool->freelist)
-            goto valid_object;
-        // already skipped marked or old objects above, so here
-        // the age bits are 0, thus the object is on the freelist
-        return NULL;
         // Not a freelist entry, therefore a valid object.
     valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,

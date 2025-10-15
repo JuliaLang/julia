@@ -1071,7 +1071,7 @@ let # Test for https://github.com/JuliaLang/julia/issues/43402
     end
 
     refs = map(Core.SSAValue, findall(@nospecialize(x)->Meta.isexpr(x, :new), src.code))
-    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == :(:some_ccall), src.code)
+    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == Expr(:tuple, :(:some_ccall)), src.code)
     @assert some_ccall !== nothing
     stmt = src.code[some_ccall]
     nccallargs = length(stmt.args[3]::Core.SimpleVector)
@@ -2120,4 +2120,18 @@ let src = code_typed1(foosvalconstprop, ())
         iscall((src, getfield))(expr) && expr.args[3] in (:(:has_default), :(:default))
     end
     @test count(is_constfield_load, src.code) == 0
+end
+
+# JuliaLang/julia #59548
+# Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
+# the codegen ABI
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, xs...)
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, 1, xs...) # convert tuples represented by `PartialStruct`
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
 end

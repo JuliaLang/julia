@@ -5,7 +5,7 @@
 """
     AsyncCondition()
 
-Create a async condition that wakes up tasks waiting for it
+Create an async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
@@ -41,7 +41,7 @@ end
 """
     AsyncCondition(callback::Function)
 
-Create a async condition that calls the given `callback` function. The `callback` is passed one argument,
+Create an async condition that calls the given `callback` function. The `callback` is passed one argument,
 the async condition object itself.
 """
 function AsyncCondition(cb::Function)

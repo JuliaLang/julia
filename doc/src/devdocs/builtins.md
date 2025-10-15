@@ -33,7 +33,9 @@ Core.memoryrefsetonce!
 
 ## Module bindings
 
+```@docs
 Core.get_binding_type
+```
 
 ## Other
 
@@ -41,4 +43,6 @@ Core.get_binding_type
 Core.IntrinsicFunction
 Core.Intrinsics
 Core.IR
+Base.quoted
+Base.isa_ast_node
 ```

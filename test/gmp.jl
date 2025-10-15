@@ -235,6 +235,11 @@ let a, b
     @test prod(b) == foldl(*, b)
     @test 1 == prod(BigInt[]) isa BigInt
     @test prod(BigInt[0, 0, 0]) == 0 # issue #46665
+    # Test prod with negative numbers
+    @test prod(BigInt[-2, 3, -4]) == 24
+    @test prod(BigInt[-1, -2, -3]) == -6
+    @test prod(BigInt[-5]) == -5
+    @test prod(BigInt[-2, -2, -2, -2]) == 16
 end
 
 @testset "Iterated arithmetic" begin
@@ -811,8 +816,24 @@ end
 
 @testset "hashing" begin
     for i in 1:10:100
-        bint = big(11)^i
-        bfloat = big(11.0)^i
-        @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+        for shift in vcat(0:8, 9:8:81)
+            for sgn in (1, -1)
+                bint = sgn * (big(11)^i << shift)
+                bfloat = float(bint)
+                @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+                @test hash(bint, Base.HASH_SEED) ==
+                    @invoke(hash(bint::Real, Base.HASH_SEED))
+                @test Base.hash_integer(bint, Base.HASH_SEED) ==
+                    @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+            end
+        end
     end
+
+    bint = big(0)
+    bfloat = float(bint)
+    @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+    @test hash(bint, Base.HASH_SEED) ==
+        @invoke(hash(bint::Real, Base.HASH_SEED))
+    @test Base.hash_integer(bint, Base.HASH_SEED) ==
+        @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
 end

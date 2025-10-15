@@ -269,7 +269,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if isType(t)
             # Type is fairly important, so do not widen it as fast as other types if avoidable
             tt = tP[1]
-            ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            # ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
             if isType(c)
                 ct = c.parameters[1]
             else

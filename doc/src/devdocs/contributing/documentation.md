@@ -1,4 +1,4 @@
-### Improving documentation
+# Improving documentation
 
 *By contributing documentation to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
@@ -16,7 +16,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 
 Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 
-#### Modifying files in `doc/src/`
+## Modifying files in `doc/src/`
 
 Most of the source text for the Julia Manual is located in `doc/src/`. To update or add new text to any one of the existing files the following steps should be followed:
 
@@ -33,7 +33,7 @@ To add a **new file** to `doc/src/` rather than updating a file replace step `1`
 
 1. add the file to the appropriate subdirectory in `doc/src/` and also add the file path to the `PAGES` vector in `doc/make.jl`.
 
-#### Modifying an existing docstring in `base/`
+## Modifying an existing docstring in `base/`
 
 All docstrings are written inline above the methods or types they are associated with and can be found by clicking on the `source` link that appears below each docstring in the HTML file. The steps needed to make a change to an existing docstring are listed below:
 
@@ -43,7 +43,7 @@ All docstrings are written inline above the methods or types they are associated
 4. check the output in `doc/_build/html/` to make sure the changes are correct;
 5. commit your changes and open a pull request.
 
-#### Adding a new docstring to `base/`
+## Adding a new docstring to `base/`
 
 The steps required to add a new docstring are listed below:
 
@@ -71,7 +71,7 @@ The steps required to add a new docstring are listed below:
 6. check the output in `doc/_build/html` to make sure the changes are correct;
 7. commit your changes and open a pull request.
 
-#### Doctests
+## Doctests
 
 Examples written within docstrings can be used as testcases known as "doctests" by annotating code blocks with `jldoctest`.
 

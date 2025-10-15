@@ -34,6 +34,7 @@ Base.GenericMemory
 Base.Memory
 Base.Memory(::UndefInitializer, ::Int)
 Base.memoryref
+Base.memoryindex
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices

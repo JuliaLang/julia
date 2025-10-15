@@ -222,7 +222,7 @@ end
 
 function greedy_func(itr, lidx, lbody)
     quote
-        let c = Channel{eltype($itr)}(0,spawn=true) do ch
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
             for item in $itr
                 put!(ch, item)
             end
@@ -287,8 +287,14 @@ A macro to execute a `for` loop in parallel. The iteration space is distributed 
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
 
+Tasks spawned by `@threads` are scheduled on the `:default` threadpool. This means that
+`@threads` will not use threads from the `:interactive` threadpool, even if called from
+the main thread or from a task in the interactive pool. The `:default` threadpool is
+intended for compute-intensive parallel workloads.
+
 See also: [`@spawn`](@ref Threads.@spawn) and
 `pmap` in [`Distributed`](@ref man-distributed).
+For more information on threadpools, see the chapter on [threadpools](@ref man-threadpools).
 
 # Extended help
 

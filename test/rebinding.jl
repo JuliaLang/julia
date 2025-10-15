@@ -285,7 +285,7 @@ module RangeMerge
 
     function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
         params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-        d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
         sprint(print, d)
     end
 
@@ -392,3 +392,19 @@ function create_and_delete_binding()
 end
 create_and_delete_binding()
 @test Base.binding_kind(BindingTestModule, :x) == Base.PARTITION_KIND_GUARD
+
+# Test that we properly invalidate bindings if the value changes, not just the
+# export status (#59272)
+module Invalidate59272
+    using Test
+    module Foo
+        export Bar
+        struct Bar
+        # x
+        end
+    end
+    using .Foo
+    @test isa(Bar(), Foo.Bar)
+    Core.eval(Foo, :(struct Bar; x; end))
+    @test Bar(1) == Foo.Bar(1)
+end

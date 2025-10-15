@@ -35,7 +35,8 @@ Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
 Base.bitrotate
-Base.:(:)
+Base.:(:)(::Any, ::Any, ::Any)
+Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
 Base.range
 Base.OneTo
 Base.StepRangeLen
@@ -187,6 +188,7 @@ Base.invmod
 Base.powermod
 Base.ndigits
 Base.add_sum
+Base.uabs
 Base.widemul
 Base.Math.evalpoly
 Base.Math.@evalpoly

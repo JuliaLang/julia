@@ -2,7 +2,10 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/GMP_jll.jl
 baremodule GMP_jll
-using Base, Libdl, CompilerSupportLibraries_jll
+using Base, Libdl
+if !Sys.isapple()
+    using CompilerSupportLibraries_jll
+end
 
 export libgmp, libgmpxx
 
@@ -12,44 +15,48 @@ const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
+
 libgmp_path::String = ""
+const libgmp = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libgmp-10.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libgmp.10.dylib")
+    else
+        BundledLazyLibraryPath("libgmp.so.10")
+    end
+)
+
 libgmpxx_path::String = ""
-
-if Sys.iswindows()
-    const _libgmp_path = BundledLazyLibraryPath("libgmp-10.dll")
-    const _libgmpxx_path = BundledLazyLibraryPath("libgmpxx-4.dll")
-elseif Sys.isapple()
-    const _libgmp_path = BundledLazyLibraryPath("libgmp.10.dylib")
-    const _libgmpxx_path = BundledLazyLibraryPath("libgmpxx.4.dylib")
-else
-    const _libgmp_path = BundledLazyLibraryPath("libgmp.so.10")
-    const _libgmpxx_path = BundledLazyLibraryPath("libgmpxx.so.4")
-end
-
-const libgmp = LazyLibrary(_libgmp_path)
-
-if Sys.isfreebsd()
-    _libgmpxx_dependencies = LazyLibrary[libgmp, libgcc_s]
-elseif Sys.isapple()
-    _libgmpxx_dependencies = LazyLibrary[libgmp]
-else
-    _libgmpxx_dependencies = LazyLibrary[libgmp, libstdcxx, libgcc_s]
-end
 const libgmpxx = LazyLibrary(
-    _libgmpxx_path,
-    dependencies=_libgmpxx_dependencies,
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libgmpxx-4.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libgmpxx.4.dylib")
+    else
+        BundledLazyLibraryPath("libgmpxx.so.4")
+    end,
+    dependencies = if Sys.isfreebsd()
+        LazyLibrary[libgmp, libgcc_s]
+    elseif Sys.isapple()
+        LazyLibrary[libgmp]
+    else
+        LazyLibrary[libgmp, libstdcxx, libgcc_s]
+    end
 )
 
 function eager_mode()
-    CompilerSupportLibraries_jll.eager_mode()
+    @static if @isdefined CompilerSupportLibraries_jll
+        CompilerSupportLibraries_jll.eager_mode()
+    end
     dlopen(libgmp)
     dlopen(libgmpxx)
 end
 is_available() = true
 
 function __init__()
-    global libgmp_path = string(_libgmp_path)
-    global libgmpxx_path = string(_libgmpxx_path)
+    global libgmp_path = string(libgmp.path)
+    global libgmpxx_path = string(libgmpxx.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgmp_path)
     push!(LIBPATH_list, LIBPATH[])

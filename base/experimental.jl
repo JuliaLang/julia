@@ -41,7 +41,7 @@ within this scope, even if the compiler can't prove this to be the case.
     Experimental API. Subject to change without deprecation.
 """
 macro aliasscope(body)
-    sym = gensym()
+    sym = :aliasscope_result
     quote
         $(Expr(:aliasscope))
         $sym = $(esc(body))
@@ -315,6 +315,7 @@ the handler for that type.
     This interface is experimental and subject to change or removal without notice.
 """
 function show_error_hints(io, ex, args...)
+    @nospecialize
     hinters = get(_hint_handlers, typeof(ex), nothing)
     isnothing(hinters) && return
     for handler in hinters
@@ -491,7 +492,10 @@ function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
 end
 
 function entrypoint(@nospecialize(argt::Type))
-    ccall(:jl_add_entrypoint, Int32, (Any,), argt)
+    # Only add to entrypoint list if we're generating output and in trim mode
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        Base.Compiler.add_entrypoint(argt)
+    end
     nothing
 end
 

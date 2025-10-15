@@ -2043,8 +2043,12 @@ end
         if Sys.iswindows()
             chmod(subdir, 0o666)
             @test !Sys.isexecutable(fpath)
-            @test Sys.isreadable(fpath)
+            # Possibly broken (or changed) by libuv commit 84896d52 which applies "other" permissions
+            # to all groups we are not a part of, affecting inherited permissions
+            # https://github.com/JuliaLang/libuv/commit/84896d522a51de50a8090fac56ec19740f5b603e
+            @test_broken Sys.isreadable(fpath)
             @test_skip Sys.iswritable(fpath)
+            chmod(fpath, 0o777)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
@@ -2153,16 +2157,16 @@ Base.joinpath(x::URI50890) = URI50890(x.f)
 end
 
 @testset "diskstat() works" begin
-    # Sanity check assuming disk is smaller than 32PB
-    PB = Int64(2)^44
+    # Sanity check assuming disk is smaller than 32PiB
+    PiB = Int64(2)^50
 
     dstat = diskstat()
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
     @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
 end
 

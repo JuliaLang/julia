@@ -5,8 +5,15 @@
 # apparently not on FreeBSD). Ref PR #22352
 
 CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
+
+CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
+CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
+else
+# Defeat bad automatic cross compile detection (e.g. clang on mingw)
+# CMAKE_COMMON += -DCMAKE_CROSSCOMPILING=0
 endif
 ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
@@ -15,8 +22,6 @@ CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLA
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LD="$(LD)"
 
-CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
-CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
 ifneq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir)
 endif
@@ -38,6 +43,12 @@ CMAKE_CC := "$$(which $(shell echo $(CC_ARG) | cut -d' ' -f1))"
 CMAKE_CXX := "$$(which $(shell echo $(CXX_ARG) | cut -d' ' -f1))"
 CMAKE_CC_ARG := $(shell echo $(CC_ARG) | cut -s -d' ' -f2-)
 CMAKE_CXX_ARG := $(shell echo $(CXX_ARG) | cut -s -d' ' -f2-)
+else ifneq (,$(findstring MINGW,$(RAW_BUILD_OS)))
+# `cmake` is mingw-native and needs `cygpath -w`, rather than `cygpath -m`, which is the msys2 conversion default
+CMAKE_CC := "$(shell echo $(call cygpath_w, $(shell which $(CC_BASE))))"
+CMAKE_CXX := "$(shell echo $(call cygpath_w, $(shell which $(CXX_BASE))))"
+CMAKE_CC_ARG := $(CC_ARG)
+CMAKE_CXX_ARG := $(CXX_ARG)
 else
 CMAKE_CC := "$$(which $(CC_BASE))"
 CMAKE_CXX := "$$(which $(CXX_BASE))"
@@ -55,11 +66,15 @@ endif
 CMAKE_COMMON += -DCMAKE_LINKER="$$(which $(LD))" -DCMAKE_AR="$$(which $(AR))" -DCMAKE_RANLIB="$$(which $(RANLIB))"
 
 ifeq ($(OS),WINNT)
+ifeq ($(BUILD_OS),WINNT)
+# Don't make CMake think we're cross compiling, but do make sure it knows we're Windows
+CMAKE_COMMON += -DCMAKE_HOST_SYSTEM_NAME=Windows
+else
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
+endif
 CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
 endif
 
-# For now this is LLVM specific, but I expect it won't be in the future
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
@@ -67,6 +82,27 @@ CMAKE_GENERATOR_COMMAND := -G "Unix Makefiles"
 else
 $(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
 endif
+
+ifneq (,$(findstring MINGW,$(RAW_BUILD_OS)))
+ifneq (,$(shell ldd $(shell which cmake) | grep msys-2.0.dll))
+# Detect MSYS2 with cygwin CMake rather than MinGW cmake - the former fails to
+# properly drive MinGW tools
+override CMAKE := echo "ERROR: CMake is Cygwin CMake, not MinGW CMake. Build will fail. Use 'pacman -S mingw-w64-{i686,x86_64}-cmake'."; exit 1; $(CMAKE)
+endif
+# In our setup, CMAKE_INSTALL_PREFIX is a relative path inside usr-staging.
+# We do not want this converted to a windows path, because our make system
+# assumes it to be relative to msys `/`.
+override CMAKE := MSYS2_ARG_CONV_EXCL="-DCMAKE_INSTALL_PREFIX" $(CMAKE)
+endif
+
+# Some dependencies' tarballs contains symlinks to non-existent targets. This breaks the
+# the default msys strategy `deepcopy` symlink strategy. To workaround this,
+# switch to `native` which tries native windows symlinks (possible if the
+# machine is in developer mode) - or if not, falls back to cygwin-style
+# symlinks. We don't particularly care either way - we just need to symlinks
+# to succeed. We could guard this by a uname check, but it's harmless elsewhere,
+# so let's not incur the additional overhead.
+MSYS_NONEXISTENT_SYMLINK_TARGET_FIX := winsymlinks:native
 
 # If the top-level Makefile is called with environment variables,
 # they will override the values passed above to ./configure
@@ -144,7 +180,7 @@ upper = $(shell echo $1 | tr a-z A-Z)
 # this rule ensures that make install is more nearly atomic
 # so it's harder to get half-installed (or half-reinstalled) dependencies
 # # and enables sharing deps compiles, uninstall, and fast reinstall
-MAKE_INSTALL = +$$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
+MAKE_INSTALL = MSYS2_ARG_CONV_EXCL="prefix=" $$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
 
 define SHLIBFILE_INSTALL
 	mkdir -p $2/$$(build_shlibdir)

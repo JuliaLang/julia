@@ -264,6 +264,17 @@ Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc)
 
 Base.ndims(bc::Broadcasted) = ndims(typeof(bc))
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(argtype(BC))
+function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N}
+    N isa Int ? N : _maxndims(argtype(BC))
+end
+_maxndims(::Type{Tuple{}}) = 0
+_maxndims(::Type{Tuple{T}}) where {T} = T <: Tuple ? 1 : Int(ndims(T))::Int
+function _maxndims(Args::Type{<:Tuple{T,Vararg}}) where {T}
+    m = T <: Tuple ? 1 : Int(ndims(T))::Int
+    n = _maxndims(Base.tuple_type_tail(Args))
+    max(m, n)
+end
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
 Base.length(bc::Broadcasted) = prod(size(bc))
@@ -280,20 +291,6 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
 end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims_broadcasted(BC)
-# the `AbstractArrayStyle` type parameter is required to be either equal to `Any` or be an `Int` value
-Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{Any},Nothing}}) = _maxndims_broadcasted(BC)
-Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N} = N::Int
-
-function _maxndims_broadcasted(BC::Type{<:Broadcasted})
-    _maxndims(fieldtype(BC, :args))
-end
-_maxndims(::Type{T}) where {T<:Tuple} = reduce(max, ntuple(n -> (F = fieldtype(T, n); F <: Tuple ? 1 : ndims(F)), Base._counttuple(T)))
-_maxndims(::Type{<:Tuple{T}}) where {T} = T <: Tuple ? 1 : ndims(T)
-function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}
-    return max(T <: Tuple ? 1 : ndims(T), S <: Tuple ? 1 : ndims(S))
-end
-
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
 ## Instantiation fills in the "missing" fields in Broadcasted.

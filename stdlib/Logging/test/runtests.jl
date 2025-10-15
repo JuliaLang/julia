@@ -334,7 +334,7 @@ end
             end
 
             ends = count(entry_end, line)
-            starts == 1 && ends == 1 && error("Interleaved logs: Log entry started and and another ended on one line")
+            starts == 1 && ends == 1 && error("Interleaved logs: Log entry started and another ended on one line")
             ends > 1 && error("Interleaved logs: Multiple log entries ended on one line")
             if ends == 1
                 startswith(line, entry_end) || error("Interleaved logs: Log entry ended in the middle of a line")

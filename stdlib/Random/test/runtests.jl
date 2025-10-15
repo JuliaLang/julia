@@ -554,6 +554,14 @@ end
     @test randcycle!(mta, A) == randcycle!(mtb, B)
     @test randcycle!(A) === A
 
+    @testset "non-`Array` `randperm!` and `randcycle!`" begin
+        x, y = Memory{Int}(undef, 10), Memory{Int}(undef, 10)
+        @test randperm!(mta, x) == randperm!(mtb, y)
+        @test randperm!(x) === x
+        @test randcycle!(mta, x) == randcycle!(mtb, y)
+        @test randcycle!(x) === x
+    end
+
     let p = randcycle(UInt16(10))
         @test typeof(p) ≡ Vector{UInt16}
         @test sort!(p) == 1:10
@@ -1061,6 +1069,23 @@ end
     # 10% chance of having a true in it, so each value should converge to 0.1.
     @test minimum(m) >= 0.094
     @test maximum(m) <= 0.106
+end
+
+@testset "`shuffle(::NTuple)`" begin
+    @testset "sorted" begin
+        for n ∈ 0:20
+            tup = ntuple(identity, n)
+            @test tup === sort(@inferred shuffle(tup))
+        end
+    end
+    @testset "not identity" begin
+        function shuffle_is_identity()
+            tup = ntuple(identity, 9)
+            tup === shuffle(tup)
+        end
+        # shuffling may behave as the identity sometimes, but if it doesn't manage to actually reorder some of the elements at least once, something is wrong
+        @test any((_ -> !shuffle_is_identity()), 1:1000000)
+    end
 end
 
 # issue #42752

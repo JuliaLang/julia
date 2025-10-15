@@ -1,28 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("tempdepot.jl")
+
 function precompile_test_harness(@nospecialize(f), testset::String)
     @testset "$testset" precompile_test_harness(f, true)
 end
 function precompile_test_harness(@nospecialize(f), separate::Bool=true)
-    load_path = mktempdir()
-    load_cache_path = separate ? mktempdir() : load_path
+    load_path = mkdepottempdir()
+    load_cache_path = separate ? mkdepottempdir() : load_path
     try
         pushfirst!(LOAD_PATH, load_path)
         pushfirst!(DEPOT_PATH, load_cache_path)
         f(load_path)
     finally
-        try
-            rm(load_path, force=true, recursive=true)
-        catch err
-            @show err
-        end
-        if separate
-            try
-                rm(load_cache_path, force=true, recursive=true)
-            catch err
-                @show err
-            end
-        end
         filter!((≠)(load_path), LOAD_PATH)
         separate && filter!((≠)(load_cache_path), DEPOT_PATH)
     end

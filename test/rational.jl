@@ -203,6 +203,21 @@ end
     end
 
     @test Rational(rand_int, 3)/Complex(3, 2) == Complex(Rational(rand_int, 13), -Rational(rand_int*2, 39))
+    @test (1//1) / complex(0, 1) === 0//1 - 1//1*im
+    @test (0//1) / complex(0, 1) === 0//1 + 0//1*im
+    @test (0//1) / complex(1, 0) === 0//1 + 0//1*im
+    @test (0//1) / complex(1, 1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1, 1) === 1//2 - 1//2*im
+    @test (0//1) / complex(1//1, 1//1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1//1, 1//1) === 1//2 - 1//2*im
+    @test (0//1) / complex(1//0, 0//1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1//1, 1//0) === 0//1 + 0//1*im
+    @test_throws DivideError (0//1) / complex(0, 0)
+    @test_throws DivideError (1//1) / complex(0, 0)
+    @test_throws DivideError (1//0) / complex(0, 0)
+
+    # 1//200 - 1//200*im cannot be represented as Complex{Rational{Int8}}
+    @test_throws OverflowError (Int8(1)//Int8(1)) / (Int8(100) + Int8(100)im)
 
     @test Complex(rand_int, 0) == Rational(rand_int)
     @test Rational(rand_int) == Complex(rand_int, 0)
@@ -836,4 +851,11 @@ end
     @testset "do not overflow silently" begin
         @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
     end
+end
+
+@testset "Float-Rational comparison" begin
+    @test Float16(6.0e-8) == big(1//16777216) == 1//16777216
+    @test Float16(6.0e-8) == 1//16777216
+    @test 1.0 != big(1//0)
+    @test Inf == big(1//0)
 end

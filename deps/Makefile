@@ -42,9 +42,10 @@ ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
 endif
 
-ifeq ($(USE_SYSTEM_CSL), 0)
+# We need to run this whether or not USE_SYSTEM_CSL is set.
+# If it is, this target copies the system CSLs into the location our
+# build system expects.
 DEP_LIBS += csl
-endif
 
 ifeq ($(SANITIZE), 1)
 DEP_LIBS += sanitizers

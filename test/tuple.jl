@@ -208,7 +208,7 @@ end
     @test iterate(t, y3[2]) === nothing
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
-    @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+    @test_throws DimensionMismatch eachindex((2,5,"foo"), (1,2,5,7))
 
     @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
@@ -539,6 +539,14 @@ end
     for n in 1:32
         @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
     end
+
+    @test Tuple == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Any})
+    @test Tuple{Vararg{Int}} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Any})
+
+    for n in 0:15
+        @test NTuple{n, Any} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Val{n}})
+        @test NTuple{n, Int} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Val{n}})
+    end
 end
 
 struct A_15703{N}
@@ -850,3 +858,6 @@ end
         end
     end
 end
+
+@test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})
+@test Tuple{Vararg{Int}} == Base.infer_return_type(reverse, Tuple{Tuple{Vararg{Int}}})

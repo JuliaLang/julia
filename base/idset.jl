@@ -10,6 +10,9 @@
 In the example below, the values are all `isequal` so they get overwritten in the ordinary `Set`.
 The `IdSet` compares by `===` and so preserves the 3 different values.
 
+!!! compat "Julia 1.11"
+    Exported in Julia 1.11 and later.
+
 # Examples
 ```jldoctest; filter = r"\\n\\s*(1|1\\.0|true)"
 julia> Set(Any[true, 1, 1.0])
@@ -78,7 +81,7 @@ pop!(s::IdSet, @nospecialize(x)) = _pop!(s, x) == -1 ? throw(KeyError(x)) : x
 pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = _pop!(s, x) == -1 ? default : x
 delete!(s::IdSet, @nospecialize(x)) = (_pop!(s, x); s)
 
-function sizehint!(s::IdSet, newsz)
+function sizehint!(s::IdSet, newsz::Integer)
     # TODO: grow/compact list and perform rehash, if profitable?
     # TODO: shrink?
     # s.list = resize(s.list, newsz)

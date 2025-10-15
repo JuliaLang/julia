@@ -213,13 +213,14 @@ end
 
 """
     isopen(c::Channel)
+
 Determines whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
-Notice that a `Channel`` can be closed and still have
-buffered elements which can be consumed with [`take!`](@ref).
+Notice that a `Channel` can be closed and still have buffered elements which can be
+consumed with [`take!`](@ref).
 
 # Examples
 
-Buffered channel with task:
+## Buffered channel with task
 ```jldoctest
 julia> c = Channel(ch -> put!(ch, 1), 1);
 
@@ -236,7 +237,7 @@ julia> isready(c)
 false
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel{Int}();
 
@@ -461,7 +462,7 @@ Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(3) do ch
            foreach(i -> put!(ch, i), 1:3)
@@ -492,7 +493,6 @@ function fetch_buffered(c::Channel)
 end
 fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
 
-
 """
     take!(c::Channel)
 
@@ -501,7 +501,7 @@ For unbuffered channels, blocks until a [`put!`](@ref) is performed by a differe
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1);
 
@@ -511,7 +511,7 @@ julia> take!(c)
 1
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel(0);
 
@@ -562,7 +562,7 @@ For unbuffered channels, return `true` if there are tasks waiting on a [`put!`](
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1);
 
@@ -575,7 +575,7 @@ julia> isready(c)
 true
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel();
 
@@ -589,7 +589,6 @@ julia> schedule(task);  # schedule a put! task
 julia> isready(c)
 true
 ```
-
 """
 isready(c::Channel) = n_avail(c) > 0
 isempty(c::Channel) = n_avail(c) == 0
@@ -616,7 +615,7 @@ tasks calling `put!` in parallel.
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1); # capacity = 1
 
@@ -629,7 +628,7 @@ julia> isfull(c)
 true
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel(); # capacity = 0
 

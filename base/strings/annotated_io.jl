@@ -200,6 +200,8 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{RegionA
     end
 end
 
+function printstyled end
+
 # NOTE: This is an interim solution to the invalidations caused
 # by the split styled display implementation. This should be
 # replaced by a more robust solution (such as a consolidation of
@@ -227,7 +229,7 @@ function Base.write(io::IO, aio::AnnotatedIOBuffer)
         # This does introduce an overhead that technically
         # could be avoided, but I'm not sure that it's currently
         # worth the effort to implement an efficient version of
-        # writing from a AnnotatedIOBuffer with style.
+        # writing from an AnnotatedIOBuffer with style.
         # In the meantime, by converting to an `AnnotatedString` we can just
         # reuse all the work done to make that work.
         ansi_write_(write, io, read(aio, AnnotatedString))::Int
@@ -249,6 +251,14 @@ Base.print(io::AnnotatedIOBuffer, s::Union{<:AnnotatedString, SubString{<:Annota
 
 Base.print(io::AnnotatedIOBuffer, c::AnnotatedChar) =
     (write(io, c); nothing)
+
+styled_print(io::AnnotatedIOBuffer, msg::Any, kwargs::Any) = print(io, msg...)
+
+styled_print_(io::AnnotatedIOBuffer, @nospecialize(msg), @nospecialize(kwargs)) =
+    invoke_in_world(tls_world_age(), styled_print, io, msg, kwargs)::Nothing
+
+Base.printstyled(io::AnnotatedIOBuffer, msg...; kwargs...) =
+    styled_print_(io, msg, kwargs)
 
 # Escape
 

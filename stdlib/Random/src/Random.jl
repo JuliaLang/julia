@@ -309,7 +309,6 @@ struct UnsafeView{T} <: DenseArray{T,1}
     len::Int
 end
 
-Base.length(a::UnsafeView) = a.len
 Base.getindex(a::UnsafeView, i::Int) = unsafe_load(a.ptr, i)
 Base.setindex!(a::UnsafeView, x, i::Int) = unsafe_store!(a.ptr, x, i)
 Base.pointer(a::UnsafeView) = a.ptr
