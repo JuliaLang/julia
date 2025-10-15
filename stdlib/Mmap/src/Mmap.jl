@@ -6,7 +6,7 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE
-using Sys: PAGESIZE
+using Base.Sys: PAGESIZE
 
 export mmap
 
