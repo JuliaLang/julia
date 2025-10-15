@@ -947,13 +947,58 @@ function expand_comprehension_to_loops(ctx, ex)
     ]
 end
 
+# Mimics native lowerer's tuple-wrap function (julia-syntax.scm:2723-2736)
+# Unwraps only ONE layer of `...` and wraps sequences of non-splat args in tuples.
+# Example: `[a, b, xs..., c]` -> `[tuple(a, b), xs, tuple(c)]`
+function _wrap_unsplatted_args(ctx, call_ex, args)
+    result = SyntaxList(ctx)
+    non_splat_run = SyntaxList(ctx)
+    for arg in args
+        if kind(arg) == K"..."
+            # Flush any accumulated non-splat args
+            if !isempty(non_splat_run)
+                push!(result, @ast ctx call_ex [K"call" "tuple"::K"core" non_splat_run...])
+                non_splat_run = SyntaxList(ctx)
+            end
+            # Unwrap only ONE layer of `...` (corresponds to (cadr x) in native lowerer)
+            push!(result, arg[1])
+        else
+            # Accumulate non-splat args
+            push!(non_splat_run, arg)
+        end
+    end
+    # Flush any remaining non-splat args
+    if !isempty(non_splat_run)
+        push!(result, @ast ctx call_ex [K"call" "tuple"::K"core" non_splat_run...])
+    end
+    result
+end
+
 function expand_splat(ctx, ex, topfunc, args)
-    return @ast ctx ex [K"call"
+    # Matches native lowerer's algorithm
+    # https://github.com/JuliaLang/julia/blob/f362f47338de099cdeeb1b2d81b3ec1948443274/src/julia-syntax.scm#L2761-2762:
+    # 1. Unwrap one layer of `...` from each argument (via _wrap_unsplatted_args)
+    # 2. Create `_apply_iterate(iterate, f, wrapped_args...)` WITHOUT expanding args yet
+    # 3. Recursively expand the entire call - if any wrapped_arg still contains `...`,
+    #    the recursive expansion will handle it, naturally building nested structure
+    #
+    # Example: tuple((xs...)...) recursion:
+    #   Pass 1: unwrap outer `...` -> _apply_iterate(iterate, tuple, (xs...))
+    #   Pass 2: expand sees (xs...) in call context, unwraps again
+    #           -> _apply_iterate(iterate, _apply_iterate, tuple(iterate, tuple), xs)
+
+    wrapped_args = _wrap_unsplatted_args(ctx, ex, args)
+
+    # Construct the unevaluated _apply_iterate call
+    result = @ast ctx ex [K"call"
         "_apply_iterate"::K"core"
         "iterate"::K"top"
         topfunc
-        expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, args))...
+        wrapped_args...
     ]
+
+    # Recursively expand the entire call (matching native's expand-forms)
+    return expand_forms_2(ctx, result)
 end
 
 function expand_array(ctx, ex, topfunc)
@@ -1810,29 +1855,6 @@ function expand_ccall(ctx, ex)
             gc_roots... # GC roots
         ]
     ]
-end
-
-# Wrap unsplatted arguments in `tuple`:
-# `[a, b, xs..., c]` -> `[(a, b), xs, (c,)]`
-function _wrap_unsplatted_args(ctx, call_ex, args)
-    wrapped = SyntaxList(ctx)
-    i = 1
-    while i <= length(args)
-        if kind(args[i]) == K"..."
-            splatarg = args[i]
-            @chk numchildren(splatarg) == 1
-            push!(wrapped, splatarg[1])
-        else
-            i1 = i
-            # Find range of non-splatted args
-            while i < length(args) && kind(args[i+1]) != K"..."
-                i += 1
-            end
-            push!(wrapped, @ast ctx call_ex [K"call" "tuple"::K"core" args[i1:i]...])
-        end
-        i += 1
-    end
-    wrapped
 end
 
 function remove_kw_args!(ctx, args::SyntaxList)
