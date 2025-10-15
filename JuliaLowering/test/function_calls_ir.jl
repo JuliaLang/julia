@@ -597,3 +597,58 @@ function A.ccall()
 #        └─────┘ ── Invalid function name
 end
 
+########################################
+# Nested splat: simple case
+tuple((xs...)...)
+#---------------------
+1   TestMod.tuple
+2   (call core.tuple top.iterate %₁)
+3   TestMod.xs
+4   (call core._apply_iterate top.iterate core._apply_iterate %₂ %₃)
+5   (return %₄)
+
+########################################
+# Nested splat: with mixed arguments
+tuple(a, (xs...)..., b)
+#---------------------
+1   TestMod.tuple
+2   TestMod.a
+3   (call core.tuple %₂)
+4   (call core.tuple top.iterate %₁ %₃)
+5   TestMod.xs
+6   TestMod.b
+7   (call core.tuple %₆)
+8   (call core.tuple %₇)
+9   (call core._apply_iterate top.iterate core._apply_iterate %₄ %₅ %₈)
+10  (return %₉)
+
+########################################
+# Nested splat: multiple nested splats
+tuple((xs...)..., (ys...)...)
+#---------------------
+1   TestMod.tuple
+2   (call core.tuple top.iterate %₁)
+3   TestMod.xs
+4   TestMod.ys
+5   (call core._apply_iterate top.iterate core._apply_iterate %₂ %₃ %₄)
+6   (return %₅)
+
+########################################
+# Nested splat: triple nesting
+tuple(((xs...)...)...)
+#---------------------
+1   TestMod.tuple
+2   (call core.tuple top.iterate %₁)
+3   (call core.tuple top.iterate core._apply_iterate %₂)
+4   TestMod.xs
+5   (call core._apply_iterate top.iterate core._apply_iterate %₃ %₄)
+6   (return %₅)
+
+########################################
+# Error: Standalone splat expression
+(xs...)
+#---------------------
+LoweringError:
+(xs...)
+#└───┘ ── `...` expression outside call
+

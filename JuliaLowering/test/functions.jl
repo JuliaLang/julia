@@ -20,6 +20,52 @@ end
          (2,3,4),
          (1,2,3,4,5))
 
+# Nested splatting
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = [[1, 2], [3, 4]]
+    tuple((xs...)...)
+end
+""") == (1, 2, 3, 4)
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = [[1, 2]]
+    ys = [[3, 4]]
+    tuple((xs...)..., (ys...)...)
+end
+""") == (1, 2, 3, 4)
+
+# Multiple (>2) nested splat
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = [[[1, 2]]]
+    tuple(((xs...)...)...)
+end
+""") == (1, 2)
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = [[[1, 2]]]
+    ys = [[[3, 4]]]
+    tuple(((xs...)...)..., ((ys...)...)...)
+end
+""") == (1, 2, 3, 4)
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = [[[1, 2]]]
+    ys = [[[3, 4]]]
+    tuple(((xs...)...)..., ((ys...)...))
+end
+""") == (1, 2, [3, 4])
+
+# Trailing comma case should still work (different semantics)
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = [[1, 2], [3, 4]]
+    tuple((xs...,)...)
+end
+""") == ([1, 2], [3, 4])
+
 # Keyword calls
 Base.eval(test_mod, :(
 begin
@@ -35,7 +81,6 @@ begin
     end
 end
 ))
-
 
 @test JuliaLowering.include_string(test_mod, """
 let
