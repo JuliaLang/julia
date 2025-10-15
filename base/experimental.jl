@@ -316,7 +316,8 @@ the handler for that type.
 """
 function show_error_hints(io, ex, args...)
     @nospecialize
-    for ex_supertype in supertypes(typeof(ex))
+    ex_supertype = typeof(ex)
+    while ex_supertype != Any
         hinters = get(_hint_handlers, ex_supertype, nothing)
         isnothing(hinters) && continue
         for handler in hinters
@@ -325,9 +326,10 @@ function show_error_hints(io, ex, args...)
                 @invokelatest handler(io, ex, args...)
             catch
                 tn = typeof(handler).name
-                @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
+                @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
             end
         end
+        ex_supertype = supertype(ex_supertype)
     end
 end
 
