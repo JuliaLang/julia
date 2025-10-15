@@ -1062,7 +1062,16 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    void *b = malloc_cache_align(allocsz);
+    void *b = NULL;
+    if (allocsz > 1u<<22u) {
+        b = malloc_page_align(allocsz);
+        #ifdef MADV_HUGEPAGE
+        madvise(b, allocsz, MADV_HUGEPAGE);
+        #endif
+    }
+    else {
+        b = malloc_cache_align(allocsz);
+    }
     if (b == NULL)
         jl_throw(jl_memory_exception);
 
