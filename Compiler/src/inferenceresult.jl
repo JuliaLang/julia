@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance)
+function matching_cache_argtypes(::AbstractLattice, mi::MethodInstance)
     (; def, specTypes) = mi
     return most_general_argtypes(isa(def, Method) ? def : nothing, specTypes)
 end
@@ -16,7 +16,7 @@ struct WidenedArgtypes
     argtypes::Vector{Any}
 end
 
-function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
+function matching_cache_argtypes(𝕃::AbstractLattice, ::MethodInstance,
                                  simple_argtypes::Union{SimpleArgtypes, WidenedArgtypes},
                                  cache_argtypes::Vector{Any})
     (; argtypes) = simple_argtypes
@@ -183,7 +183,8 @@ function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes:
     method = mi.def::Method
     nargtypes = length(given_argtypes)
     for cached_result in cache
-        cached_result.linfo === mi || @goto next_cache
+        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
+        cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const::BitVector

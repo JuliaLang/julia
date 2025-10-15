@@ -148,6 +148,8 @@ gcd(a::Rational) = checked_abs(a.num) // a.den
 lcm(a::Union{Integer,Rational}) = gcd(a)
 gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
 gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
+lcm(a::Unsigned, b::Signed) = lcm(promote(a, abs(b))...)
+lcm(a::Signed, b::Unsigned) = lcm(promote(abs(a), b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
 lcm(a::Real, b::Real) = lcm(promote(a,b)...)
 gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
@@ -252,6 +254,16 @@ function gcdx(a::Real, b::Real, cs::Real...)
     d′, x, ys... = gcdx(d, cs...)
     return d′, i*x, j*x, ys...
 end
+function gcdx(a::Signed, b::Unsigned)
+    R = promote_type(typeof(a), typeof(b))
+    _a = a % signed(R) # handle the case a == typemin(typeof(a)) if R != typeof(a)
+    d, u, v = gcdx(promote(abs(_a), b)...)
+    d, flipsign(u, a), v
+end
+function gcdx(a::Unsigned, b::Signed)
+    d, v, u = gcdx(b, a)
+    d, u, v
+end
 
 # multiplicative inverse of n mod m, error if none
 
@@ -286,7 +298,7 @@ function invmod(n::Integer, m::Integer)
     g, x, y = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
     # Note that m might be negative here.
-    if n isa Unsigned && hastypemax(typeof(n)) && x > typemax(n)>>1
+    if x isa Unsigned && hastypemax(typeof(x)) && x > typemax(x)>>1
         # x might have wrapped if it would have been negative
         # adding back m forces a correction
         x += m
@@ -335,11 +347,6 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
-function to_power_type(x::Number)
-    T = promote_type(typeof(x), typeof(one(x)), typeof(x*x))
-    convert(T, x)
-end
-to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
@@ -355,12 +362,23 @@ to_power_type(x) = oftype(x*x, x)
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
 # The * keyword supports `*=checked_mul` for `checked_pow`
 @assume_effects :terminates_locally function power_by_squaring(x_, p::Integer; mul=*)
-    x = to_power_type(x_)
+    x_squared_ = x_ * x_
+    x_squared_type = typeof(x_squared_)
+    T = if x_ isa Number
+        promote_type(typeof(x_), x_squared_type)
+    else
+        x_squared_type
+    end
+    x = convert(T, x_)
+    square_is_useful = mul === *
     if p == 1
         return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
+        if square_is_useful  # avoid performing the same multiplication a second time when possible
+            return convert(T, x_squared_)
+        end
         return mul(x, x)
     elseif p < 0
         isone(x) && return copy(x)
@@ -369,6 +387,11 @@ to_power_type(x) = oftype(x*x, x)
     end
     t = trailing_zeros(p) + 1
     p >>= t
+    if square_is_useful  # avoid performing the same multiplication a second time when possible
+        if (t -= 1) > 0
+            x = convert(T, x_squared_)
+        end
+    end
     while (t -= 1) > 0
         x = mul(x, x)
     end
@@ -466,18 +489,20 @@ julia> powermod(5, 3, 19)
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     p == 0 && return mod(one(m),m)
     # When the concrete type of p is signed and has the lowest value,
-    # `p != 0 && p == -p` is equivalent to `p == typemin(typeof(p))` for 2's complement representation.
+    # `p < 0 && p == -p` is equivalent to `p == typemin(typeof(p))` for 2's complement representation.
     # but will work for integer types like `BigInt` that don't have `typemin` defined
     # It needs special handling otherwise will cause overflow problem.
-    if p == -p
-        imod = invmod(x, m)
-        rhalf = powermod(imod, -(p÷2), m)
-        r::T = mod(widemul(rhalf, rhalf), m)
-        isodd(p) && (r = mod(widemul(r, imod), m))
-        #else odd
-        return r
-    elseif p < 0
-        return powermod(invmod(x, m), -p, m)
+    if p < 0
+        if p == -p
+            imod = invmod(x, m)
+            rhalf = powermod(imod, -(p÷2), m)
+            r::T = mod(widemul(rhalf, rhalf), m)
+            isodd(p) && (r = mod(widemul(r, imod), m))
+            #else odd
+            return r
+        else
+            return powermod(invmod(x, m), -p, m)
+        end
     end
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
@@ -505,7 +530,7 @@ _prevpow2(x::Unsigned) = one(x) << unsigned(top_set_bit(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
-    ispow2(n::Number) -> Bool
+    ispow2(n::Number)::Bool
 
 Test whether `n` is an integer power of two.
 
@@ -570,7 +595,8 @@ function nextpow(a::Real, x::Real)
     n = ceil(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^(n-1)
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     p >= x && return p
     wp = a^n
     wp > p || throw(OverflowError("result is beyond the range of type of the base"))
@@ -611,9 +637,10 @@ function prevpow(a::T, x::Real) where T <: Real
     n = floor(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^n
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     if a isa Integer
-        wp, overflow = mul_with_overflow(a, p)
+        wp, overflow = mul_with_overflow(promote(a, p)...)
         wp <= x && !overflow && return wp
     else
         wp = a^(n+1)
@@ -747,7 +774,8 @@ function ndigits0z(x::Integer, b::Integer)
 end
 
 # Extends the definition in base/int.jl
-top_set_bit(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+# assume x >= 0. result is implementation-defined for negative values
+top_set_bit(x::Integer) = iszero(x) ? 0 : exponent(x) + 1
 
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)
@@ -845,7 +873,7 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     while i >= 2
         d, c = divrem(digits, 0x64)
         digits = oftype(digits, d)
-        @inbounds d100 = _dec_d100[(c % Int) + 1]
+        @inbounds d100 = _dec_d100[(c % Int)::Int + 1]
         @inbounds buf[pos + i - 2] = d100 % UInt8
         @inbounds buf[pos + i - 1] = (d100 >> 0x8) % UInt8
         i -= 2
@@ -949,7 +977,8 @@ split_sign(n::Unsigned) = n, false
 Convert an integer `n` to a string in the given `base`,
 optionally specifying a number of digits to pad to.
 
-See also [`digits`](@ref), [`bitstring`](@ref), [`count_zeros`](@ref).
+See also [`digits`](@ref), [`bitstring`](@ref), [`count_zeros`](@ref),
+and the Printf standard library.
 
 # Examples
 ```jldoctest
@@ -958,6 +987,14 @@ julia> string(5, base = 13, pad = 4)
 
 julia> string(-13, base = 5, pad = 4)
 "-0023"
+
+julia> using Printf
+
+julia> @sprintf("%04i", 5)
+"0005"
+
+julia> @sprintf("%4i", 5)
+"   5"
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)
@@ -1062,12 +1099,10 @@ function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer
 end
 
 """
-    hastypemax(T::Type) -> Bool
+    hastypemax(T::Type)::Bool
 
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
-hastypemax(::Base.BitIntegerType) = true
-hastypemax(::Type{Bool}) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """

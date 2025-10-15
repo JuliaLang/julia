@@ -7,7 +7,8 @@ See [`CRC32c.crc32c`](@ref) for more information.
 """
 module CRC32c
 
-import Base: DenseBytes
+import Base.FastContiguousSubArray
+import Base: DenseUInt8OrInt8
 
 export crc32c
 
@@ -50,7 +51,7 @@ function crc32c(a::AbstractVector{UInt8}, crc::UInt32=0x00000000)
     return crc
 end
 
-function crc32c(a::DenseBytes, crc::UInt32=0x00000000)
+function crc32c(a::DenseUInt8OrInt8, crc::UInt32=0x00000000)
     Base._crc32c(a, crc)
 end
 

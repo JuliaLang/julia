@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <cstdint>
+#include <pthread.h>
 #include <string>
 #include <fstream>
 #include <map>
@@ -15,7 +17,7 @@
 
 using namespace llvm;
 
-static int codegen_imaging_mode(void)
+static int codegen_imaging_mode(void) JL_NOTSAFEPOINT
 {
     return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
 }
@@ -26,7 +28,9 @@ const int logdata_blocksize = 32; // target getting nearby lines in the same gen
 typedef uint64_t logdata_block[logdata_blocksize];
 typedef StringMap< SmallVector<logdata_block*, 0> > logdata_t;
 
-static uint64_t *allocLine(SmallVector<logdata_block*, 0> &vec, int line)
+pthread_mutex_t coverage_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static uint64_t *allocLine(SmallVector<logdata_block*, 0> &vec, int line) JL_NOTSAFEPOINT
 {
     unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
@@ -45,39 +49,49 @@ static uint64_t *allocLine(SmallVector<logdata_block*, 0> &vec, int line)
 
 static logdata_t coverageData;
 
-JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line)
+JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line) JL_NOTSAFEPOINT
 {
     assert(!codegen_imaging_mode());
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
+    pthread_mutex_lock(&coverage_lock);
     allocLine(coverageData[filename], line);
+    pthread_mutex_unlock(&coverage_lock);
 }
 
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line)
+JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line) JL_NOTSAFEPOINT
 {
-    return allocLine(coverageData[filename], line);
+    pthread_mutex_lock(&coverage_lock);
+    uint64_t* ret = allocLine(coverageData[filename], line);
+    pthread_mutex_unlock(&coverage_lock);
+    return ret;
 }
 
-extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_t len_filename, int line)
+extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_t len_filename, int line) JL_NOTSAFEPOINT
 {
     StringRef filename = StringRef(filename_, len_filename);
     if (codegen_imaging_mode() || filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
+    pthread_mutex_lock(&coverage_lock);
     SmallVector<logdata_block*, 0> &vec = coverageData[filename];
     uint64_t *ptr = allocLine(vec, line);
     (*ptr)++;
+    pthread_mutex_unlock(&coverage_lock);
 }
 
 // Memory allocation log (malloc_log)
 
 static logdata_t mallocData;
 
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line)
+JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line) JL_NOTSAFEPOINT
 {
-    return allocLine(mallocData[filename], line);
+    pthread_mutex_lock(&coverage_lock);
+    uint64_t* ret = allocLine(mallocData[filename], line);
+    pthread_mutex_unlock(&coverage_lock);
+    return ret;
 }
 
-static void clear_log_data(logdata_t &logData, int resetValue)
+static void clear_log_data(logdata_t &logData, int resetValue) JL_NOTSAFEPOINT
 {
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
@@ -97,18 +111,22 @@ static void clear_log_data(logdata_t &logData, int resetValue)
 }
 
 // Resets the malloc counts.
-extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
+extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void) JL_NOTSAFEPOINT
 {
+    pthread_mutex_lock(&coverage_lock);
     clear_log_data(mallocData, 1);
+    pthread_mutex_unlock(&coverage_lock);
 }
 
 // Resets the code coverage
-extern "C" JL_DLLEXPORT void jl_clear_coverage_data(void)
+extern "C" JL_DLLEXPORT void jl_clear_coverage_data(void) JL_NOTSAFEPOINT
 {
+    pthread_mutex_lock(&coverage_lock);
     clear_log_data(coverageData, 0);
+    pthread_mutex_unlock(&coverage_lock);
 }
 
-static void write_log_data(logdata_t &logData, const char *extension)
+static void write_log_data(logdata_t &logData, const char *extension) JL_NOTSAFEPOINT
 {
     std::string base = std::string(jl_options.julia_bindir);
     base = base + "/../share/julia/base/";
@@ -163,7 +181,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
     }
 }
 
-static void write_lcov_data(logdata_t &logData, const std::string &outfile)
+static void write_lcov_data(logdata_t &logData, const std::string &outfile) JL_NOTSAFEPOINT
 {
     std::ofstream outf(outfile.c_str(), std::ofstream::ate | std::ofstream::out | std::ofstream::binary);
     //std::string base = std::string(jl_options.julia_bindir);
@@ -203,8 +221,9 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     outf.close();
 }
 
-extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
+extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output) JL_NOTSAFEPOINT
 {
+    pthread_mutex_lock(&coverage_lock);
     if (output) {
         StringRef output_pattern(output);
         if (output_pattern.ends_with(".info"))
@@ -215,11 +234,14 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
         raw_string_ostream(stm) << "." << uv_os_getpid() << ".cov";
         write_log_data(coverageData, stm.c_str());
     }
+    pthread_mutex_unlock(&coverage_lock);
 }
 
-extern "C" void jl_write_malloc_log(void)
+extern "C" void jl_write_malloc_log(void) JL_NOTSAFEPOINT
 {
+    pthread_mutex_lock(&coverage_lock);
     std::string stm;
     raw_string_ostream(stm) << "." << uv_os_getpid() << ".mem";
     write_log_data(mallocData, stm.c_str());
+    pthread_mutex_unlock(&coverage_lock);
 }

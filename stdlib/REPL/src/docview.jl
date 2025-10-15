@@ -313,7 +313,7 @@ function summarize(binding::Binding, sig)
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
         bpart = Base.lookup_binding_partition(Base.tls_world_age(), convert(Core.Binding, GlobalRef(binding.mod, binding.var)))
-        if Base.binding_kind(bpart) === Base.BINDING_KIND_GUARD
+        if Base.binding_kind(bpart) === Base.PARTITION_KIND_GUARD
             println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
         else
             println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
@@ -640,7 +640,7 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
     docs = esc(:(@doc $x))
     docs = if isfield(x)
         quote
-            if isa($(esc(x.args[1])), DataType)
+            if $(esc(x.args[1])) isa Type
                 fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
             else
                 $docs
@@ -684,6 +684,7 @@ function fielddoc(binding::Binding, field::Symbol)
 end
 
 # As with the additional `doc` methods, this converts an object to a `Binding` first.
+fielddoc(obj::UnionAll, field::Symbol) = fielddoc(Base.unwrap_unionall(obj), field)
 fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), field)
 
 

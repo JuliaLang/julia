@@ -5,12 +5,14 @@
 # it does double the number of operations compared to accumulate,
 # though for cheap operations like + this does not have much impact (20%)
 function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
-    @inbounds if n < 128
-        s_ = v[i1]
-        c[i1] = op(s, s_)
+    if n < 128
+        @inbounds s_ = v[i1]
+        ci1 = op(s, s_)
+        @inbounds c[i1] = ci1
         for i = i1+1:i1+n-1
-            s_ = op(s_, v[i])
-            c[i] = op(s, s_)
+            s_ = op(s_, @inbounds(v[i]))
+            ci = op(s, s_)
+            @inbounds c[i] = ci
         end
     else
         n2 = n >> 1
@@ -26,7 +28,8 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
     n = length(li)
     n == 0 && return result
     i1 = first(li)
-    @inbounds result[i1] = v1 = reduce_first(op,v[i1])
+    v1 = reduce_first(op, @inbounds(v[i1]))
+    @inbounds result[i1] = v1
     n == 1 && return result
     _accumulate_pairwise!(op, result, v, v1, i1+1, n-1)
     return result
@@ -378,16 +381,16 @@ function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
         # We can accumulate to a temporary variable, which allows
         # register usage and will be slightly faster
         ind1 = inds_t[1]
-        @inbounds for I in CartesianIndices(tail(inds_t))
+        for I in CartesianIndices(tail(inds_t))
             if init === nothing
-                tmp = reduce_first(op, A[first(ind1), I])
+                tmp = reduce_first(op, @inbounds(A[first(ind1), I]))
             else
-                tmp = op(something(init), A[first(ind1), I])
+                tmp = op(something(init), @inbounds(A[first(ind1), I]))
             end
-            B[first(ind1), I] = tmp
+            @inbounds B[first(ind1), I] = tmp
             for i_1 = first(ind1)+1:last(ind1)
-                tmp = op(tmp, A[i_1, I])
-                B[i_1, I] = tmp
+                tmp = op(tmp, @inbounds(A[i_1, I]))
+                @inbounds B[i_1, I] = tmp
             end
         end
     else
@@ -401,12 +404,15 @@ end
 @noinline function _accumulaten!(op, B, A, R1, ind, R2, init::Nothing)
     # Copy the initial element in each 1d vector along dimension `dim`
     ii = first(ind)
-    @inbounds for J in R2, I in R1
-        B[I, ii, J] = reduce_first(op, A[I, ii, J])
+    for J in R2, I in R1
+        tmp = reduce_first(op, @inbounds(A[I, ii, J]))
+        @inbounds B[I, ii, J] = tmp
     end
     # Accumulate
-    @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
-        B[I, i, J] = op(B[I, i-1, J], A[I, i, J])
+    for J in R2, i in first(ind)+1:last(ind), I in R1
+        @inbounds Bv, Av = B[I, i-1, J], A[I, i, J]
+        tmp = op(Bv, Av)
+        @inbounds B[I, i, J] = tmp
     end
     B
 end
@@ -414,12 +420,15 @@ end
 @noinline function _accumulaten!(op, B, A, R1, ind, R2, init::Some)
     # Copy the initial element in each 1d vector along dimension `dim`
     ii = first(ind)
-    @inbounds for J in R2, I in R1
-        B[I, ii, J] = op(something(init), A[I, ii, J])
+    for J in R2, I in R1
+        tmp = op(something(init), @inbounds(A[I, ii, J]))
+        @inbounds B[I, ii, J] = tmp
     end
     # Accumulate
-    @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
-        B[I, i, J] = op(B[I, i-1, J], A[I, i, J])
+    for J in R2, i in first(ind)+1:last(ind), I in R1
+        @inbounds Bv, Av = B[I, i-1, J], A[I, i, J]
+        tmp = op(Bv, Av)
+        @inbounds B[I, i, J] = tmp
     end
     B
 end
@@ -433,10 +442,10 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     cur_val = v1
     B[i1] = cur_val
     next = iterate(inds, state)
-    @inbounds while next !== nothing
+    while next !== nothing
         (i, state) = next
-        cur_val = op(cur_val, A[i])
-        B[i] = cur_val
+        cur_val = op(cur_val, @inbounds(A[i]))
+        @inbounds B[i] = cur_val
         next = iterate(inds, state)
     end
     return B

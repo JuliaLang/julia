@@ -294,6 +294,14 @@ end
     @test eq(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
 end
 
+@testset "sizehint!" begin
+    d = Dict()
+    sizehint!(d, UInt(3))
+    @test d == Dict()
+    sizehint!(d, 5)
+    @test isempty(d)
+end
+
 @testset "equality special cases" begin
     @test Dict(1=>0.0) == Dict(1=>-0.0)
     @test !isequal(Dict(1=>0.0), Dict(1=>-0.0))

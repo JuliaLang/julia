@@ -53,7 +53,7 @@ Construct an undef [`BitArray`](@ref) with the given dimensions.
 Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest; filter = r"[01]"
 julia> BitArray(undef, 2, 2)
 2×2 BitMatrix:
  0  0
@@ -81,7 +81,7 @@ BitVector() = BitVector(undef, 0)
 
 Construct a `BitVector` from a tuple of `Bool`.
 # Examples
-```julia-repl
+```jldoctest
 julia> nt = (true, false, true, false)
 (true, false, true, false)
 
@@ -103,11 +103,6 @@ end
 length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
-
-@inline function size(B::BitVector, d::Integer)
-    d < 1 && throw_boundserror(size(B), d)
-    ifelse(d == 1, B.len, 1)
-end
 
 isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
@@ -1338,7 +1333,7 @@ function (>>>)(B::BitVector, i::UInt)
 end
 
 """
-    >>(B::BitVector, n) -> BitVector
+    >>(B::BitVector, n)::BitVector
 
 Right bit shift operator, `B >> n`. For `n >= 0`, the result is `B`
 with elements shifted `n` positions forward, filling with `false`
@@ -1376,7 +1371,7 @@ julia> B >> -1
 
 # signed integer version of shift operators with handling of negative values
 """
-    <<(B::BitVector, n) -> BitVector
+    <<(B::BitVector, n)::BitVector
 
 Left bit shift operator, `B << n`. For `n >= 0`, the result is `B`
 with elements shifted `n` positions backwards, filling with `false`
@@ -1413,7 +1408,7 @@ julia> B << -1
 (<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
 
 """
-    >>>(B::BitVector, n) -> BitVector
+    >>>(B::BitVector, n)::BitVector
 
 Unsigned right bitshift operator, `B >>> n`. Equivalent to `B >> n`. See [`>>`](@ref) for
 details and examples.

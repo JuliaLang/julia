@@ -190,7 +190,7 @@ T jl_atomic_exchange_explicit(std::atomic<T> *ptr, S desired, std::memory_order 
 {
      return std::atomic_exchange_explicit<T>(ptr, desired, order);
 }
-#define jl_atomic_exchange_release(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_reease)
+#define jl_atomic_exchange_release(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_release)
 #define jl_atomic_exchange_relaxed(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_relaxed)
 extern "C" {
 #else

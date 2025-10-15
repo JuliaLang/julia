@@ -297,7 +297,7 @@ exp10_fast(x::Union{Float32,Float64}) = Base.Math.exp10_fast(x)
 
 # builtins
 
-function pow_fast(x::Float64, y::Integer)
+@inline function pow_fast(x::Float64, y::Integer)
     z = y % Int32
     z == y ? pow_fast(x, z) : x^y
 end

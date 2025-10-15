@@ -401,9 +401,9 @@ perhaps range-types `Ind` of your own design. For more information, see
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                                    |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
 | `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                                             |
-| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride between consecutive elements in the array.                                       |
+| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride (in number of bytes) between consecutive elements in the array.                                       |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                              |
-| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.    |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
@@ -412,6 +412,34 @@ that wraps a standard `Array` with additional structure.
 
 Warning: do not implement these methods if the underlying storage is not actually strided, as it
 may lead to incorrect results or segmentation faults.
+
+The following function demonstrates how an element at indices `I` in a strided array `A` can be accessed.
+This function assumes the element type `isbitstype` and the indices are inbounds.
+
+```jldoctest
+julia> function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+           A_cconv = Base.cconvert(Ptr{T}, A)
+           GC.@preserve A_cconv begin
+               A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+               for d in 1:N
+                   stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+                   first_idx = first(axes(A, d))
+                   A_ptr += (I[d] - first_idx) * stride_in_bytes
+               end
+               unsafe_load(A_ptr)
+           end
+       end;
+
+julia> A = [1 5; 2 6; 3 7; 4 8];
+
+julia> unsafe_strided_getindex(A, 3, 2)
+7
+
+julia> V = view(A, 1:2:3, 1:2);
+
+julia> unsafe_strided_getindex(V, 2, 2)
+7
+```
 
 Here are some examples to demonstrate which type of arrays are strided and which are not:
 ```julia

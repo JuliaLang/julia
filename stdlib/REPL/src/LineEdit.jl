@@ -4,9 +4,12 @@ module LineEdit
 
 import ..REPL
 using ..REPL: AbstractREPL, Options
+using ..REPL.StylingPasses: StylingPass, SyntaxHighlightPass, RegionHighlightPass, EnclosingParenHighlightPass, StylingContext, apply_styling_passes, merge_annotations
 
 using ..Terminals
 import ..Terminals: raw!, width, height, clear_line, beep
+
+using StyledStrings
 
 import Base: ensureroom, show, AnyDict, position
 using Base: something
@@ -58,6 +61,7 @@ mutable struct Prompt <: TextInterface
     on_done::Function
     hist::HistoryProvider  # TODO?: rename this `hp` (consistency with other TextInterfaces), or is the type-assert useful for mode(s)?
     sticky::Bool
+    styling_passes::Vector{StylingPass}  # Styling passes to apply to input
 end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
@@ -169,7 +173,7 @@ region_active(s::PromptState) = s.region_active
 region_active(s::ModeState) = :off
 
 
-input_string(s::PromptState) = String(take!(copy(s.input_buffer)))::String
+input_string(s::PromptState) = takestring!(copy(s.input_buffer))::String
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -391,16 +395,21 @@ function complete_line(s::MIState)
     end
 end
 
+# Old complete_line return type: Vector{String},          String, Bool
+# New complete_line return type: NamedCompletion{String}, String, Bool
+#                            OR  NamedCompletion{String}, Region, Bool
+#
 # due to close coupling of the Pkg ReplExt `complete_line` can still return a vector of strings,
 # so we convert those in this helper
-function complete_line_named(args...; kwargs...)::Tuple{Vector{NamedCompletion},String,Bool}
-    result = complete_line(args...; kwargs...)::Union{Tuple{Vector{NamedCompletion},String,Bool},Tuple{Vector{String},String,Bool}}
-    if result isa Tuple{Vector{NamedCompletion},String,Bool}
-        return result
-    else
-        completions, partial, should_complete = result
-        return map(NamedCompletion, completions), partial, should_complete
-    end
+function complete_line_named(c, s, args...; kwargs...)::Tuple{Vector{NamedCompletion},Region,Bool}
+    r1, r2, should_complete = complete_line(c, s, args...; kwargs...)::Union{
+        Tuple{Vector{String}, String, Bool},
+        Tuple{Vector{NamedCompletion}, String, Bool},
+        Tuple{Vector{NamedCompletion}, Region, Bool},
+    }
+    completions = (r1 isa Vector{String} ? map(NamedCompletion, r1) : r1)
+    r = (r2 isa String ? (position(s)-sizeof(r2) => position(s)) : r2)
+    completions, r, should_complete
 end
 
 # checks for a hint and shows it if appropriate.
@@ -426,14 +435,14 @@ function check_show_hint(s::MIState)
         return
     end
     t_completion = Threads.@spawn :default begin
-        named_completions, partial, should_complete = nothing, nothing, nothing
+        named_completions, reg, should_complete = nothing, nothing, nothing
 
         # only allow one task to generate hints at a time and check around lock
         # if the user has pressed a key since the hint was requested, to skip old completions
         next_key_pressed() && return
         @lock s.hint_generation_lock begin
             next_key_pressed() && return
-            named_completions, partial, should_complete = try
+            named_completions, reg, should_complete = try
                 complete_line_named(st.p.complete, st, s.active_module; hint = true)
             catch
                 lock_clear_hint()
@@ -448,21 +457,19 @@ function check_show_hint(s::MIState)
             return
         end
         # Don't complete for single chars, given e.g. `x` completes to `xor`
-        if length(partial) > 1 && should_complete
+        if reg.second - reg.first > 1 && should_complete
             singlecompletion = length(completions) == 1
             p = singlecompletion ? completions[1] : common_prefix(completions)
             if singlecompletion || p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
-                # The completion `p` and the input `partial` may not share the same initial
+                # The completion `p` and the region `reg` may not share the same initial
                 # characters, for instance when completing to subscripts or superscripts.
                 # So, in general, make sure that the hint starts at the correct position by
                 # incrementing its starting position by as many characters as the input.
-                startind = 1 # index of p from which to start providing the hint
-                maxind = ncodeunits(p)
-                for _ in partial
-                    startind = nextind(p, startind)
-                    startind > maxind && break
-                end
+                maxind = lastindex(p)
+                startind = sizeof(content(s, reg))
                 if startind ≤ maxind # completion on a complete name returns itself so check that there's something to hint
+                    # index of p from which to start providing the hint
+                    startind = nextind(p, startind)
                     hint = p[startind:end]
                     next_key_pressed() && return
                     @lock s.line_modify_lock begin
@@ -491,7 +498,7 @@ function clear_hint(s::ModeState)
 end
 
 function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
-    completions, partial, should_complete = complete_line_named(s.p.complete, s, mod; hint)
+    completions, reg, should_complete = complete_line_named(s.p.complete, s, mod; hint)
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -499,17 +506,16 @@ function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=fal
         show_completions(s, completions)
     elseif length(completions) == 1
         # Replace word by completion
-        prev_pos = position(s)
         push_undo(s)
-        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1].completion)
+        edit_splice!(s, reg, completions[1].completion)
     else
         p = common_prefix(completions)
+        partial = content(s, reg.first => min(bufend(s), reg.first + sizeof(p)))
         if !isempty(p) && p != partial
             # All possible completions share the same prefix, so we might as
-            # well complete that
-            prev_pos = position(s)
+            # well complete that.
             push_undo(s)
-            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, p)
+            edit_splice!(s, reg, p)
         elseif repeats > 0
             show_completions(s, completions)
         end
@@ -563,6 +569,8 @@ function maybe_show_hint(s::PromptState)
     return nothing
 end
 
+max_highlight_size::Int = 10000 # bytes
+
 function refresh_multi_line(s::PromptState; kw...)
     if s.refresh_wait !== nothing
         close(s.refresh_wait)
@@ -609,6 +617,42 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         reader isa Base.TTY && !Base.ispty(reader)::Bool
     else false end
 
+    # Get the styling passes from the prompt
+    prompt_obj = nothing
+    if prompt isa PromptState
+        prompt_obj = prompt.p
+    elseif prompt isa PrefixSearchState || prompt isa SearchState
+        if isdefined(prompt, :parent) && prompt.parent isa Prompt
+            prompt_obj = prompt.parent
+        end
+    end
+
+    styled_buffer = AnnotatedString("")
+    if buf.size > 0 && buf.size <= max_highlight_size
+        full_input = String(buf.data[1:buf.size])
+        if !isempty(full_input)
+            passes = StylingPass[]
+            context = StylingContext(buf_pos, regstart, regstop)
+
+            # Add prompt-specific styling passes if the prompt has them and styling is enabled
+            enable_style_input = prompt_obj === nothing ? false :
+                (isdefined(prompt_obj, :repl) && prompt_obj.repl !== nothing ?
+                    prompt_obj.repl.options.style_input : false)
+
+            if enable_style_input && prompt_obj !== nothing
+                append!(passes, prompt_obj.styling_passes)
+            end
+
+            if region_active
+                push!(passes, RegionHighlightPass())
+            end
+
+            if !isempty(passes)
+                styled_buffer = apply_styling_passes(full_input, passes, context)
+            end
+        end
+    end
+
     # Now go through the buffer line by line
     seek(buf, 0)
     moreinput = true # add a blank line if there is a trailing newline on the last line
@@ -634,12 +678,26 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         llength = textwidth(line)
         slength = sizeof(line)
         cur_row += 1
-        # lwrite: what will be written to termbuf
-        lwrite = region_active ? highlight_region(line, regstart, regstop, written, slength) :
-                                 line
+
+        # Extract the portion of styled_buffer corresponding to this line.
+        if !isempty(styled_buffer)
+            # Calculate byte positions for this line in the buffer
+            line_start_byte = written + 1
+            line_end_byte = written + slength
+
+            # Convert to valid character indices (handles UTF-8 boundaries)
+            start_idx = thisind(styled_buffer, line_start_byte)
+            end_idx = thisind(styled_buffer, line_end_byte)
+
+            lwrite = @view styled_buffer[start_idx:end_idx]
+        else
+            lwrite = line
+        end
+
         written += slength
         cmove_col(termbuf, lindent + 1)
-        write(termbuf, lwrite)
+
+        write(IOContext(termbuf, :color => hascolor(terminal)), lwrite)
         # We expect to be line after the last valid output line (due to
         # the '\n' at the end of the previous line)
         if curs_row == -1
@@ -688,18 +746,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     cmove_col(termbuf, curs_pos + 1)
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
-end
-
-function highlight_region(lwrite::Union{String,SubString{String}}, regstart::Int, regstop::Int, written::Int, slength::Int)
-    if written <= regstop <= written+slength
-        i = thisind(lwrite, regstop-written)
-        lwrite = lwrite[1:i] * Base.disable_text_style[:reverse] * lwrite[nextind(lwrite, i):end]
-    end
-    if written <= regstart <= written+slength
-        i = thisind(lwrite, regstart-written)
-        lwrite = lwrite[1:i] * Base.text_colors[:reverse] * lwrite[nextind(lwrite, i):end]
-    end
-    return lwrite
 end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
@@ -830,12 +876,12 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        completions, partial, should_complete = complete_line(s.p.complete, s, m.active_module)
-        if should_complete && eof(buf) && length(completions) == 1 && length(partial) > 1
+        completions, reg, should_complete = complete_line(s.p.complete, s, m.active_module)
+        if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
             # Replace word by completion
             prev_pos = position(s)
             push_undo(s)
-            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1].completion)
+            edit_splice!(s, (prev_pos - reg.second + reg.first) => prev_pos, completions[1].completion)
             refresh_line(state(s))
             return true
         else
@@ -997,7 +1043,9 @@ function edit_insert(s::PromptState, c::StringLike)
         offset += position(buf) - beginofline(buf) # size of current line
         spinner = '\0'
         delayup = !eof(buf) || old_wait
-        if offset + textwidth(str) <= w && !(after == 0 && delayup)
+        # Disable fast path when syntax highlighting is enabled
+        use_fast_path = offset + textwidth(str) <= w && !(after == 0 && delayup) && !options(s).style_input
+        if use_fast_path
             # Avoid full update when appending characters to the end
             # and an update of curs_row isn't necessary (conservatively estimated)
             write(termbuf, str)
@@ -1524,7 +1572,7 @@ function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(fil
     end
     buf = buffer(s)
     pos = position(buf)
-    str = String(take!(buf))
+    str = takestring!(buf)
     lines = readlines(IOBuffer(str); keep=true)
 
     # Compute line
@@ -1758,7 +1806,7 @@ function normalize_key(key::Union{String,SubString{String}})
             write(buf, c)
         end
     end
-    return String(take!(buf))
+    return takestring!(buf)
 end
 
 function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
@@ -2098,7 +2146,7 @@ function history_set_backward(s::SearchState, backward::Bool)
     nothing
 end
 
-input_string(s::SearchState) = String(take!(copy(s.query_buffer)))
+input_string(s::SearchState) = takestring!(copy(s.query_buffer))
 
 function reset_state(s::SearchState)
     if s.query_buffer.size != 0
@@ -2186,7 +2234,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
     return ias
 end
 
-input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
+input_string(s::PrefixSearchState) = takestring!(copy(s.response_buffer))
 
 write_prompt(terminal, s::PrefixSearchState, color::Bool) = write_prompt(terminal, s.histprompt.parent_prompt, color)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
@@ -2224,6 +2272,13 @@ function replace_line(s::PrefixSearchState, l::Union{String,SubString{String}})
     nothing
 end
 
+function write_prompt(terminal, s::SearchState, color::Bool)
+    failed = s.failed ? "failed " : ""
+    promptstr = s.backward ? "($(failed)reverse-i-search)`" : "($(failed)forward-i-search)`"
+    write(terminal, promptstr)
+    return textwidth(promptstr)
+end
+
 function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf = IOBuffer()
     unsafe_write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
@@ -2234,9 +2289,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     write(buf, read(s.response_buffer, String))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
-    failed = s.failed ? "failed " : ""
-    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias,
-                             s.backward ? "($(failed)reverse-i-search)`" : "($(failed)forward-i-search)`")
+    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s)
     s.ias = ias
     return ias
 end
@@ -2255,12 +2308,12 @@ setmodifiers!(c) = nothing
 
 # Search Mode completions
 function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
+    completions, reg, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
         push_undo(s)
-        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1].completion)
+        edit_splice!(s, (prev_pos - reg.second - reg.first) => prev_pos, completions[1].completion)
         return true
     end
     return false
@@ -2821,10 +2874,11 @@ function Prompt(prompt
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider(),
-    sticky = false)
+    sticky = false,
+    styling_passes = StylingPass[])
 
     return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
-                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
+                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky, styling_passes)
 end
 
 run_interface(::Prompt) = nothing

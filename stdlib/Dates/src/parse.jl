@@ -321,7 +321,7 @@ function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_fo
 end
 
 """
-    parse_components(str::AbstractString, df::DateFormat) -> Array{Any}
+    parse_components(str::AbstractString, df::DateFormat)::Array{Any}
 
 Parse the string into its components according to the directives in the `DateFormat`.
 Each component will be a distinct type, typically a subtype of Period. The order of the

@@ -8,7 +8,7 @@ of Julia multi-threading features.
 By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
 This can be verified by using the command [`Threads.nthreads()`](@ref):
 
-```jldoctest
+```julia
 julia> Threads.nthreads(:default)
 1
 julia> Threads.nthreads(:interactive)
@@ -37,6 +37,7 @@ each threadpool.
 
 !!! compat "Julia 1.12"
     Starting by default with 1 interactive thread, as well as the 1 worker thread, was made as such in Julia 1.12
+    If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
 
 Lets start Julia with 4 threads:
 
@@ -46,7 +47,7 @@ $ julia --threads 4
 
 Let's verify there are 4 threads at our disposal.
 
-```julia-repl
+```jldoctest; filter = r"[0-9]+"
 julia> Threads.nthreads()
 4
 ```
@@ -83,12 +84,14 @@ julia> Threads.threadid()
 
 ### Multiple GC Threads
 
-The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
-of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+The Garbage Collector (GC) can use multiple threads. The amount used by default matches the compute
+worker threads or can configured by either the `--gcthreads` command line argument or by using the
 [`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
     The `--gcthreads` command line argument requires at least Julia 1.10.
+
+For more details about garbage collection configuration and performance tuning, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 ## [Threadpools](@id man-threadpools)
 
@@ -144,6 +147,8 @@ julia> nthreads(:interactive)
 julia> nthreads()
 3
 ```
+!!! note
+    Explicitly asking for 1 thread by doing `-t1` or `JULIA_NUM_THREADS=1` does not add an interactive thread.
 
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
@@ -209,7 +214,7 @@ Note that [`Threads.@threads`](@ref) does not have an optional reduction paramet
 
 ### Using `@threads` without data-races
 
-The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
 Lets say we want to make the function `sum_single` below multithreaded.
 ```julia-repl

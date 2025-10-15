@@ -63,7 +63,7 @@ the [LLVM library](https://llvm.org).
 If there is no sysimg file (`!jl_options.image_file`) then the `Core` and `Main` modules are
 created and `boot.jl` is evaluated:
 
-`jl_core_module = jl_new_module(jl_symbol("Core"))` creates the Julia `Core` module.
+`jl_core_module = jl_new_module(jl_symbol("Core"), NULL)` creates the Julia `Core` module.
 
 [`jl_init_intrinsic_functions()`](https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp)
 creates a new Julia module `Intrinsics` containing constant `jl_intrinsic_type` symbols. These define

@@ -266,7 +266,7 @@ mktempdir() do dir
 end
 
 ## Tests for LazyLibrary
-@testset "LazyLibrary" begin; mktempdir() do dir
+@testset "LazyLibrary" begin
     lclf_path = joinpath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
     lclb_path = joinpath(private_libdir, "libccalllazybar.$(Libdl.dlext)")
 
@@ -278,7 +278,7 @@ end
     global lclf_loaded = false
     global lclb_loaded = false
 
-    # We don't provide `dlclose()` on `LazyLibrary`'s, you have to manage it yourself:
+    # We don't provide `dlclose()` on `LazyLibrary`'s since it is dangerous, you have to manage it yourself:
     function close_libs()
         global lclf_loaded = false
         global lclb_loaded = false
@@ -294,8 +294,12 @@ end
         @test !any(contains.(dllist(), lclb_path))
     end
 
-    global libccalllazyfoo = LazyLibrary(lclf_path; on_load_callback=() -> global lclf_loaded = true)
-    global libccalllazybar = LazyLibrary(lclb_path; dependencies=[libccalllazyfoo], on_load_callback=() -> global lclb_loaded = true)
+    let libccalllazyfoo = LazyLibrary(lclf_path; on_load_callback=() -> global lclf_loaded = true),
+        libccalllazybar = LazyLibrary(lclb_path; dependencies=[libccalllazyfoo], on_load_callback=() -> global lclb_loaded = true)
+        eval(:(const libccalllazyfoo = $libccalllazyfoo))
+        eval(:(const libccalllazybar = $libccalllazybar))
+    end
+    Core.@latestworld
 
     # Creating `LazyLibrary` doesn't actually load anything
     @test !lclf_loaded
@@ -308,7 +312,8 @@ end
     close_libs()
 
     # Test that the library gets loaded when you use `ccall()`
-    @test ccall((:bar, libccalllazybar), Cint, (Cint,), 2) == 6
+    compiled_bar() = ccall((:bar, libccalllazybar), Cint, (Cint,), 2)
+    @test ccall((:bar, libccalllazybar), Cint, (Cint,), 2) == compiled_bar() == 6
     @test lclf_loaded
     @test lclb_loaded
     close_libs()
@@ -324,11 +329,17 @@ end
     @test lclf_loaded
     close_libs()
 
+    # Test that `cglobal()` works, both compiled and runtime emulation
+    compiled_cglobal() = cglobal((:bar, libccalllazybar))
+    @test cglobal((:bar, libccalllazybar)) === compiled_cglobal() === dlsym(dlopen(libccalllazybar), :bar)
+    @test lclf_loaded
+    close_libs()
+
     # Test that we can use lazily-evaluated library names:
     libname = LazyLibraryPath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
     lazy_name_lazy_lib = LazyLibrary(libname)
     @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
-end; end
+end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Libdl))
