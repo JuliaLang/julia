@@ -944,10 +944,11 @@ function LineEdit.accept_result_newmode(hist::REPLHistoryProvider)
     return nothing
 end
 
-function history_lazy_initialize(hist::REPLHistoryProvider)
+function history_do_initialize(hist::REPLHistoryProvider)
     isempty(hist.history) || return false
     update!(hist.history)
-    hist.cur_idx = length(hist.history) + 1
+    hist.start_idx = length(hist.history) + 1
+    hist.cur_idx = hist.start_idx
     hist.last_idx = -1
     true
 end
@@ -977,7 +978,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
         return
     end
     num < 0 && return history_prev(s, hist, -num, save_idx)
-    history_lazy_initialize(hist)
+    history_do_initialize(hist)
     cur_idx = hist.cur_idx
     max_idx = length(hist.history) + 1
     if cur_idx == max_idx && 0 < hist.last_idx
@@ -1008,7 +1009,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx::Int = hist.cur_idx)
-    if history_lazy_initialize(hist)
+    if history_do_initialize(hist)
         cur_idx = hist.cur_idx
     end
     cur_response = takestring!(copy(LineEdit.buffer(s)))
@@ -1342,6 +1343,7 @@ function setup_interface(
             path = find_hist_file()
             mkpath(dirname(path))
             hp.history = HistoryFile(path)
+            @async history_do_initialize(hp.history)
             finalizer(replc) do replc
                 close(hp.history)
             end
