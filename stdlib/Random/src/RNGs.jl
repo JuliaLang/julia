@@ -237,7 +237,7 @@ function seed!(rng::AbstractRNG, seed::Any=nothing)
         seed!(rng, RandomDevice())
     elseif seed isa AbstractRNG
         # avoid getting into an infinite recursive call from the other branches
-        throw(MethodError(seed!, (rng, seed)))
+        throw(NotImplementedError(seed!, (rng, seed), AbstractRNG))
     else
         seed!(rng, SeedHasher(seed))
     end

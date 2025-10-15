@@ -326,7 +326,7 @@ end
 Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
-    isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(MethodError(convert,(T,x)))
+    isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(ArgumentError("Cannot convert to an abstract type."))
 
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x, y])
