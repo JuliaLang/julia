@@ -402,21 +402,17 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 }
 
 #if defined(_OS_WINDOWS_)
+
 // XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
 static UNWIND_HISTORY_TABLE HistoryTable;
-#else
-static struct {
-    DWORD64 dwAddr;
-    DWORD64 ImageBase;
-} HistoryTable;
-#endif
+// TLS variable for abort_profile_ptr on 64-bit Windows
+static DWORD abort_profile_ptr_tls = TLS_OUT_OF_INDEXES;
+
 static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 AddrBase)
 {
-    //jl_printf(JL_STDOUT, "lookup %d\n", AddrBase);
-#ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn)
@@ -425,16 +421,11 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
     PVOID ftable = SymFunctionTableAccess64(hProcess, AddrBase);
     uv_mutex_unlock(&jl_in_stackwalk);
     return ftable;
-#else
-    return SymFunctionTableAccess64(hProcess, AddrBase);
-#endif
 }
 static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 dwAddr)
 {
-    //jl_printf(JL_STDOUT, "lookup base %d\n", dwAddr);
-#ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
     if (fn)
@@ -443,7 +434,22 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     DWORD64 fbase = SymGetModuleBase64(hProcess, dwAddr);
     uv_mutex_unlock(&jl_in_stackwalk);
     return fbase;
+}
 #else
+static struct {
+    DWORD64 dwAddr;
+    DWORD64 ImageBase;
+} HistoryTable;
+static PVOID CALLBACK JuliaFunctionTableAccess64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 AddrBase)
+{
+    return SymFunctionTableAccess64(hProcess, AddrBase);
+}
+static DWORD64 WINAPI JuliaGetModuleBase64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 dwAddr)
+{
     if (dwAddr == HistoryTable.dwAddr)
         return HistoryTable.ImageBase;
     DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
@@ -453,8 +459,8 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         return ImageBase;
     }
     return SymGetModuleBase64(hProcess, dwAddr);
-#endif
 }
+#endif
 
 // Might be called from unmanaged thread.
 static PVOID dll_notification_cookie;
@@ -527,8 +533,8 @@ static VOID CALLBACK dll_notification_callback(
     uv_mutex_unlock(&jl_in_stackwalk);
 }
 
-// Initialize DLL info list
-void jl_init_dll_info_list(void)
+// Initialize stackwalk infrastructure (DLL tracking and profiling)
+void jl_init_stackwalk(void)
 {
     uv_mutex_init(&jl_in_stackwalk);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
@@ -536,16 +542,37 @@ void jl_init_dll_info_list(void)
         jl_safe_printf("WARNING: failed to initialize stack walk info\n");
     small_arraylist_new(&dll_info_list, 0);
     LdrRegisterDllNotification(0, dll_notification_callback, NULL, &dll_notification_cookie);
+#ifdef _CPU_X86_64_
+    // Initialize TLS for abort_profile_ptr on 64-bit Windows
+    if (abort_profile_ptr_tls == TLS_OUT_OF_INDEXES) {
+        abort_profile_ptr_tls = TlsAlloc();
+    }
+#endif
 }
 
-void jl_fin_dll_info_list(void)
+// Finalize stackwalk infrastructure
+void jl_fin_stackwalk(void)
 {
     if (dll_notification_cookie) {
         LdrUnregisterDllNotification(dll_notification_cookie);
         dll_notification_cookie = NULL;
     }
+#ifdef _CPU_X86_64_
+    // Cleanup TLS for abort_profile_ptr on 64-bit Windows
+    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
+        TlsFree(abort_profile_ptr_tls);
+        abort_profile_ptr_tls = TLS_OUT_OF_INDEXES;
+    }
+#endif
 }
 
+// Set the abort_profile_ptr in TLS
+JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT
+{
+    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
+        TlsSetValue(abort_profile_ptr_tls, (LPVOID)abort_ptr);
+    }
+}
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
@@ -615,12 +642,30 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->Rip != 0;
     }
 
+    // Set can-abort flag
+    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
+        _Atomic(int) *abort_ptr = (_Atomic(int)*)TlsGetValue(abort_profile_ptr_tls);
+        if (abort_ptr && jl_atomic_exchange(abort_ptr, 0) != 0) {
+            return 0; // aborted
+        }
+    }
+
     DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     if (!ImageBase)
         return 0;
 
     PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
         GetCurrentProcess(), cursor->Rip - !from_signal_handler);
+
+    // Check if can-abort flag was removed, or remove it
+    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
+        _Atomic(int) *abort_ptr = (_Atomic(int)*)TlsGetValue(abort_profile_ptr_tls);
+        if (abort_ptr && jl_atomic_exchange(abort_ptr, 0) != 1) {
+            jl_atomic_store(abort_ptr, 3);
+            return 0; // abort
+        }
+    }
+
     if (!FunctionEntry) {
         // Not code or bad unwind?
         return 0;

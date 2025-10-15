@@ -37,8 +37,8 @@ extern "C" {
 #endif
 
 #ifdef _OS_WINDOWS_
-extern void jl_init_dll_info_list(void);
-extern void jl_fin_dll_info_list(void);
+extern void jl_init_stackwalk(void);
+extern void jl_fin_stackwalk(void);
 #else
 #include <sys/resource.h>
 #include <unistd.h>
@@ -350,9 +350,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
 #endif
     jl_teardown_codegen(); // prints stats
 #ifdef _OS_WINDOWS_
-    jl_fin_dll_info_list();
+    jl_fin_stackwalk();
 #endif
-
 }
 
 JL_DLLEXPORT void jl_postoutput_hook(void)
@@ -689,7 +688,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // initialize backtraces
     jl_init_profile_lock();
 #ifdef _OS_WINDOWS_
-    jl_init_dll_info_list();
+    jl_init_stackwalk();
 #else
     // nongnu libunwind initialization is only threadsafe on architecture where the
     // author could access TSAN, per https://github.com/libunwind/libunwind/pull/109
