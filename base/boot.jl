@@ -410,7 +410,7 @@ struct TypeError <: Exception
     # `context` optionally adds extra detail, e.g. the name of the type parameter
     # that got a bad value.
     func::Symbol
-    context::Union{AbstractString,Symbol}
+    context::Union{AbstractString,GlobalRef,Symbol}
     expected::Type
     got
     TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
