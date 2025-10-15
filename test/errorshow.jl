@@ -1476,3 +1476,38 @@ let err_str
     err_str = @except_str f56325(1,2) MethodError
     @test occursin("The anonymous function", err_str)
 end
+
+# Test that error hints catch abstract exception supertypes (issue #58367)
+
+module Hinterland
+
+abstract type AbstractHintableException <: Exception end
+struct ConcreteHintableException <: Exception end
+gonnathrow() = throw(ConcreteHintableException())
+
+function Base.showerror(io::IO, exc::ConcreteHintableException)
+    print(io, "This is my exception")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(ConcreteHintableException) do io, exc
+        print(io, "\nThis hint caught my concrete exception type")
+    end
+    Base.Experimental.register_error_hint(AbstractHintableException) do io, exc
+        print(io, "\nThis other hint caught my abstract exception supertype")
+    end
+end
+
+end
+
+@testset "Hints for abstract exception supertypes" begin
+    exc = try
+        Hinterland.gonnathrow()
+    catch e
+        e
+    end
+    exc_print = sprint(Base.showerror, exc)
+    @test occursin("This hint caught my concrete exception type", exc_print)
+    @test occursin("This other hint caught my abstract exception supertype", exc_print)
+end
