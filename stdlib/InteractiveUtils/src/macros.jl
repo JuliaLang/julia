@@ -579,10 +579,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             extract_elements.(args)
             if is_1d
                 return Expr(:call, fcn, f,
-                            Expr(:call, typesof,
-                                (ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
-                                d,
-                                map(esc, xs)...), kws...)
+                    typesof_expr((ex0.head === :ncat ? [] : Any[ex0.args[1]])..., d, xs...), kws...)
             else
                 shape = get_shape(args, true, d)
                 is_balanced = sum(map((x, y) -> sum(map(z -> z - y, x)), shape[2:end], first.(shape[2:end]))) == 0
@@ -592,11 +589,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                     map(x -> tuple(x...), shape)
                 end
                 return Expr(:call, fcn, f,
-                            Expr(:call, typesof,
-                                (ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
-                                Expr(:tuple, dimsshape...),
+                    typesof_expr((ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
+                        Expr(:tuple, dimsshape...),
                                 is_row_first,
-                                map(esc, xs)...), kws...)
+                                xs...), kws...)
             end
         else
             for (head, f) in Any[:hcat => Base.hcat,
