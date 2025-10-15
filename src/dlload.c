@@ -161,9 +161,11 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
         lib = GetModuleHandleW(wfilename);
     }
     else {
+        int havelock = jl_lock_profile_wr();
+        assert(havelock);
         lib = LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-        if (lib)
-            needsSymRefreshModuleList = 1;
+        if (havelock)
+            jl_unlock_profile_wr();
     }
     return lib;
 }

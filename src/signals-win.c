@@ -411,7 +411,7 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
 
 static volatile HANDLE hBtThread = 0;
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -446,14 +446,11 @@ void jl_thread_resume(int tid)
 
 int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
-    uv_mutex_lock(&jl_in_stackwalk);
-    jl_lock_profile();
-    ULONG_PTR lock_cookie = 0;
-    LdrLockLoaderLock(0x1, NULL, &lock_cookie);
+    jl_lock_profile(); // prevent concurrent mutation
+    uv_mutex_lock(&jl_in_stackwalk); // prevent multi-threaded dbghelp calls
     int success = jl_thread_suspend_and_get_state(tid, 0, ctx);
-    LdrUnlockLoaderLock(0x1, lock_cookie);
-    jl_unlock_profile();
     uv_mutex_unlock(&jl_in_stackwalk);
+    jl_unlock_profile();
     return success;
 }
 
@@ -482,16 +479,16 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     break;
                 }
                 // Get backtrace data
+                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
+                jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
                 profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
                         profile_bt_size_max - profile_bt_size_cur - 1, &c, NULL);
-
-                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
 
                 // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = ptls->tid + 1;
 
                 // META_OFFSET_TASKID store task id (never null)
-                profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t2;
 
                 // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
@@ -508,7 +505,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             }
         }
     }
-    uv_mutex_unlock(&jl_in_stackwalk);
     jl_profile_stop_timer();
     hBtThread = NULL;
     return 0;

@@ -14,6 +14,7 @@
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
+#include <winternl.h>
 uv_mutex_t jl_in_stackwalk;
 #define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
@@ -76,12 +77,12 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    uv_mutex_lock(&jl_in_stackwalk);
     if (!from_signal_handler) {
         // Workaround 32-bit windows bug missing top frame
         // See for example https://bugs.chromium.org/p/crashpad/issues/detail?id=53
         skip--;
     }
+    jl_lock_profile();
 #endif
 #if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -188,9 +189,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         if (n > 0) n -= 1;
     }
     jl_set_safe_restore(old_buf);
-#endif
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    uv_mutex_unlock(&jl_in_stackwalk);
+#else
+    jl_unlock_profile();
 #endif
     *bt_size = n;
     return need_more_space;
@@ -457,21 +457,99 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 }
 
 // Might be called from unmanaged thread.
-volatile int needsSymRefreshModuleList;
-BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
+static PVOID dll_notification_cookie;
+static small_arraylist_t dll_info_list;
 
-JL_DLLEXPORT void jl_refresh_dbg_module_list(void)
+// Structure definitions for LdrDllNotification
+typedef struct _LDR_DLL_LOADED_NOTIFICATION_DATA {
+    ULONG Flags;
+    PCUNICODE_STRING FullDllName;
+    PCUNICODE_STRING BaseDllName;
+    PVOID DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_LOADED_NOTIFICATION_DATA;
+typedef const LDR_DLL_LOADED_NOTIFICATION_DATA *PCLDR_DLL_LOADED_NOTIFICATION_DATA;
+
+typedef struct _LDR_DLL_UNLOADED_NOTIFICATION_DATA {
+    ULONG Flags;
+    PCUNICODE_STRING FullDllName;
+    PCUNICODE_STRING BaseDllName;
+    PVOID DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_UNLOADED_NOTIFICATION_DATA;
+typedef const LDR_DLL_UNLOADED_NOTIFICATION_DATA *PCLDR_DLL_UNLOADED_NOTIFICATION_DATA;
+
+typedef union _LDR_DLL_NOTIFICATION_DATA {
+    LDR_DLL_LOADED_NOTIFICATION_DATA Loaded;
+    LDR_DLL_UNLOADED_NOTIFICATION_DATA Unloaded;
+} LDR_DLL_NOTIFICATION_DATA;
+typedef const LDR_DLL_NOTIFICATION_DATA *PCLDR_DLL_NOTIFICATION_DATA;
+
+#define LDR_DLL_NOTIFICATION_REASON_LOADED   1
+#define LDR_DLL_NOTIFICATION_REASON_UNLOADED 2
+
+// Forward declarations for ntdll functions
+typedef VOID CALLBACK (*PLDR_DLL_NOTIFICATION_FUNCTION)(
+  ULONG                       NotificationReason,
+  PCLDR_DLL_NOTIFICATION_DATA NotificationData,
+  PVOID                       Context
+);
+NTSTATUS NTAPI LdrRegisterDllNotification(ULONG Flags, PLDR_DLL_NOTIFICATION_FUNCTION NotificationFunction, PVOID Context, PVOID *Cookie);
+NTSTATUS NTAPI LdrUnregisterDllNotification(PVOID Cookie);
+
+// Callback for LdrRegisterDllNotification
+static VOID CALLBACK dll_notification_callback(
+    ULONG NotificationReason,
+    PCLDR_DLL_NOTIFICATION_DATA NotificationData,
+    PVOID Context)
 {
-    if (needsSymRefreshModuleList && hSymRefreshModuleList != NULL) {
-        hSymRefreshModuleList(GetCurrentProcess());
-        needsSymRefreshModuleList = 0;
+    (void)Context;
+    uv_mutex_lock(&jl_in_stackwalk);
+    // Store DLL information and update symbol handler based on notification reason
+    if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
+        const LDR_DLL_LOADED_NOTIFICATION_DATA *data = &NotificationData->Loaded;
+        small_arraylist_push(&dll_info_list, data->DllBase);
+        small_arraylist_push(&dll_info_list, (PVOID)(uintptr_t)data->SizeOfImage);
+        SymLoadModuleExW(GetCurrentProcess(), NULL,
+                         data->FullDllName->Buffer,
+                         data->BaseDllName->Buffer,
+                         (DWORD64)data->DllBase,
+                         data->SizeOfImage,
+                         NULL,
+                         0);
+    }
+    else if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
+        const LDR_DLL_UNLOADED_NOTIFICATION_DATA *data = &NotificationData->Unloaded;
+        small_arraylist_push(&dll_info_list, data->DllBase);
+        small_arraylist_push(&dll_info_list, 0);
+        SymUnloadModule64(GetCurrentProcess(), (DWORD64)data->DllBase);
+    }
+    uv_mutex_unlock(&jl_in_stackwalk);
+}
+
+// Initialize DLL info list
+void jl_init_dll_info_list(void)
+{
+    uv_mutex_init(&jl_in_stackwalk);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 0))
+        jl_safe_printf("WARNING: failed to initialize stack walk info\n");
+    small_arraylist_new(&dll_info_list, 0);
+    LdrRegisterDllNotification(0, dll_notification_callback, NULL, &dll_notification_cookie);
+}
+
+void jl_fin_dll_info_list(void)
+{
+    if (dll_notification_cookie) {
+        LdrUnregisterDllNotification(dll_notification_cookie);
+        dll_notification_cookie = NULL;
     }
 }
+
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
     int result;
-    uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
     cursor->stackframe.AddrPC.Offset = Context->Eip;
@@ -481,14 +559,15 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
     cursor->context = *Context;
+    uv_mutex_lock(&jl_in_stackwalk);
     result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
             &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
             JuliaGetModuleBase64, NULL);
+    uv_mutex_unlock(&jl_in_stackwalk);
 #else
     *cursor = *Context;
     result = 1;
 #endif
-    uv_mutex_unlock(&jl_in_stackwalk);
     return result;
 }
 
@@ -520,8 +599,10 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->stackframe.AddrPC.Offset != 0;
     }
 
+    uv_mutex_lock(&jl_in_stackwalk);
     BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
         &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    uv_mutex_unlock(&jl_in_stackwalk);
     return result;
 #else
     *ip = (uintptr_t)cursor->Rip;
