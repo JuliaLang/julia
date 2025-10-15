@@ -124,7 +124,7 @@ function find_enclosing_parens(content::String, ast, cursor_pos::Int)
     innermost_pairs = Dict{Symbol,Tuple{Int,Int}}()
     paren_stack = Tuple{Int,Int,Symbol}[]  # (open_pos, depth, type)
 
-    walk_tree(ast, content, 0) do node, offset
+    walk_tree(ast, content, UInt32(0)) do node, offset
         nkind = JuliaSyntax.kind(node)
         pos = firstindex(content) + offset
 
@@ -151,7 +151,7 @@ function find_enclosing_parens(content::String, ast, cursor_pos::Int)
     return collect(values(innermost_pairs))
 end
 
-function walk_tree(f::Function, node, content::String, offset::Int)
+function walk_tree(f::Function, node, content::String, offset::UInt32)
     f(node, offset)
 
     if JuliaSyntax.numchildren(node) > 0
