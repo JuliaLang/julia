@@ -138,7 +138,9 @@ STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 #endif
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
 #define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
+#ifndef _OS_WINDOWS_
 #define malloc_page_align(sz) jl_malloc_aligned(sz, sysconf(_SC_PAGESIZE))
+#endif
 
 // =========================================================================== //
 // Pointer tagging
