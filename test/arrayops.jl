@@ -3403,4 +3403,11 @@ end
     mem = Memory{Float32}(undef, 3)
     ref = memoryref(mem, 2)
     @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 2
+
+    # Test for zero-sized structs
+    mem = Memory{Nothing}(undef, 10)
+    ref = memoryref(mem, 8)
+    @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 8
 end

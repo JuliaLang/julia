@@ -2485,7 +2485,7 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
             (rt, exct) = global_assignment_rt_exct(interp, sv, saw_latestworld, gr, v)
             return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(convert(Core.Binding, gr)))
         end
-        return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+        return CallMeta(Union{}, Union{TypeError, ErrorException}, EFFECTS_THROWS, NoCallInfo())
     end
     ⊑ = partialorder(typeinf_lattice(interp))
     if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
@@ -3480,65 +3480,29 @@ function refine_partial_type(@nospecialize t)
     return t
 end
 
-abstract_eval_nonlinearized_foreigncall_name(
-        ::AbstractInterpreter, @nospecialize(e), ::StatementState, ::IRInterpretationState
-    ) = nothing
-
-function abstract_eval_nonlinearized_foreigncall_name(
-        interp::AbstractInterpreter, @nospecialize(e), sstate::StatementState, sv::InferenceState
-    )
-    if isexpr(e, :call)
-        n = length(e.args)
-        argtypes = Vector{Any}(undef, n)
-        callresult = Future{CallMeta}()
-        i::Int = 1
-        nextstate::UInt8 = 0x0
-        local ai, res
-        function evalargs(interp, sv)
-            if nextstate === 0x1
-                @goto state1
-            elseif nextstate === 0x2
-                @goto state2
-            end
-            while i <= n
-                ai = abstract_eval_nonlinearized_foreigncall_name(interp, e.args[i], sstate, sv)
-                if !isready(ai)
-                    nextstate = 0x1
-                    return false
-                    @label state1
-                end
-                argtypes[i] = ai[].rt
-                i += 1
-            end
-            res = abstract_call(interp, ArgInfo(e.args, argtypes), sstate, sv)
-            if !isready(res)
-                nextstate = 0x2
-                return false
-                @label state2
-            end
-            callresult[] = res[]
-            return true
-        end
-        evalargs(interp, sv) || push!(sv.tasks, evalargs)
-        return callresult
-    else
-        return Future(abstract_eval_basic_statement(interp, e, sstate, sv))
-    end
-end
-
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
     callee = e.args[1]
-    if isexpr(callee, :call) && length(callee.args) > 1 && callee.args[1] == GlobalRef(Core, :tuple)
-        # NOTE these expressions are not properly linearized
-        abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[2], sstate, sv)
-        if length(callee.args) > 2
-            abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[3], sstate, sv)
+    if isexpr(callee, :tuple)
+        if length(callee.args) >= 1
+            abstract_eval_value(interp, callee.args[1], sstate, sv)
+            if length(callee.args) >= 2
+                abstract_eval_value(interp, callee.args[2], sstate, sv)
+                #TODO: implement abstract_eval_nonlinearized_foreigncall_name correctly?
+                # lib_effects = abstract_call(interp, ArgInfo(e.args, Any[typeof(Libdl.dlopen), lib]), sstate, sv)::Future
+            end
         end
     else
         abstract_eval_value(interp, callee, sstate, sv)
     end
     mi = frame_instance(sv)
     t = sp_type_rewrap(e.args[2], mi, true)
+    let fptr = e.args[1]
+        if !isexpr(fptr, :tuple)
+            if !hasintersect(widenconst(abstract_eval_value(interp, fptr, sstate, sv)), Ptr)
+                return RTEffects(Bottom, Any, EFFECTS_THROWS)
+            end
+        end
+    end
     for i = 3:length(e.args)
         if abstract_eval_value(interp, e.args[i], sstate, sv) === Bottom
             return RTEffects(Bottom, Any, EFFECTS_THROWS)
@@ -3751,7 +3715,7 @@ end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Pair{Any,Any}(newty, ErrorException)
+        return Pair{Any,Any}(newty, Union{TypeError, ErrorException})
     end
     newty′ = RefValue{Any}(newty)
     (valid_worlds, ret) = scan_partitions(interp, g, sv.world) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
@@ -3766,15 +3730,16 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     if is_some_guard(kind)
         return Pair{Any,Any}(newty, ErrorException)
     elseif is_some_const_binding(kind) || is_some_imported(kind)
-        return Pair{Any,Any}(Bottom, ErrorException)
+        # N.B.: Backdating should not improve inference in an earlier world
+        return Pair{Any,Any}(kind == PARTITION_KIND_BACKDATED_CONST ? newty : Bottom, ErrorException)
     end
     ty = kind == PARTITION_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
-        return Pair{Any,Any}(Bottom, ErrorException)
+        return Pair{Any,Any}(Bottom, TypeError)
     elseif !(wnewty <: ty)
         retty = tmeet(typeinf_lattice(interp), newty, ty)
-        return Pair{Any,Any}(retty, ErrorException)
+        return Pair{Any,Any}(retty, TypeError)
     end
     return Pair{Any,Any}(newty, Bottom)
 end
