@@ -2043,8 +2043,12 @@ end
         if Sys.iswindows()
             chmod(subdir, 0o666)
             @test !Sys.isexecutable(fpath)
-            @test Sys.isreadable(fpath)
+            # Possibly broken (or changed) by libuv commit 84896d52 which applies "other" permissions
+            # to all groups we are not a part of, affecting inherited permissions
+            # https://github.com/JuliaLang/libuv/commit/84896d522a51de50a8090fac56ec19740f5b603e
+            @test_broken Sys.isreadable(fpath)
             @test_skip Sys.iswritable(fpath)
+            chmod(fpath, 0o777)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
