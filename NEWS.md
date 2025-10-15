@@ -115,7 +115,7 @@ Standard library changes
 
 #### Dates
 
-* `isoweekdate, isoyear, weeksinyear` are now implemented and available for week based calendars, following [https://en.wikipedia.org/wiki/ISO_week_date](ISO week date). [#48507]
+* `isoweekdate`, `isoyear`, `weeksinyear` are now implemented and available for week based calendars, following [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) ([#48507]).
 
 External dependencies
 ---------------------
