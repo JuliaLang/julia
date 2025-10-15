@@ -1071,7 +1071,7 @@ let # Test for https://github.com/JuliaLang/julia/issues/43402
     end
 
     refs = map(Core.SSAValue, findall(@nospecialize(x)->Meta.isexpr(x, :new), src.code))
-    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == :(:some_ccall), src.code)
+    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == Expr(:tuple, :(:some_ccall)), src.code)
     @assert some_ccall !== nothing
     stmt = src.code[some_ccall]
     nccallargs = length(stmt.args[3]::Core.SimpleVector)
