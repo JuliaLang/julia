@@ -3359,6 +3359,9 @@ function replace_depot_path(path::AbstractString, depots::Vector{String}=normali
     end
     return path
 end
+function replace_depot_path(path::Symbol, depots::Vector{String}=normalize_depots_for_relocation())
+    return Symbol(replace_depot_path(string(path), depots))
+end
 
 function normalize_depots_for_relocation()
     depots = String[]
@@ -3376,6 +3379,9 @@ end
 function restore_depot_path(path::AbstractString, depot::AbstractString)
     replace(path, r"^@depot" => depot; count=1)
 end
+function restore_depot_path(path::Symbol, depot::AbstractString)
+    return Symbol(restore_depot_path(string(path), depot))
+end
 
 function resolve_depot(inc::AbstractString)
     startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
@@ -3383,6 +3389,9 @@ function resolve_depot(inc::AbstractString)
         ispath(restore_depot_path(inc, depot)) && return depot
     end
     return :no_depot_found
+end
+function resolve_depot(inc::Symbol)
+    return Symbol(resolve_depot(string(inc)))
 end
 
 function read_module_list(f::IO, has_buildid_hi::Bool)

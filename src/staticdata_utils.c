@@ -557,6 +557,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         JL_TYPECHK(write_dependency_list, array_any, (jl_value_t*)udeps);
     }
 
+    // TODO Use either jl_get_global_value or jl_eval_global_var for both
     replace_depot_func = jl_get_global_value(jl_base_module, jl_symbol("replace_depot_path"), ct->world_age);
     normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"), ct->world_age);
 
@@ -676,6 +677,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 // mutating external to point at the new methodtable entry instead of the new method
 static void jl_add_methods(jl_array_t *external)
 {
+
     size_t i, l = jl_array_nrows(external);
     for (i = 0; i < l; i++) {
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(external, i);

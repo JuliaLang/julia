@@ -714,6 +714,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
     if (!jl_options.strip_metadata)
+        // TODO Normalize m-> file?
         jl_queue_for_serialization(s, m->file);
     jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindingkeyset));
     if (jl_options.trim) {
@@ -1345,6 +1346,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     jl_atomic_store_relaxed(&newm->bindingkeyset, NULL);
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, bindingkeyset)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_atomic_load_relaxed(&m->bindingkeyset), s->link_ids_relocs));
+    // TODO normalize m.file here?
     newm->file = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_options.strip_metadata ? jl_empty_sym : m->file , s->link_ids_relocs));
@@ -1467,6 +1469,41 @@ static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fn
         assert(jl_atomic_load_relaxed(&ci->specsigflags) & 0b100);
     }
 #endif
+}
+
+static jl_value_t *replace_depot(jl_value_t *path)
+{
+    jl_value_t *newpath = NULL;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+
+    JL_TRY {
+        jl_value_t *replace_depot_path_func = NULL;
+        jl_value_t *normalize_depots_func = NULL;
+        JL_GC_PUSH2(&replace_depot_path_func, &normalize_depots_func);
+        replace_depot_path_func = jl_get_global_value(jl_base_module, jl_symbol("replace_depot_path"), ct->world_age);
+        normalize_depots_func = jl_get_global_value(jl_base_module, jl_symbol("normalize_depots_for_relocation"), ct->world_age);
+        {
+            jl_value_t *depots = NULL;
+            /** JL_GC_PUSH1(&depots); */
+            depots = jl_apply(&normalize_depots_func, 1);
+            {
+                jl_value_t **args;
+                JL_GC_PUSHARGS(args, 3);
+                args[0] = replace_depot_path_func;
+                args[1] = path;
+                args[2] = depots;
+                newpath = jl_apply(args, 3);
+                JL_GC_POP();
+            }
+            /** JL_GC_POP(); */
+        }
+        JL_GC_POP();
+    } JL_CATCH {}
+
+    ct->world_age = last_age;
+    return newpath;
 }
 
 jl_value_t *jl_find_ptr = NULL;
@@ -2806,6 +2843,27 @@ static void jl_strip_all_codeinfos(jl_array_t *mod_array)
     jl_foreach_reachable_mtable(strip_all_codeinfos_mt, mod_array, NULL);
 }
 
+static int reloc_depot_paths__(jl_typemap_entry_t *def, void *_env)
+{
+    jl_method_t *m = def->func.method;
+    jl_sym_t *newfile = (jl_sym_t *)replace_depot((jl_value_t *)m->file);
+    if (newfile) {
+        m->file = newfile;
+        record_field_change((jl_value_t**)&m->file, (jl_value_t*)newfile);
+    }
+    return 1;
+}
+
+static int reloc_depot_paths_mt(jl_methtable_t *mt, void *_env)
+{
+    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), reloc_depot_paths__, NULL);
+}
+
+static void jl_reloc_depot_paths(jl_array_t *mod_array)
+{
+    jl_foreach_reachable_mtable(reloc_depot_paths_mt, mod_array, NULL);
+}
+
 static int strip_module(jl_module_t *m, jl_sym_t *docmeta_sym)
 {
     size_t world = jl_atomic_load_relaxed(&jl_world_counter);
@@ -3497,6 +3555,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         if (_native_data != NULL) {
             jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_ext_cis, NULL, &query_cache);
             *_native_data = jl_precompile_worklist(worklist, extext_methods, new_ext_cis);
+            jl_reloc_depot_paths(mod_array);
             extext_methods = NULL;
             new_ext_cis = NULL;
         }
@@ -4357,6 +4416,63 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
     return read_verify_mod_list(f, depmods);
 }
 
+static jl_value_t *restore_depot(jl_value_t *file)
+{
+    /** if (jl_is_nothing(file)) { */
+    /**     return NULL; */
+    /** } */
+
+    jl_value_t *newfile = NULL;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+
+    jl_value_t *resolve_depot_func = NULL;
+    jl_value_t *restore_depot_path_func = NULL;
+    JL_GC_PUSH2(&resolve_depot_func, &restore_depot_path_func);
+    resolve_depot_func = jl_get_global_value(jl_base_module, jl_symbol("resolve_depot"), ct->world_age);
+    restore_depot_path_func = jl_get_global_value(jl_base_module, jl_symbol("restore_depot_path"), ct->world_age);
+    {
+        /** jl_value_t *args[] = { resolve_depot_func, (jl_value_t *)m->file }; */
+        /** jl_value_t *depot = jl_apply(args, 2); */
+        jl_value_t **args;
+        JL_GC_PUSHARGS(args, 2);
+        args[0] = resolve_depot_func;
+        args[1] = file;
+        jl_value_t *depot = jl_apply(args, 2);
+        JL_GC_POP();
+        if (jl_is_string(depot)) {
+            /** jl_value_t *args[] = { restore_depot_path_func, (jl_value_t *)m->file, depot }; */
+            /** m->file = (jl_sym_t *)jl_apply(args, 3); */
+            jl_value_t **args;
+            JL_GC_PUSHARGS(args, 3);
+            args[0] = restore_depot_path_func;
+            args[1] = file;
+            args[2] = depot;
+            newfile = jl_apply(args, 3);
+            JL_GC_POP();
+        } else {
+            assert(jl_is_symbol(depot));
+            // TODO emit a warning?
+        }
+    }
+    JL_GC_POP();
+
+    ct->world_age = last_age;
+    return newfile;
+}
+
+static void jl_restore_depot_paths(jl_array_t *external)
+{
+    size_t i, l = jl_array_nrows(external);
+    for (i = 0; i < l; i++) {
+        jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(external, i);
+        jl_value_t *newfile = restore_depot((jl_value_t *)m->file);
+        if (newfile)
+            m->file = (jl_sym_t *)newfile;
+    }
+}
+
 // TODO?: refactor to make it easier to create the "package inspector"
 static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
 {
@@ -4427,6 +4543,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
             if (new_methods)
                 world += 1;
+            jl_restore_depot_paths(extext_methods);
+            /** jl_restore_depot_paths(internal_methods); */
             jl_activate_methods(extext_methods, internal_methods, world, pkgname);
             // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
