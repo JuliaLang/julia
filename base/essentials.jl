@@ -385,10 +385,10 @@ function checkbounds(A::Union{Array, GenericMemory}, i::Int)
     checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
 end
 
-default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
-default_access_order(a::GenericMemory{:atomic}) = :monotonic
-default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
-default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
+default_access_order(::GenericMemory{:not_atomic}) = :not_atomic
+default_access_order(::GenericMemory{:atomic}) = :monotonic
+default_access_order(::GenericMemoryRef{:not_atomic}) = :not_atomic
+default_access_order(::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
@@ -464,7 +464,7 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 function convert end
 
 # ensure this is never ambiguous, and therefore fast for lookup
-convert(T::Type{Union{}}, x...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
+convert(::Type{Union{}}, _...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
 
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -513,7 +513,7 @@ Modifying the key-space of the underlying data may invalidate this object.
 """
 Pairs
 
-argtail(x, rest...) = rest
+argtail(_, rest...) = rest
 
 """
     tail(x::Tuple)::Tuple
@@ -576,7 +576,7 @@ end
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot
 function widen_diagonal(@nospecialize(t), troot::UnionAll)
-    body = ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)
+    return ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)
 end
 
 function isvarargtype(@nospecialize(t))
@@ -981,7 +981,7 @@ getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
     Core._svec_len(v)
 end
-firstindex(v::SimpleVector) = 1
+firstindex(::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
 iterate(v::SimpleVector, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
 eltype(::Type{SimpleVector}) = Any
@@ -1229,7 +1229,7 @@ to obtain a definitive answer.
 
 See also [`iterate`](@ref), [`isempty`](@ref)
 """
-isdone(itr, state...) = missing
+isdone(_, _...) = missing
 
 """
     iterate(iter [, state])::Union{Nothing, Tuple{Any, Any}}

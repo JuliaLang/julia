@@ -881,15 +881,6 @@ static const auto jlcheckassignonce_func = new JuliaFunction<>{
             {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
-static const auto jldeclareconstval_func = new JuliaFunction<>{
-    XSTR(jl_declare_constant_val),
-    [](LLVMContext &C) {
-        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(getVoidTy(C),
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, T_prjlvalue}, false); },
-    nullptr,
-};
 static const auto jldeclareglobal_func = new JuliaFunction<>{
     XSTR(jl_declare_global),
     [](LLVMContext &C) {
@@ -1289,7 +1280,7 @@ static const auto jldlsym_func = new JuliaFunction<>{
 static const auto jllazydlsym_func = new JuliaFunction<>{
     XSTR(jl_lazy_load_and_lookup),
     [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
-            {JuliaType::get_prjlvalue_ty(C), getPointerTy(C)}, false); },
+            {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); },
     nullptr,
 };
 static const auto jltypeassert_func = new JuliaFunction<>{
@@ -3240,8 +3231,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
                 if (!ismodifyglobal) {
-                    // TODO: use typeassert in jl_check_binding_assign_value too
-                    emit_typecheck(ctx, rval, ty, "typeassert");
+                    emit_typecheck(ctx, rval, ty, fname.c_str());
                     rval = update_julia_type(ctx, rval, ty);
                     if (rval.typ == jl_bottom_type)
                         return jl_cgval_t();
@@ -6468,43 +6458,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             true,
             jl_method_type);
         return meth;
-    }
-    else if (head == jl_const_sym) {
-        assert(nargs <= 2);
-        jl_sym_t *sym = (jl_sym_t*)args[0];
-        jl_module_t *mod = ctx.module;
-        if (jl_is_globalref(sym)) {
-            mod = jl_globalref_mod(sym);
-            sym = jl_globalref_name(sym);
-        }
-        if (jl_is_symbol(sym)) {
-            jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
-            if (nargs == 2) {
-                jl_cgval_t rhs = emit_expr(ctx, args[1]);
-                ctx.builder.CreateCall(prepare_call(jldeclareconstval_func),
-                        { julia_binding_gv(ctx, bnd), literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), boxed(ctx, rhs) });
-            } else {
-                ctx.builder.CreateCall(prepare_call(jldeclareconstval_func),
-                        { julia_binding_gv(ctx, bnd), literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), ConstantPointerNull::get(cast<PointerType>(ctx.types().T_prjlvalue)) });
-            }
-        }
-    }
-    else if (head == jl_globaldecl_sym) {
-        assert(nargs <= 2 && nargs >= 1);
-        jl_sym_t *sym = (jl_sym_t*)args[0];
-        jl_module_t *mod = ctx.module;
-        if (jl_is_globalref(sym)) {
-            mod = jl_globalref_mod(sym);
-            sym = jl_globalref_name(sym);
-        }
-        if (nargs == 2) {
-            jl_cgval_t typ = emit_expr(ctx, args[1]);
-            ctx.builder.CreateCall(prepare_call(jldeclareglobal_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), boxed(ctx, typ), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1) });
-        } else {
-            ctx.builder.CreateCall(prepare_call(jldeclareglobal_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), ConstantPointerNull::get(cast<PointerType>(ctx.types().T_prjlvalue)), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1) });
-        }
     }
     else if (head == jl_new_sym) {
         bool is_promotable = false;

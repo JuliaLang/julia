@@ -66,6 +66,8 @@ using Base.Terminals
 abstract type AbstractREPL end
 
 include("options.jl")
+include("StylingPasses.jl")
+using .StylingPasses
 
 include("LineEdit.jl")
 using .LineEdit
@@ -1329,7 +1331,11 @@ function setup_interface(
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
-        on_enter = return_callback)
+        on_enter = return_callback,
+        styling_passes = StylingPasses.StylingPass[
+            StylingPasses.SyntaxHighlightPass(),
+            StylingPasses.EnclosingParenHighlightPass()
+        ])
 
     # Setup help mode
     help_mode = Prompt(contextual_prompt(repl, HELP_PROMPT),
@@ -1845,25 +1851,10 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return Expr(:toplevel, get_usings!([], x)..., quote
-        let __temp_val_a72df459 = $x
-            $capture_result($n, __temp_val_a72df459)
-            __temp_val_a72df459
-        end
-    end)
-end
-
-function get_usings!(usings, ex)
-    ex isa Expr || return usings
-    # get all `using` and `import` statements which are at the top level
-    for (i, arg) in enumerate(ex.args)
-        if Base.isexpr(arg, :toplevel)
-            get_usings!(usings, arg)
-        elseif Base.isexpr(arg, [:using, :import])
-            push!(usings, popat!(ex.args, i))
-        end
-    end
-    return usings
+    return Expr(:block, # avoid line numbers or scope that would leak into the output and change the meaning of x
+        :(local __temp_val_a72df459 = $x),
+        Expr(:call, capture_result, n, :__temp_val_a72df459),
+        :__temp_val_a72df459)
 end
 
 function create_global_out!(mod)
