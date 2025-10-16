@@ -296,7 +296,7 @@ Closest candidates are:
 """
 function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
     list = get!(Vector{Any}, _hint_handlers, typename(exct))
-    push!(list, handler)
+    push!(list, exct, handler)
     return nothing
 end
 
@@ -320,7 +320,9 @@ function show_error_hints(io, ex, args...)
     while ex_supertype != Any
         hinters = get(_hint_handlers, typename(ex_supertype), nothing)
         isnothing(hinters) && continue
-        for handler in hinters
+        for k in 1:2:length(hinters)
+            ex isa hinters[k] || continue
+            handler = hinters[k + 1]
             try
                 # TODO: deal with handlers accepting different signatures?
                 @invokelatest handler(io, ex, args...)
