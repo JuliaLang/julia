@@ -46,14 +46,14 @@ size_t bitvector_nwords(uint64_t nbits)
 void bitvector_set(uint32_t *b, uint64_t n, uint32_t c)
 {
     if (c)
-        b[n>>5] |= (1<<(n&31));
+        b[n>>5] |= (1u<<(n&31));
     else
-        b[n>>5] &= ~(1<<(n&31));
+        b[n>>5] &= ~(1u<<(n&31));
 }
 
 uint32_t bitvector_get(uint32_t *b, uint64_t n)
 {
-    return b[n>>5] & (1<<(n&31));
+    return b[n>>5] & (1u<<(n&31));
 }
 
 #ifdef __cplusplus

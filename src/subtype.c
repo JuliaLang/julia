@@ -27,6 +27,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "bitvector.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -148,7 +149,7 @@ static int statestack_get(jl_unionstate_t *st, int i) JL_NOTSAFEPOINT
         stack = stack->next;
         i -= sizeof(stack->data) * 8;
     }
-    return (stack->data[i>>5] & (1u<<(i&31))) != 0;
+    return bitvector_get(stack->data, i) != 0;
 }
 
 static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
@@ -163,10 +164,7 @@ static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
         stack = stack->next;
         i -= sizeof(stack->data) * 8;
     }
-    if (val)
-        stack->data[i>>5] |= (1u<<(i&31));
-    else
-        stack->data[i>>5] &= ~(1u<<(i&31));
+    bitvector_set(stack->data, i, val);
 }
 
 #define has_next_union_state(e, R) ((((R) ? &(e)->Runions : &(e)->Lunions)->more) != 0)
