@@ -438,7 +438,8 @@ function load_LinearAlgebra(mod::Module=Main)
             return nothing
         end
     end
-    return Core.eval(mod, :(using Base.MainInclude.LinearAlgebra; Base.MainInclude.LinearAlgebra))
+    Core._using(mod, MainInclude.LinearAlgebra)
+    return MainInclude.LinearAlgebra
 end
 
 function load_REPL()
