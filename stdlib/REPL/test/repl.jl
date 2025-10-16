@@ -2059,8 +2059,8 @@ end
             end
 
             # Test 1: Simple keyword highlighting
-            write(stdin_write, "function")
-            s = readuntil(stdout_read, "function", keep=true)
+            write(stdin_write, "function # SENTINEL1")
+            s = readuntil(stdout_read, "# SENTINEL1", keep=true)
             # The keyword "function" should be styled (have escape code before it)
             # Look for "function" that appears after the prompt, not just anywhere
             # Extract just the input portion after "julia> "
@@ -2075,8 +2075,8 @@ end
 
             # Test 2: Unicode identifiers with syntax highlighting
             readuntil(stdout_read, "julia> ")
-            write(stdin_write, "function αβ(a, β)")
-            s = readuntil(stdout_read, "β)", keep=true)
+            write(stdin_write, "function αβ(a, β) # SENTINEL2")
+            s = readuntil(stdout_read, "# SENTINEL2", keep=true)
             # Should highlight "function" keyword even with unicode following
             input_part = split(s, "julia> ", keepempty=false)
             if !isempty(input_part)
@@ -2095,8 +2095,8 @@ end
             readuntil(stdout_read, "julia> ")
             write(stdin_write, "begin\n")
             readuntil(stdout_read, "begin")
-            write(stdin_write, "    local test_var_for_highlighting = 42\n")
-            s = readuntil(stdout_read, "42", keep=true)
+            write(stdin_write, "    local test_var_for_highlighting = 42 # SENTINEL3\n")
+            s = readuntil(stdout_read, "# SENTINEL3", keep=true)
             # Should contain highlighting - the "local" keyword should be styled
             @test occursin(r"\e\[[0-9;]*m.*local", s)
             write(stdin_write, "\x03")  # Ctrl-C to cancel before executing
@@ -2104,18 +2104,19 @@ end
 
             # Test 4: Bracket highlighting (paren matching)
             readuntil(stdout_read, "julia> ")
-            write(stdin_write, "(1 + (2 * 3))")
+            write(stdin_write, "(1 + (2 * 3)) # SENTINEL4")
             # Move cursor to be inside the inner parens: between 2 and *
-            # Current position is at end: (1 + (2 * 3))|
-            # Move left 5 times to get to: (1 + (2| * 3))
-            for _ in 1:5
+            # Current position is at end: (1 + (2 * 3)) # SENTINEL4|
+            # Move left to get to: (1 + (2| * 3)) # SENTINEL4
+            # We need to move past " # SENTINEL4" which is 13 characters
+            for _ in 1:18  # 13 for " # SENTINEL4" + 5 to get between 2 and *
                 write(stdin_write, "\e[D")  # Left arrow
             end
             # Give it a moment to process and re-render
             sleep(0.1)
-            # Now write a character to trigger re-render and capture output
+            # Now write a space to trigger re-render and capture output
             write(stdin_write, " ")
-            s = readuntil(stdout_read, " ", keep=true)
+            s = readuntil(stdout_read, "# SENTINEL4", keep=true)
             # The enclosing parens around "2 * 3" should be highlighted with bold/underline
             # We can't easily test the exact positioning, but we can verify that
             # there are ANSI codes for bold (\e[1m) or underline (\e[4m) present
@@ -2135,8 +2136,8 @@ end
             end
 
             # Even though the prompt has styling passes, they shouldn't be applied
-            write(stdin_write, "function")
-            s = readuntil(stdout_read, "function", keep=true)
+            write(stdin_write, "function # SENTINEL5")
+            s = readuntil(stdout_read, "# SENTINEL5", keep=true)
             # With style_input=false, there should be no color codes from syntax highlighting
             # (there may still be prompt color codes, but not within the input text)
             lines = split(s, '\n')
