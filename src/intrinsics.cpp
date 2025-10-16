@@ -1193,19 +1193,34 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
         Value *x_tindex = x.TIndex;
         Value *y_tindex = y.TIndex;
         if (x_tindex || y_tindex) {
-            if (!x.isghost)
-                x = value_to_pointer(ctx, x);
-            if (!y.isghost)
-                y = value_to_pointer(ctx, y);
             Value *x_vboxed = x.Vboxed;
             Value *y_vboxed = y.Vboxed;
-            Value *x_ptr = (x.isghost ? NULL : data_pointer(ctx, x));
-            Value *y_ptr = (y.isghost ? NULL : data_pointer(ctx, y));
-            MDNode *ifelse_tbaa;
-            if (!x.isghost && x.constant)
+            Value *x_ptr = NULL;
+            Value *y_ptr = NULL;
+            if (!x.isghost && x.constant) {
+                x_ptr = data_pointer(ctx, x);
                 x_vboxed = boxed(ctx, x);
-            if (!y.isghost && y.constant)
+            } else if (!x.isghost && x.V != NULL) {
+                x_ptr = maybe_decay_tracked(ctx, x.V);
+            }
+            if (!y.isghost && y.constant) {
+                y_ptr = data_pointer(ctx, y);
                 y_vboxed = boxed(ctx, y);
+            } else if (!y.isghost && y.V != NULL) {
+                y_ptr = maybe_decay_tracked(ctx, y.V);
+            }
+            auto nroots = std::max(x.inline_roots.size(), y.inline_roots.size());
+            Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
+            SmallVector<Value *, 0> ifelse_roots(nroots, Vnull);
+            for (size_t i = 0; i < nroots; i++) {
+                Value *x_root = Vnull, *y_root = Vnull;
+                if (i < x.inline_roots.size())
+                    x_root = x.inline_roots[i];
+                if (i < y.inline_roots.size())
+                    y_root = y.inline_roots[i];
+                ifelse_roots[i] = ctx.builder.CreateSelect(isfalse, y_root, x_root);
+            }
+            MDNode *ifelse_tbaa;
             if (!x_ptr && !y_ptr) { // both ghost
                 ifelse_result = NULL;
                 ifelse_tbaa = ctx.tbaa().tbaa_stack;
@@ -1269,7 +1284,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 tindex = ret;
                 setName(ctx.emission_context, tindex, "ifelse_tindex");
             }
-            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa);
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa, ifelse_roots);
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));
