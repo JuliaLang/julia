@@ -303,6 +303,8 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 }
 #endif
 
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx);
+
 #if defined(HAVE_MACH)
 #include "signals-mach.c"
 #else
@@ -310,34 +312,25 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #include <sys/eventfd.h>
 #include <link.h>
 
-#ifndef _OS_FREEBSD_
 typedef struct {
-    void (*f)(void*) JL_NOTSAFEPOINT;
-    void *ctx;
-} callback_t;
+    int16_t tid;
+    bt_context_t *ctx;
+    int success;
+} callback_data_t;
 static int with_dl_iterate_phdr_lock(struct dl_phdr_info *info, size_t size, void *data)
 {
     jl_lock_profile();
-    callback_t *callback = (callback_t*)data;
-    callback->f(callback->ctx);
+    callback_data_t *cb_data = (callback_data_t*)data;
+    cb_data->success = jl_thread_suspend_and_get_state(cb_data->tid, 1, cb_data->ctx);
     jl_unlock_profile();
     return 1; // only call this once
 }
-#endif
 
-void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
-#ifndef _OS_FREEBSD_
-    callback_t callback = {f, ctx};
-    dl_iterate_phdr(with_dl_iterate_phdr_lock, &callback);
-#else
-    // FreeBSD makes the questionable decisions to use a terrible implementation of a spin
-    // lock and to block all signals while a lock is held. However, that also means it is
-    // not currently vulnerable to this libunwind bug that other platforms can encounter.
-    jl_lock_profile();
-    f(ctx);
-    jl_unlock_profile();
-#endif
+    callback_data_t cb_data = {tid, ctx, 0};
+    dl_iterate_phdr(with_dl_iterate_phdr_lock, &cb_data);
+    return cb_data.success;
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
@@ -458,7 +451,7 @@ static int exit_signal_cond = -1;
 static int signal_caught_cond = -1;
 static int signals_inflight = 0;
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     int err;
     pthread_mutex_lock(&in_signal_lock);
@@ -845,7 +838,7 @@ void trigger_profile_peek(void)
 
 static jl_bt_element_t signal_bt_data[JL_MAX_BT_SIZE + 1];
 static size_t signal_bt_size = 0;
-static void do_critical_profile(void *ctx)
+static void do_critical_profile(void)
 {
     bt_context_t signal_context;
     // sample each thread, round-robin style in reverse order
@@ -853,7 +846,7 @@ static void do_critical_profile(void *ctx)
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     for (int i = nthreads; i-- > 0; ) {
         // notify thread to stop
-        if (!jl_thread_suspend_and_get_state(i, 1, &signal_context))
+        if (!jl_thread_suspend(i, &signal_context))
             continue;
 
         // do backtrace on thread contexts for critical signals
@@ -866,7 +859,7 @@ static void do_critical_profile(void *ctx)
     }
 }
 
-static void do_profile(void *ctx)
+static void do_profile(void)
 {
     bt_context_t signal_context;
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
@@ -883,7 +876,7 @@ static void do_profile(void *ctx)
             return;
         }
         // notify thread to stop
-        if (!jl_thread_suspend_and_get_state(tid, 1, &signal_context))
+        if (!jl_thread_suspend(tid, &signal_context))
             return;
         // unwinding can fail, so keep track of the current state
         // and restore from the SEGV handler if anything happens.
@@ -1062,7 +1055,7 @@ static void *signal_listener(void *arg)
         signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         if (critical) {
-            jl_with_stackwalk_lock(do_critical_profile, NULL);
+            do_critical_profile();
         }
         else if (profile) {
             if (profile_all_tasks) {
@@ -1070,7 +1063,7 @@ static void *signal_listener(void *arg)
                 jl_profile_task();
             }
             else {
-                jl_with_stackwalk_lock(do_profile, NULL);
+                do_profile();
             }
         }
 #ifndef HAVE_MACH

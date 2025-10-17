@@ -4,6 +4,11 @@
 // Note that this file is `#include`d by "signal-handling.c"
 #include <mmsystem.h> // hidden by LEAN_AND_MEAN
 
+// Loader lock functions from ntdll
+// See https://devblogs.microsoft.com/oldnewthing/20140808-00/?p=293
+extern NTSTATUS NTAPI LdrLockLoaderLock(ULONG Flags, ULONG *State, ULONG_PTR *Cookie);
+extern NTSTATUS NTAPI LdrUnlockLoaderLock(ULONG Flags, ULONG_PTR Cookie);
+
 static const size_t sig_stack_size = 131072; // 128k reserved for backtrace_fiber for stack overflow handling
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
@@ -439,25 +444,18 @@ void jl_thread_resume(int tid)
     }
 }
 
-void jl_lock_stackwalk(void)
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
     uv_mutex_lock(&jl_in_stackwalk);
     jl_lock_profile();
-}
-
-void jl_unlock_stackwalk(void)
-{
+    ULONG_PTR lock_cookie = 0;
+    LdrLockLoaderLock(0x1, NULL, &lock_cookie);
+    int success = jl_thread_suspend_and_get_state(tid, 0, ctx);
+    LdrUnlockLoaderLock(0x1, lock_cookie);
     jl_unlock_profile();
     uv_mutex_unlock(&jl_in_stackwalk);
+    return success;
 }
-
-void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
-{
-    jl_lock_stackwalk();
-    f(ctx);
-    jl_unlock_stackwalk();
-}
-
 
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
@@ -477,17 +475,15 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             }
             else {
                 // TODO: bring this up to parity with other OS by adding loop over tid here
-                jl_lock_stackwalk();
-                CONTEXT ctxThread;
-                if (!jl_thread_suspend_and_get_state(0, 0, &ctxThread)) {
-                    jl_unlock_stackwalk();
+                bt_context_t c;
+                if (!jl_thread_suspend(0, &c)) {
                     fputs("failed to suspend main thread. aborting profiling.", stderr);
                     jl_profile_stop_timer();
                     break;
                 }
                 // Get backtrace data
                 profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
-                        profile_bt_size_max - profile_bt_size_cur - 1, &ctxThread, NULL);
+                        profile_bt_size_max - profile_bt_size_cur - 1, &c, NULL);
 
                 jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
 
@@ -507,7 +503,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 // Mark the end of this block with two 0's
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
-                jl_unlock_stackwalk();
                 jl_thread_resume(0);
                 jl_check_profile_autostop();
             }
