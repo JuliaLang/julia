@@ -117,8 +117,6 @@ mutable struct PromptState <: ModeState
     beeping::Float64
     # this option is to detect when code is pasted in non-"bracketed paste mode" :
     last_newline::Float64 # register when last newline was entered
-    # this option is to speed up output
-    refresh_wait::Union{Timer,Nothing}
 end
 
 struct Modifiers
@@ -524,10 +522,6 @@ function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=fal
 end
 
 function clear_input_area(terminal::AbstractTerminal, s::PromptState)
-    if s.refresh_wait !== nothing
-        close(s.refresh_wait)
-        s.refresh_wait = nothing
-    end
     _clear_input_area(terminal, s.ias)
     s.ias = InputAreaState(0, 0)
 end
@@ -572,10 +566,6 @@ end
 max_highlight_size::Int = 10000 # bytes
 
 function refresh_multi_line(s::PromptState; kw...)
-    if s.refresh_wait !== nothing
-        close(s.refresh_wait)
-        s.refresh_wait = nothing
-    end
     if s.hint isa String
         # clear remainder of line which is unknown here if it had a hint before unbeknownst to refresh_multi_line
         # the clear line cannot be printed each time because it would break column movement
@@ -1025,57 +1015,28 @@ function edit_insert(s::PromptState, c::StringLike)
         end
     end
 
-    old_wait = s.refresh_wait !== nothing
-    if old_wait
-        close(s.refresh_wait)
-        s.refresh_wait = nothing
-    end
     str = string(c)
     edit_insert(buf, str)
     if '\n' in str
         refresh_line(s)
     else
-        after = options(s).auto_refresh_time_delay
         termbuf = terminal(s)
         w = width(termbuf)
         offset = s.ias.curs_row == 1 || s.indent < 0 ?
             sizeof(prompt_string(s.p.prompt)::String) : s.indent
         offset += position(buf) - beginofline(buf) # size of current line
-        spinner = '\0'
-        delayup = !eof(buf) || old_wait
         # Disable fast path when syntax highlighting is enabled
-        use_fast_path = offset + textwidth(str) <= w && !(after == 0 && delayup) && !options(s).style_input
+        use_fast_path = offset + textwidth(str) <= w && eof(buf) && !options(s).style_input
         if use_fast_path
             # Avoid full update when appending characters to the end
             # and an update of curs_row isn't necessary (conservatively estimated)
             write(termbuf, str)
-            spinner = ' ' # temporarily clear under the cursor
-        elseif after == 0
+        else
             refresh_line(s)
-            delayup = false
-        else # render a spinner for each key press
-            if old_wait || length(str) != 1
-                spinner = spin_seq[mod1(position(buf) - w, length(spin_seq))]
-            else
-                spinner = str[end]
-            end
-            delayup = true
-        end
-        if delayup
-            if spinner != '\0'
-                write(termbuf, spinner)
-                cmove_left(termbuf)
-            end
-            s.refresh_wait = Timer(after) do t
-                s.refresh_wait === t || return
-                s.refresh_wait = nothing
-                refresh_line(s)
-            end
         end
     end
     nothing
 end
-const spin_seq = ("⋯", "⋱", "⋮", "⋰")
 
 function edit_insert(buf::IOBuffer, c::StringLike)
     if eof(buf)
@@ -2885,7 +2846,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, nothing, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())
