@@ -86,7 +86,18 @@ function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState,
     # Restore column pos
     print(buf, "\e[", textwidth(PROMPT_TEXT) + position(pstate.input_buffer) + 1, 'G')
     synccap && print(buf, SYNC_UPDATE_END)
-    write(io, seekstart(buf.io))
+    if Base.generating_output()
+        # Write output in chunks seems to avoid a hang that happens here during precompilation
+        # of the history on mac (io gets full without anything draining it?)
+        seekstart(buf.io)
+        data = read(buf.io)
+        for chunk in Iterators.partition(data, 32)
+            write(io, chunk)
+            flush(io)
+        end
+    else
+        write(io, seekstart(buf.io))
+    end
     truncate(buf.io, 0)
     flush(io)
 end
