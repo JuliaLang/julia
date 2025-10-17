@@ -300,7 +300,7 @@ function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
     return nothing
 end
 
-const _hint_handlers = IdDict{TypeName,Vector{Any}}()
+const _hint_handlers = IdDict{Core.TypeName,Vector{Any}}()
 
 """
     Experimental.show_error_hints(io, ex, args...)
