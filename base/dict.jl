@@ -851,6 +851,28 @@ length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
+"""
+    setindex(d::ImmutableDict, value, key)
+
+Creates a new `ImmutableDict` similar to `d` with the most recent value of the
+key `key` set to `value`.
+
+Any existing values with the same key remain in `d`, but they are shadowed by
+this new value when using [`getindex`](@ref). The existing values are still
+present when iterating over `d`.
+
+# Examples
+```jldoctest
+julia> Base.setindex(Base.ImmutableDict(:a => 1), 2, :a) == Base.ImmutableDict(:a => 1, :a => 2)
+true
+julia> Base.setindex(Base.ImmutableDict(:a => 1), 2, :b) == Base.ImmutableDict(:a => 1, :b => 2)
+true
+```
+"""
+function setindex(d::ImmutableDict, value, key)
+    ImmutableDict(d, key => value)
+end
+
 _similar_for(c::AbstractDict, ::Type{Pair{K,V}}, itr, isz, len) where {K, V} = empty(c, K, V)
 _similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
     throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
