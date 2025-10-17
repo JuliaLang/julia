@@ -1669,6 +1669,14 @@ end
        @test isfile(Base.locate_package(id_dev))
        @test Base.identify_package("Devved2") === nothing
 
+       # Test that workspace projects can be specified with subfolder paths
+       # and that base_project searches upward through multiple directory levels
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "nested", "deep"))
+       proj_file = joinpath(@__DIR__, "project", "SubProject", "nested", "deep", "Project.toml")
+       base_proj = Base.base_project(proj_file)
+       @test base_proj == joinpath(@__DIR__, "project", "SubProject", "Project.toml")
+
     finally
        copy!(LOAD_PATH, old_load_path)
     end

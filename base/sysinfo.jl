@@ -14,6 +14,7 @@ export BINDIR,
        MACHINE,
        KERNEL,
        JIT,
+       PAGESIZE,
        cpu_info,
        cpu_summary,
        sysimage_target,
@@ -144,6 +145,13 @@ Note: Included in the detailed system information via `versioninfo(verbose=true)
 """
 global JIT::String
 
+"""
+    Sys.PAGESIZE::Clong
+
+A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+"""
+global PAGESIZE::Clong
+
 function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
@@ -162,6 +170,7 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
     __init_build()
     nothing
 end
