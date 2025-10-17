@@ -153,7 +153,12 @@ end
 
 empty!(Base.TOML_CACHE.d)
 Base.TOML.reinit!(Base.TOML_CACHE.p, "")
-@eval Base BUILDROOT = ""
+
+# Clear some build-related globals (TODO: Use Base.delete_binding?)
+@eval Base begin
+    DATAROOT = ""
+    BUILDROOT = ""
+end
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""
