@@ -1125,7 +1125,8 @@ precompile_test_harness("code caching") do dir
         end
         @test invalidations[idxv-1].def.def.name === :flbi
         idxv = findnext(==("verify_methods"), invalidations, idxv+1)
-        @test invalidations[idxv-1].def.def.name === :useflbi
+        # Temporarily skip the next test on Windows (https://github.com/JuliaLang/julia/issues/59846):
+        @test invalidations[idxv-1].def.def.name === :useflbi skip=Sys.iswindows()
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
