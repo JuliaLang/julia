@@ -1604,11 +1604,11 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 For binary operators `⊙` and `⊡` of identical operator precedence parsing depends on their
 associativity as follows:
 
-| Associativity | Parsing behavior                          |
-|:-------------:|:-----------------------------------------:|
-| `:left`       | `(x ⊙ y) ⊡ z == x ⊙ y ⊡ z != x ⊙ (y ⊡ z)` |
-| `:none`       | `(x ⊙ y) ⊡ z != x ⊙ y ⊡ z != x ⊙ (y ⊡ z)` |
-| `:right`      | `(x ⊙ y) ⊡ z != x ⊙ y ⊡ z == x ⊙ (y ⊡ z)` |
+| Associativity | `x ⊙ y ⊡ z` is parsed as |
+|:-------------:|:------------------------:|
+| `:left`       | `(x ⊙ y) ⊡ z`            |
+| `:none`       | `x ⊙ y ⊡ z`              |
+| `:right`      | `x ⊙ (y ⊡ z)`            |
 
 `⊙` and `⊡` can be the same operator. A difference in parsing behavior does not imply a
 different result of the expression.
