@@ -8,10 +8,10 @@ Launch the interactive REPL history search interface.
 Spawns prompt and display tasks, waits for user confirm or abort,
 and returns the final selection (if any).
 """
-function runsearch(histfile::HistoryFile)
+function runsearch(histfile::HistoryFile, term)
     update!(histfile)
     events = Channel{Symbol}(Inf)
-    pspec = create_prompt(events)
+    pspec = create_prompt(events, term)
     ptask = @spawn runprompt!(pspec, events)
     dtask = @spawn run_display!(pspec, events, histfile.records)
     wait(ptask)

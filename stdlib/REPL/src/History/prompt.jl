@@ -57,17 +57,14 @@ function select_keymap(events::Channel{Symbol})
 end
 
 """
-    create_prompt(events::Channel{Symbol})
+    create_prompt(events::Channel{Symbol}, term)
 
-Initialize a custom REPL prompt tied to `events`.
+Initialize a custom REPL prompt tied to `events` using the existing `term`.
 
 Returns a tuple `(term, prompt, istate, pstate)` ready for
 input handling and display.
 """
-function create_prompt(events::Channel{Symbol})
-    term = REPL.Terminals.TTYTerminal(
-        get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"),
-        stdin, stdout, stderr)
+function create_prompt(events::Channel{Symbol}, term)
     prompt = REPL.LineEdit.Prompt(
         PROMPT_TEXT, # prompt
         "\e[90m", "\e[0m", # prompt_prefix, prompt_suffix

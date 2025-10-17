@@ -2700,7 +2700,7 @@ function repl_history_hook!(mistate::MIState)
     mimode = mode(mistate)
     mistate.mode_state[mimode] =
         deactivate(mimode, state(mistate), termbuf, term)
-    result = histsearch(mimode.hist.history)
+    result = histsearch(mimode.hist.history, term)
     mimode = if isnothing(result.mode)
         mistate.current_mode
     else

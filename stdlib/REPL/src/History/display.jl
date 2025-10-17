@@ -76,7 +76,16 @@ function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState,
     # Restore column pos
     print(buf, "\e[", textwidth(PROMPT_TEXT) + position(pstate.input_buffer) + 1, 'G')
     print(buf, "\eP=2s\e\\") # End sync update
-    write(io, seekstart(buf.io))
+    # Write output in chunks seems to avoid a hang that happens here during precompilation
+    # of the history on mac (io gets full without anything draining it?)
+    seekstart(buf.io)
+    data = read(buf.io)
+    chunk_size = 32
+    for i in 1:chunk_size:length(data)
+        chunk_end = min(i + chunk_size - 1, length(data))
+        write(io, @view data[i:chunk_end])
+        flush(io)
+    end
     truncate(buf.io, 0)
     flush(io)
 end

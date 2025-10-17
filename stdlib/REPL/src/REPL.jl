@@ -102,7 +102,7 @@ include("docview.jl")
 include("History/History.jl")
 using .History
 
-histsearch(hist::HistoryFile) = runsearch(hist)
+histsearch(hist::HistoryFile, term) = runsearch(hist, term)
 
 include("Pkg_beforeload.jl")
 
@@ -1890,7 +1890,7 @@ import .Numbered.numbered_prompt!
 Base.REPL_MODULE_REF[] = REPL
 
 if Base.generating_output()
-    include("precompile.jl")
+   include("precompile.jl")
 end
 
 end # module
