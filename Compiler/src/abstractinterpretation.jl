@@ -3484,6 +3484,10 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
     callee = e.args[1]
     if isexpr(callee, :tuple)
         if length(callee.args) >= 1
+            # Evaluate the arguments to constrain the world, effects, and other info for codegen,
+            # but note there is an implied `if !=(C_NULL)` branch here that might read data
+            # in a different world (the exact cache behavior is unspecified), so we do not use
+            # these results to refine reachability of the subsequent foreigncall.
             abstract_eval_value(interp, callee.args[1], sstate, sv)
             if length(callee.args) >= 2
                 abstract_eval_value(interp, callee.args[2], sstate, sv)
