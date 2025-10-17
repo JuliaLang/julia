@@ -1075,3 +1075,11 @@ let io = IOBuffer()
     str = String(take!(io))
     @test occursin("julia.write_barrier", str)
 end
+
+f42559 = 5
+foo42559() = f42559
+let io = IOBuffer()
+    code_llvm(io, foo42559, Tuple{}, raw=true, optimize=false)
+    str = String(take!(io))
+    @test !occursin("jl_get_binding_value_seqcst", str)
+end
