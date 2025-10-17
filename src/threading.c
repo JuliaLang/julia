@@ -345,18 +345,12 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
     ptls->system_id = uv_thread_self();
     ptls->rngseed = jl_rand();
-    if (tid == 0)
+    if (tid == 0) {
         ptls->disable_gc = 1;
 #ifdef _OS_WINDOWS_
-    if (tid == 0) {
-        if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
-                             GetCurrentProcess(), &hMainThread, 0,
-                             FALSE, DUPLICATE_SAME_ACCESS)) {
-            jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
-            hMainThread = INVALID_HANDLE_VALUE;
-        }
-    }
+        hMainThread = ptls->system_id;
 #endif
+    }
     jl_atomic_store_relaxed(&ptls->gc_state, JL_GC_STATE_UNSAFE); // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
@@ -879,7 +873,6 @@ void jl_start_threads(void)
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
             mask[i - ninteractive_threads] = 0;
         }
-        uv_thread_detach(&uvtid);
     }
 }
 

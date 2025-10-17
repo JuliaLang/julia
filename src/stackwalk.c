@@ -76,12 +76,14 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     volatile int need_more_space = 0;
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_)
+#if !defined(_CPU_X86_64_)
     if (!from_signal_handler) {
         // Workaround 32-bit windows bug missing top frame
         // See for example https://bugs.chromium.org/p/crashpad/issues/detail?id=53
         skip--;
     }
+#endif
     jl_lock_profile();
 #endif
 #if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
@@ -405,9 +407,8 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 
 // XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
-static UNWIND_HISTORY_TABLE HistoryTable;
-// TLS variable for abort_profile_ptr on 64-bit Windows
-static DWORD abort_profile_ptr_tls = TLS_OUT_OF_INDEXES;
+static __thread UNWIND_HISTORY_TABLE HistoryTable;
+static __thread _Atomic(int) *abort_profile_ptr = NULL;
 
 static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
@@ -436,7 +437,7 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     return fbase;
 }
 #else
-static struct {
+static __thread struct {
     DWORD64 dwAddr;
     DWORD64 ImageBase;
 } HistoryTable;
@@ -464,7 +465,6 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 
 // Might be called from unmanaged thread.
 static PVOID dll_notification_cookie;
-static small_arraylist_t dll_info_list;
 
 // Structure definitions for LdrDllNotification
 typedef struct _LDR_DLL_LOADED_NOTIFICATION_DATA {
@@ -514,21 +514,17 @@ static VOID CALLBACK dll_notification_callback(
     // Store DLL information and update symbol handler based on notification reason
     if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
         const LDR_DLL_LOADED_NOTIFICATION_DATA *data = &NotificationData->Loaded;
-        small_arraylist_push(&dll_info_list, data->DllBase);
-        small_arraylist_push(&dll_info_list, (PVOID)(uintptr_t)data->SizeOfImage);
         SymLoadModuleExW(GetCurrentProcess(), NULL,
                          data->FullDllName->Buffer,
                          data->BaseDllName->Buffer,
-                         (DWORD64)data->DllBase,
+                         (uintptr_t)data->DllBase,
                          data->SizeOfImage,
                          NULL,
                          0);
     }
     else if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
         const LDR_DLL_UNLOADED_NOTIFICATION_DATA *data = &NotificationData->Unloaded;
-        small_arraylist_push(&dll_info_list, data->DllBase);
-        small_arraylist_push(&dll_info_list, 0);
-        SymUnloadModule64(GetCurrentProcess(), (DWORD64)data->DllBase);
+        SymUnloadModule64(GetCurrentProcess(), (uintptr_t)data->DllBase);
     }
     uv_mutex_unlock(&jl_in_stackwalk);
 }
@@ -538,16 +534,9 @@ void jl_init_stackwalk(void)
 {
     uv_mutex_init(&jl_in_stackwalk);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
-    if (!SymInitialize(GetCurrentProcess(), "", 0))
+    if (!SymInitialize(GetCurrentProcess(), "", 1))
         jl_safe_printf("WARNING: failed to initialize stack walk info\n");
-    small_arraylist_new(&dll_info_list, 0);
     LdrRegisterDllNotification(0, dll_notification_callback, NULL, &dll_notification_cookie);
-#ifdef _CPU_X86_64_
-    // Initialize TLS for abort_profile_ptr on 64-bit Windows
-    if (abort_profile_ptr_tls == TLS_OUT_OF_INDEXES) {
-        abort_profile_ptr_tls = TlsAlloc();
-    }
-#endif
 }
 
 // Finalize stackwalk infrastructure
@@ -557,22 +546,15 @@ void jl_fin_stackwalk(void)
         LdrUnregisterDllNotification(dll_notification_cookie);
         dll_notification_cookie = NULL;
     }
-#ifdef _CPU_X86_64_
-    // Cleanup TLS for abort_profile_ptr on 64-bit Windows
-    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
-        TlsFree(abort_profile_ptr_tls);
-        abort_profile_ptr_tls = TLS_OUT_OF_INDEXES;
-    }
-#endif
 }
 
 // Set the abort_profile_ptr in TLS
+#ifdef _CPU_X86_64_
 JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT
 {
-    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
-        TlsSetValue(abort_profile_ptr_tls, (LPVOID)abort_ptr);
-    }
+    abort_profile_ptr = abort_ptr;
 }
+#endif
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
@@ -643,27 +625,20 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     }
 
     // Set can-abort flag
-    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
-        _Atomic(int) *abort_ptr = (_Atomic(int)*)TlsGetValue(abort_profile_ptr_tls);
-        if (abort_ptr && jl_atomic_exchange(abort_ptr, 0) != 0) {
-            return 0; // aborted
-        }
+    _Atomic(int) *abort_ptr = abort_profile_ptr;
+    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 1) != 0) {
+        jl_atomic_store_relaxed(abort_ptr, 3);
+        return 0; // aborted
     }
 
     DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
-    if (!ImageBase)
-        return 0;
-
-    PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
-        GetCurrentProcess(), cursor->Rip - !from_signal_handler);
+    PRUNTIME_FUNCTION FunctionEntry = ImageBase ? (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
+        GetCurrentProcess(), cursor->Rip - !from_signal_handler) : NULL;
 
     // Check if can-abort flag was removed, or remove it
-    if (abort_profile_ptr_tls != TLS_OUT_OF_INDEXES) {
-        _Atomic(int) *abort_ptr = (_Atomic(int)*)TlsGetValue(abort_profile_ptr_tls);
-        if (abort_ptr && jl_atomic_exchange(abort_ptr, 0) != 1) {
-            jl_atomic_store(abort_ptr, 3);
-            return 0; // abort
-        }
+    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 0) != 1) {
+        jl_atomic_store_relaxed(abort_ptr, 3);
+        return 0; // abort
     }
 
     if (!FunctionEntry) {
