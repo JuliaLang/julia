@@ -502,6 +502,30 @@ sum_ref = md"Behaves like $(ref(sum))"
 @test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
 @test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
+# JuliaLang/julia#59783
+let x = 1,
+    result = md"""
+    $x
+
+    [^1]: $x
+
+    !!! note
+    $x
+    """,
+    expected = """
+    1
+
+    [^1]: 1
+
+    !!! note
+
+
+
+    1
+    """
+    @test plain(result) == expected
+end
+
 show(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
