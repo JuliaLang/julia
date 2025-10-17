@@ -37,8 +37,8 @@ function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
     return result
 end
 
-function apply_style(pass::StylingPass, input::String, context::StylingContext)
-    return pass(input, context)::AnnotatedString{String}
+function apply_style(pass::StylingPass, input::String, ast, context::StylingContext)
+    return pass(input, ast, context)::AnnotatedString{String}
 end
 
 function apply_styling_passes(input::String, passes::Vector{StylingPass}, context::StylingContext)
@@ -46,18 +46,20 @@ function apply_styling_passes(input::String, passes::Vector{StylingPass}, contex
         return AnnotatedString(input)
     end
 
-    results = [apply_style(pass, input, context) for pass in passes]
+    # Parse once and share AST across all passes
+    ast = JuliaSyntax.parseall(JuliaSyntax.GreenNode, input; ignore_errors=true)
+
+    results = [apply_style(pass, input, ast, context) for pass in passes]
     return merge_annotations(results)
 end
 
 # Applies Julia syntax highlighting
 struct SyntaxHighlightPass <: StylingPass end
 
-function (::SyntaxHighlightPass)(input::String, ::StylingContext)
+function (::SyntaxHighlightPass)(input::String, ast, ::StylingContext)
     try
-        return JuliaSyntaxHighlighting.highlight(input)
+        return JuliaSyntaxHighlighting.highlight(input, ast)
     catch e
-        e isa InterruptException && rethrow()
         @error "Error in SyntaxHighlightPass" exception=(e, catch_backtrace()) maxlog=1
         return AnnotatedString(input)
     end
@@ -66,7 +68,7 @@ end
 # Applies inverse video styling to the selected region
 struct RegionHighlightPass <: StylingPass end
 
-function (::RegionHighlightPass)(input::String, context::StylingContext)
+function (::RegionHighlightPass)(input::String, ::Any, context::StylingContext)
     result = AnnotatedString(input)
 
     if context.region_start > 0 && context.region_stop >= context.region_start
@@ -86,7 +88,7 @@ end
 
 EnclosingParenHighlightPass() = EnclosingParenHighlightPass(Face(weight=:bold, underline=true))
 
-function (pass::EnclosingParenHighlightPass)(input::String, context::StylingContext)
+function (pass::EnclosingParenHighlightPass)(input::String, ast, context::StylingContext)
     result = AnnotatedString(input)
 
     if isempty(input) || context.cursor_pos < 1
@@ -94,7 +96,6 @@ function (pass::EnclosingParenHighlightPass)(input::String, context::StylingCont
     end
 
     try
-        ast = JuliaSyntax.parseall(JuliaSyntax.GreenNode, input; ignore_errors=true)
         paren_pairs = find_enclosing_parens(input, ast, context.cursor_pos)
 
         for (open_pos, close_pos) in paren_pairs
@@ -102,7 +103,6 @@ function (pass::EnclosingParenHighlightPass)(input::String, context::StylingCont
             annotate!(result, close_pos:close_pos, :face, pass.face)
         end
     catch e
-        e isa InterruptException && rethrow()
         @error "Error in EnclosingParenHighlightPass" exception=(e, catch_backtrace()) maxlog=1
     end
 
