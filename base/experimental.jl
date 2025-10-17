@@ -295,7 +295,7 @@ Closest candidates are:
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
 function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
-    list = get!(Vector{Any}, _hint_handlers, typename(exct))
+    list = get!(Vector{Any}, _hint_handlers, Core.typename(exct))
     push!(list, exct, handler)
     return nothing
 end
@@ -318,7 +318,7 @@ function show_error_hints(io, ex, args...)
     @nospecialize
     ex_supertype = typeof(ex)
     while ex_supertype != Any
-        hinters = get(_hint_handlers, typename(ex_supertype), nothing)
+        hinters = get(_hint_handlers, Core.typename(ex_supertype), nothing)
         isnothing(hinters) && continue
         for k in 1:2:length(hinters)
             ex isa hinters[k] || continue
