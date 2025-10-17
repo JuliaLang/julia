@@ -45,15 +45,9 @@ end
 
 mutable struct Prompt <: TextInterface
     # A string or function to be printed as the prompt.
-    prompt::Union{String,Function}
-    # A string or function to be printed before the prompt. May not change the length of the prompt.
-    # This may be used for changing the color, issuing other terminal escape codes, etc.
-    prompt_prefix::Union{String,Function}
-    # Same as prefix except after the prompt
-    prompt_suffix::Union{String,Function}
-    output_prefix::Union{String,Function}
-    output_prefix_prefix::Union{String,Function}
-    output_prefix_suffix::Union{String,Function}
+    prompt::Union{AbstractString,Function}
+    # A string or function to be printed before a returned result.
+    output_prefix::Union{AbstractString,Function}
     keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
@@ -220,17 +214,32 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
         errormonitor(@async begin
             trylock(s.refresh_lock) || return
             try
-                orig_prefix = s.p.prompt_prefix
-                use_current && push!(colors, prompt_string(orig_prefix))
+                orig_prompt = s.p.prompt
+                orig_prompt_str = prompt_string(orig_prompt)
+                # Extract plain text to wrap in face during beep flash
+                plain_prompt_str = if orig_prompt_str isa StyledStrings.AnnotatedString
+                    String(orig_prompt_str)
+                elseif orig_prompt_str isa AbstractString
+                    orig_prompt_str
+                else
+                    string(orig_prompt_str)
+                end
+                use_current && push!(colors, :default)
                 i = 0
                 while s.beeping > 0.0
-                    prefix = colors[mod1(i+=1, end)]
-                    s.p.prompt_prefix = prefix
+                    face = colors[mod1(i+=1, end)]
+                    # Temporarily change prompt for visual bell effect
+                    if face === :default
+                        s.p.prompt = orig_prompt
+                    else
+                        beep_prompt_str = StyledStrings.styled"{$face:$plain_prompt_str}"
+                        s.p.prompt = () -> beep_prompt_str
+                    end
                     refresh_multi_line(s, beeping=true)
                     sleep(blink)
                     s.beeping -= blink
                 end
-                s.p.prompt_prefix = orig_prefix
+                s.p.prompt = orig_prompt
                 refresh_multi_line(s, beeping=true)
                 s.beeping = 0.0
             finally
@@ -1039,7 +1048,7 @@ function edit_insert(s::PromptState, c::StringLike)
         termbuf = terminal(s)
         w = width(termbuf)
         offset = s.ias.curs_row == 1 || s.indent < 0 ?
-            sizeof(prompt_string(s.p.prompt)::String) : s.indent
+            textwidth(prompt_string(s.p.prompt)) : s.indent
         offset += position(buf) - beginofline(buf) # size of current line
         spinner = '\0'
         delayup = !eof(buf) || old_wait
@@ -1707,24 +1716,12 @@ default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
-    prefix = prompt_string(p.prompt_prefix)
-    suffix = prompt_string(p.prompt_suffix)
-    write(terminal, prefix)
-    color && write(terminal, Base.text_colors[:bold])
     width = write_prompt(terminal, p.prompt, color)
-    color && write(terminal, Base.text_colors[:normal])
-    write(terminal, suffix)
     return width
 end
 
 function write_output_prefix(io::IO, p::Prompt, color::Bool)
-    prefix = prompt_string(p.output_prefix_prefix)
-    suffix = prompt_string(p.output_prefix_suffix)
-    print(io, prefix)
-    color && write(io, Base.text_colors[:bold])
     width = write_prompt(io, p.output_prefix, color)
-    color && write(io, Base.text_colors[:normal])
-    print(io, suffix)
     return width
 end
 
@@ -1766,8 +1763,8 @@ end
 
 # returns the width of the written prompt
 function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
-    promptstr = prompt_string(s)::String
-    write(terminal, promptstr)
+    promptstr = prompt_string(s)
+    write(IOContext(terminal, :color => color), promptstr)
     return textwidth(promptstr)
 end
 
@@ -2863,11 +2860,7 @@ const default_keymap_dict = keymap([default_keymap, escape_defaults])
 
 function Prompt(prompt
     ;
-    prompt_prefix = "",
-    prompt_suffix = "",
     output_prefix = "",
-    output_prefix_prefix = "",
-    output_prefix_suffix = "",
     keymap_dict = default_keymap_dict,
     repl = nothing,
     complete = EmptyCompletionProvider(),
@@ -2875,9 +2868,15 @@ function Prompt(prompt
     on_done = ()->nothing,
     hist = EmptyHistoryProvider(),
     sticky = false,
-    styling_passes = StylingPass[])
+    styling_passes = StylingPass[],
+    # Deprecated keyword arguments - accepted for backwards compatibility but ignored
+    # Use AnnotatedString with face annotations for colored prompts instead
+    prompt_prefix = nothing,
+    prompt_suffix = nothing,
+    output_prefix_prefix = nothing,
+    output_prefix_suffix = nothing)
 
-    return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
+    return Prompt(prompt, output_prefix,
                    keymap_dict, repl, complete, on_enter, on_done, hist, sticky, styling_passes)
 end
 
