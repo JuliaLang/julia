@@ -934,7 +934,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     return kwargs_flag != 0 && arg_pos == :kwargs
 end
 
-function get_loading_candidates(pkgstarts::String, project_file::String)
+function get_loading_candidates(pkgstarts::Union{String, SubString{String}}, project_file::String)
     loading_candidates = String[]
     d = Base.parsed_toml(project_file)
     pkg = get(d, "name", nothing)::Union{String, Nothing}
@@ -950,7 +950,7 @@ function get_loading_candidates(pkgstarts::String, project_file::String)
     return loading_candidates
 end
 
-function complete_loading_candidates!(suggestions::Vector{Completion}, s::String)
+function complete_loading_candidates!(suggestions::Vector{Completion}, s::Union{String, SubString{String}})
     for name in ("Core", "Base")
         startswith(name, s) && push!(suggestions, PackageCompletion(name))
     end
