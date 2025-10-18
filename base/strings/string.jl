@@ -516,23 +516,6 @@ function getindex_continued(s, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
-
-@inline function getindex(s::String, r::UnitRange{Int})
-    isempty(r) && return ""
-    i, j = first(r), last(r)
-    @boundscheck begin
-        checkbounds(s, r)
-        @inbounds isvalid(s, i) || string_index_err(s, i)
-        @inbounds isvalid(s, j) || string_index_err(s, j)
-    end
-    j = nextind(s, j) - 1
-    n = j - i + 1
-    ss = _string_n(n)
-    GC.@preserve s ss unsafe_copyto!(pointer(ss), pointer(s, i), n)
-    return ss
-end
-
 # nothrow because we know the start and end indices are valid
 @assume_effects :nothrow length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 

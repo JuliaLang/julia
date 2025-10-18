@@ -299,7 +299,7 @@ function lreplace!(sym::Symbol, r::LReplace, in_quote_context::Bool, escs::Int)
     Symbol(lreplace_string!(string(sym), r))
 end
 
-function lreplace_string!(str::String, r::LReplace)
+function lreplace_string!(str::AbstractString, r::LReplace)
     i = firstindex(str)
     pat = r.pat_str
     j = firstindex(pat)
@@ -331,7 +331,7 @@ function lreplace_string!(str::String, r::LReplace)
         if matching && j > lastindex(pat)
             if i > lastindex(str) || str[i] == '_'
                 # We have a match
-                return string(str[1:prevind(str, istart)], r.val, lreplace_string!(str[i:end], r))
+                return string(str[1:prevind(str, istart)], r.val, lreplace_string!(String(str[i:end]), r))
             end
             matching = false
             j = firstindex(pat)
