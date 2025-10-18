@@ -254,7 +254,7 @@ julia> struct HasPlain
        end
 
 julia> HasPlain()
-HasPlain(438103441441)
+HasPlain(0)
 ```
 
 Arrays of plain data types exhibit the same behavior.
