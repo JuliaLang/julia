@@ -2101,6 +2101,142 @@ const escape_defaults = merge!(
     AnyDict("\e[$(c)l" => nothing for c in 1:20)
     )
 
+
+# Keymap for automatic bracket/quote insertion and completion
+const bracket_insert_keymap = AnyDict()
+let
+    # Determine when we should not close a bracket/quote
+    function should_skip_closing_bracket(left_peek, v)
+        # Don't close if we already have an open quote immediately before (triple quote case)
+        # For quotes, also check for transpose expressions: issue JuliaLang/OhMyREPL.jl#200
+        left_peek == v && return true
+        if v == '\''
+            tr_expr = isletter(left_peek) || isnumeric(left_peek) || left_peek == '_' || left_peek == ']'
+            return tr_expr
+        end
+        return false
+    end
+
+    function peek_char_left(b::IOBuffer)
+        p = position(b)
+        c = char_move_left(b)
+        seek(b, p)
+        return c
+    end
+
+    # Check if there's an unmatched opening quote before the cursor
+    function has_unmatched_quote(buf::IOBuffer, quote_char::Char)
+        pos = position(buf)
+        content = String(buf.data[1:pos])
+        isempty(content) && return false
+
+        # Count unescaped quotes before cursor position
+        count = 0
+        i = 1
+        while i <= length(content)
+            if content[i] == quote_char
+                # Check if escaped by counting preceding backslashes
+                num_backslashes = 0
+                j = i - 1
+                while j >= 1 && content[j] == '\\'
+                    num_backslashes += 1
+                    j -= 1
+                end
+                # If even number of backslashes (including zero), the quote is not escaped
+                if num_backslashes % 2 == 0
+                    count += 1
+                end
+            end
+            i = nextind(content, i)
+        end
+        return isodd(count)
+    end
+
+    # Left/right bracket pairs
+    bracket_pairs = (('(', ')'), ('{', '}'), ('[', ']'))
+    right_brackets_ws = (')', '}', ']', ' ', '\t', '\n')
+
+    for (left, right) in bracket_pairs
+        # Left bracket: insert both and move cursor between them
+        bracket_insert_keymap[left] = (s::MIState, o...) -> begin
+            buf = buffer(s)
+            edit_insert(buf, left)
+            if eof(buf) || peek(buf, Char) in right_brackets_ws
+                edit_insert(buf, right)
+                edit_move_left(buf)
+            end
+            refresh_line(s)
+        end
+
+        # Right bracket: skip over if next char matches, otherwise insert
+        bracket_insert_keymap[right] = (s::MIState, o...) -> begin
+            buf = buffer(s)
+            if !eof(buf) && peek(buf, Char) == right
+                edit_move_right(buf)
+            else
+                edit_insert(buf, right)
+            end
+            refresh_line(s)
+        end
+    end
+
+    # Quote characters (need special handling for transpose detection)
+    for quote_char in ('"', '\'', '`')
+        bracket_insert_keymap[quote_char] = (s::MIState, o...) -> begin
+            buf = buffer(s)
+            if !eof(buf) && peek(buf, Char) == quote_char
+                # Skip over closing quote
+                edit_move_right(buf)
+            elseif position(buf) > 0 && should_skip_closing_bracket(peek_char_left(buf), quote_char)
+                # Don't auto-close (e.g., for transpose or triple quotes)
+                edit_insert(buf, quote_char)
+            elseif quote_char in ('"', '\'', '`') && has_unmatched_quote(buf, quote_char)
+                # For quotes, check if we're closing an existing string
+                edit_insert(buf, quote_char)
+            else
+                # Insert both quotes
+                edit_insert(buf, quote_char)
+                edit_insert(buf, quote_char)
+                edit_move_left(buf)
+            end
+            refresh_line(s)
+        end
+    end
+
+    # Backspace - also remove matching closing bracket/quote
+    bracket_insert_keymap['\b'] = (s::MIState, o...) -> begin
+        if is_region_active(s)
+            return edit_kill_region(s)
+        elseif isempty(s) || position(buffer(s)) == 0
+            # Handle transitioning to main mode
+            repl = Base.active_repl
+            mirepl = isdefined(repl, :mi) ? repl.mi : repl
+            main_mode = mirepl.interface.modes[1]
+            buf = copy(buffer(s))
+            transition(s, main_mode) do
+                state(s, main_mode).input_buffer = buf
+            end
+            return
+        end
+
+        buf = buffer(s)
+        left_brackets = ('(', '{', '[', '"', '\'', '`')
+        right_brackets = (')', '}', ']', '"', '\'', '`')
+
+        if !eof(buf) && position(buf) > 0
+            left_char = peek_char_left(buf)
+            i = findfirst(isequal(left_char), left_brackets)
+            if i !== nothing && peek(buf, Char) == right_brackets[i]
+                # Remove both the left and right bracket/quote
+                edit_delete(buf)
+                edit_backspace(buf)
+                return refresh_line(s)
+            end
+        end
+        return edit_backspace(s)
+    end
+end
+
 mutable struct HistoryPrompt <: TextInterface
     hp::HistoryProvider
     complete::CompletionProvider

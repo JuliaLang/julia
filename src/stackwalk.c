@@ -14,6 +14,7 @@
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
+#include <winternl.h>
 uv_mutex_t jl_in_stackwalk;
 #define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
@@ -75,13 +76,15 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     volatile int need_more_space = 0;
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    uv_mutex_lock(&jl_in_stackwalk);
+#if defined(_OS_WINDOWS_)
+#if !defined(_CPU_X86_64_)
     if (!from_signal_handler) {
         // Workaround 32-bit windows bug missing top frame
         // See for example https://bugs.chromium.org/p/crashpad/issues/detail?id=53
         skip--;
     }
+#endif
+    jl_lock_profile();
 #endif
 #if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -188,9 +191,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         if (n > 0) n -= 1;
     }
     jl_set_safe_restore(old_buf);
-#endif
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    uv_mutex_unlock(&jl_in_stackwalk);
+#else
+    jl_unlock_profile();
 #endif
     *bt_size = n;
     return need_more_space;
@@ -402,21 +404,16 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 }
 
 #if defined(_OS_WINDOWS_)
+
 // XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
-static UNWIND_HISTORY_TABLE HistoryTable;
-#else
-static struct {
-    DWORD64 dwAddr;
-    DWORD64 ImageBase;
-} HistoryTable;
-#endif
+static __thread UNWIND_HISTORY_TABLE HistoryTable;
+static __thread _Atomic(int) *abort_profile_ptr = NULL;
+
 static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 AddrBase)
 {
-    //jl_printf(JL_STDOUT, "lookup %d\n", AddrBase);
-#ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn)
@@ -425,16 +422,11 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
     PVOID ftable = SymFunctionTableAccess64(hProcess, AddrBase);
     uv_mutex_unlock(&jl_in_stackwalk);
     return ftable;
-#else
-    return SymFunctionTableAccess64(hProcess, AddrBase);
-#endif
 }
 static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 dwAddr)
 {
-    //jl_printf(JL_STDOUT, "lookup base %d\n", dwAddr);
-#ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
     if (fn)
@@ -443,7 +435,22 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     DWORD64 fbase = SymGetModuleBase64(hProcess, dwAddr);
     uv_mutex_unlock(&jl_in_stackwalk);
     return fbase;
+}
 #else
+static __thread struct {
+    DWORD64 dwAddr;
+    DWORD64 ImageBase;
+} HistoryTable;
+static PVOID CALLBACK JuliaFunctionTableAccess64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 AddrBase)
+{
+    return SymFunctionTableAccess64(hProcess, AddrBase);
+}
+static DWORD64 WINAPI JuliaGetModuleBase64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 dwAddr)
+{
     if (dwAddr == HistoryTable.dwAddr)
         return HistoryTable.ImageBase;
     DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
@@ -453,25 +460,105 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         return ImageBase;
     }
     return SymGetModuleBase64(hProcess, dwAddr);
-#endif
 }
+#endif
 
 // Might be called from unmanaged thread.
-volatile int needsSymRefreshModuleList;
-BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
+static PVOID dll_notification_cookie;
 
-JL_DLLEXPORT void jl_refresh_dbg_module_list(void)
+// Structure definitions for LdrDllNotification
+typedef struct _LDR_DLL_LOADED_NOTIFICATION_DATA {
+    ULONG Flags;
+    PCUNICODE_STRING FullDllName;
+    PCUNICODE_STRING BaseDllName;
+    PVOID DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_LOADED_NOTIFICATION_DATA;
+typedef const LDR_DLL_LOADED_NOTIFICATION_DATA *PCLDR_DLL_LOADED_NOTIFICATION_DATA;
+
+typedef struct _LDR_DLL_UNLOADED_NOTIFICATION_DATA {
+    ULONG Flags;
+    PCUNICODE_STRING FullDllName;
+    PCUNICODE_STRING BaseDllName;
+    PVOID DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_UNLOADED_NOTIFICATION_DATA;
+typedef const LDR_DLL_UNLOADED_NOTIFICATION_DATA *PCLDR_DLL_UNLOADED_NOTIFICATION_DATA;
+
+typedef union _LDR_DLL_NOTIFICATION_DATA {
+    LDR_DLL_LOADED_NOTIFICATION_DATA Loaded;
+    LDR_DLL_UNLOADED_NOTIFICATION_DATA Unloaded;
+} LDR_DLL_NOTIFICATION_DATA;
+typedef const LDR_DLL_NOTIFICATION_DATA *PCLDR_DLL_NOTIFICATION_DATA;
+
+#define LDR_DLL_NOTIFICATION_REASON_LOADED   1
+#define LDR_DLL_NOTIFICATION_REASON_UNLOADED 2
+
+// Forward declarations for ntdll functions
+typedef VOID CALLBACK (*PLDR_DLL_NOTIFICATION_FUNCTION)(
+  ULONG                       NotificationReason,
+  PCLDR_DLL_NOTIFICATION_DATA NotificationData,
+  PVOID                       Context
+);
+NTSTATUS NTAPI LdrRegisterDllNotification(ULONG Flags, PLDR_DLL_NOTIFICATION_FUNCTION NotificationFunction, PVOID Context, PVOID *Cookie);
+NTSTATUS NTAPI LdrUnregisterDllNotification(PVOID Cookie);
+
+// Callback for LdrRegisterDllNotification
+static VOID CALLBACK dll_notification_callback(
+    ULONG NotificationReason,
+    PCLDR_DLL_NOTIFICATION_DATA NotificationData,
+    PVOID Context)
 {
-    if (needsSymRefreshModuleList && hSymRefreshModuleList != NULL) {
-        hSymRefreshModuleList(GetCurrentProcess());
-        needsSymRefreshModuleList = 0;
+    (void)Context;
+    uv_mutex_lock(&jl_in_stackwalk);
+    // Store DLL information and update symbol handler based on notification reason
+    if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
+        const LDR_DLL_LOADED_NOTIFICATION_DATA *data = &NotificationData->Loaded;
+        SymLoadModuleExW(GetCurrentProcess(), NULL,
+                         data->FullDllName->Buffer,
+                         data->BaseDllName->Buffer,
+                         (uintptr_t)data->DllBase,
+                         data->SizeOfImage,
+                         NULL,
+                         0);
+    }
+    else if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
+        const LDR_DLL_UNLOADED_NOTIFICATION_DATA *data = &NotificationData->Unloaded;
+        SymUnloadModule64(GetCurrentProcess(), (uintptr_t)data->DllBase);
+    }
+    uv_mutex_unlock(&jl_in_stackwalk);
+}
+
+// Initialize stackwalk infrastructure (DLL tracking and profiling)
+void jl_init_stackwalk(void)
+{
+    uv_mutex_init(&jl_in_stackwalk);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 1))
+        jl_safe_printf("WARNING: failed to initialize stack walk info\n");
+    LdrRegisterDllNotification(0, dll_notification_callback, NULL, &dll_notification_cookie);
+}
+
+// Finalize stackwalk infrastructure
+void jl_fin_stackwalk(void)
+{
+    if (dll_notification_cookie) {
+        LdrUnregisterDllNotification(dll_notification_cookie);
+        dll_notification_cookie = NULL;
     }
 }
+
+// Set the abort_profile_ptr in TLS
+#ifdef _CPU_X86_64_
+JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT
+{
+    abort_profile_ptr = abort_ptr;
+}
+#endif
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
     int result;
-    uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
     cursor->stackframe.AddrPC.Offset = Context->Eip;
@@ -481,14 +568,15 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
     cursor->context = *Context;
+    uv_mutex_lock(&jl_in_stackwalk);
     result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
             &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
             JuliaGetModuleBase64, NULL);
+    uv_mutex_unlock(&jl_in_stackwalk);
 #else
     *cursor = *Context;
     result = 1;
 #endif
-    uv_mutex_unlock(&jl_in_stackwalk);
     return result;
 }
 
@@ -520,8 +608,10 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->stackframe.AddrPC.Offset != 0;
     }
 
+    uv_mutex_lock(&jl_in_stackwalk);
     BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
         &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    uv_mutex_unlock(&jl_in_stackwalk);
     return result;
 #else
     *ip = (uintptr_t)cursor->Rip;
@@ -534,12 +624,23 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->Rip != 0;
     }
 
-    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
-    if (!ImageBase)
-        return 0;
+    // Set can-abort flag
+    _Atomic(int) *abort_ptr = abort_profile_ptr;
+    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 1) != 0) {
+        jl_atomic_store_relaxed(abort_ptr, 3);
+        return 0; // aborted
+    }
 
-    PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
-        GetCurrentProcess(), cursor->Rip - !from_signal_handler);
+    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
+    PRUNTIME_FUNCTION FunctionEntry = ImageBase ? (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
+        GetCurrentProcess(), cursor->Rip - !from_signal_handler) : NULL;
+
+    // Check if can-abort flag was removed, or remove it
+    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 0) != 1) {
+        jl_atomic_store_relaxed(abort_ptr, 3);
+        return 0; // abort
+    }
+
     if (!FunctionEntry) {
         // Not code or bad unwind?
         return 0;

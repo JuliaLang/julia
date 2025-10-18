@@ -1499,7 +1499,18 @@ function setup_interface(
                 end
                 Base.errormonitor(t_replswitch)
             else
-                edit_insert(s, ']')
+                # Use bracket insertion if enabled, otherwise just insert
+                if repl.options.auto_insert_closing_bracket
+                    buf = LineEdit.buffer(s)
+                    if !eof(buf) && LineEdit.peek(buf, Char) == ']'
+                        LineEdit.edit_move_right(buf)
+                    else
+                        edit_insert(buf, ']')
+                    end
+                    LineEdit.refresh_line(s)
+                else
+                    edit_insert(s, ']')
+                end
                 LineEdit.check_show_hint(s)
             end
         end,
@@ -1671,14 +1682,28 @@ function setup_interface(
 
     prefix_prompt, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
 
-    a = Dict{Any,Any}[skeymap, repl_keymap, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    # Build keymap list - add bracket insertion if enabled
+    base_keymaps = Dict{Any,Any}[skeymap, repl_keymap, prefix_keymap, LineEdit.history_keymap]
+    if repl.options.auto_insert_closing_bracket
+        push!(base_keymaps, LineEdit.bracket_insert_keymap)
+    end
+    push!(base_keymaps, LineEdit.default_keymap, LineEdit.escape_defaults)
+
+    a = base_keymaps
     prepend!(a, extra_repl_keymap)
 
     julia_prompt.keymap_dict = LineEdit.keymap(a)
 
     mk = mode_keymap(julia_prompt)
 
-    b = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    # Build keymap list for other modes
+    mode_base_keymaps = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap]
+    if repl.options.auto_insert_closing_bracket
+        push!(mode_base_keymaps, LineEdit.bracket_insert_keymap)
+    end
+    push!(mode_base_keymaps, LineEdit.default_keymap, LineEdit.escape_defaults)
+
+    b = mode_base_keymaps
     prepend!(b, extra_repl_keymap)
 
     shell_mode.keymap_dict = help_mode.keymap_dict = dummy_pkg_mode.keymap_dict = LineEdit.keymap(b)

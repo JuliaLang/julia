@@ -409,9 +409,33 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
-static volatile HANDLE hBtThread = 0;
+static TIMECAPS timecaps;
+static HANDLE hBtThread = 0;
+static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+#ifdef _CPU_X86_64_
+// Callback data structure for profile timeout
+typedef struct {
+    _Atomic(int) *abort_ptr;
+    int tid;
+} profile_timeout_data_t;
+
+static void CALLBACK profile_timeout_cb(PVOID lpParam, BOOLEAN TimerOrWaitFired)
+{
+    profile_timeout_data_t *data = (profile_timeout_data_t*)lpParam;
+    if (TimerOrWaitFired && data != NULL && data->abort_ptr != NULL) {
+        // Timeout reached, signal an abort should occur
+        // jl_safe_fprintf(ios_safe_stderr, "profile_timeout_cb called.\n");
+        if (jl_atomic_exchange(data->abort_ptr, 2) == 1) {
+            // jl_safe_fprintf(ios_safe_stderr, "profile_timeout_cb jl_thread_resume.\n");
+            jl_thread_resume(data->tid);
+            data->tid = -1;
+        }
+    }
+}
+#endif
+
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -421,8 +445,10 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
     if (ct2 == NULL) // this thread is already dead
         return 0;
     HANDLE hThread = ptls2->system_id;
-    if ((DWORD)-1 == SuspendThread(hThread))
+    if ((DWORD)-1 == SuspendThread(hThread)) {
+        // jl_safe_fprintf(ios_safe_stderr, "failed to suspend thread %d: %lu\n", tid, GetLastError());
         return 0;
+    }
     assert(sizeof(*ctx) == sizeof(CONTEXT));
     memset(ctx, 0, sizeof(CONTEXT));
     ctx->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
@@ -439,90 +465,127 @@ void jl_thread_resume(int tid)
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     HANDLE hThread = ptls2->system_id;
     if ((DWORD)-1 == ResumeThread(hThread)) {
-        fputs("failed to resume main thread! aborting.", stderr);
+        jl_safe_fprintf(ios_safe_stderr, "failed to resume main thread! aborting.\n");
         abort();
     }
 }
 
 int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
-    uv_mutex_lock(&jl_in_stackwalk);
-    jl_lock_profile();
-    ULONG_PTR lock_cookie = 0;
-    LdrLockLoaderLock(0x1, NULL, &lock_cookie);
+    jl_lock_profile(); // prevent concurrent mutation
+    uv_mutex_lock(&jl_in_stackwalk); // prevent multi-threaded dbghelp calls
     int success = jl_thread_suspend_and_get_state(tid, 0, ctx);
-    LdrUnlockLoaderLock(0x1, lock_cookie);
-    jl_unlock_profile();
     uv_mutex_unlock(&jl_in_stackwalk);
+    jl_unlock_profile();
     return success;
 }
 
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
+    // Dummy event for RegisterWaitForSingleObject (to use timeout callback)
+    HANDLE hProfileEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (hProfileEvent == NULL) {
+        jl_safe_fprintf(ios_safe_stderr, "failed to create profile event.\n");
+        abort();
+    }
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
-        if (profile_running) {
-            if (jl_profile_is_buffer_full()) {
-                jl_profile_stop_timer(); // does not change the thread state
-                SuspendThread(GetCurrentThread());
-                continue;
-            }
-            else if (profile_all_tasks) {
-                // Don't take the stackwalk lock here since it's already taken in `jl_rec_backtrace`
-                jl_profile_task();
-            }
-            else {
-                // TODO: bring this up to parity with other OS by adding loop over tid here
-                bt_context_t c;
-                if (!jl_thread_suspend(0, &c)) {
-                    fputs("failed to suspend main thread. aborting profiling.", stderr);
+        if (jl_profile_is_buffer_full())
+            jl_profile_stop_timer(); // does not change the thread state
+        if (!profile_running) {
+            uv_mutex_lock(&bt_data_prof_lock);
+            while (!profile_running)
+                uv_cond_wait(&bt_data_prof_cond, &bt_data_prof_lock);
+            uv_mutex_unlock(&bt_data_prof_lock);
+        }
+        else if (profile_all_tasks) {
+            // Don't take the stackwalk lock here since it's already taken in `jl_rec_backtrace`
+            jl_profile_task();
+        }
+        else {
+            // Profile all threads, similar to Unix implementation
+            bt_context_t c;
+            int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+            int *randperm = profile_get_randperm(nthreads);
+            for (int idx = nthreads; idx-- > 0; ) {
+                int tid = randperm[idx];
+                if (!profile_running)
+                    break;
+                if (jl_profile_is_buffer_full()) {
                     jl_profile_stop_timer();
                     break;
                 }
+                if (!jl_thread_suspend(tid, &c))
+                    continue;
+                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
+                int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
+
+                // Set up timeout handler for stackwalk
+#ifdef _CPU_X86_64_
+                _Atomic(int) abort_profiling = 0;
+                profile_timeout_data_t timeout_data;
+                timeout_data.abort_ptr = &abort_profiling;
+                timeout_data.tid = tid;
+                jl_set_profile_abort_ptr(&abort_profiling);
+                HANDLE hWaitHandle = NULL;
+                if (!RegisterWaitForSingleObject(&hWaitHandle, hProfileEvent, profile_timeout_cb,
+                                                 &timeout_data, 100, WT_EXECUTEONLYONCE | WT_EXECUTEINWAITTHREAD)) {
+                    // Failed to register wait, proceed without timeout protection
+                    hWaitHandle = NULL;
+                }
+#endif
                 // Get backtrace data
                 profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
                         profile_bt_size_max - profile_bt_size_cur - 1, &c, NULL);
-
-                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
+#ifdef _CPU_X86_64_
+                // Clear abort pointer from TLS
+                jl_set_profile_abort_ptr(NULL);
+                // Wait for callback to complete or cancel before continuing
+                if (hWaitHandle != NULL)
+                    UnregisterWaitEx(hWaitHandle, INVALID_HANDLE_VALUE);
+                if (timeout_data.tid != -1)
+#endif
+                    jl_thread_resume(tid);
 
                 // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
-                profile_bt_data_prof[profile_bt_size_cur++].uintptr = ptls->tid + 1;
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = tid + 1;
 
                 // META_OFFSET_TASKID store task id (never null)
-                profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t2;
 
                 // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
 
                 // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
-                int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
 
                 // Mark the end of this block with two 0's
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
-                jl_thread_resume(0);
-                jl_check_profile_autostop();
             }
+            jl_check_profile_autostop();
         }
     }
-    uv_mutex_unlock(&jl_in_stackwalk);
-    jl_profile_stop_timer();
+    // this is unreachable, but would be the relevant cleanup
+    uv_mutex_lock(&bt_data_prof_lock);
     hBtThread = NULL;
+    uv_mutex_unlock(&bt_data_prof_lock);
+    jl_profile_stop_timer();
+    CloseHandle(hProfileEvent);
     return 0;
 }
 
-static volatile TIMECAPS timecaps;
-
 JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
+    uv_mutex_lock(&bt_data_prof_lock);
     if (hBtThread == NULL) {
-
         TIMECAPS _timecaps;
         if (MMSYSERR_NOERROR != timeGetDevCaps(&_timecaps, sizeof(_timecaps))) {
-            fputs("failed to get timer resolution", stderr);
+            uv_mutex_unlock(&bt_data_prof_lock);
+            jl_safe_fprintf(ios_safe_stderr, "failed to get timer resolution.\n");
             return -2;
         }
         timecaps = _timecaps;
@@ -534,15 +597,12 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
             0,                      // argument to thread function
             0,                      // use default creation flags
             0);                     // returns the thread identifier
-        if (hBtThread == NULL)
+        if (hBtThread == NULL) {
+            uv_mutex_unlock(&bt_data_prof_lock);
+            jl_safe_fprintf(ios_safe_stderr, "failed to allocate profile thread.\n");
             return -1;
-        (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
-    }
-    else {
-        if ((DWORD)-1 == ResumeThread(hBtThread)) {
-            fputs("failed to resume profiling thread.", stderr);
-            return -2;
         }
+        (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     if (profile_running == 0) {
         // Failure to change the timer resolution is not fatal. However, it is important to
@@ -552,6 +612,8 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     }
     profile_all_tasks = all_tasks;
     profile_running = 1; // set `profile_running` finally
+    uv_cond_broadcast(&bt_data_prof_cond);
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 JL_DLLEXPORT void jl_profile_stop_timer(void)
