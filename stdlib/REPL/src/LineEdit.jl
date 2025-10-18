@@ -4,9 +4,12 @@ module LineEdit
 
 import ..REPL
 using ..REPL: AbstractREPL, Options
+using ..REPL.StylingPasses: StylingPass, SyntaxHighlightPass, RegionHighlightPass, EnclosingParenHighlightPass, StylingContext, apply_styling_passes, merge_annotations
 
 using ..Terminals
 import ..Terminals: raw!, width, height, clear_line, beep
+
+using StyledStrings
 
 import Base: ensureroom, show, AnyDict, position
 using Base: something
@@ -58,6 +61,7 @@ mutable struct Prompt <: TextInterface
     on_done::Function
     hist::HistoryProvider  # TODO?: rename this `hp` (consistency with other TextInterfaces), or is the type-assert useful for mode(s)?
     sticky::Bool
+    styling_passes::Vector{StylingPass}  # Styling passes to apply to input
 end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
@@ -565,6 +569,8 @@ function maybe_show_hint(s::PromptState)
     return nothing
 end
 
+max_highlight_size::Int = 10000 # bytes
+
 function refresh_multi_line(s::PromptState; kw...)
     if s.refresh_wait !== nothing
         close(s.refresh_wait)
@@ -611,6 +617,42 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         reader isa Base.TTY && !Base.ispty(reader)::Bool
     else false end
 
+    # Get the styling passes from the prompt
+    prompt_obj = nothing
+    if prompt isa PromptState
+        prompt_obj = prompt.p
+    elseif prompt isa PrefixSearchState || prompt isa SearchState
+        if isdefined(prompt, :parent) && prompt.parent isa Prompt
+            prompt_obj = prompt.parent
+        end
+    end
+
+    styled_buffer = AnnotatedString("")
+    if buf.size > 0 && buf.size <= max_highlight_size
+        full_input = String(buf.data[1:buf.size])
+        if !isempty(full_input)
+            passes = StylingPass[]
+            context = StylingContext(buf_pos, regstart, regstop)
+
+            # Add prompt-specific styling passes if the prompt has them and styling is enabled
+            enable_style_input = prompt_obj === nothing ? false :
+                (isdefined(prompt_obj, :repl) && prompt_obj.repl !== nothing ?
+                    prompt_obj.repl.options.style_input : false)
+
+            if enable_style_input && prompt_obj !== nothing
+                append!(passes, prompt_obj.styling_passes)
+            end
+
+            if region_active
+                push!(passes, RegionHighlightPass())
+            end
+
+            if !isempty(passes)
+                styled_buffer = apply_styling_passes(full_input, passes, context)
+            end
+        end
+    end
+
     # Now go through the buffer line by line
     seek(buf, 0)
     moreinput = true # add a blank line if there is a trailing newline on the last line
@@ -636,12 +678,26 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         llength = textwidth(line)
         slength = sizeof(line)
         cur_row += 1
-        # lwrite: what will be written to termbuf
-        lwrite = region_active ? highlight_region(line, regstart, regstop, written, slength) :
-                                 line
+
+        # Extract the portion of styled_buffer corresponding to this line.
+        if !isempty(styled_buffer)
+            # Calculate byte positions for this line in the buffer
+            line_start_byte = written + 1
+            line_end_byte = written + slength
+
+            # Convert to valid character indices (handles UTF-8 boundaries)
+            start_idx = thisind(styled_buffer, line_start_byte)
+            end_idx = thisind(styled_buffer, line_end_byte)
+
+            lwrite = @view styled_buffer[start_idx:end_idx]
+        else
+            lwrite = line
+        end
+
         written += slength
         cmove_col(termbuf, lindent + 1)
-        write(termbuf, lwrite)
+
+        write(IOContext(termbuf, :color => hascolor(terminal)), lwrite)
         # We expect to be line after the last valid output line (due to
         # the '\n' at the end of the previous line)
         if curs_row == -1
@@ -690,18 +746,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     cmove_col(termbuf, curs_pos + 1)
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
-end
-
-function highlight_region(lwrite::Union{String,SubString{String}}, regstart::Int, regstop::Int, written::Int, slength::Int)
-    if written <= regstop <= written+slength
-        i = thisind(lwrite, regstop-written)
-        lwrite = lwrite[1:i] * Base.disable_text_style[:reverse] * lwrite[nextind(lwrite, i):end]
-    end
-    if written <= regstart <= written+slength
-        i = thisind(lwrite, regstart-written)
-        lwrite = lwrite[1:i] * Base.text_colors[:reverse] * lwrite[nextind(lwrite, i):end]
-    end
-    return lwrite
 end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
@@ -999,7 +1043,9 @@ function edit_insert(s::PromptState, c::StringLike)
         offset += position(buf) - beginofline(buf) # size of current line
         spinner = '\0'
         delayup = !eof(buf) || old_wait
-        if offset + textwidth(str) <= w && !(after == 0 && delayup)
+        # Disable fast path when syntax highlighting is enabled
+        use_fast_path = offset + textwidth(str) <= w && !(after == 0 && delayup) && !options(s).style_input
+        if use_fast_path
             # Avoid full update when appending characters to the end
             # and an update of curs_row isn't necessary (conservatively estimated)
             write(termbuf, str)
@@ -2055,6 +2101,142 @@ const escape_defaults = merge!(
     AnyDict("\e[$(c)l" => nothing for c in 1:20)
     )
 
+
+# Keymap for automatic bracket/quote insertion and completion
+const bracket_insert_keymap = AnyDict()
+let
+    # Determine when we should not close a bracket/quote
+    function should_skip_closing_bracket(left_peek, v)
+        # Don't close if we already have an open quote immediately before (triple quote case)
+        # For quotes, also check for transpose expressions: issue JuliaLang/OhMyREPL.jl#200
+        left_peek == v && return true
+        if v == '\''
+            tr_expr = isletter(left_peek) || isnumeric(left_peek) || left_peek == '_' || left_peek == ']'
+            return tr_expr
+        end
+        return false
+    end
+
+    function peek_char_left(b::IOBuffer)
+        p = position(b)
+        c = char_move_left(b)
+        seek(b, p)
+        return c
+    end
+
+    # Check if there's an unmatched opening quote before the cursor
+    function has_unmatched_quote(buf::IOBuffer, quote_char::Char)
+        pos = position(buf)
+        content = String(buf.data[1:pos])
+        isempty(content) && return false
+
+        # Count unescaped quotes before cursor position
+        count = 0
+        i = 1
+        while i <= length(content)
+            if content[i] == quote_char
+                # Check if escaped by counting preceding backslashes
+                num_backslashes = 0
+                j = i - 1
+                while j >= 1 && content[j] == '\\'
+                    num_backslashes += 1
+                    j -= 1
+                end
+                # If even number of backslashes (including zero), the quote is not escaped
+                if num_backslashes % 2 == 0
+                    count += 1
+                end
+            end
+            i = nextind(content, i)
+        end
+        return isodd(count)
+    end
+
+    # Left/right bracket pairs
+    bracket_pairs = (('(', ')'), ('{', '}'), ('[', ']'))
+    right_brackets_ws = (')', '}', ']', ' ', '\t', '\n')
+
+    for (left, right) in bracket_pairs
+        # Left bracket: insert both and move cursor between them
+        bracket_insert_keymap[left] = (s::MIState, o...) -> begin
+            buf = buffer(s)
+            edit_insert(buf, left)
+            if eof(buf) || peek(buf, Char) in right_brackets_ws
+                edit_insert(buf, right)
+                edit_move_left(buf)
+            end
+            refresh_line(s)
+        end
+
+        # Right bracket: skip over if next char matches, otherwise insert
+        bracket_insert_keymap[right] = (s::MIState, o...) -> begin
+            buf = buffer(s)
+            if !eof(buf) && peek(buf, Char) == right
+                edit_move_right(buf)
+            else
+                edit_insert(buf, right)
+            end
+            refresh_line(s)
+        end
+    end
+
+    # Quote characters (need special handling for transpose detection)
+    for quote_char in ('"', '\'', '`')
+        bracket_insert_keymap[quote_char] = (s::MIState, o...) -> begin
+            buf = buffer(s)
+            if !eof(buf) && peek(buf, Char) == quote_char
+                # Skip over closing quote
+                edit_move_right(buf)
+            elseif position(buf) > 0 && should_skip_closing_bracket(peek_char_left(buf), quote_char)
+                # Don't auto-close (e.g., for transpose or triple quotes)
+                edit_insert(buf, quote_char)
+            elseif quote_char in ('"', '\'', '`') && has_unmatched_quote(buf, quote_char)
+                # For quotes, check if we're closing an existing string
+                edit_insert(buf, quote_char)
+            else
+                # Insert both quotes
+                edit_insert(buf, quote_char)
+                edit_insert(buf, quote_char)
+                edit_move_left(buf)
+            end
+            refresh_line(s)
+        end
+    end
+
+    # Backspace - also remove matching closing bracket/quote
+    bracket_insert_keymap['\b'] = (s::MIState, o...) -> begin
+        if is_region_active(s)
+            return edit_kill_region(s)
+        elseif isempty(s) || position(buffer(s)) == 0
+            # Handle transitioning to main mode
+            repl = Base.active_repl
+            mirepl = isdefined(repl, :mi) ? repl.mi : repl
+            main_mode = mirepl.interface.modes[1]
+            buf = copy(buffer(s))
+            transition(s, main_mode) do
+                state(s, main_mode).input_buffer = buf
+            end
+            return
+        end
+
+        buf = buffer(s)
+        left_brackets = ('(', '{', '[', '"', '\'', '`')
+        right_brackets = (')', '}', ']', '"', '\'', '`')
+
+        if !eof(buf) && position(buf) > 0
+            left_char = peek_char_left(buf)
+            i = findfirst(isequal(left_char), left_brackets)
+            if i !== nothing && peek(buf, Char) == right_brackets[i]
+                # Remove both the left and right bracket/quote
+                edit_delete(buf)
+                edit_backspace(buf)
+                return refresh_line(s)
+            end
+        end
+        return edit_backspace(s)
+    end
+end
+
 mutable struct HistoryPrompt <: TextInterface
     hp::HistoryProvider
     complete::CompletionProvider
@@ -2226,6 +2408,13 @@ function replace_line(s::PrefixSearchState, l::Union{String,SubString{String}})
     nothing
 end
 
+function write_prompt(terminal, s::SearchState, color::Bool)
+    failed = s.failed ? "failed " : ""
+    promptstr = s.backward ? "($(failed)reverse-i-search)`" : "($(failed)forward-i-search)`"
+    write(terminal, promptstr)
+    return textwidth(promptstr)
+end
+
 function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf = IOBuffer()
     unsafe_write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
@@ -2236,9 +2425,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     write(buf, read(s.response_buffer, String))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
-    failed = s.failed ? "failed " : ""
-    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias,
-                             s.backward ? "($(failed)reverse-i-search)`" : "($(failed)forward-i-search)`")
+    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s)
     s.ias = ias
     return ias
 end
@@ -2823,10 +3010,11 @@ function Prompt(prompt
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider(),
-    sticky = false)
+    sticky = false,
+    styling_passes = StylingPass[])
 
     return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
-                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
+                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky, styling_passes)
 end
 
 run_interface(::Prompt) = nothing

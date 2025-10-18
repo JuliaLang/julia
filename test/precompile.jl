@@ -1123,9 +1123,9 @@ precompile_test_harness("code caching") do dir
         if invalidations[idxv-1].def.def.name === :getproperty
             idxv = findnext(==("verify_methods"), invalidations, idxv+1)
         end
-        @test invalidations[idxv-1].def.def.name === :flbi
-        idxv = findnext(==("verify_methods"), invalidations, idxv+1)
-        @test invalidations[idxv-1].def.def.name === :useflbi
+        idxv = findnext(==(invalidations[idxv-1]), invalidations, idxv+1)
+        @test invalidations[idxv-1] == "verify_methods"
+        @test invalidations[idxv-2].def.def.name === :useflbi
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -2249,7 +2249,7 @@ precompile_test_harness("Issue #52063") do load_path
         @test e isa SystemError
         @test e.prefix == "opening file or folder $(repr(fname))"
         true
-    end broken=Sys.iswindows()
+    end
     dir = mktempdir() do dir
         @test include_dependency(dir) === nothing
         chmod(dir, 0x000)
@@ -2259,7 +2259,7 @@ precompile_test_harness("Issue #52063") do load_path
             @test e isa SystemError
             @test e.prefix == "opening file or folder $(repr(dir))"
             true
-        end broken=Sys.iswindows()
+        end
         dir
     end
     @test try

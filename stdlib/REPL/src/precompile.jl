@@ -202,14 +202,18 @@ end
 
 let
     if Base.generating_output() && Base.JLOptions().use_pkgimages != 0
-        repl_workload()
-        precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
-        precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
-        precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
-        precompile(Tuple{typeof(Base.:(==)), Char, String})
-        #for child in copy(Base.newly_inferred)
-        #    precompile((child::Base.CodeInstance).def)
-        #end
+        # Bare-bones PrecompileTools.jl
+        # Do we need latestworld-if-toplevel here
+        ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+        try
+            repl_workload()
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
+            precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+            precompile(Tuple{typeof(Base.:(==)), Char, String})
+        finally
+            ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+        end
     end
 end
 

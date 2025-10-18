@@ -96,6 +96,9 @@ Standard library changes
 
 #### REPL
 
+* The Julia REPL now support bracketed paste on Windows which should significantly speed up pasting large code blocks into the REPL ([#59825])
+* The REPL now provides syntax highlighting for input as you type. See the REPL docs for more info about customization.
+* The REPL now supports automatic insertion of closing brackets, parentheses, and quotes. See the REPL docs for more info about customization.
 * The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
 * Display of repeated frames and cycles in stack traces has been improved by bracketing them in the trace and treating them consistently ([#55841]).
 
@@ -110,10 +113,6 @@ Standard library changes
 
 * Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}`. Type-annotated variables as in `f(val::Int; kw::Float64)` are not evaluated if the type annotation provides the necessary information, making this syntax compatible with signatures found in stacktraces ([#57909], [#58222]).
 * Code introspection macros such as `@code_lowered` and `@code_typed` now have a much better support for broadcasting expressions, including broadcasting assignments of the form `x .+= f(y)` ([#58349]).
-
-#### Dates
-
-* `isoweekdate, isoyear, weeksinyear` are now implemented and available for week based calendars, following [https://en.wikipedia.org/wiki/ISO_week_date](ISO week date). [#48507]
 
 External dependencies
 ---------------------
