@@ -35,14 +35,26 @@ end
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
     Base.Experimental.register_error_hint(UndefVarError_REPL_hint, UndefVarError)
+    foreach(addface!, REPL_FACES)
     return nothing
 end
 
 using Base.Meta, Sockets, StyledStrings
+using StyledStrings: Face, addface!, @styled_str, getface
 using JuliaSyntaxHighlighting
 import InteractiveUtils
 import FileWatching
 import Base.JuliaSyntax: kind, @K_str, @KSet_str, Tokenize.tokenize
+
+const REPL_FACES = [
+    :repl_prompt_julia => Face(foreground=:green, weight=:bold),
+    :repl_prompt_shell => Face(foreground=:red, weight=:bold),
+    :repl_prompt_help => Face(foreground=:yellow, weight=:bold),
+    :repl_prompt_pkg => Face(foreground=:blue, weight=:bold),
+    :repl_output_prefix_julia => Face(foreground=:red, weight=:bold),
+    :repl_input => Face(),
+    :repl_answer => Face(),
+]
 
 export
     AbstractREPL,
@@ -753,32 +765,33 @@ end
 mutable struct LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
-    prompt_color::String
-    input_color::String
-    answer_color::String
-    shell_color::String
-    help_color::String
-    pkg_color::String
     history_file::Bool
     in_shell::Bool
     in_help::Bool
-    envcolors::Bool
     waserror::Bool
     specialdisplay::Union{Nothing,AbstractDisplay}
     options::Options
     mistate::Union{MIState,Nothing}
     last_shown_line_infos::Vector{Tuple{String,Int}}
+    prompt::Union{AbstractString,Function,Nothing}
+    output_prefix::Union{AbstractString,Function,Nothing}
+    help_prompt::Union{AbstractString,Function,Nothing}
+    shell_prompt::Union{AbstractString,Function,Nothing}
+    pkg_prompt::Union{AbstractString,Function,Nothing}
+    # Fields below are left uninitialized by the constructor
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
-    function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,in_help,envcolors)
+    function LineEditREPL(t,hascolor,history_file,in_shell,in_help)
         opts = Options()
         opts.hascolor = hascolor
         if !hascolor
             opts.beep_colors = [""]
         end
-        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+        new(t,hascolor,history_file,in_shell,
+            in_help,false,nothing, opts, nothing, Tuple{String,Int}[],
+            nothing, nothing, nothing, nothing, nothing)
+            # interface, backendref, frontend_task are left uninitialized
     end
 end
 outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
@@ -788,15 +801,7 @@ terminal(r::LineEditREPL) = r.t
 hascolor(r::LineEditREPL) = r.hascolor
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
-    LineEditREPL(t, hascolor,
-        hascolor ? Base.text_colors[:green] : "",
-        hascolor ? Base.input_color() : "",
-        hascolor ? Base.answer_color() : "",
-        hascolor ? Base.text_colors[:red] : "",
-        hascolor ? Base.text_colors[:yellow] : "",
-        hascolor ? Base.text_colors[:blue] : "",
-        false, false, false, envcolors
-    )
+    LineEditREPL(t, hascolor, false, false, false)
 
 mutable struct REPLCompletionProvider <: CompletionProvider
     modifiers::LineEdit.Modifiers
@@ -1324,11 +1329,17 @@ function setup_interface(
     replc = REPLCompletionProvider()
 
     # Set up the main Julia prompt
-    julia_prompt = Prompt(contextual_prompt(repl, JULIA_PROMPT);
-        # Copy colors from the prompt object
-        prompt_prefix = hascolor ? repl.prompt_color : "",
-        prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
+    julia_prompt_text = if repl.prompt !== nothing
+        repl.prompt
+    else
+        julia_original_prompt = contextual_prompt(repl, JULIA_PROMPT)
+        () -> styled"{repl_prompt_julia:$(julia_original_prompt())}"
+    end
+
+    julia_output_prefix = repl.output_prefix !== nothing ? repl.output_prefix : ""
+
+    julia_prompt = Prompt(julia_prompt_text;
+        output_prefix = julia_output_prefix,
         repl = repl,
         complete = replc,
         on_enter = return_callback,
@@ -1338,10 +1349,13 @@ function setup_interface(
         ])
 
     # Setup help mode
-    help_mode = Prompt(contextual_prompt(repl, HELP_PROMPT),
-        prompt_prefix = hascolor ? repl.help_color : "",
-        prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
+    help_prompt_text = if repl.help_prompt !== nothing
+        repl.help_prompt
+    else
+        help_original_prompt = contextual_prompt(repl, HELP_PROMPT)
+        () -> styled"{repl_prompt_help:$(help_original_prompt())}"
+    end
+    help_mode = Prompt(help_prompt_text,
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
@@ -1350,10 +1364,8 @@ function setup_interface(
 
 
     # Set up shell mode
-    shell_mode = Prompt(SHELL_PROMPT;
-        prompt_prefix = hascolor ? repl.shell_color : "",
-        prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
+    shell_prompt_text = repl.shell_prompt !== nothing ? repl.shell_prompt : styled"{repl_prompt_shell:$SHELL_PROMPT}"
+    shell_mode = Prompt(shell_prompt_text;
         repl = repl,
         complete = ShellCompletionProvider(),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
@@ -1368,10 +1380,13 @@ function setup_interface(
 
     # Set up dummy Pkg mode that will be replaced once Pkg is loaded
     # use 6 dots to occupy the same space as the most likely "@v1.xx" env name
-    dummy_pkg_mode = Prompt(Pkg_promptf,
-        prompt_prefix = hascolor ? repl.pkg_color : "",
-        prompt_suffix = hascolor ?
-        (repl.envcolors ? Base.input_color : repl.input_color) : "",
+    pkg_prompt_text = if repl.pkg_prompt !== nothing
+        repl.pkg_prompt
+    else
+        pkg_original_prompt = Pkg_promptf
+        () -> styled"{repl_prompt_pkg:$(pkg_original_prompt())}"
+    end
+    dummy_pkg_mode = Prompt(pkg_prompt_text,
         repl = repl,
         complete = LineEdit.EmptyCompletionProvider(),
         on_done = respond(line->nothing, repl, julia_prompt),
@@ -1409,7 +1424,7 @@ function setup_interface(
             mkpath(dirname(hist_path))
             hp.file_path = hist_path
             hist_open_file(hp)
-            finalizer(replc) do replc
+            finalizer(replc) do _
                 close(hp.history_file)
             end
             hist_from_file(hp, hist_path)
@@ -1735,23 +1750,21 @@ end
 
 mutable struct StreamREPL <: AbstractREPL
     stream::IO
-    prompt_color::String
-    input_color::String
-    answer_color::String
+    prompt::Union{AbstractString,Function}
     waserror::Bool
     frontend_task::Task
-    StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
+    StreamREPL(stream, prompt) = new(stream, prompt, false)
 end
-StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input_color(), Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, styled"{repl_prompt_julia:$JULIA_PROMPT}")
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
 hascolor(s::StreamREPL) = get(s.stream, :color, false)::Bool
 
-answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
-answer_color(r::StreamREPL) = r.answer_color
-input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
-input_color(r::StreamREPL) = r.input_color
+# Kept for compatibility - return empty strings (no longer used)
+# Prompt colors are now handled via the face system (see REPL_FACES)
+answer_color(r::Union{LineEditREPL,StreamREPL}) = ""
+input_color(r::Union{LineEditREPL,StreamREPL}) = ""
 
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
@@ -1842,13 +1855,8 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     while !eof(repl.stream)::Bool
-        if have_color
-            print(repl.stream,repl.prompt_color)
-        end
-        print(repl.stream, JULIA_PROMPT)
-        if have_color
-            print(repl.stream, input_color(repl))
-        end
+        promptstr = LineEdit.prompt_string(repl.prompt)
+        write(IOContext(repl.stream, :color => have_color), promptstr)
         line = readline(repl.stream, keep=true)
         if !isempty(line)
             ast = Base.parse_input_line(line)
@@ -1868,6 +1876,7 @@ end
 module Numbered
 
 using ..REPL
+using StyledStrings: @styled_str
 
 __current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
@@ -1917,10 +1926,7 @@ end
 
 function set_output_prefix(repl::LineEditREPL, n::Ref{Int})
     julia_prompt = repl.interface.modes[1]
-    if REPL.hascolor(repl)
-        julia_prompt.output_prefix_prefix = Base.text_colors[:red]
-    end
-    julia_prompt.output_prefix = () -> string("Out[", n[], "]: ")
+    julia_prompt.output_prefix = () -> styled"{repl_output_prefix_julia:Out[$(n[])]: }"
     nothing
 end
 

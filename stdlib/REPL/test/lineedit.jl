@@ -503,12 +503,12 @@ end
     termbuf = REPL.Terminals.TerminalBuffer(outbuf)
     @inferred(LineEdit.refresh_multi_line(termbuf, term, ps))
     @test String(take!(outbuf)) ==
-        "\r\e[0K\e[1mJulia is Fun! > \e[0m\r\e[16Cbegin\n" *
+        "\r\e[0KJulia is Fun! > \r\e[16Cbegin\n" *
         "\r\e[16C    julia = :fun\n" *
         "\r\e[16Cend\r\e[19C"
     LineEdit.refresh_multi_line(termbuf, term, ps)
     @test String(take!(outbuf)) ==
-        "\r\e[0K\e[1A\r\e[0K\e[1A\r\e[0K\e[1m> \e[0m\r\e[2Cbegin\n" *
+        "\r\e[0K\e[1A\r\e[0K\e[1A\r\e[0K> \r\e[2Cbegin\n" *
         "\r\e[2C    julia = :fun\n" *
         "\r\e[2Cend\r\e[5C"
 end

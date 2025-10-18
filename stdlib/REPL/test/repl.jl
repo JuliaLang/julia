@@ -6,6 +6,7 @@ using Random
 using Logging
 import REPL.LineEdit
 using Markdown
+using StyledStrings
 
 empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
 
@@ -101,9 +102,7 @@ Base.exit_on_sigint(false)
 # make sure `run_interface` can normally handle `eof`
 # without any special handling by the user
 fake_repl() do stdin_write, stdout_read, repl
-    panel = LineEdit.Prompt("test";
-        prompt_prefix = "",
-        prompt_suffix = Base.text_colors[:white],
+    panel = LineEdit.Prompt(string("test", Base.text_colors[:white]);
         on_enter = s -> true)
     panel.on_done = (s, buf, ok) -> begin
         @test !ok
@@ -417,9 +416,7 @@ end
 
 function AddCustomMode(repl, prompt)
     # Custom REPL mode tests
-    foobar_mode = LineEdit.Prompt(prompt;
-        prompt_prefix="\e[38;5;166m",
-        prompt_suffix=Base.text_colors[:white],
+    foobar_mode = LineEdit.Prompt(string("\e[38;5;166m", prompt, Base.text_colors[:white]);
         on_enter = s->true,
         on_done = line->true)
 
@@ -831,9 +828,7 @@ end
 
 # Simple non-standard REPL tests
 fake_repl() do stdin_write, stdout_read, repl
-    panel = LineEdit.Prompt("testπ";
-        prompt_prefix="\e[38;5;166m",
-        prompt_suffix=Base.text_colors[:white],
+    panel = LineEdit.Prompt(string("\e[38;5;166m", "testπ", Base.text_colors[:white]);
         on_enter = s->true)
 
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:parse => panel))
@@ -2147,6 +2142,65 @@ end
             write(stdin_write, "\x03")  # Ctrl-C to cancel
             write(stdin_write, '\x04')  # Exit
             Base.wait(repltask)
+        end
+    end
+
+    @testset "Custom prompts" begin
+        # Test that prompt customization using styled strings works
+        fake_repl(options = REPL.Options(confirm_exit=false)) do stdin_write, stdout_read, repl
+            # Customize prompt before setting up interface
+            repl.prompt = styled"{cyan:myprompt>} "
+            repl.output_prefix = styled"{red:=>} "
+
+            repl.interface = REPL.setup_interface(repl)
+
+            repltask = @async begin
+                REPL.run_repl(repl)
+            end
+
+            # Read the initial prompt
+            s = readuntil(stdout_read, "myprompt>", keep=true)
+            # Should contain "myprompt>" text
+            @test occursin("myprompt>", s)
+
+            write(stdin_write, '\x04')  # Exit
+            Base.wait(repltask)
+        end
+
+        # Test that prompts are always AnnotatedStrings with face annotations
+        fake_repl(options = REPL.Options(confirm_exit=false)) do stdin_write, stdout_read, repl
+            repl.interface = REPL.setup_interface(repl)
+
+            julia_prompt = repl.interface.modes[1]
+            # Get the prompt string (call the function if it's dynamic)
+            prompt_text = julia_prompt.prompt isa Function ? julia_prompt.prompt() : julia_prompt.prompt
+
+            # Should be an AnnotatedString with face annotation
+            @test prompt_text isa Base.AnnotatedString
+            @test any(ann -> ann.label == :face && ann.value == :repl_prompt_julia,
+                     Base.annotations(prompt_text))
+        end
+
+        # Test that color parameter in write_prompt is respected
+        fake_repl(options = REPL.Options(confirm_exit=false)) do stdin_write, stdout_read, repl
+            repl.interface = REPL.setup_interface(repl)
+
+            julia_prompt = repl.interface.modes[1]
+
+            # Test with color=true
+            buf_color = IOBuffer()
+            LineEdit.write_prompt(IOContext(buf_color, :color => true), julia_prompt.prompt, true)
+            output_color = String(take!(buf_color))
+
+            # Test with color=false
+            buf_nocolor = IOBuffer()
+            LineEdit.write_prompt(IOContext(buf_nocolor, :color => false), julia_prompt.prompt, false)
+            output_nocolor = String(take!(buf_nocolor))
+
+            # With color, should contain ANSI codes for green (julia prompt color)
+            @test occursin(r"\e\[[0-9;]*m", output_color)
+            # Without color, should not contain ANSI codes
+            @test !occursin(r"\e\[[0-9;]*m", output_nocolor)
         end
     end
 end

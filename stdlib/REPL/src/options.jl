@@ -15,7 +15,7 @@ mutable struct Options
     beep_duration::Float64
     beep_blink::Float64
     beep_maxduration::Float64
-    beep_colors::Vector{String}
+    beep_colors::Vector{Symbol}
     beep_use_current::Bool
     backspace_align::Bool
     backspace_adjust::Bool
@@ -41,7 +41,7 @@ Options(;
         kill_ring_max = 100,
         region_animation_duration = 0.2,
         beep_duration = 0.2, beep_blink = 0.2, beep_maxduration = 1.0,
-        beep_colors = ["\e[90m"], # gray (text_colors not yet available)
+        beep_colors = [:bright_black],
         beep_use_current = true,
         backspace_align = true, backspace_adjust = backspace_align,
         confirm_exit = false,
