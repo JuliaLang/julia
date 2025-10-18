@@ -854,18 +854,135 @@ it must be handled in other ways.
 
 In some cases, the exact name or path of the needed library is not known in
 advance and must be computed at run time. To handle such cases, the library
-component specification can be a value such as `Libdl.LazyLibrary`. For
-example, in `@ccall blas.dgemm()`, there can be a global defined as `const blas
-= LazyLibrary("libblas")`. The runtime will call `dlsym(:dgemm, dlopen(blas))`
-when the `@ccall` itself is executed. The `Libdl.dlopen` function can be
-overloaded for custom types to provide alternate behaviors. However, it is
-assumed that the library location does not change once it is determined, so the
-result of the call can be cached and reused. Therefore, the number of times the
-expression executes is unspecified, and returning different values for multiple
-calls results in unspecified behavior.
+component specification can be a value such as `Libdl.LazyLibrary`. The runtime
+will call `Libdl.dlopen` on that object when first used by a `ccall`.
 
-If even more flexibility is needed, it is possible
-to use computed values as function names by staging through [`eval`](@ref) as follows:
+### [Using LazyLibrary for Lazy Loading](@id man-lazylibrary)
+
+[`Libdl.LazyLibrary`](@ref) provides a thread-safe mechanism for deferring library loading
+until first use. This is the recommended approach for library initialization in modern Julia code.
+
+A `LazyLibrary` represents a library that opens itself (and its dependencies) automatically
+on first use in a `ccall()`, `@ccall`, `dlopen()`, `dlsym()`, `dlpath()`, or `cglobal()`.
+The library is loaded exactly once in a thread-safe manner, and subsequent calls reuse the
+loaded library handle.
+
+#### Basic Usage
+
+```julia
+using Libdl
+
+# Define a LazyLibrary as a const for optimal performance
+const libz = LazyLibrary("libz")
+
+# Use directly in @ccall - library loads automatically on first call
+@ccall libz.deflate(strm::Ptr{Cvoid}, flush::Cint)::Cint
+
+# Also works with ccall
+ccall((:inflate, libz), Cint, (Ptr{Cvoid}, Cint), strm, flush)
+```
+
+#### Platform-Specific Libraries
+
+For code that needs to work across different platforms:
+
+```julia
+const mylib = LazyLibrary(
+    if Sys.iswindows()
+        "mylib.dll"
+    elseif Sys.isapple()
+        "libmylib.dylib"
+    else
+        "libmylib.so"
+    end
+)
+```
+
+#### Libraries with Dependencies
+
+When a library depends on other libraries, specify the dependencies to ensure
+they load in the correct order:
+
+```julia
+const libfoo = LazyLibrary("libfoo")
+const libbar = LazyLibrary("libbar"; dependencies=[libfoo])
+
+# When libbar is first used, libfoo is loaded first automatically
+@ccall libbar.bar_function(x::Cint)::Cint
+```
+
+#### Lazy Path Construction
+
+For libraries whose paths are determined at runtime, use `LazyLibraryPath`:
+
+```julia
+# Path is constructed when library is first accessed
+const mylib = LazyLibrary(LazyLibraryPath(artifact_dir, "lib", "libmylib.so"))
+```
+
+#### Initialization Callbacks
+
+If a library requires initialization after loading:
+
+```julia
+const mylib = LazyLibrary("libmylib";
+    on_load_callback = () -> @ccall mylib.initialize()::Cvoid
+)
+```
+
+!!! warning
+    The `on_load_callback` should be minimal and must not call `wait()` on any tasks.
+    It is called exactly once by the thread that loads the library.
+
+#### Conversion from `__init__()` Pattern
+
+Before `LazyLibrary`, library paths were often computed in `__init__()` functions.
+This pattern can be replaced with `LazyLibrary` for better performance and thread safety.
+
+Old pattern using `__init__()`:
+
+```julia
+# Old: Library path computed in __init__()
+libmylib_path = ""
+
+function __init__(
+    # Loads library on startup, whether it is used or not
+    global libmylib_path = find_library(["libmylib"])
+end
+
+function myfunc(x)
+    ccall((:cfunc, libmylib_path), Cint, (Cint,), x)
+end
+```
+
+New pattern using `LazyLibrary`:
+
+```julia
+# New: Library as const, no __init__() needed
+const libmylib = LazyLibrary("libmylib")
+
+function myfunc(x)
+    # Library loads automatically just before calling `cfunc`
+    @ccall libmylib.cfunc(x::Cint)::Cint
+end
+```
+
+For more details, see the [`Libdl.LazyLibrary`](@ref) documentation.
+
+### Overloading `dlopen` for Custom Types
+
+The runtime will call `dlsym(:function, dlopen(library)::Ptr{Cvoid})` when a `@ccall` is executed.
+The `Libdl.dlopen` function can be overloaded for custom types to provide alternate behaviors.
+However, it is assumed that the library location and handle does not change
+once it is determined, so the result of the call may be cached and reused.
+Therefore, the number of times the `dlopen` expression executes is unspecified,
+and returning different values for multiple calls will results in unspecified
+(but valid) behavior.
+
+### Computed Function Names
+
+If even more flexibility is needed, it is possible to use computed values as
+function names by staging through [`eval`](@ref) as follows:
 
 ```julia
 @eval @ccall "lib".$(string("a", "b"))()::Cint
@@ -876,38 +993,37 @@ expression, which is then evaluated. Keep in mind that `eval` only operates at t
 so within this expression local variables will not be available (unless their values are substituted
 with `$`). For this reason, `eval` is typically only used to form top-level definitions, for example
 when wrapping libraries that contain many similar functions.
-A similar example can be constructed for [`@cfunction`](@ref).
 
-However, doing this will also be very slow and leak memory, so you should usually avoid this and instead keep
-reading.
-The next section discusses how to use indirect calls to efficiently achieve a similar effect.
+### Indirect Calls
 
-## Indirect Calls
+The first argument to `@ccall` can also be an expression to be evaluated at run
+time, each time it is used. In this case, the expression must evaluate to a
+`Ptr`, which will be used as the address of the native function to call. This
+behavior occurs when the first `@ccall` argument is marked with `$` and when
+the first `ccall` argument is not a simple constant literal or expression in
+`()`. The argument can be any expression and can use local variables and
+arguments and can return a different value every time.
 
-The first argument to `@ccall` can also be an expression evaluated at run time. In this
-case, the expression must evaluate to a `Ptr`, which will be used as the address of the native
-function to call. This behavior occurs when the first `@ccall` argument contains references
-to non-constants, such as local variables, function arguments, or non-constant globals.
-
-For example, you might look up the function via `dlsym`,
-then cache it in a shared reference for that session. For example:
+For example, you might implement a macro similar to `cglobal` that looks up the
+function via `dlsym`, then caches the pointer in a shared reference (which is
+auto reset to C_NULL during precompile saving).
+For example:
 
 ```julia
 macro dlsym(lib, func)
-    z = Ref{Ptr{Cvoid}}(C_NULL)
+    z = Ref(C_NULL)
     quote
-        let zlocal = $z[]
-            if zlocal == C_NULL
-                zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
-                $z[] = zlocal
-            end
-            zlocal
+        local zlocal = $z[]
+        if zlocal == C_NULL
+            zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
+            $z[] = zlocal
         end
+        zlocal
     end
 end
 
-mylibvar = Libdl.dlopen("mylib")
-@ccall $(@dlsym(mylibvar, "myfunc"))()::Cvoid
+const mylibvar = LazyLibrary("mylib")
+@ccall $(@dlsym(dlopen(mylibvar), "myfunc"))()::Cvoid
 ```
 
 ## Closure cfunctions

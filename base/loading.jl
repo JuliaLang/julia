@@ -671,20 +671,45 @@ function env_project_file(env::String)::Union{Bool,String}
 end
 
 function base_project(project_file)
-    base_dir = abspath(joinpath(dirname(project_file), ".."))
-    base_project_file = env_project_file(base_dir)
-    base_project_file isa String || return nothing
-    d = parsed_toml(base_project_file)
-    workspace = get(d, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
-    if workspace === nothing
-        return nothing
+    home_dir = abspath(homedir())
+    project_dir = abspath(dirname(project_file))
+    current_dir = project_dir
+    # Only stop at home boundary if we started under home
+    started_in_home = startswith(project_dir, home_dir)
+
+    while true
+        parent_dir = dirname(current_dir)
+        # Stop if we've reached root
+        if parent_dir == current_dir
+            return nothing
+        end
+        # Stop if we started in home and have now left it
+        if started_in_home && !startswith(parent_dir, home_dir)
+            return nothing
+        end
+
+        base_project_file = env_project_file(parent_dir)
+        if base_project_file isa String
+            d = parsed_toml(base_project_file)
+            workspace = get(d, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
+            if workspace !== nothing
+                projects = get(workspace, "projects", nothing)::Union{Vector{String}, Nothing, String}
+                if projects isa Vector
+                    # Check if any project in the workspace matches the original project
+                    workspace_root = dirname(base_project_file)
+                    for project in projects
+                        project_path = joinpath(workspace_root, project)
+                        if isdir(project_path)
+                            if samefile(project_path, project_dir)
+                                return base_project_file
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        current_dir = parent_dir
     end
-    projects = get(workspace, "projects", nothing)::Union{Vector{String}, Nothing, String}
-    projects === nothing && return nothing
-    if projects isa Vector && basename(dirname(project_file)) in projects
-        return base_project_file
-    end
-    return nothing
 end
 
 function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}

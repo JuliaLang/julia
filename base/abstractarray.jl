@@ -2939,8 +2939,6 @@ _iterator_axes(x, ::IteratorSize) = axes(x)
 # For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
 _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
     _typed_stack(dims, T, S, IteratorSize(S), A)
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S} =
-    _typed_stack(dims, T, S, HasShape{1}(), A)
 function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
     if dims == N+1
         _typed_stack(:, T, S, A, (_vec_axis(A),))
