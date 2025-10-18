@@ -2168,9 +2168,9 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
         jl_value_t *obj_parent = (jl_value_t *)mb_parent;
         struct _jl_module_using *objary_begin = (struct _jl_module_using *)mb_parent->usings.items;
         struct _jl_module_using *objary_end = objary_begin + nusings;
-        static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void *), "Mismatch in _jl_module_using size");
+        static_assert(sizeof(struct _jl_module_using) == 4*sizeof(void *), "Mismatch in _jl_module_using size");
         static_assert(offsetof(struct _jl_module_using, mod) == 0, "Expected `mod` at the beginning of _jl_module_using");
-        gc_mark_objarray(ptls, obj_parent, (jl_value_t**)objary_begin, (jl_value_t**)objary_end, 3, nptr);
+        gc_mark_objarray(ptls, obj_parent, (jl_value_t**)objary_begin, (jl_value_t**)objary_end, 4, nptr);
     }
     else {
         gc_mark_push_remset(ptls, (jl_value_t *)mb_parent, nptr);
