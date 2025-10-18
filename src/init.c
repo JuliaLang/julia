@@ -37,8 +37,8 @@ extern "C" {
 #endif
 
 #ifdef _OS_WINDOWS_
-extern int needsSymRefreshModuleList;
-extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
+extern void jl_init_stackwalk(void);
+extern void jl_fin_stackwalk(void);
 #else
 #include <sys/resource.h>
 #include <unistd.h>
@@ -349,6 +349,9 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     jl_print_timings();
 #endif
     jl_teardown_codegen(); // prints stats
+#ifdef _OS_WINDOWS_
+    jl_fin_stackwalk();
+#endif
 }
 
 JL_DLLEXPORT void jl_postoutput_hook(void)
@@ -685,12 +688,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // initialize backtraces
     jl_init_profile_lock();
 #ifdef _OS_WINDOWS_
-    uv_mutex_init(&jl_in_stackwalk);
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
-    if (!SymInitialize(GetCurrentProcess(), "", 1)) {
-        jl_safe_printf("WARNING: failed to initialize stack walk info\n");
-    }
-    needsSymRefreshModuleList = 0;
+    jl_init_stackwalk();
 #else
     // nongnu libunwind initialization is only threadsafe on architecture where the
     // author could access TSAN, per https://github.com/libunwind/libunwind/pull/109
@@ -736,10 +734,6 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_kernel32_handle = jl_dlopen("kernel32.dll", JL_RTLD_NOLOAD);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, JL_RTLD_NOLOAD);
     jl_winsock_handle = jl_dlopen("ws2_32.dll", JL_RTLD_NOLOAD);
-    HMODULE jl_dbghelp = (HMODULE) jl_dlopen("dbghelp.dll", JL_RTLD_NOLOAD);
-    needsSymRefreshModuleList = 0;
-    if (jl_dbghelp)
-        jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1, 0);
 #else
     /* macOS dlopen(3): If path is NULL and the option RTLD_FIRST is used, the
        handle returned will only search the main executable. */

@@ -271,6 +271,9 @@ extern uv_mutex_t bt_data_prof_lock;
 #define PROFILE_STATE_THREAD_SLEEPING (2)
 #define PROFILE_STATE_WALL_TIME_PROFILING (3)
 void jl_profile_task(void);
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT;
+#endif
 
 // number of cycles since power-on
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
@@ -1529,9 +1532,6 @@ JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT;
 void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT;
 void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
-#ifdef _OS_WINDOWS_
-JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
-#endif
 void jl_thread_resume(int tid) JL_NOTSAFEPOINT;
 int jl_thread_suspend(int16_t tid, bt_context_t *ctx) JL_NOTSAFEPOINT;
 
