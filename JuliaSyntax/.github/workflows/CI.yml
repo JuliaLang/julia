@@ -1,0 +1,121 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+      - release-*
+    tags: '*'
+  pull_request:
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.0'
+          - '1.1'
+          - '1.2'
+          - '1.3'
+          - '1.4'
+          - '1.5'
+          - '1.6'
+          - '1.7'
+          - '1.8'
+          - '1.9'
+          - '1'
+          - 'pre'
+          - 'nightly'
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+        arch:
+          - x86
+          - x64
+        exclude:
+          # Test all OS's and arch possibilities on
+          # - 1.0
+          # - 1.6
+          # - 1
+          # - pre
+          # - nightly
+          # but remove some configurations from the build matrix to reduce CI time.
+          # See https://github.com/marketplace/actions/setup-julia-environment
+          - {os: 'macOS-latest', version: '1.1'}
+          - {os: 'macOS-latest', version: '1.2'}
+          - {os: 'macOS-latest', version: '1.3'}
+          - {os: 'macOS-latest', version: '1.4'}
+          - {os: 'macOS-latest', version: '1.5'}
+          - {os: 'macOS-latest', version: '1.7'}
+          - {os: 'macOS-latest', version: '1.8'}
+          - {os: 'macOS-latest', version: '1.9'}
+          # MacOS not available on x86
+          - {os: 'macOS-latest', arch: 'x86'}
+          - {os: 'windows-latest', version: '1.1'}
+          - {os: 'windows-latest', version: '1.2'}
+          - {os: 'windows-latest', version: '1.3'}
+          - {os: 'windows-latest', version: '1.4'}
+          - {os: 'windows-latest', version: '1.5'}
+          - {os: 'windows-latest', version: '1.7'}
+          - {os: 'windows-latest', version: '1.8'}
+          - {os: 'windows-latest', version: '1.9'}
+          - {os: 'ubuntu-latest', version: '1.1', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.2', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.3', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.4', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.5', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.7', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.8', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.9', arch: 'x86'}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+      - uses: julia-actions/julia-processcoverage@latest
+      - uses: codecov/codecov-action@v3
+        with:
+          file: lcov.info
+  test_sysimage:
+    name: JuliaSyntax sysimage build - ${{ github.event_name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: 1.6
+          arch: x64
+      - uses: actions/cache@v4
+        env:
+          cache-name: cache-artifacts
+        with:
+          path: ~/.julia/artifacts
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
+            ${{ runner.os }}-test-
+            ${{ runner.os }}-
+      - uses: julia-actions/julia-buildpkg@v1
+      - run: julia sysimage/compile.jl
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: '1.10'
+      - run: julia --project=docs -e '
+          using Pkg;
+          Pkg.develop(PackageSpec(; path=pwd()));
+          Pkg.instantiate();'
+      - run: julia --project=docs docs/make.jl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
