@@ -545,7 +545,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // replaced later
                 JL_GC_PUSH1(&scope);
                 ct->scope = scope;
-                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
@@ -553,7 +553,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 JL_GC_POP();
             }
             else {
-                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
