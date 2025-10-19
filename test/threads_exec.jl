@@ -1364,6 +1364,17 @@ end
                 @test !istaskdone(tasks[3])
 
                 teardown(tasks, event)
+
+                @test_throws CompositeException begin
+                    waitall(Threads.@spawn(div(1, i)) for i = 0:1)
+                end
+
+                tasks = [Threads.@spawn(div(1, i)) for i = 0:1]
+                wait(tasks[1]; throw=false)
+                wait(tasks[2]; throw=false)
+                @test_throws CompositeException begin
+                    waitall(Threads.@spawn(div(1, i)) for i = 0:1)
+                end
             end
         end
     end
