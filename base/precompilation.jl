@@ -406,7 +406,7 @@ function excluded_circular_deps_explanation(io::IOContext{IO}, ext_to_parent::Di
             else
                 line = " └" * "─" ^j * " "
             end
-            hascolor = get(io, :color, false)::Bool
+            hascolor = get(io, :color, false)::Bool # XXX: this output does not go to `io` so this is bad to call here
             line = _color_string(line, :light_black, hascolor) * full_name(ext_to_parent, pkg) * "\n"
             cycle_str *= line
         end
@@ -482,14 +482,17 @@ empty (default), precompiles all project dependencies. When specified,
 precompiles only the given packages and their dependencies (unless
 `manifest=true`).
 
+!!! note
+    Errors will only throw when precompiling the top-level dependencies, given that
+    not all manifest dependencies may be loaded by the top-level dependencies on the given system.
+    This can be overridden to make errors in all dependencies throw by setting the kwarg `strict` to `true`
+
 # Keyword Arguments
-- `internal_call::Bool`: Indicates this is an automatic/internal precompilation call
-  (e.g., triggered by package loading). When `true`, errors are handled gracefully: in
-  interactive sessions, errors are stored in `Base.MainInclude.err` instead of throwing;
-  in non-interactive sessions, errors are printed but not thrown. Default: `false`.
+- `internal_call::Bool`: Indicates this is an automatic precompilation call
+  from somewhere external (e.g. Pkg). Do not use this parameter.
 
 - `strict::Bool`: Controls error reporting scope. When `false` (default), only reports
-  errors for direct project dependencies.
+  errors for direct project dependencies. Only relevant when `manifest=true`.
 
 - `warn_loaded::Bool`: When `true` (default), checks for and warns about packages that are
   precompiled but already loaded with a different version. Displays a warning that Julia
@@ -564,7 +567,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          timing::Bool,
                          _from_loading::Bool,
                          configs::Vector{Config},
-                         _io::IOContext{IO},
+                         io::IOContext{IO},
                          fancyprint::Bool,
                          manifest::Bool,
                          ignore_loaded::Bool)
@@ -602,16 +605,18 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # suppress precompilation progress messages when precompiling for loading packages, except during interactive sessions
     # or when specified by logging heuristics that explicitly require it
     # since the complicated IO implemented here can have somewhat disastrous consequences when happening in the background (e.g. #59599)
-    io = _io
+    logio = io
     logcalls = nothing
-    if _from_loading && !isinteractive()
-        io = IOContext{IO}(devnull)
-        fancyprint = false
+    if _from_loading
+        if !isinteractive()
+            logio = IOContext{IO}(devnull)
+            fancyprint = false
+        end
         logcalls = isinteractive() ? CoreLogging.Info : CoreLogging.Debug # sync with Base.compilecache
     end
 
     nconfigs = length(configs)
-    hascolor = get(io, :color, false)::Bool
+    hascolor = get(logio, :color, false)::Bool
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
     stale_cache = Dict{StaleCacheKey, Bool}()
@@ -901,9 +906,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
 
     function monitor_std(pkg_config, pipe; single_requested_pkg=false)
-        pkg, config = pkg_config
+        local pkg, config = pkg_config
         try
-            liveprinting = false
+            local liveprinting = false
+            local thistaskwaiting = false
             while !eof(pipe)
                 local str = readline(pipe, keep=true)
                 if single_requested_pkg && (liveprinting || !isempty(str))
@@ -916,15 +922,18 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     end
                 end
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
-                if !in(pkg_config, taskwaiting) && occursin("waiting for IO to finish", str)
-                    !fancyprint && @lock print_lock begin
-                        println(io, pkg.name, color_string(" Waiting for background task / IO / timer.", Base.warn_color()))
+                if thistaskwaiting
+                    if occursin("Waiting for background task / IO / timer", str)
+                        thistaskwaiting = true
+                        !liveprinting && !fancyprint && @lock print_lock begin
+                            println(io, pkg.name, color_string(str, Base.warn_color()))
+                        end
+                        push!(taskwaiting, pkg_config)
                     end
-                    push!(taskwaiting, pkg_config)
-                end
-                if !fancyprint && in(pkg_config, taskwaiting)
-                    @lock print_lock begin
-                        print(io, str)
+                else
+                    # XXX: don't just re-enable IO for random packages without printing the context for them first
+                    !liveprinting && !fancyprint && @lock print_lock begin
+                        print(io, ansi_cleartoendofline, str)
                     end
                 end
             end
@@ -940,10 +949,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             (isempty(pkg_queue) || interrupted_or_done[]) && return
             @lock print_lock begin
                 if target[] !== nothing
-                    printpkgstyle(io, :Precompiling, target[])
+                    printpkgstyle(logio, :Precompiling, target[])
                 end
                 if fancyprint
-                    print(io, ansi_disablecursor)
+                    print(logio, ansi_disablecursor)
                 end
             end
             t = Timer(0; interval=1/10)
@@ -957,7 +966,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             n_print_rows = 0
             while !printloop_should_exit[]
                 @lock print_lock begin
-                    term_size = displaysize(io)::Tuple{Int, Int}
+                    term_size = displaysize(logio)::Tuple{Int, Int}
                     num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !interrupted_or_done[] && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
@@ -974,7 +983,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         # window between print cycles
                         termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
                         if !final_loop
-                            s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
+                            s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=logio)
                             print(iostr, Base._truncate_at_width_or_chars(true, s, termwidth), "\n")
                         end
                         for pkg_config in pkg_queue_show
@@ -1015,11 +1024,11 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     end
                     last_length = length(pkg_queue_show)
                     n_print_rows = count("\n", str_)
-                    print(io, str_)
+                    print(logio, str_)
                     printloop_should_exit[] = interrupted_or_done[] && final_loop
                     final_loop = interrupted_or_done[] # ensures one more loop to tidy last task after finish
                     i += 1
-                    printloop_should_exit[] || print(io, ansi_moveup(n_print_rows), ansi_movecol1)
+                    printloop_should_exit[] || print(logio, ansi_moveup(n_print_rows), ansi_movecol1)
                 end
                 wait(t)
             end
@@ -1029,7 +1038,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             # Base.display_error(ErrorException(""), Base.catch_backtrace())
             handle_interrupt(err, true) || rethrow()
         finally
-            fancyprint && print(io, ansi_enablecursor)
+            fancyprint && print(logio, ansi_enablecursor)
         end
     end
 
@@ -1081,8 +1090,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     end
                     if !circular && is_stale
                         Base.acquire(parallel_limiter)
-                        is_project_dep = pkg in project_deps
                         is_serial_dep = pkg in serial_deps
+                        is_project_dep = pkg in project_deps
 
                         # std monitoring
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
@@ -1092,7 +1101,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                             @lock print_lock begin
                                 if !fancyprint && isempty(pkg_queue)
-                                    printpkgstyle(io, :Precompiling, something(target[], "packages..."))
+                                    printpkgstyle(logio, :Precompiling, something(target[], "packages..."))
                                 end
                             end
                             push!(pkg_queue, pkg_config)
@@ -1141,11 +1150,11 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             if ret isa Exception
                                 push!(precomperr_deps, pkg_config)
                                 !fancyprint && @lock print_lock begin
-                                    println(io, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
+                                    println(logio, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
                                 end
                             else
                                 !fancyprint && @lock print_lock begin
-                                    println(io, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
+                                    println(logio, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
                                 end
                                 if ret !== nothing
                                     was_recompiled[pkg_config] = true
@@ -1161,11 +1170,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                                errmsg = String(take!(get(IOBuffer, std_outputs, pkg_config)))
-                                delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
-                                failed_deps[pkg_config] = (strict || is_project_dep) ? string(sprint(showerror, err), "\n", strip(errmsg)) : ""
+                                failed_deps[pkg_config] = sprint(showerror, err)
                                 !fancyprint && @lock print_lock begin
-                                    println(io, " "^12, color_string("  ✗ ", Base.error_color()), name)
+                                    println(logio, " "^12, color_string("  ✗ ", Base.error_color()), name)
                                 end
                             else
                                 rethrow()
@@ -1213,9 +1220,25 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), tasks) || interrupted[] # all should have finished (to avoid memory corruption)
     seconds_elapsed = round(Int, (time_ns() - time_start) / 1e9)
     ndeps = count(values(was_recompiled))
-    if ndeps > 0 || !isempty(failed_deps) || (quick_exit && !isempty(std_outputs))
-        str = sprint(context=io) do iostr
-            if !quick_exit
+    # Determine if any of failures were a requested package
+    requested_errs = false
+    for ((dep, config), err) in failed_deps
+        if dep in requested_pkgids
+            requested_errs = true
+            break
+        end
+    end
+    # if every requested package succeeded, filter away output from failed packages
+    # since it didn't contribute to the overall success and can be regenerated if that package is later required
+    if !strict && !requested_errs
+        for (pkg_config, err) in failed_deps
+            delete!(std_outputs, pkg_config)
+        end
+        empty!(failed_deps)
+    end
+    if ndeps > 0 || !isempty(failed_deps)
+        if !quick_exit
+            logstr = sprint(context=logio) do iostr
                 if fancyprint # replace the progress bar
                     what = isempty(requested_pkgids) ? "packages finished." : "$(join((p.name for p in requested_pkgids), ", ", " and ")) finished."
                     printpkgstyle(iostr, :Precompiling, what)
@@ -1248,10 +1271,17 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     )
                 end
             end
+            @lock print_lock begin
+                println(logio, logstr)
+            end
+        end
+    end
+    if !isempty(std_outputs)
+        str = sprint(context=io) do iostr
             # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
-            # interrupting a hanging precompile job with stderr output. julia#48371
+            # interrupting a hanging precompile job with stderr output.
             let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
-                filter!(kv -> !isempty(last(kv)), std_outputs)
+                filter!(!isempty∘last, std_outputs)
                 if !isempty(std_outputs)
                     local plural1 = length(std_outputs) == 1 ? "y" : "ies"
                     local plural2 = length(std_outputs) == 1 ? "" : "s"
@@ -1269,49 +1299,32 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 end
             end
         end
-        @lock print_lock begin
+        isempty(str) || @lock print_lock begin
             println(io, str)
         end
-        if interrupted[]
-            # done cleanup, now ensure caller aborts too
-            throw(InterruptException())
-        end
-        quick_exit && return Vector{String}[]
+    end
+    # Done cleanup and sub-process output, now ensure caller aborts too with the right error
+    if interrupted[]
+        throw(InterruptException())
+    end
+    # Fail noisily now with failed_deps if any.
+    # Include all messages from compilecache since any might be relevant in the failure.
+    if !isempty(failed_deps)
         err_str = IOBuffer()
-        n_direct_errs = 0
-        for (pkg_config, err) in failed_deps
-            dep, config = pkg_config
-            if strict || (dep in project_deps)
-                print(err_str, "\n", dep.name, " ")
-                for cfg in config[1]
-                    print(err_str, cfg, " ")
-                end
-                print(err_str, "\n\n", err)
-                n_direct_errs > 0 && write(err_str, "\n")
-                n_direct_errs += 1
-            end
+        for ((dep, config), err) in failed_deps
+            write(err_str, "\n")
+            print(err_str, "\n", dep.name, " ")
+            join(err_str, config[1], " ")
+            print(err_str, "\n", err)
         end
-        if position(err_str) > 0
-            skip(err_str, -1)
-            truncate(err_str, position(err_str))
-            pluralde = n_direct_errs == 1 ? "y" : "ies"
-            direct = strict ? "" : "direct "
-            err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(String(take!(err_str)))"
-            if internal_call # aka. decide which untested code path to run that does some unsafe behavior
-                if isinteractive() # XXX: this test is incorrect
-                    plural1 = length(failed_deps) == 1 ? "y" : "ies"
-                    println(io, "  ", color_string("$(length(failed_deps))", Base.error_color()), " dependenc$(plural1) errored.")
-                    println(io, "  For a report of the errors see `julia> err`. To retry use `pkg> precompile`")
-                    setglobal!(Base.MainInclude, :err, PkgPrecompileError(err_msg)) # XXX: this call is dangerous
-                else
-                    # auto-precompilation shouldn't throw but if the user can't easily access the
-                    # error messages, just show them
-                    print(io, "\n", err_msg)
-                end
-            else # XXX: crashing is wrong
-                println(io)
-                throw(PkgPrecompileError(err_msg))
-            end
+        n_errs = length(failed_deps)
+        pluraled = n_errs == 1 ? "" : "s"
+        err_msg = "The following $n_errs package$(pluraled) failed to precompile:$(String(take!(err_str)))\n"
+        if internal_call
+            # Pkg does not implement correct error handling, so this sometimes handles them instead
+            print(io, err_msg)
+        else
+            throw(PkgPrecompileError(err_msg))
         end
     end
     return collect(String, Iterators.flatten((v for (pkgid, v) in cachepath_cache if pkgid in requested_pkgids)))

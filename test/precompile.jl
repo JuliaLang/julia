@@ -687,15 +687,7 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    try
-        Base.require(Main, :FooBar2)
-        error("the \"break me\" test failed")
-    catch exc
-        isa(exc, LoadError) || rethrow()
-        exc = exc.error
-        isa(exc, ErrorException) || rethrow()
-        "break me" == exc.msg || rethrow()
-    end
+    @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -707,14 +699,7 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        try
-            Base.require(Main, :FooBar3)
-        catch exc
-            isa(exc, LoadError) || rethrow()
-            exc = exc.error
-            isa(exc, ErrorException) || rethrow()
-            occursin("Evaluation into the closed module `Base` breaks incremental compilation", exc.msg) || rethrow()
-        end
+        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
     end
 
     # Test transitive dependency for #21266
@@ -2563,8 +2548,8 @@ end
         write(joinpath(fail_pkg_path, "src", "FailPkg.jl"),
               """
               module FailPkg
-              print("FailPkg precompiling.\n")
-              error("fail")
+              print("Now FailPkg is running.\n")
+              error("expected fail")
               end
               """)
 
@@ -2583,7 +2568,7 @@ end
         write(joinpath(loads_pkg_path, "src", "LoadsFailPkg.jl"),
               """
               module LoadsFailPkg
-              print("LoadsFailPkg precompiling.\n")
+              print("Now LoadsFailPkg is running.\n")
               import FailPkg
               print("unreachable\n")
               end
@@ -2605,7 +2590,7 @@ end
               """
               module DependsOnly
               # Has FailPkg as a dependency but doesn't load it
-              print("DependsOnly precompiling.\n")
+              print("Now DependsOnly is running.\n")
               end
               """)
 
@@ -2661,16 +2646,20 @@ end
         try
             push!(empty!(DEPOT_PATH), depot)
             Base.set_active_project(project_path)
-            loadsfailpkg = open(LoadsFailPkg_output, "w") do io
-                # set internal_call to bypass buggy code
-                Base.Precompilation.precompilepkgs(["LoadsFailPkg"]; io, fancyprint=true, internal_call=true)
+            precompile_capture(file, pkg) = open(file, "w") do io
+                try
+                    r = Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true)
+                    @test r isa Vector{String}
+                    r
+                catch ex
+                    ex isa Base.Precompilation.PkgPrecompileError || rethrow()
+                    ex
+                end
             end
-            @test isempty(loadsfailpkg::Vector{String})
-            dependsonly = open(DependsOnly_output, "w") do io
-                # set internal_call to bypass buggy code
-                Base.Precompilation.precompilepkgs(["DependsOnly"]; io, fancyprint=true, internal_call=true)
-            end
-            @test length(dependsonly::Vector{String}) == 1
+            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
+            @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
+            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
+            @test length(dependsonly) == 1
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
@@ -2678,25 +2667,22 @@ end
 
         output = read(LoadsFailPkg_output, String)
         # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
-        @test_broken count(output, "ERROR: fail") > 0
-        @test_broken count(output, "ERROR: fail") == 1
+        @test count("LoadError: expected fail", output) == 1
+        @test count("expected fail", output) == 1
         @test count("✗ FailPkg", output) > 0
         @test count("✗ LoadsFailPkg", output) > 0
-        @test count("FailPkg precompiling.", output) > 0
-        @test_broken count("FailPkg precompiling.", output) == 1
-        @test 0 < count("LoadsFailPkg precompiling.", output) <= 2
-        @test_broken count("LoadsFailPkg precompiling.", output) == 1
-        @test !contains(output, "DependsOnly precompiling.")
+        @test count("Now FailPkg is running.", output) == 1
+        @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("DependsOnly precompiling.", output) == 0
 
         # DependsOnly should succeed because it doesn't actually load FailPkg
         output = read(DependsOnly_output, String)
-        @test_broken count(output, "ERROR: fail") > 0
-        @test_broken count(output, "ERROR: fail") == 1
+        @test count("LoadError: expected fail", output) == 0
+        @test count("expected fail", output) == 0
         @test count("✗ FailPkg", output) > 0
         @test count("Precompiling DependsOnly finished.", output) == 1
-        @test_broken count("FailPkg precompiling.", output) > 0
-        @test_broken count("FailPkg precompiling.", output) == 1
-        @test count("DependsOnly precompiling.", output) == 1
+        @test count("Now FailPkg is running.", output) == 0
+        @test count("Now DependsOnly is running.", output) == 1
     end
 end
 
