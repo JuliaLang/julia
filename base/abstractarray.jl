@@ -3196,7 +3196,7 @@ avoids the allocations that a comprehension or `collect(c)` would incur.
 
 !!! compat "Julia 1.13"
     The single-argument method requires Julia 1.13 or later. To support previous versions,
-    too, use the equivalent `foreach(identity, c)`.
+    too, use the equivalent `foreach(Returns(nothing), c)`.
 
 See also: [`collect`](@ref), [`map`](@ref).
 
