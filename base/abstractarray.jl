@@ -3177,6 +3177,7 @@ end
 
 """
     foreach(f, c...) -> nothing
+    foreach(c) -> nothing
 
 Call function `f` on each element of iterable `c`.
 For multiple iterable arguments, `f` is called elementwise, and iteration stops when
@@ -3184,6 +3185,16 @@ any iterator is finished.
 
 `foreach` should be used instead of [`map`](@ref) when the results of `f` are not
 needed, for example in `foreach(println, array)`.
+
+Without supplying `f`, `foreach(c)` simply exhausts the iterable `c` and discards all
+values. This is equivalent to `for _ in c; end; nothing`. Use it when you need to force
+evaluation of an iterator for its side effects (e.g. in a pipeline, with function
+composition or with a generator) but do not need to transform its elements.
+
+The single-argument form is a shorter alternative to `foreach(identity, c)`, and
+avoids the allocations that a comprehension or `collect(c)` would incur.
+
+See also: [`collect`](@ref), [`map`](@ref).
 
 # Examples
 ```jldoctest
@@ -3201,10 +3212,18 @@ julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
 1 with a
 4 with b
 7 with c
+
+julia> (println(10 + x) for x = tri if x < 5) |> foreach
+11
+14
+
+julia> foreach(tri) === nothing
+true
 ```
 """
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
 foreach(f, itr, itrs...) = (for z in zip(itr, itrs...); f(z...); end; nothing)
+foreach(itr) = (for _ in itr; end; nothing)
 
 ## map over arrays ##
 
