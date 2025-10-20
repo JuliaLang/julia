@@ -242,15 +242,19 @@ function show_convert_error(io::IO, ex::NotImplementedError, arg_types_param)
     # should maybe just be a new ConvertError.
     # See #13033
     T = striptype(ex.args[1])
-    p2 = arg_types_param[2]
-    print_one_line = isa(T, DataType) && isa(p2, DataType) && T.name != p2.name
-    printstyled(io, "Cannot `convert` an object of type ")
-    print_one_line || printstyled(io, "\n  ")
-    print_with_compare(io, p2, T, :light_green)
-    printstyled(io, " to an object of type ")
-    print_one_line || printstyled(io, "\n  ")
-    print_with_compare(io, T, p2, :light_red)
-    printstyled(io, ".")
+    if T === nothing
+        print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
+    else
+        p2 = arg_types_param[2]
+        print_one_line = isa(T, DataType) && isa(p2, DataType) && T.name != p2.name
+        printstyled(io, "Cannot `convert` an object of type ")
+        print_one_line || printstyled(io, "\n  ")
+        print_with_compare(io, p2, T, :light_green)
+        printstyled(io, " to an object of type ")
+        print_one_line || printstyled(io, "\n  ")
+        print_with_compare(io, T, p2, :light_red)
+        printstyled(io, ".")
+    end
 end
 
 function showerror(io::IO, ex::NotImplementedError)
@@ -261,24 +265,24 @@ function showerror(io::IO, ex::NotImplementedError)
     if ex.f !== nothing
         is_arg_types = isa(ex.args, DataType)
         arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
-        f, _, arg_types_param, kwargs = unwrap_kwcall(ex.f, ex.args, arg_types, is_arg_types)
+        f, _, san_arg_types_param, kwargs = unwrap_kwcall(ex.f, ex.args, arg_types, is_arg_types)
         print(io, "no implementation has been provided matching the signature ")
-        print_method_signature(io, f, arg_types_param, kwargs)
+        print_method_signature(io, f, arg_types, kwargs)
         interfacestr = ex.interface == Any ?
             "." :
             " expected as part of the interface for $(ex.interface)."
         print(io, interfacestr)
     end
-    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if f === Base.convert && length(san_arg_types_param) == 2 && !is_arg_types
         print(io, " ")
-        show_convert_error(io, ex, arg_types_param)
+        show_convert_error(io, ex, san_arg_types_param)
     end
 
     !isempty(ex.msg) && print(io, " ", ex.msg)
     println(io)
 end
 
-function print_method_signature(io::IO, f, kwargs)
+function print_method_signature(io::IO, f, arg_types, kwargs)
     buf = IOBuffer()
     iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
     show_signature_function(iob, Core.Typeof(f))
@@ -288,7 +292,7 @@ function print_method_signature(io::IO, f, kwargs)
     print(io, str)
 end
 
-function unwrap_kwargs(f, args, arg_types, is_arg_types)
+function unwrap_kwcall(f, args, arg_types, is_arg_types)
     arg_types_param::SimpleVector = (unwrap_unionall(arg_types)::DataType).parameters
     san_arg_types_param = Any[rewrap_unionall(arg_types_param[i], arg_types) for i in 1:length(arg_types_param)]
     kwargs = []
@@ -302,7 +306,7 @@ function unwrap_kwargs(f, args, arg_types, is_arg_types)
         keys = kwt.parameters[1]::Tuple
         kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
     end
-    return f, args, arg_types_param, san_arg_types_param, kwargs
+    return f, args, san_arg_types_param, kwargs
 end
 
 function showerror(io::IO, ex::MethodError)
@@ -317,12 +321,11 @@ function showerror(io::IO, ex::MethodError)
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     print(io, "MethodError: ")
-    f, args, arg_types_param, san_arg_types_param, kwargs = unwrap_kwargs(f, ex.args, arg_types, is_arg_types)
+    f, args, san_arg_types_param, kwargs = unwrap_kwcall(f, ex.args, arg_types, is_arg_types)
     ex = MethodError(f, args, ex.world)
     ft = typeof(f)
     show_candidates = true
     f_is_function = false
-    name = ft.name.mt.name
     if isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
@@ -338,7 +341,7 @@ function showerror(io::IO, ex::MethodError)
         else
             print(io, "no method matching ")
         end
-        print_method_signature(io, f, kwargs)
+        print_method_signature(io, f, arg_types, kwargs)
     end
     # catch the two common cases of element-wise addition and subtraction
     if (f === Base.:+ || f === Base.:-) && length(san_arg_types_param) == 2
