@@ -3194,6 +3194,10 @@ composition or with a generator) but do not need to transform its elements.
 The single-argument form is a shorter alternative to `foreach(identity, c)`, and
 avoids the allocations that a comprehension or `collect(c)` would incur.
 
+!!! compat "Julia 1.13"
+    The single-argument method requires Julia 1.13 or later. To support previous versions,
+    too, use the equivalent `foreach(identity, c)`.
+
 See also: [`collect`](@ref), [`map`](@ref).
 
 # Examples
