@@ -5813,11 +5813,14 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     }
     jl_cgval_t slot;
     PHINode *value_phi = NULL;
+    bool has_tracked_pointers = false;
     if (!isboxed && vtype->isAggregateType()) {
         // the value will be moved into dest in the predecessor critical block.
         // here it's moved into phi in the successor (from dest)
         auto tracked = CountTrackedPointers(vtype);
         if (tracked.count) {
+            // Aggregates with pointers have split representation (separate data and roots PHIs)
+            has_tracked_pointers = true;
             roots.resize(tracked.count);
             assert(tracked.count == split_value_size((jl_datatype_t*)phiType).second);
             for (size_t nr = 0; nr < tracked.count; nr++) {
@@ -5825,25 +5828,28 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
                 root_phi->insertInto(BB, InsertPt);
                 roots[nr] = root_phi;
             }
-        }
-        AllocaInst *phi = nullptr;
-        if (!tracked.all) {
-            Align align(julia_alignment(phiType));
-            unsigned nb = jl_datatype_size(phiType);
-            dest = emit_static_alloca(ctx, nb, align);
-            phi = cast<AllocaInst>(dest->clone());
+            AllocaInst *phi = nullptr;
+            if (!tracked.all) {
+                Align align(julia_alignment(phiType));
+                unsigned nb = jl_datatype_size(phiType);
+                dest = emit_static_alloca(ctx, nb, align);
+                phi = cast<AllocaInst>(dest->clone());
 #if JL_LLVM_VERSION >= 200000
-            phi->insertBefore(dest->getIterator());
+                phi->insertBefore(dest->getIterator());
 #else
-            phi->insertBefore(dest);
+                phi->insertBefore(dest);
 #endif
-            ctx.builder.CreateMemCpy(phi, align, dest, align, nb, false);
-            ctx.builder.CreateLifetimeEnd(dest);
+                ctx.builder.CreateMemCpy(phi, align, dest, align, nb, false);
+                ctx.builder.CreateLifetimeEnd(dest);
+            }
+            slot = mark_julia_slot(phi, phiType, NULL, ctx.tbaa().tbaa_stack,
+                    roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
         }
-        slot = mark_julia_slot(phi, phiType, NULL, ctx.tbaa().tbaa_stack,
-                roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
     }
-    else {
+    if (!has_tracked_pointers) {
+        // Everything else uses a direct value PHI:
+        // - Non-aggregate types (boxed or unboxed)
+        // - Pointer-free aggregates
         value_phi = PHINode::Create(vtype, jl_array_nrows(edges), "value_phi");
         value_phi->insertInto(BB, InsertPt);
         slot = mark_julia_type(ctx, value_phi, isboxed, phiType);
