@@ -848,4 +848,3 @@ indentation from the syntax tree?  Source formatting involves a big pile of
 heuristics to get something which "looks nice"... and ML systems have become
 very good at heuristics. Also, we've got huge piles of training data — just
 choose some high quality, tastefully hand-formatted libraries.
-

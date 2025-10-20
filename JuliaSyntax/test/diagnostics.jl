@@ -34,7 +34,7 @@ end
 end
 
 @testset "parser errors" begin
-	@test diagnostic("+ #==# (a,b)") ==
+    @test diagnostic("+ #==# (a,b)") ==
         Diagnostic(2, 7, :error, "whitespace not allowed between prefix function call and argument list")
     @test diagnostic("1 -+ (a=1, b=2)") ==
         Diagnostic(5, 5, :error, "whitespace not allowed between prefix function call and argument list")
@@ -44,18 +44,18 @@ end
     @test diagnostic("function (\$f) body end") ==
         Diagnostic(10, 13, :error, "Ambiguous signature. Add a trailing comma if this is a 1-argument anonymous function; remove parentheses if this is a macro call acting as function signature.")
 
-	@test diagnostic("A.@B.x", only_first=true) ==
+    @test diagnostic("A.@B.x", only_first=true) ==
         Diagnostic(3, 4, :error, "`@` must appear on first or last macro name component")
-	@test diagnostic("@M.(x)") ==
+    @test diagnostic("@M.(x)") ==
         Diagnostic(1, 3, :error, "dot call syntax not supported for macros")
 
-	@test diagnostic("try x end") ==
+    @test diagnostic("try x end") ==
         Diagnostic(1, 9, :error, "try without catch or finally")
     # TODO: better range
-	@test diagnostic("@A.\$x a") ==
+    @test diagnostic("@A.\$x a") ==
         Diagnostic(4, 5, :error, "invalid macro name")
 
-	@test diagnostic("a, , b") ==
+    @test diagnostic("a, , b") ==
         Diagnostic(4, 4, :error, "unexpected `,`")
     @test diagnostic(")", allow_multiple=true) == [
         Diagnostic(1, 1, :error, "unexpected `)`")
@@ -118,15 +118,15 @@ end
 end
 
 @testset "parser warnings" begin
-	@test diagnostic("@(A)", only_first=true) ==
+    @test diagnostic("@(A)", only_first=true) ==
         Diagnostic(2, 4, :warning, "parenthesizing macro names is unnecessary")
-	@test diagnostic("try finally catch a ; b end") ==
+    @test diagnostic("try finally catch a ; b end") ==
         Diagnostic(13, 23, :warning, "`catch` after `finally` will execute out of order")
-	@test diagnostic("import .  .A") ==
+    @test diagnostic("import .  .A") ==
         Diagnostic(9, 10, :warning, "space between dots in import path")
-	@test diagnostic("import A .==") ==
+    @test diagnostic("import A .==") ==
         Diagnostic(9, 9, :warning, "space between dots in import path")
-	@test diagnostic("import A.:+") ==
+    @test diagnostic("import A.:+") ==
         Diagnostic(10, 10, :warning, "quoting with `:` is not required here")
     # No warnings for imports of `:` and parenthesized `(..)`
     @test diagnostic("import A.:, :", allow_multiple=true) == []
@@ -244,8 +244,8 @@ end
         tempdirname = mktempdir()
         cd(tempdirname) do
             rm(tempdirname)
-            # Test _file_url doesn't fail with nonexistant directories
-            @test isnothing(JuliaSyntax._file_url(joinpath("__nonexistant__", "test.jl")))
+            # Test _file_url doesn't fail with nonexistent directories
+            @test isnothing(JuliaSyntax._file_url(joinpath("__nonexistent__", "test.jl")))
         end
     end
 end

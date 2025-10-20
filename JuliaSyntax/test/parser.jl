@@ -300,7 +300,7 @@ tests = [
         # `where` combined with `->` still parses strangely. However:
         # * It's extra hard to add a tuple around the `x` in this syntax corner case.
         # * The user already needs to add additional, ugly, parens to get this
-        #   to parse correctly because the precendence of `where` is
+        #   to parse correctly because the precedence of `where` is
         #   inconsistent with `::` and `->` in this case.
         "(x where T)->c" => "(-> (parens (where x T)) c)"
         "((x::T) where T)->c" => "(-> (parens (where (parens (::-i x T)) T)) c)"
@@ -963,7 +963,7 @@ tests = [
         "[a \n b]"  =>  "(vcat a b)"
         # Can't mix multiple ;'s and spaces
         ((v=v"1.7",), "[a ;; b c]")  =>  "(ncat-2 a (row b (error-t) c))"
-        # Empty nd arrays
+        # Empty N-dimensional arrays
         ((v=v"1.8",), "[;]")   =>  "(ncat-1)"
         ((v=v"1.8",), "[;;]")  =>  "(ncat-2)"
         ((v=v"1.8",), "[\n  ;; \n ]")  =>  "(ncat-2)"

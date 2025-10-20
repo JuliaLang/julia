@@ -35,4 +35,3 @@ To reduce startup latency you can combine with a custom system as described in
 the [Julia VScode docs](https://www.julia-vscode.org/docs/dev/userguide/compilesysimage/#Creating-a-sysimage-for-the-active-environment),
 combined with the precompile execution file in `sysimage/precompile_exec.jl` in the source tree.
 For additional detail see the discussion in [issue #128](https://github.com/JuliaLang/JuliaSyntax.jl/issues/128).
-
