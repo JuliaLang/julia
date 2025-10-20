@@ -168,7 +168,7 @@ end
 # TODO: Replace this with makeleaf variant?
 function mapleaf(ctx, src, kind)
     ex = makeleaf(syntax_graph(ctx), src, kind)
-    # TODO: Value coersion might be broken here due to use of `name_val` vs
+    # TODO: Value coercion might be broken here due to use of `name_val` vs
     # `value` vs ... ?
     copy_attrs!(ex, src)
     ex

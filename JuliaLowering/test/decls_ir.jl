@@ -297,4 +297,3 @@ function f()
     global x::Int = 1
 #         └─────────┘ ── type declarations for global variables must be at top level, not inside a function
 end
-

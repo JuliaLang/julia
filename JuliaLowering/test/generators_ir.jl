@@ -297,4 +297,3 @@ T[(x,y) for x in xs, y in ys]
 48  (gotoifnot %₄₇ label₅₀)
 49  (goto label₁₅)
 50  (return %₇)
-

@@ -890,7 +890,7 @@ function _remove_vars_with_isdefined_check!(vars, ex)
 end
 
 # Find newvar nodes that are unnecessary because
-# 1. The variable is not captured and 
+# 1. The variable is not captured and
 # 2. The variable is assigned before any branches.
 #
 # This is used to remove newvar nodes that are not needed for re-initializing

@@ -1,4 +1,4 @@
-@testset "Miscellanous" begin
+@testset "Miscellaneous" begin
 
 test_mod = Module()
 

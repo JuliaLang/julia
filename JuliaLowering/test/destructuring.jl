@@ -45,7 +45,7 @@ end
 """) == ('a', "βcδ", 'e')
 
 
-# Use in value position yeilds rhs
+# Use in value position yields rhs
 @test JuliaLowering.include_string(test_mod, """
 let
     as = [1,2]

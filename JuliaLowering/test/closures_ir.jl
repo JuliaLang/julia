@@ -763,4 +763,3 @@ slots: [slot₁/#self#(!read) slot₂/T(!read) slot₃/tmp(!read)]
 #---------------------
 LoweringError:
 #= line 1 =# - Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
-

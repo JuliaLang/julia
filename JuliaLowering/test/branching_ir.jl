@@ -237,4 +237,3 @@ x = @label foo
 LoweringError:
 x = @label foo
 #          └─┘ ── misplaced label in value position
-

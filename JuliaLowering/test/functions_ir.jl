@@ -1346,7 +1346,7 @@ end
 ########################################
 # Static parameters used in keywords, with and without the static parameter
 # being present in positional argument types.
-# 
+#
 # Here the wrong type for `b` will get a `TypeError` but `A` will need to rely
 # on a MethodError.
 function f_kw_sparams(x::X; a::A=a_def, b::X=b_def) where {X,A}
@@ -1590,4 +1590,3 @@ end
 20  latestworld
 21  TestMod.f_partially_generated
 22  (return %₂₁)
-

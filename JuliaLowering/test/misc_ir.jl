@@ -1,5 +1,5 @@
-module JuxtTest
-    macro emit_juxt()
+module JuxtuposeTest
+    macro emit_juxtupose()
         :(10x)
     end
 end
@@ -304,18 +304,18 @@ end
 4   (return %₃)
 
 ########################################
-# Juxtaposition - check the juxtapose multiply is resolved to `JuxtTest.*` when
-# emitted by the macro in the JuxtTest module.
-# 
+# Juxtaposition - check the juxtapose multiply is resolved to `JuxtuposeTest.*` when
+# emitted by the macro in the JuxtuposeTest module.
+#
 # This is consistent with Julia's existing system but it's not entirely clear
 # this is good - perhaps we should resolve to Base.* instead? Resolving to the
 # module-local version makes it exactly equivalent to `*`. But one might argue
 # this is confusing because the symbol `*` appears nowhere in the user's source
 # code.
-JuxtTest.@emit_juxt
+JuxtuposeTest.@emit_juxtupose
 #---------------------
-1   TestMod.JuxtTest.*
-2   TestMod.JuxtTest.x
+1   TestMod.JuxtuposeTest.*
+2   TestMod.JuxtuposeTest.x
 3   (call %₁ 10 %₂)
 4   (return %₃)
 
@@ -535,10 +535,9 @@ f(x)::Int, g() = [1.0, 2.0]
 └──┘ ── invalid assignment location
 
 ########################################
-# Error: Destructuring assignment typdef, variable, and function (broken, legacy)
+# Error: Destructuring assignment typedef, variable, and function (broken, legacy)
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 #---------------------
 LoweringError:
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 #                  └─┘ ── invalid assignment location
-

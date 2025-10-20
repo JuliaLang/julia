@@ -794,7 +794,7 @@ function similar_tuples_or_identifiers(a, b)
 end
 
 # Return the anonymous function taking an iterated value, for use with the
-# first agument to `Base.Generator`
+# first argument to `Base.Generator`
 function func_for_generator(ctx, body, iter_value_destructuring)
     if similar_tuples_or_identifiers(iter_value_destructuring, body)
         # Use Base.identity for generators which are filters such as
@@ -1139,7 +1139,7 @@ end
 # ncat comes in various layouts which we need to lower to special cases
 # - one dimensional along some dimension
 # - balanced column first or row first
-# - ragged colum first or row first
+# - ragged column first or row first
 function expand_ncat(ctx, ex)
     is_typed = kind(ex) == K"typed_ncat"
     outer_dim = numeric_flags(ex)
@@ -1209,7 +1209,7 @@ function expand_ncat(ctx, ex)
         end
     else
         # For unbalanced/ragged concatenations, the shape is specified by the
-        # number of elements in each ND slice of the array, from layout
+        # number of elements in each N-dimensional slice of the array, from layout
         # dimension 1 to N. See the documentation for `hvncat` for details.
         i = 1
         while i <= length(nrow_spans)
@@ -1354,7 +1354,7 @@ function expand_assignment(ctx, ex, is_const=false)
                      convert_for_type_decl(ctx, ex, rhs, T, true)
                  ]])
         elseif is_identifier_like(x)
-            # Identifer in lhs[1] is a variable type declaration, eg
+            # Identifier in lhs[1] is a variable type declaration, eg
             # x::T = rhs
             @ast ctx ex [K"block"
                 [K"decl" lhs[1] lhs[2]]
@@ -2378,8 +2378,8 @@ end
 # Select static parameters which are used in function arguments `arg_types`, or
 # transitively used.
 #
-# The transitive usage check probably doesn't guarentee that the types are
-# inferrable during dispatch as they may only be part of the bounds of another
+# The transitive usage check probably doesn't guarantee that the types are
+# inferable during dispatch as they may only be part of the bounds of another
 # type. Thus we might get false positives here but we shouldn't get false
 # negatives.
 function select_used_typevars(arg_types, typevar_names, typevar_stmts)
@@ -3073,7 +3073,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             push!(sig_stmts, @ast(ctx, ex, [K"curly" "Tuple"::K"core" arg_types[2:i]...]))
         end
         sig_type = @ast ctx ex [K"where"
-            [K"curly" "Union"::K"core" sig_stmts...] 
+            [K"curly" "Union"::K"core" sig_stmts...]
             [K"_typevars" [K"block" typevar_names...] [K"block"]]
         ]
         out = @ast ctx docs [K"block"
@@ -3907,7 +3907,7 @@ function rewrite_new_calls(ctx, ex, struct_name, global_struct_name,
     )
 end
 
-function _constructor_min_initalized(ex::SyntaxTree)
+function _constructor_min_initialized(ex::SyntaxTree)
     if _is_new_call(ex)
         if any(kind(e) == K"..." for e in ex[2:end])
             # Lowering ensures new with splats always inits all fields
@@ -3917,7 +3917,7 @@ function _constructor_min_initalized(ex::SyntaxTree)
             numchildren(ex) - 1
         end
     elseif !is_leaf(ex)
-        minimum((_constructor_min_initalized(e) for e in children(ex)), init=typemax(Int))
+        minimum((_constructor_min_initialized(e) for e in children(ex)), init=typemax(Int))
     else
         typemax(Int)
     end
@@ -3958,7 +3958,7 @@ function expand_struct_def(ctx, ex, docs)
     _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                            inner_defs, children(type_body))
     is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
-    min_initialized = minimum((_constructor_min_initalized(e) for e in inner_defs),
+    min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
                               init=length(field_names))
     newtype_var = ssavar(ctx, ex, "struct_type")
     hasprev = ssavar(ctx, ex, "hasprev")
@@ -3984,7 +3984,7 @@ function expand_struct_def(ctx, ex, docs)
     need_outer_constructor = false
     if isempty(inner_defs) && !isempty(typevar_names)
         # To generate an outer constructor each struct type parameter must be
-        # able to be inferred from the list of fields passed as constuctor
+        # able to be inferred from the list of fields passed as constructor
         # arguments.
         #
         # More precisely, it must occur in a field type, or in the bounds of a
