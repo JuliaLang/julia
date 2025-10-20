@@ -1418,7 +1418,7 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
             # (x) -> y
             # (x; a=1) -> y
         elseif kb == K"where"
-            # `where` and `->` have the "wrong" precedence when writing anon functons.
+            # `where` and `->` have the "wrong" precedence when writing anon functions.
             # So ignore this case to allow use of grouping brackets with `where`.
             # This needs to worked around in lowering :-(
             # (x where T) -> y  ==>  (-> (x where T) y)

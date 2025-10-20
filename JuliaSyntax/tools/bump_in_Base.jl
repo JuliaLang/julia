@@ -72,4 +72,3 @@ if !isinteractive()
         exit(bump_in_Base(ARGS[1], juliasyntax_dir, ARGS[2]))
     end
 end
-

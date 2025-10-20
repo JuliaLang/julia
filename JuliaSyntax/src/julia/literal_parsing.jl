@@ -471,4 +471,3 @@ function lower_identifier_name(name::Symbol, k::Kind)
         Symbol(lower_identifier_name(string(name), k))
     end
 end
-

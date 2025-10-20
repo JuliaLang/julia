@@ -269,7 +269,7 @@ mutable struct ParseStream
         lexer = Tokenize.Lexer(io)
         # To avoid keeping track of the exact Julia development version where new
         # features were added or comparing prerelease strings, we treat prereleases
-        # or dev versons as the release version using only major and minor version
+        # or dev versions as the release version using only major and minor version
         # numbers. This means we're inexact for old dev versions but that seems
         # like an acceptable tradeoff.
         ver = (version.major, version.minor)

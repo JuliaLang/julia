@@ -482,4 +482,3 @@ function Meta_parseall(text::AbstractString; filename="none", lineno=1)
     ex,_ = _Meta_parse_string(text, String(filename), lineno, 1, :all)
     return ex
 end
-
