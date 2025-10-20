@@ -319,16 +319,17 @@ function show_error_hints(io, ex, args...)
     ex_supertype = typeof(ex)
     while ex_supertype != Any
         hinters = get(_hint_handlers, Core.typename(ex_supertype), nothing)
-        isnothing(hinters) && continue
-        for k in 1:2:length(hinters)
-            ex isa hinters[k] || continue
-            handler = hinters[k + 1]
-            try
-                # TODO: deal with handlers accepting different signatures?
-                @invokelatest handler(io, ex, args...)
-            catch
-                tn = typeof(handler).name
-                @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+        if !isnothing(hinters)
+            for k in 1:2:length(hinters)
+                ex isa hinters[k] || continue
+                handler = hinters[k + 1]
+                try
+                    # TODO: deal with handlers accepting different signatures?
+                    @invokelatest handler(io, ex, args...)
+                catch
+                    tn = typeof(handler).name
+                    @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+                end
             end
         end
         ex_supertype = supertype(ex_supertype)
