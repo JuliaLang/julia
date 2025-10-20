@@ -3826,7 +3826,7 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 #endif
     #ifdef MADV_HUGEPAGE
         void *b = NULL;
-        if (allocsz > 1u<<22u) {
+        if ((jl_options.hugepage_threshold >= 0) && (allocsz >= jl_options.hugepage_threshold)) {
             b = malloc_page_align(allocsz);
             madvise(b, allocsz, MADV_HUGEPAGE);
         }

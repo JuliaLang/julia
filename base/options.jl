@@ -70,6 +70,7 @@ struct JLOptions
     gc_sweep_always_full::Int8
     compress_sysimage::Int8
     alert_on_critical_error::Int8
+    hugepage_threshold::Int64
 end
 
 # This runs early in the sysimage != is not defined yet
