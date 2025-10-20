@@ -216,7 +216,7 @@ function finish_ir_debug_info!(current_codelocs_stack)
     _compress_debuginfo(only(current_codelocs_stack))
 end
 
-# Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
+# Convert SyntaxTree to the CodeInfo+Expr data structures understood by the
 # Julia runtime
 function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     stmts = Any[]

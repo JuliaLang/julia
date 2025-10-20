@@ -496,4 +496,3 @@ a[] = rhs
 2   TestMod.a
 3   (call top.setindex! %₂ %₁)
 4   (return %₁)
-

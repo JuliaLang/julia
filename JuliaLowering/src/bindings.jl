@@ -247,4 +247,3 @@ end
 function has_lambda_binding(ctx::AbstractLoweringContext, x)
     has_lambda_binding(current_lambda_bindings(ctx), x)
 end
-

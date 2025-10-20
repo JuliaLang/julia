@@ -355,4 +355,3 @@ end
 6   TestMod.b
 7   (pop_exception %₁)
 8   (return %₆)
-

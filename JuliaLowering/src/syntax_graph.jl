@@ -146,7 +146,7 @@ function hasattr(graph::SyntaxGraph, name::Symbol)
     getattr(graph, name, nothing) !== nothing
 end
 
-# TODO: Probably terribly non-inferrable?
+# TODO: Probably terribly non-inferable?
 function setattr!(graph::SyntaxGraph, id; attrs...)
     for (k,v) in pairs(attrs)
         if !isnothing(v)
@@ -817,4 +817,3 @@ end
 #     end
 #     out
 # end
-

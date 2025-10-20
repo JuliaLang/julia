@@ -485,7 +485,7 @@ const JL = JuliaLowering
         @test JuliaLowering.expr_to_syntaxtree(Expr(:comparison, :x, esc(Symbol(".+")), :y)) ≈
             @ast_ [K"comparison"
                 "x"::K"Identifier"
-                [K"." 
+                [K"."
                     [K"escape" "+"::K"Identifier"]
                 ]
                 "y"::K"Identifier"

@@ -395,7 +395,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             @ast ctx ex ex=>K"Placeholder"
         elseif is_ccall_or_cglobal(name_str)
             # Lower special identifiers `cglobal` and `ccall` to `K"core"`
-            # psuedo-refs very early so that cglobal and ccall can never be
+            # pseudo-refs very early so that cglobal and ccall can never be
             # turned into normal bindings (eg, assigned to)
             @ast ctx ex name_str::K"core"
         else

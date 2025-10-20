@@ -186,4 +186,3 @@ cmdmac`hello`
 cmdmac`hello`12345
 #---------------------
 1   (return "hello from cmdmac with suffix 12345")
-

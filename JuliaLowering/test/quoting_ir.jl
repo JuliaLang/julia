@@ -42,4 +42,3 @@ quote
     $$x + 1
 #    └┘ ── `$` expression outside string or quote block
 end
-

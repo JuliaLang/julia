@@ -1346,4 +1346,3 @@ function f()
     end
 #─────┘ ── this syntax is only allowed in top level code
 end
-

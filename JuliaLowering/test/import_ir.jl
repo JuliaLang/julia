@@ -67,4 +67,3 @@ public a, b, c
 #---------------------
 1   (call JuliaLowering.eval_public TestMod false ["a", "b", "c"])
 2   (return %₁)
-

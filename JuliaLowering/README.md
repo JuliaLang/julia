@@ -267,7 +267,7 @@ JuliaLowering our representation is the tuple `(name,scope_layer)`, also called
 `VarId` in the scope resolution pass.
 
 JuliaLowering's macro expander attaches a unique *scope layer* to each
-identifier in a piece of syntax. A "scope layer" is an integer identifer
+identifier in a piece of syntax. A "scope layer" is an integer identifier
 combined with the module in which the syntax was created.
 
 When expanding macros,
@@ -278,7 +278,7 @@ When expanding macros,
   in the syntax produced by the macro are tagged with this layer.
 
 Subsequently, the `(name,scope_layer)` pairs are used when resolving bindings.
-This ensures that, by default, we satisfy the basic rules for hygenic macros
+This ensures that, by default, we satisfy the basic rules for hygienic macros
 discussed in Adams' paper:
 
 1. A macro can't insert a binding that can capture references other than those
@@ -577,7 +577,7 @@ optimizations include:
 
 Properties of non-globals which are computed per-binding-per-closure include:
 * Read: the value of the binding is used.
-* Write: the binding is asssigned to.
+* Write: the binding is assigned to.
 * Captured: Bindings defined outside the closure which are either Read or Write
   within the closure are "captured" and need to be one of the closure's fields.
 * Called: the binding is called as a function, ie, `x()`. (TODO - what is this
@@ -621,7 +621,7 @@ begin
 end
 
 let
-    # f is local so this is a closure becuase `let ... end` introduces a scope
+    # f is local so this is a closure because `let ... end` introduces a scope
     function f()
         body
     end
@@ -831,7 +831,7 @@ runtime itself.
 ### Untyped IR (`CodeInfo` form)
 
 The final lowered IR is expressed as `CodeInfo` objects which are a sequence of
-`code` statments containing
+`code` statements containing
 * Literals
 * Restricted forms of `Expr` (with semantics different from surface syntax,
   even for the same `head`! for example the arguments to `Expr(:call)` in IR
@@ -890,7 +890,7 @@ In the current Julia runtime,
 - Uses `jl_toplevel_eval_in` which calls `jl_toplevel_eval_flex`
 
 `jl_toplevel_eval_flex(mod, ex)`
-- Lowers if necessay
+- Lowers if necessary
 - Evaluates certain blessed top level forms
   * `:.`
   * `:module`

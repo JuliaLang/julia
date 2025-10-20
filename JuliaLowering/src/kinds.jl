@@ -8,7 +8,7 @@ function _register_kinds()
         "BEGIN_EXTENSION_KINDS"
             # atomic fields or accesses (see `@atomic`)
             "atomic"
-            # Flag for @generated parts of a functon
+            # Flag for @generated parts of a function
             "generated"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve"
