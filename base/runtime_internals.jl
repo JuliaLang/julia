@@ -580,7 +580,7 @@ alignment of the elements, not the whole object.
 """
 function datatype_alignment(dt::DataType)
     @_foldable_meta
-    layout::Ptr{Cvoid} = dt.layout
+    layout = dt.layout::Ptr{Cvoid}
     layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, layout)).alignment
     return Int(alignment)
