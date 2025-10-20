@@ -757,7 +757,7 @@ void jl_init_threading(void)
         }
     }
 
-    int cpu = jl_cpu_threads();
+    int cpu = jl_effective_threads();
     jl_n_markthreads = jl_options.nmarkthreads - 1;
     jl_n_sweepthreads = jl_options.nsweepthreads;
     if (jl_n_markthreads == -1) { // --gcthreads not specified
@@ -839,7 +839,7 @@ void jl_start_threads(void)
     // default pool according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
-        if (ndefault_threads > jl_cpu_threads()) {
+        if (ndefault_threads > jl_effective_threads()) {
             jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
             exit(1);
         }
