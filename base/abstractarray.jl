@@ -3220,9 +3220,6 @@ julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
 julia> (println(10 + x) for x = tri if x < 5) |> foreach
 11
 14
-
-julia> foreach(tri) === nothing
-true
 ```
 """
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
