@@ -517,21 +517,18 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             end
             d = args[1]
             args = args[2:end]
-            xs = []
             is_row_first = false
             is_row(x) = isa(x, Expr) && (x.head === :row || x.head === :nrow)
             function extract_elements(x)
                 if isa(x, Expr)
                     if x.head === :nrow
-                        extract_elements.(x.args[2:end])
+                        return extract_elements.(x.args[2:end])
                     elseif x.head === :row
                         is_row_first = true
-                        extract_elements.(x.args)
+                        return extract_elements.(x.args)
                     else
-                        push!(xs, x)
+                        return []
                     end
-                else
-                    push!(xs, x)
                 end
             end
             function get_shape(a, is_row_first, d)
@@ -576,11 +573,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 end
             end
             is_1d = !any(is_row, args)
-            extract_elements.(args)
+            xs = extract_elements.(args)
             if is_1d
-                return Expr(:call, fcn, f,
-                    typesof_expr([ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs], where_params),
-                    kws...)
+                args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs]
+                return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
             else
                 shape = get_shape(args, true, d)
                 is_balanced = sum(map((x, y) -> sum(map(z -> z - y, x)), shape[2:end], first.(shape[2:end]))) == 0
@@ -589,9 +585,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 else
                     map(x -> tuple(x...), shape)
                 end
-                return Expr(:call, fcn, f,
-                    typesof_expr([ex0.head === :ncat ? [] : Any[esc(ex0.args[1])]; Expr(:tuple, dimsshape...); is_row_first; xs]),
-                    kws...)
+                args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; Expr(:tuple, dimsshape...); is_row_first; xs]
+                return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
             end
         else
             for (head, f) in Any[:hcat => Base.hcat,
