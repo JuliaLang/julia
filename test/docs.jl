@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.Docs: meta, @var, DocStr, parsedoc
+import Base.Docs: meta, DocStr, parsedoc, bindingexpr, namify
+
+macro var(x) # just for testing bindingexpr/nameify more conveniently
+    esc(bindingexpr(namify(x)))
+end
 
 # check that @doc can work before REPL is loaded
 @test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
@@ -58,6 +62,8 @@ macro macro_doctest() end
 @test (@eval @doc $(Meta.parse("``"))) == (@doc @cmd)
 @test (@eval @doc $(Meta.parse("123456789012345678901234567890"))) == (@doc @int128_str)
 @test (@eval @doc $(Meta.parse("1234567890123456789012345678901234567890"))) == (@doc @big_str)
+# Test that @doc doesn't crash on empty tuple expression (issue #XXXXX)
+@test (@doc :()) == (@doc Expr)
 
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
 @doc doc"""
@@ -1239,7 +1245,7 @@ end
 
 # Bindings.
 
-import Base.Docs: @var, Binding, defined
+import Base.Docs: Binding, defined
 
 let x = Binding(Base, Symbol("@inline"))
     @test defined(x) == true
@@ -1565,8 +1571,7 @@ Base.@ccallable c51586_long()::Int = 3
 
 @testset "Docs docstrings" begin
     undoc = Docs.undocumented_names(Docs)
-    @test_broken isempty(undoc)
-    @test undoc == [Symbol("@var")]
+    @test isempty(undoc)
 end
 
 # Docing the macroception macro
