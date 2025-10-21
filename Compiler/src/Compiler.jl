@@ -41,9 +41,8 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
-    typename, unsafe_write, write
+    typename, unsafe_write, write, stdout, stderr
 
-using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
     PARTITION_FLAG_DEPWARN,
@@ -64,7 +63,10 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
-    _uncompressed_ir, maybe_add_binding_backedge!
+    _uncompressed_ir, maybe_add_binding_backedge!,
+    devnull, devnull as stdin
+
+using Base
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,

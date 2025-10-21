@@ -139,6 +139,7 @@ let ex =
             kwtest4(a::SubString; x23, _something) = pass
             kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
             kwtest5(a::Char, b; xyz) = pass
+            kwtest6(f::Function, arg1; somekwarg) = pass
 
             const named = (; len2=3)
             const fmsoebelkv = (; len2=3)
@@ -198,6 +199,8 @@ test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastinde
 test_complete_pos(s) = map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1)))
 test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
     map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
+test_complete_context_pos(s, m=@__MODULE__; shift::Bool=true) =
+    map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1, m, shift)))
 test_complete_foo(s; shift::Bool=true) = test_complete_context(s, Main.CompletionFoo; shift)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -2684,8 +2687,54 @@ f54131 = F54131()
 
     s = "f54131.x(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
-    @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 100
+end
+
+@kwdef struct T59244
+    asdf = 1
+    qwer = 2
+end
+@kwdef struct S59244{T}
+    asdf::T = 1
+    qwer::T = 2
+end
+@testset "kwarg completion of types" begin
+    s = "T59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "T59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Int}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Int}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Any}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Any}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
 end
 
 # Completion inside string interpolation
@@ -2719,4 +2768,11 @@ let s = "foo58296(findfi"
     c, r = test_complete(s)
     @test "findfirst" in c
     @test r == 10:15
+end
+
+# #58833 - Autocompletion of keyword arguments with do-blocks is broken
+let s = "kwtest6(123; som|) do x; x + 3 end"
+    c, r = test_complete_context_pos(s, Main.CompletionFoo)
+    @test "somekwarg=" in c
+    @test r == 14:16
 end

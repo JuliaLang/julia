@@ -698,6 +698,15 @@ code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
 MAX_METHOD_COMPLETIONS::Int = 40
 function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     isempty(ex_org.args) && return 2, nothing, [], Set{Symbol}()
+    # Desugar do block call into call with lambda
+    if ex_org.head === :do && length(ex_org.args) >= 2
+        ex_call = ex_org.args[1]
+        ex_args = [x for x in ex_call.args if !(x isa Expr && x.head === :parameters)]
+        ex_params = findfirst(x -> x isa Expr && x.head === :parameters, ex_call.args)
+        new_args = [ex_args[1], ex_org.args[end], ex_args[2:end]...]
+        ex_params !== nothing && push!(new_args, ex_call.args[ex_params])
+        ex_org = Expr(:call, new_args...)
+    end
     funct = repl_eval_ex(ex_org.args[1], context_module)
     funct === nothing && return 2, nothing, [], Set{Symbol}()
     funct = CC.widenconst(funct)
@@ -896,12 +905,6 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     kwargs_flag == 2 && return false # one of the previous kwargs is invalid
 
     methods = Completion[]
-    # Limit kwarg completions to cases when function is concretely known; looking up
-    # matching methods for abstract functions — particularly `Any` or `Function` — can
-    # take many seconds to run over the thousands of possible methods. Note that
-    # isabstracttype would return naively return true for common constructor calls
-    # like Array, but the REPL's introspection here may know their Type{T}.
-    isconcretetype(funct) || return false
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
