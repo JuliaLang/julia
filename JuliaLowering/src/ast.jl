@@ -70,6 +70,21 @@ Id for scope layers in macro expansion
 """
 const LayerId = Int
 
+"""
+A `ScopeLayer` is a mechanism for automatic hygienic macros; every identifier
+is assigned to a particular layer and can only match against bindings which are
+themselves part of that layer.
+
+Normal code contains a single scope layer, whereas each macro expansion
+generates a new layer.
+"""
+struct ScopeLayer
+    id::LayerId
+    mod::Module
+    parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
+    is_macro_expansion::Bool # FIXME
+end
+
 #-------------------------------------------------------------------------------
 # AST creation utilities
 _node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
@@ -498,6 +513,10 @@ Copy `ex`, adopting the scope layer of `ref`.
 """
 function adopt_scope(ex::SyntaxTree, scope_layer::LayerId)
     set_scope_layer(ex, ex, scope_layer, true)
+end
+
+function adopt_scope(ex::SyntaxTree, layer::ScopeLayer)
+    adopt_scope(ex, layer.id)
 end
 
 function adopt_scope(ex::SyntaxTree, ref::SyntaxTree)
