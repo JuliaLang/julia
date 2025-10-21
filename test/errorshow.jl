@@ -1482,7 +1482,7 @@ end
 module Hinterland
 
 abstract type AbstractHintableException <: Exception end
-struct ConcreteHintableException <: Exception end
+struct ConcreteHintableException <: AbstractHintableException end
 gonnathrow() = throw(ConcreteHintableException())
 
 function Base.showerror(io::IO, exc::ConcreteHintableException)
