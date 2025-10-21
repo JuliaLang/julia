@@ -458,7 +458,13 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     elseif k == K"module" || k == K"toplevel" || k == K"inert"
         ex
     elseif k == K"." && numchildren(ex) == 2
-        e2 = expand_forms_1(ctx, ex[2])
+        # Handle quoted property access like `x.:(foo)` or `Core.:(!==)`
+        # Unwrap the quote to get the identifier before expansion
+        rhs = ex[2]
+        if kind(rhs) == K"quote" && numchildren(rhs) == 1
+            rhs = rhs[1]
+        end
+        e2 = expand_forms_1(ctx, rhs)
         if kind(e2) == K"Identifier" || kind(e2) == K"Placeholder"
             # FIXME: Do the K"Symbol" transformation in the parser??
             e2 = @ast ctx e2 e2=>K"Symbol"
