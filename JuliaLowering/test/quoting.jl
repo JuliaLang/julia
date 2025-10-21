@@ -94,6 +94,33 @@ end
 @test kind(ex[2]) == K"Identifier"
 @test ex[2].name_val == "a"
 
+# Test quoted property access syntax like `Core.:(foo)` and `Core.:(!==)`
+@test JuliaLowering.include_string(test_mod, """
+    x = (a=1, b=2)
+    x.:(a)
+""") == 1
+@test JuliaLowering.include_string(test_mod, """
+    Core.:(!==)
+""") === (!==)
+
+# Test quoted operator function definitions (issue #20)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    struct Issue20
+        x::Int
+    end
+    Base.:(==)(a::Issue20, b::Issue20) = a.x == b.x
+    Issue20(1) == Issue20(1)
+end
+""") === true
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    Base.:(<)(a::Issue20, b::Issue20) = a.x < b.x
+    Issue20(1) < Issue20(2)
+end
+""") === true
+
 # interpolations at multiple depths
 ex = JuliaLowering.include_string(test_mod, raw"""
 let
