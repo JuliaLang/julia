@@ -343,9 +343,11 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     macro_world = typemax(UInt)
     ctx1 = MacroExpansionContext(graph, __module__, false, macro_world)
 
+    layer = only(ctx1.scope_layers)
+
     # Run code generator - this acts like a macro expander and like a macro
     # expander it gets a MacroContext.
-    mctx = MacroContext(syntax_graph(ctx1), g.srcref, ctx1.scope_layers[end])
+    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer)
     ex0 = g.gen(mctx, args...)
     if ex0 isa SyntaxTree
         if !is_compatible_graph(ctx1, ex0)
@@ -370,10 +372,10 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Wrap expansion in a non-toplevel lambda and run scope resolution
     ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
         [K"block"
-            (string(n)::K"Identifier" for n in g.argnames)...
+            (adopt_scope(string(n)::K"Identifier", layer) for n in g.argnames)...
         ]
         [K"block"
-            (string(n)::K"Identifier" for n in g.spnames)...
+            (adopt_scope(string(n)::K"Identifier", layer) for n in g.spnames)...
         ]
         ex2
     ]

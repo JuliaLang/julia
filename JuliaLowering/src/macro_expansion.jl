@@ -1,20 +1,5 @@
 # Lowering pass 1: Macro expansion, simple normalizations and quote expansion
 
-"""
-A `ScopeLayer` is a mechanism for automatic hygienic macros; every identifier
-is assigned to a particular layer and can only match against bindings which are
-themselves part of that layer.
-
-Normal code contains a single scope layer, whereas each macro expansion
-generates a new layer.
-"""
-struct ScopeLayer
-    id::LayerId
-    mod::Module
-    parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
-    is_macro_expansion::Bool # FIXME
-end
-
 struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     bindings::Bindings

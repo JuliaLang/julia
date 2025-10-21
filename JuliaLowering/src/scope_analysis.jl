@@ -12,16 +12,9 @@ function Base.isless(a::NameKey, b::NameKey)
     (a.name, a.layer) < (b.name, b.layer)
 end
 
-# Identifiers produced by lowering will have the following layer by default.
-#
-# To make new mutable variables without colliding names, lowering can
-# - generate new var_id's directly (like the gensyms used by the old system)
-# - create additional layers, though this may be unnecessary
-const _lowering_internal_layer = -1
-
 function NameKey(ex::SyntaxTree)
     @chk kind(ex) == K"Identifier"
-    NameKey(ex.name_val, get(ex, :scope_layer, _lowering_internal_layer))
+    NameKey(ex.name_val, ex.scope_layer)
 end
 
 #-------------------------------------------------------------------------------
