@@ -910,16 +910,16 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
             uint32_t func_id = 0;
             uint32_t cfunc_id = 0;
             if (func == "jl_fptr_args") {
-                func_id = -1;
+                func_id = -JL_INVOKE_ARGS;
             }
             else if (func == "jl_fptr_sparam") {
-                func_id = -2;
+                func_id = -JL_INVOKE_SPARAM;
             }
             else if (func == "jl_f_opaque_closure_call") {
-                func_id = -4;
+                assert(false);  // TODO: remove
             }
             else if (func == "jl_fptr_const_return") {
-                func_id = -5;
+                func_id = -JL_INVOKE_CONST;
             }
             else {
                 //Safe b/c context is locked by params

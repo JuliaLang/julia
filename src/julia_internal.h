@@ -187,6 +187,12 @@ extern uintptr_t __stack_chk_guard;
 extern JL_DLLEXPORT uintptr_t __stack_chk_guard;
 #endif
 
+#if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
+#  define jl_unreachable() __builtin_unreachable()
+#else
+#  define jl_unreachable() ((void)jl_assume(0))
+#endif
+
 // If this is detected in a backtrace of segfault, it means the functions
 // that use this value must be reworked into their async form with cb arg
 // provided and with JL_UV_LOCK used around the calls
@@ -424,6 +430,45 @@ typedef struct _jl_abi_t {
     // OpaqueClosure Methods override the first argument of their signature
     int is_opaque_closure;
 } jl_abi_t;
+
+// The compiler uses the specific integer values returned by jl_invoke_api
+typedef enum {
+    JL_INVOKE_ARGS = 1,         // jl_fptr_args
+    JL_INVOKE_CONST = 2,        // jl_fptr_const
+    JL_INVOKE_SPARAM = 3,       // jl_fptr_sparam
+    JL_INVOKE_INTERPRETED = 4,  // jl_fptr_interpret_call
+    JL_INVOKE_SPECSIG     = 5,  // jfptr_* wrapper
+} jl_invoke_api_t;
+
+static inline int jl_jlcall_specptr_is_native(jl_invoke_api_t type)
+{
+    return type == JL_INVOKE_ARGS || type == JL_INVOKE_SPARAM || type == JL_INVOKE_SPECSIG;
+}
+
+static inline jl_invoke_api_t jl_callptr_invoke_api(jl_callptr_t ptr)
+{
+    if (ptr == jl_fptr_args_addr)
+        return JL_INVOKE_ARGS;
+    else if (ptr == jl_fptr_const_return_addr)
+        return JL_INVOKE_CONST;
+    else if (ptr == jl_fptr_sparam_addr)
+        return JL_INVOKE_SPARAM;
+    else if (ptr == jl_fptr_interpret_call_addr)
+        return JL_INVOKE_INTERPRETED;
+    return JL_INVOKE_SPECSIG;
+}
+
+static inline jl_callptr_t jl_invoke_api_callptr(jl_invoke_api_t type)
+{
+    switch (type) {
+    case JL_INVOKE_ARGS: return jl_fptr_args_addr;
+    case JL_INVOKE_CONST: return jl_fptr_const_return_addr;
+    case JL_INVOKE_SPARAM: return jl_fptr_sparam_addr;
+    case JL_INVOKE_INTERPRETED: return jl_fptr_interpret_call_addr;
+    case JL_INVOKE_SPECSIG: return NULL;
+    default: jl_unreachable();
+    }
+}
 
 // useful constants
 extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
@@ -2020,12 +2065,6 @@ struct _jl_image_fptrs_t;
 
 JL_DLLEXPORT void jl_write_coverage_data(const char*);
 void jl_write_malloc_log(void);
-
-#if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
-#  define jl_unreachable() __builtin_unreachable()
-#else
-#  define jl_unreachable() ((void)jl_assume(0))
-#endif
 
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
