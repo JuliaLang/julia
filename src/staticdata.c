@@ -2281,9 +2281,13 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 break;
             }
             if (specfunc) {
+                uint8_t flags = jl_atomic_load_relaxed(&codeinst->flags);
+                flags |= JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR | JL_CI_FLAGS_FROM_IMAGE;
+                if (jl_callptr_invoke_api(jl_atomic_load_relaxed(&codeinst->invoke)) ==
+                    JL_INVOKE_SPECSIG)
+                    flags |= JL_CI_FLAGS_SPECPTR_SPECIALIZED;
                 jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
-                // TODO: set JL_CI_FLAGS_SPECPTR_SPECIALIZED only if confirmed to be true
-                jl_atomic_store_relaxed(&codeinst->flags, jl_atomic_load_relaxed(&codeinst->flags) | JL_CI_FLAGS_SPECPTR_SPECIALIZED | JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR | JL_CI_FLAGS_FROM_IMAGE);
+                jl_atomic_store_relaxed(&codeinst->flags, flags);
             }
             else {
                 jl_atomic_store_relaxed(&codeinst->invoke, (jl_callptr_t)fptr);
