@@ -1749,27 +1749,25 @@ function expand_ccall(ctx, ex)
     end
     arg_types = children(arg_type_tuple)
     vararg_type = nothing
+    num_required_args = length(arg_types)
     if length(arg_types) >= 1
         va = arg_types[end]
         if kind(va) == K"..."
             @chk numchildren(va) == 1
             # Ok: vararg function
             vararg_type = va
+            if length(arg_types) <= 1
+                throw(LoweringError(vararg_type, "C ABI prohibits vararg without one required argument"))
+            else
+                num_required_args = length(arg_types) - 1
+            end
         end
     end
     # todo: use multi-range errors here
-    if length(args) < length(arg_types)
+    if length(args) < num_required_args
         throw(LoweringError(ex, "Too few arguments in ccall compared to argument types"))
     elseif length(args) > length(arg_types) && isnothing(vararg_type)
         throw(LoweringError(ex, "More arguments than types in ccall"))
-    end
-    if isnothing(vararg_type)
-        num_required_args = 0
-    else
-        num_required_args = length(arg_types) - 1
-        if num_required_args < 1
-            throw(LoweringError(vararg_type, "C ABI prohibits vararg without one required argument"))
-        end
     end
     sctx = with_stmts(ctx)
     expanded_types = SyntaxList(ctx)
@@ -1845,7 +1843,7 @@ function expand_ccall(ctx, ex)
                     expanded_types...
                 ]
             ]
-            num_required_args::K"Integer"
+            (isnothing(vararg_type) ? 0 : num_required_args)::K"Integer"
             if isnothing(cconv)
                 "ccall"::K"Symbol"
             else
