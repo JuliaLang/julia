@@ -296,7 +296,7 @@ Closest candidates are:
 """
 function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
     list = get!(Vector{Any}, _hint_handlers, Core.typename(exct))
-    push!(list, exct, handler)
+    push!(list, (exct, handler))
     return nothing
 end
 
@@ -319,9 +319,8 @@ function show_error_hints(io, ex, args...)
     ex_supertype = typeof(ex)
     while ex_supertype != Any
         hinters = get(_hint_handlers, Core.typename(ex_supertype), Any[])
-        for k in 1:2:length(hinters)
-            ex isa hinters[k] || continue
-            handler = hinters[k + 1]
+        for (exct, handler) in hinters
+            ex isa exct || continue
             try
                 # TODO: deal with handlers accepting different signatures?
                 @invokelatest handler(io, ex, args...)
