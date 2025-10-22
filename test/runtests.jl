@@ -116,7 +116,7 @@ cd(@__DIR__) do
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.
     if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
-        n = min(Sys.CPU_THREADS, length(tests))
+        n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
