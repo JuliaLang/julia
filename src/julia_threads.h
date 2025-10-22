@@ -42,10 +42,10 @@ JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 // JL_HAVE_ASM -- mostly setjmp
 // JL_HAVE_ASM && JL_HAVE_UNW_CONTEXT -- libunwind-based
 // JL_HAVE_UNW_CONTEXT -- libunwind-based
-// JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
+// JL_TASK_SWITCH_WINDOWS -- implementation for Windows
 
 #ifdef _OS_WINDOWS_
-#define JL_HAVE_UCONTEXT
+#define JL_TASK_SWITCH_WINDOWS
 typedef win32_ucontext_t jl_stack_context_t;
 typedef jl_stack_context_t _jl_ucontext_t;
 
@@ -62,8 +62,7 @@ typedef struct {
 typedef struct {
     jl_jmp_buf uc_mcontext;
 } jl_stack_context_t;
-#if !defined(JL_HAVE_UCONTEXT) && \
-    !defined(JL_HAVE_ASM) && \
+#if !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
@@ -88,10 +87,6 @@ typedef jl_stack_context_t _jl_ucontext_t;
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 typedef unw_context_t _jl_ucontext_t;
-#endif
-#if defined(JL_HAVE_UCONTEXT)
-#include <ucontext.h>
-typedef ucontext_t _jl_ucontext_t;
 #endif
 #pragma GCC visibility pop
 #endif
