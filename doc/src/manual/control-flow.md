@@ -248,7 +248,7 @@ no
 ## Short-Circuit Evaluation
 
 The `&&` and `||` operators in Julia correspond to logical “and” and “or” operations, respectively,
-and are typically used for this purpose.  However, they have an additional property of *short-circuit*
+and are typically used for this purpose. However, they have an additional property of *short-circuit*
 evaluation: they don't necessarily evaluate their second argument, as explained below.  (There
 are also bitwise `&` and `|` operators that can be used as logical “and” and “or” *without*
 short-circuit behavior, but beware that `&` and `|` have higher precedence than `&&` and `||` for evaluation order.)
@@ -601,6 +601,7 @@ below all interrupt the normal flow of control.
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |
 | [`ErrorException`](@ref)      |
+| [`FieldError`](@ref)          |
 | [`InexactError`](@ref)        |
 | [`InitError`](@ref)           |
 | [`InterruptException`](@ref)  |
@@ -891,6 +892,41 @@ When control leaves the `try` block (for example due to a `return`, or just fini
 `close(f)` will be executed. If the `try` block exits due to an exception, the exception will
 continue propagating. A `catch` block may be combined with `try` and `finally` as well. In this
 case the `finally` block will run after `catch` has handled the error.
+
+When evaluating a `try/catch/else/finally` expression, the value of the entire
+expression is the value of the last block executed, excluding the `finally`
+block. For example:
+
+```jldoctest
+julia> try
+           1
+       finally
+           2
+       end
+1
+
+julia> try
+           error("")
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+1
+
+julia> try
+           0
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+2
+```
 
 ## [Tasks (aka Coroutines)](@id man-tasks)
 

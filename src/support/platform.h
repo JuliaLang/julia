@@ -16,6 +16,7 @@
  *          _COMPILER_GCC_
  *      OS:
  *          _OS_FREEBSD_
+ *          _OS_OPENBSD_
  *          _OS_LINUX_
  *          _OS_WINDOWS_
  *          _OS_DARWIN_
@@ -26,6 +27,7 @@
  *          _CPU_X86_64_
  *          _CPU_AARCH64_
  *          _CPU_ARM_
+ *          _CPU_RISCV64_
  *          _CPU_WASM_
  */
 
@@ -33,12 +35,12 @@
 *                               Compiler                                       *
 *******************************************************************************/
 
-#if defined(__clang__)
+#if defined(_MSC_VER)
+#define _COMPILER_MICROSOFT_
+#elif defined(__clang__)
 #define _COMPILER_CLANG_
 #elif defined(__GNUC__)
 #define _COMPILER_GCC_
-#elif defined(_MSC_VER)
-#define _COMPILER_MICROSOFT_
 #else
 #error Unsupported compiler
 #endif
@@ -81,6 +83,8 @@
 
 #if defined(__FreeBSD__)
 #define _OS_FREEBSD_
+#elif defined(__OpenBSD__)
+#define _OS_OPENBSD_
 #elif defined(__linux__)
 #define _OS_LINUX_
 #elif defined(_WIN32) || defined(_WIN64)
@@ -103,6 +107,8 @@
 #define _CPU_AARCH64_
 #elif defined(__arm__) || defined(_M_ARM)
 #define _CPU_ARM_
+#elif defined(__riscv) && __riscv_xlen == 64
+#define _CPU_RISCV64_
 #elif defined(__PPC64__)
 #define _CPU_PPC64_
 #elif defined(_ARCH_PPC)

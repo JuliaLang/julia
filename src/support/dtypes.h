@@ -25,6 +25,9 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #define WIN32_LEAN_AND_MEAN
+/* Clang does not like fvisibility=hidden with windows headers. This adds the visibility attribute there.
+   Arguably this is a clang bug. */
+#define DECLSPEC_IMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
 #include <windows.h>
 
 #if defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
@@ -36,21 +39,6 @@ typedef intptr_t ssize_t;
 #define _SSIZE_T_DEFINED
 
 #endif /* defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED) */
-
-#if !defined(_COMPILER_GCC_)
-
-#define strtoull                                            _strtoui64
-#define strtoll                                             _strtoi64
-#define strcasecmp                                          _stricmp
-#define strncasecmp                                         _strnicmp
-#define snprintf                                            _snprintf
-#define stat                                                _stat
-
-#define STDIN_FILENO                                        0
-#define STDOUT_FILENO                                       1
-#define STDERR_FILENO                                       2
-
-#endif /* !_COMPILER_GCC_ */
 
 #endif /* _OS_WINDOWS_ */
 
@@ -73,13 +61,13 @@ typedef intptr_t ssize_t;
 #ifdef _OS_WINDOWS_
 #define STDCALL  __stdcall
 # ifdef JL_LIBRARY_EXPORTS_INTERNAL
-#  define JL_DLLEXPORT __declspec(dllexport)
+#  define JL_DLLEXPORT __declspec(dllexport) __attribute__ ((visibility("default")))
 # endif
 # ifdef JL_LIBRARY_EXPORTS_CODEGEN
-#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport)
+#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) __attribute__ ((visibility("default")))
 # endif
 #define JL_HIDDEN
-#define JL_DLLIMPORT   __declspec(dllimport)
+#define JL_DLLIMPORT   __declspec(dllimport) __attribute__ ((visibility("default")))
 #else
 #define STDCALL
 #define JL_DLLIMPORT __attribute__ ((visibility("default")))
@@ -99,7 +87,7 @@ typedef intptr_t ssize_t;
 #define BYTE_ORDER     __BYTE_ORDER
 #endif
 
-#if defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <machine/endian.h>
 #define __LITTLE_ENDIAN  LITTLE_ENDIAN
 #define __BIG_ENDIAN     BIG_ENDIAN
@@ -122,6 +110,9 @@ typedef intptr_t ssize_t;
 
 #define STATIC_INLINE static inline
 #define FORCE_INLINE static inline __attribute__((always_inline))
+
+#define EXTERN_INLINE_DECLARE inline __attribute__ ((visibility("default")))
+#define EXTERN_INLINE_DEFINE extern inline JL_DLLEXPORT
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)

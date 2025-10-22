@@ -2,7 +2,7 @@
 
 # Core definitions for interacting with the libuv library from Julia
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
+include(string(Base.BUILDROOT, "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
 
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
@@ -26,10 +26,10 @@ for r in uv_req_types
 @eval const $(Symbol("_sizeof_", lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
-uv_handle_data(handle) = ccall(:jl_uv_handle_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
-uv_req_data(handle) = ccall(:jl_uv_req_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
-uv_req_set_data(req, data) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
-uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
+uv_handle_data(handle) = ccall(:uv_handle_get_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_data(handle) = ccall(:uv_req_get_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_set_data(req, data) = ccall(:uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
+uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:uv_handle_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
 
 macro handle_as(hand, typ)
     return quote
@@ -39,8 +39,15 @@ macro handle_as(hand, typ)
     end
 end
 
-associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
+function _uv_hook_close end
+
+function associate_julia_struct(handle::Ptr{Cvoid}, jlobj::T) where T
+    # This `cfunction` is not used anywhere, but it triggers compilation of this
+    # MethodInstance for `--trim` so that it will be available when dispatched to
+    # by `jl_uv_call_close_callback()`
+    _ = @cfunction(Base._uv_hook_close, Cvoid, (Ref{T},))
     ccall(:jl_uv_associate_julia_struct, Cvoid, (Ptr{Cvoid}, Any), handle, jlobj)
+end
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Cvoid}) =
     handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Cvoid, (Ptr{Cvoid},), handle)
@@ -52,14 +59,14 @@ iolock_end() = ccall(:jl_iolock_end, Cvoid, ())
 # and should thus not be garbage collected
 const uvhandles = IdDict()
 const preserve_handle_lock = Threads.SpinLock()
-function preserve_handle(x)
+@nospecializeinfer function preserve_handle(@nospecialize(x))
     lock(preserve_handle_lock)
     v = get(uvhandles, x, 0)::Int
     uvhandles[x] = v + 1
     unlock(preserve_handle_lock)
     nothing
 end
-function unpreserve_handle(x)
+@nospecializeinfer function unpreserve_handle(@nospecialize(x))
     lock(preserve_handle_lock)
     v = get(uvhandles, x, 0)::Int
     if v == 0
@@ -103,7 +110,8 @@ struverror(err::Int32) = unsafe_string(ccall(:uv_strerror, Cstring, (Int32,), er
 uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), err))
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix), c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)) : nothing
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? _uv_error(prefix, c) : nothing
+_uv_error(prefix::AbstractString, c::Integer) = throw(_UVError(prefix, c))
 
 ## event loop ##
 
@@ -133,18 +141,21 @@ function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
 
-function reinit_stdio()
-    global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
-    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
-    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+reinit_stdio() = _reinit_stdio()
+# we need this so it can be called by codegen to print errors, even after
+# reinit_stdio has been redefined by the juliac build script.
+function _reinit_stdio()
+    global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
+    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
+    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
     opts = JLOptions()
-    if opts.color != 0
-        have_color = (opts.color == 1)
+    color = colored_text(opts)
+    if !isnothing(color)
         if !isa(stdout, TTY)
-            global stdout = IOContext(stdout, :color => have_color)
+            global stdout = IOContext(stdout, :color => color::Bool)
         end
         if !isa(stderr, TTY)
-            global stderr = IOContext(stderr, :color => have_color)
+            global stderr = IOContext(stderr, :color => color::Bool)
         end
     end
     nothing

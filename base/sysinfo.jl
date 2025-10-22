@@ -14,8 +14,10 @@ export BINDIR,
        MACHINE,
        KERNEL,
        JIT,
+       PAGESIZE,
        cpu_info,
        cpu_summary,
+       sysimage_target,
        uptime,
        loadavg,
        free_memory,
@@ -36,7 +38,8 @@ export BINDIR,
        isreadable,
        iswritable,
        username,
-       which
+       which,
+       detectwsl
 
 import ..Base: show
 
@@ -56,6 +59,8 @@ global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSI
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
+# Similarly, this is the root of the julia repo directory that julia was built from
+const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 
@@ -101,7 +106,7 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 """
-    Sys.SC_CLK_TCK:
+    Sys.SC_CLK_TCK::Clong
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
@@ -140,6 +145,13 @@ Note: Included in the detailed system information via `versioninfo(verbose=true)
 """
 global JIT::String
 
+"""
+    Sys.PAGESIZE::Clong
+
+A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+"""
+global PAGESIZE::Clong
+
 function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
@@ -147,7 +159,7 @@ function __init__()
     end
     global CPU_THREADS = if env_threads !== nothing
         env_threads = tryparse(Int, env_threads)
-        if !(env_threads isa Int && env_threads > 0)
+        if env_threads === nothing || env_threads <= 0
             env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
             Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
@@ -158,6 +170,7 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
     __init_build()
     nothing
 end
@@ -165,7 +178,7 @@ end
 # without pulling in anything unnecessary like `CPU_NAME`
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
@@ -310,6 +323,23 @@ function cpu_info()
 end
 
 """
+    Sys.sysimage_target()
+
+Return the CPU target string that was used to build the current system image.
+
+This function returns the original CPU target specification that was passed to Julia
+when the system image was compiled. This can be useful for reproducing the same
+system image or for understanding what CPU features were enabled during compilation.
+
+If the system image was built with the default settings this will return `"native"`.
+
+See also [`JULIA_CPU_TARGET`](@ref).
+"""
+function sysimage_target()
+    return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
+end
+
+"""
     Sys.uptime()
 
 Gets the current system uptime in seconds.
@@ -399,7 +429,7 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - man page of `getrusage`(2) on Linux and BSD.
     - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
@@ -530,6 +560,27 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 
+"""
+    Sys.detectwsl()
+
+Runtime predicate for testing if Julia is running inside
+Windows Subsystem for Linux (WSL).
+
+!!! note
+    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
+    cannot meaningfully be used in `@static if` constructs.
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
+"""
+function detectwsl()
+    # We use the same approach as canonical/snapd do to detect WSL
+    islinux() && (
+        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
+        || isdir("/run/WSL")
+    )
+end
+
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
@@ -634,10 +685,10 @@ function which(program_name::String)
     # If we couldn't find anything, don't return anything
     nothing
 end
-which(program_name::AbstractString) = which(String(program_name))
+which(program_name::AbstractString) = which(String(program_name)::String)
 
 """
-    Sys.username() -> String
+    Sys.username()::String
 
 Return the username for the current user. If the username cannot be determined
 or is empty, this function throws an error.
