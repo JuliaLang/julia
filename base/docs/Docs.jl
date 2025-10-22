@@ -295,16 +295,29 @@ catdoc(xs...) = vcat(xs...)
 
 const keywords = Dict{Symbol, DocStr}()
 
-namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
+namify(@nospecialize x) = astname(x, isexpr(x, :macro))
 
 function astname(x::Expr, ismacro::Bool)
     head = x.head
     if head === :.
         ismacro ? macroname(x) : x
-    elseif head === :call && isexpr(x.args[1], :(::))
-        return astname((x.args[1]::Expr).args[end], ismacro)
+elseif head === :call && length(x.args) >= 1 && isexpr(x.args[1], :(::))
+        # for documenting (x::y)(args...), extract the name from y
+        # otherwise, for documenting `x::y`, it will be extracted from x
+        astname((x.args[1]::Expr).args[end], ismacro)
     else
-        n = isexpr(x, (:module, :struct)) ? 2 : 1
+        n = if isexpr(x, (:module, :struct))
+            2
+        elseif isexpr(x, (:call, :macrocall, :function, :(=), :macro, :where, :curly,
+                          :(::), :(<:), :(>:), :local, :global, :const, :atomic,
+                          :copyast, :quote, :inert, :primitive, :abstract,
+                          :escape, :var"hygienic-scope"))
+            # similar to is_function_def, but without -> and with various assignments, quoted statements, and miscellaneous that might be encountered in struct definitions also
+            1
+        else
+            return x # nothing to see here--bindingexpr will convert this to an error if defining a doc
+        end
+        length(x.args) < n && return x
         astname(x.args[n], ismacro)
     end
 end
@@ -356,7 +369,7 @@ function metadata(__source__, __module__, expr, ismodule)
             if isa(eachex, Symbol) || isexpr(eachex, :(::))
                 # a field declaration
                 if last_docstr !== nothing
-                    push!(fields, P(namify(eachex::Union{Symbol,Expr}), last_docstr))
+                    push!(fields, P(namify(eachex), last_docstr))
                     last_docstr = nothing
                 end
             elseif isexpr(eachex, :function) || isexpr(eachex, :(=))
@@ -610,7 +623,13 @@ function simple_lookup_doc(ex)
     elseif !isa(ex, Expr) && !isa(ex, Symbol)
         return :($(_doc)($(typeof)($(esc(ex)))))
     end
-    binding = esc(bindingexpr(namify(ex)))
+    name = namify(ex)
+    # If namify couldn't extract a meaningful name and returned an Expr
+    # that can't be converted to a binding, treat it like a value
+    if isa(name, Expr) && !isexpr(name, :(.))
+        return :($(_doc)($(typeof)($(esc(ex)))))
+    end
+    binding = esc(bindingexpr(name))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
         :($(_doc)($binding, $sig))

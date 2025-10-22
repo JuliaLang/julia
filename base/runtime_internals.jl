@@ -580,8 +580,9 @@ alignment of the elements, not the whole object.
 """
 function datatype_alignment(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, layout)).alignment
     return Int(alignment)
 end
 
@@ -664,8 +665,9 @@ Return the number of pointers in the layout of a datatype.
 """
 function datatype_npointers(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, layout)).npointers
 end
 
 """

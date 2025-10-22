@@ -580,7 +580,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
             # there may be atrailing separator here so use rstrip
-            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
