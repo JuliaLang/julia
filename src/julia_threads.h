@@ -49,19 +49,16 @@ JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 typedef win32_ucontext_t jl_stack_context_t;
 typedef jl_stack_context_t _jl_ucontext_t;
 
-#elif defined(_OS_OPENBSD_)
+#else
+
+#if defined(_OS_OPENBSD_)
 #define JL_HAVE_UNW_CONTEXT
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
-typedef unw_context_t _jl_ucontext_t;
+#endif
+
 typedef struct {
     jl_jmp_buf uc_mcontext;
 } jl_stack_context_t;
 
-#else
-typedef struct {
-    jl_jmp_buf uc_mcontext;
-} jl_stack_context_t;
 #if !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
@@ -79,16 +76,16 @@ typedef struct {
 #endif
 #endif
 
-#if !defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)
-typedef jl_stack_context_t _jl_ucontext_t;
-#endif
-#pragma GCC visibility push(default)
 #if defined(JL_HAVE_UNW_CONTEXT)
+#pragma GCC visibility push(default)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 typedef unw_context_t _jl_ucontext_t;
-#endif
 #pragma GCC visibility pop
+#elif defined(JL_HAVE_ASM)
+typedef jl_stack_context_t _jl_ucontext_t;
+#endif
+
 #endif
 
 typedef struct {
