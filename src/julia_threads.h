@@ -40,8 +40,8 @@ JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 
 //  Options for task switching algorithm (in order of preference):
 // JL_HAVE_ASM -- mostly setjmp
-// JL_HAVE_ASM && JL_HAVE_UNW_CONTEXT -- libunwind-based
-// JL_HAVE_UNW_CONTEXT -- libunwind-based
+// JL_HAVE_ASM && JL_TASK_SWITCH_LIBUNWIND -- libunwind-based
+// JL_TASK_SWITCH_LIBUNWIND -- libunwind-based
 // JL_TASK_SWITCH_WINDOWS -- implementation for Windows
 
 #ifdef _OS_WINDOWS_
@@ -52,7 +52,7 @@ typedef jl_stack_context_t _jl_ucontext_t;
 #else
 
 #if defined(_OS_OPENBSD_)
-#define JL_HAVE_UNW_CONTEXT
+#define JL_TASK_SWITCH_LIBUNWIND
 #endif
 
 typedef struct {
@@ -60,7 +60,7 @@ typedef struct {
 } jl_stack_context_t;
 
 #if !defined(JL_HAVE_ASM) && \
-    !defined(JL_HAVE_UNW_CONTEXT)
+    !defined(JL_TASK_SWITCH_LIBUNWIND)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
 #define JL_HAVE_ASM
@@ -68,15 +68,15 @@ typedef struct {
 #if 0
 // very slow, but more debugging
 //#elif defined(_OS_DARWIN_)
-//#define JL_HAVE_UNW_CONTEXT
+//#define JL_TASK_SWITCH_LIBUNWIND
 //#elif defined(_OS_LINUX_)
-//#define JL_HAVE_UNW_CONTEXT
+//#define JL_TASK_SWITCH_LIBUNWIND
 #elif !defined(JL_HAVE_ASM)
-#define JL_HAVE_UNW_CONTEXT // optimistically?
+#define JL_TASK_SWITCH_LIBUNWIND // optimistically?
 #endif
 #endif
 
-#if defined(JL_HAVE_UNW_CONTEXT)
+#if defined(JL_TASK_SWITCH_LIBUNWIND)
 #pragma GCC visibility push(default)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
