@@ -385,6 +385,10 @@ end
 
     @test powermod(-3, 0x80, 7) === 2
     @test powermod(0x03, 0x80, 0x07) === 0x02
+
+    @test powermod(511, 1, 0x00000021) === 0x00000010
+    @test powermod(Int8(-1), 0xff, Int8(33)) === Int8(32)
+    @test powermod(0, 10, -5) === 0
 end
 
 @testset "nextpow/prevpow" begin
