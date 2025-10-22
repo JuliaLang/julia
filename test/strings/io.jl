@@ -344,3 +344,8 @@ end
 @testset "`string` return types" begin
     @test all(T -> T <: AbstractString, Base.return_types(string))
 end
+
+@testset "type stable `join` (#55389)" begin
+    itr = ("foo" for _ in 1:100)
+    @test Base.return_types(join, (typeof(itr),))[] == String
+end

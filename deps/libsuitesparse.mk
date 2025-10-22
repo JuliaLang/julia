@@ -58,7 +58,7 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteS
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
-	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
+	cd $(dir $<) && $(CMAKE) -G"Unix Makefiles" . $(LIBSUITESPARSE_CMAKE_FLAGS)
 	$(MAKE) -C $(dir $<)
 	$(MAKE) -C $(dir $<) install
 	echo 1 > $@
@@ -113,9 +113,7 @@ uninstall-libsuitesparse:
 endef
 
 remove-libsuitesparse-gpl-lib:
-ifeq ($(USE_GPL_LIBS),1)
-	@echo This build contains [GPL-2.0+] libs:  libcholmod librbio libspqr libumfpack
-else
+ifeq ($(USE_GPL_LIBS),0)
 	@echo Removing GPL libs...
 	-rm -f $(build_bindir)/libcholmod*
 	-rm -f $(build_bindir)/libklu_cholmod*

@@ -49,37 +49,28 @@ extern JuliaOJIT *jl_ExecutionEngine;
 
 namespace {
 
-static bool have_fp16(Function &caller, const Triple &TT) {
-    Attribute FSAttr = caller.getFnAttribute("target-features");
-    StringRef FS = "";
-    if (FSAttr.isValid())
-        FS = FSAttr.getValueAsString();
-    else if (jl_ExecutionEngine)
-        FS = jl_ExecutionEngine->getTargetFeatureString();
-    // else probably called from opt, just do nothing
-    if (TT.isAArch64()) {
-        if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
-            return true;
-        }
-    } else if (TT.getArch() == Triple::x86_64) {
-        if (FS.find("+avx512fp16") != llvm::StringRef::npos){
-            return true;
-        }
-    }
-    if (caller.hasFnAttribute("julia.hasfp16")) {
-        return true;
-    }
-    return false;
+static bool have_fp16(Function &F, const Triple &TT) {
+    // for testing purposes
+    Attribute Attr = F.getFnAttribute("julia.hasfp16");
+    if (Attr.isValid())
+        return Attr.getValueAsBool();
+
+    // llvm/llvm-project#97975: on some platforms, `half` uses excessive precision
+    if (TT.isPPC())
+        return false;
+
+    return true;
 }
 
-static bool have_bf16(Function &caller, const Triple &TT) {
-    if (caller.hasFnAttribute("julia.hasbf16")) {
-        return true;
-    }
+static bool have_bf16(Function &F, const Triple &TT) {
+    // for testing purposes
+    Attribute Attr = F.getFnAttribute("julia.hasbf16");
+    if (Attr.isValid())
+        return Attr.getValueAsBool();
 
-    // there's no targets that fully support bfloat yet;,
-    // AVX512BF16 only provides conversion and dot product instructions.
-    return false;
+    // https://github.com/llvm/llvm-project/issues/97975#issuecomment-2218770199:
+    // on current versions of LLVM, bf16 always uses TypeSoftPromoteHalf
+    return true;
 }
 
 static bool demoteFloat16(Function &F)

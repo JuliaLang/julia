@@ -88,12 +88,12 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test @inferred(count(!, Breduc, dims=region)) ≈ safe_count(.!Breduc, region)
 
     @test isequal(
-        @inferred(count(Breduc, dims=region, init=0x02)),
-        safe_count(Breduc, region) .% UInt8 .+ 0x02,
+        @inferred(Array{UInt8,ndims(Breduc)}, count(Breduc, dims=region, init=0x00)),
+        safe_count(Breduc, region),
     )
     @test isequal(
-        @inferred(count(!, Breduc, dims=region, init=Int16(0))),
-        safe_count(.!Breduc, region) .% Int16,
+        @inferred(Array{Int16,ndims(Breduc)}, count(!, Breduc, dims=region, init=Int16(0))),
+        safe_count(.!Breduc, region),
     )
 end
 
@@ -587,6 +587,30 @@ end
     @test B[argmin(B, dims=[2, 3])] == @inferred(minimum(B, dims=[2, 3]))
 end
 
+@testset "careful with @inbounds" begin
+    Base.@propagate_inbounds f(x) = x == 2 ? x[-10000] : x
+    Base.@propagate_inbounds op(x,y) = x[-10000] + y[-10000]
+    for (arr, dims) in (([1,1,2], 1), ([1 1 2], 2), ([ones(Int,256);2], 1))
+        @test_throws BoundsError mapreduce(f, +, arr)
+        @test_throws BoundsError mapreduce(f, +, arr; dims)
+        @test_throws BoundsError mapreduce(f, +, arr; dims, init=0)
+        @test_throws BoundsError mapreduce(identity, op, arr)
+        try
+            #=@test_throws BoundsError=# mapreduce(identity, op, arr; dims)
+        catch ex
+            @test_broken ex isa BoundsError
+        end
+        @test_throws BoundsError mapreduce(identity, op, arr; dims, init=0)
+
+        @test_throws BoundsError findmin(f, arr)
+        @test_throws BoundsError findmin(f, arr; dims)
+
+        @test_throws BoundsError mapreduce(f, max, arr)
+        @test_throws BoundsError mapreduce(f, max, arr; dims)
+        @test_throws BoundsError mapreduce(f, max, arr; dims, init=0)
+    end
+end
+
 @testset "in-place reductions with mismatched dimensionalities" begin
     B = reshape(1:24, 4, 3, 2)
     for R in (fill(0, 4), fill(0, 4, 1), fill(0, 4, 1, 1))
@@ -669,7 +693,7 @@ end
     @test_throws TypeError count!([1], [1])
 end
 
-@test @inferred(count(false:true, dims=:, init=0x0004)) === 0x0005
+@test @inferred(UInt16, count(false:true, dims=:, init=0x0000)) === 1
 @test @inferred(count(isodd, reshape(1:9, 3, 3), dims=:, init=Int128(0))) === Int128(5)
 
 @testset "reduced_index for BigInt (issue #39995)" begin

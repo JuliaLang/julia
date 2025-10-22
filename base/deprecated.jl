@@ -4,7 +4,7 @@
 # Instructions for Julia Core Developers:
 # 1. When making a breaking change that is known to be depnedet upon by an
 #    important and closely coupled package, decide on a unique `change_name`
-#    for your PR and add it to the list below. In general, is is better to
+#    for your PR and add it to the list below. In general, it is better to
 #    err on the side of caution and assign a `change_name` even if it is not
 #    clear that it is required. `change_name`s may also be assigned after the
 #    fact in a separate PR. (Note that this may cause packages to misbehave
@@ -24,8 +24,10 @@ const __internal_changes_list = (
     :invertedlinetables,
     :codeinforefactor,
     :miuninferredrm,
-    :codeinfonargs,  # #54341
+    :codeinfonargs, #54341
     :ocnopartial,
+    :printcodeinfocalls,
+    :syntacticccall, #59165
     # Add new change names above this line
 )
 
@@ -86,7 +88,7 @@ else
 end
 ```
 
-To find out the correct verrsion to use as the first argument, you may use
+To find out the correct version to use as the first argument, you may use
 `Base.__next_removal_version`, which is set to the next version number in which
 the list of changes will be cleared.
 
@@ -210,7 +212,7 @@ macro deprecate(old, new, export_old=true)
             maybe_export,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
                   $(esc(new))
               end))
     else
@@ -221,7 +223,7 @@ macro deprecate(old, new, export_old=true)
             export_old ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...; kwargs...)
                   $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
                   $(esc(new))(args...; kwargs...)
               end))
     end
@@ -352,6 +354,7 @@ end
 @deprecate one(i::CartesianIndex)                    oneunit(i)
 @deprecate one(I::Type{CartesianIndex{N}}) where {N} oneunit(I)
 
+import .MPFR: BigFloat
 @deprecate BigFloat(x, prec::Int)                               BigFloat(x; precision=prec)
 @deprecate BigFloat(x, prec::Int, rounding::RoundingMode)       BigFloat(x, rounding; precision=prec)
 @deprecate BigFloat(x::Real, prec::Int)                         BigFloat(x; precision=prec)
@@ -432,7 +435,8 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
 
 # the plan is to eventually overload getproperty to access entries of the dict
 @noinline function getproperty(x::Pairs, s::Symbol)
-    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    s == :data && depwarn("use values(kwargs) instead of kwargs.data", :getproperty, force=true)
+    s == :itr && depwarn("use keys(kwargs) instead of kwargs.itr", :getproperty, force=true)
     return getfield(x, s)
 end
 
@@ -529,6 +533,36 @@ end
 
 # BEGIN 1.12 deprecations
 
-@deprecate stat(fd::Integer) stat(RawFD(fd))
+@deprecate isbindingresolved(m::Module, var::Symbol) true false
+
+"""
+    isbindingresolved(m::Module, s::Symbol) -> Bool
+
+Returns whether the binding of a symbol in a module is resolved.
+
+See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
+
+```jldoctest
+julia> module Mod
+           foo() = 17
+       end
+Mod
+
+julia> Base.isbindingresolved(Mod, :foo)
+true
+```
+
+!!! warning
+    This function is deprecated. The concept of binding "resolvedness" was removed in Julia 1.12.
+    The function now always returns `true`.
+"""
+isbindingresolved
+
+# Some packages call this function
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 
 # END 1.12 deprecations

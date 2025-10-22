@@ -21,7 +21,7 @@ function paragraph(stream::IO, md::MD)
             char == '\r' && !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
-            elseif blankline(stream) || parse(stream, md, breaking = true)
+            elseif blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, ' ')
@@ -114,7 +114,7 @@ function indentcode(stream::IO, block::MD)
                 break
             end
         end
-        code = String(take!(buffer))
+        code = takestring!(buffer)
         !isempty(code) && (push!(block, Code(rstrip(code))); return true)
         return false
     end
@@ -178,7 +178,7 @@ function blockquote(stream::IO, block::MD)
         end
         empty && return false
 
-        md = String(take!(buffer))
+        md = takestring!(buffer)
         push!(block, BlockQuote(parse(md, flavor = config(block)).content))
         return true
     end
@@ -236,7 +236,7 @@ function admonition(stream::IO, block::MD)
             end
         end
         # Parse the nested block as markdown and create a new Admonition block.
-        nested = parse(String(take!(buffer)), flavor = config(block))
+        nested = parse(takestring!(buffer), flavor = config(block))
         push!(block, Admonition(category, title, nested.content))
         return true
     end
@@ -326,7 +326,7 @@ function list(stream::IO, block::MD)
         return true
     end
 end
-pushitem!(list, buffer) = push!(list.items, parse(String(take!(buffer))).content)
+pushitem!(list, buffer) = push!(list.items, parse(takestring!(buffer)).content)
 
 # ––––––––––––––
 # HorizontalRule

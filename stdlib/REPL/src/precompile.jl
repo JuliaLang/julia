@@ -8,12 +8,27 @@ import ..REPL
 Base._track_dependencies[] = false
 try
     Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+    @Core.latestworld
     import .FakePTYs: open_fake_pty
 finally
     Base._track_dependencies[] = true
 end
 
-let
+function repl_workload()
+    # these are intentionally triggered
+    allowed_errors = [
+        "BoundsError: attempt to access 0-element Vector{Any} at index [1]",
+        "MethodError: no method matching f(::$Int, ::$Int)",
+        "Padding of type", # reinterpret docstring has ERROR examples
+    ]
+    function check_errors(out)
+        str = String(out)
+        if occursin("ERROR:", str) && !any(occursin(e, str) for e in allowed_errors)
+            @error "Unexpected error (Review REPL precompilation with debug_output on):\n$str" exception=(
+                Base.PrecompilableError(), Base.backtrace())
+            exit(1)
+        end
+    end
     ## Debugging options
     # View the code sent to the repl by setting this to `stdout`
     debug_output = devnull # or stdout
@@ -24,12 +39,29 @@ let
     UP_ARROW = "\e[A"
     DOWN_ARROW = "\e[B"
 
+    # This is notified as soon as the first prompt appears
+    repl_init_event = Base.Event()
+    repl_init_done_event = Base.Event()
+
+    atreplinit() do repl
+        # Main is closed so we can't evaluate in it, but atreplinit runs at
+        # a time that repl.mistate === nothing so REPL.activate fails. So do
+        # it async and wait for the first prompt to know its ready.
+        t = @async begin
+            wait(repl_init_event)
+            REPL.activate(REPL.Precompile; interactive_utils=false)
+            notify(repl_init_done_event)
+        end
+        Base.errormonitor(t)
+    end
+
     repl_script = """
     2+2
     print("")
     printstyled("a", "b")
     display([1])
     display([1 2; 3 4])
+    display("a string")
     foo(x) = 1
     @time @eval foo(1)
     ; pwd
@@ -51,6 +83,9 @@ let
     """
 
     JULIA_PROMPT = "julia> "
+    # The help text for `reinterpret` has example `julia>` prompts in it,
+    # so use the longer prompt to avoid desychronization.
+    ACTIVATED_JULIA_PROMPT = "(REPL.Precompile) julia> "
     PKG_PROMPT = "pkg> "
     SHELL_PROMPT = "shell> "
     HELP_PROMPT = "help?> "
@@ -96,60 +131,68 @@ let
         repltask = @task try
             Base.run_std_repl(REPL, false, :yes, true)
         finally
-            redirect_stderr(isopen(orig_stderr) ? orig_stderr : devnull)
+            redirect_stdin(isopen(orig_stdin) ? orig_stdin : devnull)
             redirect_stdout(isopen(orig_stdout) ? orig_stdout : devnull)
             close(pts)
         end
+        Base.errormonitor(repltask)
         try
             Base.REPL_MODULE_REF[] = REPL
             redirect_stdin(pts)
             redirect_stdout(pts)
             redirect_stderr(pts)
-            REPL.print_qualified_access_warning(Base.Iterators, Base, :minimum) # trigger the warning while stderr is suppressed
             try
-                schedule(repltask)
-                # wait for the definitive prompt before start writing to the TTY
-                readuntil(output_copy, JULIA_PROMPT)
+                REPL.print_qualified_access_warning(Base.Iterators, Base, :minimum) # trigger the warning while stderr is suppressed
             finally
                 redirect_stderr(isopen(orig_stderr) ? orig_stderr : devnull)
             end
+            schedule(repltask)
+            # wait for the definitive prompt before start writing to the TTY
+            check_errors(readuntil(output_copy, JULIA_PROMPT, keep=true))
+
+            # Switch to the activated prompt
+            notify(repl_init_event)
+            wait(repl_init_done_event)
+            write(ptm, "\n")
+            # The prompt prints twice - once for the restatement of the input, once
+            # to indicate ready for the new prompt.
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+
             write(debug_output, "\n#### REPL STARTED ####\n")
-            sleep(0.1)
-            readavailable(output_copy)
             # Input our script
             precompile_lines = split(repl_script::String, '\n'; keepempty=false)
             curr = 0
             for l in precompile_lines
-                sleep(0.1)
+                sleep(0.01) # try to let a bit of output accumulate before reading again
                 curr += 1
-                # consume any other output
-                bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
                 # If the line ends with a CTRL_C, don't write an extra newline, which would
                 # cause a second empty prompt. Our code below expects one new prompt per
                 # input line and can race out of sync with the unexpected second line.
                 endswith(l, CTRL_C) ? write(ptm, l) : write(ptm, l, "\n")
-                readuntil(output_copy, "\n")
+                check_errors(readuntil(output_copy, "\n"))
                 # wait for the next prompt-like to appear
-                readuntil(output_copy, "\n")
+                check_errors(readuntil(output_copy, "\n"))
                 strbuf = ""
                 while !eof(output_copy)
                     strbuf *= String(readavailable(output_copy))
-                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(ACTIVATED_JULIA_PROMPT, strbuf) && break
                     occursin(PKG_PROMPT, strbuf) && break
                     occursin(SHELL_PROMPT, strbuf) && break
                     occursin(HELP_PROMPT, strbuf) && break
-                    sleep(0.1)
+                    sleep(0.01) # try to let a bit of output accumulate before reading again
                 end
+                check_errors(strbuf)
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
             write(ptm, "$CTRL_D")
             wait(repltask)
         finally
-            close(pts)
             redirect_stdin(isopen(orig_stdin) ? orig_stdin : devnull)
             redirect_stdout(isopen(orig_stdout) ? orig_stdout : devnull)
+            close(pts)
         end
         wait(tee)
     end
@@ -157,9 +200,21 @@ let
     nothing
 end
 
-precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
-precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
-precompile(Tuple{typeof(Base.:(==)), Char, String})
-precompile(Tuple{typeof(Base.reseteof), Base.TTY})
+let
+    if Base.generating_output() && Base.JLOptions().use_pkgimages != 0
+        # Bare-bones PrecompileTools.jl
+        # Do we need latestworld-if-toplevel here
+        ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+        try
+            repl_workload()
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
+            precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+            precompile(Tuple{typeof(Base.:(==)), Char, String})
+        finally
+            ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+        end
+    end
+end
 
 end # Precompile

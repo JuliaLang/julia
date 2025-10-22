@@ -349,10 +349,16 @@ static char *libstdcxxprobe(void)
             pid_t npid = waitpid(pid, &wstatus, 0);
             if (npid == -1) {
                 if (errno == EINTR) continue;
-                if (errno != EINTR) {
-                    perror("Error during libstdcxxprobe in parent process:\nwaitpid");
-                    exit(1);
+                if (errno == ECHILD) {
+                    // SIGCHLD is set to SIG_IGN or has flag SA_NOCLDWAIT, so the child
+                    // did not become a zombie and wait for `waitpid` - it just exited.
+                    //
+                    // Assume that it exited successfully and use whatever libpath we
+                    // got out of the pipe, if any.
+                    break;
                 }
+                perror("Error during libstdcxxprobe in parent process:\nwaitpid");
+                exit(1);
             }
             else if (!WIFEXITED(wstatus)) {
                 const char *err_str = "Error during libstdcxxprobe in parent process:\n"
@@ -546,7 +552,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
-#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_) && !defined(_OS_OPENBSD_)
+#if !defined(_OS_WINDOWS_) && !defined(_OS_OPENBSD_)
     void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
     if (jl_pgcstack_setkey == NULL) {
         jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
