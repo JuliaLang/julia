@@ -1094,12 +1094,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     jl_timing_task_init(t);
 
 #ifdef COPY_STACKS
-    if (!t->copy_stack) {
-#if defined(JL_DEBUG_BUILD)
-        memset(&t->ctx, 0, sizeof(t->ctx));
-#endif
-    }
-    else {
+    if (t->copy_stack) {
         if (always_copy_stacks)
             memcpy(&t->ctx.copy_ctx, &ct->ptls->copy_stack_ctx, sizeof(t->ctx.copy_ctx));
         else
