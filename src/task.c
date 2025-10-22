@@ -261,7 +261,7 @@ JL_NO_ASAN static void restore_stack2(jl_ucontext_t *t, jl_ptls_t ptls, jl_ucont
         return;
     if (r != 0 || returns != 1)
         abort();
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
     if (jl_setjmp(lastt->ctx->uc_mcontext, 0))
         return;
 #else
@@ -274,7 +274,7 @@ JL_NO_ASAN static void restore_stack2(jl_ucontext_t *t, jl_ptls_t ptls, jl_ucont
 
 JL_NO_ASAN static void NOINLINE restore_stack3(jl_ucontext_t *t, jl_ptls_t ptls, char *p)
 {
-#if !defined(JL_HAVE_ASM)
+#if !defined(JL_TASK_SWITCH_ASM)
     char *_x = (char*)ptls->stackbase;
     if (!p) {
         // switch to a stackframe that's well beyond the bounds of the next switch
@@ -1349,7 +1349,7 @@ static void jl_set_fiber(jl_ucontext_t *t)
         abort();
     unw_resume(&c);
 }
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->ctx->uc_mcontext, 0))
@@ -1363,7 +1363,7 @@ static void jl_set_fiber(jl_ucontext_t *t)
 }
 #endif
 
-#if defined(JL_TASK_SWITCH_LIBUNWIND) && !defined(JL_HAVE_ASM)
+#if defined(JL_TASK_SWITCH_LIBUNWIND) && !defined(JL_TASK_SWITCH_ASM)
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #define PUSH_RET(ctx, stk) \
     do { \
@@ -1427,9 +1427,9 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 }
 #endif
 
-#if defined(JL_HAVE_ASM)
+#if defined(JL_TASK_SWITCH_ASM)
 #ifdef _OS_WINDOWS_
-#error JL_HAVE_ASM not defined in Windows
+#error JL_TASK_SWITCH_ASM not defined in Windows
 #endif
 JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
@@ -1523,7 +1523,7 @@ CFI_NORETURN
         " trap; \n"
         : : "r"(stk), "r"(fn) : "memory");
 #else
-#error JL_HAVE_ASM defined but not implemented for this CPU type
+#error JL_TASK_SWITCH_ASM defined but not implemented for this CPU type
 #endif
     __builtin_unreachable();
 }

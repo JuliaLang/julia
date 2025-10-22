@@ -1423,7 +1423,7 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
             context = &c;
 #elif defined(JL_TASK_SWITCH_LIBUNWIND)
         context = t->ctx.ctx;
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
         memset(&c, 0, sizeof(c));
         if (jl_simulate_longjmp(*mctx, &c))
             context = &c;
