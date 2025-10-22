@@ -132,7 +132,7 @@ function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = not
     if i ≢ nothing
         print(msg, ", mismatch at dim ", i)
     end
-    throw(DimensionMismatch(String(take!(msg))))
+    throw(DimensionMismatch(takestring!(msg)))
 end
 
 function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
@@ -310,9 +310,9 @@ to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
 to_index(I::AbstractArray{Union{}}) = I
 to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
-    throw(ArgumentError("invalid index: $(limitrepr(I)) of type $(typeof(I))"))
+    throw(ArgumentError(LazyString("invalid index: ", limitrepr(I), " of type ", typeof(I))))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
-to_index(i) = throw(ArgumentError("invalid index: $(limitrepr(i)) of type $(typeof(i))"))
+to_index(i) = throw(ArgumentError(LazyString("invalid index: ", limitrepr(i), " of type ", typeof(i))))
 
 # The general to_indices is mostly defined in multidimensional.jl, but this
 # definition is required for bootstrap:
@@ -385,15 +385,13 @@ end
 Slice(S::Slice) = S
 Slice{T}(S::Slice) where {T<:AbstractUnitRange} = Slice{T}(T(S.indices))
 
-axes(S::Slice) = (IdentityUnitRange(S.indices),)
+axes(S::Slice) = (axes1(S),)
 axes1(S::Slice) = IdentityUnitRange(S.indices)
-axes(S::Slice{<:OneTo}) = (S.indices,)
-axes1(S::Slice{<:OneTo}) = S.indices
+axes1(S::Slice{<:AbstractOneTo{<:Integer}}) = S.indices
 
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
 size(S::Slice) = (length(S.indices),)
-length(S::Slice) = length(S.indices)
 getindex(S::Slice, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
@@ -414,15 +412,13 @@ IdentityUnitRange(S::IdentityUnitRange) = S
 IdentityUnitRange{T}(S::IdentityUnitRange) where {T<:AbstractUnitRange} = IdentityUnitRange{T}(T(S.indices))
 
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
-axes(S::IdentityUnitRange) = (S,)
+axes(S::IdentityUnitRange) = (axes1(S),)
 axes1(S::IdentityUnitRange) = S
-axes(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
-axes1(S::IdentityUnitRange{<:OneTo}) = S.indices
+axes1(S::IdentityUnitRange{<:AbstractOneTo{<:Integer}}) = S.indices
 
 first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
-length(S::IdentityUnitRange) = length(S.indices)
 unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
 getindex(S::IdentityUnitRange, i::Integer) = (@inline; @boundscheck checkbounds(S, i); convert(eltype(S), i))
 getindex(S::IdentityUnitRange, i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
@@ -465,11 +461,11 @@ end
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
-# For OneTo, the values and indices of the values are identical, so this may be defined in Base.
+# For AbstractOneTo, the values and indices of the values are identical, so this may be defined in Base.
 # In general such an indexing operation would produce offset ranges
 # This should also ideally return an AbstractUnitRange{eltype(S)}, but currently
 # we're restricted to eltype(::IdentityUnitRange) == Int by definition
-function getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+function getindex(S::AbstractOneTo{<:Integer}, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
     @inline
     @boundscheck checkbounds(S, I)
     return I
@@ -576,3 +572,7 @@ first(iter::LinearIndices) = 1
 first(iter::LinearIndices{1}) = (@inline; first(axes1(iter.indices[1])))
 last(iter::LinearIndices) = (@inline; length(iter))
 last(iter::LinearIndices{1}) = (@inline; last(axes1(iter.indices[1])))
+
+function show(io::IO, iter::LinearIndices)
+    print(io, "LinearIndices(", iter.indices, ")")
+end

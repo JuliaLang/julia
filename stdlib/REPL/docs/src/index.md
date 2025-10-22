@@ -50,14 +50,16 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
 that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
-well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg> ` ) are parsed, but others are
 removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
 without having to scrub away prompts and outputs. This feature is enabled by default but can be
 disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
 out by pasting the code block above this paragraph straight into the REPL. This feature does not
 work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
-Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
+A non-[`nothing`](@ref) result of executing an expression is displayed by the REPL using the [`show`](@ref) function
+with a specific [`IOContext`](@ref) (via [`display`](@ref), which defaults to calling
+`show(io, MIME("text/plain"), ans)`, which in turn defaults to `show(io, ans)`).
 In particular, the `:limit` attribute is set to `true`.
 Other attributes can receive in certain `show` methods a default value if it's not already set,
 like `:compact`.
@@ -66,7 +68,7 @@ It's possible, as an experimental feature, to specify the attributes used by the
 
 ```julia-repl
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.8833    0.329197
  0.719708  0.59114
 
@@ -76,7 +78,7 @@ julia> show(IOContext(stdout, :compact => false), "text/plain", rand(2, 2))
 julia> Base.active_repl.options.iocontext[:compact] = false;
 
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.2083967319174056  0.13330606013126012
  0.6244375177790158  0.9777957560761545
 ```
@@ -315,6 +317,28 @@ atreplinit(customize_keys)
 
 Users should refer to `LineEdit.jl` to discover the available actions on key input.
 
+### Automatic bracket insertion
+
+The Julia REPL supports automatically inserting closing brackets, parentheses, braces, and quotes
+when you type the opening character.
+
+When enabled, typing an opening bracket `(`, `{`, or `[` will automatically insert the matching
+closing bracket `)`, `}`, or `]` and position the cursor between them. The same behavior applies
+to quotes (`"`, `'`, and `` ` ``). If you then type the closing character, the REPL will skip over
+the auto-inserted character instead of inserting a duplicate. Additionally, pressing backspace
+immediately after auto-insertion will remove both the opening and closing characters.
+
+To disable this feature, add the following to your `~/.julia/config/startup.jl` file:
+
+```julia
+atreplinit() do repl
+    # Robust against older julia versions
+    if hasfield(typeof(repl.options), :auto_insert_closing_bracket)
+        repl.options.auto_insert_closing_bracket = false
+    end
+end
+```
+
 ## Tab completion
 
 In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
@@ -341,7 +365,15 @@ mapfoldl mapfoldr
 
 When a single complete tab-complete result is available at the end of an input line and 2 or more characters
 have been typed, a hint of the completion will show in a lighter color.
-This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false` or by adding
+```
+atreplinit() do repl
+    if VERSION >= v"1.11.0-0"
+        repl.options.hint_tab_completes = false
+    end
+end
+```
+to your `~/.julia/config/startup.jl`.
 
 !!! compat "Julia 1.11"
     Tab-complete hinting was added in Julia 1.11
@@ -366,13 +398,13 @@ julia> π
 
 julia> e\_1[TAB] = [1,0]
 julia> e₁ = [1,0]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  0
 
 julia> e\^1[TAB] = [1 0]
 julia> e¹ = [1 0]
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 
 julia> \sqrt[TAB]2     # √ is equivalent to the sqrt function
@@ -522,6 +554,183 @@ mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::I
 mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
 mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
 ```
+
+## Syntax Highlighting
+
+The REPL provides syntax highlighting for input as you type.
+Syntax highlighting is enabled by default but can be disabled in your `~/.julia/config/startup.jl`:
+
+```julia
+atreplinit() do repl
+    repl.options.style_input = false
+end
+```
+
+### Customizing Syntax Highlighting Colors
+
+The default syntax highlighting theme is quite conservative but can be customized using a TOML file `faces.toml` (https://julialang.github.io/StyledStrings.jl/dev/#stdlib-styledstrings-face-toml) in `.julia/config` (or by explicitly loading the faces from a face toml file).
+
+
+<details>
+<summary>Example: Monokai color theme (click to expand)</summary>
+
+```toml
+# Monokai color theme for Julia syntax highlighting
+
+[julia_macro]
+foreground = "#A6E22E"
+
+[julia_symbol]
+foreground = "#AE81FF"
+
+[julia_singleton_identifier]
+inherit = "julia_symbol"
+
+[julia_type]
+foreground = "#66D9EF"
+
+[julia_typedec]
+foreground = "#66D9EF"
+weight = "bold"
+
+[julia_comment]
+foreground = "#75715E"
+italic = true
+
+[julia_string]
+foreground = "#E6DB74"
+
+[julia_regex]
+inherit = "julia_string"
+
+[julia_backslash_literal]
+foreground = "#FD971F"
+inherit = "julia_string"
+
+[julia_string_delim]
+foreground = "#E6DB74"
+weight = "bold"
+
+[julia_cmdstring]
+inherit = "julia_string"
+
+[julia_char]
+inherit = "julia_string"
+
+[julia_char_delim]
+inherit = "julia_string_delim"
+
+[julia_number]
+foreground = "#AE81FF"
+
+[julia_bool]
+foreground = "#AE81FF"
+weight = "bold"
+
+[julia_funcall]
+foreground = "#A6E22E"
+
+[julia_broadcast]
+foreground = "#F92672"
+weight = "bold"
+
+[julia_builtin]
+foreground = "#66D9EF"
+weight = "bold"
+
+[julia_operator]
+foreground = "#F92672"
+
+[julia_comparator]
+inherit = "julia_operator"
+
+[julia_assignment]
+foreground = "#F92672"
+weight = "bold"
+
+[julia_keyword]
+foreground = "#F92672"
+weight = "bold"
+
+[julia_parentheses]
+foreground = "#F8F8F2"
+
+[julia_unpaired_parentheses]
+background = "#F92672"
+foreground = "#F8F8F0"
+weight = "bold"
+
+[julia_error]
+background = "#F92672"
+foreground = "#F8F8F0"
+
+[julia_rainbow_paren_1]
+foreground = "#A6E22E"
+inherit = "julia_parentheses"
+
+[julia_rainbow_paren_2]
+foreground = "#66D9EF"
+inherit = "julia_parentheses"
+
+[julia_rainbow_paren_3]
+foreground = "#FD971F"
+inherit = "julia_parentheses"
+
+[julia_rainbow_paren_4]
+inherit = "julia_rainbow_paren_1"
+
+[julia_rainbow_paren_5]
+inherit = "julia_rainbow_paren_2"
+
+[julia_rainbow_paren_6]
+inherit = "julia_rainbow_paren_3"
+
+# Rainbow brackets
+[julia_rainbow_bracket_1]
+foreground = "#AE81FF"
+inherit = "julia_parentheses"
+
+[julia_rainbow_bracket_2]
+foreground = "#E6DB74"
+inherit = "julia_parentheses"
+
+[julia_rainbow_bracket_3]
+inherit = "julia_rainbow_bracket_1"
+
+[julia_rainbow_bracket_4]
+inherit = "julia_rainbow_bracket_2"
+
+[julia_rainbow_bracket_5]
+inherit = "julia_rainbow_bracket_1"
+
+[julia_rainbow_bracket_6]
+inherit = "julia_rainbow_bracket_2"
+
+# Rainbow curlies
+[julia_rainbow_curly_1]
+foreground = "#F92672"
+inherit = "julia_parentheses"
+
+[julia_rainbow_curly_2]
+foreground = "#A6E22E"
+inherit = "julia_parentheses"
+
+[julia_rainbow_curly_3]
+inherit = "julia_rainbow_curly_1"
+
+[julia_rainbow_curly_4]
+inherit = "julia_rainbow_curly_2"
+
+[julia_rainbow_curly_5]
+inherit = "julia_rainbow_curly_1"
+
+[julia_rainbow_curly_6]
+inherit = "julia_rainbow_curly_2"
+```
+
+</details>
+
+For a complete list of customizable faces, see the [JuliaSyntaxHighlighting package documentation](https://julialang.github.io/JuliaSyntaxHighlighting.jl/dev/).
 
 ## Customizing Colors
 

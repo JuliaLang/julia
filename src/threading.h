@@ -12,6 +12,8 @@ extern "C" {
 
 #define PROFILE_JL_THREADING            0
 
+extern uv_barrier_t thread_init_done;
+
 extern _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED; /* thread local storage */
 
 typedef struct _jl_threadarg_t {

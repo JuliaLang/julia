@@ -67,6 +67,9 @@ end
 
 function html(io::IO, code::Code)
     withtag(io, :pre) do
+        if code.language == "styled"
+            code = Code("", String(styled(code.code)))
+        end
         maybe_lang = !isempty(code.language) ? Any[:class=>"language-$(code.language)"] : []
         withtag(io, :code, maybe_lang...) do
             htmlesc(io, code.code)
@@ -134,6 +137,9 @@ function htmlinline(io::IO, content::Vector)
 end
 
 function htmlinline(io::IO, code::Code)
+    if code.language == "styled"
+        code = Code("", String(styled(code.code)))
+    end
     withtag(io, :code) do
         htmlesc(io, code.code)
     end

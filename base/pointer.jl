@@ -59,8 +59,6 @@ cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
-unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
 cconvert(::Type{<:Ptr}, a::Array) = getfield(a, :ref)
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
@@ -118,7 +116,7 @@ end
 function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
                      p::Ptr{T}, dims::Tuple{Int}; own::Bool = false) where {kind,T}
     ccall(:jl_ptr_to_genericmemory, Ref{GenericMemory{kind,T,Core.CPU}},
-          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, dim[1], own)
+          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, dims[1], own)
 end
 function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
                      p::Ptr{T}, d::Integer; own::Bool = false) where {kind,T}
@@ -169,7 +167,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
-different type may be valid provided that that the types are compatible.
+different type may be valid provided that the types are compatible.
 
 !!! compat "Julia 1.10"
      The `order` argument is available as of Julia 1.10.
@@ -184,7 +182,7 @@ function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
 end
 
 """
-    unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol]) -> Pair
+    unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol])::Pair
 
 These atomically perform the operations to get and set a memory address after applying
 the function `op`. If supported by the hardware (for example, atomic increment), this may be

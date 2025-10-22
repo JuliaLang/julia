@@ -51,6 +51,10 @@ You can retrieve docs for functions, macros and other objects as follows:
     @doc @time
     @doc md""
 
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, retrieving documentation with the `@doc` macro requires that
+    the `REPL` stdlib is loaded.
+
 ## Functions & Methods
 Placing documentation before a method definition (e.g. `function foo() ...` or `foo() = ...`)
 will cause that specific method to be documented, as opposed to the whole function. Method
@@ -75,18 +79,23 @@ const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
 function meta(m::Module; autoinit::Bool=true)
-    if !isdefined(m, META) || getfield(m, META) === nothing
-        autoinit ? initmeta(m) : return nothing
+    if !invokelatest(isdefinedglobal, m, META)
+        return autoinit ? initmeta(m) : nothing
     end
-    return getfield(m, META)::METAType
+    # TODO: This `invokelatest` is not technically required, but because
+    # of the automatic constant backdating is currently required to avoid
+    # a warning.
+    return invokelatest(getglobal, m, META)::METAType
 end
 
 function initmeta(m::Module)
-    if !isdefined(m, META) || getfield(m, META) === nothing
-        Core.eval(m, :($META = $(METAType())))
+    if !invokelatest(isdefinedglobal, m, META)
+        val = METAType()
+        Core.eval(m, :(const $META = $val))
         push!(modules, m)
+        return val
     end
-    nothing
+    return invokelatest(getglobal, m, META)
 end
 
 struct TypeParams{T<:Tuple} end
@@ -288,16 +297,29 @@ catdoc(xs...) = vcat(xs...)
 
 const keywords = Dict{Symbol, DocStr}()
 
-namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
+namify(@nospecialize x) = astname(x, isexpr(x, :macro))
 
 function astname(x::Expr, ismacro::Bool)
     head = x.head
     if head === :.
         ismacro ? macroname(x) : x
-    elseif head === :call && isexpr(x.args[1], :(::))
-        return astname((x.args[1]::Expr).args[end], ismacro)
+elseif head === :call && length(x.args) >= 1 && isexpr(x.args[1], :(::))
+        # for documenting (x::y)(args...), extract the name from y
+        # otherwise, for documenting `x::y`, it will be extracted from x
+        astname((x.args[1]::Expr).args[end], ismacro)
     else
-        n = isexpr(x, (:module, :struct)) ? 2 : 1
+        n = if isexpr(x, (:module, :struct))
+            2
+        elseif isexpr(x, (:call, :macrocall, :function, :(=), :macro, :where, :curly,
+                          :(::), :(<:), :(>:), :local, :global, :const, :atomic,
+                          :copyast, :quote, :inert, :primitive, :abstract,
+                          :escape, :var"hygienic-scope"))
+            # similar to is_function_def, but without -> and with various assignments, quoted statements, and miscellaneous that might be encountered in struct definitions also
+            1
+        else
+            return x # nothing to see here--bindingexpr will convert this to an error if defining a doc
+        end
+        length(x.args) < n && return x
         astname(x.args[n], ismacro)
     end
 end
@@ -349,7 +371,7 @@ function metadata(__source__, __module__, expr, ismodule)
             if isa(eachex, Symbol) || isexpr(eachex, :(::))
                 # a field declaration
                 if last_docstr !== nothing
-                    push!(fields, P(namify(eachex::Union{Symbol,Expr}), last_docstr))
+                    push!(fields, P(namify(eachex), last_docstr))
                     last_docstr = nothing
                 end
             elseif isexpr(eachex, :function) || isexpr(eachex, :(=))
@@ -565,14 +587,68 @@ isquotedmacrocall(@nospecialize x) =
 isbasicdoc(@nospecialize x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
 is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
 
+function _doc(binding::Binding, sig::Type = Union{})
+    if defined(binding)
+        result = getdoc(resolve(binding), sig)
+        result === nothing || return result
+    end
+    # Lookup first match for `binding` and `sig` in all modules of the docsystem.
+    for mod in modules
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
+        if haskey(dict, binding)
+            multidoc = dict[binding]
+            for msig in multidoc.order
+                sig <: msig && return multidoc.docs[msig]
+            end
+            # if no matching signatures, return first
+            if !isempty(multidoc.docs)
+                return first(values(multidoc.docs))
+            end
+        end
+    end
+    return nothing
+end
+
+# Some additional convenience `doc` methods that take objects rather than `Binding`s.
+_doc(obj::UnionAll) = _doc(Base.unwrap_unionall(obj))
+_doc(object, sig::Type = Union{}) = _doc(aliasof(object, typeof(object)), sig)
+_doc(object, sig...)              = _doc(object, Tuple{sig...})
+
+function simple_lookup_doc(ex)
+    if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
+        # handle syntactic operators, e.g. +=, ::, .=
+        ex = ex.head
+    end
+    if haskey(keywords, ex)
+        return keywords[ex]
+    elseif !isa(ex, Expr) && !isa(ex, Symbol)
+        return :($(_doc)($(typeof)($(esc(ex)))))
+    end
+    name = namify(ex)
+    # If namify couldn't extract a meaningful name and returned an Expr
+    # that can't be converted to a binding, treat it like a value
+    if isa(name, Expr) && !isexpr(name, :(.))
+        return :($(_doc)($(typeof)($(esc(ex)))))
+    end
+    binding = esc(bindingexpr(name))
+    if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
+        sig = esc(signature(ex))
+        :($(_doc)($binding, $sig))
+    else
+        :($(_doc)($binding))
+    end
+end
+
 function docm(source::LineNumberNode, mod::Module, ex)
     @nospecialize ex
     if isexpr(ex, :->) && length(ex.args) > 1
         return docm(source, mod, ex.args...)
-    elseif isassigned(Base.REPL_MODULE_REF)
+    elseif (REPL = Base.REPL_MODULE_REF[]) !== Base
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
-        REPL = Base.REPL_MODULE_REF[]
         return invokelatest(REPL.lookup_doc, ex)
+    else
+        return simple_lookup_doc(ex)
     end
     return nothing
 end
@@ -704,15 +780,16 @@ include("utils.jl")
 # Swap out the bootstrap macro with the real one.
 Core.atdoc!(docm)
 
-function loaddocs(docs::Vector{Core.SimpleVector})
-    for (mod, ex, str, file, line) in docs
+function loaddocs(docs::Base.CoreDocs.DocLinkedList)
+    while isdefined(docs, :doc)
+        (mod, ex, str, file, line) = docs.doc
         data = Dict{Symbol,Any}(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
         lno = LineNumberNode(line, file)
         docstring = docm(lno, mod, doc, ex, false) # expand the real @doc macro now
         Core.eval(mod, Expr(:var"hygienic-scope", docstring, Docs, lno))
+        docs = docs.next
     end
-    empty!(docs)
     nothing
 end
 
@@ -735,6 +812,9 @@ When `pattern` is a string, case is ignored. Results are printed to `io`.
 ```
 help?> "pattern"
 ```
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, `apropos` requires that the `REPL` stdlib is loaded.
 """
 function apropos end
 
@@ -745,6 +825,9 @@ Return all documentation that matches both `binding` and `sig`.
 
 If `getdoc` returns a non-`nothing` result on the value of the binding, then a
 dynamic docstring is returned instead of one based on the binding itself.
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, `Docs.doc` requires that the `REPL` stdlib is loaded.
 """
 function doc end
 

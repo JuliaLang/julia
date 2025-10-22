@@ -10,6 +10,7 @@
 #include <stdio.h> // for printf
 
 #include "dtypes.h"
+#include "uv.h"
 
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
@@ -988,6 +989,15 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     return NULL;
 }
 
+#ifdef _OS_WINDOWS_
+const wchar_t *ios_utf8_to_wchar(const char *str) {
+    ssize_t wlen = uv_wtf8_length_as_utf16(str);
+    wchar_t *wstr = (wchar_t *)malloc_s(sizeof(wchar_t) * wlen);
+    uv_wtf8_to_utf16(str, wstr, wlen);
+    return wstr;
+}
+#endif // _OS_WINDOWS_
+
 // Portable ios analogue of mkstemp: modifies fname to replace
 // trailing XXXX's with unique ID and returns the file handle s
 // for writing and reading.
@@ -1061,6 +1071,7 @@ ios_t *ios_fd(ios_t *s, long fd, int isfile, int own)
 ios_t *ios_stdin = NULL;
 ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
+ios_t *ios_safe_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
@@ -1074,6 +1085,12 @@ void ios_init_stdstreams(void)
     ios_stderr = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
+
+    // this 'safe' variant must use `bm_none` to avoid memory allocation
+    // in an async-signal context
+    ios_safe_stderr = (ios_t*)malloc_s(sizeof(ios_t));
+    ios_fd(ios_safe_stderr, STDERR_FILENO, 0, 0);
+    ios_safe_stderr->bm = bm_none;
 }
 
 /* higher level interface */
