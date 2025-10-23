@@ -391,7 +391,8 @@ function parse(str::AbstractString;
     if isexpr(ex, :error)
         return ex
     end
-    if pos <= ncodeunits(str)
+           # Check if there are non-whitespace tokens remaining
+    if pos <= ncodeunits(str) && !isempty(strip(SubString(str, pos)))
         raise && throw(ParseError("extra token after end of expression"))
         return Expr(:error, "extra token after end of expression")
     end
