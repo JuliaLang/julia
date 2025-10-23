@@ -381,6 +381,8 @@ end
     sA = view(A, 1:2, 3, [1 3; 4 2])
     @test ndims(sA) == 3
     @test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
+    @test axes(similar(typeof(A),axes(A))) == axes(A)
+    @test eltype(similar(typeof(A),axes(A))) == eltype(A)
 end
 
 @testset "logical indexing #4763" begin
@@ -1027,31 +1029,6 @@ catch err
     err isa ErrorException && startswith(err.msg, "syntax:")
 end
 
-
-@testset "avoid allocating in reindex" begin
-    a = reshape(1:16, 4, 4)
-    inds = ([2,3], [3,4])
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (2,3)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
-
-    inds = (reshape([eachindex(a);], size(a)),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2),)
-
-    inds = (reshape([eachindex(a);], size(a)..., 1),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2, 1:1)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
-end
-
 @testset "isassigned" begin
     a = Vector{BigFloat}(undef, 5)
     a[2] = 0
@@ -1122,4 +1099,59 @@ end
     @test Base.mightalias(V1, permutedims(V1))
     @test Base.mightalias(permutedims(V1), V1)
     @test Base.mightalias(permutedims(V1), permutedims(V1))
+end
+
+
+@test @views quote var"begin" + var"end" end isa Expr
+
+@testset "@views handling of assignment" begin
+    @test @macroexpand(@views x[a:b] = c) == :(x[a:b] = c)
+    # Assignments should still work
+    let array = [1, 2, 3, 4, 5, 6, 7, 8]
+        @views array[begin:2] = [-1, -2]
+        @test array == [-1, -2, 3, 4, 5, 6, 7, 8]
+        @views array[7:end] = [-7, -8]
+        @test array == [-1, -2, 3, 4, 5, 6, -7, -8]
+        @views array[begin + 2:end - 4] = [-3, -4]
+        @test array == [-1, -2, -3, -4, 5, 6, -7, -8]
+        @views identity(array)[begin + 4:end - 2] = [-5, -6]
+        @test array == [-1, -2, -3, -4, -5, -6, -7, -8]
+
+        @views array[begin:2] .= 100
+        @test array == [100, 100, -3, -4, -5, -6, -7, -8]
+        @views array[7:end] .= 200
+        @test array == [100, 100, -3, -4, -5, -6, 200, 200]
+        @views array[begin + 2:end - 4] .= 300
+        @test array == [100, 100, 300, 300, -5, -6, 200, 200]
+        @views identity(array)[begin + 4:end - 2] .= 400
+        @test array == [100, 100, 300, 300, 400, 400, 200, 200]
+
+        @views identity(array)[begin:end] .-= 1
+        @test array == [99, 99, 299, 299, 399, 399, 199, 199]
+
+        @views identity(array)[begin:end] += [1, 2, 3, 4, 5, 6, 7, 8]
+        @test array == [100, 101, 302, 303, 404, 405, 206, 207]
+    end
+    # Nested getindex in assignment should be transformed
+    let array = [1, 2, 3, 4, 5, 6, 7, 8], array2 = [1, 2, 3, 4, 5, 6, 7, 8]
+        array[begin + 1:end - 2][2] = -1
+        array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, 3, 4, 5, 6, 7, 8]
+
+        @views array[begin + 1:end - 2][2] = -1
+        @views array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+
+        function swap_ele(ary, i, v)
+            res = ary[i]
+            ary[i] = v
+            return res
+        end
+        array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-1, -2, -3, -4, -5, -6, -7]
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+        @test array2 == [-1, -2, -3, -4, -5, -6, -7, 8]
+        @views array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-10, 2, -30, 4, -50, 6, -70]
+        @test array == [-3, 2, -1, 4, 5, -2, -4, 8]
+        @test array2 == [-10, 2, -30, 4, -50, 6, -70, 8]
+    end
 end

@@ -32,11 +32,15 @@ The syntax for [`@ccall`](@ref) to generate a call to the library function is:
 @ccall $function_pointer(argvalue1::argtype1, ...)::returntype
 ```
 
-where `library` is a string constant or literal (but see [Non-constant Function
-Specifications](@ref) below). The library may be omitted, in which case the
-function name is resolved in the current process. This form can be used to call
-C library functions, functions in the Julia runtime, or functions in an
-application linked to Julia. The full path to the library may also be specified.
+where `library` is a string constant or global variable name (see [Non-constant
+Function -Specifications](@ref) below). The library can be just a name, or it
+can specify a full path to the library. The library may be omitted, in which
+case the function name is resolved in the current executable, the current libc,
+or libjulia(-internal). This form can be used to call C library functions,
+functions in the Julia runtime, or functions in an application linked to Julia.
+Omitting the library *cannot* be used to call a function in any library (like
+specifying `RTLD_DEFAULT` to `dlsym`) as such behavior is slow, complicated,
+and not implemented on all platforms.
 Alternatively, `@ccall` may also be used to call a function pointer
 `$function_pointer`, such as one returned by `Libdl.dlsym`. The `argtype`s
 corresponds to the C-function signature and the `argvalue`s are the actual
@@ -69,7 +73,7 @@ julia> unsafe_string(path)
 
 In practice, especially when providing reusable functionality, one generally wraps `@ccall`
 uses in Julia functions that set up arguments and then check for errors in whatever manner the
-C or Fortran function specifies. And if an error occurs it is thrown as a normal Julia exception. This is especially
+C or Fortran function specifies. If an error occurs it is thrown as a normal Julia exception. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
@@ -224,7 +228,7 @@ julia> A
 ```
 
 As the example shows, the original Julia array `A` has now been sorted: `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
-[takes care of converting the array to a `Ptr{Cdouble}`](@ref automatic-type-conversion)), computing
+[takes care of converting the array to a `Ptr{Cdouble}`](@ref automatic-type-conversion), computing
 the size of the element type in bytes, and so on.
 
 For fun, try inserting a `println("mycompare($a, $b)")` line into `mycompare`, which will allow
@@ -357,7 +361,7 @@ an `Int` in Julia).
 | `unsigned long long`                                    |                          | `Culonglong`         | `UInt64`                                                                                                       |
 | `intmax_t`                                              |                          | `Cintmax_t`          | `Int64`                                                                                                        |
 | `uintmax_t`                                             |                          | `Cuintmax_t`         | `UInt64`                                                                                                       |
-| `float`                                                 | `REAL*4i`                | `Cfloat`             | `Float32`                                                                                                      |
+| `float`                                                 | `REAL*4`                 | `Cfloat`             | `Float32`                                                                                                      |
 | `double`                                                | `REAL*8`                 | `Cdouble`            | `Float64`                                                                                                      |
 | `complex float`                                         | `COMPLEX*8`              | `ComplexF32`         | `Complex{Float32}`                                                                                             |
 | `complex double`                                        | `COMPLEX*16`             | `ComplexF64`         | `Complex{Float64}`                                                                                             |
@@ -547,15 +551,14 @@ is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
 
-Note: This feature is currently implemented on 64-bit x86 and AArch64 platforms only.
-
 If a C/C++ routine has an argument or return value that is a native SIMD type, the corresponding
 Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIMD type. Specifically:
 
->   * The tuple must be the same size as the SIMD type. For example, a tuple representing an `__m128`
->     on x86 must have a size of 16 bytes.
->   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a primitive type that
->     is 1, 2, 4 or 8 bytes.
+>   * The tuple must be the same size and elements as the SIMD type. For example, a tuple
+>     representing an `__m128` on x86 must have a size of 16 bytes and Float32 elements.
+>   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a
+>     primitive type with a power-of-two number of bytes (e.g. 1, 2, 4, 8, 16, etc) such as
+>     Int8 or Float64.
 
 For instance, consider this C routine that uses AVX intrinsics:
 
@@ -628,6 +631,10 @@ For translating a C argument list to Julia:
 
       * `T`, where `T` is a concrete Julia type
       * argument value will be copied (passed by value)
+  * `vector T` (or `__attribute__ vector_size`, or a typedef such as `__m128`)
+
+      * `NTuple{N, VecElement{T}}`, where `T` is a primitive Julia type of the correct size
+        and N is the number of elements in the vector (equal to `vector_size / sizeof T`).
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
@@ -674,13 +681,16 @@ For translating a C return type to Julia:
   * `T`, where `T` is one of the primitive types: `char`, `int`, `long`, `short`, `float`, `double`,
     `complex`, `enum` or any of their `typedef` equivalents
 
-      * `T`, where `T` is an equivalent Julia Bits Type (per the table above)
-      * if `T` is an `enum`, the argument type should be equivalent to `Cint` or `Cuint`
+      * same as C argument list
       * argument value will be copied (returned by-value)
   * `struct T` (including typedef to a struct)
 
-      * `T`, where `T` is a concrete Julia Type
+      * same as C argument list
       * argument value will be copied (returned by-value)
+
+  * `vector T`
+
+      * same as C argument list
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
@@ -842,16 +852,137 @@ it must be handled in other ways.
 
 ## Non-constant Function Specifications
 
-In some cases, the exact name or path of the needed library is not known in advance and must
-be computed at run time. To handle such cases, the library component
-specification can be a function call, e.g. `find_blas().dgemm`. The call expression will
-be executed when the `ccall` itself is executed. However, it is assumed that the library
-location does not change once it is determined, so the result of the call can be cached and
-reused. Therefore, the number of times the expression executes is unspecified, and returning
-different values for multiple calls results in unspecified behavior.
+In some cases, the exact name or path of the needed library is not known in
+advance and must be computed at run time. To handle such cases, the library
+component specification can be a value such as `Libdl.LazyLibrary`. The runtime
+will call `Libdl.dlopen` on that object when first used by a `ccall`.
 
-If even more flexibility is needed, it is possible
-to use computed values as function names by staging through [`eval`](@ref) as follows:
+### [Using LazyLibrary for Lazy Loading](@id man-lazylibrary)
+
+[`Libdl.LazyLibrary`](@ref) provides a thread-safe mechanism for deferring library loading
+until first use. This is the recommended approach for library initialization in modern Julia code.
+
+A `LazyLibrary` represents a library that opens itself (and its dependencies) automatically
+on first use in a `ccall()`, `@ccall`, `dlopen()`, `dlsym()`, `dlpath()`, or `cglobal()`.
+The library is loaded exactly once in a thread-safe manner, and subsequent calls reuse the
+loaded library handle.
+
+#### Basic Usage
+
+```julia
+using Libdl
+
+# Define a LazyLibrary as a const for optimal performance
+const libz = LazyLibrary("libz")
+
+# Use directly in @ccall - library loads automatically on first call
+@ccall libz.deflate(strm::Ptr{Cvoid}, flush::Cint)::Cint
+
+# Also works with ccall
+ccall((:inflate, libz), Cint, (Ptr{Cvoid}, Cint), strm, flush)
+```
+
+#### Platform-Specific Libraries
+
+For code that needs to work across different platforms:
+
+```julia
+const mylib = LazyLibrary(
+    if Sys.iswindows()
+        "mylib.dll"
+    elseif Sys.isapple()
+        "libmylib.dylib"
+    else
+        "libmylib.so"
+    end
+)
+```
+
+#### Libraries with Dependencies
+
+When a library depends on other libraries, specify the dependencies to ensure
+they load in the correct order:
+
+```julia
+const libfoo = LazyLibrary("libfoo")
+const libbar = LazyLibrary("libbar"; dependencies=[libfoo])
+
+# When libbar is first used, libfoo is loaded first automatically
+@ccall libbar.bar_function(x::Cint)::Cint
+```
+
+#### Lazy Path Construction
+
+For libraries whose paths are determined at runtime, use `LazyLibraryPath`:
+
+```julia
+# Path is constructed when library is first accessed
+const mylib = LazyLibrary(LazyLibraryPath(artifact_dir, "lib", "libmylib.so"))
+```
+
+#### Initialization Callbacks
+
+If a library requires initialization after loading:
+
+```julia
+const mylib = LazyLibrary("libmylib";
+    on_load_callback = () -> @ccall mylib.initialize()::Cvoid
+)
+```
+
+!!! warning
+    The `on_load_callback` should be minimal and must not call `wait()` on any tasks.
+    It is called exactly once by the thread that loads the library.
+
+#### Conversion from `__init__()` Pattern
+
+Before `LazyLibrary`, library paths were often computed in `__init__()` functions.
+This pattern can be replaced with `LazyLibrary` for better performance and thread safety.
+
+Old pattern using `__init__()`:
+
+```julia
+# Old: Library path computed in __init__()
+libmylib_path = ""
+
+function __init__(
+    # Loads library on startup, whether it is used or not
+    global libmylib_path = find_library(["libmylib"])
+end
+
+function myfunc(x)
+    ccall((:cfunc, libmylib_path), Cint, (Cint,), x)
+end
+```
+
+New pattern using `LazyLibrary`:
+
+```julia
+# New: Library as const, no __init__() needed
+const libmylib = LazyLibrary("libmylib")
+
+function myfunc(x)
+    # Library loads automatically just before calling `cfunc`
+    @ccall libmylib.cfunc(x::Cint)::Cint
+end
+```
+
+For more details, see the [`Libdl.LazyLibrary`](@ref) documentation.
+
+### Overloading `dlopen` for Custom Types
+
+The runtime will call `dlsym(:function, dlopen(library)::Ptr{Cvoid})` when a `@ccall` is executed.
+The `Libdl.dlopen` function can be overloaded for custom types to provide alternate behaviors.
+However, it is assumed that the library location and handle does not change
+once it is determined, so the result of the call may be cached and reused.
+Therefore, the number of times the `dlopen` expression executes is unspecified,
+and returning different values for multiple calls will results in unspecified
+(but valid) behavior.
+
+### Computed Function Names
+
+If even more flexibility is needed, it is possible to use computed values as
+function names by staging through [`eval`](@ref) as follows:
 
 ```julia
 @eval @ccall "lib".$(string("a", "b"))()::Cint
@@ -862,38 +993,37 @@ expression, which is then evaluated. Keep in mind that `eval` only operates at t
 so within this expression local variables will not be available (unless their values are substituted
 with `$`). For this reason, `eval` is typically only used to form top-level definitions, for example
 when wrapping libraries that contain many similar functions.
-A similar example can be constructed for [`@cfunction`](@ref).
 
-However, doing this will also be very slow and leak memory, so you should usually avoid this and instead keep
-reading.
-The next section discusses how to use indirect calls to efficiently achieve a similar effect.
+### Indirect Calls
 
-## Indirect Calls
+The first argument to `@ccall` can also be an expression to be evaluated at run
+time, each time it is used. In this case, the expression must evaluate to a
+`Ptr`, which will be used as the address of the native function to call. This
+behavior occurs when the first `@ccall` argument is marked with `$` and when
+the first `ccall` argument is not a simple constant literal or expression in
+`()`. The argument can be any expression and can use local variables and
+arguments and can return a different value every time.
 
-The first argument to `@ccall` can also be an expression evaluated at run time. In this
-case, the expression must evaluate to a `Ptr`, which will be used as the address of the native
-function to call. This behavior occurs when the first `@ccall` argument contains references
-to non-constants, such as local variables, function arguments, or non-constant globals.
-
-For example, you might look up the function via `dlsym`,
-then cache it in a shared reference for that session. For example:
+For example, you might implement a macro similar to `cglobal` that looks up the
+function via `dlsym`, then caches the pointer in a shared reference (which is
+auto reset to C_NULL during precompile saving).
+For example:
 
 ```julia
 macro dlsym(lib, func)
-    z = Ref{Ptr{Cvoid}}(C_NULL)
+    z = Ref(C_NULL)
     quote
-        let zlocal = $z[]
-            if zlocal == C_NULL
-                zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
-                $z[] = zlocal
-            end
-            zlocal
+        local zlocal = $z[]
+        if zlocal == C_NULL
+            zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
+            $z[] = zlocal
         end
+        zlocal
     end
 end
 
-mylibvar = Libdl.dlopen("mylib")
-@ccall $(@dlsym(mylibvar, "myfunc"))()::Cvoid
+const mylibvar = LazyLibrary("mylib")
+@ccall $(@dlsym(dlopen(mylibvar), "myfunc"))()::Cvoid
 ```
 
 ## Closure cfunctions
@@ -984,18 +1114,45 @@ The arguments to [`ccall`](@ref) are:
 
 
 !!! note
-    The `(:function, "library")` pair, return type, and input types must be literal constants
-    (i.e., they can't be variables, but see [Non-constant Function Specifications](@ref)).
+    The `(:function, "library")` pair and the input type list must be syntactic tuples
+    (i.e., they can't be variables or values with a type of Tuple.
 
-    The remaining parameters are evaluated at compile-time, when the containing method is defined.
+    The rettype and argument type values are evaluated at when the containing method is
+    defined, not runtime.
 
+!!! note "Function Name vs Pointer Syntax"
+    The syntax of the first argument to `ccall` determines whether you're calling by **name** or by **pointer**:
+    * **Name-based calls** (tuple literal syntax):
+    - Both the function and library names can be a quoted Symbol, a String, a
+      variable name (a GlobalRef), or a dotted expression ending with a variable
+      name.
+    - Single name: `(:function_name,)` or `"function_name"` - uses default library lookup.
+    - Name with library: `(:function_name, "library")` - specifies both function and library.
+    - Symbol, string, and tuple literal constants (not expressions that evaluate to those constants,
+      but actual literals) are automatically normalized to tuple form.
+    * **Pointer-based calls** (non-tuple syntax):
+    - Anything that is not a literal tuple expression specified above is assumed to be an
+      expression that evaluates to a function pointers at runtime.
+    - Function pointer variables: `fptr` where `fptr` is a runtime pointer value.
+    - Function pointer computations: `dlsym(:something)` where the result is computed at
+      runtime every time (usually along with some caching logic).
+    * **Library name expressions**:
+    - When given as a variable, the library name can resolve to a `Symbol`, a `String`, or
+      any other value. The runtime will call `Libdl.dlopen(name)` on the value an
+      unspecified number of times, caching the result. The result is not invalidated if the
+      value of the binding changes or if it becomes undefined, as long as there exists any
+      value for that binding in any past or future worlds, that value may be used.
+    - Dot expressions, such as `A.B().c`, will be executed at method definition
+      time up to the final `c`. The first part must resolve to a Module, and the
+      second part to a quoted symbol. The value of that global will be resolved at
+      runtime when the `ccall` is first executed.
 
 A table of translations between the macro and function interfaces is given below.
 
 | `@ccall`                                                                     | `ccall`                                                                     |
 |------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
 | `@ccall clock()::Int32`                                                      | `ccall(:clock, Int32, ())`                                                  |
-| `@ccall f(a::Cint)::Cint`                                                    | `ccall(:a, Cint, (Cint,), a)`                                               |
+| `@ccall f(a::Cint)::Cint`                                                    | `ccall(:f, Cint, (Cint,), a)`                                               |
 | `@ccall "mylib".f(a::Cint, b::Cdouble)::Cvoid`                               | `ccall((:f, "mylib"), Cvoid, (Cint, Cdouble), a, b)`                        |
 | `@ccall $fptr.f()::Cvoid`                                                    | `ccall(fptr, f, Cvoid, ())`                                                 |
 | `@ccall printf("%s = %d\n"::Cstring ; "foo"::Cstring, foo::Cint)::Cint`      | `<unavailable>`                                                             |
@@ -1009,7 +1166,7 @@ be a calling convention specifier (the `@ccall` macro currently does not support
 giving a calling convention). Without any specifier, the platform-default C
 calling convention is used. Other supported conventions are: `stdcall`, `cdecl`,
 `fastcall`, and `thiscall` (no-op on 64-bit Windows). For example (from
-`base/libc.jl`) we see the same `gethostname``ccall` as above, but with the
+`base/libc.jl`) we see the same `gethostname` `ccall` as above, but with the
 correct signature for Windows:
 
 ```julia

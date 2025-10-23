@@ -146,8 +146,6 @@ static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
 
 static mach_port_t segv_port = 0;
 
-#define STR(x) #x
-#define XSTR(x) STR(x)
 #define HANDLE_MACH_ERROR(msg, retval) \
     if (retval != KERN_SUCCESS) { mach_error(msg XSTR(: __FILE__:__LINE__:), (retval)); abort(); }
 
@@ -339,7 +337,7 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
                             NULL /*current_task?*/);
         ptls2->sig_exception = exception;
         ptls2->io_wait = 0;
-        jl_task_t *ct = ptls2->current_task;
+        jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
         jl_handler_t *eh = ct->eh;
         if (eh != NULL) {
             asan_unpoison_task_stack(ct, &eh->eh_ctx);
@@ -529,7 +527,7 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) J
     return 1;
 }
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
     host_thread_state_t state;
@@ -581,7 +579,7 @@ static void jl_try_deliver_sigint(void)
 
 static void JL_NORETURN jl_exit_thread0_cb(int signo)
 {
-    jl_critical_error(signo, 0, NULL, jl_current_task);
+    jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(signo);
 }
@@ -714,13 +712,18 @@ static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
     jl_unlock_profile();
 }
 
-int jl_lock_stackwalk(void)
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
-    return jl_lock_profile_mach(1);
+    int lockret = jl_lock_profile_mach(1);
+    int success = jl_thread_suspend_and_get_state(tid, 1, ctx);
+    jl_unlock_profile_mach(1, lockret);
+    return success;
 }
 
-void jl_unlock_stackwalk(int lockret)
+void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
 {
+    int lockret = jl_lock_profile_mach(1);
+    f(ctx);
     jl_unlock_profile_mach(1, lockret);
 }
 

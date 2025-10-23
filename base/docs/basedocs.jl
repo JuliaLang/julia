@@ -1063,6 +1063,20 @@ end
 The syntax `catch e` (where `e` is any variable) assigns the thrown
 exception object to the given variable within the `catch` block.
 
+```julia
+try
+    a_dangerous_operation()
+catch e
+    if isa(e, EOFError)
+        @warn "The operation failed - EOF."
+    elseif isa(e, OutOfMemoryError)
+        @warn "The operation failed - OOM."
+    else
+        rethrow() # ensure other exceptions can bubble up the call stack
+    end
+end
+```
+
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 
@@ -1118,6 +1132,41 @@ normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to 
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
+
+When evaluating a `try/catch/else/finally` expression, the value of the entire
+expression is the value of the last block executed, excluding the `finally`
+block. For example:
+
+```jldoctest
+julia> try
+           1
+       finally
+           2
+       end
+1
+
+julia> try
+           error("")
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+1
+
+julia> try
+           0
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+2
+```
 """
 kw"finally"
 
@@ -1395,8 +1444,6 @@ Note that contrary to `ccall`, the argument types must be specified as a tuple t
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
-
-[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
 
 See
 [`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
@@ -1905,7 +1952,7 @@ recurses infinitely.
 StackOverflowError
 
 """
-    nfields(x) -> Int
+    nfields(x)::Int
 
 Get the number of fields in the given object.
 
@@ -2007,7 +2054,7 @@ to let `InterruptException` be thrown by CTRL+C during the execution.
 InterruptException
 
 """
-    applicable(f, args...) -> Bool
+    applicable(f, args...)::Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -2105,7 +2152,7 @@ Integer
 invoke
 
 """
-    isa(x, type) -> Bool
+    isa(x, type)::Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
 `x isa type`.
@@ -2398,7 +2445,7 @@ iteration over characters.
 Symbol
 
 """
-    Symbol(x...) -> Symbol
+    Symbol(x...)::Symbol
 
 Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
@@ -2435,14 +2482,19 @@ julia> Tuple(Real[1, 2, pi])  # takes a collection
 tuple
 
 """
-    getfield(value, name::Symbol, [order::Symbol])
-    getfield(value, i::Int, [order::Symbol])
+    getfield(value, name::Symbol, [order::Symbol], [boundscheck::Bool=true])
+    getfield(value, i::Int, [order::Symbol], [boundscheck::Bool=true])
 
-Extract a field from a composite `value` by name or position. Optionally, an
-ordering can be defined for the operation. If the field was declared `@atomic`,
-the specification is strongly recommended to be compatible with the stores to
-that location. Otherwise, if not declared as `@atomic`, this parameter must be
-`:not_atomic` if specified.
+Extract a field from a composite `value` by name or position.
+
+Optionally, an ordering can be defined for the operation.
+If the field was declared `@atomic`, the specification is strongly recommended to be
+compatible with the stores to that location.
+Otherwise, if not declared as `@atomic`, this parameter must be `:not_atomic` if specified.
+
+The bounds check may be disabled, in which case the behavior of this function is
+undefined if `i` is out of bounds.
+
 See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
@@ -2511,8 +2563,8 @@ Atomically perform the operations to simultaneously get and set a field:
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
-    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol])::Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol])::Pair
 
 Atomically perform the operations to get and set a field after applying
 the function `op`.
@@ -2678,7 +2730,7 @@ See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
 swapglobal!
 
 """
-    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic])::Pair
 
 Atomically perform the operations to get and set a global after applying
 the function `op`.
@@ -2719,6 +2771,71 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 setglobalonce!
 
 """
+    declare_global(module::Module, name::Symbol, strong::Bool=false, [ty::Type])
+
+Declare the global `name` in module `module`.  If `ty` is given, declares a
+"strong" global, which cannot be replaced with a constant binding, otherwise
+declares a weak global.
+
+See also [`global`](@ref), [`setglobal!`](@ref), [`get_binding_type`](@ref Core.get_binding_type).
+"""
+Core.declare_global
+
+"""
+    declare_const(module::Module, name::Symbol, [x])
+
+Create or replace the constant `name` in `module` with the new value `x`.  When
+replacing, `x` does not need to have the same type as the original constant.
+
+When `x` is not given, `name` becomes an undefined constant; it cannot be read
+or written to, but can be redefined.
+
+Unlike the syntax `const`, calling this function does not insert `Core.@latestworld` to update the world age of the current frame:
+```
+julia> begin
+           const x = 1
+           println(x)
+           const x = 2
+           println(x)
+           Core.declare_const(Main, :x, 3)
+           println(x)
+           Core.@latestworld
+           println(x)
+       end
+1
+2
+2
+3
+```
+
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.  Redefining constants on earlier
+    versions of Julia is unpredictable.
+
+See also [`const`](@ref).
+"""
+Core.declare_const
+
+"""
+   _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, imported::Bool])
+
+With all five arguments, imports `sym` from module `from` into `to` with name
+`asname`.  `imported` is true for bindings created with `import` (set it to
+false for `using A: ...`).
+
+With only the first three arguments, creates a binding for the module `from`
+with name `asname` in `to`.
+"""
+Core._import
+
+"""
+   _using(to::Module, from::Module)
+
+Add `from` to the usings list of `to`.
+"""
+Core._using
+
+"""
     typeof(x)
 
 Get the concrete type of `x`.
@@ -2754,6 +2871,9 @@ compatible with the stores to that location. Otherwise, if not declared as
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
+The global variable variant is supported for compatibility with older julia
+releases. For new code, prefer [`isdefinedglobal`](@ref).
+
 See also [`@isdefined`](@ref).
 
 # Examples
@@ -2780,6 +2900,40 @@ false
 ```
 """
 isdefined
+
+
+"""
+    isdefinedglobal(m::Module, s::Symbol, [allow_import::Bool=true, [order::Symbol=:unordered]])
+
+Tests whether a global variable `s` is defined in module `m` (in the current world age).
+A variable is considered defined if and only if a value may be read from this global variable
+and an access will not throw. This includes both constants and global variables that have
+a value set.
+
+If `allow_import` is `false`, the global variable must be defined inside `m`
+and may not be imported from another module.
+
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.
+
+See also [`@isdefined`](@ref).
+
+# Examples
+```jldoctest
+julia> isdefinedglobal(Base, :sum)
+true
+
+julia> isdefinedglobal(Base, :NonExistentMethod)
+false
+
+julia> isdefinedglobal(Base, :sum, false)
+true
+
+julia> isdefinedglobal(Main, :sum, false)
+false
+```
+"""
+isdefinedglobal
 
 """
     Memory{T}(undef, n)

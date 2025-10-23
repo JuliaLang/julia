@@ -34,6 +34,7 @@ end
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
 original_depot_path = copy(Base.DEPOT_PATH)
+include("tempdepot.jl")
 include("precompile_utils.jl")
 
 loaded_files = String[]
@@ -226,7 +227,6 @@ end
     end
 end
 
-
 ## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
@@ -236,8 +236,9 @@ watcher_counter = Ref(0)
 push!(Base.active_project_callbacks, () -> watcher_counter[] += 1)
 push!(Base.active_project_callbacks, () -> error("broken"))
 
+const testdefaultdepot = mkdepottempdir()
 push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
-append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
+append!(empty!(DEPOT_PATH), [testdefaultdepot, joinpath(@__DIR__, "depot")])
 @test watcher_counter[] == 0
 @test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
 @test watcher_counter[] == 1
@@ -461,7 +462,7 @@ function make_env(flat, root, roots, graph, paths, dummies)
     )
 end
 
-const depots = [mktempdir() for _ = 1:3]
+const depots = [mkdepottempdir() for _ = 1:3]
 const envs = Dict{String,Any}()
 
 append!(empty!(DEPOT_PATH), depots)
@@ -755,13 +756,6 @@ end
 for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
-for depot in depots
-    try
-        rm(depot, force=true, recursive=true)
-    catch err
-        @show err
-    end
-end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
@@ -798,6 +792,7 @@ end
 
 @testset "`::AbstractString` constraint on the path argument to `include`" begin
     for m ∈ (NotPkgModule, evalfile("testhelpers/just_module.jl"))
+        @Core.latestworld
         let i = m.include
             @test !applicable(i, (nothing,))
             @test !applicable(i, (identity, nothing,))
@@ -1022,7 +1017,7 @@ end
             write(joinpath(tmp, "Env1", "Manifest.toml"), """
             """)
             # Package in current env not present in manifest
-            pkg, env = Base.identify_package_env("Baz")
+            pkg, env = @lock Base.require_lock Base.identify_package_env("Baz")
             @test Base.locate_package(pkg, env) === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
@@ -1042,9 +1037,10 @@ end
         _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
     end
     """
-    depot_path = mktempdir()
-    try
-        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+    depot_path = mkdepottempdir()
+    proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+
+    begin
 
         function gen_extension_cmd(compile, distr=false)
             load_distr = distr ? "using Distributed; addprocs(1)" : ""
@@ -1154,7 +1150,7 @@ end
 
         # Extension-to-extension dependencies
 
-        mktempdir() do depot # Parallel pre-compilation
+        mkdepottempdir() do depot # Parallel pre-compilation
             code = """
             Base.disable_parallel_precompile = false
             using ExtToExtDependency
@@ -1170,7 +1166,7 @@ end
             )
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
-        mktempdir() do depot # Serial pre-compilation
+        mkdepottempdir() do depot # Serial pre-compilation
             code = """
             Base.disable_parallel_precompile = true
             using ExtToExtDependency
@@ -1187,7 +1183,7 @@ end
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
 
-        mktempdir() do depot # Parallel pre-compilation
+        mkdepottempdir() do depot # Parallel pre-compilation
             code = """
             Base.disable_parallel_precompile = false
             using CrossPackageExtToExtDependency
@@ -1203,7 +1199,7 @@ end
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
-        mktempdir() do depot # Serial pre-compilation
+        mkdepottempdir() do depot # Serial pre-compilation
             code = """
             Base.disable_parallel_precompile = true
             using CrossPackageExtToExtDependency
@@ -1223,7 +1219,7 @@ end
         # Extensions for "parent" dependencies
         # (i.e. an `ExtAB`  where A depends on / loads B, but B provides the extension)
 
-        mktempdir() do depot # Parallel pre-compilation
+        mkdepottempdir() do depot # Parallel pre-compilation
             code = """
             Base.disable_parallel_precompile = false
             using Parent
@@ -1238,7 +1234,7 @@ end
             )
             @test occursin("Hello parent!", String(read(cmd)))
         end
-        mktempdir() do depot # Serial pre-compilation
+        mkdepottempdir() do depot # Serial pre-compilation
             code = """
             Base.disable_parallel_precompile = true
             using Parent
@@ -1252,13 +1248,6 @@ end
                 "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
             )
             @test occursin("Hello parent!", String(read(cmd)))
-        end
-
-    finally
-        try
-            rm(depot_path, force=true, recursive=true)
-        catch err
-            @show err
         end
     end
 end
@@ -1309,6 +1298,9 @@ end
     @test cf.inline
     @test cf.opt_level == 3
     @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
+
+    # Round trip CacheFlags
+    @test parse(Base.CacheFlags, repr(cf)) == cf
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1344,9 +1336,9 @@ module loaded_pkgid4 end
     end
     wait(e)
     reset(e)
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 -> pkgid2 -> pkgid1 -> pkgid3 && pkgid4"),
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 using pkgid2 using pkgid1 using pkgid3 (while loading pkgid4)"),
         @lock Base.require_lock Base.start_loading(pkid3, build_id, false)).value            # try using pkgid3
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 using pkgid4 (while loading pkgid1)"),
         @lock Base.require_lock Base.start_loading(pkid4, build_id, false)).value            # try using pkgid4
     @lock Base.require_lock Base.end_loading(pkid1, loaded_pkgid1)        # end
     @lock Base.require_lock Base.end_loading(pkid4, loaded_pkgid4)        # end
@@ -1360,38 +1352,46 @@ end
 end
 
 @testset "relocatable upgrades #51989" begin
-    mktempdir() do depot
+    mkdepottempdir() do depot
         # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
         # project path so the cache file slug will be different if the tempdir is given as a symlink
         # (which it often is on MacOS) which would break the test.
-        project_path = joinpath(realpath(depot), "project")
-        mkpath(project_path)
 
         # Create fake `Foo.jl` package with two files:
         foo_path = joinpath(depot, "dev", "Foo51989")
         mkpath(joinpath(foo_path, "src"))
-        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
-            println(io, """
+        write(joinpath(foo_path, "src", "Foo51989.jl"),
+            """
             module Foo51989
             include("internal.jl")
             end
             """)
-        end
-        open(joinpath(foo_path, "src", "internal.jl"); write=true) do io
-            println(io, "const a = \"asd\"")
-        end
-        open(joinpath(foo_path, "Project.toml"); write=true) do io
-            println(io, """
+        write(joinpath(foo_path, "src", "internal.jl"),
+            "const a = \"asd\"")
+        write(joinpath(foo_path, "Project.toml"),
+            """
             name = "Foo51989"
             uuid = "00000000-0000-0000-0000-000000000001"
             version = "1.0.0"
             """)
-        end
+        write(joinpath(foo_path, "Manifest.toml"),
+            """
+            # This file is machine-generated - editing it directly is not advised
+            julia_version = "1.13.0-DEV"
+            manifest_format = "2.0"
+            project_hash = "8699765aeeac181c3e5ddbaeb9371968e1f84d6b"
 
-        # In our depot, `dev` and then `precompile` this `Foo` package.
-        @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo51989"); Pkg.precompile(); exit(0)'`,
-            "JULIA_DEPOT_PATH" => depot))
+            [[deps.Foo51989]]
+            path = "."
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+
+        # In our depot, `precompile` this `Foo` package.
+        @test success(pipeline(addenv(
+            `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'Base.Precompilation.precompilepkgs(["Foo51989"]); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ); stdout, stderr))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
         foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
@@ -1409,10 +1409,10 @@ end
         end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
-        @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo51989; exit(0)'`,
+        @test success(pipeline(addenv(
+            `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'using Foo51989; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
-        ))
+        ); stdout, stderr))
 
         # Ensure that there is still only one `.ji` file (it got replaced
         # and the file size changed).
@@ -1434,7 +1434,7 @@ end
 end
 
 @testset "code coverage disabled during precompilation" begin
-    mktempdir() do depot
+    mkdepottempdir() do depot
         cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
         cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
         function rm_cov_files()
@@ -1478,7 +1478,7 @@ end
 end
 
 @testset "command-line flags" begin
-    mktempdir() do depot_path mktempdir() do dir
+    mkdepottempdir() do depot_path mktempdir() do dir
         # generate a Parent.jl and Child.jl package, with Parent depending on Child
         open(joinpath(dir, "Child.jl"), "w") do io
             println(io, """
@@ -1494,7 +1494,7 @@ end
 
         # helper function to load a package and return the output
         function load_package(name, args=``)
-            code = "using $name"
+            code = "Base.disable_parallel_precompile = true; using $name"
             cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
                         "JULIA_LOAD_PATH" => dir,
                         "JULIA_DEPOT_PATH" => depot_path,
@@ -1561,7 +1561,7 @@ end
 end
 
 @testset "including non-existent file throws proper error #52462" begin
-    mktempdir() do depot
+    mkdepottempdir() do depot
         project_path = joinpath(depot, "project")
         mkpath(project_path)
 
@@ -1669,6 +1669,14 @@ end
        @test isfile(Base.locate_package(id_dev))
        @test Base.identify_package("Devved2") === nothing
 
+       # Test that workspace projects can be specified with subfolder paths
+       # and that base_project searches upward through multiple directory levels
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "nested", "deep"))
+       proj_file = joinpath(@__DIR__, "project", "SubProject", "nested", "deep", "Project.toml")
+       base_proj = Base.base_project(proj_file)
+       @test base_proj == joinpath(@__DIR__, "project", "SubProject", "Project.toml")
+
     finally
        copy!(LOAD_PATH, old_load_path)
     end
@@ -1703,14 +1711,15 @@ end
 end
 
 @testset "require_stdlib loading duplication" begin
-    depot_path = mktempdir()
+    depot_path = mkdepottempdir()
     oldBase64 = nothing
     try
         push!(empty!(DEPOT_PATH), depot_path)
         Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
         oldBase64 = Base.unreference_module(Base64_key)
         cc = Base.compilecache(Base64_key)
-        @test Base.isprecompiled(Base64_key, cachepaths=String[cc[1]])
+        sourcepath = Base.locate_package(Base64_key)
+        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcepath, cc[1]) !== true
         empty!(DEPOT_PATH)
         Base.require_stdlib(Base64_key)
         push!(DEPOT_PATH, depot_path)
@@ -1727,6 +1736,23 @@ end
     finally
         oldBase64 === nothing || Base.register_root_module(oldBase64)
         copy!(DEPOT_PATH, original_depot_path)
-        rm(depot_path, force=true, recursive=true)
     end
 end
+
+# Test `import Package as M`
+module M57965
+    import Random as R
+end
+@test M57965.R === Base.require(M57965, :Random)
+
+# #58272 - _eval_import accidentally reuses evaluated "from" path
+module M58272_1
+    const x = 1
+    module M58272_2
+        const y = 3
+        const x = 2
+    end
+end
+module M58272_to end
+@eval M58272_to import ..M58272_1: M58272_2.y, x
+@test @eval M58272_to x === 1
