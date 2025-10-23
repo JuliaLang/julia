@@ -96,7 +96,7 @@ if Sys.isunix()
         # The process will not ignore the second SIGQUIT, but the kernel might ignore it.
         # So keep sending SIGQUIT every few seconds until the kernel delivers the second one
         # and `p` exits.
-        t = Timer(0, 10) do t; Base.kill(p, Base.SIGQUIT); end
+        t = Timer(0, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
         wait(p)
         close(t)
         err_s = readchomp(errp)
