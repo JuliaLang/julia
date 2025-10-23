@@ -535,20 +535,47 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
         end
     end
     (m == 1 || m == -1) && return zero(m)
-    b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
-    t = prevpow(2, p)
-    r = 1
-    while true
-        if p >= t
-            r = mod(widemul(r,b),m)
-            p -= t
+    mm = uabs(m)
+    rr = one(mm)
+    bb = oftype(mm, mod(x, mm))
+
+    # legal && profitable
+    if _powermod_mi_legal(mm) && (p > 2sizeof(mm))
+        if bb == 0
+            rr = zero(mm)
+        else
+            mis = MultiplicativeInverses.multiplicativeinverse(mm)
+            Base.@assume_effects :terminates_locally while true
+                if (p & 1) != 0
+                    rr = mod(rr * bb, mis)
+                end
+                p >>= 1
+                p == 0 && break
+                bb = mod(bb * bb, mis)
+            end
         end
-        t >>>= 1
-        t <= 0 && break
-        r = mod(widemul(r,r),m)
+    else
+        if bb == 0
+            rr = zero(mm)
+        else
+            Base.@assume_effects :terminates_locally while true
+                if (p & 1) != 0
+                    rr = oftype(mm, mod(widemul(rr, bb), mm))
+                end
+                p >>= 1
+                p == 0 && break
+                bb = oftype(mm, mod(widemul(bb, bb), mm))
+            end
+        end
     end
-    return r
+    r = oftype(m, rr)
+    return (iszero(r) || (m > 0)) ? r : r + m
+end
+
+_powermod_mi_legal(::Integer) = false
+function _powermod_mi_legal(mm::T) where {T<:Unsigned}
+    return Base.hastypemax(T) && (mm <= (typemax(T) >> (sizeof(T) << 2)))
 end
 
 # optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
