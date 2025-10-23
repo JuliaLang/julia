@@ -1,0 +1,45 @@
+name: JuliaSyntaxCI
+on:
+  push:
+    branches:
+      - master
+      - release-*
+    paths:
+      - 'JuliaSyntax/**'
+    tags: '*'
+  pull_request:
+    paths:
+      - 'JuliaSyntax/**'
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.0'
+          - '1.6'
+          - '1.10'
+          - '1'
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+        arch:
+          - x86
+          - x64
+        exclude:
+          # MacOS not available on x86
+          - {os: 'macOS-latest', arch: 'x86'}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          project: JuliaSyntax
+      - uses: julia-actions/julia-processcoverage@latest
