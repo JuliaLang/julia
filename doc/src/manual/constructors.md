@@ -583,27 +583,8 @@ method. This includes types, i.e., objects of type [`Type`](@ref); and construct
 in fact, be viewed as just callable type objects. For example, there are many methods
 defined on `Bool` and various supertypes of it:
 
-```julia-repl
-julia> methods(Bool)
-# 9 methods for type constructor:
- [1] Bool(x::BigFloat)
-     @ mpfr.jl:479
- [2] Bool(x::Float16)
-     @ float.jl:360
- [3] Bool(x::Rational)
-     @ rational.jl:156
- [4] Bool(x::Real)
-     @ bool.jl:190
- [5] (dt::Type{<:Integer})(ip::Sockets.IPAddr)
-     @ ~/.julia/juliaup/julia-1.12.1+0.x64.linux.gnu/share/julia/stdlib/v1.12/Sockets/src/IPAddr.jl:11
- [6] (::Type{T})(x::Enum{T2}) where {T<:Integer, T2<:Integer}
-     @ Enums.jl:19
- [7] (::Type{T})(z::Complex) where T<:Real
-     @ complex.jl:44
- [8] (::Type{T})(x::Base.TwicePrecision) where T<:Number
-     @ twiceprecision.jl:265
- [9] (::Type{T})(x::AbstractChar) where T<:Union{AbstractChar, Number}
-     @ char.jl:52
+```@repl
+methods(Bool)
 ```
 
 The usual constructor syntax is exactly equivalent to the function-like object
