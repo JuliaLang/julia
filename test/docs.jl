@@ -1625,7 +1625,7 @@ module DocReturnValue
         "docstring for global y"
         global y = 4
     end
-    @test_broken result6 === 4
+    @test result6 === 4
     @test y === 4
     # Test that assignment returns the RHS
     result7 = begin
