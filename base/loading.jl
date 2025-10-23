@@ -348,11 +348,14 @@ function identify_package_env(where::PkgId, name::String)
     else
         for env in load_path()
             pkgid = manifest_deps_get(env, where, name)
-            pkgid === nothing && continue # not found--keep looking
+            # If we didn't find `where` at all, keep looking through the environment stack
+            pkgid === nothing && continue
             if pkgid.uuid !== nothing
-                pkg_env = pkgid, env # found in explicit environment--use it
+                pkg_env = pkgid, env
             end
-            break # found in implicit environment--return "not found"
+            # If we don't have pkgid.uuid, still break here - this is a sentinel that indicates
+            # that we've found `where` but it did not have the required dependency. We terminate the search.
+            break
         end
         if pkg_env === nothing && is_stdlib(where)
             # if not found it could be that manifests are from a different julia version/commit
@@ -723,30 +726,31 @@ function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     return nothing
 end
 
-function package_get(project_file, where::PkgId, name::String)
-    proj = project_file_name_uuid(project_file, where.name)
-    if proj == where
-        # if `where` matches the project, use [deps] section as manifest, and stop searching
-        pkg_uuid = explicit_project_deps_get(project_file, name)
-        return PkgId(pkg_uuid, name)
-    end
-    return nothing
+function package_get_here(project_file, name::String)
+    # if `where` matches the project, use [deps] section as manifest, and stop searching
+    pkg_uuid = explicit_project_deps_get(project_file, name)
+    pkg_uuid === nothing && return PkgId(name)
+    return PkgId(pkg_uuid, name)
 end
 
-function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
-    uuid = where.uuid
-    @assert uuid !== nothing
-    project_file = env_project_file(env)
-    if project_file isa String
-        pkg = package_get(project_file, where, name)
-        pkg === nothing || return pkg
-        d = parsed_toml(project_file)
-        exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
-        if exts !== nothing
-            proj = project_file_name_uuid(project_file, where.name)
-            # Check if `where` is an extension of the project
-            if where.name in keys(exts) && where.uuid == uuid5(proj.uuid::UUID, where.name)
-                # Extensions can load weak deps...
+function package_get(project_file, where::PkgId, name::String)
+    proj = project_file_name_uuid(project_file, where.name)
+    proj != where && return nothing
+    return package_get_here(project_file, name)
+end
+
+ext_may_load_weakdep(exts::String, name::String) = exts == name
+ext_may_load_weakdep(exts::Vector{String}, name::String) = name in exts
+
+function package_extension_get(project_file, where::PkgId, name::String)
+    d = parsed_toml(project_file)
+    exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
+    if exts !== nothing
+        proj = project_file_name_uuid(project_file, where.name)
+        # Check if `where` is an extension of the project
+        if where.name in keys(exts) && where.uuid == uuid5(proj.uuid::UUID, where.name)
+            # Extensions can load weak deps if they are an extension trigger
+            if ext_may_load_weakdep(exts[where.name]::Union{String, Vector{String}}, name)
                 weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
                 if weakdeps !== nothing
                     wuuid = get(weakdeps, name, nothing)::Union{String, Nothing}
@@ -754,18 +758,43 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
                         return PkgId(UUID(wuuid), name)
                     end
                 end
-                # ... and they can load same deps as the project itself
-                mby_uuid = explicit_project_deps_get(project_file, name)
-                mby_uuid === nothing || return PkgId(mby_uuid, name)
             end
+            # ... and they can load same deps as the project itself
+            return package_get_here(project_file, name)
         end
-        # look for manifest file and `where` stanza
-        return explicit_manifest_deps_get(project_file, where, name)
-    elseif project_file
-        # if env names a directory, search it
-        return implicit_manifest_deps_get(env, where, name)
     end
     return nothing
+end
+
+function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
+    @assert where.uuid !== nothing
+    project_file = env_project_file(env)
+    implicit_manifest = !(project_file isa String)
+    if implicit_manifest
+        project_file || return nothing
+        project_file = implicit_manifest_project(env, where)
+        project_file === nothing && return nothing
+    end
+
+    # 1. Are we loading into the top-level project itself? dependencies come from [deps]
+    #    N.B.: Here "top-level" includes package loaded from an implicit manifest, which
+    #          uses the same code path.
+    pkg = package_get(project_file, where, name)
+    pkg === nothing || return pkg
+
+    # 2. Are we an extension of the top-level project? dependencies come from [weakdeps] and [deps]
+    pkg = package_extension_get(project_file, where, name)
+    pkg === nothing || return pkg
+
+    if implicit_manifest
+        # With an implicit manifest, getting here means that our (implicit) environment
+        # *has* the package `where`. If we don't find it, it just means that `where` doesn't
+        # have `name` as a dependency - c.f. the analogous case in `explicit_manifest_deps_get`.
+        return PkgId(name)
+    end
+
+    # All other cases, dependencies come from the (top-level) manifest
+    return explicit_manifest_deps_get(project_file, where, name)
 end
 
 function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missing}
@@ -938,7 +967,7 @@ end
 # find project file root or deps `name => uuid` mapping
 # `ext` is the name of the extension if `name` is loaded from one
 # return `nothing` if `name` is not found
-function explicit_project_deps_get(project_file::String, name::String, ext::Union{String,Nothing}=nothing)::Union{Nothing,UUID}
+function explicit_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
     d = parsed_toml(project_file)
     if get(d, "name", nothing)::Union{String, Nothing} === name
         root_uuid = dummy_uuid(project_file)
@@ -949,19 +978,6 @@ function explicit_project_deps_get(project_file::String, name::String, ext::Unio
     if deps !== nothing
         uuid = get(deps, name, nothing)::Union{String, Nothing}
         uuid === nothing || return UUID(uuid)
-    end
-    if ext !== nothing
-        extensions = get(d, "extensions", nothing)
-        extensions === nothing && return nothing
-        ext_data = get(extensions, ext, nothing)
-        ext_data === nothing && return nothing
-        if (ext_data isa String && name == ext_data) || (ext_data isa Vector{String} && name in ext_data)
-            weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
-            weakdeps === nothing && return nothing
-            wuuid = get(weakdeps, name, nothing)::Union{String, Nothing}
-            wuuid === nothing && return nothing
-            return UUID(wuuid)
-        end
     end
     return nothing
 end
@@ -989,14 +1005,27 @@ function get_deps(raw_manifest::Dict)
     end
 end
 
-# find `where` stanza and return the PkgId for `name`
-# return `nothing` if it did not find `where` (indicating caller should continue searching)
+function dep_stanza_get(stanza::Dict{String, Any}, name::String)::Union{Nothing, PkgId}
+    for (dep, uuid) in stanza
+        uuid::String
+        if dep === name
+            return PkgId(UUID(uuid), name)
+        end
+    end
+    return nothing
+end
+
+function dep_stanza_get(stanza::Vector{String}, name::String)::Union{Nothing, PkgId}
+    name in stanza && return PkgId(name)
+    return nothing
+end
+
+dep_stanza_get(stanza::Nothing, name::String) = nothing
+
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
     d = get_deps(parsed_toml(manifest_file))
-    found_where = false
-    found_name = false
     for (dep_name, entries) in d
         entries::Vector{Any}
         for entry in entries
@@ -1006,67 +1035,62 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             # deps is either a list of names (deps = ["DepA", "DepB"]) or
             # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
             deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+            local dep::Union{Nothing, PkgId}
             if UUID(uuid) === where.uuid
-                found_where = true
-                if deps isa Vector{String}
-                    found_name = name in deps
-                    found_name && @goto done
-                elseif deps isa Dict{String, Any}
-                    deps = deps::Dict{String, Any}
-                    for (dep, uuid) in deps
-                        uuid::String
-                        if dep === name
-                            return PkgId(UUID(uuid), name)
-                        end
-                    end
-                end
-            else # Check for extensions
+                dep = dep_stanza_get(deps, name)
+
+                # We found `where` in this environment, but it did not have a deps entry for
+                # `name`. This is likely because the dependency was modified without a corresponding
+                # change to dependency's Project or our Manifest. Return a sentinel here indicating
+                # that we know the package, but do not know its UUID. The caller will terminate the
+                # search and provide an appropriate error to the user.
+                dep === nothing && return PkgId(name)
+            else
+                # Check if we're trying to load into an extension of this package
                 extensions = get(entry, "extensions", nothing)
                 if extensions !== nothing
                     if haskey(extensions, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
-                        found_where = true
                         if name == dep_name
+                            # Extension loads its base package
                             return PkgId(UUID(uuid), name)
                         end
                         exts = extensions[where.name]::Union{String, Vector{String}}
-                        weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                        if (exts isa String && name == exts) || (exts isa Vector{String} && name in exts)
-                            for deps′ in [weakdeps, deps]
-                                    if deps′ !== nothing
-                                        if deps′ isa Vector{String}
-                                            found_name = name in deps′
-                                            found_name && @goto done
-                                        elseif deps′ isa Dict{String, Any}
-                                            deps′ = deps′::Dict{String, Any}
-                                            for (dep, uuid) in deps′
-                                                uuid::String
-                                                if dep === name
-                                                    return PkgId(UUID(uuid), name)
-                                                end
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        # `name` is not an ext, do standard lookup as if this was the parent
-                        return identify_package(PkgId(UUID(uuid), dep_name), name)
+                        # Extensions are allowed to load:
+                        # 1. Any ordinary dep of the parent package
+                        # 2. Any weakdep of the parent package declared as an extension trigger
+                        for deps′ in (ext_may_load_weakdep(exts, name) ?
+                                (get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}, deps) :
+                                (deps,))
+                            dep = dep_stanza_get(deps′, name)
+                            dep === nothing && continue
+                            @goto have_dep
+                        end
+                        return PkgId(name)
                     end
                 end
+                continue
             end
+
+            @label have_dep
+            dep.uuid !== nothing && return dep
+
+            # We have the dep, but it did not specify a UUID. In this case,
+            # it must be that the name is unique in the manifest - so lookup
+            # the UUID at the lop level by name
+            name_deps = get(d, name, nothing)::Union{Nothing, Vector{Any}}
+            if name_deps === nothing || length(name_deps) != 1
+                error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+            end
+            entry = first(name_deps::Vector{Any})::Dict{String, Any}
+            uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+            uuid === nothing && return PkgId(name)
+            return PkgId(UUID(uuid), name)
         end
     end
-    @label done
-    found_where || return nothing
-    found_name || return PkgId(name)
-    # Only reach here if deps was not a dict which mean we have a unique name for the dep
-    name_deps = get(d, name, nothing)::Union{Nothing, Vector{Any}}
-    if name_deps === nothing || length(name_deps) != 1
-        error("expected a single entry for $(repr(name)) in $(repr(project_file))")
-    end
-    entry = first(name_deps::Vector{Any})::Dict{String, Any}
-    uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
-    uuid === nothing && return nothing
-    return PkgId(UUID(uuid), name)
+
+    # We did not find `where` in this environment, either as a package or as an extension.
+    # The caller should continue searching the environment stack.
+    return nothing
 end
 
 # find `uuid` stanza, return the corresponding path
@@ -1149,35 +1173,16 @@ function implicit_project_deps_get(dir::String, name::String)::Union{Nothing,Pkg
     return proj
 end
 
-# look for an entry-point for `name`, check that UUID matches
-# if there's a project file, look up `name` in its deps and return that
-# otherwise return `nothing` to indicate the caller should keep searching
-function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Union{Nothing,PkgId}
-    @assert where.uuid !== nothing
-    project_file = entry_point_and_project_file(dir, where.name)[2]
+function implicit_manifest_project(dir, pkg::PkgId)::Union{Nothing, String}
+    @assert pkg.uuid !== nothing
+    project_file = entry_point_and_project_file(dir, pkg.name)[2]
     if project_file === nothing
         # `where` could be an extension
-        project_file = implicit_env_project_file_extension(dir, where)[2]
-        project_file === nothing && return nothing
+        return implicit_env_project_file_extension(dir, pkg)[2]
     end
-    proj = project_file_name_uuid(project_file, where.name)
-    ext = nothing
-    if proj !== where
-        # `where` could be an extension in `proj`
-        d = parsed_toml(project_file)
-        exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
-        if exts !== nothing && where.name in keys(exts)
-            if where.uuid !== uuid5(proj.uuid, where.name)
-                return nothing
-            end
-            ext = where.name
-        else
-            return nothing
-        end
-    end
-    # this is the correct project, so stop searching here
-    pkg_uuid = explicit_project_deps_get(project_file, name, ext)
-    return PkgId(pkg_uuid, name)
+    proj = project_file_name_uuid(project_file, pkg.name)
+    proj == pkg || return nothing
+    return project_file
 end
 
 # look for an entry-point for `pkg` and return its path if UUID matches
