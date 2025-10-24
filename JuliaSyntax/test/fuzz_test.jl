@@ -1,5 +1,4 @@
-using JuliaSyntax
-using JuliaSyntax: tokenize
+using .JuliaSyntax: tokenize
 import Logging
 import Test
 
