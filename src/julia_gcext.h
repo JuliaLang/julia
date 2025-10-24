@@ -15,7 +15,7 @@ extern "C" {
 // along with custom mark functions must not alter the GC state except
 // through calling jl_gc_mark_queue_obj() and jl_gc_mark_queue_objarray().
 typedef void (*jl_gc_cb_root_scanner_t)(int full) JL_NOTSAFEPOINT;
-typedef void (*jl_gc_cb_task_scanner_t)(jl_task_t *task, int full) JL_NOTSAFEPOINT;
+typedef void (*jl_gc_cb_task_scanner_t)(jl_task_t *task, int is_root_task, jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // Callbacks that are invoked before and after a collection.
 typedef void (*jl_gc_cb_pre_gc_t)(int full) JL_NOTSAFEPOINT;
