@@ -1,11 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct SlotRefinement
-    slot::SlotNumber
-    typ::Any
-    SlotRefinement(slot::SlotNumber, @nospecialize(typ)) = new(slot, typ)
-end
-
 # See if the inference result of the current statement's result value might affect
 # the final answer for the method (aside from optimization potential and exceptions).
 # To do that, we need to check both for slot assignment and SSA usage.
@@ -95,7 +89,7 @@ mutable struct CallInferenceState
     all_effects::Effects
     const_results::Union{Nothing,Vector{Union{Nothing,ConstResult}}} # keeps the results of inference with the extended lattice elements (if happened)
     conditionals::Union{Nothing,Tuple{Vector{Any},Vector{Any}}} # keeps refinement information of call argument types when the return type is boolean
-    slotrefinements::Union{Nothing,Vector{Any}} # keeps refinement information on slot types obtained from call signature
+    slotrefinements::Union{Nothing,Vector{SlotRefinement}} # keeps refinement information on slot types obtained from call signature
 
     # some additional fields for untyped objects (just to avoid capturing)
     func
@@ -140,6 +134,16 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # final result
     gfresult = Future{CallMeta}()
     state = CallInferenceState(func, matches)
+    merged_refinements::Union{Nothing, Vector{SlotRefinement}} = nothing
+    fargs = arginfo.fargs
+    if isa(sv, InferenceState) && fargs !== nothing && !isconcretetype(atype)
+        merged_refinements = SlotRefinement[]
+        for farg in fargs
+            isa(farg, SlotNumber) || continue
+            any(x::SlotRefinement -> x.slot === farg, merged_refinements) && continue
+            push!(merged_refinements, SlotRefinement(farg, Union{}))
+        end
+    end
 
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
@@ -166,15 +170,18 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             #end
             mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)::Future
             function handle1(interp, sv)
-                local (; rt, exct, effects, edge, volatile_inf_result) = mresult[]
+                local (; rt, exct, effects, refinements, edge, volatile_inf_result) = mresult[]
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
+                if merged_refinements !== nothing && ipo_slot_refinement_enabled(interp)
+                    merge_slot_refinements!(merged_refinements, 𝕃ᵢ, refinements, fargs, match)
+                end
                 # try constant propagation with argtypes for this match
                 # this is in preparation for inlining, or improving the return result
                 local matches = state.matches
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[state.inferidx]
-                this_arginfo = ArgInfo(arginfo.fargs, this_argtypes)
+                this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp,
                     mresult[], state.func, this_arginfo, si, match, sv)
                 const_result = volatile_inf_result
@@ -231,7 +238,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
 
                 state.rettype = state.rettype ⊔ₚ this_rt
                 state.exctype = state.exctype ⊔ₚ this_exct
-                if has_conditional(𝕃ₚ, sv) && this_conditional !== Bottom && is_lattice_bool(𝕃ₚ, state.rettype) && arginfo.fargs !== nothing
+                if has_conditional(𝕃ₚ, sv) && this_conditional !== Bottom && is_lattice_bool(𝕃ₚ, state.rettype) && fargs !== nothing
                     local conditionals = state.conditionals
                     if conditionals === nothing
                         conditionals = state.conditionals = (
@@ -270,9 +277,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.all_effects = Effects(state.all_effects; nothrow=false)
                 state.exctype = state.exctype ⊔ₚ MethodError
             end
-            local fargs = arginfo.fargs
-            if sv isa InferenceState && fargs !== nothing
-                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
+            if merged_refinements !== nothing
+                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, merged_refinements, argtypes, fargs)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals)
             if call_result_unused(si) && !(state.rettype === Bottom)
@@ -337,6 +343,26 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # start making progress on the first call
     infercalls(interp, sv) || push!(sv.tasks, infercalls)
     return gfresult
+end
+
+function merge_slot_refinements!(merged_refinements::Vector{SlotRefinement}, 𝕃ᵢ::AbstractLattice, refinements::Union{Nothing, Vector{SlotRefinement}}, fargs::Vector{Any}, match::MethodMatch)
+    valid_as_lattice(match.spec_types, true) || return nothing
+    ⊔ = join(𝕃ᵢ)
+    for i in 1:length(merged_refinements)
+        merged_refinement = merged_refinements[i]
+        newt = refinements === nothing ? Any : begin
+            j = findfirst(x::SlotRefinement -> x.slot === merged_refinement.slot, refinements)
+            j === nothing ? Any : refinements[j].typ
+        end
+        for k in 1:length(fargs)
+            fargₖ = fargs[k]
+            isa(fargₖ, SlotNumber) || continue
+            fargₖ === merged_refinement.slot || continue
+            sigtₖ = fieldtype(match.spec_types, k)
+            newt = intersect_refined_types(newt, sigtₖ, 𝕃ᵢ)
+        end
+        merged_refinements[i] = SlotRefinement(merged_refinement.slot, merged_refinement.typ ⊔ newt)
+    end
 end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
@@ -564,31 +590,30 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     end
 end
 
-function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget},
-    argtypes::Vector{Any}, fargs::Vector{Any}, sv::InferenceState)
-    ⊏, ⊔ = strictpartialorder(𝕃ᵢ), join(𝕃ᵢ)
+function collect_slot_refinements(𝕃ᵢ::AbstractLattice, merged_refinements::Vector{SlotRefinement}, argtypes::Vector{Any}, fargs::Vector{Any})
+    ⊏ = strictpartialorder(𝕃ᵢ)
     slotrefinements = nothing
     for i = 1:length(fargs)
         fargᵢ = fargs[i]
-        if fargᵢ isa SlotNumber
-            fidx = slot_id(fargᵢ)
-            argt = widenslotwrapper(argtypes[i])
-            if isvarargtype(argt)
-                argt = unwrapva(argt)
+        fargᵢ isa SlotNumber || continue
+        argt = unwrapva(widenslotwrapper(argtypes[i]))
+        if slotrefinements !== nothing && any(x::SlotRefinement -> fargᵢ === x.slot, slotrefinements)
+            # slot was already processed, and argtypes should be identical for the same slot
+            for i′ in 1:length(fargs)
+                i === i′ && continue
+                fargᵢ′ = fargs[i′]
+                fargᵢ′ === fargᵢ || continue
+                @assert widenslotwrapper(unwrapva(argtypes[i′])) == argt
             end
-            sigt = Bottom
-            for j = 1:length(applicable)
-                (;match) = applicable[j]
-                valid_as_lattice(match.spec_types, true) || continue
-                sigt = sigt ⊔ fieldtype(match.spec_types, i)
-            end
-            if sigt ⊏ argt # i.e. signature type is strictly more specific than the type of the argument slot
-                if slotrefinements === nothing
-                    slotrefinements = fill!(Vector{Any}(undef, length(sv.slottypes)), nothing)
-                end
-                slotrefinements[fidx] = sigt
-            end
+            continue
         end
+        j = findfirst(x::SlotRefinement -> x.slot === fargᵢ, merged_refinements)::Int
+        newt = merged_refinements[j].typ
+        newt === Union{} && continue
+        newt ⊏ argt || continue
+        refinement = SlotRefinement(fargᵢ, newt)
+        slotrefinements === nothing && (slotrefinements = SlotRefinement[])
+        push!(slotrefinements, refinement)
     end
     return slotrefinements
 end
@@ -602,9 +627,9 @@ function abstract_call_method(interp::AbstractInterpreter,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
-        return Future(MethodCallResult(Any, Any, Effects(), nothing, false, false))
+        return Future(MethodCallResult(Any, Any, Effects(), nothing, nothing, false, false))
     all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), sigtuple.parameters) ||
-        return Future(MethodCallResult(Union{}, Any, EFFECTS_THROWS, nothing, false, false)) # catch bad type intersections early
+        return Future(MethodCallResult(Union{}, Any, EFFECTS_THROWS, nothing, nothing, false, false)) # catch bad type intersections early
 
     if is_nospecializeinfer(method)
         sig = get_nospecializeinfer_sig(method, sig, sparams)
@@ -676,7 +701,7 @@ function abstract_call_method(interp::AbstractInterpreter,
                 # since it's very unlikely that we'll try to inline this,
                 # or want make an invoke edge to its calling convention return type.
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                return Future(MethodCallResult(Any, Any, Effects(), nothing, true, true))
+                return Future(MethodCallResult(Any, Any, Effects(), nothing, nothing, true, true))
             end
             add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             # TODO (#48913) implement a proper recursion handling for irinterp:
@@ -832,14 +857,16 @@ struct MethodCallResult
     rt
     exct
     effects::Effects
+    refinements::Union{Nothing,Vector{SlotRefinement}}
     edge::Union{Nothing,CodeInstance}
     edgecycle::Bool
     edgelimited::Bool
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}
     function MethodCallResult(@nospecialize(rt), @nospecialize(exct), effects::Effects,
+                              refinements::Union{Nothing,Vector{SlotRefinement}},
                               edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
                               volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
-        return new(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
+        return new(rt, exct, effects, refinements, edge, edgecycle, edgelimited, volatile_inf_result)
     end
 end
 
@@ -2292,7 +2319,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     lookupsig_box = Core.Box(lookupsig)
     invokecall = InvokeCall(types)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, effects, edge, volatile_inf_result) = result
+        (; rt, exct, effects, edge, volatile_inf_result, refinements) = result
         local ft′ = ft′_box.contents
         sig = match.spec_types
         argtypes′ = invoke_rewrite(arginfo.argtypes)
@@ -2329,7 +2356,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
         end
-        return CallMeta(rt, exct, effects, info)
+        return CallMeta(rt, exct, effects, info, refinements)
     end
 end
 
@@ -2818,7 +2845,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, effects, volatile_inf_result, edge, edgecycle) = result
+        (; rt, exct, effects, refinements, volatile_inf_result, edge, edgecycle) = result
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
         const_result = volatile_inf_result
@@ -2850,7 +2877,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
         info = OpaqueClosureCallInfo(edge, match, const_result)
-        return CallMeta(rt, exct, effects, info)
+        return CallMeta(rt, exct, effects, info, refinements)
     end
 end
 
@@ -3036,7 +3063,7 @@ struct RTEffects
     rt::Any
     exct::Any
     effects::Effects
-    refinements # ::Union{Nothing,SlotRefinement,Vector{Any}}
+    refinements # ::Union{Nothing,SlotRefinement,Vector{SlotRefinement}}
     function RTEffects(rt, exct, effects::Effects, refinements=nothing)
         @nospecialize rt exct refinements
         return new(rt, exct, effects, refinements)
@@ -4264,6 +4291,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             if else_change !== nothing
                                 elsestate = copy(currstate)
                                 stoverwrite1!(elsestate, else_change)
+                                refinement = SlotRefinement(else_change.var, else_change.vtype.typ)
+                                record_refinements!(frame, falsebb, interp, refinement)
                             elseif condslot isa SlotNumber
                                 elsestate = copy(currstate)
                             else
@@ -4276,6 +4305,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             then_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#true)
                             thenstate = currstate
                             if then_change !== nothing
+                                refinement = SlotRefinement(then_change.var, then_change.vtype.typ)
+                                record_refinements!(frame, truebb, interp, refinement)
                                 stoverwrite1!(thenstate, then_change)
                             end
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this then branch
@@ -4352,14 +4383,19 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
+                # On slot reassignment, the aliasing assumption drops: a slot changing from even `::T` -> `::T`
+                # makes IPO slot refinement unsound, because the link with any caller slot becomes broken.
+                # Thankfully, we only care about argument slots for IPO, and reassigning those is already
+                # undefined behavior, so we don't need to worry about it.
             end
-            if refinements isa SlotRefinement
-                apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes)
-            elseif refinements isa Vector{Any}
-                for i = 1:length(refinements)
-                    newtyp = refinements[i]
-                    newtyp === nothing && continue
-                    apply_refinement!(𝕃ᵢ, SlotNumber(i), newtyp, currstate, changes)
+            if refinements !== nothing
+                apply_refinements!(currstate, 𝕃ᵢ, refinements, changes)
+                if is_ipo_slot_refinement_profitable(frame)
+                    if should_eagerly_apply_refinements_for_ipo(interp, frame, currbb)
+                        apply_refinements_for_ipo!(frame, 𝕃ᵢ, refinements)
+                    else
+                        record_refinements!(frame, currbb, interp, refinements)
+                    end
                 end
             end
             if rt === nothing
@@ -4392,25 +4428,243 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 init_vartable!(currstate, frame)
             else
                 stoverwrite!(currstate, nexttable)
+                merge_refinements_from_predecessors!(frame, currstate, interp)
             end
         end
     end # while currbb <= nbbs
 
+    finish_merging_global_refinements!(frame, interp)
+
     return CurrentState()
 end
 
-function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecialize(newtyp),
-                           currstate::VarTable, currchanges::Union{Nothing,StateUpdate})
-    if currchanges !== nothing && currchanges.var == slot
-        return # type propagation from statement (like assignment) should have the precedence
-    end
-    vtype = currstate[slot_id(slot)]
+function ipo_slot_refinement_enabled(interp::AbstractInterpreter)
+    inf_params = InferenceParams(interp)
+    return inf_params.ipo_slot_refinement
+end
+
+is_ipo_slot_refinement_profitable(state::InferenceState) = !isempty(state.refinements)
+
+function is_argument_slot(frame::InferenceState, slot::SlotNumber)
+    def = frame.linfo.def
+    isa(def, Method) || return false
+    return slot.id ≤ def.nargs
+end
+
+function apply_refinement!(vartable::VarTable, 𝕃ᵢ::AbstractLattice, refinement::SlotRefinement)
+    slot = refinement.slot
+    vtype = vartable[slot_id(slot)]
     oldtyp = vtype.typ
+    newtyp = refinement.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
         stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef))
-        stoverwrite1!(currstate, stmtupdate)
+        stoverwrite1!(vartable, stmtupdate)
     end
+end
+
+function apply_refinements_for_ipo!(frame::InferenceState, 𝕃ᵢ::AbstractLattice,
+                                  refinements#=::Iterable{SlotRefinement}=#)
+    is_ipo_slot_refinement_profitable(frame) || return
+    for refinement in refinements
+        is_argument_slot(frame, refinement.slot) || continue
+        apply_refinement!(frame.refinements, 𝕃ᵢ, refinement)
+    end
+end
+
+function apply_refinements!(vartable::VarTable, 𝕃ᵢ::AbstractLattice, refinements#=::Iterable{SlotRefinement}=#,
+                            changes::Union{Nothing,StateUpdate} = nothing)
+    for refinement in refinements
+        # type propagation from statement (like assignment) should have the precedence
+        changes !== nothing && changes.var == refinement.slot && continue
+        apply_refinement!(vartable, 𝕃ᵢ, refinement)
+    end
+end
+
+function SlotRefinementPropagationState(frame::InferenceState)
+    cfg = compute_basic_blocks(frame.src.code)
+    return SlotRefinementPropagationState(cfg)
+end
+
+function SlotRefinementPropagationState(cfg::CFG)
+    postdomtree = construct_postdomtree(cfg)
+    n = length(cfg.blocks)
+
+    terminating_blocks = IdSet{BBIndex}()
+    top_level_blocks = IdSet{BBIndex}()
+    merge_points = IdSet{BBIndex}()
+
+    # Initialize paths.
+    paths = PathIndex[0 for _ in 1:n]
+    paths[1] = 1
+    path_bound = 1
+    next = BBIndex[1]
+    v = 1
+    seen = IdSet{BBIndex}()
+    while !isempty(next)
+        v = popfirst!(next)
+        in(v, seen) && continue # don't process backedges
+        push!(seen, v)
+        postdominates(postdomtree, v, 1) && push!(top_level_blocks, v)
+        info = cfg.blocks[v]
+        preds = info.preds
+        succs = info.succs
+        if isempty(succs)
+            push!(terminating_blocks, v)
+        elseif length(succs) == 1
+            w = succs[1]
+            paths[w] == 0 || continue
+            paths[w] = paths[v]
+            push!(next, w)
+        else
+            for w in succs
+                paths[w] == 0 || continue
+                paths[w] = (path_bound += 1)
+                push!(next, w)
+            end
+        end
+    end
+
+    for v in 1:n
+        info = cfg.blocks[v]
+        preds = info.preds
+        length(preds) ≥ 2 || continue
+        i = findfirst(≠(0), preds)
+        i === nothing && continue
+        a = paths[preds[i]]
+        a == 0 && continue # don't process nodes that are not reachable
+        for i in 2:length(preds)
+            u = preds[i]
+            u == 0 && continue
+            b = paths[u]
+            b == 0 && continue
+            a == b && continue
+            push!(merge_points, v)
+            break
+        end
+    end
+
+    # Allocate slot refinement information
+    initial_refinements = Vector{SlotRefinement}[SlotRefinement[] for _ in 1:path_bound]
+    updates = IdDict{Int,SlotRefinement}[IdDict{Int,SlotRefinement}() for _ in 1:path_bound]
+
+    return SlotRefinementPropagationState(postdomtree, paths, initial_refinements, updates, merge_points, terminating_blocks, top_level_blocks)
+end
+
+function get_ipo_slot_refinement_state!(frame::InferenceState)
+    state = frame.refinement_propagation
+    state !== nothing && return state
+    state = SlotRefinementPropagationState(frame)
+    frame.refinement_propagation = state
+    return state
+end
+
+function record_refinements!(frame::InferenceState, block::BBIndex,
+                             interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#)
+    ipo_slot_refinement_enabled(interp) || return
+    is_ipo_slot_refinement_profitable(frame) || return
+    state = get_ipo_slot_refinement_state!(frame)
+    path = state.paths[block]
+    updates = state.updates[path]
+    record_refinements!(frame, updates, interp, refinements)
+end
+
+function record_refinements!(frame::InferenceState, updates::IdDict{Int, SlotRefinement},
+                             interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#)
+    for refinement in refinements
+        is_argument_slot(frame, refinement.slot) || continue
+        i = slot_id(refinement.slot)
+        existing = get(updates, i, nothing)
+        if existing === nothing
+            updates[i] = refinement
+            continue
+        end
+        𝕃ₚ = ipo_lattice(interp)
+        ⊑ = partialorder(𝕃ₚ)
+        new = refinement.typ
+        existing.typ === new && continue
+        newt = new ⊑ existing.typ ? new : intersect_refined_types(new, existing.typ, 𝕃ₚ)
+        updates[i] = SlotRefinement(refinement.slot, newt)
+    end
+end
+
+function merge_updates_from_paths(𝕃ᵢ::AbstractLattice, state::SlotRefinementPropagationState, paths::Vector{PathIndex}, frame::InferenceState)
+    isempty(paths) && return nothing
+    result = copy(state.updates[paths[1]])
+    length(paths) == 1 && return result
+    ⊔ = join(𝕃ᵢ)
+    for i in 2:length(paths)
+        path = paths[i]
+        path == 0 && continue
+        updates = state.updates[path]
+        for key in keys(result)
+            update = get(updates, key, nothing)
+            if update === nothing
+                delete!(result, key)
+            else
+                existing = result[key]
+                result[key] = SlotRefinement(existing.slot, existing.typ ⊔ update.typ)
+            end
+        end
+    end
+    return result
+end
+
+function should_eagerly_apply_refinements_for_ipo(interp::AbstractInterpreter, frame::InferenceState, bb::Int)
+    ipo_slot_refinement_enabled(interp) || return false
+    state = get_ipo_slot_refinement_state!(frame)
+    return should_eagerly_apply_refinements_for_ipo(state, bb)
+end
+
+should_eagerly_apply_refinements_for_ipo(state::SlotRefinementPropagationState, bb::Int) = in(bb, state.top_level_blocks)
+
+function merge_refinements_from_predecessors!(frame::InferenceState, vartable::VarTable, interp::AbstractInterpreter)
+    ipo_slot_refinement_enabled(interp) || return
+    is_ipo_slot_refinement_profitable(frame) || return
+    state = frame.refinement_propagation
+    state === nothing && return
+    block = frame.currbb
+    in(block, state.merge_points) || return
+    𝕃ᵢ = typeinf_lattice(interp)
+    preds = frame.cfg.blocks[block].preds
+    paths = nonthrowing_paths(state, frame, preds)
+    updates = merge_updates_from_paths(𝕃ᵢ, state, paths, frame)
+    updates === nothing && return
+    refinements = values(updates)
+    apply_refinements!(vartable, 𝕃ᵢ, refinements)
+    if should_eagerly_apply_refinements_for_ipo(state, block)
+        apply_refinements_for_ipo!(frame, 𝕃ᵢ, refinements)
+    else
+        path = state.paths[block]
+        state.updates[path] = updates
+    end
+end
+
+function finish_merging_global_refinements!(frame::InferenceState, interp::AbstractInterpreter)
+    ipo_slot_refinement_enabled(interp) || return
+    is_ipo_slot_refinement_profitable(frame) || return
+    state = frame.refinement_propagation
+    state === nothing && return
+    length(state.terminating_blocks) ≥ 2 || return
+    𝕃ᵢ = typeinf_lattice(interp)
+    paths = nonthrowing_paths(state, frame, state.terminating_blocks; finished = true)
+    updates = merge_updates_from_paths(𝕃ᵢ, state, paths, frame)
+    updates === nothing && return
+    refinements = values(updates)
+    apply_refinements!(frame.refinements, 𝕃ᵢ, refinements)
+end
+
+function nonthrowing_paths(state::SlotRefinementPropagationState, frame::InferenceState, blocks; finished::Bool = false)
+    paths = PathIndex[]
+    for v in blocks
+        i = last(frame.cfg.blocks[v].stmts)
+        inferred = frame.src.ssavaluetypes[i]
+        inferred === Union{} && continue
+        # If we call this post-inference, `NOT_FOUND` indicates unreachable code.
+        inferred === NOT_FOUND && finished && continue
+        push!(paths, state.paths[v])
+    end
+    return paths
 end
 
 function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Bool)

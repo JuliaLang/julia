@@ -2469,6 +2469,221 @@ isasome(::Nothing) = false
     return 0
 end |> only === Int
 
+@testset "Interprocedural slot refinement" begin
+    return_after(f, x) = (f(x); x)
+    return_after(f, x, y) = (f(x, y); (x, y))
+    return_after(f, x, y, z) = (f(x, y, z); (x, y, z))
+
+    @testset "Signature/refinement merging for a single method match" begin
+        # refinement ⊏ signature type
+        let subfunc(x::Number) = x::AbstractFloat
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === AbstractFloat
+        end
+
+        # signature type ⊏ refinement
+        let subfunc(x::Float64) = x::AbstractFloat
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        # signature type === refinement
+        let subfunc(x::AbstractFloat) = x::AbstractFloat
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === AbstractFloat
+        end
+
+        ## multiple refinements for a single slot in a single call
+
+        let subfunc(x, y) = (x::AbstractFloat, y::Float64)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x, y) = (x::Union{Int64, Float64}, y::Union{Float64, String})
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x::Float64, y) = (x, y::AbstractFloat)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x, y::Float64) = (x::AbstractFloat, y)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x::String, y) = (x, y::Float64)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            # XXX: we could also refine `x` down to `Union{}`
+            @test src.rettype === Any
+        end
+
+        let subfunc(x::T, y::T) where {T<:Number} = (x::Float64, y)
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any); optimize = false)
+            # XXX: we could also further refine `y` to `Float64` using the diagonal type constraint
+            @test src.rettype === Tuple{Float64, Number}
+        end
+    end
+
+    @testset "Merging refinements across method matches" begin
+        let subfunc(lt::typeof(isless)) = lt::typeof(isless)
+            subfunc(lt) = lt
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Any
+        end
+
+        let subfunc(x) = unwrap_unionall(x)
+            U = Union{Type{Tuple}, Core.TypeofVararg, UnionAll}
+            src = code_typed1(return_after, (typeof(subfunc), U); optimize = false)
+            @test src.rettype === U
+        end
+
+        let subfunc(x::AbstractFloat) = x
+            subfunc(x) = x::Number
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Number
+        end
+
+        let subfunc(x) = x::AbstractFloat
+            subfunc(x::Number) = x
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Number
+        end
+
+        let subfunc(x::Float64) = x
+            subfunc(x) = x::String
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Union{Float64, String}
+        end
+
+        let subfunc(x::Number, y) = (x, y::Float64)
+            subfunc(x, y) = (x::String, y::Symbol)
+            subfunc(x::Symbol, y::Int64) = (x, y::String)
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any); optimize = false)
+            # XXX: we could further infer `y` as `Union{Float64, Symbol}`,
+            # as the third method will always throw.
+            @test src.rettype === Tuple{Union{Number, String, Symbol}, Union{Float64, Symbol, Int64}}
+        end
+
+        let subfunc(x::Float64, y, z) = (x, y::String, z::Float64)
+            subfunc(x::Float64, y::String, z) = (x, y, z::Symbol)
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any, Any); optimize = false)
+            # XXX: it is theoretically possible to infer `z::Symbol` given that
+            # `y::String` implies dispatching to the second method; the first
+            # is therefore never dispatched to if we assume that execution does not throw.
+            @test src.rettype === Tuple{Float64, String, Union{Float64, Symbol}}
+        end
+    end
+
+    @testset "Computation and use of slot refinements across control-flow paths" begin
+        # don't propagate refinement information if type assumptions
+        # may be invalidated by exception catching
+        let subfunc(x) = x::Float64
+            src = code_typed1((f, x) -> (try subfunc(x); catch; end; x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Any
+        end
+
+        let subfunc(x) = rand(Bool) ? x::Float64 : x::String
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Union{Float64, String}
+        end
+
+        let subfunc(x) = rand(Bool) ? x::Float64 : subfunc(x)
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Any
+
+            # XXX: Correctly inferring that would requiring proving that the
+            # `x::Float64` branch dominates any exit of a terminating *program* in a
+            # recursive context. This requires IPO for the more general case of entering
+            # another function and possibly calling back into the caller.
+            # (even though here we could special-case re-entry into itself in theory)
+
+            # Any non-throwing, globally terminating program will be dominated by the type assertion.
+            # @test src.rettype === Float64
+        end
+
+        let f(y::Number) = y::Signed
+            f(y) = y::Symbol
+            subfunc_2 = f # prevent function from being boxed
+            subfunc(x, y) = begin
+                if isa(x, Float64)
+                    y::Integer
+                else
+                    isa(x, Int64) || error("")
+                    y::Real
+                end
+                subfunc_2(y)
+            end
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any); optimize = false)
+            @test src.rettype === Tuple{Union{Float64, Int64}, Signed}
+        end
+
+        let subfunc(x) = begin
+                i = 0
+                @label a
+                x > 0 ? @goto(b) : @goto(c)
+                @label b
+                i += 1
+                x::Symbol
+                i > 4 && @goto(d)
+                @label c
+                x::Real
+                i > 5 || @goto(b)
+                @label d
+            end
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            # @test src.rettype === Tuple{Union{Float64, Int64}, Signed}
+        end
+    end
+
+    # Make sure that reassigned slots have their frame refinements dropped.
+    # For now, we only refine argument slots which should not be reassigned,
+    # but best to be safe.
+    let subfunc(x) = begin
+            x::Union{Int, Nothing}
+            while true
+                if !isa(x, Int)
+                    x = Base.inferencebarrier("hello")
+                    if isa(x, String)
+                        x = 2
+                    end
+                    return Val(!isa(x, Int))
+                end
+            end
+        end
+        src = code_typed1(subfunc, (Any,); optimize = false)
+        @test src.rettype == Val # especially not `Val{true}`
+    end
+
+    @eval module SlotIPO_1
+
+    f1(x::Number) = x
+    f2(x::Signed) = x
+    f2(x::Symbol) = x
+    f3(x::Integer) = x::Int64
+    f3(x::AbstractFloat) = x::Float64
+    g1(x) = isa(x, String) ? x : throw(ArgumentError("Expected a String"))
+    function f(x)
+        if inferencebarrier(true)
+            f1(x) # -> x::Number
+            f2(x) # -> x::Signed
+            f3(x) # -> x::Integer -> x::Int64
+        else
+            g1(x) # -> x::String
+        end
+        x # -> ::Union{Int64, String}
+    end
+
+    end # module
+
+    let src = code_typed1(return_after, (typeof(@invokelatest(SlotIPO_1.f)), Any); optimize = false)
+        @test src.rettype === Union{Int64, String}
+    end
+end
+
 # appropriate lattice order
 @test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
     v = x.f        # ::MustAlias(2, AliasableField{Any}, 1, Any)
