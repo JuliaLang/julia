@@ -3458,7 +3458,7 @@ function abstract_eval_nonlinearized_foreigncall_name(
         callresult = Future{CallMeta}()
         i::Int = 1
         nextstate::UInt8 = 0x0
-        local ai, res
+        local ai::Future, res::Future
         function evalargs(interp, sv)
             if nextstate === 0x1
                 @goto state1
