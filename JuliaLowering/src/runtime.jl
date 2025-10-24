@@ -48,22 +48,9 @@ _syntax_list(ctx::ExprInterpolationContext) = Any[]
 _interp_makenode(ctx::InterpolationContext, ex, args) = makenode(ctx, ex, ex, args)
 _interp_makenode(ctx::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
 
-_to_syntax_tree(ex::SyntaxTree) = ex
-_to_syntax_tree(@nospecialize(ex)) = expr_to_syntaxtree(ex)
-
-
-function _contains_active_interp(ex, depth)
-    k = _interp_kind(ex)
-    if k == K"$" && depth == 0
-        return true
-    elseif _numchildren(ex) == 0
-        return false
-    end
-    inner_depth = k == K"quote" ? depth + 1 :
-                  k == K"$"     ? depth - 1 :
-                  depth
-    return any(_contains_active_interp(c, inner_depth) for c in _children(ex))
-end
+_is_leaf(ex::SyntaxTree) = is_leaf(ex)
+_is_leaf(ex::Expr) = false
+_is_leaf(@nospecialize(ex)) = true
 
 # Produce interpolated node for `$x` syntax
 function _interpolated_value(ctx::InterpolationContext, srcref, ex)
@@ -86,22 +73,17 @@ function _interpolated_value(::ExprInterpolationContext, _, ex)
     ex
 end
 
-function copy_ast(::ExprInterpolationContext, @nospecialize(ex))
-    @ccall(jl_copy_ast(ex::Any)::Any)
+function _interpolate_ast(ctx::ExprInterpolationContext, ex::QuoteNode, depth)
+    out = _interpolate_ast(ctx, Expr(:inert, ex.value), depth)
+    QuoteNode(only(out.args))
 end
 
-function _interpolate_ast(ctx, ex, depth)
-    if ctx.current_index[] > length(ctx.values) || !_contains_active_interp(ex, depth)
-        return ex
-    end
-
-    # We have an interpolation deeper in the tree somewhere - expand to an
-    # expression which performs the interpolation.
+function _interpolate_ast(ctx, @nospecialize(ex), depth)
+    _is_leaf(ex) && return ex
     k = _interp_kind(ex)
     inner_depth = k == K"quote" ? depth + 1 :
                   k == K"$"     ? depth - 1 :
                   depth
-
     expanded_children = _syntax_list(ctx)
 
     for e in _children(ex)
@@ -120,7 +102,10 @@ function _interpolate_ast(ctx, ex, depth)
     _interp_makenode(ctx, ex, expanded_children)
 end
 
-function _setup_interpolation(::Type{SyntaxTree}, ex, values)
+# Produced by expanding K"quote".  Must create a copy of the AST.  Note that
+# wrapping `ex` in an extra node handles the edge case where the root `ex` is
+# `$` (our recursion is one step removed due to forms like `($ a b)`.)
+function interpolate_ast(::Type{SyntaxTree}, ex::SyntaxTree, values...)
     # Construct graph for interpolation context. We inherit this from the macro
     # context where possible by detecting it using __macro_ctx__. This feels
     # hacky though.
@@ -137,34 +122,32 @@ function _setup_interpolation(::Type{SyntaxTree}, ex, values)
         end
     end
     if isnothing(graph)
-        graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                                  value=Any, name_val=String, scope_layer=LayerId)
+        graph = ensure_attributes(
+            SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
+            value=Any, name_val=String, scope_layer=LayerId)
     end
     ctx = InterpolationContext(graph, values, Ref(1))
-    return ctx
-end
 
-function _setup_interpolation(::Type{Expr}, ex, values)
-    return ExprInterpolationContext(values, Ref(1))
-end
-
-function interpolate_ast(::Type{T}, ex, values...) where {T}
-    ctx = _setup_interpolation(T, ex, values)
-
-    # We must copy the AST into our context to use it as the source reference
-    # of generated expressions (and in the Expr case at least, to avoid mutation)
+    # We must copy the AST into our context to use it as the source reference of
+    # generated expressions.
     ex1 = copy_ast(ctx, ex)
-    if _interp_kind(ex1) == K"$"
-        @assert length(values) == 1
-        vs = values[1]
-        if length(vs) > 1
-            # :($($(xs...))) where xs is more than length 1
-            throw(LoweringError(_to_syntax_tree(ex1),
-                                "More than one value in bare `\$` expression"))
+    out = _interpolate_ast(ctx, @ast(ctx, ex1, [K"None" ex1]), 0)
+    length(children(out)) === 1 || throw(
+        LoweringError(ex1, "More than one value in bare `\$` expression"))
+    return only(children(out))
+end
+
+function interpolate_ast(::Type{Expr}, @nospecialize(ex), values...)
+    ctx = ExprInterpolationContext(values, Ref(1))
+    if ex isa Expr && ex.head === :$
+        @assert length(values) === 1
+        if length(ex.args) !== 1
+            throw(LoweringError(
+                expr_to_syntaxtree(ex), "More than one value in bare `\$` expression"))
         end
-        _interpolated_value(ctx, ex1, only(vs))
+        only(values[1])
     else
-        _interpolate_ast(ctx, ex1, 0)
+        _interpolate_ast(ctx, ex, 0)
     end
 end
 
