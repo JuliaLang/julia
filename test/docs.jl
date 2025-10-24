@@ -1585,3 +1585,77 @@ This docmacroception has a docstring
 @docmacroception()
 
 @test Docs.hasdoc(@__MODULE__, :var"@docmacrofoo")
+
+# Test that @doc returns the value of the documented expression
+module DocReturnValue
+    using Test
+    # Test function definition returns the function
+    result = begin
+        "docstring for f"
+        function f end
+    end
+    @test result === f
+    # Test with regular function syntax
+    result2 = begin
+        "docstring for g"
+        g(x) = x + 1
+    end
+    @test result2 === g
+    # Test with struct definition
+    result3 = begin
+        "docstring for S"
+        struct S; x; end
+    end
+    @test result3 === nothing
+    # Test with const binding
+    result4 = begin
+        "docstring for K"
+        const K = 42
+    end
+    @test result4 === 42
+    # Test that documenting a global declaration returns nothing to avoid syntax errors
+    result5 = begin
+        "docstring for global x"
+        global x
+    end
+    @test result5 === nothing
+    @test Base.binding_module(DocReturnValue, :x) === DocReturnValue
+    # Test that assignment returns the RHS
+    result6 = begin
+        "docstring for global y"
+        global y = 4
+    end
+    @test result6 === 4
+    @test y === 4
+    # Test that assignment returns the RHS
+    result7 = begin
+        "docstring for const z"
+        const z = 5
+    end
+    @test result7 === z === 5
+    # Test module returns module
+    result8 = begin
+        "docstring for module A"
+        module A end
+    end
+    @test result8 === A
+    # Tests without definition effect
+    function t end
+    result9 = begin
+        "docstring for existing value t"
+        :t
+    end
+    @test result9 isa Base.Docs.Binding
+    macro s end
+    result10 = begin
+        "docstring for existing macro s"
+        :@s
+    end
+    @test result10 isa Base.Docs.Binding
+    function h end
+    result11 = begin
+        "docstring for existing function"
+        h()
+    end
+    @test result11 isa Base.Docs.Binding
+end

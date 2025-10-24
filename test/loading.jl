@@ -463,7 +463,7 @@ function make_env(flat, root, roots, graph, paths, dummies)
 end
 
 const depots = [mkdepottempdir() for _ = 1:3]
-const envs = Dict{String,Any}()
+const envs = Pair{String, Any}[]
 
 append!(empty!(DEPOT_PATH), depots)
 
@@ -557,7 +557,7 @@ for (flat, root, roots, graph) in graphs
         end
     end
 
-    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
+    push!(envs, dir => make_env(flat, root, roots, graph, paths, dummies))
 end
 
 # materialize dependency graphs as implicit environments (if possible)
@@ -590,7 +590,7 @@ for (flat, root, roots, graph) in graphs
         end
     end
 
-    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
+    push!(envs, dir => make_env(flat, root, roots, graph, paths, dummies))
 end
 
 ## use generated environments to test package loading ##
@@ -612,10 +612,12 @@ function test_find(
         where.uuid === nothing && continue
         deps = get(graph, where, Dict(where.name => where))
         for name in NAMES
-            id = identify_package(where, name)
-            @test id == get(deps, name, nothing)
-            path = id === nothing ? nothing : locate_package(id)
-            @test path == get(paths, id, nothing)
+            @testset let where=where, name=name
+                id = identify_package(where, name)
+                @test id == get(deps, name, nothing)
+                path = id === nothing ? nothing : locate_package(id)
+                @test path == get(paths, id, nothing)
+            end
         end
     end
 end
@@ -628,14 +630,17 @@ end
 end
 
 @testset "find_package with two envs in load path" begin
-    for x = false:true,
-        (env1, (_, _, roots1, graph1, paths1)) in (x ? envs : rand(envs, 10)),
-        (env2, (_, _, roots2, graph2, paths2)) in (x ? rand(envs, 10) : envs)
-        push!(empty!(LOAD_PATH), env1, env2)
-        roots = merge(roots2, roots1)
-        graph = merge(graph2, graph1)
-        paths = merge(paths2, paths1)
-        test_find(roots, graph, paths)
+    for x = false:true, env1idx in (x ? (1:length(envs)) : rand(1:length(envs), 10)),
+                        env2idx in (x ? rand(1:length(envs), 10) : (1:length(envs)))
+        @testset let env1idx=env1idx, env2idx=env2idx
+            (env1, (_, _, roots1, graph1, paths1)) = envs[env1idx]
+            (env2, (_, _, roots2, graph2, paths2)) = envs[env2idx]
+            push!(empty!(LOAD_PATH), env1, env2)
+            roots = merge(roots2, roots1)
+            graph = merge(graph2, graph1)
+            paths = merge(paths2, paths1)
+            test_find(roots, graph, paths)
+        end
     end
 end
 
@@ -753,7 +758,7 @@ end
 
 ## cleanup after tests ##
 
-for env in keys(envs)
+for (env, _) in envs
     rm(env, force=true, recursive=true)
 end
 
@@ -1376,10 +1381,8 @@ end
             """)
         write(joinpath(foo_path, "Manifest.toml"),
             """
-            # This file is machine-generated - editing it directly is not advised
-            julia_version = "1.13.0-DEV"
+            julia_version = "1.13.0"
             manifest_format = "2.0"
-            project_hash = "8699765aeeac181c3e5ddbaeb9371968e1f84d6b"
 
             [[deps.Foo51989]]
             path = "."
