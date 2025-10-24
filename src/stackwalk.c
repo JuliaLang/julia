@@ -1417,15 +1417,13 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
         // need to read the context from the task stored state
         jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-#if defined(_OS_WINDOWS_)
+#if defined(JL_TASK_SWITCH_WINDOWS)
         memset(&c, 0, sizeof(c));
         if (jl_simulate_longjmp(*mctx, &c))
             context = &c;
-#elif defined(JL_HAVE_UNW_CONTEXT)
+#elif defined(JL_TASK_SWITCH_LIBUNWIND)
         context = t->ctx.ctx;
-#elif defined(JL_HAVE_UCONTEXT)
-        context = jl_to_bt_context(t->ctx.ctx);
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
         memset(&c, 0, sizeof(c));
         if (jl_simulate_longjmp(*mctx, &c))
             context = &c;
