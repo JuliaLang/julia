@@ -108,6 +108,7 @@ Standard library changes
 * Transparent test sets (`@testset let`) now show context when tests error ([#58727]).
 * `@test_throws` now supports a three-argument form `@test_throws ExceptionType pattern expr` to test both exception type and message pattern in one call ([#59117]).
 * The testset stack was changed to use `ScopedValue` rather than task local storage ([#53462]).
+* New `@include_files` macro for organizing test files with optional filtering based on command-line arguments. Supports `Pkg.test(test_args=["--files=pattern"])` for substring matching and `Pkg.test(test_args=["--files-regex=pattern"])` for regex matching to run only matching test files. ([#59951])
 
 #### InteractiveUtils
 
