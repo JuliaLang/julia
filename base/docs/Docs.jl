@@ -396,8 +396,22 @@ function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
     @nospecialize str def expr sig
     binding = esc(bindingexpr(namify(expr)))
     docstr  = esc(docexpr(__source__, __module__, lazy_iterpolate(str), metadata(__source__, __module__, expr, false)))
-    # Note: we want to avoid introducing line number nodes here (issue #24468)
-    return Expr(:block, esc(def), :($(doc!)($__module__, $binding, $docstr, $(esc(sig)))))
+    # Store the result of the definition and return it after documenting
+    docex = :($(doc!)($__module__, $binding, $docstr, $(esc(sig))))
+    if def === nothing
+        return Expr(:block, docex)
+    else
+        exdef = esc(def)
+        if isexpr(def, :global, 1) && def.args[1] isa Union{Symbol,GlobalRef}
+            # Special case: `global x` should return nothing to avoid syntax errors with assigning to a value
+            val = nothing
+        else
+            val = :val
+            exdef = Expr(:(=), val, exdef)
+        end
+        # Note: we want to avoid introducing line number nodes here (issue #24468) for def
+        return Expr(:block, exdef, docex, val)
+    end
 end
 
 function calldoc(__source__, __module__, str, def::Expr)
@@ -431,7 +445,9 @@ function moduledoc(__source__, __module__, meta, def, def′::Expr)
     end
 end
 
-# Shares a single doc, `meta`, between several expressions from the tuple expression `ex`.
+# Shares a single doc, `meta`, between several expressions from the tuple expression `ex`
+# (but don't actually create the tuple for the result and just return the final one,
+# as if this was a C++ comma operator or a block separated by `;` instead of `,`).
 function multidoc(__source__, __module__, meta, ex::Expr, define::Bool)
     @nospecialize meta
     out = Expr(:block)
@@ -657,7 +673,7 @@ docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)
 # also part of a :where expression, so it unwraps the :where layers until it reaches the
 # "actual" expression
 iscallexpr(ex::Expr) = isexpr(ex, :where) ? iscallexpr(ex.args[1]) : isexpr(ex, :call)
-iscallexpr(ex) = false
+iscallexpr(@nospecialize ex) = false
 
 function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true)
     @nospecialize meta ex
@@ -722,7 +738,7 @@ function _docm(source::LineNumberNode, mod::Module, meta, x, define::Bool = true
     #   f(::T, ::U) where T where U
     #
     isexpr(x, FUNC_HEADS) && is_signature((x::Expr).args[1]) ? objectdoc(source, mod, meta, def, x::Expr, signature(x::Expr)) :
-    isexpr(x, [:function, :macro])  && !isexpr((x::Expr).args[1], :call) ? objectdoc(source, mod, meta, def, x::Expr) :
+    (isexpr(x, :function) || isexpr(x, :macro)) && !isexpr((x::Expr).args[1], :call) ? objectdoc(source, mod, meta, def, x::Expr) :
     iscallexpr(x) ? calldoc(source, mod, meta, x::Expr) :
 
     # Type definitions.
@@ -742,7 +758,7 @@ function _docm(source::LineNumberNode, mod::Module, meta, x, define::Bool = true
     isexpr(x, BINDING_HEADS) && !isexpr((x::Expr).args[1], :call) ? objectdoc(source, mod, meta, def, x::Expr) :
 
     # Quoted macrocall syntax. `:@time` / `:(Base.@time)`.
-    isquotedmacrocall(x) ? objectdoc(source, mod, meta, def, x) :
+    isquotedmacrocall(x) ? objectdoc(source, mod, meta, nothing, x) :
     # Modules and baremodules.
     isexpr(x, :module) ? moduledoc(source, mod, meta, def, x::Expr) :
     # Document several expressions with the same docstring. `a, b, c`.
