@@ -87,6 +87,7 @@ struct OptimizationOptions {
     bool enable_scalar_optimizations;
     bool enable_loop_optimizations;
     bool enable_vector_pipeline;
+    bool enable_attributes;
     bool remove_ni;
     bool cleanup;
     bool warn_missed_transformations;
@@ -102,6 +103,7 @@ struct OptimizationOptions {
         bool enable_scalar_optimizations=true,
         bool enable_loop_optimizations=true,
         bool enable_vector_pipeline=true,
+        bool enable_attributes=true,
         bool remove_ni=true,
         bool cleanup=true,
         bool warn_missed_transformations=false) {
@@ -109,6 +111,7 @@ struct OptimizationOptions {
                 always_inline, enable_early_simplifications,
                 enable_early_optimizations, enable_scalar_optimizations,
                 enable_loop_optimizations, enable_vector_pipeline,
+                enable_attributes,
                 remove_ni, cleanup, warn_missed_transformations};
     }
 };
