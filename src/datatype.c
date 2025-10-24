@@ -1992,11 +1992,11 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     }
 }
 
-inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name)
+inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_binding_t *b, jl_module_t *mod, jl_sym_t *name)
 {
     jl_value_t *r = isatomic ? jl_atomic_load(p) : jl_atomic_load_relaxed(p);
     if (__unlikely(r == NULL)) {
-        if (mod && name)
+        if (b)
             jl_undefined_var_error(name, (jl_value_t*)mod);
         jl_throw(jl_undefref_exception);
     }
@@ -2007,11 +2007,10 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
         args[1] = rhs;
         jl_value_t *y = jl_apply_generic(op, args, 2);
         args[1] = y;
-        if (!jl_isa(y, ty)) {
-            if (mod && name)
-                jl_errorf("cannot assign an incompatible value to the global %s.%s.", jl_symbol_name(mod->name), jl_symbol_name(name));
+        if (b)
+            jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
+        else if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
-        }
         if (isatomic ? jl_atomic_cmpswap(p, &r, y) : jl_atomic_cmpswap_release(p, &r, y)) {
             jl_gc_wb(parent, y);
             break;
@@ -2125,7 +2124,7 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
     jl_value_t *ty = jl_field_type_concrete(st, i);
     char *p = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, NULL, NULL);
+        return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, NULL, NULL, NULL);
     }
     else {
         uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;

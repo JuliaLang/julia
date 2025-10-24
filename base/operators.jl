@@ -288,9 +288,9 @@ orderings such as [`isless`](@ref).
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
 """
-isunordered(x) = false
+isunordered(_) = false
 isunordered(x::AbstractFloat) = isnan(x)
-isunordered(x::Missing) = true
+isunordered(::Missing) = true
 
 ==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
 ==(T::TypeVar, S::Type) = false
@@ -1194,7 +1194,8 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
-    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
+    (left, right) = _split_tuple(args, N-1)
+    return f.f(left..., f.x, right...; kws...)
 end
 
 # Special cases for improved constant propagation

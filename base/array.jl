@@ -185,13 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = size(a, Int(d)::Int)
-function size(a::Array, d::Int)
-    d < 1 && error("arraysize: dimension out of range")
-    sz = getfield(a, :size)
-    return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
-end
-
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
@@ -1094,14 +1087,14 @@ end
 # Specifically we are wasting ~10% of memory for small arrays
 # by not picking memory sizes that max out a GC pool
 function overallocation(maxsize)
-    maxsize < 8 && return 8;
-    # compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
+    # compute maxsize = maxsize + 3*maxsize^(7/8) + maxsize/8
     # for small n, we grow faster than O(n)
     # for large n, we grow at O(n/8)
     # and as we reach O(memory) for memory>>1MB,
     # this means we end by adding about 10% of memory each time
+    # most commonly, this will take steps of 0-3-9-34 or 1-4-16-66 or 2-8-33
     exp2 = sizeof(maxsize) * 8 - Core.Intrinsics.ctlz_int(maxsize)
-    maxsize += (1 << div(exp2 * 7, 8)) * 4 + div(maxsize, 8)
+    maxsize += (1 << div(exp2 * 7, 8)) * 3 + div(maxsize, 8)
     return maxsize
 end
 
@@ -1148,16 +1141,16 @@ function _growbeg!(a::Vector, delta::Integer)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
-    mem = ref.mem
     len = length(a)
     offset = memoryrefoffset(ref)
     newlen = len + delta
-    setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
+        setfield!(a, :size, (newlen,))
     else
         @noinline _growbeg_internal!(a, delta, len)
+        setfield!(a, :size, (newlen,))
     end
     return
 end
@@ -1207,11 +1200,11 @@ function _growend!(a::Vector, delta::Integer)
     len = length(a)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline _growend_internal!(a, delta, len)
     end
+    setfield!(a, :size, (newlen,))
     return
 end
 
@@ -1229,7 +1222,6 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
     memlen = length(mem)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
 
     # which side would we rather grow into?
@@ -1239,11 +1231,13 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         newref = @inbounds memoryref(mem, offset - delta)
         unsafe_copyto!(newref, ref, i)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
     elseif !prefer_start && memlen >= newmemlen
         unsafe_copyto!(mem, offset - 1 + delta + i, mem, offset - 1 + i, len - i + 1)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
@@ -1257,6 +1251,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
     end
 end
 
@@ -1264,22 +1259,30 @@ end
 function _deletebeg!(a::Vector, delta::Integer)
     delta = Int(delta)
     len = length(a)
-    0 <= delta <= len || throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    # See comment in _deleteend!
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    end
     for i in 1:delta
         @inbounds _unsetindex!(a, i)
     end
     newlen = len - delta
+    setfield!(a, :size, (newlen,))
     if newlen != 0 # if newlen==0 we could accidentally index past the memory
         newref = @inbounds memoryref(a.ref, delta + 1)
         setfield!(a, :ref, newref)
     end
-    setfield!(a, :size, (newlen,))
     return
 end
 function _deleteend!(a::Vector, delta::Integer)
     delta = Int(delta)
     len = length(a)
-    0 <= delta <= len || throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    # Do the comparison unsigned, to so the compiler knows `len` cannot be negative.
+    # This works because if delta is negative, it will overflow and still trigger.
+    # This enables the compiler to skip the check sometimes.
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    end
     newlen = len - delta
     for i in newlen+1:len
         @inbounds _unsetindex!(a, i)
@@ -1416,7 +1419,6 @@ append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
-    i = lastindex(a)
     sizehint!(a, length(a) + n; shrink=false)
     for item in iter
         push!(a, item)
@@ -1532,7 +1534,10 @@ function resize!(a::Vector, nl_::Integer)
     nl = Int(nl_)::Int
     l = length(a)
     if nl > l
-        _growend!(a, nl-l)
+        # Since l is positive, if nl > l, both are positive, and so nl-l is also
+        # positive. But the compiler does not know that, so we mask out top bit.
+        # This allows the compiler to skip the check
+        _growend!(a, (nl-l) & typemax(Int))
     elseif nl != l
         if nl < 0
             _throw_argerror("new length must be ≥ 0")
@@ -1757,7 +1762,6 @@ function pushfirst!(a::Vector{Any}, @nospecialize x)
 end
 function pushfirst!(a::Vector{Any}, @nospecialize x...)
     @_terminates_locally_meta
-    na = length(a)
     nx = length(x)
     _growbeg!(a, nx)
     @_safeindex for i = 1:nx
@@ -1871,7 +1875,6 @@ function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
     if eltype(r) === Bool
         return invoke(deleteat!, Tuple{Vector, AbstractVector{Bool}}, a, r)
     else
-        n = length(a)
         f = first(r)
         f isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
         isempty(r) || _deleteat!(a, f, length(r))
@@ -2234,7 +2237,7 @@ end
 # 1d special cases of reverse(A; dims) and reverse!(A; dims):
 for (f,_f) in ((:reverse,:_reverse), (:reverse!,:_reverse!))
     @eval begin
-        $f(A::AbstractVector; dims=:) = $_f(A, dims)
+        $f(A::AbstractVector; dims::D=:) where {D} = $_f(A, dims)
         $_f(A::AbstractVector, ::Colon) = $f(A, firstindex(A), lastindex(A))
         $_f(A::AbstractVector, dim::Tuple{Integer}) = $_f(A, first(dim))
         function $_f(A::AbstractVector, dim::Integer)

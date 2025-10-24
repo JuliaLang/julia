@@ -34,6 +34,7 @@ public
 # arrays
     has_offset_axes,
     require_one_based_indexing,
+    memoryindex,
 
 # collections
     IteratorEltype,
@@ -80,8 +81,9 @@ public
     isoperator,
     isunaryoperator,
 
-# scalar math
+# Integer math
     uabs,
+    mul_hi,
 
 # C interface
     cconvert,

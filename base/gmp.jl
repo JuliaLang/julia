@@ -151,7 +151,7 @@ using ..GMP: BigInt, Limb, BITS_PER_LIMB, libgmp
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
 
-gmpz(op::Symbol) = (Symbol(:__gmpz_, op), libgmp)
+gmpz(op::Symbol) = Expr(:tuple, QuoteNode(Symbol(:__gmpz_, op)), GlobalRef(MPZ, :libgmp))
 
 init!(x::BigInt) = (ccall((:__gmpz_init, libgmp), Cvoid, (mpz_t,), x); x)
 init2!(x::BigInt, a) = (ccall((:__gmpz_init2, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
@@ -605,10 +605,19 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
+# all uses of _bit_magnitude MUST ensure at callsite that `x` is strictly positive, otherwise it is UB
+_bit_magnitude(x::BigInt) = x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
+
+function exponent(x::BigInt)
+    iszero(x) && throw(DomainError(x, "cannot be zero"))
+    ux = abs(x)
+    return _bit_magnitude(ux) - 1
+end
+
 function top_set_bit(x::BigInt)
     isnegative(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
     iszero(x) && return 0
-    x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
+    return _bit_magnitude(x)
 end
 
 divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
@@ -855,21 +864,48 @@ if Limb === UInt64 === UInt
 
     using .Base: HASH_SECRET, hash_bytes, hash_finalizer
 
+    # UnsafeLimbView provides a safe iterator interface to BigInt limb data
+    struct UnsafeLimbView <: AbstractVector{UInt8}
+        bigint::BigInt
+        start_byte::Int
+        num_bytes::Int
+    end
+
+    function Base.size(view::UnsafeLimbView)
+        return (view.num_bytes,)
+    end
+
+    function Base.getindex(view::UnsafeLimbView, i::Int)
+        @boundscheck checkbounds(view, i)
+        GC.@preserve view begin
+            limb_index = div(view.start_byte + i - 2, 8) + 1
+            byte_in_limb = (view.start_byte + i - 2) % 8
+            limb = unsafe_load(view.bigint.d, limb_index)
+            return UInt8((limb >> (8 * byte_in_limb)) & 0xff)
+        end
+    end
+
+    function Base.iterate(view::UnsafeLimbView, state::Int = 1)
+        state > view.num_bytes && return nothing
+        return @inbounds(view[state]), state + 1
+    end
+
+    function Base.length(view::UnsafeLimbView)
+        return view.num_bytes
+    end
+
     function hash_integer(n::BigInt, h::UInt)
         iszero(n) && return hash_integer(0, h)
-        GC.@preserve n begin
-            s = n.size
-            h ⊻= (s < 0)
+        s = n.size
+        h ⊻= (s < 0)
 
-            us = abs(s)
-            leading_zero_bytes = div(leading_zeros(unsafe_load(n.d, us)), 8)
-            hash_bytes(
-                Ptr{UInt8}(n.d),
-                8 * us - leading_zero_bytes,
-                h,
-                HASH_SECRET
-            )
-        end
+        us = abs(s)
+        leading_zero_bytes = div(leading_zeros(unsafe_load(n.d, us)), 8)
+        num_bytes = 8 * us - leading_zero_bytes
+
+        # Use UnsafeLimbView for safe iterator-based access
+        limb_view = UnsafeLimbView(n, 1, num_bytes)
+        return hash_bytes(limb_view, h, HASH_SECRET)
     end
 
     function hash(x::BigInt, h::UInt)
@@ -904,12 +940,11 @@ if Limb === UInt64 === UInt
             h ⊻= (sz < 0)
             leading_zero_bytes = div(leading_zeros(unsafe_load(x.d, asz)), 8)
             trailing_zero_bytes = div(pow, 8)
-            return hash_bytes(
-                Ptr{UInt8}(x.d) + trailing_zero_bytes,
-                8 * asz - (leading_zero_bytes + trailing_zero_bytes),
-                h,
-                HASH_SECRET
-            )
+            num_bytes = 8 * asz - (leading_zero_bytes + trailing_zero_bytes)
+
+            # Use UnsafeLimbView for safe iterator-based access
+            limb_view = UnsafeLimbView(x, trailing_zero_bytes + 1, num_bytes)
+            return hash_bytes(limb_view, h, HASH_SECRET)
         end
     end
 end
@@ -920,7 +955,7 @@ module MPQ
 import .Base: unsafe_rational, __throw_rational_argerror_zero
 import ..GMP: BigInt, MPZ, Limb, libgmp
 
-gmpq(op::Symbol) = (Symbol(:__gmpq_, op), libgmp)
+gmpq(op::Symbol) = Expr(:tuple, QuoteNode(Symbol(:__gmpq_, op)), GlobalRef(MPZ, :libgmp))
 
 mutable struct _MPQ
     num_alloc::Cint

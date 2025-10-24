@@ -295,18 +295,18 @@ Closest candidates are:
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
 function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
-    list = get!(Vector{Any}, _hint_handlers, exct)
-    push!(list, handler)
+    list = get!(Vector{Any}, _hint_handlers, Core.typename(exct))
+    push!(list, (exct, handler))
     return nothing
 end
 
-const _hint_handlers = IdDict{Type,Vector{Any}}()
+const _hint_handlers = IdDict{Core.TypeName,Vector{Any}}()
 
 """
     Experimental.show_error_hints(io, ex, args...)
 
 Invoke all handlers from [`Experimental.register_error_hint`](@ref) for the particular
-exception type `typeof(ex)`. `args` must contain any other arguments expected by
+exception type `typeof(ex)` and all of its supertypes. `args` must contain any other arguments expected by
 the handler for that type.
 
 !!! compat "Julia 1.5"
@@ -315,15 +315,21 @@ the handler for that type.
     This interface is experimental and subject to change or removal without notice.
 """
 function show_error_hints(io, ex, args...)
-    hinters = get(_hint_handlers, typeof(ex), nothing)
-    isnothing(hinters) && return
-    for handler in hinters
-        try
-            @invokelatest handler(io, ex, args...)
-        catch
-            tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
+    @nospecialize
+    ex_supertype = typeof(ex)
+    while ex_supertype != Any
+        hinters = get(_hint_handlers, Core.typename(ex_supertype), Any[])
+        for (exct, handler) in hinters
+            ex isa exct || continue
+            try
+                # TODO: deal with handlers accepting different signatures?
+                @invokelatest handler(io, ex, args...)
+            catch
+                tn = typeof(handler).name
+                @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+            end
         end
+        ex_supertype = supertype(ex_supertype)
     end
 end
 
