@@ -3,7 +3,7 @@
 # Here we test the ParseStream interface, by taking input code and checking
 # that the correct sequence of emit() and bump() produces a valid parse tree.
 
-using JuliaSyntax: ParseStream,
+using .JuliaSyntax: ParseStream,
     peek, peek_token,
     bump, bump_trivia, bump_invisible,
     emit, emit_diagnostic, TRIVIA_FLAG, INFIX_FLAG,

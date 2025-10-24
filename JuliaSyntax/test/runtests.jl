@@ -1,4 +1,7 @@
-using JuliaSyntax
+if !(@isdefined JuliaSyntax)
+    using JuliaSyntax
+end
+
 using Test
 
 include("test_utils.jl")

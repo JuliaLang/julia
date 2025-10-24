@@ -3,7 +3,7 @@ module TokenizeTests
 
 using Test
 
-using JuliaSyntax:
+using ..JuliaSyntax:
     JuliaSyntax,
     @K_str,
     Kind,
@@ -11,13 +11,13 @@ using JuliaSyntax:
     is_error,
     is_operator
 
-using JuliaSyntax.Tokenize:
+using ..JuliaSyntax.Tokenize:
     Tokenize,
     tokenize,
     untokenize,
     RawToken
 
-using ..Main: toks
+import ..toks
 
 tok(str, i = 1) = collect(tokenize(str))[i]
 

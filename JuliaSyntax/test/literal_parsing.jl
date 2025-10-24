@@ -1,4 +1,4 @@
-using JuliaSyntax:
+using .JuliaSyntax:
     parse_int_literal,
     parse_uint_literal,
     parse_float_literal,

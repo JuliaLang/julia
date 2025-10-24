@@ -2,7 +2,7 @@
 if !isdefined(@__MODULE__, :FooKinds)
 @eval module FooKinds
 
-using JuliaSyntax
+using ..JuliaSyntax
 
 function _init_kinds()
     JuliaSyntax.register_kinds!(@__MODULE__, 42, [
