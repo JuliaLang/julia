@@ -27,7 +27,8 @@ end
 @test sprint(io->showprov(io, ex[1][3], tree=true)) == raw"""
     (call g z)
     ├─ (call g z)
-    │  └─ @ string:3
+    │  └─ (call g z)
+    │     └─ @ string:3
     └─ ($ y)
        └─ @ string:5
     """
@@ -184,7 +185,31 @@ let
     :(:($$(args...)))
 end
 """)
-@test_throws LoweringError JuliaLowering.eval(test_mod, multi_interp_ex)
+@test try
+    JuliaLowering.eval(test_mod, multi_interp_ex)
+    nothing
+catch exc
+    @test exc isa LoweringError
+    sprint(io->Base.showerror(io, exc, show_detail=false))
+end == raw"""
+LoweringError:
+let
+    args = (:(x), :(y))
+    :(:($$(args...)))
+#       └─────────┘ ── More than one value in bare `$` expression
+end"""
+
+@test try
+    JuliaLowering.eval(test_mod, multi_interp_ex, expr_compat_mode=true)
+    nothing
+catch exc
+    @test exc isa LoweringError
+    sprint(io->Base.showerror(io, exc, show_detail=false))
+end == raw"""
+LoweringError:
+No source for expression
+└ ── More than one value in bare `$` expression"""
+# ^ TODO: Improve error messages involving expr_to_syntaxtree!
 
 # Interpolation of SyntaxTree Identifier vs plain Symbol
 symbol_interp = JuliaLowering.include_string(test_mod, raw"""
@@ -246,6 +271,13 @@ end
     end
     exs
     """, expr_compat_mode=true) == Any[Expr(:call, :f, :x, :y, :z), Expr(:call, :f, :x, :y, :z)]
+
+    # Test interpolation into QuoteNode
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = :push!
+        @eval Base.$x
+    end
+    """; expr_compat_mode=true) == Base.push!
 end
 
 end

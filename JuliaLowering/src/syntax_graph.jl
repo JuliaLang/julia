@@ -313,7 +313,7 @@ function JuliaSyntax.head(ex::SyntaxTree)
 end
 
 function JuliaSyntax.kind(ex::SyntaxTree)
-    ex.kind
+    ex.kind::JuliaSyntax.Kind
 end
 
 function JuliaSyntax.flags(ex::SyntaxTree)
@@ -695,6 +695,7 @@ macro SyntaxTree(ex_old)
     # 3. Using the current file and line number, dig into the re-parsed tree and
     # discover the piece of AST which should be returned.
     ex = _find_SyntaxTree_macro(full_ex, __source__.line)
+    isnothing(ex) && error("_find_SyntaxTree_macro failed")
     # 4. Do the first step of JuliaLowering's syntax lowering to get
     # syntax interpolations to work
     _, ex1 = expand_forms_1(__module__, ex, false, Base.tls_world_age())
