@@ -20,6 +20,23 @@ let x = [1,2]
 end
 """) == [1,2]
 
+@test JuliaLowering.include_string(test_mod, raw"""
+let
+    x = 10
+    @eval $x + 2
+end
+""") == 12
+
+@test JuliaLowering.include_string(test_mod, raw"""
+module EvalTest
+    _some_var = 2
+end
+let
+    x = 10
+    @eval EvalTest $x + _some_var
+end
+""") == 12
+
 @test JuliaLowering.include_string(test_mod, """
 let x=11
     20x

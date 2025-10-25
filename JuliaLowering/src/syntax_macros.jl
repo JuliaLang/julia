@@ -272,6 +272,33 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
     ]
 end
 
+function _at_eval_code(ctx, srcref, mod, ex)
+    @ast ctx srcref [K"block"
+        [K"local"
+            [K"="
+                "eval_result"::K"Identifier"
+                [K"call"
+                    # TODO: Call "eval"::K"core" here
+                    JuliaLowering.eval::K"Value"
+                    mod
+                    [K"quote" ex]
+                ]
+            ]
+        ]
+        (::K"latestworld_if_toplevel")
+        "eval_result"::K"Identifier"
+    ]
+end
+
+function Base.var"@eval"(__context__::MacroContext, ex)
+    mod = @ast __context__ __context__.macrocall __context__.scope_layer.mod::K"Value"
+    _at_eval_code(__context__, __context__.macrocall, mod, ex)
+end
+
+function Base.var"@eval"(__context__::MacroContext, mod, ex)
+    _at_eval_code(__context__, __context__.macrocall, mod, ex)
+end
+
 #--------------------------------------------------------------------------------
 # The following `@islocal` and `@inert` are macros for special syntax known to
 # lowering which don't exist in Base but arguably should.

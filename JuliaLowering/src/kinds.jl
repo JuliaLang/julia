@@ -165,7 +165,7 @@ function _register_kinds()
             "new_opaque_closure"
             # Wrapper for the lambda of around opaque closure methods
             "opaque_closure_method"
-            # World age increment
+            # World age increment (TODO: use top level assertion and only one latestworld kind)
             "latestworld"
         "END_IR_KINDS"
     ])
