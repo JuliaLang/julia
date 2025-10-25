@@ -51,7 +51,7 @@ const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
-    for dir in readdir(STDLIB_DIR)
+    for dir in sort!(collect(readdir(STDLIB_DIR)))
         sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src")
         if dir in EXT_STDLIB_DOCS
             sourcefile = joinpath(sourcefile, "basedocs.md")
@@ -95,9 +95,9 @@ end
 documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib")),
                                 stdlib_build_dir = joinpath(buildrootdoc, "..", "stdlib")
     # Get a list of all *.version files in stdlib/..
-    version_files = filter(readdir(stdlib_dir)) do fname
+    version_files = sort!(filter(readdir(stdlib_dir)) do fname
         isfile(joinpath(stdlib_dir, fname)) && endswith(fname, ".version")
-    end
+    end)
     # .. and then parse them, each becoming an entry for makedocs's remotes.
     # The values for each are of the form path => (remote, sha1), where
     #  - path: the path to the stdlib package's root directory, i.e. "stdlib/$PACKAGE"
