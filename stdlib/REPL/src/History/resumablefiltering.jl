@@ -155,7 +155,7 @@ function ConditionSet(spec::S) where {S <: AbstractString}
         elseif chr == '\\'
             escaped = true
         elseif chr == FILTER_SEPARATOR
-            str = SubString(spec, mark:pos - 1)
+            str = SubString(spec, mark:prevind(spec, pos))
             if !isempty(dropbytes)
                 str = SubString(convert(S, String(deleteat!(collect(codeunits(str)), dropbytes))))
                 empty!(dropbytes)
@@ -166,7 +166,7 @@ function ConditionSet(spec::S) where {S <: AbstractString}
         pos = nextind(spec, pos)
     end
     if mark <= lastind
-        str = SubString(spec, mark:pos - 1)
+        str = SubString(spec, mark:prevind(spec, pos))
         if !isempty(dropbytes)
             str = SubString(convert(S, String(deleteat!(collect(codeunits(str)), dropbytes))))
         end
