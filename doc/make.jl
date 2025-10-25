@@ -422,7 +422,7 @@ doc = makedocs(
 )
 
 # update this when the number of missing docstrings changes
-const known_missing_from_manual = 398
+const known_missing_from_manual = 399
 
 # Check that we're not regressing in missing docs, but only check on PRs so that master builds can still pass
 if in("deploy", ARGS) && haskey(ENV,"BUILDKITE_BRANCH") && ENV["BUILDKITE_BRANCH"] != "master"
@@ -443,9 +443,9 @@ if in("deploy", ARGS) && haskey(ENV,"BUILDKITE_BRANCH") && ENV["BUILDKITE_BRANCH
     if missing_from_manual > known_missing_from_manual
         show_buildkite_annotation(
             "warning",
-            """New docstrings have been added for exported functions that are missing from the manual.
+            """New docstrings have been added for public objects that are missing from the manual.
             Please add these to the manual.
-            Number known to be missing=#$(known_missing_from_manual), Current=$missing_from_manual.
+            Number known to be missing=$(known_missing_from_manual), Current=$missing_from_manual.
             See the `doctest` job for details.
             """
         )
