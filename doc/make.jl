@@ -412,6 +412,7 @@ doc = makedocs(
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     checkdocs = :public,
+    checkdocs_ignored_modules = [Pkg], # Pkg has its own comprehensive documentation
     warnonly  = :missing_docs, # warn about missing docstrings, but don't fail
     format    = format,
     sitename  = "The Julia Language",
@@ -422,7 +423,7 @@ doc = makedocs(
 )
 
 # update this when the number of missing docstrings changes
-const known_missing_from_manual = 399
+const known_missing_from_manual = 379
 
 # Check that we're not regressing in missing docs, but only check on PRs so that master builds can still pass
 if in("deploy", ARGS) && haskey(ENV,"BUILDKITE_BRANCH") && ENV["BUILDKITE_BRANCH"] != "master"
@@ -437,9 +438,8 @@ if in("deploy", ARGS) && haskey(ENV,"BUILDKITE_BRANCH") && ENV["BUILDKITE_BRANCH
     end
 
     # ignore logging in the report because makedocs has already run this internally, we just want the number out
-    # Exclude Pkg from the missing docs check since it has its own comprehensive documentation
     missing_from_manual = with_logger(NullLogger()) do
-        Documenter.missingdocs(doc; exclude_modules=[Pkg])
+        Documenter.missingdocs(doc)
     end
     if missing_from_manual > known_missing_from_manual
         show_buildkite_annotation(
