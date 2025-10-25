@@ -115,6 +115,11 @@ const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
 const HELP_PROMPT = "help?> "
 
+mutable struct HistorySessionRef
+    session::UInt64
+    histfile::HistoryFile
+end
+
 mutable struct REPLBackend
     "channel for AST"
     repl_channel::Channel{Any}
@@ -124,11 +129,14 @@ mutable struct REPLBackend
     in_eval::Bool
     "transformation functions to apply before evaluating expressions"
     ast_transforms::Vector{Any}
+    "a record of historical information, contained in a file, very interesting"
+    hist::HistorySessionRef
     "current backend task"
     backend_task::Task
 
-    REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
-        new(repl_channel, response_channel, in_eval, ast_transforms)
+    REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms),
+                hist=HistorySessionRef(zero(UInt64), HistoryFile())) =
+        new(repl_channel, response_channel, in_eval, ast_transforms, hist)
 end
 REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 
@@ -136,8 +144,9 @@ REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 struct REPLBackendRef
     repl_channel::Channel{Any}
     response_channel::Channel{Any}
+    hist::HistorySessionRef
 end
-REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
+REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel, backend.hist)
 
 function destroy(ref::REPLBackendRef, state::Task)
     if istaskfailed(state)
@@ -317,19 +326,24 @@ function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
         check_for_missing_packages_and_run_hooks(ast)
-        return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
+        eval_start = time()
+        value = invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
+        return time() - eval_start, value
     end
     local value=nothing
+    local elapsed=0.0
     for i = 1:length(ast.args)
-        value = toplevel_eval_with_hooks(mod, ast.args[i], toplevel_file, toplevel_line)
+        dur, value = toplevel_eval_with_hooks(mod, ast.args[i], toplevel_file, toplevel_line)
+        elapsed += dur
     end
-    return value
+    return elapsed, value
 end
 
 function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     lasterr = nothing
     Base.sigatomic_begin()
     while true
+        eval_start = time()
         try
             Base.sigatomic_end()
             if lasterr !== nothing
@@ -339,10 +353,13 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
-                value = toplevel_eval_with_hooks(mod, ast)
+                eval_duration, value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
+                push!(backend.hist.histfile,
+                      HistUpdate(backend.hist.session, nameof(typeof(value)),
+                                 false, eval_duration))
             end
             break
         catch err
@@ -351,6 +368,13 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 println(err)
             end
             lasterr = current_exceptions()
+            errtype = Exception
+            if lasterr isa Base.ExceptionStack && !isempty(lasterr.stack)
+                errtype = typeof(first(lasterr.stack).exception)
+            end
+            push!(backend.hist.histfile,
+                  HistUpdate(backend.hist.session, nameof(errtype),
+                             true, time() - eval_start))
         end
     end
     Base.sigatomic_end()
@@ -876,6 +900,8 @@ end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::HistoryFile
+    session::UInt64
+    session_idx::Int
     start_idx::Int
     cur_idx::Int
     last_idx::Int
@@ -884,7 +910,8 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     mode_mapping::Dict{Symbol,Prompt}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(HistoryFile(), 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(HistoryFile(), rand(UInt64),
+                        0, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping)
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
@@ -893,7 +920,8 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) && isequal(mode, hist.history[end].mode) &&
         str == hist.history[end].content && return
-    entry = HistEntry(mode, now(UTC), str, 0)
+    entry = HistEntry(hist.session, hist.session_idx += 1, pwd(),
+                      mode, now(UTC), String(str))
     push!(hist.history, entry)
     nothing
 end
@@ -917,7 +945,13 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
             mode_idx(hist, LineEdit.mode(s)),
             oldrec.date,
             LineEdit.input_string(s),
-            oldrec.index)
+            oldrec.session,
+            oldrec.cwd,
+            "", # Invalidated result type
+            zero(Float32), # Invalidated duration
+            oldrec.index,
+            oldrec.sid,
+            false) # Invalidated error state
     end
 
     # load the saved line
@@ -1655,6 +1689,9 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     dopushdisplay && pushdisplay(d)
     if !isdefined(repl,:interface)
         interface = repl.interface = setup_interface(repl)
+        hp = repl.interface.modes[1].hist
+        backend.hist.histfile = hp.history
+        backend.hist.session = hp.session
     else
         interface = repl.interface
     end
@@ -1822,10 +1859,6 @@ using ..REPL
 
 __current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
-function repl_eval_counter(hp)
-    return length(hp.history) - hp.start_idx
-end
-
 function out_transform(@nospecialize(x), n::Ref{Int})
     return Expr(:block, # avoid line numbers or scope that would leak into the output and change the meaning of x
         :(local __temp_val_a72df459 = $x),
@@ -1860,7 +1893,7 @@ end
 function set_prompt(repl::LineEditREPL, n::Ref{Int})
     julia_prompt = repl.interface.modes[1]
     julia_prompt.prompt = REPL.contextual_prompt(repl, function()
-        n[] = repl_eval_counter(julia_prompt.hist)+1
+        n[] = julia_prompt.hist.session_idx + 1
         string("In [", n[], "]: ")
     end)
     nothing
