@@ -161,6 +161,13 @@ const MODE_FACES = Dict(
     :help => :yellow,
 )
 
+const MODE_KEYS = Dict(
+    :julia => ' ',
+    :shell => ';',
+    :pkg => ']',
+    :help => '?',
+)
+
 """
     redisplay_prompt(io::IO, oldstate::SelectorState, newstate::SelectorState, pstate::PromptState)
 
@@ -446,13 +453,45 @@ julia> humanage(4000)
 ```
 """
 function humanage(seconds::Integer)
-    unit, count = :s, seconds
+    unit, count, rem = :s, seconds, 0
     for (dunit, dsecs) in pairs(DURATIONS)
-        n = seconds ÷ dsecs
+        n, rem = divrem(seconds, dsecs)
         n == 0 && break
         unit, count = dunit, n
     end
-    "$count$unit"
+    "$count$unit", rem
+end
+
+function humanage(seconds::AbstractFloat)
+    if seconds >= 10
+        isec = round(Int, seconds)
+        frem = seconds - isec
+        age, irem = humanage(isec)
+        age, irem + frem
+    elseif seconds >= 0.1
+        rsec = round(seconds, digits=1)
+        "$(rsec)s", seconds - rsec
+    elseif seconds >= 0.001
+        msec = round(Int, seconds * 1000)
+        "$(msec)ms", seconds - msec / 1000
+    else
+        μsec = round(Int, seconds * 1_000_000)
+        "$(μsec)μs", seconds - μsec / 1_000_000
+    end
+end
+
+function humanage2(seconds::AbstractFloat)
+    if seconds > 60
+        part1, rem1 = humanage(seconds)
+        part2, rem2 = if rem1 < 1
+            "", rem1
+        else
+            humanage(rem1)
+        end
+        part1 * part2, rem2
+    else
+        humanage(seconds)
+    end
 end
 
 """
@@ -463,35 +502,40 @@ Render one history entry line with markers, mode hint, age, and highlighted cont
 Truncates and focuses on matches to fit `width`.
 """
 function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int; selected::Bool, hover::Bool)
-    print(io, ' ', if selected
+    print(io, ' ',
+          if selected
               LIST_MARKERS.selected
           elseif hover
               LIST_MARKERS.hover
           else
               LIST_MARKERS.unselected
-          end, ' ')
-    age = humanage(floor(Int, ((now(UTC) - cand.date)::Millisecond).value ÷ 1000))
+          end)
+    age, _ = humanage(floor(Int, ((now(UTC) - cand.date)::Millisecond).value ÷ 1000))
     agedec = S" {shadow,light,italic:$age}"
-    modehint = if cand.mode == BASE_MODE
-        S""
+    modeprefix = if cand.mode == BASE_MODE
+        S"  "
     else
         modeface = get(MODE_FACES, cand.mode, :grey)
-        if hover
-            S"{region: {bold,inverse,$modeface: $(cand.mode) }}"
-        elseif ncodeunits(age) == 2
-            S" {$modeface:◼}  "
-        else
-            S" {$modeface:◼} "
-        end
+        modekey = get(MODE_KEYS, cand.mode, ' ')
+        S"{bold,$modeface:\e]66;n=1:d=1:w=2:h=2;$modekey\a}"
     end
-    decorationlen = 3 #= spc + marker + spc =# + textwidth(modehint) + textwidth(agedec) + 1 #= spc =#
+    errordot = if cand.errored && hover
+        S"{region: {error:●} }"
+    elseif cand.errored
+        S" {error:●} "
+    else
+        S""
+    end
+    decorationlen = 4 #= spc + marker + 2*spc =# +
+                    textwidth(errordot) + textwidth(agedec) + 1 #= spc =#
     flatcand = replace(highlightcand(cand), r"\r?\n\s*" => NEWLINE_MARKER)
     candstr = focus_matches(search, flatcand, width - decorationlen)
     if hover
         face!(candstr, :region)
         face!(agedec, :region)
     end
-    println(io, candstr, modehint, agedec, ' ')
+    println(io, modeprefix,
+            candstr, errordot, agedec, ' ')
 end
 
 """
@@ -682,7 +726,19 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
                     mcolor = get(MODE_FACES, hovcand.mode, :grey)
                     hovcontent = S"{bold,$mcolor:$(hovcand.mode)>} " * hovcontent
                 end
-                boxedcontent(io, hovcontent, newstate.area.width, newrows - 2)
+                badge = if iszero(hovcand.elapsed) && isempty(hovcand.result)
+                    S""
+                elseif isempty(hovcand.result)
+                    S"{yellow:▐{inverse:$(first(humanage2(hovcand.elapsed)))}▍}"
+                else
+                    status = ifelse(hovcand.errored, :error, :yellow)
+                    S"{region:{$status:▌}$(hovcand.result){$status:▐}} \
+                      {light,$status:$(first(humanage2(hovcand.elapsed)))} "
+                # else
+                #     S"{region:{$(ifelse(hovcand.errored, :error, :yellow)):▍}$(hovcand.result){yellow:▐}}\
+                #       {yellow,inverse:$(first(humanage2(hovcand.elapsed)))}{yellow:▍}"
+                end
+                boxedcontent(io, hovcontent, newstate.area.width, newrows - 2, badge)
             else
                 0
             end
@@ -696,25 +752,36 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
     else
         linesprinted = 0
         seltexts = AnnotatedString{String}[]
+        selduration = 0.0
         for idx in getselidxs(newstate)
             entry = getcand(newstate, idx)
+            selduration += entry.elapsed
             content = highlightcand(entry)
             ishover(newstate, idx) && face!(content, :region)
             push!(seltexts, content)
         end
+        badge = S"{yellow:▐{inverse:$(first(humanage2(selduration)))}▍}"
         linecount = sum(t -> 1 + count('\n', String(t)), seltexts, init=0)
         for (i, content) in enumerate(seltexts)
             clines = 1 + count('\n', String(content))
             if linesprinted + clines < newrows - 2 || (i == length(seltexts) && linesprinted + clines == newrows - 2)
-                for line in eachsplit(content, '\n')
-                    println(io, bar, ' ', rtruncpad(line, innerwidth - 2), ' ', bar)
+                for (l, line) in enumerate(eachsplit(content, '\n'))
+                    if i == 1 && l == 1
+                        println(io, bar, ' ', rtruncpad(line, innerwidth - textwidth(badge) - 3), ' ', badge, ' ', bar)
+                    else
+                        println(io, bar, ' ', rtruncpad(line, innerwidth - 2), ' ', bar)
+                    end
                 end
                 linesprinted += clines
             else
                 remaininglines = newrows - 2 - linesprinted
-                for (i, line) in enumerate(eachsplit(content, '\n'))
-                    i == remaininglines && break
-                    println(io, bar, ' ', rtruncpad(line, innerwidth - 2), ' ', bar)
+                for (l, line) in enumerate(eachsplit(content, '\n'))
+                    l == remaininglines && break
+                    if i == 1 && l == 1
+                        println(io, bar, ' ', rtruncpad(line, innerwidth - textwidth(badge) - 3), ' ', badge, ' ', bar)
+                    else
+                        println(io, bar, ' ', rtruncpad(line, innerwidth - 2), ' ', bar)
+                    end
                 end
                 msg = S"{julia_comment:⋮ {italic:$(linecount - newrows + 3) lines hidden}}"
                 println(io, bar, ' ', rtruncpad(msg, innerwidth - 2), ' ', bar)
@@ -743,7 +810,7 @@ Draw `content` inside a Unicode box, wrapping or truncating to `width` and `maxl
 
 Returns the number of printed lines.
 """
-function boxedcontent(io::IO, content::AnnotatedString{String}, width::Int, maxlines::Int)
+function boxedcontent(io::IO, content::AnnotatedString{String}, width::Int, maxlines::Int, badge::AnnotatedString{String} = S"")
     function breaklines(content::AnnotatedString{String}, maxwidth::Int)
         textwidth(content) <= maxwidth && return [content]
         spans = AnnotatedString{String}[]
@@ -764,11 +831,13 @@ function boxedcontent(io::IO, content::AnnotatedString{String}, width::Int, maxl
         spans
     end
     left, right = S"{shadow:│} ", S" {shadow:│}"
+    badgeright = badge * S"{shadow:│}"
     leftcont, rightcont = S"{shadow:┊▸}", S"{shadow:◂┊}"
     if maxlines == 1
+        bwidth = width - textwidth(badge) - 3
         println(io, left,
-                rpad(rtruncate(content, width - 4, LINE_ELLIPSIS), width - 4),
-                right)
+                rpad(rtruncate(content, bwidth, LINE_ELLIPSIS), bwidth),
+                badge, right)
         return 1
     end
     printedlines = 0
@@ -776,11 +845,15 @@ function boxedcontent(io::IO, content::AnnotatedString{String}, width::Int, maxl
         content = AnnotatedString(rtruncate(content, width * maxlines, ' '))
     end
     lines = split(content, '\n')
-    innerwidth = width - 4
     for (i, line) in enumerate(lines)
         printedlines >= maxlines && break
+        innerwidth, bright = if i == 1
+            width - textwidth(badge) - 3, badgeright
+        else
+            width - 4, right
+        end
         if textwidth(line) <= innerwidth
-            println(io, left, rpad(line, innerwidth), right)
+            println(io, left, rpad(line, innerwidth), bright)
             printedlines += 1
             continue
         end
@@ -801,10 +874,13 @@ function boxedcontent(io::IO, content::AnnotatedString{String}, width::Int, maxl
                 LINE_ELLIPSIS, LINE_ELLIPSIS
             end
             printedlines += 1
+            if printedlines == 1
+                innerwidth, bright = width - 4, right
+            end
             println(io, ifelse(i == 1, left, leftcont), ' ' ^ indent,
                     prefix, rpad(span, innerwidth - 2 - indent), suffix,
                     ifelse(i == length(spans) || printedlines == maxlines,
-                           right, rightcont))
+                           bright, rightcont))
             printedlines >= maxlines && break
         end
     end
