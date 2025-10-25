@@ -732,43 +732,51 @@ inherit = "julia_rainbow_curly_2"
 
 For a complete list of customizable faces, see the [JuliaSyntaxHighlighting package documentation](https://julialang.github.io/JuliaSyntaxHighlighting.jl/dev/).
 
+## Customizing prompts
+
+The text and colors of the REPL prompts can be customized by setting the `prompt` and `output_prefix`
+fields on the `repl` object within an [`atreplinit`](@ref) hook in your `~/.julia/config/startup.jl` file.
+
+Use styled strings to customize the prompt text and colors:
+
+```julia
+using StyledStrings
+
+atreplinit() do repl
+    repl.prompt = styled"{cyan:myprompt>} "
+    repl.output_prefix = styled"{red:=>} "
+end
+```
+
+The prompt can also be a plain string or a function for dynamic prompts.
+Dynamic prompts can be combined with styling:
+
+```julia
+using StyledStrings
+using Dates
+
+atreplinit() do repl
+    # Dynamic prompt with time
+    repl.output_prefix = () -> string(Dates.format(Dates.now(), "HH:MM:SS"), "> ")
+
+    # Dynamic prompt with Julia version and styling
+    repl.prompt = () -> styled"{bold,magenta:julia v$(VERSION)>} "
+end
+```
+
+To customize other REPL modes (shell, help, pkg), set the corresponding prompt fields:
+
+```julia
+using StyledStrings
+atreplinit() do repl
+    repl.shell_prompt = styled"{green:shell>} "
+    repl.help_prompt = styled"{magenta:help?} "
+end
+```
+
 ## Customizing Colors
 
-The colors used by Julia and the REPL can be customized, as well. To change the
-color of the Julia prompt you can add something like the following to your
-`~/.julia/config/startup.jl` file, which is to be placed inside your home directory:
-
-```julia
-function customize_colors(repl)
-    repl.prompt_color = Base.text_colors[:cyan]
-end
-
-atreplinit(customize_colors)
-```
-
-The available color keys can be seen by typing `Base.text_colors` in the help mode of the REPL.
-In addition, the integers 0 to 255 can be used as color keys for terminals
-with 256 color support.
-
-You can also change the colors for the help and shell prompts and
-input and answer text by setting the appropriate field of `repl` in the `customize_colors` function
-above (respectively, `help_color`, `shell_color`, `input_color`, and `answer_color`). For the
-latter two, be sure that the `envcolors` field is also set to false.
-
-It is also possible to apply boldface formatting by using
-`Base.text_colors[:bold]` as a color. For instance, to print answers in
-boldface font, one can use the following as a `~/.julia/config/startup.jl`:
-
-```julia
-function customize_colors(repl)
-    repl.envcolors = false
-    repl.answer_color = Base.text_colors[:bold]
-end
-
-atreplinit(customize_colors)
-```
-
-You can also customize the color used to render warning and informational messages by
+You can customize the color used to render warning and informational messages by
 setting the appropriate environment variables. For instance, to render error, warning, and informational
 messages respectively in magenta, yellow, and cyan you can add the following to your
 `~/.julia/config/startup.jl` file:
@@ -778,7 +786,6 @@ ENV["JULIA_ERROR_COLOR"] = :magenta
 ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
-
 
 ## Changing the contextual module which is active at the REPL
 

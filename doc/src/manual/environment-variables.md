@@ -443,16 +443,6 @@ should have at the terminal.
 The formatting `Base.info_color()` (default: cyan, `"\033[36m"`) that info
 should have at the terminal.
 
-### [`JULIA_INPUT_COLOR`](@id JULIA_INPUT_COLOR)
-
-The formatting `Base.input_color()` (default: normal, `"\033[0m"`) that input
-should have at the terminal.
-
-### [`JULIA_ANSWER_COLOR`](@id JULIA_ANSWER_COLOR)
-
-The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
-should have at the terminal.
-
 ### [`NO_COLOR`](@id NO_COLOR)
 
 When this variable is present and not an empty string (regardless of its value) then colored

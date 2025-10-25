@@ -489,7 +489,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
         repl = REPL.BasicREPL(term)
         quiet || @warn "Terminal not fully functional"
     else
-        repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
+        repl = REPL.LineEditREPL(term, get(stdout, :color, false))
         repl.history_file = history_file
     end
     # Make sure any displays pushed in .julia/config/startup.jl ends up above the
