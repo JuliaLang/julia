@@ -437,8 +437,9 @@ if in("deploy", ARGS) && haskey(ENV,"BUILDKITE_BRANCH") && ENV["BUILDKITE_BRANCH
     end
 
     # ignore logging in the report because makedocs has already run this internally, we just want the number out
+    # Exclude Pkg from the missing docs check since it has its own comprehensive documentation
     missing_from_manual = with_logger(NullLogger()) do
-        Documenter.missingdocs(doc)
+        Documenter.missingdocs(doc; exclude_modules=[Pkg])
     end
     if missing_from_manual > known_missing_from_manual
         show_buildkite_annotation(
