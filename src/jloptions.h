@@ -74,7 +74,6 @@ typedef struct {
     int8_t gc_sweep_always_full;
     int8_t compress_sysimage;
     int8_t alert_on_critical_error;
-    int64_t hugepage_threshold;
 } jl_options_t;
 
 #endif

@@ -84,14 +84,6 @@ uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int
     return sz < limit ? (uint64_t)sz : UINT64_MAX;
 }
 
-static int64_t default_hugepage_threshold(void)
-{
-    long hps = jl_gethugepagesize();
-    if (hps > 0)
-        return (int64_t)(3 * hps / 4);
-    return -1;
-}
-
 static int jl_options_initialized = 0;
 
 JL_DLLEXPORT void jl_init_options(void)
@@ -171,7 +163,6 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // gc_sweep_always_full
                         0, // compress_sysimage
                         0, // alert_on_critical_error
-                        default_hugepage_threshold(), // hugepage_threshold
     };
     jl_options_initialized = 1;
 }
@@ -307,14 +298,7 @@ static const char opts[]  =
     "                                               number of bytes, optionally in units of: B,\n"
     "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
     "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
-    " --hugepage-threshold={auto|no|<size>[<unit>]}   Minimum heap allocation size for which Julia\n"
-    "                                               requests MADV_HUGEPAGE (transparent huge pages).\n"
-    "                                               Linux-only; applies to the stock GC only. The\n"
-    "                                               default is 3/4 of the system huge page size; 'no'\n"
-    "                                               disables. The underlying allocator may still choose\n"
-    "                                               huge pages independently of this setting.\n"
-
-    ;
+;
 
 static const char opts_hidden[]  =
     "Switches (a '*' marks the default value, if applicable):\n\n"
@@ -432,7 +416,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_trace_eval,
            opt_experimental_features,
            opt_compress_sysimage,
-           opt_hugepage_threshold,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -506,7 +489,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "trim",  optional_argument, 0, opt_trim },
         { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
         { "trace-eval",       optional_argument, 0, opt_trace_eval },
-        { "hugepage-threshold",required_argument, 0, opt_hugepage_threshold },
         { 0, 0, 0, 0 }
     };
 
@@ -1096,48 +1078,6 @@ restart_switch:
                 jl_options.trace_eval = 0;
             else
                 jl_errorf("julia: invalid argument to --trace-eval={yes|no} (%s)", optarg);
-            break;
-        case opt_hugepage_threshold:
-            if (!strcmp(optarg, "auto")) {
-                jl_options.hugepage_threshold = default_hugepage_threshold();
-            }
-            else if (!strcmp(optarg, "no")) {
-                jl_options.hugepage_threshold = -1; // disabled
-            }
-            else {
-                // parse size like heap-size options but without percent and allowing 0
-                long double value = 0.0;
-                char unit[4] = {0};
-                int nparsed = sscanf(optarg, "%Lf%3s", &value, unit);
-                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && ascii_tolower(unit[1]) != 'b'))
-                    jl_errorf("julia: invalid argument to --hugepage-threshold={auto|no|<size>[<unit>]} (%s)", optarg);
-                uint64_t multiplier = 1ull;
-                switch (ascii_tolower(unit[0])) {
-                    case '\0':
-                    case 'b':
-                        break;
-                    case 'k':
-                        multiplier <<= 10;
-                        break;
-                    case 'm':
-                        multiplier <<= 20;
-                        break;
-                    case 'g':
-                        multiplier <<= 30;
-                        break;
-                    case 't':
-                        multiplier <<= 40;
-                        break;
-                    default:
-                        jl_errorf("julia: invalid argument to --hugepage-threshold={auto|no|<size>[<unit>]} (%s)", optarg);
-                }
-                long double sz = value * multiplier;
-                if (isnan(sz) || sz < 0)
-                    jl_errorf("julia: invalid argument to --hugepage-threshold={auto|no|<size>[<unit>]} (%s)", optarg);
-                const long double limit = ldexpl(1.0, 63); // INT64_MAX + 1
-                int64_t parsed = (sz < limit) ? (int64_t)sz : INT64_MAX;
-                jl_options.hugepage_threshold = parsed; // allow 0 (means advise for all)
-            }
             break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))
