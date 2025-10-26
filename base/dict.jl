@@ -772,9 +772,10 @@ struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}
     key::K
     value::V
-    ImmutableDict{K,V}() where {K,V} = new() # represents an empty dictionary
-    ImmutableDict{K,V}(key, value) where {K,V} = (empty = new(); new(empty, key, value))
-    ImmutableDict{K,V}(parent::ImmutableDict, key, value) where {K,V} = new(parent, key, value)
+    len::Int
+    ImmutableDict{K,V}() where {K,V} = new(0) # represents an empty dictionary
+    ImmutableDict{K,V}(key, value) where {K,V} = (empty = new(0); new(empty, key, value, 1))
+    ImmutableDict{K,V}(parent::ImmutableDict, key, value) where {K,V} = new(parent, key, value, parent.len + 1)
 end
 
 """
@@ -847,7 +848,8 @@ function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
     !isdefined(t, :parent) && return nothing
     (Pair{K,V}(t.key, t.value), t.parent)
 end
-length(t::ImmutableDict) = count(Returns(true), t)
+length(t::ImmutableDict) = t.len
+Base.IteratorSize(::Type{<:ImmutableDict}) = Base.HasLength()
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
