@@ -17,11 +17,9 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    permissions: # needed to allow julia-actions/cache to proactively delete old caches that it has created
-      actions: write
+    permissions:
       contents: read
     strategy:
       fail-fast: false
@@ -31,24 +29,38 @@ jobs:
           - '1.6'
           - '1.10'
           - '1'
-        os:
+        github-runner:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
-        arch:
-          - x86
-          - x64
+        julia-wordsize:
+          # The value here only affects the version of Julia binary that we download.
+          # It does not affect the architecture of the GitHub Runner (virtual machine) that
+          # we run on.
+          - '32' # 32-bit Julia. Only available on x86_64. Not available on aarch64.
+          - '64' # 64-bit Julia.
         exclude:
-          # MacOS not available on x86
-          - {os: 'macOS-latest', arch: 'x86'}
+          # We don't have 32-bit builds of Julia for Intel macOS:
+          - github-runner: macos-13 # macos-13 = Intel.
+            julia-wordsize: '32'
+          # We don't have 32-bit builds of Julia for Apple Silicon macOS:
+          - github-runner: macos-14 # macos-14 = Apple Silicon.
+            julia-wordsize: '32'
     steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v2
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@v1
+          persist-credentials: false
+      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
+        with:
+          version: ${{ matrix.julia-version }}
+          # If `julia-wordsize` is 32, then we set `arch` to `x86`, because we know that
+          # 32-bit builds of Julia are only available for x86.
+          #
+          # If `julia-wordsize` is 64, then we set `arch` to `${{ runner.arch }}`, which
+          # GitHub will automatically expand to the correct value (`x86_64` or `aarch64`)
+          # based on the architecture of the underlying GitHub Runner (virtual machine).
+          arch: ${{ matrix.julia-wordsize == '32' && 'x86' || runner.arch }}
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+      - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
           project: JuliaSyntax
