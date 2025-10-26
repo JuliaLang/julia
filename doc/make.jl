@@ -423,7 +423,7 @@ doc = makedocs(
 )
 
 # update this when the number of missing docstrings changes
-const known_missing_from_manual = 379
+const known_missing_from_manual = 354
 
 # Check that we're not regressing in missing docs, but only check on PRs so that master builds can still pass
 if in("deploy", ARGS) && haskey(ENV,"BUILDKITE_BRANCH") && ENV["BUILDKITE_BRANCH"] != "master"
