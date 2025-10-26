@@ -3828,9 +3828,11 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
         void *b = NULL;
         if (allocsz >= 1u<<18u) {
             b = malloc_page_align(allocsz);
-            size_t leftover = jl_hugepage_size - (allocsz % jl_hugepage_size);
-            if ((leftover <= allocsz / 4) || (leftover == jl_hugepage_size))  // limit fragmentation
-                madvise(b, allocsz, MADV_HUGEPAGE);
+            if (jl_hugepage_size > 0) {
+                size_t leftover = jl_hugepage_size - (allocsz % jl_hugepage_size);
+                if ((leftover <= allocsz / 4) || (leftover == jl_hugepage_size))  // limit fragmentation
+                    madvise(b, allocsz, MADV_HUGEPAGE);
+            }
         }
         else {
             b = malloc_cache_align(allocsz);
