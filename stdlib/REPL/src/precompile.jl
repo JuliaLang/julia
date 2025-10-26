@@ -237,6 +237,12 @@ let
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, String}})
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, Symbol}})
             precompile(Tuple{typeof(REPL.banner), Base.TTY})
+            # Since TermOSC uses a keymap-triggered task, it's not hit in the workload.
+            precompile(Tuple{typeof(REPL.TermOSC.receive_osc), Base.Terminals.TTYTerminal})
+            precompile(Tuple{typeof(REPL.TermOSC.read_osc_response), Base.TTY})
+            precompile(Tuple{REPL.TermOSC.ColorCallbackWrapper{typeof(REPL.StyledStrings.setcolors!)}, Array{REPL.TermOSC.OSCResponse, 1}})
+            # Unknown source, but seemingly needed
+            precompile(Tuple{typeof(Base.print), Base.TTY, String})
         finally
             ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
         end
