@@ -49,7 +49,7 @@ version = "0.9.5"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", "DocStringExtensions", "Downloads", "Git", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "MarkdownAST", "Pkg", "PrecompileTools", "REPL", "RegistryInstances", "SHA", "TOML", "Test", "Unicode"]
-git-tree-sha1 = "8d088c8c4c0ac739b049b6d0bfda94189e6afae0"
+git-tree-sha1 = "cc02e321b45c187443f0271b7cebc962450f6d22"
 repo-rev = "ib/stability_fix"
 repo-url = "https://github.com/IanButterworth/Documenter.jl"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
