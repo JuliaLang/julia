@@ -209,6 +209,7 @@ Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.invpermute!
 Base.reverse(::AbstractVector; kwargs...)
+Base.reverse(::Tuple)
 Base.reverseind
 Base.reverse!
 ```

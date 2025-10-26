@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/SharedArrays/do
 
 # Shared Arrays
 
+```@docs
+SharedArrays.SharedArrays
+```
+
 `SharedArray` represents an array, which is shared across multiple processes, on a single machine.
 
 ```@docs

@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Profile/docs/sr
 
 # [Profiling](@id lib-profiling)
 
+```@docs
+Profile.Profile
+```
+
 ## CPU Profiling
 
 There are two main approaches to CPU profiling julia code:
@@ -84,6 +88,7 @@ profile data consumer.
 
 ```@docs
 Profile.@profile
+Profile.@profile_walltime
 ```
 
 The methods in `Profile` are not exported and need to be called e.g. as `Profile.print()`.
@@ -98,6 +103,9 @@ Profile.callers
 Profile.clear_malloc_data
 Profile.get_peek_duration
 Profile.set_peek_duration
+Profile.flatten
+Profile.take_page_profile
+Profile.add_fake_meta
 ```
 
 ## Memory profiling

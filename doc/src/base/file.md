@@ -34,7 +34,9 @@ Base.Filesystem.rm
 Base.Filesystem.touch
 Base.Filesystem.tempname
 Base.Filesystem.tempdir
+Base.Filesystem.mktemp(::Any)
 Base.Filesystem.mktemp(::AbstractString)
+Base.Filesystem.mktemp(::Function)
 Base.Filesystem.mktemp(::Function, ::AbstractString)
 Base.Filesystem.mktempdir(::AbstractString)
 Base.Filesystem.mktempdir(::Function, ::AbstractString)
@@ -67,4 +69,56 @@ Base.Filesystem.splitdir
 Base.Filesystem.splitdrive
 Base.Filesystem.splitext
 Base.Filesystem.splitpath
+Base.Filesystem.StatStruct
+Base.setuid
+Base.setgid
+```
+
+## File Open Flags
+
+```@docs
+Base.Filesystem.JL_O_APPEND
+Base.Filesystem.JL_O_ASYNC
+Base.Filesystem.JL_O_CLOEXEC
+Base.Filesystem.JL_O_CREAT
+Base.Filesystem.JL_O_DIRECT
+Base.Filesystem.JL_O_DIRECTORY
+Base.Filesystem.JL_O_DSYNC
+Base.Filesystem.JL_O_EXCL
+Base.Filesystem.JL_O_FSYNC
+Base.Filesystem.JL_O_LARGEFILE
+Base.Filesystem.JL_O_NDELAY
+Base.Filesystem.JL_O_NOATIME
+Base.Filesystem.JL_O_NOCTTY
+Base.Filesystem.JL_O_NOFOLLOW
+Base.Filesystem.JL_O_NONBLOCK
+Base.Filesystem.JL_O_PATH
+Base.Filesystem.JL_O_RANDOM
+Base.Filesystem.JL_O_RDONLY
+Base.Filesystem.JL_O_RDWR
+Base.Filesystem.JL_O_RSYNC
+Base.Filesystem.JL_O_SEQUENTIAL
+Base.Filesystem.JL_O_SHORT_LIVED
+Base.Filesystem.JL_O_SYNC
+Base.Filesystem.JL_O_TEMPORARY
+Base.Filesystem.JL_O_TMPFILE
+Base.Filesystem.JL_O_TRUNC
+Base.Filesystem.JL_O_WRONLY
+```
+
+## File Permissions
+
+```@docs
+Base.Filesystem.S_IRUSR
+Base.Filesystem.S_IWUSR
+Base.Filesystem.S_IXUSR
+Base.Filesystem.S_IRWXU
+Base.Filesystem.S_IRGRP
+Base.Filesystem.S_IWGRP
+Base.Filesystem.S_IXGRP
+Base.Filesystem.S_IRWXG
+Base.Filesystem.S_IROTH
+Base.Filesystem.S_IWOTH
+Base.Filesystem.S_IXOTH
+Base.Filesystem.S_IRWXO
 ```

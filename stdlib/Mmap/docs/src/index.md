@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Mmap/docs/src/i
 
 # Memory-mapped I/O
 
+```@docs
+Mmap
+```
+
 Low level module for mmap (memory mapping of files).
 
 ```@docs

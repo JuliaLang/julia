@@ -12,6 +12,13 @@ Libdl
 Libdl.dlopen
 Libdl.dlopen_e
 Libdl.RTLD_NOW
+Libdl.RTLD_LAZY
+Libdl.RTLD_GLOBAL
+Libdl.RTLD_LOCAL
+Libdl.RTLD_FIRST
+Libdl.RTLD_DEEPBIND
+Libdl.RTLD_NOLOAD
+Libdl.RTLD_NODELETE
 Libdl.dlsym
 Libdl.dlsym_e
 Libdl.dlclose
