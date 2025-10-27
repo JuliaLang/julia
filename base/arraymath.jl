@@ -13,7 +13,12 @@ function +(A::Array, Bs::Array...)
     for B in Bs
         promote_shape(A, B) # check size compatibility
     end
-    broadcast_preserving_zero_d(+, A, Bs...)
+    map(+, A, Bs...)
+end
+
+function -(A::Array, B::Array)
+    promote_shape(A, B) # check size compatibility
+    map(-, A, B)
 end
 
 for f in (:/, :\, :*)
