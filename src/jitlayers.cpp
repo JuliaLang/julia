@@ -302,8 +302,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
 
     orc::ThreadSafeModule result_m;
     std::string gf_thunk_name;
-    {
-        jl_codegen_params_t params(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
+    withCodegenParamsDo(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple(), [&] (jl_codegen_params_t &params) {
         params.getContext().setDiscardValueNames(true);
         params.cache = true;
         params.imaging_mode = 0;
@@ -323,7 +322,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
         SmallVector<orc::ThreadSafeModule,0> sharedmodules;
         finish_params(M, params, sharedmodules);
         assert(sharedmodules.empty());
-    }
+    });
     int8_t gc_state = jl_gc_safe_enter(ct->ptls);
     jl_ExecutionEngine->addModule(std::move(result_m));
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
@@ -602,11 +601,12 @@ static void prepare_compile(jl_code_instance_t *codeinst) JL_NOTSAFEPOINT_LEAVE 
             assert(waiting == std::get<1>(it->second));
             std::get<1>(it->second) = 0;
             auto &params = std::get<0>(it->second);
-            params.tsctx_lock = params.tsctx.getLock();
-            waiting = jl_analyze_workqueue(codeinst, params, true); // may safepoint
-            assert(!waiting); (void)waiting;
-            Module *M = emittedmodules[codeinst].getModuleUnlocked();
-            finish_params(M, params, sharedmodules);
+            params.withContextDo([&] (LLVMContext*) JL_NOTSAFEPOINT {
+                waiting = jl_analyze_workqueue(codeinst, params, true); // may safepoint
+                assert(!waiting); (void)waiting;
+                Module *M = emittedmodules[codeinst].getModuleUnlocked();
+                finish_params(M, params, sharedmodules);
+            });
             incompletemodules.erase(it);
         }
         // and then indicate this should be compiled now
@@ -633,13 +633,14 @@ static void complete_emit(jl_code_instance_t *edge) JL_NOTSAFEPOINT_LEAVE JL_NOT
         assert(it != incompletemodules.end());
         if (--std::get<1>(it->second) == 0) {
             auto &params = std::get<0>(it->second);
-            params.tsctx_lock = params.tsctx.getLock();
-            assert(callee == it->first);
-            orc::ThreadSafeModule &M = emittedmodules[callee];
-            emit_always_inline(M, params); // may safepoint
-            int waiting = jl_analyze_workqueue(callee, params); // may safepoint
-            assert(!waiting); (void)waiting;
-            finish_params(M.getModuleUnlocked(), params, sharedmodules);
+            params.withContextDo([&] (LLVMContext*) {
+                assert(callee == it->first);
+                orc::ThreadSafeModule &M = emittedmodules[callee];
+                emit_always_inline(M, params); // may safepoint
+                int waiting = jl_analyze_workqueue(callee, params); // may safepoint
+                assert(!waiting); (void)waiting;
+                finish_params(M.getModuleUnlocked(), params, sharedmodules);
+            });
             incompletemodules.erase(it);
         }
     }
@@ -659,10 +660,9 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
         if (!sharedmodules.empty()) {
             auto TSM = sharedmodules.pop_back_val();
             lock.native.unlock();
-            {
-                auto Lock = TSM.getContext().getLock();
+            withContextDo(TSM.getContext(), [&] (LLVMContext*) {
                 jl_ExecutionEngine->optimizeDLSyms(*TSM.getModuleUnlocked()); // may safepoint
-            }
+            });
             jl_ExecutionEngine->addModule(std::move(TSM));
             lock.native.lock();
         }
@@ -678,10 +678,9 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             emittedmodules.erase(TSMref);
             lock.native.unlock();
             uint64_t start_time = jl_hrtime();
-            {
-                auto Lock = TSM.getContext().getLock();
+            withContextDo(TSM.getContext(), [&] (LLVMContext*) {
                 jl_ExecutionEngine->optimizeDLSyms(*TSM.getModuleUnlocked()); // may safepoint
-            }
+            });
             jl_ExecutionEngine->addModule(std::move(TSM)); // may safepoint
             // If logging of the compilation stream is enabled,
             // then dump the method-instance specialization type to the stream
@@ -812,26 +811,31 @@ void jl_emit_codeinst_to_jit_impl(
     }
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
     // emit the code in LLVM IR form to the new context
-    jl_codegen_params_t params(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
-    params.getContext().setDiscardValueNames(true);
-    params.cache = true;
-    params.imaging_mode = 0;
-    orc::ThreadSafeModule result_m =
-        jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)), params.tsctx, params.DL, params.TargetTriple);
-    params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
-    JL_GC_PUSH1(&params.temporary_roots);
-    jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
-    if (!result_m) {
+    orc::ThreadSafeModule result_m;
+    jl_llvm_functions_t decls;
+    jl_codegen_params_t params(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple(), std::defer_lock);
+    auto exit = params.withContextDo([&] (LLVMContext *ctx) {
+        ctx->setDiscardValueNames(true);
+        params.cache = true;
+        params.imaging_mode = 0;
+        result_m =
+            jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)), params.tsctx, params.DL, params.TargetTriple);
+        params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+        JL_GC_PUSH1(&params.temporary_roots);
+        decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
+        if (!result_m) {
+            JL_GC_POP();
+            return true;
+        }
+        jl_optimize_roots(params, jl_get_ci_mi(codeinst), *result_m.getModuleUnlocked()); // contains safepoints
+        params.temporary_roots = nullptr;
+        params.temporary_roots_set.clear();
         JL_GC_POP();
+        return false;
+    });
+    if (exit)
         return;
-    }
-    jl_optimize_roots(params, jl_get_ci_mi(codeinst), *result_m.getModuleUnlocked()); // contains safepoints
-    params.temporary_roots = nullptr;
-    params.temporary_roots_set.clear();
-    JL_GC_POP();
-    { // drop lock before acquiring engine_lock
-        auto release = std::move(params.tsctx_lock);
-    }
+    // drop codegen params lock before acquiring engine_lock
     jl_unique_gcsafe_lock lock(engine_lock);
     if (invokenames.count(codeinst) || jl_is_compiled_codeinst(codeinst))
         return; // destroy everything
@@ -855,16 +859,17 @@ void jl_emit_codeinst_to_jit_impl(
     jl_atomic_cmpswap_relaxed(&codeinst->invoke, &expected, jl_fptr_wait_for_compiled_addr);
     invokenames[codeinst] = std::move(decls);
     complete_emit(codeinst);
-    params.tsctx_lock = params.tsctx.getLock(); // re-acquire lock
-    emit_always_inline(result_m, params);
-    int waiting = jl_analyze_workqueue(codeinst, params);
-    if (waiting) {
-        auto release = std::move(params.tsctx_lock); // unlock again before moving from it
-        incompletemodules.try_emplace(codeinst, std::move(params), waiting);
-    }
-    else {
-        finish_params(result_m.getModuleUnlocked(), params, sharedmodules);
-    }
+    params.withContextDo([&] (LLVMContext *ctx) {
+        // re-acquire lock
+        emit_always_inline(result_m, params);
+        int waiting = jl_analyze_workqueue(codeinst, params);
+        if (waiting) {
+            incompletemodules.try_emplace(codeinst, std::move(params), waiting);
+        }
+        else {
+            finish_params(result_m.getModuleUnlocked(), params, sharedmodules);
+        }
+    });
     emittedmodules[codeinst] = std::move(result_m);
 }
 
@@ -2188,27 +2193,28 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     TSM = selectOptLevel(std::move(TSM));
     TSM = (*Optimizers)(std::move(TSM));
     TSM = (*JITPointers)(std::move(TSM));
-    auto Lock = TSM.getContext().getLock();
-    Module &M = *TSM.getModuleUnlocked();
-
-    for (auto &f : M) {
-        if (!f.isDeclaration()){
-            jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, f.getName().str().c_str());
+    auto Obj = withContextDo(TSM.getContext(), [&] (LLVMContext*) {
+        Module &M = *TSM.getModuleUnlocked();
+        for (auto &f : M) {
+            if (!f.isDeclaration()){
+                jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, f.getName().str().c_str());
+            }
         }
-    }
 
-    // Treat this as if one of the passes might contain a safepoint
-    // even though that shouldn't be the case and might be unwise
-    Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
-    if (!Obj) {
+        // Treat this as if one of the passes might contain a safepoint
+        // even though that shouldn't be the case and might be unwise
+        auto Obj = CompileLayer.getCompiler()(M);
+        if (!Obj) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
-        ES.reportError(Obj.takeError());
+            ES.reportError(Obj.takeError());
 #endif
-        errs() << "Failed to add module to JIT!\n";
-        errs() << "Dumping failing module\n" << M << "\n";
+            errs() << "Failed to add module to JIT!\n";
+            errs() << "Dumping failing module\n" << M << "\n";
+        }
+        return Obj;
+    });
+    if (!Obj)
         return;
-    }
-    { auto release = std::move(Lock); }
     auto Err = JuliaOJIT::addObjectFile(JD, std::move(*Obj));
     if (Err) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
