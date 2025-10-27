@@ -17,14 +17,14 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.github-runner }}
     timeout-minutes: 60
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        version:
+        julia-version:
           - '1.0'
           - '1.6'
           - '1.10'
