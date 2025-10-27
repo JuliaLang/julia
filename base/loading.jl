@@ -885,6 +885,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         manifest_path === missing || return manifest_path
     end
     dir = abspath(dirname(project_file))
+    isfile_casesensitive(project_file) || return nothing
     d = parsed_toml(project_file)
     base_manifest = workspace_manifest(project_file)
     if base_manifest !== nothing

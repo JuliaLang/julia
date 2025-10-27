@@ -79,6 +79,7 @@ function repl_workload()
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
+    \x12?\x7f\e[A\e[B\t history\r
     println("done")
     """
 
@@ -90,9 +91,20 @@ function repl_workload()
     SHELL_PROMPT = "shell> "
     HELP_PROMPT = "help?> "
 
-    blackhole = Sys.isunix() ? "/dev/null" : "nul"
+    tmphistfile = tempname()
+    write(tmphistfile, """
+    # time: 2020-10-31 13:16:39 AWST
+    # mode: julia
+    \tcos
+    # time: 2020-10-31 13:16:40 AWST
+    # mode: julia
+    \tsin
+    # time: 2020-11-01 02:19:36 AWST
+    # mode: help
+    \t?
+    """)
 
-    withenv("JULIA_HISTORY" => blackhole,
+    withenv("JULIA_HISTORY" => tmphistfile,
             "JULIA_PROJECT" => nothing, # remove from environment
             "JULIA_LOAD_PATH" => "@stdlib",
             "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
@@ -211,6 +223,20 @@ let
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
             precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
             precompile(Tuple{typeof(Base.:(==)), Char, String})
+            # For the banner
+            # TODO: Fix precompilation so this is no longer needed
+            precompile(Tuple{typeof(Base.AnnotatedDisplay.ansi_write), typeof(Base.write), Base.TTY, Base.AnnotatedString{String}})
+            precompile(Tuple{typeof(Base.all), Tuple{Bool, Bool}})
+            precompile(Tuple{typeof(Base.get), Base.Dict{Tuple{Symbol, Any}, Int64}, Tuple{Symbol, REPL.StyledStrings.Face}, Int64})
+            precompile(Tuple{typeof(Base.get), Base.Dict{Tuple{Symbol, Any}, Int64}, Tuple{Symbol, String}, Int64})
+            precompile(Tuple{typeof(Base.get), Base.Dict{Tuple{Symbol, Any}, Int64}, Tuple{Symbol, Symbol}, Int64})
+            precompile(Tuple{typeof(Base.hashindex), Tuple{Symbol, String}, Int64})
+            precompile(Tuple{typeof(Base.isempty), Base.Dict{String, Any}})
+            precompile(Tuple{typeof(Base.print), Base.TTY, Base.AnnotatedString{String}})
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, REPL.StyledStrings.Face}})
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, String}})
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, Symbol}})
+            precompile(Tuple{typeof(REPL.banner), Base.TTY})
         finally
             ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
         end

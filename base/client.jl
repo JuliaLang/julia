@@ -484,7 +484,7 @@ end
 function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
     term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
     term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-    banner == :no || REPL.banner(term, short=banner==:short)
+    banner == :no || REPL.banner(term, banner)
     if term.term_type == "dumb"
         repl = REPL.BasicREPL(term)
         quiet || @warn "Terminal not fully functional"
@@ -607,12 +607,26 @@ end
 function repl_main(_)
     opts = Base.JLOptions()
     interactiveinput = isa(stdin, Base.TTY)
-    b = opts.banner
-    auto = b == -1
-    banner = b == 0 || (auto && !interactiveinput) ? :no  :
-             b == 1 || (auto && interactiveinput)  ? :yes :
-             :short # b == 2
-
+    bval = if opts.banner == -1 # Auto
+        Int(interactiveinput)
+    else
+        opts.banner
+    end
+    # All the options produced by `jloptions.c`'s `case opt_banner`.
+    # 0=off, 1=largest, ..., N=smallest
+    banner = if bval == 0
+        :no
+    elseif bval == 1
+        :full
+    elseif bval == 2
+        :narrow
+    elseif bval == 3
+        :short
+    elseif bval == 4
+        :tiny
+    else # For type stability of `banner`
+        :unreachable
+    end
     quiet                 = (opts.quiet != 0)
     history_file          = (opts.historyfile != 0)
     return run_main_repl(interactiveinput, quiet, banner, history_file)

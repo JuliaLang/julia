@@ -40,6 +40,7 @@ end
 
 using Base.Meta, Sockets, StyledStrings
 using JuliaSyntaxHighlighting
+using Dates: now, UTC
 import InteractiveUtils
 import FileWatching
 import Base.JuliaSyntax: kind, @K_str, @KSet_str, Tokenize.tokenize
@@ -69,6 +70,8 @@ include("options.jl")
 include("StylingPasses.jl")
 using .StylingPasses
 
+function histsearch end # To work around circular dependency
+
 include("LineEdit.jl")
 using .LineEdit
 import .LineEdit:
@@ -95,6 +98,11 @@ using .REPLCompletions
 
 include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
+
+include("History/History.jl")
+using .History
+
+histsearch(args...) = runsearch(args...)
 
 include("Pkg_beforeload.jl")
 
@@ -867,113 +875,26 @@ function with_repl_linfo(f, repl::LineEditREPL)
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
-    history::Vector{String}
-    file_path::String
-    history_file::Union{Nothing,IO}
+    history::HistoryFile
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
     last_mode::Union{Nothing,Prompt}
     mode_mapping::Dict{Symbol,Prompt}
-    modes::Vector{Symbol}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(String[], "", nothing, 0, 0, -1, IOBuffer(),
-                        nothing, mode_mapping, UInt8[])
-
-invalid_history_message(path::String) = """
-Invalid history file ($path) format:
-If you have a history file left over from an older version of Julia,
-try renaming or deleting it.
-Invalid character: """
-
-munged_history_message(path::String) = """
-Invalid history file ($path) format:
-An editor may have converted tabs to spaces at line """
-
-function hist_open_file(hp::REPLHistoryProvider)
-    f = open(hp.file_path, read=true, write=true, create=true)
-    hp.history_file = f
-    seekend(f)
-end
-
-function hist_from_file(hp::REPLHistoryProvider, path::String)
-    getline(lines, i) = i > length(lines) ? "" : lines[i]
-    file_lines = readlines(path)
-    countlines = 0
-    while true
-        # First parse the metadata that starts with '#' in particular the REPL mode
-        countlines += 1
-        line = getline(file_lines, countlines)
-        mode = :julia
-        isempty(line) && break
-        line[1] != '#' &&
-            error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
-        while !isempty(line)
-            startswith(line, '#') || break
-            if startswith(line, "# mode: ")
-                mode = Symbol(SubString(line, 9))
-            end
-            countlines += 1
-            line = getline(file_lines, countlines)
-        end
-        isempty(line) && break
-
-        # Now parse the code for the current REPL mode
-        line[1] == ' '  &&
-            error(munged_history_message(path), countlines)
-        line[1] != '\t' &&
-            error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
-        lines = String[]
-        while !isempty(line)
-            push!(lines, chomp(SubString(line, 2)))
-            next_line = getline(file_lines, countlines+1)
-            isempty(next_line) && break
-            first(next_line) == ' '  && error(munged_history_message(path), countlines)
-            # A line not starting with a tab means we are done with code for this entry
-            first(next_line) != '\t' && break
-            countlines += 1
-            line = getline(file_lines, countlines)
-        end
-        push!(hp.modes, mode)
-        push!(hp.history, join(lines, '\n'))
-    end
-    hp.start_idx = length(hp.history)
-    return hp
-end
+    REPLHistoryProvider(HistoryFile(), 0, 0, -1, IOBuffer(),
+                        nothing, mode_mapping)
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(takestring!(copy(s.input_buffer)))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
-    !isempty(hist.history) &&
-        isequal(mode, hist.modes[end]) && str == hist.history[end] && return
-    push!(hist.modes, mode)
-    push!(hist.history, str)
-    hist.history_file === nothing && return
-    entry = """
-    # time: $(Libc.strftime("%Y-%m-%d %H:%M:%S %Z", time()))
-    # mode: $mode
-    $(replace(str, r"^"ms => "\t"))
-    """
-    try
-        seekend(hist.history_file)
-    catch err
-        (err isa SystemError) || rethrow()
-        # File handle might get stale after a while, especially under network file systems
-        # If this doesn't fix it (e.g. when file is deleted), we'll end up rethrowing anyway
-        hist_open_file(hist)
-    end
-    if isfile(hist.file_path)
-        FileWatching.mkpidlock(hist.file_path  * ".pid", stale_age=3) do
-            print(hist.history_file, entry)
-            flush(hist.history_file)
-        end
-    else # handle eg devnull
-        print(hist.history_file, entry)
-        flush(hist.history_file)
-    end
+    !isempty(hist.history) && isequal(mode, hist.history[end].mode) &&
+        str == hist.history[end].content && return
+    entry = HistEntry(mode, now(UTC), str, 0)
+    push!(hist.history, entry)
     nothing
 end
 
@@ -988,8 +909,15 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
         hist.last_mode = LineEdit.mode(s)
         hist.last_buffer = copy(LineEdit.buffer(s))
     else
-        hist.history[save_idx] = LineEdit.input_string(s)
-        hist.modes[save_idx] = mode_idx(hist, LineEdit.mode(s))
+        # NOTE: Modifying the history is a bit funky, so
+        # we reach into the internals of `HistoryFile`
+        # to do so rather than implementing `setindex!`.
+        oldrec = hist.history.records[save_idx]
+        hist.history.records[save_idx] = HistEntry(
+            mode_idx(hist, LineEdit.mode(s)),
+            oldrec.date,
+            LineEdit.input_string(s),
+            oldrec.index)
     end
 
     # load the saved line
@@ -1001,9 +929,9 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
         hist.last_mode = nothing
         hist.last_buffer = IOBuffer()
     else
-        if haskey(hist.mode_mapping, hist.modes[idx])
-            LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]]) do
-                LineEdit.replace_line(s, hist.history[idx])
+        if haskey(hist.mode_mapping, hist.history[idx].mode)
+            LineEdit.transition(s, hist.mode_mapping[hist.history[idx].mode]) do
+                LineEdit.replace_line(s, hist.history[idx].content)
             end
         else
             return :skip
@@ -1016,10 +944,19 @@ end
 
 # REPL History can also transitions modes
 function LineEdit.accept_result_newmode(hist::REPLHistoryProvider)
-    if 1 <= hist.cur_idx <= length(hist.modes)
-        return hist.mode_mapping[hist.modes[hist.cur_idx]]
+    if 1 <= hist.cur_idx <= length(hist.history)
+        return hist.mode_mapping[hist.history[hist.cur_idx].mode]
     end
     return nothing
+end
+
+function history_do_initialize(hist::REPLHistoryProvider)
+    isempty(hist.history) || return false
+    update!(hist.history)
+    hist.start_idx = length(hist.history) + 1
+    hist.cur_idx = hist.start_idx
+    hist.last_idx = -1
+    true
 end
 
 function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
@@ -1047,6 +984,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
         return
     end
     num < 0 && return history_prev(s, hist, -num, save_idx)
+    history_do_initialize(hist)
     cur_idx = hist.cur_idx
     max_idx = length(hist.history) + 1
     if cur_idx == max_idx && 0 < hist.last_idx
@@ -1070,13 +1008,16 @@ history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
                  (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
-    history_next(s, hist, length(hist.history) - hist.cur_idx + 1)
+    history_next(s, hist, length(update!(hist.history)) - hist.cur_idx + 1)
 
 function history_move_prefix(s::LineEdit.PrefixSearchState,
                              hist::REPLHistoryProvider,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx::Int = hist.cur_idx)
+    if history_do_initialize(hist)
+        cur_idx = hist.cur_idx
+    end
     cur_response = takestring!(copy(LineEdit.buffer(s)))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
@@ -1086,7 +1027,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     max_idx = length(hist.history)+1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):1:max_idx)
     for idx in idxs
-        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || get(hist.mode_mapping, hist.modes[idx], nothing) !== LineEdit.mode(s)))
+        if (idx == max_idx) || (startswith(hist.history[idx].content, prefix) && (hist.history[idx].content != cur_response || get(hist.mode_mapping, hist.history[idx].mode, nothing) !== LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m === :ok
                 if idx == max_idx
@@ -1152,9 +1093,9 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # Now search all the other buffers
     idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):1:length(hist.history))
     for idx in idxs
-        h = hist.history[idx]
+        h = hist.history[idx].content
         match = backwards ? findlast(searchdata, h) : findfirst(searchdata, h)
-        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
+        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.history[idx].mode)
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match) - 1)
@@ -1405,14 +1346,13 @@ function setup_interface(
                                                  :pkg  => dummy_pkg_mode))
     if repl.history_file
         try
-            hist_path = find_hist_file()
-            mkpath(dirname(hist_path))
-            hp.file_path = hist_path
-            hist_open_file(hp)
+            path = find_hist_file()
+            mkpath(dirname(path))
+            hp.history = HistoryFile(path)
+            errormonitor(@async history_do_initialize(hp))
             finalizer(replc) do replc
-                close(hp.history_file)
+                close(hp.history)
             end
-            hist_from_file(hp, hist_path)
         catch
             # use REPL.hascolor to avoid using the local variable with the same name
             print_response(repl, Pair{Any, Bool}(current_exceptions(), true), true, REPL.hascolor(repl))
@@ -1428,10 +1368,6 @@ function setup_interface(
     dummy_pkg_mode.hist = hp
 
     julia_prompt.on_done = respond(x->Base.parse_input_line(x,filename=repl_filename(repl,hp)), repl, julia_prompt)
-
-
-    search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
-    search_prompt.complete = LatexCompletions()
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
@@ -1683,7 +1619,7 @@ function setup_interface(
     prefix_prompt, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
 
     # Build keymap list - add bracket insertion if enabled
-    base_keymaps = Dict{Any,Any}[skeymap, repl_keymap, prefix_keymap, LineEdit.history_keymap]
+    base_keymaps = Dict{Any,Any}[repl_keymap, prefix_keymap, LineEdit.history_keymap]
     if repl.options.auto_insert_closing_bracket
         push!(base_keymaps, LineEdit.bracket_insert_keymap)
     end
@@ -1697,7 +1633,7 @@ function setup_interface(
     mk = mode_keymap(julia_prompt)
 
     # Build keymap list for other modes
-    mode_base_keymaps = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap]
+    mode_base_keymaps = Dict{Any,Any}[mk, prefix_keymap, LineEdit.history_keymap]
     if repl.options.auto_insert_closing_bracket
         push!(mode_base_keymaps, LineEdit.bracket_insert_keymap)
     end
@@ -1708,7 +1644,7 @@ function setup_interface(
 
     shell_mode.keymap_dict = help_mode.keymap_dict = dummy_pkg_mode.keymap_dict = LineEdit.keymap(b)
 
-    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, search_prompt, prefix_prompt]
+    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, prefix_prompt]
     return ModalInterface(allprompts)
 end
 
@@ -1764,11 +1700,21 @@ function ends_with_semicolon(code)
     return semi
 end
 
-function banner(io::IO = stdout; short = false)
-    if Base.GIT_VERSION_INFO.tagged_commit
-        commit_string = Base.TAGGED_RELEASE_BANNER
+"""
+    banner(io::IO = stdout, preferred::Symbol = :full)
+
+Print the "Julia" informative banner to `io`, using the `preferred` variant
+if reasonable and known.
+
+!!! warning
+    The particular banner selected by `preferred` is liable to being changed
+    without warning. The current variants are: `:tiny`, `:short`, `:narrow`, and `:full`.
+"""
+function banner(io::IO = stdout, preferred::Symbol = :full)
+    commit_string = if Base.GIT_VERSION_INFO.tagged_commit
+        Base.AnnotatedString(TAGGED_RELEASE_BANNER, :face => :shadow)
     elseif isempty(Base.GIT_VERSION_INFO.commit)
-        commit_string = ""
+         styled""
     else
         days = Int(floor((ccall(:jl_clock_now, Float64, ()) - Base.GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
         days = max(0, days)
@@ -1777,60 +1723,65 @@ function banner(io::IO = stdout; short = false)
         commit = Base.GIT_VERSION_INFO.commit_short
 
         if distance == 0
-            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
+            styled"""Commit {grey:$commit} \
+                     ({warning:⌛ {italic:$days $unit}} old master)"""
         else
             branch = Base.GIT_VERSION_INFO.branch
-            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
+            styled"""{emphasis:$branch}/{grey:$commit} \
+                     ({italic:{success:{bold,(slant=normal):↑} $distance commits}, \
+                     {warning:{(slant=normal):⌛} $days $unit}})"""
         end
     end
 
-    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : styled" {light:($(split(Base.GIT_VERSION_INFO.date_string)[1]))}"
+    doclink = styled"{bold:Documentation:} {(underline=grey),link={https://docs.julialang.org}:https://docs.julialang.org}"
+    help = styled"Type {repl_prompt_help:?} for help, {repl_prompt_pkg:]?} for {(underline=grey),link={https://pkgdocs.julialang.org/}:Pkg} help."
 
-    if get(io, :color, false)::Bool
-        c = Base.text_colors
-        tx = c[:normal] # text
-        jl = c[:normal] # julia
-        d1 = c[:bold] * c[:blue]    # first dot
-        d2 = c[:bold] * c[:red]     # second dot
-        d3 = c[:bold] * c[:green]   # third dot
-        d4 = c[:bold] * c[:magenta] # fourth dot
+    sizenames = (:tiny, :short, :narrow, :full)
+    maxsize = something(findfirst(==(preferred), sizenames), length(sizenames))
+    size = min(if     all(displaysize(io) .>= (8, 70)); 4 # Full size
+               elseif all(displaysize(io) .>= (8, 45)); 3 # Narrower
+               elseif all(displaysize(io) .>= (3, 50)); 2 # Tiny
+               else 1 end,
+               max(0, maxsize))
 
-        if short
-            print(io,"""
-              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
-             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
-            """)
-        else
-            print(io,"""               $(d3)_$(tx)
-               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-              $(jl)| | | | | | |/ _` |$(tx)  |
-              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
-             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-            $(jl)|__/$(tx)                   |
+    if size == 4 # Full size
+        print(io, styled"""
+                                 {bold,green:_}
+                     {bold,blue:_}       _ {bold:{red:_}{green:(_)}{magenta:_}}     {shadow:│}  $doclink
+                    {bold,blue:(_)}     | {bold:{red:(_)} {magenta:(_)}}    {shadow:│}
+                     _ _   _| |_  __ _   {shadow:│}  $help
+                    | | | | | | |/ _` |  {shadow:│}
+                    | | |_| | | | (_| |  {shadow:│}  Version {bold:$VERSION}$commit_date
+                   _/ |\\__'_|_|_|\\__'_|  {shadow:│}  $commit_string
+                  |__/                   {shadow:│}
+                  \n""")
+    elseif size == 3 # Rotated
+        print(io, styled"""
+                                 {bold,green:_}
+                     {bold,blue:_}       _ {bold:{red:_}{green:(_)}{magenta:_}}
+                    {bold,blue:(_)}     | {bold:{red:(_)} {magenta:(_)}}
+                     _ _   _| |_  __ _
+                    | | | | | | |/ _` |
+                    | | |_| | | | (_| |
+                   _/ |\\__'_|_|_|\\__'_|
+                  |__/
 
-            """)
-        end
-    else
-        if short
-            print(io,"""
-              o  |  Version $(VERSION)$(commit_date)
-             o o |  $(commit_string)
-            """)
-        else
-            print(io,"""
-                           _
-               _       _ _(_)_     |  Documentation: https://docs.julialang.org
-              (_)     | (_) (_)    |
-               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-              | | | | | | |/ _` |  |
-              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
-             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-            |__/                   |
+                   $doclink
+                   $help
 
-            """)
-        end
+                   Version {bold:$VERSION}$commit_date
+                   $commit_string
+                  \n""")
+    elseif size == 2 # Tiny
+        print(io, styled"""
+                     {bold,green:o}  {shadow:│} Version {bold:$VERSION}$commit_date
+                    {bold:{red:o} {magenta:o}} {shadow:│} $commit_string
+                   """, ifelse(displaysize(io) > (12, 0), "\n", ""))
+    elseif size == 1 && Base.GIT_VERSION_INFO.tagged_commit # Text only
+        print(io, styled"""{bold:{blue:∴} {magenta:Julia} $VERSION}$commit_date\n""")
+    elseif size == 1 # Text only
+        print(io, styled"""{bold:{blue:∴} {magenta:Julia} $VERSION}$commit_date $commit_string\n""")
     end
 end
 
@@ -1960,7 +1911,7 @@ import .Numbered.numbered_prompt!
 Base.REPL_MODULE_REF[] = REPL
 
 if Base.generating_output()
-    include("precompile.jl")
+   include("precompile.jl")
 end
 
 end # module
