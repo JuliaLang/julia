@@ -505,8 +505,13 @@ static int lookup_pointer(
         else {
             int havelock = jl_lock_profile_wr();
             assert(havelock); (void)havelock;
-            info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+            auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
             jl_unlock_profile_wr();
+#if JL_LLVM_VERSION < 210000
+            info = std::move(lineinfo);
+#else
+            info = std::move(lineinfo.value());
+#endif
         }
 
         jl_frame_t *frame = &(*frames)[i];
