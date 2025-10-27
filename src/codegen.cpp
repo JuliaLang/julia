@@ -625,7 +625,7 @@ static AttributeList get_attrs_noreturn(LLVMContext &C)
     return AttributeList::get(C,
                 Attributes(C, {Attribute::NoReturn}),
                 AttributeSet(),
-                None);
+                {});
 }
 
 static AttributeList get_attrs_basic(LLVMContext &C)
@@ -633,7 +633,7 @@ static AttributeList get_attrs_basic(LLVMContext &C)
     return AttributeList::get(C,
                 AttributeSet(),
                 Attributes(C, {Attribute::NonNull}),
-                None);
+                {});
 }
 
 static AttributeList get_attrs_box_float(LLVMContext &C, unsigned nbytes)
@@ -649,7 +649,7 @@ static AttributeList get_attrs_box_float(LLVMContext &C, unsigned nbytes)
     return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet::get(C, RetAttrs),
-                None);
+                {});
 }
 
 static AttributeList get_attrs_box_sext(LLVMContext &C, unsigned nbytes)
@@ -936,7 +936,7 @@ static const auto jltopeval_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
-            None); },
+            {}); },
 };
 static const auto jlcopyast_func = new JuliaFunction<>{
     XSTR(jl_copy_ast),
@@ -948,7 +948,7 @@ static const auto jlcopyast_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
-            None); },
+            {}); },
 };
 static const auto jlapplygeneric_func = new JuliaFunction<>{
     XSTR(jl_apply_generic),
@@ -1054,7 +1054,7 @@ static const auto jlleave_func = new JuliaFunction<>{
             return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet(),
-                None);
+                {});
         },
 };
 static const auto jlleave_noexcept_func = new JuliaFunction<>{
@@ -1071,7 +1071,7 @@ static const auto jlleave_noexcept_func = new JuliaFunction<>{
             return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet(),
-                None);
+                {});
         },
 };
 static const auto jl_restore_excstack_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -1101,7 +1101,7 @@ static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
         return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet(),
-                None); },
+                {}); },
 };
 static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
     "julia.gc_alloc_obj",
@@ -1125,7 +1125,7 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             AttributeSet::get(C, RetAttrs),
-            None);
+            {});
     },
 };
 static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -1149,7 +1149,7 @@ static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<Type
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             AttributeSet::get(C, RetAttrs),
-            None);
+            {});
     },
 };
 static const auto jl_newbits_func = new JuliaFunction<>{
@@ -1162,7 +1162,7 @@ static const auto jl_newbits_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
-            None); },
+            {}); },
 };
 // `julia.typeof` does read memory, but it is effectively readnone before we lower
 // the allocation function. This is OK as long as we lower `julia.typeof` no later than
@@ -1182,7 +1182,7 @@ static const auto jl_typeof_func = new JuliaFunction<>{
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             Attributes(C, {Attribute::NonNull}),
-            None); },
+            {}); },
 };
 
 static const auto jl_write_barrier_func = new JuliaFunction<>{
@@ -1234,7 +1234,7 @@ static const auto jlapplytype_func = new JuliaFunction<>{
             AttributeSet(),
             AttributeSet::get(C, ArrayRef<Attribute>({Attribute::get(C, Attribute::NonNull),
                                                Attribute::getWithAlignment(C, Align(16))})),
-            None);
+            {});
     },
 };
 static const auto jl_object_id__func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -1255,7 +1255,7 @@ static const auto setjmp_func = new JuliaFunction<TypeFnContextAndTriple>{
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReturnsTwice}),
             AttributeSet(),
-            None); },
+            {}); },
 };
 static const auto memcmp_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(memcmp),
@@ -1268,7 +1268,7 @@ static const auto memcmp_func = new JuliaFunction<TypeFnContextAndSizeT>{
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             AttributeSet(),
-            None); },
+            {}); },
     // TODO: inferLibFuncAttributes(*memcmp_func, TLI);
 };
 static const auto jldlsym_func = new JuliaFunction<>{
@@ -1302,7 +1302,7 @@ static const auto jlgetnthfieldchecked_func = new JuliaFunction<TypeFnContextAnd
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
-            None); },
+            {}); },
 };
 static const auto jlfieldindex_func = new JuliaFunction<>{
     XSTR(jl_field_index),
@@ -1319,7 +1319,7 @@ static const auto jlfieldindex_func = new JuliaFunction<>{
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             AttributeSet(),
-            None); }, // This function can error if the third argument is 1 so don't do that.
+            {}); }, // This function can error if the third argument is 1 so don't do that.
 };
 static const auto jlfieldisdefinedchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_field_isdefined_checked),
@@ -1331,7 +1331,7 @@ static const auto jlfieldisdefinedchecked_func = new JuliaFunction<TypeFnContext
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {}),
-            None); },
+            {}); },
 };
 static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     XSTR(jl_get_cfunction_trampoline),
@@ -1353,7 +1353,7 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
-            None); },
+            {}); },
 };
 static const auto jlgetabiconverter_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_get_abi_converter),
@@ -1393,7 +1393,7 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
             return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet::get(C, RetAttrs),
-                None); },
+                {}); },
 };
 #define BOX_FUNC(ct,at,attrs,nbytes)                                                    \
 static const auto box_##ct##_func = new JuliaFunction<>{                           \
@@ -1435,7 +1435,7 @@ static const auto jldnd_func = new JuliaFunction<>{
         return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 Attributes(C, {}),
-                None);
+                {});
     },
 };
 
@@ -1470,7 +1470,7 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             Attributes(C, {Attribute::NonNull}),
-            None); },
+            {}); },
 };
 static const auto gc_loaded_func = new JuliaFunction<>{
     "julia.gc_loaded",
@@ -1665,7 +1665,7 @@ struct jl_aliasinfo_t {
                 MDNode *operand = cast<MDNode>(this->scope->getOperand(0));
                 auto scope_name = cast<MDString>(operand->getOperand(0))->getString();
                 if (scope_name == "jnoalias_const")
-                    inst->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(inst->getContext(), None));
+                    inst->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(inst->getContext(), {}));
             }
         }
 
@@ -2017,7 +2017,7 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed = NULL);
 static jl_returninfo_t get_specsig_function(jl_codegen_params_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure,
-        ArrayRef<const char*> ArgNames=None, unsigned nreq=0);
+        ArrayRef<const char*> ArgNames={}, unsigned nreq=0);
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa);
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
@@ -2195,7 +2195,7 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
     if (jl_is_type_type(typ)) {
         assert(is_uniquerep_Type(typ));
         // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
-        jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+        jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), ArrayRef<Value*>());
         constant.constant = jl_tparam0(typ);
         if (typ == (jl_value_t*)jl_typeofbottom_type->super)
             constant.isghost = true;
@@ -2219,13 +2219,13 @@ static inline jl_cgval_t mark_julia_const(jl_codectx_t &ctx, jl_value_t *jv)
         if (jl_is_datatype_singleton((jl_datatype_t*)typ))
             return ghostValue(ctx, typ);
     }
-    jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+    jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), ArrayRef<Value*>());
     constant.constant = jv;
     return constant;
 }
 
 
-static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa, ArrayRef<Value*> inline_roots=None)
+static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa, ArrayRef<Value*> inline_roots={})
 {
     // this enables lazy-copying of immutable values and stack or argument slots
     jl_cgval_t tagval(v, false, typ, tindex, tbaa, inline_roots);
@@ -2311,7 +2311,7 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
             return value_to_pointer(ctx, v, typ, NULL);
     }
     if (isboxed)
-        return jl_cgval_t(v, isboxed, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+        return jl_cgval_t(v, isboxed, typ, NULL, best_tbaa(ctx.tbaa(), typ), ArrayRef<Value*>());
     return jl_cgval_t(v, typ, NULL);
 }
 
@@ -2590,7 +2590,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
         }
     }
     else {
-        return jl_cgval_t(boxed(ctx, v), true, typ, NULL, best_tbaa(ctx.tbaa(), typ), None);
+        return jl_cgval_t(boxed(ctx, v), true, typ, NULL, best_tbaa(ctx.tbaa(), typ), ArrayRef<Value*>());
     }
     return jl_cgval_t(v, typ, new_tindex);
 }
@@ -5641,7 +5641,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             Value *tindex = NULL;
             if (vi.pTIndex)
                 tindex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(1), vi.isVolatile);
-            v = mark_julia_slot(ssaslot, vi.value.typ, tindex, ctx.tbaa().tbaa_stack, None);
+            v = mark_julia_slot(ssaslot, vi.value.typ, tindex, ctx.tbaa().tbaa_stack);
         }
         if (vi.inline_roots) {
             AllocaInst *varslot = vi.inline_roots;
@@ -6599,7 +6599,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         SmallVector<Metadata *, 8> MDs;
 
         // Reserve first location for self reference to the LoopID metadata node.
-        TempMDTuple TempNode = MDNode::getTemporary(ctx.builder.getContext(), None);
+        TempMDTuple TempNode = MDNode::getTemporary(ctx.builder.getContext(), {});
         MDs.push_back(TempNode.get());
 
         for (int i = 0, ie = nargs; i < ie; ++i) {
@@ -8634,7 +8634,7 @@ static jl_llvm_functions_t
             AllocaInst *roots = sizes.second > 0 ? emit_static_roots(ctx, sizes.second) : nullptr;
             if (bits) bits->setName(jl_symbol_name(s));
             if (roots) roots->setName(StringRef(".roots.") + jl_symbol_name(s));
-            varinfo.value = mark_julia_slot(bits, jt, NULL, ctx.tbaa().tbaa_stack, None);
+            varinfo.value = mark_julia_slot(bits, jt, NULL, ctx.tbaa().tbaa_stack, {});
             varinfo.inline_roots = roots;
             alloc_def_flag(ctx, varinfo);
             if (debug_enabled && varinfo.dinfo) {
