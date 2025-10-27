@@ -7790,7 +7790,7 @@ const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value
         crt = (jl_value_t*)jl_any_type;
     }
     bool toboxed;
-    Type *lcrt = _julia_struct_to_llvm(&params, *params.tsctx.getContext(), crt, &toboxed);
+    Type *lcrt = _julia_struct_to_llvm(&params, params.getContext(), crt, &toboxed);
     if (toboxed)
         lcrt = JuliaType::get_prjlvalue_ty(lcrt->getContext());
     size_t nargs = jl_nparams(sigt)-1;
@@ -8150,7 +8150,7 @@ static jl_llvm_functions_t
     size_t min_world = src->min_world;
     size_t max_world = src->max_world;
     jl_llvm_functions_t declarations;
-    jl_codectx_t ctx(*params.tsctx.getContext(), params, min_world, max_world);
+    jl_codectx_t ctx(params.getContext(), params, min_world, max_world);
     jl_datatype_t *vatyp = NULL;
     JL_GC_PUSH2(&ctx.code, &vatyp);
     ctx.code = src->code;

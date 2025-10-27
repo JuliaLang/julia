@@ -506,37 +506,38 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         //If TSM is not passed in, then the context MUST be locked externally.
         //RAII will release the lock
-        std::optional<orc::ThreadSafeContext::Lock> lock;
-        if (TSM) {
-            lock.emplace(TSM->getContext().getLock());
-        }
-        Function *llvmf = cast<Function>(unwrap(dump->F));
-        if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
-            jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
+        orc::ThreadSafeContext TSCtx;
+        if (TSM)
+            TSCtx = TSM->getContext();
+        withContextDo(TSCtx, [&] (LLVMContext*) {
+            Function *llvmf = cast<Function>(unwrap(dump->F));
+            if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
+                jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
-        LineNumberAnnotatedWriter AAW{"; ", false, debuginfo};
-        if (!llvmf->getParent()) {
-            // print the function declaration as-is
-            llvmf->print(stream, &AAW);
-            delete llvmf;
-        }
-        else {
-            assert(TSM && TSM->getModuleUnlocked() == llvmf->getParent() && "Passed module was not the same as function parent!");
-            auto m = TSM->getModuleUnlocked();
-            if (strip_ir_metadata) {
-                std::string llvmfn(llvmf->getName());
-                jl_strip_llvm_addrspaces(m);
-                jl_strip_llvm_debug(m, true, &AAW);
-                // rewriting the function type creates a new function, so look it up again
-                llvmf = m->getFunction(llvmfn);
-            }
-            if (dump_module) {
-                m->print(stream, &AAW);
+            LineNumberAnnotatedWriter AAW{"; ", false, debuginfo};
+            if (!llvmf->getParent()) {
+                // print the function declaration as-is
+                llvmf->print(stream, &AAW);
+                delete llvmf;
             }
             else {
-                llvmf->print(stream, &AAW);
+                assert(TSM && TSM->getModuleUnlocked() == llvmf->getParent() && "Passed module was not the same as function parent!");
+                auto m = TSM->getModuleUnlocked();
+                if (strip_ir_metadata) {
+                    std::string llvmfn(llvmf->getName());
+                    jl_strip_llvm_addrspaces(m);
+                    jl_strip_llvm_debug(m, true, &AAW);
+                    // rewriting the function type creates a new function, so look it up again
+                    llvmf = m->getFunction(llvmfn);
+                }
+                if (dump_module) {
+                    m->print(stream, &AAW);
+                }
+                else {
+                    llvmf->print(stream, &AAW);
+                }
             }
-        }
+        });
     }
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
