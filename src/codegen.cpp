@@ -10060,7 +10060,9 @@ void linkFunctionBody(Function &Dst, Function &Src)
         Dst.setPersonalityFn(Src.getPersonalityFn());
     if (Src.hasPersonalityFn())
         Dst.setPersonalityFn(Src.getPersonalityFn());
+#if JL_LLVM_VERSION < 210000
     assert(Src.IsNewDbgInfoFormat == Dst.IsNewDbgInfoFormat);
+#endif
 
     // Copy over the metadata attachments without remapping.
     Dst.copyMetadata(&Src, 0);

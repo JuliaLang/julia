@@ -565,7 +565,9 @@ Function *IRLinker_copyFunctionProto(Module *DstM, Function *SF) {
   auto *F = Function::Create(SF->getFunctionType(), SF->getLinkage(),
                              SF->getAddressSpace(), SF->getName(), DstM);
   F->copyAttributesFrom(SF);
+#if JL_LLVM_VERSION < 210000
   F->IsNewDbgInfoFormat = SF->IsNewDbgInfoFormat;
+#endif
 
   // Remove these copied constants since they point to the source module.
   F->setPersonalityFn(nullptr);
