@@ -1529,7 +1529,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     AOTOutputs out;
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             SourceTM.getTargetTriple().str(),
+#else
+            SourceTM.getTargetTriple(),
+#endif
             SourceTM.getTargetCPU(),
             SourceTM.getTargetFeatureString(),
             SourceTM.Options,
@@ -1557,7 +1561,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
         auto PMTM = std::unique_ptr<TargetMachine>(
             SourceTM.getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
                 SourceTM.getTargetTriple().str(),
+#else
+                SourceTM.getTargetTriple(),
+#endif
                 SourceTM.getTargetCPU(),
                 SourceTM.getTargetFeatureString(),
                 SourceTM.Options,
@@ -2109,7 +2117,11 @@ void jl_dump_native_impl(void *native_code,
     }
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             TheTriple.getTriple(),
+#else
+            TheTriple,
+#endif
             jl_ExecutionEngine->getTargetCPU(),
             jl_ExecutionEngine->getTargetFeatureString(),
             jl_ExecutionEngine->getTargetOptions(),
@@ -2142,7 +2154,11 @@ void jl_dump_native_impl(void *native_code,
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module sysimgM("sysimg", Context);
+#if JL_LLVM_VERSION < 210000
         sysimgM.setTargetTriple(TheTriple.str());
+#else
+        sysimgM.setTargetTriple(TheTriple);
+#endif
         sysimgM.setDataLayout(DL);
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
@@ -2210,7 +2226,11 @@ void jl_dump_native_impl(void *native_code,
 
     data->M.withModuleDo([&](Module &dataM) {
         JL_TIMING(NATIVE_AOT, NATIVE_Setup);
+#if JL_LLVM_VERSION < 210000
         dataM.setTargetTriple(TheTriple.str());
+#else
+        dataM.setTargetTriple(TheTriple);
+#endif
         dataM.setDataLayout(DL);
         dataM.setPICLevel(PICLevel::BigPIC);
         auto &Context = dataM.getContext();
@@ -2311,7 +2331,11 @@ void jl_dump_native_impl(void *native_code,
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module metadataM("metadata", Context);
+#if JL_LLVM_VERSION < 210000
         metadataM.setTargetTriple(TheTriple.str());
+#else
+        metadataM.setTargetTriple(TheTriple);
+#endif
         metadataM.setDataLayout(DL);
         metadataM.setStackProtectorGuard(StackProtectorGuard);
         metadataM.setOverrideStackAlignment(OverrideStackAlignment);
