@@ -435,19 +435,21 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
             done_mask[i] = true
             exception |= istaskfailed(t)
             nremaining -= 1
-        else
-            done_mask[i] = false
         end
     end
 
-    if nremaining == 0
-        return tasks, Task[]
-    elseif any(done_mask) && (!all || (failfast && exception))
+    # We can return early all tasks are done, or if any is done and we only
+    # needed to wait for one, or if any task failed and we have failfast
+    if nremaining == 0 || (any(done_mask) && (!all || (failfast && exception)))
         if throwexc && (!all || failfast) && exception
             exceptions = [TaskFailedException(t) for t in tasks[done_mask] if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
-            return tasks[done_mask], tasks[.~done_mask]
+            if nremaining == 0
+                return tasks, Task[]
+            else
+                return tasks[done_mask], tasks[.~done_mask]
+            end
         end
     end
 
@@ -489,6 +491,10 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
     close(chan)
 
     if nremaining == 0
+        if throwexc && exception
+            exceptions = [TaskFailedException(t) for t in tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        end
         return tasks, Task[]
     else
         remaining_mask = .~done_mask

@@ -67,7 +67,7 @@ end
 #end
 
 # REPL tests
-function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false,style_input=false))
+function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false,style_input=false,auto_insert_closing_bracket=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -121,7 +121,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=false)) do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=false,auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -443,14 +443,13 @@ function AddCustomMode(repl, prompt)
         end
     )
 
-    search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     mk = REPL.mode_keymap(main_mode)
 
-    b = Dict{Any,Any}[skeymap, mk, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    b = Dict{Any,Any}[mk, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     foobar_mode.keymap_dict = LineEdit.keymap(b)
 
     main_mode.keymap_dict = LineEdit.keymap_merge(main_mode.keymap_dict, foobar_keymap)
-    foobar_mode, search_prompt
+    foobar_mode
 end
 
 # Note: since the \t character matters for the REPL file history,
@@ -503,21 +502,20 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
         pkg_mode = repl.interface.modes[4]
-        histp = repl.interface.modes[5]
-        prefix_mode = repl.interface.modes[6]
+        # histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[5]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
                                                        :help  => help_mode))
         hist_path = tempname()
         write(hist_path, fakehistory)
-        REPL.hist_from_file(hp, hist_path)
-        f = open(hist_path, read=true, write=true, create=true)
-        hp.history_file = f
-        seekend(f)
+        hp.history = REPL.History.HistoryFile(hist_path)
+        REPL.history_do_initialize(hp)
         REPL.history_reset_state(hp)
 
-        histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+        # histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+        repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
         # Some manual setup
         s = LineEdit.init_state(repl.t, repl.interface)
@@ -571,6 +569,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test buffercontents(LineEdit.buffer(s)) == "wip"
         @test position(LineEdit.buffer(s)) == 3
         # test that history_first jumps to beginning of current session's history
+        @test hp.start_idx == 11
         hp.start_idx -= 5 # temporarily alter history
         LineEdit.history_first(s, hp)
         @test hp.cur_idx == 6
@@ -619,115 +618,6 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test LineEdit.input_string(ps) == "wip"
         @test position(LineEdit.buffer(s)) == 3
         LineEdit.accept_result(s, prefix_mode)
-
-        # Test that searching backwards puts you into the correct mode and
-        # skips invalid modes.
-        LineEdit.enter_search(s, histp, true)
-        ss = LineEdit.state(s, histp)
-        write(ss.query_buffer, "l")
-        LineEdit.update_display_buffer(ss, ss)
-        LineEdit.accept_result(s, histp)
-        @test LineEdit.mode(s) == shell_mode
-        @test buffercontents(LineEdit.buffer(s)) == "ls"
-        @test position(LineEdit.buffer(s)) == 0
-
-        # Test that searching for `ll` actually matches `ll` after
-        # both letters are types rather than jumping to `shell`
-        LineEdit.history_prev(s, hp)
-        LineEdit.enter_search(s, histp, true)
-        write(ss.query_buffer, "l")
-        LineEdit.update_display_buffer(ss, ss)
-        @test buffercontents(ss.response_buffer) == "ll"
-        @test position(ss.response_buffer) == 1
-        write(ss.query_buffer, "l")
-        LineEdit.update_display_buffer(ss, ss)
-        LineEdit.accept_result(s, histp)
-        @test LineEdit.mode(s) == shell_mode
-        @test buffercontents(LineEdit.buffer(s)) == "ll"
-        @test position(LineEdit.buffer(s)) == 0
-
-        # Test that searching backwards with a one-letter query doesn't
-        # return indefinitely the same match (#9352)
-        LineEdit.enter_search(s, histp, true)
-        write(ss.query_buffer, "l")
-        LineEdit.update_display_buffer(ss, ss)
-        LineEdit.history_next_result(s, ss)
-        LineEdit.update_display_buffer(ss, ss)
-        LineEdit.accept_result(s, histp)
-        @test LineEdit.mode(s) == repl_mode
-        @test buffercontents(LineEdit.buffer(s)) == "shell"
-        @test position(LineEdit.buffer(s)) == 4
-
-        # Test that searching backwards doesn't skip matches (#9352)
-        # (for a search with multiple one-byte characters, or UTF-8 characters)
-        LineEdit.enter_search(s, histp, true)
-        write(ss.query_buffer, "é") # matches right-most "é" in "éé"
-        LineEdit.update_display_buffer(ss, ss)
-        @test position(ss.query_buffer) == sizeof("é")
-        LineEdit.history_next_result(s, ss) # matches left-most "é" in "éé"
-        LineEdit.update_display_buffer(ss, ss)
-        LineEdit.accept_result(s, histp)
-        @test buffercontents(LineEdit.buffer(s)) == "éé"
-        @test position(LineEdit.buffer(s)) == 0
-
-        # Issue #7551
-        # Enter search mode and try accepting an empty result
-        REPL.history_reset_state(hp)
-        LineEdit.edit_clear(s)
-        cur_mode = LineEdit.mode(s)
-        LineEdit.enter_search(s, histp, true)
-        LineEdit.accept_result(s, histp)
-        @test LineEdit.mode(s) == cur_mode
-        @test buffercontents(LineEdit.buffer(s)) == ""
-        @test position(LineEdit.buffer(s)) == 0
-
-        # Test that new modes can be dynamically added to the REPL and will
-        # integrate nicely
-        foobar_mode, custom_histp = AddCustomMode(repl, prompt)
-
-        # ^R l, should now find `ls` in foobar mode
-        LineEdit.enter_search(s, histp, true)
-        ss = LineEdit.state(s, histp)
-        write(ss.query_buffer, "l")
-        LineEdit.update_display_buffer(ss, ss)
-        LineEdit.accept_result(s, histp)
-        @test LineEdit.mode(s) == foobar_mode
-        @test buffercontents(LineEdit.buffer(s)) == "ls"
-        @test position(LineEdit.buffer(s)) == 0
-
-        # Try the same for prefix search
-        LineEdit.history_next(s, hp)
-        LineEdit.history_prev_prefix(ps, hp, "l")
-        @test ps.parent == foobar_mode
-        @test LineEdit.input_string(ps) == "ls"
-        @test position(LineEdit.buffer(s)) == 1
-
-        # Some Unicode handling testing
-        LineEdit.history_prev(s, hp)
-        LineEdit.enter_search(s, histp, true)
-        write(ss.query_buffer, "x")
-        LineEdit.update_display_buffer(ss, ss)
-        @test buffercontents(ss.response_buffer) == "x ΔxΔ"
-        @test position(ss.response_buffer) == 4
-        write(ss.query_buffer, " ")
-        LineEdit.update_display_buffer(ss, ss)
-        LineEdit.accept_result(s, histp)
-        @test LineEdit.mode(s) == repl_mode
-        @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
-        @test position(LineEdit.buffer(s)) == 0
-
-        LineEdit.edit_clear(s)
-        LineEdit.enter_search(s, histp, true)
-        ss = LineEdit.state(s, histp)
-        write(ss.query_buffer, "Å") # should not be in history
-        LineEdit.update_display_buffer(ss, ss)
-        @test buffercontents(ss.response_buffer) == ""
-        @test position(ss.response_buffer) == 0
-        LineEdit.history_next_result(s, ss) # should not throw BoundsError
-        LineEdit.accept_result(s, histp)
-
-        # Try entering search mode while in custom repl mode
-        LineEdit.enter_search(s, custom_histp, true)
     end
 end
 
@@ -1035,7 +925,7 @@ function history_move_prefix(s::LineEdit.MIState,
     hist.last_idx = -1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):length(hist.history))
     for idx in idxs
-        if startswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
+        if startswith(hist.history[idx].content, prefix) && hist.history[idx].content != allbuf
             REPL.history_move(s, hist, idx)
             seek(LineEdit.buffer(s), pos)
             LineEdit.refresh_line(s)
@@ -1091,7 +981,7 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Close the history file
             # (otherwise trying to delete it fails on Windows)
-            close(repl.interface.modes[1].hist.history_file)
+            close(repl.interface.modes[1].hist.history)
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;", keep=true)
@@ -1726,21 +1616,20 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
         pkg_mode = repl.interface.modes[4]
-        histp = repl.interface.modes[5]
-        prefix_mode = repl.interface.modes[6]
+        # histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[5]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
                                                        :help  => help_mode))
         hist_path = tempname()
         write(hist_path, fakehistory_2)
-        REPL.hist_from_file(hp, hist_path)
-        f = open(hist_path, read=true, write=true, create=true)
-        hp.history_file = f
-        seekend(f)
+        histfile = REPL.HistoryFile(hist_path)
+        hp.history = histfile
+        REPL.history_do_initialize(hp)
         REPL.history_reset_state(hp)
 
-        histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+        # histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
         s = LineEdit.init_state(repl.t, prefix_mode)
         prefix_prev() = REPL.history_prev_prefix(s, hp, "x")
@@ -1893,7 +1782,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 ## hints disabled
-fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false)) do stdin_write, stdout_read, repl
+fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false,auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
     end
@@ -1912,9 +1801,9 @@ let io = IOBuffer()
     seek(io, 0)
     @test countlines(io) == 9
     take!(io)
-    @test REPL.banner(io; short=true) === nothing
+    @test REPL.banner(io, :tiny) === nothing
     seek(io, 0)
-    @test countlines(io) == 2
+    @test countlines(io) == 1
 end
 
 @testset "Docstrings" begin
@@ -2040,7 +1929,7 @@ end
                             :julia_number => StyledStrings.Face(foreground=:blue)) do
 
         # Test that julia_prompt has syntax highlighting passes
-        fake_repl(options = REPL.Options(confirm_exit=false, style_input=true)) do stdin_write, stdout_read, repl
+        fake_repl(options = REPL.Options(confirm_exit=false, style_input=true, auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
             repl.interface = REPL.setup_interface(repl)
             julia_prompt = repl.interface.modes[1]
             shell_mode = repl.interface.modes[3]
@@ -2059,8 +1948,8 @@ end
             end
 
             # Test 1: Simple keyword highlighting
-            write(stdin_write, "function")
-            s = readuntil(stdout_read, "function", keep=true)
+            write(stdin_write, "function # SENTINEL1")
+            s = readuntil(stdout_read, "# SENTINEL1", keep=true)
             # The keyword "function" should be styled (have escape code before it)
             # Look for "function" that appears after the prompt, not just anywhere
             # Extract just the input portion after "julia> "
@@ -2075,8 +1964,8 @@ end
 
             # Test 2: Unicode identifiers with syntax highlighting
             readuntil(stdout_read, "julia> ")
-            write(stdin_write, "function αβ(a, β)")
-            s = readuntil(stdout_read, "β)", keep=true)
+            write(stdin_write, "function αβ(a, β) # SENTINEL2")
+            s = readuntil(stdout_read, "# SENTINEL2", keep=true)
             # Should highlight "function" keyword even with unicode following
             input_part = split(s, "julia> ", keepempty=false)
             if !isempty(input_part)
@@ -2095,8 +1984,8 @@ end
             readuntil(stdout_read, "julia> ")
             write(stdin_write, "begin\n")
             readuntil(stdout_read, "begin")
-            write(stdin_write, "    local test_var_for_highlighting = 42\n")
-            s = readuntil(stdout_read, "42", keep=true)
+            write(stdin_write, "    local test_var_for_highlighting = 42 # SENTINEL3\n")
+            s = readuntil(stdout_read, "# SENTINEL3", keep=true)
             # Should contain highlighting - the "local" keyword should be styled
             @test occursin(r"\e\[[0-9;]*m.*local", s)
             write(stdin_write, "\x03")  # Ctrl-C to cancel before executing
@@ -2104,18 +1993,19 @@ end
 
             # Test 4: Bracket highlighting (paren matching)
             readuntil(stdout_read, "julia> ")
-            write(stdin_write, "(1 + (2 * 3))")
+            write(stdin_write, "(1 + (2 * 3)) # SENTINEL4")
             # Move cursor to be inside the inner parens: between 2 and *
-            # Current position is at end: (1 + (2 * 3))|
-            # Move left 5 times to get to: (1 + (2| * 3))
-            for _ in 1:5
+            # Current position is at end: (1 + (2 * 3)) # SENTINEL4|
+            # Move left to get to: (1 + (2| * 3)) # SENTINEL4
+            # We need to move past " # SENTINEL4" which is 13 characters
+            for _ in 1:18  # 13 for " # SENTINEL4" + 5 to get between 2 and *
                 write(stdin_write, "\e[D")  # Left arrow
             end
             # Give it a moment to process and re-render
             sleep(0.1)
-            # Now write a character to trigger re-render and capture output
+            # Now write a space to trigger re-render and capture output
             write(stdin_write, " ")
-            s = readuntil(stdout_read, " ", keep=true)
+            s = readuntil(stdout_read, "# SENTINEL4", keep=true)
             # The enclosing parens around "2 * 3" should be highlighted with bold/underline
             # We can't easily test the exact positioning, but we can verify that
             # there are ANSI codes for bold (\e[1m) or underline (\e[4m) present
@@ -2127,7 +2017,7 @@ end
         end
 
         # Test that syntax highlighting can be disabled
-        fake_repl(options = REPL.Options(confirm_exit=false, style_input=false)) do stdin_write, stdout_read, repl
+        fake_repl(options = REPL.Options(confirm_exit=false, style_input=false, auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
             repl.interface = REPL.setup_interface(repl)
 
             repltask = @async begin
@@ -2135,8 +2025,8 @@ end
             end
 
             # Even though the prompt has styling passes, they shouldn't be applied
-            write(stdin_write, "function")
-            s = readuntil(stdout_read, "function", keep=true)
+            write(stdin_write, "function # SENTINEL5")
+            s = readuntil(stdout_read, "# SENTINEL5", keep=true)
             # With style_input=false, there should be no color codes from syntax highlighting
             # (there may still be prompt color codes, but not within the input text)
             lines = split(s, '\n')

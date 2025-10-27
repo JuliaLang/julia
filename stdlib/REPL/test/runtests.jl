@@ -22,6 +22,9 @@ end
 module TerminalMenusTest
     include("TerminalMenus/runtests.jl")
 end
+module HistoryTest
+    include("history.jl")
+end
 module BadHistoryStartupTest
     include("bad_history_startup.jl")
 end

@@ -872,11 +872,12 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     concrete_eval_result = nothing
     if eligibility === :concrete_eval
         concrete_eval_result = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
-        # if we don't inline the result of this concrete evaluation,
-        # give const-prop' a chance to inline a better method body
-        if !may_optimize(interp) || (
-            may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
-            concrete_eval_result.rt === Bottom) # unless this call deterministically throws and thus is non-inlineable
+        if (concrete_eval_result !== nothing &&  # allow external abstract interpreters to disable concrete evaluation ad-hoc
+            # if we don't inline the result of this concrete evaluation,
+            # give const-prop' a chance to inline a better method body
+            (!may_optimize(interp) ||
+             may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
+             concrete_eval_result.rt === Bottom)) # unless this call deterministically throws and thus is non-inlineable
             return concrete_eval_result
         end
         # TODO allow semi-concrete interp for this call?
@@ -3484,6 +3485,10 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
     callee = e.args[1]
     if isexpr(callee, :tuple)
         if length(callee.args) >= 1
+            # Evaluate the arguments to constrain the world, effects, and other info for codegen,
+            # but note there is an implied `if !=(C_NULL)` branch here that might read data
+            # in a different world (the exact cache behavior is unspecified), so we do not use
+            # these results to refine reachability of the subsequent foreigncall.
             abstract_eval_value(interp, callee.args[1], sstate, sv)
             if length(callee.args) >= 2
                 abstract_eval_value(interp, callee.args[2], sstate, sv)

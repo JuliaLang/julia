@@ -91,8 +91,14 @@ if Sys.isunix()
         # disable coredumps for this process
         p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
         @test read(p, UInt8) == UInt8('r')
-        Base.kill(p, Base.SIGQUIT)
+        # The process might ignore the first SIGQUIT, since it will try to then run cleanup,
+        # which may fail for many reasons.
+        # The process will not ignore the second SIGQUIT, but the kernel might ignore it.
+        # So keep sending SIGQUIT every few seconds until the kernel delivers the second one
+        # and `p` exits.
+        t = Timer(0, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
         wait(p)
+        close(t)
         err_s = readchomp(errp)
         @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
         @test occursin("==== Thread ", err_s)
@@ -315,18 +321,21 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --quiet, --banner
     let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
-        @test read(`$exename                   -e $p`, String) == "(0, -1)"
-        @test read(`$exename -q                -e $p`, String) == "(1, 0)"
-        @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=no       -e $p`, String) == "(0, 0)"
-        @test read(`$exename --banner=yes      -e $p`, String) == "(0, 1)"
-        @test read(`$exename --banner=short    -e $p`, String) == "(0, 2)"
-        @test read(`$exename -q --banner=no    -e $p`, String) == "(1, 0)"
-        @test read(`$exename -q --banner=yes   -e $p`, String) == "(1, 1)"
-        @test read(`$exename -q --banner=short -e $p`, String) == "(1, 2)"
-        @test read(`$exename --banner=no  -q   -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=yes -q   -e $p`, String) == "(1, 1)"
-        @test read(`$exename --banner=short -q -e $p`, String) == "(1, 2)"
+        @test read(`$exename                    -e $p`, String) == "(0, -1)"
+        @test read(`$exename -q                 -e $p`, String) == "(1, 0)"
+        @test read(`$exename --quiet            -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=auto      -e $p`, String) == "(0, -1)"
+        @test read(`$exename --banner=no        -e $p`, String) == "(0, 0)"
+        @test read(`$exename --banner=yes       -e $p`, String) == "(0, 1)"
+        @test read(`$exename --banner=full      -e $p`, String) == "(0, 1)"
+        @test read(`$exename -q --banner=no     -e $p`, String) == "(1, 0)"
+        @test read(`$exename -q --banner=yes    -e $p`, String) == "(1, 1)"
+        @test read(`$exename -q --banner=tiny   -e $p`, String) == "(1, 4)"
+        @test read(`$exename --banner=no  -q    -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=yes -q    -e $p`, String) == "(1, 1)"
+        @test read(`$exename --banner=narrow -q -e $p`, String) == "(1, 2)"
+        @test read(`$exename --banner=short  -q -e $p`, String) == "(1, 3)"
+        @test read(`$exename --banner=tiny   -q -e $p`, String) == "(1, 4)"
     end
 
     # --home
@@ -580,7 +589,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
             # there may be atrailing separator here so use rstrip
-            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)

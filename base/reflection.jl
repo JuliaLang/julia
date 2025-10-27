@@ -308,8 +308,23 @@ function invoke_interp_compiler(interp, fname::Symbol, args...)
         T = typeof(interp)
         while true
             Tname = typename(T).name
-            Tname === :Any && error("Expected Interpreter")
+            Tname === :Any && error("Expected AbstractInterpreter")
             Tname === :AbstractInterpreter && break
+            T = supertype(T)
+        end
+        return getglobal(typename(T).module, fname)(args...)
+    end
+end
+
+function invoke_mt_compiler(mt, fname::Symbol, args...)
+    if mt === nothing
+        return invoke_default_compiler(fname, args...)
+    else
+        T = typeof(mt)
+        while true
+            Tname = typename(T).name
+            Tname === :Any && error("Expected MethodTableView")
+            Tname === :MethodTableView && break
             T = supertype(T)
         end
         return getglobal(typename(T).module, fname)(args...)
@@ -922,7 +937,7 @@ function _which(@nospecialize(tt::Type);
     world::UInt=get_world_counter(),
     raise::Bool=true)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    match, = invoke_default_compiler(:findsup_mt, tt, world, method_table)
+    match, = invoke_mt_compiler(method_table, :findsup_mt, tt, world, method_table)
     if match === nothing
         raise && error("no unique matching method found for the specified argument types")
         return nothing

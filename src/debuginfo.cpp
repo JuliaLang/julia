@@ -1076,7 +1076,6 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
     uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!isvalid)
@@ -1178,7 +1177,6 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
     DWORD64 dwAddress = pointer;
     frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {

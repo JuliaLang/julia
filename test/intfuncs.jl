@@ -217,6 +217,19 @@ end
     d, u, v = gcdx(x, y)
     @test x*u + y*v == d
 
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test_throws DomainError gcdx(typemin(T), typemin(T))
+        @test_throws DomainError gcdx(typemin(T), T(0))
+        @test_throws DomainError gcdx(T(0), typemin(T))
+        d, u, v = gcdx(typemin(T), T(-1))
+        @test d == T(1)
+        @test typemin(T) * u + T(-1) * v == T(1)
+        @test gcdx(T(-1), typemin(T)) == (d, v, u)
+        d, u, v = gcdx(typemin(T), T(1))
+        @test d == T(1)
+        @test typemin(T) * u + T(1) * v == T(1)
+        @test gcdx(T(1), typemin(T)) == (d, v, u)
+    end
 end
 
 # issue #58025
@@ -244,7 +257,7 @@ end
 
     @test gcdx(Int16(-32768), Int8(-128)) === (Int16(128), Int16(0), Int16(-1))
     @test gcdx(Int8(-128), UInt16(256)) === (0x0080, 0xffff, 0x0000)
-    @test_broken gcd(Int8(-128), UInt16(256)) === 0x0080
+    @test gcd(Int8(-128), UInt16(256)) === 0x0080
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin
@@ -294,10 +307,20 @@ end
     # Verify issue described in PR 58010 is fixed
     @test invmod(UInt8(3), UInt16(50000)) === 0x411b
 
+    @test invmod(0x00000001, Int8(-128)) === Int32(-127)
+    @test invmod(0xffffffff, Int8(-38)) === Int32(-15)
+    @test invmod(Int8(-1), 0xffffffff) === 0xfffffffe
+    @test invmod(Int32(-1), typemin(Int64)) === Int64(-1)
+    @test invmod(0x3e81, Int16(-5716)) === Int16(-2407)
+
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
             for m in typemin(T):typemax(T)
-                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+                if !(
+                    iszero(m) ||
+                    iszero(mod(x, m)) && !isone(abs(m)) ||
+                    !isone(gcd(x, m))
+                )
                     y = invmod(x, m)
                     @test mod(widemul(y, x), m) == mod(1, m)
                     @test div(y, m) == 0
@@ -362,6 +385,10 @@ end
 
     @test powermod(-3, 0x80, 7) === 2
     @test powermod(0x03, 0x80, 0x07) === 0x02
+
+    @test powermod(511, 1, 0x00000021) === 0x00000010
+    @test powermod(Int8(-1), 0xff, Int8(33)) === Int8(32)
+    @test powermod(0, 10, -5) === 0
 end
 
 @testset "nextpow/prevpow" begin
