@@ -1702,6 +1702,15 @@ struct jl_aliasinfo_t {
     // memory region non-aliasing. It should be deleted once the TBAA metadata
     // is improved to encode only memory layout and *not* memory regions.
     static jl_aliasinfo_t fromTBAA(jl_codectx_t &ctx, MDNode *tbaa);
+
+    AAMDNodes toAAMDNodes() const
+    {
+#if JL_LLVM_VERSION < 220000
+        return AAMDNodes(tbaa, tbaa_struct, scope, noalias);
+#else
+        return AAMDNodes(tbaa, tbaa_struct, scope, noalias, nullptr);
+#endif
+    }
 };
 
 // metadata tracking for a llvm Value* during codegen
