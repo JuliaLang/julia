@@ -520,7 +520,7 @@ Function *CloneCtx::create_trampoline(Function *F, GlobalVariable *slot, bool au
 
     auto ptr = irbuilder.CreateLoad(F->getType(), slot);
     ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), None));
+    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), {}));
 
     SmallVector<Value *, 0> Args;
     for (auto &arg : trampoline->args())
@@ -876,7 +876,7 @@ static void replaceUsesWithLoad(Function &F, Type *T_size, I2GV should_replace, 
 #endif
             Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
             ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
+            ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), {}));
             use_i->setOperand(info.use->getOperandNo(),
                                 rewrite_inst_use(uses.get_stack(), T_size, ptr,
                                                 insert_before));
