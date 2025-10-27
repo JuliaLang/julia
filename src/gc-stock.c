@@ -27,7 +27,7 @@ _Atomic(int) gc_n_threads_sweeping_stacks;
 // Temporary for the `ptls->gc_tls.page_metadata_allocd` used during parallel sweeping (padded to avoid false sharing)
 _Atomic(jl_gc_padded_page_stack_t *) gc_allocd_scratch;
 // `tid` of mutator thread that triggered GC
-_Atomic(int) gc_master_tid;
+_Atomic(int) gc_initiator_tid;
 // counter for sharing work when sweeping stacks
 _Atomic(int) gc_ptls_sweep_idx;
 // counter for round robin of giving back stack pages to the OS
@@ -2514,8 +2514,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
     }
 }
 
-// Used in gc-debug
-void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+void gc_collect_neighbors(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     while (1) {
         void *new_obj = (void *)gc_ptr_queue_pop(&ptls->gc_tls.mark_queue);
@@ -2527,35 +2526,14 @@ void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     }
 }
 
-// Drain items from worker's own chunkqueue
-void gc_drain_own_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
-{
-    jl_gc_chunk_t c = {.cid = GC_empty_chunk};
-    do {
-        c = gc_chunkqueue_pop(mq);
-        if (c.cid != GC_empty_chunk) {
-            gc_mark_chunk(ptls, mq, &c);
-            gc_mark_loop_serial_(ptls, mq);
-        }
-    } while (c.cid != GC_empty_chunk);
-}
-
-// Main mark loop. Stack (allocated on the heap) of `jl_value_t *`
-// is used to keep track of processed items. Maintaining this stack (instead of
-// native one) avoids stack overflow when marking deep objects and
-// makes it easier to implement parallel marking via work-stealing
-JL_EXTENSION NOINLINE void gc_mark_loop_serial(jl_ptls_t ptls) JL_NOTSAFEPOINT
-{
-    gc_mark_loop_serial_(ptls, &ptls->gc_tls.mark_queue);
-    gc_drain_own_chunkqueue(ptls, &ptls->gc_tls.mark_queue);
-}
-
 void gc_mark_and_steal(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    int master_tid = jl_atomic_load(&gc_master_tid);
-    assert(master_tid != -1);
     jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
-    jl_gc_markqueue_t *mq_master = &gc_all_tls_states[master_tid]->gc_tls.mark_queue;
+    jl_gc_markqueue_t *mq_initiator = mq;
+    int initiator_tid = jl_atomic_load(&gc_initiator_tid);
+    if (initiator_tid != -1) {
+        mq_initiator = &gc_all_tls_states[initiator_tid]->gc_tls.mark_queue;
+    }
     void *new_obj;
     jl_gc_chunk_t c;
     pop : {
@@ -2604,8 +2582,8 @@ void gc_mark_and_steal(jl_ptls_t ptls) JL_NOTSAFEPOINT
                 goto pop;
             }
         }
-        // Try to steal chunk from master thread
-        c = gc_chunkqueue_steal_from(mq_master);
+        // Try to steal chunk from initiator thread
+        c = gc_chunkqueue_steal_from(mq_initiator);
         if (c.cid != GC_empty_chunk) {
             gc_mark_chunk(ptls, mq, &c);
             goto pop;
@@ -2629,8 +2607,8 @@ void gc_mark_and_steal(jl_ptls_t ptls) JL_NOTSAFEPOINT
             if (new_obj != NULL)
                 goto mark;
         }
-        // Try to steal pointer from master thread
-        new_obj = gc_ptr_queue_steal_from(mq_master);
+        // Try to steal pointer from initiator thread
+        new_obj = gc_ptr_queue_steal_from(mq_initiator);
         if (new_obj != NULL)
             goto mark;
     }
@@ -2655,7 +2633,7 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * - No work items shall be in any thread's queues when `gc_should_mark` observes
  * that `gc_n_threads_marking` is zero.
  *
- * - No work item shall be stolen from the master thread (i.e. mutator thread which started
+ * - No work item shall be stolen from the initiator thread (i.e. mutator thread which started
  * GC and which helped the `jl_n_markthreads` - 1 threads to mark) after
  * `gc_should_mark` observes that `gc_n_threads_marking` is zero. This property is
  * necessary because we call `gc_mark_loop_serial` after marking the finalizer list in
@@ -2681,7 +2659,7 @@ int gc_should_mark(void) JL_NOTSAFEPOINT
         if (n_threads_marking == 0) {
             break;
         }
-        int tid = jl_atomic_load_relaxed(&gc_master_tid);
+        int tid = jl_atomic_load_relaxed(&gc_initiator_tid);
         assert(tid != -1);
         assert(gc_all_tls_states != NULL);
         size_t work = gc_count_work_in_queue(gc_all_tls_states[tid]);
@@ -2712,10 +2690,10 @@ void gc_wake_all_for_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
     uv_mutex_unlock(&gc_threads_lock);
 }
 
-void gc_mark_loop_parallel(jl_ptls_t ptls, int master) JL_NOTSAFEPOINT
+void gc_mark_loop(jl_ptls_t ptls, int mark_loop_initiator) JL_NOTSAFEPOINT
 {
-    if (master) {
-        jl_atomic_store(&gc_master_tid, ptls->tid);
+    if (mark_loop_initiator) {
+        jl_atomic_store(&gc_initiator_tid, ptls->tid);
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
         gc_wake_all_for_marking(ptls);
         gc_mark_and_steal(ptls);
@@ -2731,20 +2709,10 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master) JL_NOTSAFEPOINT
     }
 }
 
-void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT
-{
-    if (jl_n_markthreads == 0 || gc_heap_snapshot_enabled) {
-        gc_mark_loop_serial(ptls);
-    }
-    else {
-        gc_mark_loop_parallel(ptls, 1);
-    }
-}
-
 void gc_mark_loop_barrier(void) JL_NOTSAFEPOINT
 {
     assert(jl_atomic_load_relaxed(&gc_n_threads_marking) == 0);
-    jl_atomic_store_relaxed(&gc_master_tid, -1);
+    jl_atomic_store_relaxed(&gc_initiator_tid, -1);
 }
 
 void gc_mark_clean_reclaim_sets(void) JL_NOTSAFEPOINT
@@ -3079,7 +3047,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
                 gc_cblist_root_scanner, (collection));
         }
-        gc_mark_loop(ptls);
+
+        if (single_threaded_mark) {
+            gc_mark_and_steal(ptls);
+        }
+        else {
+            gc_mark_loop(ptls, 1);
+        }
         gc_mark_loop_barrier();
         gc_mark_clean_reclaim_sets();
 
@@ -3108,7 +3082,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_mark_finlist(mq, &finalizer_list_marked, orig_marked_len);
         // "Flush" the mark stack before flipping the reset_age bit
         // so that the objects are not incorrectly reset.
-        gc_mark_loop_serial(ptls);
+        gc_mark_and_steal(ptls);
         // Conservative marking relies on age to tell allocated objects
         // and freelist entries apart.
         mark_reset_age = !jl_gc_conservative_gc_support_enabled();
@@ -3117,7 +3091,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         // and should not be referenced by any old objects so this won't break
         // the GC invariant.
         gc_mark_finlist(mq, &to_finalize, 0);
-        gc_mark_loop_serial(ptls);
+        gc_mark_and_steal(ptls);
         mark_reset_age = 0;
     }
 
@@ -3657,7 +3631,7 @@ void jl_parallel_gc_threadfun(void *arg)
         }
         uv_mutex_unlock(&gc_threads_lock);
         assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
-        gc_mark_loop_parallel(ptls, 0);
+        gc_mark_loop(ptls, 0);
         if (may_sweep_stack(ptls)) {
             assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
             sweep_stack_pool_loop();
