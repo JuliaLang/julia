@@ -1,4 +1,4 @@
-name: JuliaSyntaxCI
+name: JuliaSyntax
 on:
   push:
     branches:
@@ -31,7 +31,7 @@ jobs:
           - '1'
         github-runner:
           - ubuntu-latest
-          - macOS-latest
+          - macos-latest
           - windows-latest
         julia-wordsize:
           # The value here only affects the version of Julia binary that we download.
@@ -40,12 +40,14 @@ jobs:
           - '32' # 32-bit Julia. Only available on x86_64. Not available on aarch64.
           - '64' # 64-bit Julia.
         exclude:
-          # We don't have 32-bit builds of Julia for Intel macOS:
-          - github-runner: macos-13 # macos-13 = Intel.
+          # For Apple Silicon macOS we don't have 32-bit builds of Julia, nor
+          # builds for older Julia versions.
+          - github-runner: macos-latest
             julia-wordsize: '32'
-          # We don't have 32-bit builds of Julia for Apple Silicon macOS:
-          - github-runner: macos-14 # macos-14 = Apple Silicon.
-            julia-wordsize: '32'
+          - github-runner: macos-latest
+            julia-version: '1.0'
+          - github-runner: macos-latest
+            julia-version: '1.6'
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
