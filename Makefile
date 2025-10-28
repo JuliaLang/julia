@@ -699,16 +699,49 @@ distcleanall: cleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
 
 .FORCE:
-.PHONY: .FORCE default debug release check-whitespace fix-whitespace release-candidate \
-	julia-debug julia-release julia-stdlib julia-deps julia-deps-libs \
-	julia-cli-release julia-cli-debug julia-src-release julia-src-debug \
-	julia-symlink julia-base julia-sysimg julia-sysimg-ji julia-sysimg-release julia-sysimg-debug \
-	test testall testall1 test \
-	clean distcleanall cleanall $(CLEAN_TARGETS) \
-	run-julia run-julia-debug run-julia-release run \
-	install binary-dist light-source-dist.tmp light-source-dist \
-	dist full-source-dist source-dist \
-	compile-database
+
+.PHONY: .FORCE
+.PHONY: $(CLEAN_TARGETS)
+.PHONY: binary-dist
+.PHONY: check-whitespace
+.PHONY: clean
+.PHONY: cleanall
+.PHONY: compile-database
+.PHONY: debug
+.PHONY: default
+.PHONY: dist
+.PHONY: distcleanall
+.PHONY: fix-whitespace
+.PHONY: full-source-dist
+.PHONY: install
+.PHONY: julia-base
+.PHONY: julia-cli-debug
+.PHONY: julia-cli-release
+.PHONY: julia-debug
+.PHONY: julia-deps
+.PHONY: julia-deps-libs
+.PHONY: julia-release
+.PHONY: julia-src-debug
+.PHONY: julia-src-release
+.PHONY: julia-stdlib
+.PHONY: julia-symlink
+.PHONY: julia-sysimg
+.PHONY: julia-sysimg-debug
+.PHONY: julia-sysimg-ji
+.PHONY: julia-sysimg-release
+.PHONY: light-source-dist
+.PHONY: light-source-dist.tmp
+.PHONY: release
+.PHONY: release-candidate
+.PHONY: run
+.PHONY: run-julia
+.PHONY: run-julia-debug
+.PHONY: run-julia-release
+.PHONY: source-dist
+.PHONY: test
+.PHONY: test
+.PHONY: testall
+.PHONY: testall1
 
 # Generate compilation database (leverages existing clang tooling setup)
 compile-database:
