@@ -712,7 +712,7 @@ distcleanall: cleanall
 
 # Generate compilation database (leverages existing clang tooling setup)
 compile-database:
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database-src
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database
 
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)

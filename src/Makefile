@@ -725,4 +725,4 @@ compile-database: $(BUILDDIR)/compile_commands.json
 	@echo "Compilation database created: $<"
 
 .FORCE:
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database $(BUILDDIR)/compile_commands.json .FORCE
+.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database .FORCE

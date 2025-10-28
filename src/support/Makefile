@@ -125,4 +125,4 @@ clean:
 	rm -f $(BUILDDIR)/compile_commands.json
 	rm -f $(BUILDDIR)/host/*
 
-.PHONY: compile-database $(BUILDDIR)/compile_commands.json
+.PHONY: compile-database
