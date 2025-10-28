@@ -31,6 +31,7 @@ jobs:
           - '1'
         github-runner:
           - ubuntu-latest
+          - macos-13
           - macos-latest
           - windows-latest
         julia-wordsize:
@@ -40,6 +41,9 @@ jobs:
           - '32' # 32-bit Julia. Only available on x86_64. Not available on aarch64.
           - '64' # 64-bit Julia.
         exclude:
+          # For Intel macOS we don't have 32-bit builds of Julia
+          - github-runner: macos-13
+            julia-wordsize: '32'
           # For Apple Silicon macOS we don't have 32-bit builds of Julia, nor
           # builds for older Julia versions.
           - github-runner: macos-latest
