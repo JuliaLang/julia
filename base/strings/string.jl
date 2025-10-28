@@ -11,7 +11,7 @@ struct StringIndexError <: Exception
 end
 @noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
-function Base.showerror(io::IO, exc::StringIndexError)
+function showerror(io::IO, exc::StringIndexError)
     s = exc.string
     print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
     if firstindex(s) <= exc.index <= ncodeunits(s)
@@ -109,6 +109,7 @@ takestring!(v::Vector{UInt8}) = String(v)
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
+    unsafe_string(p::Cstring)
 
 Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
 (The pointer can be safely freed afterwards.) If `length` is specified
@@ -157,7 +158,7 @@ pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
-codeunit(s::String, i::Integer) = codeunit(s, Int(i))
+codeunit(s::String, i::Integer) = codeunit(s, Int(i)::Int)
 @assume_effects :foldable @inline function codeunit(s::String, i::Int)
     @boundscheck checkbounds(s, i)
     b = GC.@preserve s unsafe_load(pointer(s, i))

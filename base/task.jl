@@ -435,19 +435,21 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
             done_mask[i] = true
             exception |= istaskfailed(t)
             nremaining -= 1
-        else
-            done_mask[i] = false
         end
     end
 
-    if nremaining == 0
-        return tasks, Task[]
-    elseif any(done_mask) && (!all || (failfast && exception))
+    # We can return early all tasks are done, or if any is done and we only
+    # needed to wait for one, or if any task failed and we have failfast
+    if nremaining == 0 || (any(done_mask) && (!all || (failfast && exception)))
         if throwexc && (!all || failfast) && exception
             exceptions = [TaskFailedException(t) for t in tasks[done_mask] if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
-            return tasks[done_mask], tasks[.~done_mask]
+            if nremaining == 0
+                return tasks, Task[]
+            else
+                return tasks[done_mask], tasks[.~done_mask]
+            end
         end
     end
 
@@ -489,6 +491,10 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
     close(chan)
 
     if nremaining == 0
+        if throwexc && exception
+            exceptions = [TaskFailedException(t) for t in tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        end
         return tasks, Task[]
     else
         remaining_mask = .~done_mask
@@ -1132,9 +1138,25 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
-@inline function wait_forever()
+function wait_forever()
     while true
-        wait()
+        try
+            while true
+                wait()
+            end
+        catch e
+            local errs = stderr
+            # try to display the failure atomically
+            errio = IOContext(PipeBuffer(), errs::IO)
+            emphasize(errio, "Internal Task ")
+            display_error(errio, current_exceptions())
+            write(errs, errio)
+            # victimize another random Task also
+            if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
+                backend = repl_backend_task()
+                backend isa Task && throwto(backend, e)
+            end
+        end
     end
 end
 
@@ -1195,6 +1217,7 @@ function wait()
         # thread sleep logic.
         sched_task = get_sched_task()
         if ct !== sched_task
+            istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)

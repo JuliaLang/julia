@@ -236,6 +236,20 @@ function exec_options(opts)
     global have_color     = colored_text(opts)
     global is_interactive = (opts.isinteractive != 0)
 
+    # Enable verbose debugging options when requested by other frameworks
+    debug_env_vars = (
+        "RUNNER_DEBUG",   # github actions when UI "debug logging" is enabled
+        "CI_DEBUG_TRACE", # gitlab CI when UI "debug" toggle is enabled
+        "SYSTEM_DEBUG",   # azure pipelines when UI "System diagnostics" is enabled
+    )
+    for v in debug_env_vars
+        if get_bool_env(v, false)
+            Base.TRACE_EVAL = Base.TRACE_EVAL === :full ? :full : :loc # Enable --trace-eval (location only)
+            ENV["JULIA_TEST_VERBOSE"] = "true" # Set JULIA_TEST_VERBOSE for this session
+            break
+        end
+    end
+
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
     repl = !arg_is_program
@@ -470,7 +484,7 @@ end
 function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
     term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
     term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-    banner == :no || REPL.banner(term, short=banner==:short)
+    banner == :no || REPL.banner(term, banner)
     if term.term_type == "dumb"
         repl = REPL.BasicREPL(term)
         quiet || @warn "Terminal not fully functional"
@@ -593,12 +607,26 @@ end
 function repl_main(_)
     opts = Base.JLOptions()
     interactiveinput = isa(stdin, Base.TTY)
-    b = opts.banner
-    auto = b == -1
-    banner = b == 0 || (auto && !interactiveinput) ? :no  :
-             b == 1 || (auto && interactiveinput)  ? :yes :
-             :short # b == 2
-
+    bval = if opts.banner == -1 # Auto
+        Int(interactiveinput)
+    else
+        opts.banner
+    end
+    # All the options produced by `jloptions.c`'s `case opt_banner`.
+    # 0=off, 1=largest, ..., N=smallest
+    banner = if bval == 0
+        :no
+    elseif bval == 1
+        :full
+    elseif bval == 2
+        :narrow
+    elseif bval == 3
+        :short
+    elseif bval == 4
+        :tiny
+    else # For type stability of `banner`
+        :unreachable
+    end
     quiet                 = (opts.quiet != 0)
     history_file          = (opts.historyfile != 0)
     return run_main_repl(interactiveinput, quiet, banner, history_file)
@@ -613,8 +641,8 @@ entrypoint. The precise semantics of the entrypoint depend on the CLI driver.
 In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be automatically called upon
 the completion of script execution.
 
-The `@main` macro may be used standalone or as part of the function definition, though in the latter
-case, parentheses are required. In particular, the following are equivalent:
+The `@main` macro may be used standalone or as part of the function definition.
+The following are equivalent:
 
 ```
 function @main(args)

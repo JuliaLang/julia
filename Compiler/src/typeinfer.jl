@@ -91,7 +91,7 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
-function result_edges(interp::AbstractInterpreter, caller::InferenceState)
+function result_edges(::AbstractInterpreter, caller::InferenceState)
     result = caller.result
     opt = result.src
     if isa(opt, OptimizationState)
@@ -103,12 +103,12 @@ end
 
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
-    #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
+    edges = result_edges(interp, caller)
+    #@assert last(result.valid_worlds) <= get_world_counter() || isempty(edges)
     if caller.cache_mode === CACHE_MODE_LOCAL
         @assert !isdefined(result, :ci)
-        result.src = transform_result_for_local_cache(interp, result)
+        result.src = transform_result_for_local_cache(interp, result, edges)
     elseif isdefined(result, :ci)
-        edges = result_edges(interp, caller)
         ci = result.ci
         mi = result.linfo
         # if we aren't cached, we don't need this edge
@@ -198,7 +198,6 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     di = src.debuginfo
     rettype = Any
     exctype = Any
-    rettype_const = nothing
     const_flags = 0x0
     ipo_effects = zero(UInt32)
     min_world = src.min_world
@@ -400,7 +399,7 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
     end
 end
 
-function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
+function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
     if is_result_constabi_eligible(result)
         return nothing
     end
@@ -433,7 +432,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     return src
 end
 
-function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
+function discard_optimized_result(interp::AbstractInterpreter, _#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
     may_discard_trees(interp) || return false
     return inlining_cost == MAX_INLINE_COST
 end
@@ -683,7 +682,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     nothing
 end
 
-function is_already_cached(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
+function is_already_cached(interp::AbstractInterpreter, result::InferenceResult, ::CodeInstance)
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this right now
     mi = result.linfo
@@ -840,7 +839,7 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
 end
 
 # annotate types of all symbols in AST, preparing for optimization
-function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
+function type_annotate!(::AbstractInterpreter, sv::InferenceState)
     # widen `Conditional`s from `slottypes`
     slottypes = sv.slottypes
     for i = 1:length(slottypes)
@@ -1166,14 +1165,14 @@ end
 #### entry points for inferring a MethodInstance given a type signature ####
 
 """
-    codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, @nospecialize(val))
+    codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
 
 Return a fake CodeInfo that just contains `return \$val`. This function is used in various reflection APIs when asking
 for the code of a function that inference has found to just return a constant. For such functions, no code is actually
 stored - the constant is used directly. However, because this is an ABI implementation detail, it is nice to maintain
 consistency and just synthesize a CodeInfo when the reflection APIs ask for them - this function does that.
 """
-function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @nospecialize(val))
+function codeinfo_for_const(::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
     method = mi.def::Method
     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     tree.code = Any[ ReturnNode(quoted(val)) ]
@@ -1184,7 +1183,9 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = [IR_FLAG_NULL]
     tree.rettype = Core.Typeof(val)
-    tree.edges = Core.svec()
+    tree.min_world = first(worlds)
+    tree.max_world = last(worlds)
+    tree.edges = edges
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree
@@ -1250,7 +1251,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
     if run_optimizer
         if result_is_constabi(interp, frame.result)
             rt = frame.result.result::Const
-            src = codeinfo_for_const(interp, frame.linfo, rt.val)
+            src = codeinfo_for_const(interp, frame.linfo, frame.world.valid_worlds, Core.svec(frame.edges...), rt.val)
         else
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
@@ -1488,7 +1489,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 continue
             end
         elseif isexpr(stmt, :cfunction) && length(stmt.args) == 5
-            (pointer_type, f, rt, at, call_type) = stmt.args
+            (_, f, _, at, _) = stmt.args
             linfo = ci.parent
 
             linfo isa MethodInstance || continue
@@ -1617,7 +1618,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             mi = get_ci_mi(callee)
             # now make sure everything has source code, if desired
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, mi, callee.rettype_const)
+                src = codeinfo_for_const(interp, mi, WorldRange(callee.min_world, callee.max_world), callee.edges, callee.rettype_const)
             else
                 src = get(interp.codegen, callee, nothing)
                 if src === nothing

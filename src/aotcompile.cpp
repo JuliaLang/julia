@@ -50,6 +50,8 @@
 
 using namespace llvm;
 
+#include <zstd.h>
+
 #include "jitlayers.h"
 #include "serialize.h"
 #include "julia_assert.h"
@@ -96,7 +98,7 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
-jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance_t **data)
+jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
 {
     jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
     auto &map = desc->jl_fvar_map;
@@ -109,7 +111,7 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     assert(*num_elements == map.size());
     size_t i = 0;
     for (auto &ci : map) {
-        data[i++] = jl_get_ci_mi(ci.first);
+        data[i++] = ci.first;
     }
 }
 
@@ -901,7 +903,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 jl_callptr_t invoke;
                 void *fptr;
                 jl_read_codeinst_invoke(this_code, &specsigflags, &invoke, &fptr, 0);
-                if (invoke != NULL && (specsigflags & 0b100)) {
+                if (invoke != NULL && (specsigflags & JL_CI_FLAGS_FROM_IMAGE)) {
                     // this codeinst is already available externally: keep it only if canPartition demands it for local use
                     // TODO: for performance, avoid generating the src code when we know it would reach here anyways?
                     if (M.withModuleDo([&](Module &M) { return !canPartition(*cast<Function>(M.getNamedValue(cfunc))); })) {
@@ -1202,7 +1204,6 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
-    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -1213,7 +1214,6 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
-    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -2187,8 +2187,9 @@ static void add_output(AOTOutputs &outputs, Module &M, TargetMachine &TM, String
                     // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
                     // or it may skip emitting debug info for that file. Here set it to ./julia#N
                     DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                    for (DICompileUnit *CU : M->debug_compile_units())
-                        CU->replaceOperandWith(0, topfile);
+                    if (M->getNamedMetadata("llvm.dbg.cu"))
+                        for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
+                            CU->replaceOperandWith(0, topfile);
                     timers[i].construct.stopTimer();
 
                     add_output_impl(outputs, *M, TM, false, &timers[i]);
@@ -2234,12 +2235,6 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
 #endif
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
         return 1;
-    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
-    // for any of our other symbols that we insert during compilation.
-    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
-        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
-        return 1;
-    }
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
@@ -2247,7 +2242,7 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
         return 1;
     }
 
-    unsigned threads = std::max(jl_cpu_threads() / 2, 1);
+    unsigned threads = std::max(jl_effective_threads() / 2, 1);
 
     auto max_threads = info.globals / 100;
     if (max_threads < threads) {
@@ -2374,12 +2369,25 @@ void jl_dump_native_impl(void *native_code,
         sysimgM.setDataLayout(DL);
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
-        Constant *data = ConstantDataArray::get(Context,
-            ArrayRef<uint8_t>((const unsigned char*)z->buf, z->size));
+
+        int compression = jl_options.compress_sysimage ? 15 : 0;
+        ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
+        SmallVector<char, 0> compressed_data;
+        if (compression) {
+            compressed_data.resize(ZSTD_compressBound(z->size));
+            size_t comp_size = ZSTD_compress(compressed_data.data(), compressed_data.size(),
+                                             z->buf, z->size, compression);
+            compressed_data.resize(comp_size);
+            sysimg_data = compressed_data;
+            ios_close(z);
+            free(z);
+        }
+
+        Constant *data = ConstantDataArray::get(Context, sysimg_data);
         auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
-        sysdata->setAlignment(Align(64));
+        sysdata->setAlignment(Align(jl_page_size));
 #if JL_LLVM_VERSION >= 180000
         sysdata->setCodeModel(CodeModel::Large);
 #else
@@ -2387,14 +2395,27 @@ void jl_dump_native_impl(void *native_code,
             sysdata->setSection(".ldata");
 #endif
         addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
+        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"), TheTriple);
-        // Free z here, since we've copied out everything into data
-        // Results in serious memory savings
-        ios_close(z);
-        free(z);
+
+        const char *unpack_func = compression ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp";
+        auto unpack = new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,
+                                         GlobalVariable::ExternalLinkage, nullptr,
+                                         unpack_func);
+        addComdat(new GlobalVariable(sysimgM, PointerType::getUnqual(Context), true,
+                                     GlobalVariable::ExternalLinkage, unpack,
+                                     "jl_image_unpack"),
+                  TheTriple);
+
+        if (!compression) {
+            // Free z here, since we've copied out everything into data
+            // Results in serious memory savings
+            ios_close(z);
+            free(z);
+        }
+        compressed_data.clear();
         // Note that we don't set z to null, this allows the check in write_archive
         // to function as expected
         // no need to free the module/context, destructor handles that

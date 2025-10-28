@@ -60,7 +60,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
-    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    Type *NewT = PointerType::get(T->getContext(), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -70,7 +70,7 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
-    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    Type *NewT = PointerType::get(T->getContext(), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -78,7 +78,7 @@ static Value *mark_callee_rooted(jl_codectx_t &ctx, Value *V)
 {
     assert(V->getType() == ctx.types().T_pjlvalue || V->getType() == ctx.types().T_prjlvalue);
     return ctx.builder.CreateAddrSpaceCast(V,
-        PointerType::get(ctx.types().T_jlvalue, AddressSpace::CalleeRooted));
+        PointerType::get(V->getContext(), AddressSpace::CalleeRooted));
 }
 
 AtomicOrdering get_llvm_atomic_order(enum jl_memory_order order)
@@ -707,13 +707,13 @@ static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
 
 static llvm::StructType* get_jlmemoryref(llvm::LLVMContext &C, unsigned AS) {
     return llvm::StructType::get(C, {
-            llvm::PointerType::get(llvm::Type::getInt8Ty(C), AS),
+            llvm::PointerType::get(C, AS),
             JuliaType::get_prjlvalue_ty(C),
             });
 }
 static llvm::StructType* get_jlmemoryboxedref(llvm::LLVMContext &C, unsigned AS) {
     return llvm::StructType::get(C, {
-            llvm::PointerType::get(JuliaType::get_prjlvalue_ty(C), AS),
+            llvm::PointerType::get(C, AS),
             JuliaType::get_prjlvalue_ty(C),
             });
 }
@@ -2228,6 +2228,9 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     }
     Value *instr = nullptr;
     if (!isboxed && jl_is_genericmemoryref_type(jltype)) {
+        //We don't specify the stronger expected memory ordering here because of fears it may interfere with vectorization and other optimizations
+        //if (Order == AtomicOrdering::NotAtomic)
+        //    Order = AtomicOrdering::Monotonic;
         // load these FCA as individual fields, so LLVM does not need to split them later
         Value *fld0 = ctx.builder.CreateStructGEP(elty, ptr, 0);
         LoadInst *load0 = ctx.builder.CreateAlignedLoad(elty->getStructElementType(0), fld0, Align(alignment), false);
@@ -2403,11 +2406,26 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             instr = load;
         }
         if (r) {
-            StoreInst *store = ctx.builder.CreateAlignedStore(r, ptr, Align(alignment));
-            store->setOrdering(Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-            ai.decorateInst(store);
+            if (false && !isboxed && Order == AtomicOrdering::NotAtomic && jl_is_genericmemoryref_type(jltype)) {
+                // if enabled, store these FCA as individual fields, so LLVM does not need to split them later and they can use release ordering
+                assert(r->getType() == ctx.types().T_jlgenericmemory);
+                Value *f1 = ctx.builder.CreateExtractValue(r, 0);
+                Value *f2 = ctx.builder.CreateExtractValue(r, 1);
+                static_assert(offsetof(jl_genericmemoryref_t, ptr_or_offset) == 0, "wrong field order");
+                StoreInst *store = ctx.builder.CreateAlignedStore(f1, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 0), Align(alignment));
+                store->setOrdering(AtomicOrdering::Release);
+                ai.decorateInst(store);
+                store = ctx.builder.CreateAlignedStore(f2, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 1), Align(alignment));
+                store->setOrdering(AtomicOrdering::Release);
+                ai.decorateInst(store);
+            }
+            else {
+                StoreInst *store = ctx.builder.CreateAlignedStore(r, ptr, Align(alignment));
+                store->setOrdering(Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order);
+                ai.decorateInst(store);
+            }
         }
         else {
             assert(Order == AtomicOrdering::NotAtomic && !isboxed && rhs.typ == jltype);
@@ -3795,7 +3813,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
     for (auto *User : Val->users()) {
         if (isa<GetElementPtrInst>(User)) {
             GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
-            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            Inst->mutateType(PointerType::get(Inst->getContext(), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) {
@@ -3804,7 +3822,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
         }
         else if (isa<BitCastInst>(User)) {
             BitCastInst *Inst = cast<BitCastInst>(User);
-            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            Inst->mutateType(PointerType::get(Inst->getContext(), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
     }
@@ -4435,10 +4453,11 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         for (size_t i = nargs; i < nf; i++) {
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strctinfo.tbaa);
-                ai.decorateInst(ctx.builder.CreateAlignedStore(
+                auto *store = ctx.builder.CreateAlignedStore(
                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                         emit_ptrgep(ctx, strct, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1),
-                        Align(1)));
+                        Align(1));
+                ai.decorateInst(store);
             }
         }
         // TODO: verify that nargs <= nf (currently handled by front-end)
@@ -4937,7 +4956,7 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
     if (!GEPlist.empty()) {
         for (auto &GEP : make_range(GEPlist.rbegin(), GEPlist.rend())) {
             GetElementPtrInst *GEP2 = cast<GetElementPtrInst>(GEP->clone());
-            GEP2->mutateType(PointerType::get(GEP->getResultElementType(), AS));
+            GEP2->mutateType(PointerType::get(GEP->getContext(), AS));
             GEP2->setOperand(GetElementPtrInst::getPointerOperandIndex(), data);
             GEP2->setIsInBounds(true);
             ctx.builder.Insert(GEP2);

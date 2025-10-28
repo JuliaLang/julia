@@ -1880,6 +1880,33 @@ end
     end
 end
 
+@testset "issue 56771, stack(; dims) on containers with HasLength eltype & HasShape elements" begin
+    for T in (Matrix, Array, Any)
+        xs = T[rand(2,3) for _ in 1:4]
+        @test size(stack(xs; dims=1)) == (4,2,3)
+        @test size(stack(xs; dims=2)) == (2,4,3)  # this was the problem case, for T=Array
+        @test size(stack(xs; dims=3)) == (2,3,4)
+        @test size(stack(identity, xs; dims=2)) == (2,4,3)
+        @test size(stack(x for x in xs if true; dims=2)) == (2,4,3)
+
+        xmat = T[rand(2,3) for _ in 1:4, _ in 1:5]
+        @test size(stack(xmat; dims=1)) == (20,2,3)
+        @test size(stack(xmat; dims=2)) == (2,20,3)
+        @test size(stack(xmat; dims=3)) == (2,3,20)
+    end
+
+    it = Iterators.product(1:2, 3:5)
+    @test size(it) == (2,3)
+    @test Base.IteratorSize(typeof(it)) == Base.HasShape{2}()
+    @test Base.IteratorSize(Iterators.ProductIterator) == Base.HasLength()
+    for T in (typeof(it), Iterators.ProductIterator, Any)
+        ys = T[it for _ in 1:4]
+        @test size(stack(ys; dims=2)) == (2,4,3)
+        @test size(stack(identity, ys; dims=2)) == (2,4,3)
+        @test size(stack(y for y in ys if true; dims=2)) == (2,4,3)
+    end
+end
+
 @testset "keepat!" begin
     a = [1:6;]
     @test a === keepat!(a, 1:5)
@@ -2291,6 +2318,21 @@ end
 
         @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
     end
+end
+
+@testset "AbstractOneTo" begin
+    s = SizedArrays.SizedArray{(2,2)}(ones(2,2))
+    v = view(s, :, 1)
+    @test axes(v,1) isa SizedArrays.SOneTo{2}
+    @test eachindex(v) isa SizedArrays.SOneTo{2}
+
+    ax = axes(v,1)
+    @test ax[Base.IdentityUnitRange(ax)] == ax
+    @test ax[Base.IdentityUnitRange(2:2)] == Base.IdentityUnitRange(2:2)
+
+    # check that IdentityUnitRange behaves like Slice
+    @test axes(Base.IdentityUnitRange(ax), 1) === ax
+    @test eachindex(Base.IdentityUnitRange(ax)) === ax
 end
 
 @testset "effect inference for `iterate` for `Array` and for `Memory`" begin

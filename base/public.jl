@@ -34,6 +34,7 @@ public
 # arrays
     has_offset_axes,
     require_one_based_indexing,
+    memoryindex,
 
 # collections
     IteratorEltype,
@@ -52,6 +53,7 @@ public
     DL_LOAD_PATH,
     load_path,
     active_project,
+    active_manifest,
 
 # Reflection and introspection
     get_extension,
@@ -79,6 +81,10 @@ public
     isbinaryoperator,
     isoperator,
     isunaryoperator,
+
+# Integer math
+    uabs,
+    mul_hi,
 
 # C interface
     cconvert,

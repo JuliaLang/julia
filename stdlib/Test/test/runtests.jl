@@ -24,6 +24,10 @@ import Logging: Debug, Info, Warn, with_logger
     @test isapprox(1, 1; [(:atol, 0)]...)
     @test isapprox(1, 2; atol)
     @test isapprox(1, 3; a.atol)
+    # Test custom .. operator (not a broadcast operator)
+    ..(x, y) = x == y
+    @test 'a' .. 'a'
+    @test !('a' .. 'b')
 end
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
@@ -1541,7 +1545,7 @@ end
             write(f,
             """
             using Test
-            ENV["JULIA_TEST_FAILFAST"] = true
+
             @testset "Foo" begin
                 @test false
                 @test error()
@@ -1551,7 +1555,7 @@ end
                 end
             end
             """)
-            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            cmd    = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no $f`, "JULIA_TEST_FAILFAST"=>"true")
             result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
             @test occursin(expected, result)
         end
@@ -1950,6 +1954,8 @@ end
         @test _escape_call(:(Main.f.(x, y))) == (; func=:(Broadcast.BroadcastFunction($(esc(:(Main.f))))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(Main.f))))
         @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
+        # Test that .. operator is not treated as a broadcast operator
+        @test _escape_call(:(x .. y)) == (; func=esc(:(..)), args, kwargs, quoted_func=:(:..))
     end
 end
 
@@ -2014,7 +2020,7 @@ end
     io = IOBuffer()
 
     # Create a testset with passing and failing tests
-    ts = Test.DefaultTestSet("IO Test")
+    ts = Test.DefaultTestSet("IO Test"; time_start=1.36071654e9)
     Test.record(ts, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(1), false))
     fail = Test.Fail(:test, "1 == 2", nothing, nothing, LineNumberNode(2, Symbol("test.jl")))
     push!(ts.results, fail)
@@ -2032,4 +2038,61 @@ end
     output = String(take!(io))
     @test occursin("Error in testset", output)
     @test occursin("1 == 2", output)
+end
+
+@testset "JULIA_TEST_VERBOSE" begin
+    # Test the verbose testset entry/exit functionality
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => true begin
+        # Capture output
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Verbose Test" begin
+                    @test true
+                    @testset "Nested Verbose Test" begin
+                        sleep(0.01)  # Add some duration
+                        @test 1 + 1 == 2
+                    end
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Check that verbose messages are present
+        @test occursin("Starting testset: Verbose Test", output)
+        @test occursin("Finished testset: Verbose Test", output)
+        @test occursin("Starting testset: Nested Verbose Test", output)
+        @test occursin("Finished testset: Nested Verbose Test", output)
+
+        # Check that timing information is included in exit messages
+        @test occursin(r"Finished testset: Nested Verbose Test \([0-9\.]+s\)", output)
+
+        # Check indentation for nested testsets
+        lines = split(output, '\n')
+        entering_nested = findfirst(line -> occursin("Starting testset: Nested Verbose Test", line), lines)
+        exiting_nested = findfirst(line -> occursin("Finished testset: Nested Verbose Test", line), lines)
+
+        if entering_nested !== nothing && exiting_nested !== nothing
+            # Both nested messages should have more indentation than outer messages
+            @test startswith(lines[entering_nested], "  ")
+            @test startswith(lines[exiting_nested], "  ")
+        end
+    end
+
+    # Test that verbose output is disabled by default
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => false begin
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Non-Verbose Test" begin
+                    @test true
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Should not contain verbose messages
+        @test !occursin("Starting testset:", output)
+        @test !occursin("Finished testset:", output)
+    end
 end

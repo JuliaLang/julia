@@ -294,7 +294,6 @@
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
-    XX(jl_macroexpand1) \
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \
@@ -331,6 +330,10 @@
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
+    XX(jl_begin_new_module) \
+    XX(jl_end_new_module) \
+    XX(jl_new_opaque_closure_from_code_info) \
+    XX(jl_new_opaque_closure_from_code_info_in_world) \
     XX(jl_new_primitivetype) \
     XX(jl_new_struct) \
     XX(jl_new_structt) \
@@ -420,6 +423,7 @@
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
     XX(jl_static_show) \
+    XX(jl_safe_static_show) \
     XX(jl_static_show_func_sig) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
@@ -518,7 +522,7 @@
     YY(jl_get_llvm_gvs) \
     YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
-    YY(jl_get_llvm_mis) \
+    YY(jl_get_llvm_cis) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
