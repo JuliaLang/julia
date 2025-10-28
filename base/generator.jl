@@ -89,6 +89,12 @@ Base.HasShape{1}()
 
 julia> Base.IteratorSize((2,3))
 Base.HasLength()
+
+julia> Base.IteratorSize(Iterators.cycle(1:5))
+Base.SizeUnknown()
+
+julia> Base.IteratorSize(Iterators.cycle(1:0))
+Base.SizeUnknown()
 ```
 """
 IteratorSize(x) = IteratorSize(typeof(x))
