@@ -3347,6 +3347,15 @@ The arguments passed to a function are invalid.
 ArgumentError
 
 """
+    NotImplementedError([f, args, [interface]], [msg])
+
+A specific implementation does not exist for the given function and argument types.
+`interface` may indicate an abstract type related to the missing implementation.
+`msg` is a descriptive error message.
+"""
+NotImplementedError
+
+"""
     MethodError(f, args)
 
 A method with the required type signature does not exist in the given generic function.

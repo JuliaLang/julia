@@ -160,8 +160,8 @@ gcd(a::Real, b::Real) = gcd(promote(a,b)...)
 lcm(a::Real, b::Real) = lcm(promote(a,b)...)
 gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
 lcm(a::Real, b::Real, c::Real...) = lcm(a, lcm(b, c...))
-gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
-lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
+gcd(a::T, b::T) where T<:Real = throw(NotImplementedError(gcd, (a,b), Real))
+lcm(a::T, b::T) where T<:Real = throw(NotImplementedError(lcm, (a,b), Real))
 
 gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
 function lcm(abc::AbstractArray{<:Real})
@@ -256,7 +256,7 @@ Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Int
     end
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
-gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
+gcdx(a::T, b::T) where T<:Real = throw(NotImplementedError(gcdx, (a,b), Real))
 gcdx(a::Real) = (gcd(a), signbit(a) ? -one(a) : one(a))
 function gcdx(a::Real, b::Real, cs::Real...)
     # a solution to the 3-arg `gcdx(a,b,c)` problem, `u*a + v*b + w*c = gcd(a,b,c)`, can be
