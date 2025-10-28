@@ -22,6 +22,7 @@ endif
 
 VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
+.PHONY: default
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
@@ -65,6 +66,7 @@ julia_flisp.boot.inc.phony: julia-deps
 $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
 	@$(MAKE) docs
 
+.PHONY: julia-symlink
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
 	printf '@"%%~dp0/%s" %%*\n' "$$(printf "%s\n" '$(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE))')" | tr / '\\' > $(BUILDROOT)/julia.bat
@@ -82,13 +84,16 @@ TOP_LEVEL_PKG_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/,$(TOP_LEVE
 # Generate symlinks for top level pkgs in usr/share/julia/
 $(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/$(module),$$(build_datarootdir)/julia,$(module))))
 
+.PHONY: julia-deps
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
 # `julia-stdlib` depends on `julia-deps` so that the fake JLL stdlibs can copy in their Artifacts.toml files.
+.PHONY: julia-stdlib
 julia-stdlib: | $(DIRS) julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/stdlib
 
+.PHONY: julia-base
 julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl $(build_datarootdir)/julia/juliac/juliac.jl $(build_datarootdir)/julia/juliac/abi_export.jl $(build_datarootdir)/julia/juliac/juliac-buildscript.jl $(build_datarootdir)/julia/juliac/juliac-trim-base.jl $(build_datarootdir)/julia/juliac/juliac-trim-stdlib.jl $(build_datarootdir)/julia/juliac/Artifacts.toml
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
@@ -104,12 +109,18 @@ julia-libccalllazybar: julia-deps julia-libccalllazyfoo
 julia-libllvmcalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libllvmcalltest
 
+.PHONY: julia-src-debug
+.PHONY: julia-src-release
 julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony julia-cli-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src $*
 
+.PHONY: julia-cli-debug
+.PHONY: julia-cli-release
 julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
+.PHONY: julia-sysimg-debug
+.PHONY: julia-sysimg-release
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
@@ -117,12 +128,16 @@ julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEV
 julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysbase-$*
 
+.PHONY: julia-debug
+.PHONY: julia-release
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest \
                                       julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest julia-base-cache
 
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk $*
 
+.PHONY: debug
+.PHONY: release
 debug release : % : julia-% stdlibs-cache-%
 
 docs: julia-sysimg-$(JULIA_BUILD_MODE) stdlibs-cache-$(JULIA_BUILD_MODE)
@@ -131,6 +146,7 @@ docs: julia-sysimg-$(JULIA_BUILD_MODE) stdlibs-cache-$(JULIA_BUILD_MODE)
 docs-revise:
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no' revise=true
 
+.PHONY: check-whitespace
 check-whitespace:
 ifneq ($(NO_GIT), 1)
 	@# Append the directory containing the julia we just built to the end of `PATH`,
@@ -140,6 +156,7 @@ else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
 
+.PHONY: fix-whitespace
 fix-whitespace:
 ifneq ($(NO_GIT), 1)
 	@# Append the directory containing the julia we just built to the end of `PATH`,
@@ -149,6 +166,7 @@ else
 	$(warn "Skipping whitespace fix because git is unavailable")
 endif
 
+.PHONY: release-candidate
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers
 	@#Check documentation
@@ -328,6 +346,7 @@ define stringreplace
 endef
 
 
+.PHONY: install
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(private_libexecdir); do \
@@ -574,6 +593,7 @@ endif
 distclean:
 	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
+.PHONY: binary-dist
 binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
 ifeq ($(ISX86),1)
@@ -620,6 +640,7 @@ app:
 darwinframework:
 	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework
 
+.PHONY: light-source-dist.tmp
 light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
 ifneq ($(BUILDROOT),$(JULIAHOME))
 	$(error make light-source-dist does not work in out-of-tree builds)
@@ -642,6 +663,7 @@ endif
 	find doc/_build/html >> light-source-dist.tmp
 
 # Make tarball with only Julia code + stdlib tarballs
+.PHONY: light-source-dist
 light-source-dist: light-source-dist.tmp
 	# Prefix everything with "julia-$(commit-sha)/" or "julia-$(version)/" and then create tarball
 	# To achieve prefixing, we temporarily create a symlink in the source directory that points back
@@ -651,10 +673,12 @@ light-source-dist: light-source-dist.tmp
 	tar -cz --no-recursion -T light-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 	rm julia-${JULIA_COMMIT}
 
+.PHONY: source-dist
 source-dist:
 	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
 
 # Make tarball with Julia code plus all dependencies
+.PHONY: full-source-dist
 full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall DEPS_GIT=0 USE_BINARYBUILDER=0
@@ -671,6 +695,7 @@ full-source-dist: light-source-dist.tmp
 	tar -cz --no-recursion -T full-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
 	rm julia-${JULIA_COMMIT}
 
+.PHONY: clean
 clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/base clean
 	@-$(MAKE) -C $(BUILDROOT)/doc clean
@@ -688,65 +713,40 @@ clean: | $(CLEAN_TARGETS)
 # Teporarily add this line to the Makefile to remove extras
 	-rm -fr $(build_datarootdir)/julia/extras
 
+.PHONY: cleanall
 cleanall: clean
 	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
 	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
 	-rm -fr $(build_prefix) $(build_staging)
 
+.PHONY: distcleanall
 distcleanall: cleanall
 	@-$(MAKE) -C $(BUILDROOT)/stdlib distclean
 	@-$(MAKE) -C $(BUILDROOT)/deps distcleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
 
 .FORCE:
-
 .PHONY: .FORCE
+
 .PHONY: $(CLEAN_TARGETS)
-.PHONY: binary-dist
-.PHONY: check-whitespace
-.PHONY: clean
-.PHONY: cleanall
-.PHONY: compile-database
-.PHONY: debug
-.PHONY: default
-.PHONY: distcleanall
-.PHONY: fix-whitespace
-.PHONY: full-source-dist
-.PHONY: install
-.PHONY: julia-base
-.PHONY: julia-cli-debug
-.PHONY: julia-cli-release
-.PHONY: julia-debug
-.PHONY: julia-deps
-.PHONY: julia-release
-.PHONY: julia-src-debug
-.PHONY: julia-src-release
-.PHONY: julia-stdlib
-.PHONY: julia-symlink
-.PHONY: julia-sysimg-debug
-.PHONY: julia-sysimg-release
-.PHONY: light-source-dist
-.PHONY: light-source-dist.tmp
-.PHONY: release
-.PHONY: release-candidate
-.PHONY: source-dist
-.PHONY: test
-.PHONY: testall
-.PHONY: testall1
 
 # Generate compilation database (leverages existing clang tooling setup)
+.PHONY: compile-database
 compile-database:
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database
 
+.PHONY: test
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
+.PHONY: testall
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT)
 	$(call spawn,$(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true')
 	rm $(BUILDROOT)/local.$(SHLIB_EXT)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
+.PHONY: testall1
 testall1: check-whitespace $(JULIA_BUILD_MODE)
 	@env JULIA_CPU_THREADS=1 $(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
@@ -759,7 +759,7 @@ test-revise-%: .FORCE
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test revise-$* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 # download target for some hardcoded windows dependencies
-.PHONY: win-extras wine_path
+.PHONY: win-extras
 win-extras:
 	@$(MAKE) -C $(BUILDROOT)/deps install-p7zip
 	mkdir -p $(JULIAHOME)/dist-extras
