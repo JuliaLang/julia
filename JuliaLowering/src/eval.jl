@@ -461,6 +461,11 @@ end
     _eval(mod, iter)
 end
 
+# Version of eval() taking `Expr` (or Expr tree leaves of any type)
+function eval(mod::Module, ex; opts...)
+    eval(mod, expr_to_syntaxtree(ex); opts...)
+end
+
 if VERSION >= v"1.13.0-DEV.1199" # https://github.com/JuliaLang/julia/pull/59604
 
 function _eval(mod, iter)

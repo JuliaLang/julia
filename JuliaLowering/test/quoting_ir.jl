@@ -32,6 +32,19 @@ end
 4   (return %₃)
 
 ########################################
+# Symbols on `.` right hand side need to be scoped correctly
+let x = 1
+    :(A.$x)
+end
+#---------------------
+1   1
+2   (= slot₁/x %₁)
+3   slot₁/x
+4   (call core.tuple %₃)
+5   (call JuliaLowering.interpolate_ast SyntaxTree (inert (. A ($ x))) %₄)
+6   (return %₅)
+
+########################################
 # Error: Double escape
 quote
     $$x + 1
