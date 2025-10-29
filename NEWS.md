@@ -84,6 +84,8 @@ New library features
 Standard library changes
 ------------------------
 
+* libpicosat_jll is now included as a bundled stdlib, providing access to the PicoSAT SAT solver.
+
 #### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
