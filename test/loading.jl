@@ -1487,8 +1487,10 @@ end
             """)
         write(joinpath(foo_path, "Manifest.toml"),
             """
-            julia_version = "1.13.0"
+            # This file is machine-generated - editing it directly is not advised
+            julia_version = "1.13.0-DEV"
             manifest_format = "2.0"
+            project_hash = "8699765aeeac181c3e5ddbaeb9371968e1f84d6b"
 
             [[deps.Foo51989]]
             path = "."
