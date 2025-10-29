@@ -321,21 +321,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --quiet, --banner
     let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
-        @test read(`$exename                    -e $p`, String) == "(0, -1)"
-        @test read(`$exename -q                 -e $p`, String) == "(1, 0)"
-        @test read(`$exename --quiet            -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=auto      -e $p`, String) == "(0, -1)"
-        @test read(`$exename --banner=no        -e $p`, String) == "(0, 0)"
-        @test read(`$exename --banner=yes       -e $p`, String) == "(0, 1)"
-        @test read(`$exename --banner=full      -e $p`, String) == "(0, 1)"
-        @test read(`$exename -q --banner=no     -e $p`, String) == "(1, 0)"
-        @test read(`$exename -q --banner=yes    -e $p`, String) == "(1, 1)"
-        @test read(`$exename -q --banner=tiny   -e $p`, String) == "(1, 4)"
-        @test read(`$exename --banner=no  -q    -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=yes -q    -e $p`, String) == "(1, 1)"
-        @test read(`$exename --banner=narrow -q -e $p`, String) == "(1, 2)"
-        @test read(`$exename --banner=short  -q -e $p`, String) == "(1, 3)"
-        @test read(`$exename --banner=tiny   -q -e $p`, String) == "(1, 4)"
+        @test read(`$exename                   -e $p`, String) == "(0, -1)"
+        @test read(`$exename -q                -e $p`, String) == "(1, 0)"
+        @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=no       -e $p`, String) == "(0, 0)"
+        @test read(`$exename --banner=yes      -e $p`, String) == "(0, 1)"
+        @test read(`$exename --banner=short    -e $p`, String) == "(0, 2)"
+        @test read(`$exename -q --banner=no    -e $p`, String) == "(1, 0)"
+        @test read(`$exename -q --banner=yes   -e $p`, String) == "(1, 1)"
+        @test read(`$exename -q --banner=short -e $p`, String) == "(1, 2)"
+        @test read(`$exename --banner=no  -q   -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=yes -q   -e $p`, String) == "(1, 1)"
+        @test read(`$exename --banner=short -q -e $p`, String) == "(1, 2)"
     end
 
     # --home

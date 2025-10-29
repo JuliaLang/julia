@@ -60,7 +60,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
-    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    Type *NewT = PointerType::get(T->getContext(), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -70,7 +70,7 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
-    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    Type *NewT = PointerType::get(T->getContext(), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -78,7 +78,7 @@ static Value *mark_callee_rooted(jl_codectx_t &ctx, Value *V)
 {
     assert(V->getType() == ctx.types().T_pjlvalue || V->getType() == ctx.types().T_prjlvalue);
     return ctx.builder.CreateAddrSpaceCast(V,
-        PointerType::get(ctx.types().T_jlvalue, AddressSpace::CalleeRooted));
+        PointerType::get(V->getContext(), AddressSpace::CalleeRooted));
 }
 
 AtomicOrdering get_llvm_atomic_order(enum jl_memory_order order)
@@ -707,13 +707,13 @@ static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
 
 static llvm::StructType* get_jlmemoryref(llvm::LLVMContext &C, unsigned AS) {
     return llvm::StructType::get(C, {
-            llvm::PointerType::get(llvm::Type::getInt8Ty(C), AS),
+            llvm::PointerType::get(C, AS),
             JuliaType::get_prjlvalue_ty(C),
             });
 }
 static llvm::StructType* get_jlmemoryboxedref(llvm::LLVMContext &C, unsigned AS) {
     return llvm::StructType::get(C, {
-            llvm::PointerType::get(JuliaType::get_prjlvalue_ty(C), AS),
+            llvm::PointerType::get(C, AS),
             JuliaType::get_prjlvalue_ty(C),
             });
 }
@@ -3813,7 +3813,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
     for (auto *User : Val->users()) {
         if (isa<GetElementPtrInst>(User)) {
             GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
-            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            Inst->mutateType(PointerType::get(Inst->getContext(), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) {
@@ -3822,7 +3822,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
         }
         else if (isa<BitCastInst>(User)) {
             BitCastInst *Inst = cast<BitCastInst>(User);
-            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            Inst->mutateType(PointerType::get(Inst->getContext(), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
     }
@@ -4956,7 +4956,7 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
     if (!GEPlist.empty()) {
         for (auto &GEP : make_range(GEPlist.rbegin(), GEPlist.rend())) {
             GetElementPtrInst *GEP2 = cast<GetElementPtrInst>(GEP->clone());
-            GEP2->mutateType(PointerType::get(GEP->getResultElementType(), AS));
+            GEP2->mutateType(PointerType::get(GEP->getContext(), AS));
             GEP2->setOperand(GetElementPtrInst::getPointerOperandIndex(), data);
             GEP2->setIsInBounds(true);
             ctx.builder.Insert(GEP2);

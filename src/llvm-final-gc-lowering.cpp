@@ -51,7 +51,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
             builder.CreateAlignedLoad(T_ppjlvalue, pgcstack, Align(sizeof(void*)), "task.gcstack"),
             builder.CreatePointerCast(
                     builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1, "frame.prev"),
-                    PointerType::get(T_ppjlvalue, 0)),
+                    PointerType::get(T_ppjlvalue->getContext(), 0)),
             Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     builder.CreateAlignedStore(

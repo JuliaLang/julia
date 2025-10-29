@@ -1299,7 +1299,7 @@ std::string generate_func_sig(const char *fname)
             }
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(AttributeSet::get(LLVMCtx, retattrs));
-            fargt_sig.push_back(PointerType::get(lrt, 0));
+            fargt_sig.push_back(PointerType::get(LLVMCtx, 0));
             sret = 1;
             prt = lrt;
         }
@@ -1357,7 +1357,7 @@ std::string generate_func_sig(const char *fname)
             pat = t;
         }
         else if (byRef) {
-            pat = PointerType::get(t, AddressSpace::Derived);
+            pat = PointerType::get(LLVMCtx, AddressSpace::Derived);
         }
         else {
             pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, LLVMCtx);

@@ -304,10 +304,10 @@ struct jl_typecache_t {
         // use pointer abi alignment for intptr_t
         alignof_ptr = DL.getPointerABIAlignment(0);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
-        T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-        T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
+        T_pjlvalue = getPointerTy(context);
+        T_prjlvalue = PointerType::get(context, AddressSpace::Tracked);
+        T_ppjlvalue = getPointerTy(context);
+        T_pprjlvalue = getPointerTy(context);
 
         T_jlfunc = JuliaType::get_jlfunc_ty(context);
         assert(T_jlfunc != NULL);
@@ -315,12 +315,12 @@ struct jl_typecache_t {
         assert(T_jlfuncparams != NULL);
 
         T_jlgenericmemory = StructType::get(context, { T_size, T_pprjlvalue /* [, real-owner] */ });
-        Type *vaelts[] = { PointerType::get(getInt8Ty(context), AddressSpace::Loaded),
-                           PointerType::get(T_jlgenericmemory, AddressSpace::Tracked),
+        Type *vaelts[] = { PointerType::get(context, AddressSpace::Loaded),
+                           PointerType::get(context, AddressSpace::Tracked),
                            // dimsize[ndims]
         };
         T_jlarray = StructType::get(context, ArrayRef<Type*>(vaelts));
-        T_pjlarray = PointerType::get(T_jlarray, 0);
+        T_pjlarray = getPointerTy(context);
     }
 };
 
@@ -739,7 +739,7 @@ static const auto jlboxed_uint8_cache = new JuliaVariable{
 
 static const auto jlpgcstack_func = new JuliaFunction<>{
     "julia.get_pgcstack",
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_ppjlvalue_ty(C), 0), false); },
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C), false); },
     nullptr,
 };
 
@@ -770,7 +770,7 @@ static const auto jlsplatnew_func = new JuliaFunction<>{
 static const auto jlthrow_func = new JuliaFunction<>{
     XSTR(jl_throw),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlerror_func = new JuliaFunction<>{
@@ -794,13 +794,13 @@ static const auto jlatomicerror_func = new JuliaFunction<>{
 static const auto jltypeerror_func = new JuliaFunction<>{
     XSTR(jl_type_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {getPointerTy(C), JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {getPointerTy(C), JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlundefvarerror_func = new JuliaFunction<>{
     XSTR(jl_undefined_var_error),
     [](LLVMContext &C) {
-        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted);
+        Type *T = PointerType::get(C, AddressSpace::CalleeRooted);
         return FunctionType::get(getVoidTy(C), {T, T}, false);
     },
     get_attrs_noreturn,
@@ -808,20 +808,20 @@ static const auto jlundefvarerror_func = new JuliaFunction<>{
 static const auto jlhasnofield_func = new JuliaFunction<>{
     XSTR(jl_has_no_field_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted),
-             PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted),
+             PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), PointerType::getUnqual(T_size->getContext()), T_size}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted), getPointerTy(C), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_int),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), T_size}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlvboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -834,7 +834,7 @@ static const auto jluboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>
     XSTR(jl_bounds_error_unboxed_int),
     [](LLVMContext &C, Type *T_size) {
         return FunctionType::get(getVoidTy(C),
-            {PointerType::get(getInt8Ty(C), AddressSpace::Derived), JuliaType::get_pjlvalue_ty(C), T_size}, false); },
+            {PointerType::get(C, AddressSpace::Derived), JuliaType::get_pjlvalue_ty(C), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlcheckassign_func = new JuliaFunction<>{
@@ -842,7 +842,7 @@ static const auto jlcheckassign_func = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(getVoidTy(C),
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
 static const auto jlcheckreplace_func = new JuliaFunction<>{
@@ -869,7 +869,7 @@ static const auto jlcheckswap_func = new JuliaFunction<>{
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
 static const auto jlcheckassignonce_func = new JuliaFunction<>{
@@ -878,7 +878,7 @@ static const auto jlcheckassignonce_func = new JuliaFunction<>{
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
 static const auto jldeclareglobal_func = new JuliaFunction<>{
@@ -973,9 +973,8 @@ static const auto jlopaque_closure_call_func = new JuliaFunction<>{
 static const auto jlmethod_func = new JuliaFunction<>{
     XSTR(jl_method_def),
     [](LLVMContext &C) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue,
                 {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_pjlvalue}, false);
     },
@@ -984,9 +983,8 @@ static const auto jlmethod_func = new JuliaFunction<>{
 static const auto jlgenericfunction_func = new JuliaFunction<>{
     XSTR(jl_declare_const_gf),
     [](LLVMContext &C) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue, {T_pjlvalue, T_pjlvalue}, false);
     },
     nullptr,
@@ -994,7 +992,7 @@ static const auto jlgenericfunction_func = new JuliaFunction<>{
 static const auto jllockvalue_func = new JuliaFunction<>{
     XSTR(jl_lock_value),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1003,7 +1001,7 @@ static const auto jllockvalue_func = new JuliaFunction<>{
 static const auto jlunlockvalue_func = new JuliaFunction<>{
     XSTR(jl_unlock_value),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1012,7 +1010,7 @@ static const auto jlunlockvalue_func = new JuliaFunction<>{
 static const auto jllockfield_func = new JuliaFunction<>{
     XSTR(jl_lock_field),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Loaded)}, false); },
+            {PointerType::get(C, AddressSpace::Loaded)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1021,7 +1019,7 @@ static const auto jllockfield_func = new JuliaFunction<>{
 static const auto jlunlockfield_func = new JuliaFunction<>{
     XSTR(jl_unlock_field),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Loaded)}, false); },
+            {PointerType::get(C, AddressSpace::Loaded)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1092,7 +1090,7 @@ static const auto jl_excstack_state_func = new JuliaFunction<TypeFnContextAndSiz
 static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_egal__unboxed),
     [](LLVMContext &C, Type *T_size) {
-        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
+        Type *T = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(getInt32Ty(C), {T, T, T_size}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
@@ -1106,9 +1104,8 @@ static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
 static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
     "julia.gc_alloc_obj",
     [](LLVMContext &C, Type *T_size) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue,
                 {T_pjlvalue, T_size, T_prjlvalue}, false);
     },
@@ -1131,9 +1128,8 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
 static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_alloc_genericmemory_unchecked),
     [](LLVMContext &C, Type *T_size) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue,
                 {T_pjlvalue, T_size, T_pjlvalue}, false);
     },
@@ -1240,7 +1236,7 @@ static const auto jlapplytype_func = new JuliaFunction<>{
 static const auto jl_object_id__func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_object_id_),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size,
-            {T_size, PointerType::get(getInt8Ty(C), AddressSpace::Derived)}, false); },
+            {T_size, PointerType::get(C, AddressSpace::Derived)}, false); },
     nullptr,
 };
 static const auto setjmp_func = new JuliaFunction<TypeFnContextAndTriple>{
@@ -1336,7 +1332,7 @@ static const auto jlfieldisdefinedchecked_func = new JuliaFunction<TypeFnContext
 static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     XSTR(jl_get_cfunction_trampoline),
     [](LLVMContext &C) {
-        auto T_pjlvalue = PointerType::get(C, 0);
+        auto T_pjlvalue = getPointerTy(C);
         auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         auto T_derived = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
@@ -1458,7 +1454,7 @@ static const auto gc_preserve_end_func = new JuliaFunction<> {
 static const auto pointer_from_objref_func = new JuliaFunction<>{
     "julia.pointer_from_objref",
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pjlvalue_ty(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived)}, false); },
+            {PointerType::get(C, AddressSpace::Derived)}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
         FnAttrs.addMemoryAttr(MemoryEffects::none());
@@ -1479,8 +1475,8 @@ static const auto gc_loaded_func = new JuliaFunction<>{
     //  top:
     //   %metadata GC base pointer is ptr(Tracked)
     //   ret addrspacecast ptr to ptr(Loaded)
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded),
-            {JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_prjlvalue_ty(C), 0)}, false); },
+    [](LLVMContext &C) { return FunctionType::get(PointerType::get(C, AddressSpace::Loaded),
+            {JuliaType::get_prjlvalue_ty(C), getPointerTy(C)}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
         FnAttrs.addAttribute(Attribute::NoSync);
@@ -1539,7 +1535,7 @@ static const auto julia_call3 = new JuliaFunction<>{
     "julia.call3",
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
+        Type *T = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
             {getPointerTy(C),
              T}, // %f
