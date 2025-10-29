@@ -538,8 +538,7 @@ function flatten(data::Vector, lidict::LineInfoDict)
     return (newdata, newdict)
 end
 
-const SRC_DIR = normpath(joinpath(Sys.BUILD_ROOT_PATH, "src"))
-const COMPILER_DIR = "../usr/share/julia/Compiler/"
+const SRC_DIR = normpath(Base.SOURCEDIR, "src")
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
@@ -548,17 +547,18 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
     return get!(filenamecache, spath) do
         path = Base.fixup_stdlib_path(string(spath))
         path_norm = normpath(path)
-        possible_base_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
+        possible_base_path = normpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path)
         lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
+        compiler_dir = joinpath(Base.DATAROOT, "julia", "Compiler")
         if startswith(path_norm, SRC_DIR)
             remainder = only(split(path_norm, SRC_DIR, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@juliasrc", remainder
         elseif startswith(path_norm, lib_dir)
             remainder = only(split(path_norm, lib_dir, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
-        elseif contains(path, COMPILER_DIR)
-            remainder = split(path, COMPILER_DIR, keepempty=false)[end]
-            possible_compiler_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", remainder))
+        elseif startswith(path_norm, compiler_dir)
+            remainder = split(path, compiler_dir, keepempty=false)[end]
+            possible_compiler_path = normpath(Sys.BINDIR, Base.DATAROOT, "julia", "Compiler", remainder)
             return (isfile(possible_compiler_path) ? possible_compiler_path : ""), "@Compiler", remainder
         elseif isabspath(path)
             if ispath(path)

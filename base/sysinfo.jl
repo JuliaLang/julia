@@ -41,7 +41,7 @@ export BINDIR,
        which,
        detectwsl
 
-import ..Base: show
+import ..Base: DATAROOTDIR, show
 
 """
     Sys.BINDIR::String
@@ -55,12 +55,10 @@ global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/$DATAROOTDIR/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
-# Similarly, this is the root of the julia repo directory that julia was built from
-const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 
@@ -179,7 +177,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR, DATAROOTDIR, "julia", "stdlib", vers)
     nothing
 end
 
