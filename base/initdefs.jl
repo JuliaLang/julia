@@ -288,10 +288,16 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
             program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
             isnothing(program_file) && return nothing # User did not pass a script
 
+            # Check if the program file itself is a portable script first
+            if env == "@script" && Base.has_inline_project(program_file)
+                return abspath(program_file)
+            end
+
             # Expand trailing relative path
             dir = dirname(program_file)
             dir = env != "@script" ? (dir * env[length("@script")+1:end]) : dir
-            return current_project(dir)
+            project = current_project(dir)
+            return project
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
@@ -326,7 +332,9 @@ load_path_expand(::Nothing) = nothing
 """
     active_project()
 
-Return the path of the active `Project.toml` file. See also [`Base.set_active_project`](@ref).
+Return the path of the active project (either a `Project.toml` file or a julia
+file when using a [portable script](@ref portable-scripts)).
+See also [`Base.set_active_project`](@ref).
 """
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
@@ -355,7 +363,9 @@ end
 """
     set_active_project(projfile::Union{AbstractString,Nothing})
 
-Set the active `Project.toml` file to `projfile`. See also [`Base.active_project`](@ref).
+Set the active `Project.toml` file to `projfile`. The `projfile` can be a path to a traditional
+`Project.toml` file, a [portable script](@ref portable-scripts) with inline metadata, or `nothing`
+to clear the active project. See also [`Base.active_project`](@ref).
 
 !!! compat "Julia 1.8"
     This function requires at least Julia 1.8.
@@ -376,6 +386,7 @@ end
     active_manifest(project_file::AbstractString)
 
 Return the path of the active manifest file, or the manifest file that would be used for a given `project_file`.
+When a [portable script](@ref portable-scripts) is active, this returns the script path itself.
 
 In a stacked environment (where multiple environments exist in the load path), this returns the manifest
 file for the primary (active) environment only, not the manifests from other environments in the stack.

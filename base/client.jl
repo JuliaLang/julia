@@ -275,6 +275,11 @@ function exec_options(opts)
     # remove filename from ARGS
     global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
+    if arg_is_program && PROGRAM_FILE != "-" && Base.active_project(false) === nothing
+        script_path = abspath(PROGRAM_FILE)
+        Base.has_inline_project(script_path) && Base.set_active_project(script_path)
+    end
+
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
