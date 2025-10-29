@@ -1,3 +1,6 @@
+# JuliaLowering REPL mode: an interactive test utility for lowering code (not
+# part of the unit tests)
+
 module JuliaLoweringREPL
 
 import ReplMaker

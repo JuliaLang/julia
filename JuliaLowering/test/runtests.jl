@@ -1,5 +1,3 @@
-using Test
-
 include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
