@@ -189,13 +189,9 @@ end
 function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
     k = kind(ex)
     scope_layer = get(ex, :scope_layer, layer_ids[layer_idx])
-    if k == K"module" || k == K"toplevel" || k == K"inert"
-        makenode(ctx, ex, ex, children(ex);
-                 scope_layer=scope_layer)
-    elseif k == K"."
-        makenode(ctx, ex, ex, set_macro_arg_hygiene(ctx, ex[1], layer_ids, layer_idx), ex[2],
-                 scope_layer=scope_layer)
-    elseif !is_leaf(ex)
+    if is_leaf(ex)
+        makeleaf(ctx, ex, ex; scope_layer=scope_layer)
+    else
         inner_layer_idx = layer_idx
         if k == K"escape"
             inner_layer_idx = layer_idx - 1
@@ -210,8 +206,6 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
         end
         mapchildren(e->set_macro_arg_hygiene(ctx, e, layer_ids, inner_layer_idx),
                     ctx, ex; scope_layer=scope_layer)
-    else
-        makeleaf(ctx, ex, ex; scope_layer=scope_layer)
     end
 end
 
@@ -359,6 +353,20 @@ function append_sourceref(ctx, ex, secondary_prov)
     end
 end
 
+function remove_scope_layer!(ex)
+    if !is_leaf(ex)
+        for c in children(ex)
+            remove_scope_layer!(c)
+        end
+    end
+    deleteattr!(ex, :scope_layer)
+    ex
+end
+
+function remove_scope_layer(ctx, ex)
+    remove_scope_layer!(copy_ast(ctx, ex))
+end
+
 """
 Lowering pass 1
 
@@ -441,7 +449,12 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
     elseif k == K"module" || k == K"toplevel" || k == K"inert"
-        ex
+        # Remove scope layer information from any inert syntax which survives
+        # macro expansion so that it doesn't contaminate lowering passes which
+        # are later run against the quoted code. TODO: This works as a first
+        # approximation but is incorrect in general. We need to revisit such
+        # "deferred hygiene" situations (see https://github.com/c42f/JuliaLowering.jl/issues/111)
+        remove_scope_layer(ctx, ex)
     elseif k == K"." && numchildren(ex) == 2
         # Handle quoted property access like `x.:(foo)` or `Core.:(!==)`
         # Unwrap the quote to get the identifier before expansion

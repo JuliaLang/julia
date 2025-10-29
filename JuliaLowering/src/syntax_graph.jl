@@ -155,6 +155,10 @@ function setattr!(graph::SyntaxGraph, id; attrs...)
     end
 end
 
+function deleteattr!(graph::SyntaxGraph, id::NodeId, name::Symbol)
+    delete!(getattr(graph, name), id)
+end
+
 function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     # TODO: Remove access to internals?
     name === :edge_ranges && return getfield(graph, :edge_ranges)
@@ -292,6 +296,10 @@ end
 
 function setattr!(ex::SyntaxTree; attrs...)
     setattr!(ex._graph, ex._id; attrs...)
+end
+
+function deleteattr!(ex::SyntaxTree, name::Symbol)
+    deleteattr!(ex._graph, ex._id, name)
 end
 
 # JuliaSyntax tree API
