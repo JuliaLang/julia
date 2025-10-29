@@ -256,8 +256,8 @@ struct LoadingCache
     env_project_file::Dict{String, Union{Bool, String}}
     project_file_manifest_path::Dict{String, Union{Nothing, String}}
     require_parsed::Set{String}
-    identified_where::Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, String}}}
-    identified::Dict{String, Union{Nothing, Tuple{PkgId, String}}}
+    identified_where::Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{ApiId, String}}}
+    identified::Dict{String, Union{Nothing, Tuple{ApiId, String}}}
     located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{String, String}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing) # n.b.: all access to and through this are protected by require_lock
@@ -303,10 +303,10 @@ end
 # Used by Pkg but not used in loading itself
 function find_package(arg) # ::Union{Nothing,String}
     @lock require_lock begin
-    pkgenv = identify_package_env(arg)
-    pkgenv === nothing && return nothing
-    pkg, env = pkgenv
-    return locate_package(pkg, env)
+    apienv = identify_package_env(arg)
+    apienv === nothing && return nothing
+    api, env = apienv
+    return locate_package(api.pkg, env)
     end
 end
 
@@ -338,7 +338,7 @@ function identify_package_env(where::Union{PkgId, Nothing}, name::String)
     if where !== nothing
         if where.name === name
             # Project tries to load itself
-            return (where, nothing)
+            return (ApiId(where, nothing), nothing)
         elseif where.uuid === nothing
             # Project without Project.toml - treat as toplevel load
             where = nothing
@@ -351,36 +351,36 @@ function identify_package_env(where::Union{PkgId, Nothing}, name::String)
     cache_key = where === nothing ? name : (where, name)
     if cache !== nothing
         env_cache = where === nothing ? cache.identified : cache.identified_where
-        pkg_env = get(env_cache, cache_key, missing)
-        pkg_env === missing || return pkg_env
+        api_env = get(env_cache, cache_key, missing)
+        api_env === missing || return api_env
     end
 
     # Main part: Search through all environments in the load path to see if we have
     # a matching entry.
-    pkg_env = nothing
+    api_env = nothing
     for env in load_path()
-        pkgid = environment_deps_get(env, where, name)
+        apiid = environment_deps_get(env, where, name)
         # If we didn't find `where` at all, keep looking through the environment stack
-        pkgid === nothing && continue
-        if pkgid.uuid !== nothing || where === nothing
-            pkg_env = pkgid, env
+        apiid === nothing && continue
+        if apiid.pkg.uuid !== nothing || where === nothing
+            api_env = apiid, env
         end
         # If we don't have pkgid.uuid, still break here - this is a sentinel that indicates
         # that we've found `where` but it did not have the required dependency. We terminate the search.
         break
     end
-    if pkg_env === nothing && where !== nothing && is_stdlib(where)
+    if api_env === nothing && where !== nothing && is_stdlib(where)
         # if not found it could be that manifests are from a different julia version/commit
         # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
         # as a fallback
-        pkg_env = identify_stdlib_project_dep(where, name)
+        api_env = identify_stdlib_project_dep(where, name)
     end
 
     # Cache the result
     if cache !== nothing
-        env_cache[cache_key] = pkg_env
+        env_cache[cache_key] = api_env
     end
-    return pkg_env
+    return api_env
 end
 identify_package_env(name::String) = identify_package_env(nothing, name)
 
@@ -427,9 +427,13 @@ julia> using LinearAlgebra
 julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
 ```
 """
-identify_package(where::Module, name::String) = @lock require_lock _nothing_or_first(identify_package_env(where, name))
-identify_package(where::PkgId, name::String)  = @lock require_lock _nothing_or_first(identify_package_env(where, name))
-identify_package(name::String)                = @lock require_lock _nothing_or_first(identify_package_env(name))
+identify_package(where::Module, name::String) = (api = identify_api(where, name); return api === nothing ? nothing : api.pkg)
+identify_package(where::PkgId, name::String)  = (api = identify_api(where, name); return api === nothing ? nothing : api.pkg)
+identify_package(name::String)                = (api = identify_api(name); return api === nothing ? nothing : api.pkg)
+
+identify_api(where::Module, name::String) = @lock require_lock _nothing_or_first(identify_package_env(where, name))
+identify_api(where::PkgId, name::String)  = @lock require_lock _nothing_or_first(identify_package_env(where, name))
+identify_api(name::String)                = @lock require_lock _nothing_or_first(identify_package_env(name))
 
 function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,Tuple{String,String}}
     assert_havelock(require_lock)
@@ -708,14 +712,15 @@ function base_project(project_file)
     end
 end
 
-function package_get_here(project_file, name::String)
+function package_get_here(project_file, name::String)::Union{Nothing,ApiId}
     # if `where` matches the project, use [deps] section as manifest, and stop searching
     pkg_uuid = explicit_project_deps_get(project_file, name)
-    pkg_uuid === nothing && return PkgId(name)
-    return PkgId(pkg_uuid, name)
+    pkg_compat = explicit_project_compat_get(project_file, name)
+    pkg_uuid === nothing && return ApiId(PkgId(name), pkg_compat)
+    return ApiId(PkgId(pkg_uuid, name), pkg_compat)
 end
 
-function package_get(project_file, where::Union{Nothing, PkgId}, name::String)
+function package_get(project_file, where::Union{Nothing, PkgId}, name::String)::Union{Nothing,ApiId}
     if where !== nothing
         proj = project_file_name_uuid(project_file, where.name)
         proj != where && return nothing
@@ -726,7 +731,7 @@ end
 ext_may_load_weakdep(exts::String, name::String) = exts == name
 ext_may_load_weakdep(exts::Vector{String}, name::String) = name in exts
 
-function package_extension_get(project_file, where::PkgId, name::String)
+function package_extension_get(project_file, where::PkgId, name::String)::Union{Nothing,ApiId}
     d = parsed_toml(project_file)
     exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
     if exts !== nothing
@@ -739,7 +744,8 @@ function package_extension_get(project_file, where::PkgId, name::String)
                 if weakdeps !== nothing
                     wuuid = get(weakdeps, name, nothing)::Union{String, Nothing}
                     if wuuid !== nothing
-                        return PkgId(UUID(wuuid), name)
+                        return ApiId(PkgId(UUID(wuuid), name),
+                            explicit_project_compat_get(project_file, name))
                     end
                 end
             end
@@ -750,7 +756,7 @@ function package_extension_get(project_file, where::PkgId, name::String)
     return nothing
 end
 
-function environment_deps_get(env::String, where::Union{Nothing,PkgId}, name::String)::Union{Nothing,PkgId}
+function environment_deps_get(env::String, where::Union{Nothing,PkgId}, name::String)::Union{Nothing,ApiId}
     @assert where === nothing || where.uuid !== nothing
     project_file = env_project_file(env)
     implicit_manifest = !(project_file isa String)
@@ -760,7 +766,8 @@ function environment_deps_get(env::String, where::Union{Nothing,PkgId}, name::St
             # Toplevel load with a directory (implicit manifest) - all we look for is the
             # existence of the package name in the directory.
             pkg = implicit_manifest_pkgid(env, name)
-            return pkg
+            pkg === nothing &&  return nothing
+            return ApiId(pkg, nothing)
         end
         project_file = implicit_manifest_project(env, where)
         project_file === nothing && return nothing
@@ -781,7 +788,7 @@ function environment_deps_get(env::String, where::Union{Nothing,PkgId}, name::St
     #       uses the same code path. Otherwise this is the active project.
     pkg = package_get(project_file, where, name)
     if pkg !== nothing
-        if where === nothing && pkg.uuid === nothing
+    if where === nothing && pkg.pkg.uuid === nothing
             # This is a top-level load - even though we didn't find the dependency
             # here, we still want to keep looking through the top-level environment stack.
             return nothing
@@ -802,7 +809,7 @@ function environment_deps_get(env::String, where::Union{Nothing,PkgId}, name::St
         # With an implicit manifest, getting here means that our (implicit) environment
         # *has* the package `where`. If we don't find it, it just means that `where` doesn't
         # have `name` as a dependency - c.f. the analogous case in `explicit_manifest_deps_get`.
-        return PkgId(name)
+        return ApiId(PkgId(name), nothing)
     end
 
     # All other cases, dependencies come from the (top-level) manifest
@@ -995,6 +1002,13 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
+function explicit_project_compat_get(project_file::String, name::String)
+    d = parsed_toml(project_file)
+    compat = get(d, "compat", nothing)::Union{Dict{String, Any}, Nothing}
+    compat === nothing && return nothing
+    return get(compat, name, nothing)
+end
+
 function is_v1_format_manifest(raw_manifest::Dict{String})
     if haskey(raw_manifest, "manifest_format")
         mf = raw_manifest["manifest_format"]
@@ -1018,24 +1032,31 @@ function get_deps(raw_manifest::Dict)
     end
 end
 
-function dep_stanza_get(stanza::Dict{String, Any}, name::String)::Union{Nothing, PkgId}
-    for (dep, uuid) in stanza
-        uuid::String
-        if dep === name
-            return PkgId(UUID(uuid), name)
+function dep_stanza_get(stanza::Dict{String, Any}, name)::Union{ApiId, Nothing}
+    for (dep, uuid_or_obj) in stanza
+        if dep == name
+            if uuid_or_obj isa String
+                # uuid specified, but no API compat
+                return ApiId(PkgId(UUID(uuid_or_obj), name), nothing)
+            else
+                api_compat = get(uuid_or_obj, "compat", nothing)::Union{Nothing, String}
+                uuid = get(uuid_or_obj, "uuid", nothing)::Union{Nothing, String}
+                uuid === nothing && return nothing
+                return ApiId(PkgId(UUID(uuid), name), api_compat)
+            end
         end
     end
     return nothing
 end
 
-function dep_stanza_get(stanza::Vector{String}, name::String)::Union{Nothing, PkgId}
-    name in stanza && return PkgId(name)
+function dep_stanza_get(stanza::Vector{String}, name::String)::Union{Nothing, ApiId}
+    name in stanza && return ApiId(PkgId(name), nothing)
     return nothing
 end
 
 dep_stanza_get(stanza::Nothing, name::String) = nothing
 
-function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
+function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,ApiId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
     d = get_deps(parsed_toml(manifest_file))
@@ -1048,7 +1069,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             # deps is either a list of names (deps = ["DepA", "DepB"]) or
             # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
             deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-            local dep::Union{Nothing, PkgId}
+            local dep::Union{Nothing, ApiId}
             if UUID(uuid) === where.uuid
                 dep = dep_stanza_get(deps, name)
 
@@ -1057,7 +1078,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                 # change to dependency's Project or our Manifest. Return a sentinel here indicating
                 # that we know the package, but do not know its UUID. The caller will terminate the
                 # search and provide an appropriate error to the user.
-                dep === nothing && return PkgId(name)
+                dep === nothing && return ApiId(PkgId(name), nothing)
             else
                 # Check if we're trying to load into an extension of this package
                 extensions = get(entry, "extensions", nothing)
@@ -1065,7 +1086,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                     if haskey(extensions, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
                         if name == dep_name
                             # Extension loads its base package
-                            return PkgId(UUID(uuid), name)
+                            return ApiId(PkgId(UUID(uuid), name), nothing)
                         end
                         exts = extensions[where.name]::Union{String, Vector{String}}
                         # Extensions are allowed to load:
@@ -1078,14 +1099,14 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             dep === nothing && continue
                             @goto have_dep
                         end
-                        return PkgId(name)
+                        return ApiId(PkgId(name), nothing)
                     end
                 end
                 continue
             end
 
             @label have_dep
-            dep.uuid !== nothing && return dep
+            dep.pkg.uuid !== nothing && return dep
 
             # We have the dep, but it did not specify a UUID. In this case,
             # it must be that the name is unique in the manifest - so lookup
@@ -1097,7 +1118,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             entry = first(name_deps::Vector{Any})::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && return PkgId(name)
-            return PkgId(UUID(uuid), name)
+            return ApiId(PkgId(UUID(uuid), name), nothing)
         end
     end
 
@@ -1471,6 +1492,7 @@ function run_module_init(mod::Module, i::Int=1)
     end
 end
 
+run_package_callbacks(modkey::ApiId) = run_package_callbacks(modkey.pkg)
 function run_package_callbacks(modkey::PkgId)
     run_extension_callbacks(modkey)
     assert_havelock(require_lock)
@@ -1505,6 +1527,7 @@ const EXT_PRIMED = Dict{PkgId,Vector{PkgId}}() # Extension -> Parent + Triggers 
 const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}() # Trigger -> Extensions that can be triggered by it
 const EXT_DORMITORY_FAILED = ExtensionId[]
 
+insert_extension_triggers(api::ApiId) = insert_extension_triggers(api.pkg)
 function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
     path_env_loc = locate_package_env(pkg)
@@ -2263,6 +2286,12 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     return cond
 end
 
+function start_loading(modkey::ApiId, build_id::UInt128, stalecheck::Bool)
+    m = start_loading(modkey.pkg, build_id, true)
+    m === nothing && return nothing
+    return api_for_loaded_module(modkey, m)
+end
+
 function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     # handle recursive and concurrent calls to require
     while true
@@ -2278,6 +2307,7 @@ function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     end
 end
 
+end_loading(apikey::ApiId, @nospecialize loaded) = end_loading(apikey.pkg, loaded)
 function end_loading(modkey::PkgId, @nospecialize loaded)
     assert_havelock(require_lock)
     loading = pop!(package_locks, modkey)
@@ -2498,7 +2528,7 @@ function __require(into::Module, mod::Symbol)
         end
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
-            path = binpack(uuidkey)
+            path = binpack(uuidkey.pkg)
             push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), 0.0))
         end
         return _require_prelocked(uuidkey, env)
@@ -2565,8 +2595,8 @@ function require(uuidkey::PkgId)
     end
     return invoke_in_world(world, __require, uuidkey)
 end
-__require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
-function _require_prelocked(uuidkey::PkgId, env=nothing)
+__require(uuidkey::Union{PkgId, ApiId}) = @lock require_lock _require_prelocked(uuidkey)
+function _require_prelocked(uuidkey::Union{PkgId, ApiId}, env=nothing)
     assert_havelock(require_lock)
     m = start_loading(uuidkey, UInt128(0), true)
     if m === nothing
@@ -2823,6 +2853,23 @@ function __require_prelocked(pkg::PkgId, env)
         end
     end
     return loaded
+end
+
+__require_prelocked(apikey::ApiId, env) =
+    api_for_loaded_module(apikey, __require_prelocked(apikey.pkg, env))
+
+function lookup_api(loaded::Module, api::ApiId)
+    if !isdefined(loaded, :_get_versioned_api)
+        return loaded
+    end
+    return loaded._get_versioned_api(api.compat)::Module
+end
+
+function api_for_loaded_module(apikey::ApiId, loaded::Module)
+    if apikey.compat === nothing
+        return loaded
+    end
+    return invokelatest(lookup_api, loaded, apikey)
 end
 
 # load a serialized file directly, including dependencies (without checking staleness except for immediate conflicts)

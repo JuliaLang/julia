@@ -508,15 +508,15 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     else
         requested_pkgids = PkgId[]
         for name in pkgs
-            pkgid = Base.identify_package(name)
-            if pkgid === nothing
+            pkg = Base.identify_package(name)
+            if pkg === nothing
                 if _from_loading
                     return # leave it up to loading to handle this
                 else
                     throw(PkgPrecompileError("Unknown package: $name"))
                 end
             end
-            push!(requested_pkgids, pkgid)
+            push!(requested_pkgids, pkg)
         end
     end
 

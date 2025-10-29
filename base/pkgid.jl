@@ -43,3 +43,18 @@ function binunpack(s::String)
     name = read(io, String)
     return PkgId(UUID(uuid), name)
 end
+
+struct ApiId
+    pkg::PkgId
+    compat::Union{String, Nothing}
+end
+ApiId(pkg::PkgId) = ApiId(pkg, nothing)
+==(a::ApiId, b::ApiId) = a.pkg == b.pkg && a.compat == b.compat
+
+function hash(api::ApiId, h::UInt)
+    h = hash(api.pkg, h)
+    return hash(api.compat, h)
+end
+
+show(io::IO,  ::MIME"text/plain", api::ApiId) =
+    print(io, api.pkg, api.compat === nothing ? "" : " at version compat " * api.compat)
