@@ -259,7 +259,7 @@ endif
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
-release debug: %: libjulia-internal-% libjulia-codegen-% $(BUILDDIR)/compile_commands.json
+release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands.json
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -558,6 +558,7 @@ clean:
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
+	-rm -f $(BUILDDIR)/compile_commands.json
 
 clean-flisp:
 	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
@@ -654,7 +655,8 @@ clean-analyzegc:
 	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 
 # Compilation database generation using existing clang infrastructure
-$(BUILDDIR)/compile_commands.json:
+.PHONY: regenerate-compile_commands.json
+regenerate-compile_commands.json:
 	@{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		CLANG_TOOLING_CXX_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_CXX_FLAGS))"; \
@@ -719,7 +721,7 @@ $(BUILDDIR)/compile_commands.json:
 		rm -f $@.tmp; \
 	fi
 
-compile-database: $(BUILDDIR)/compile_commands.json
+compile-database: regenerate-compile_commands.json
 	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
 	@echo "Compilation database created: $<"

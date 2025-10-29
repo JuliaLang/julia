@@ -53,8 +53,8 @@ $(BUILDDIR)/host/Makefile:
 	@printf "%s\n" 'BUILDING_HOST_TOOLS=1' >> $@
 	@printf "%s\n" 'include $(SRCDIR)/Makefile' >> $@
 
-release: $(BUILDDIR)/libsupport.a $(BUILDDIR)/compile_commands.json
-debug: $(BUILDDIR)/libsupport-debug.a $(BUILDDIR)/compile_commands.json
+release: $(BUILDDIR)/libsupport.a regenerate-compile_commands.json
+debug: $(BUILDDIR)/libsupport-debug.a regenerate-compile_commands.json
 
 $(BUILDDIR)/libsupport.a: $(OBJS) | $(BUILDIR)
 	rm -rf $@
@@ -78,7 +78,8 @@ CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) 
 INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
 
 # Compilation database generation
-$(BUILDDIR)/compile_commands.json:
+.PHONY: regenerate-compile_commands.json
+regenerate-compile_commands.json:
 	@{ \
 		CLANG_TOOLING_S_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS))"; \
@@ -111,7 +112,7 @@ $(BUILDDIR)/compile_commands.json:
 		rm -f $@.tmp; \
 	fi
 
-compile-database: $(BUILDDIR)/compile_commands.json
+compile-database: regenerate-compile_commands.json
 	@echo "Compilation database created in support: $<"
 
 clean:

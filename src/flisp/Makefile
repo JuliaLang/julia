@@ -61,9 +61,9 @@ DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
 
 default: release
 
-release: $(BUILDDIR)/$(EXENAME)$(EXE) $(BUILDDIR)/compile_commands.json
+release: $(BUILDDIR)/$(EXENAME)$(EXE) regenerate-compile_commands.json
 
-debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) $(BUILDDIR)/compile_commands.json
+debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) regenerate-compile_commands.json
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -140,7 +140,8 @@ CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) 
 INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.c:read.c flisp.c:equal.c
 
 # Compilation database generation
-$(BUILDDIR)/compile_commands.json:
+.PHONY: regenerate-compile_commands.json
+regenerate-compile_commands.json:
 	@{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		echo "["; \
@@ -166,7 +167,7 @@ $(BUILDDIR)/compile_commands.json:
 		rm -f $@.tmp; \
 	fi
 
-compile-database: $(BUILDDIR)/compile_commands.json
+compile-database: regenerate-compile_commands.json
 	@echo "Compilation database created for flisp: $<"
 
 clean:
