@@ -8,12 +8,14 @@ Provide methods for retrieving information about hardware and the operating syst
 export BINDIR,
        STDLIB,
        CPU_THREADS,
+       EFFECTIVE_CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
        MACHINE,
        KERNEL,
        JIT,
+       PAGESIZE,
        cpu_info,
        cpu_summary,
        sysimage_target,
@@ -72,8 +74,27 @@ CPU cores, for example, in the presence of
 [hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
+
+See also: [`Sys.EFFECTIVE_CPU_THREADS`](@ref) for a container-aware CPU count that respects
+cgroup limits.
 """
 global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
+
+"""
+    Sys.EFFECTIVE_CPU_THREADS::Int
+
+The effective number of logical CPU cores available to the Julia process, taking into
+account container limits (e.g., Docker `--cpus`, Kubernetes CPU limits, cgroup quotas).
+This is the minimum of the hardware CPU thread count and any imposed CPU limits.
+
+In non-containerized environments, this typically equals `Sys.CPU_THREADS`. In containerized
+environments, it respects cgroup CPU limits and provides a more accurate measure of
+available parallelism.
+
+Use this constant when determining default thread pool sizes or parallelism levels to
+ensure proper behavior in containerized deployments.
+"""
+global EFFECTIVE_CPU_THREADS::Int = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH::Symbol
@@ -144,6 +165,13 @@ Note: Included in the detailed system information via `versioninfo(verbose=true)
 """
 global JIT::String
 
+"""
+    Sys.PAGESIZE::Clong
+
+A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+"""
+global PAGESIZE::Clong
+
 function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
@@ -159,9 +187,11 @@ function __init__()
     else
         Int(ccall(:jl_cpu_threads, Int32, ()))
     end
+    global EFFECTIVE_CPU_THREADS = min(CPU_THREADS, Int(ccall(:jl_effective_threads, Int32, ())))
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
     __init_build()
     nothing
 end

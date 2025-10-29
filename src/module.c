@@ -1886,7 +1886,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
 
 // For a generally writable binding (checked using jl_check_binding_currently_writable in this world age), check whether
 // we can actually write the value `rhs` to it.
-jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED)
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, const char *msg)
 {
     JL_GC_PUSH1(&rhs); // callee-rooted
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
@@ -1894,10 +1894,8 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
     assert(kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_GLOBAL);
     jl_value_t *old_ty = kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
     JL_GC_PROMISE_ROOTED(old_ty);
-    if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty) {
-        if (!jl_isa(rhs, old_ty))
-            jl_errorf("cannot assign an incompatible value to the global %s.%s.",
-                        jl_symbol_name(mod->name), jl_symbol_name(var));
+    if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty && !jl_isa(rhs, old_ty)) {
+        jl_type_error_global(msg, mod, var, old_ty, rhs);
     }
     JL_GC_POP();
     return old_ty;
@@ -1905,7 +1903,7 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
-    if (jl_check_binding_assign_value(b, mod, var, rhs) != NULL) {
+    if (jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!") != NULL) {
         jl_atomic_store_release(&b->value, rhs);
         jl_gc_wb(b, rhs);
     }
@@ -1913,7 +1911,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
 
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
-    jl_check_binding_assign_value(b, mod, var, rhs);
+    jl_check_binding_assign_value(b, mod, var, rhs, "swapglobal!");
     jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     jl_gc_wb(b, rhs);
     if (__unlikely(old == NULL))
@@ -1923,7 +1921,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_s
 
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs)
 {
-    jl_value_t *ty = jl_check_binding_assign_value(b, mod, var, rhs);
+    jl_value_t *ty = jl_check_binding_assign_value(b, mod, var, rhs, "replaceglobal!");
     return replace_value(ty, &b->value, (jl_value_t*)b, expected, rhs, 1, mod, var);
 }
 
@@ -1937,12 +1935,12 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
                   jl_symbol_name(mod->name), jl_symbol_name(var));
     jl_value_t *ty = bpart->restriction;
     JL_GC_PROMISE_ROOTED(ty);
-    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, mod, var);
+    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, b, mod, var);
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs )
 {
-    jl_check_binding_assign_value(b, mod, var, rhs);
+    jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
     jl_value_t *old = NULL;
     if (jl_atomic_cmpswap(&b->value, &old, rhs))
         jl_gc_wb(b, rhs);

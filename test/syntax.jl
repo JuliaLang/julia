@@ -352,6 +352,12 @@ end
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
+# Using the value of a `global` declaration is allowed, provided that value came
+# from something that isn't another `global` declaration:
+@test_nowarn Meta.lower(Main, Meta.parse("foo = global bar = baz()"))
+
+@test_nowarn Meta.lower(Main, Meta.parse("begin global foo; global bar end"))
+
 # issue #15844
 function f15844(x)
     x
@@ -2596,6 +2602,15 @@ end
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
 end
 
+module M59008 # dotop with global LHS in macro
+using Test
+global a = 1
+macro counter()
+    :(a += 1)
+end
+@test @counter() === 2 === a
+end
+
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
 
@@ -4601,4 +4616,48 @@ end
     # Test with undefined macro
     @test_throws UndefVarError macroexpand(@__MODULE__, :(@undefined_macro(x)))
     @test_throws UndefVarError macroexpand!(@__MODULE__, :(@undefined_macro(x)))
+end
+
+# #59755 - Don't hoist global declarations out of toplevel-preserving syntax
+module M59755 end
+@testset "toplevel-preserving syntax" begin
+    Core.eval(M59755, :(if true
+                            global v1::Bool
+                        else
+                            const v1 = 1
+                        end))
+    @test !isdefined(M59755, :v1)
+    @test Base.binding_kind(M59755, :v1) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(M59755, :v1) == Bool
+
+    Core.eval(M59755, :(if false
+                            global v2::Bool
+                        else
+                            const v2 = 2
+                        end))
+    @test M59755.v2 === 2
+    @test Base.binding_kind(M59755, :v2) == Base.PARTITION_KIND_CONST
+
+    Core.eval(M59755, :(v3 = if true
+                            global v4::Bool
+                            4
+                        else
+                            const v4 = 5
+                            6
+                        end))
+    @test M59755.v3 == 4
+    @test !isdefined(M59755, :v4)
+    @test Base.binding_kind(M59755, :v4) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(M59755, :v4) == Bool
+
+    Core.eval(M59755, :(v5 = if false
+                            global v6::Bool
+                            4
+                        else
+                            const v6 = 5
+                            6
+                        end))
+    @test M59755.v5 === 6
+    @test M59755.v6 === 5
+    @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
 end

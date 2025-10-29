@@ -171,7 +171,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
 end
 
 _typename(@nospecialize a) = Union{}
-_typename(a::TypeVar) = Core.TypeName
+_typename(::TypeVar) = Core.TypeName
 function _typename(a::Union)
     ta = _typename(a.a)
     tb = _typename(a.b)

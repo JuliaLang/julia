@@ -3,9 +3,6 @@
 using Test
 using Distributed
 using Dates
-if !Sys.iswindows() && isa(stdin, Base.TTY)
-    import REPL
-end
 using Printf: @sprintf
 using Base: Experimental
 using Base.ScopedValues
@@ -119,7 +116,7 @@ cd(@__DIR__) do
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.
     if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
-        n = min(Sys.CPU_THREADS, length(tests))
+        n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
@@ -239,9 +236,9 @@ cd(@__DIR__) do
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
-                term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
+                term = Base.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
-                    REPL.Terminals.raw!(term, true)
+                    Base.Terminals.raw!(term, true)
                     while true
                         c = read(term, Char)
                         if c == '\x3'
@@ -258,7 +255,7 @@ cd(@__DIR__) do
                 catch e
                     isa(e, InterruptException) || rethrow()
                 finally
-                    REPL.Terminals.raw!(term, false)
+                    Base.Terminals.raw!(term, false)
                 end
             end
         end

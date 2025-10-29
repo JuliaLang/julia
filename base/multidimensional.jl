@@ -345,6 +345,8 @@ module IteratorsMD
     CartesianIndices((2:1:3, 1:2:3))
     ```
     """
+    (:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
+
     (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =
         CartesianIndices(map((i,j) -> i:j, Tuple(I), Tuple(J)))
     (:)(I::CartesianIndex{N}, S::CartesianIndex{N}, J::CartesianIndex{N}) where N =
