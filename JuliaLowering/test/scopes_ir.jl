@@ -1,4 +1,4 @@
-using JuliaLowering: @islocal
+using .JuliaLowering: @islocal
 using Base: @locals
 
 #*******************************************************************************

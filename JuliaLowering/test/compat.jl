@@ -1,6 +1,4 @@
 using Test
-using JuliaSyntax
-using JuliaLowering
 const JS = JuliaSyntax
 const JL = JuliaLowering
 

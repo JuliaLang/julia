@@ -1,7 +1,9 @@
+# Shared testing code which should be included before running individual test files.
 using Test
 
 using JuliaLowering
 using JuliaSyntax
+
 import FileWatching
 
 # The following are for docstrings testing. We need to load the REPL module
@@ -10,9 +12,9 @@ import FileWatching
 using Markdown
 import REPL
 
-using JuliaSyntax: sourcetext, set_numeric_flags
+using .JuliaSyntax: sourcetext, set_numeric_flags
 
-using JuliaLowering:
+using .JuliaLowering:
     SyntaxGraph, newnode!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
     makenode, makeleaf, setattr!, sethead!,
@@ -153,8 +155,9 @@ end
 
 function setup_ir_test_module(preamble)
     test_mod = Module(:TestMod)
-    JuliaLowering.include_string(test_mod, preamble)
+    Base.eval(test_mod, :(const JuliaLowering = $JuliaLowering))
     Base.eval(test_mod, :(const var"@ast_" = $(var"@ast_")))
+    JuliaLowering.include_string(test_mod, preamble)
     test_mod
 end
 

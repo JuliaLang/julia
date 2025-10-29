@@ -4,11 +4,6 @@
 
 test_mod = Module()
 
-Base.eval(test_mod, quote
-    using JuliaLowering: JuliaLowering, @ast, @chk
-    using JuliaSyntax
-end)
-
 #-------------------------------------------------------------------------------
 @testset "Tail position" begin
 

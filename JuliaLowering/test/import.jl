@@ -2,18 +2,7 @@
 
 test_mod = Module()
 
-JuliaLowering.include_string(test_mod, """
-    using JuliaSyntax
-    using JuliaLowering: SyntaxTree
-    using JuliaLowering: SyntaxTree as st
-    import JuliaLowering: SyntaxTree as st1, SyntaxTree as st2
-""")
-@test test_mod.SyntaxTree === JuliaLowering.SyntaxTree
-@test test_mod.st === JuliaLowering.SyntaxTree
-@test test_mod.st1 === JuliaLowering.SyntaxTree
-@test test_mod.st2 === JuliaLowering.SyntaxTree
-@test test_mod.parsestmt === JuliaSyntax.parsestmt
-
+# Test attributes are correctly set for export/public
 JuliaLowering.include_string(test_mod, """
 x = 1
 y = 2
@@ -25,21 +14,37 @@ public y
 @test Base.ispublic(test_mod, :y)
 @test !Base.isexported(test_mod, :y)
 
+# Test various forms of `using`
 C = JuliaLowering.include_string(test_mod, """
 module C
     module D
+        export x
+        public y, f
+        x = [101]
+        y = [202]
+
         function f()
             "hi"
         end
     end
     module E
-        using ...C.D: f
+        using ..D: f
+        using ..D
+        using .D: y as D_y
+        using .D: x as D_x_2, y as D_y_2
+        import .D.y as D_y_3
     end
 end
 """)
 @test C.D.f === C.E.f
+@test C.D.x === C.E.x
+@test C.D.y === C.E.D_y
+@test C.D.x === C.E.D_x_2
+@test C.D.y === C.E.D_y_2
+@test C.D.y === C.E.D_y_3
 
-# Test that `using` F brings in the symbol G immediately
+# Test that using F brings in the exported symbol G immediately and that it can
+# be used next in the import list.
 F = JuliaLowering.include_string(test_mod, """
 module F
     export G

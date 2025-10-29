@@ -4,10 +4,15 @@ test_mod = Module(:macro_test)
 Base.eval(test_mod, :(const var"@ast" = $(JuliaLowering.var"@ast")))
 Base.eval(test_mod, :(const var"@K_str" = $(JuliaLowering.var"@K_str")))
 
+# These libraries may either be packages or vendored into Base - need to pull
+# them in via relative paths in the `using` statements below.
+Base.eval(test_mod, :(const JuliaLowering = $(JuliaLowering)))
+Base.eval(test_mod, :(const JuliaSyntax = $(JuliaSyntax)))
+
 JuliaLowering.include_string(test_mod, raw"""
 module M
-    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope
-    using JuliaSyntax
+    using ..JuliaLowering: JuliaLowering, adopt_scope
+    using ..JuliaSyntax
 
     # Introspection
     macro __MODULE__()
