@@ -483,4 +483,23 @@ end
     @test_broken JuliaLowering.eval(test_mod, code) == ("outer x", "inner x")
 end
 
+@testset "toplevel macro hygiene" begin
+    @eval test_mod global mod = $test_mod
+    @eval test_mod module MacroMod
+    global mod = MacroMod
+    macro escaped_toplevel()
+        esc(Expr(:toplevel, :(mod)))
+    end
+    macro inner_escaped_toplevel()
+        Expr(:toplevel, esc(:(mod)))
+    end
+    macro unescaped_toplevel()
+        Expr(:toplevel, :(mod))
+    end
+    end
+    @test JuliaLowering.include_string(test_mod, "MacroMod.@escaped_toplevel") === test_mod
+    @test JuliaLowering.include_string(test_mod, "MacroMod.@inner_escaped_toplevel") === test_mod
+    @test JuliaLowering.include_string(test_mod, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+end
+
 end
