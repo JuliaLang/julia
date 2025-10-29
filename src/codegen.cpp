@@ -4137,7 +4137,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (argv[2].constant) {
             if (!jl_is_long(argv[2].constant))
                 return false;
-            auto nel = jl_unbox_long(argv[2].constant);
+            size_t nel = jl_unbox_long(argv[2].constant);
             if (nel < 0)
                 return false;
             *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
@@ -8935,7 +8935,7 @@ static jl_llvm_functions_t
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
                 struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
-                ssize_t i = lineidx.line;
+                size_t i = lineidx.line;
                 if (i < 0) // pc out of range: broken debuginfo?
                     return false;
                 if (i == 0 && lineidx.to == 0) // no update
