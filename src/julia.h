@@ -694,11 +694,11 @@ typedef struct _jl_weakref_t {
 //
 // We may make this list more permissive in the future.
 //
-// Finally, PARTITION_KIND_BACKDATED_CONST is a special case, and the only case where we may replace an
-// existing partition by a different partition kind in the same world age. As such, it needs special
-// support in inference. Any partition kind that may be replaced by a PARTITION_KIND_BACKDATED_CONST
-// must be inferred accordingly. PARTITION_KIND_BACKDATED_CONST is intended as a temporary compatibility
-// measure. The following kinds may be replaced by PARTITION_KIND_BACKDATED_CONST:
+// Finally, PARTITION_KIND_BACKDATED_* are special cases, and the only cases where we may replace an
+// existing partition by a different partition kind in the same world age. As such, they need special
+// support in inference. Any partition kind that may be replaced by a PARTITION_KIND_BACKDATED_*
+// must be inferred accordingly. PARTITION_KIND_BACKDATED_* are intended as a temporary compatibility
+// measure. The following kinds may be replaced by any backdated partition kind:
 //  - PARTITION_KIND_GUARD
 //  - PARTITION_KIND_FAILED
 //  - PARTITION_KIND_DECLARED
@@ -743,11 +743,17 @@ enum jl_partition_kind {
     // Backated constant. A constant that was backdated for compatibility. In all other
     // ways equivalent to PARTITION_KIND_CONST, but prints a warning on access
     PARTITION_KIND_BACKDATED_CONST = 0xb,
+    // Backdated import. An explicit import that was backdated for compatibility. In all other
+    // ways equivalent to PARTITION_KIND_IMPORTED, but prints a warning on access
+    PARTITION_KIND_BACKDATED_IMPORT = 0xc,
+    // Backdated global. A global that was backdated for compatibility. In all other
+    // ways equivalent to PARTITION_KIND_GLOBAL, but prints a warning on access
+    PARTITION_KIND_BACKDATED_GLOBAL = 0xd,
 
     // This is not a real binding kind, but can be used to ask for a re-resolution
     // of the implicit binding kind
-    PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE = 0xc,
-    PARTITION_FAKE_KIND_CYCLE = 0xd
+    PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE = 0xe,
+    PARTITION_FAKE_KIND_CYCLE = 0xf
 };
 
 static const uint8_t PARTITION_MASK_KIND = 0x0f;
