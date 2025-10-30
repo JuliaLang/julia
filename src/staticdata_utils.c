@@ -234,7 +234,10 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
             continue;
         jl_method_instance_t *mi = ci->def;
         jl_method_t *m = mi->def.method;
-        if (ci->inferred && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+        void *code = (jl_options.serialize_machine_code_only) ? (void *)ci->invoke : (void *)ci->inferred;
+        int for_serialized_method = jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module);
+        int has_code = code != NULL;
+        if (has_code && for_serialized_method) {
             int found = has_backedge_to_worklist(mi, &visited, &stack);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);

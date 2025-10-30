@@ -62,6 +62,7 @@ struct JLOptions
     safe_crash_log_file::Ptr{UInt8}
     task_metrics::Int8
     timeout_for_safepoint_straggler_s::Int16
+    serialize_machine_code_only::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

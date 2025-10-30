@@ -184,14 +184,20 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
         int do_compile = 0;
         if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
-            if (inferred &&
-                inferred != jl_nothing &&
-                jl_ir_flag_inferred(inferred) &&
-                (jl_ir_inlining_cost(inferred) == UINT16_MAX)) {
-                do_compile = 1;
-            }
-            else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {
-                do_compile = 1;
+            if (jl_options.serialize_machine_code_only) {
+                if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL) {
+                    do_compile = 1;
+                }
+            } else {
+                if (inferred &&
+                    inferred != jl_nothing &&
+                    jl_ir_flag_inferred(inferred) &&
+                    (jl_ir_inlining_cost(inferred) == UINT16_MAX)) {
+                    do_compile = 1;
+                }
+                else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {
+                    do_compile = 1;
+                }
             }
         }
         if (do_compile) {

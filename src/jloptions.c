@@ -95,6 +95,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // safe_crash_log_file
                         0, // task_metrics
                         25, // timeout_for_safepoint_straggler_s
+                        0, // serialize_machine_code_only
     };
     jl_options_initialized = 1;
 }
@@ -245,6 +246,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_warn_scope,
            opt_inline,
            opt_polly,
+           opt_serialize_machine_code_only,
            opt_timeout_for_safepoint_straggler,
            opt_trace_compile,
            opt_trace_compile_timing,
@@ -325,6 +327,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "warn-scope",      required_argument, 0, opt_warn_scope },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
+        { "serialize-machine-code-only", no_argument, 0, opt_serialize_machine_code_only },
         { "timeout-for-safepoint-straggler", required_argument, 0, opt_timeout_for_safepoint_straggler },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
@@ -892,6 +895,9 @@ restart_switch:
             if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
                 jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
             jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
+            break;
+        case opt_serialize_machine_code_only:
+            jl_options.serialize_machine_code_only = 1;
             break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))

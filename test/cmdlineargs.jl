@@ -1132,3 +1132,8 @@ end
     timeout = 120
     @test parse(Int,read(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, String)) == timeout
 end
+
+@testset "--serialize-machine-code-only" begin
+    exename = `$(Base.julia_cmd())`
+    @test parse(Int,read(`$exename --serialize-machine-code-only -E "Base.JLOptions().serialize_machine_code_only"`, String)) == 1
+end

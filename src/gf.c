@@ -2882,6 +2882,10 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
         if (jl_atomic_load_relaxed(&((jl_code_instance_t*)codeinst)->invoke) == jl_fptr_const_return)
             return; // probably not a good idea to generate code
         jl_atomic_store_relaxed(&((jl_code_instance_t*)codeinst)->precompile, 1);
+        if (jl_options.serialize_machine_code_only) {
+            // also trigger compilation so that JIT-based compilation heuristics can succeed
+            (void)jl_compile_method_internal(mi, world);
+        }
     }
 }
 
