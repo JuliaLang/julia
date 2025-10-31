@@ -1928,6 +1928,8 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *mc JL_PR
 
 static jl_method_instance_t *jl_mt_assoc_by_type(jl_methcache_t *mc JL_PROPAGATES_ROOT, jl_datatype_t *tt JL_MAYBE_UNROOTED, size_t world)
 {
+    if (!tt || !jl_is_dispatch_tuple(tt))
+        return NULL;
     jl_typemap_entry_t *entry = jl_mt_find_cache_entry(mc, tt, world);
     if (entry)
         return entry->func.linfo;
