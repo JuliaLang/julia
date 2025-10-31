@@ -1659,3 +1659,12 @@ module DocReturnValue
     end
     @test result11 isa Base.Docs.Binding
 end
+
+# https://github.com/JuliaLang/julia/issues/59949
+struct Foo59949{T} end
+
+"""
+Bar59949{T}
+"""
+Bar59949{T} = Foo59949{T}
+@test docstrings_equal(@doc(Bar59949), doc"Bar59949{T}")
