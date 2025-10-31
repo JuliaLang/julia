@@ -26,17 +26,13 @@ if !Sys.iswindows()
         std = readuntil(ptm, "julia>")
         # check for newlines instead of equality with "julia>" because color may be on
         occursin("\n", std) && @info "There was output before the julia prompt:\n$std"
-        # Exit the REPL cleanly to ensure all trace-compile output is flushed
-        write(ptm, '\x04')  # CTRL_D
-        # Read until EOF to ensure all output is consumed before the process exits
-        timedwait(5.0) do
-            eof(ptm) && return true
-            readavailable(ptm)
-            return false
-        end
-        close(ptm)
-        wait(p)
+        write(ptm, "\n")  # another prompt
+        readuntil(ptm, "julia>")
+        write(ptm, "\n")  # another prompt
+        readuntil(ptm, "julia>")
+        sleep(1) # sometimes precompiles output just after prompt appears
         tracecompile_out = read(f, String)
+        close(ptm) # close after reading so we don't get precompiles from error shutdown
 
         # given this test checks that startup is snappy, it's best to add workloads to
         # contrib/generate_precompile.jl rather than increase this number. But if that's not
