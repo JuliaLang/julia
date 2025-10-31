@@ -142,7 +142,9 @@ INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.
 # Compilation database generation
 .PHONY: regenerate-compile_commands.json
 regenerate-compile_commands.json:
-	@{ \
+	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
+	echo "TMPFILE-flisp = $$TMPFILE"; \
+	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		echo "["; \
 		first=true; \
@@ -159,12 +161,11 @@ regenerate-compile_commands.json:
 			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
 		done; \
 		echo "]"; \
-	} > $@.tmp
-	@# This ensures we replace the file atomically, and avoid spurious rewrites
-	@if ! cmp -s $@.tmp $@; then \
-		mv $@.tmp $@; \
+	} > $$TMPFILE; \
+	if ! cmp -s $$TMPFILE $(BUILDDIR)/compile_commands.json; then \
+		mv $$TMPFILE $(BUILDDIR)/compile_commands.json; \
 	else \
-		rm -f $@.tmp; \
+		rm -f $$TMPFILE; \
 	fi
 
 compile-database: regenerate-compile_commands.json
