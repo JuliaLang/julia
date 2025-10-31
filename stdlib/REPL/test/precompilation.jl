@@ -30,7 +30,6 @@ if !Sys.iswindows()
         readuntil(ptm, "julia>")
         write(ptm, "\n")  # another prompt
         readuntil(ptm, "julia>")
-        sleep(1) # sometimes precompiles output just after prompt appears
         tracecompile_out = read(f, String)
         close(ptm) # close after reading so we don't get precompiles from error shutdown
 
