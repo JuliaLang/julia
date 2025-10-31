@@ -77,6 +77,7 @@ struct implicit_search_resolution {
     size_t min_world;
     size_t max_world;
     int saw_cycle;
+    int should_be_reexported;  // Set if resolved through a using with JL_MODULE_USING_REEXPORT
     //// Not semantic, but used for reflection.
     // If non-null, the unique module from which this binding was imported
     jl_module_t *debug_only_import_from;
@@ -93,6 +94,7 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     to_update->min_world = WORLDMAX(to_update->min_world, resolution.min_world);
     to_update->max_world = WORLDMIN(to_update->max_world, resolution.max_world);
     to_update->saw_cycle |= resolution.saw_cycle;
+    to_update->should_be_reexported |= resolution.should_be_reexported;
     if (resolution.ultimate_kind == PARTITION_FAKE_KIND_CYCLE) {
         // Cycles get ignored. This causes the resolution resolution to only be partial, so we can't
         // cache it. This gets tracked in saw_cycle;
@@ -130,6 +132,10 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
 static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, struct implicit_search_gap gap, struct implicit_search_resolution resolution)
 {
     size_t new_kind = resolution.ultimate_kind | gap.inherited_flags;
+    // If the resolution indicates this should be reexported, add the implicit export flag
+    if (resolution.should_be_reexported) {
+        new_kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
+    }
     size_t new_max_world = gap.max_world < resolution.max_world ? gap.max_world : resolution.max_world;
     size_t new_min_world = gap.min_world > resolution.min_world ? gap.min_world : resolution.min_world;
     jl_binding_partition_t *next = gap.replace;
@@ -210,7 +216,7 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
         modstack_t *tmp = st;
         for (; tmp != NULL; tmp = tmp->prev) {
             if (tmp->b == b) {
-                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, NULL, NULL };
+                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, 0, NULL, NULL };
             }
         }
     }
@@ -223,7 +229,7 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
     struct implicit_search_resolution depimpstate;
     size_t min_world = 0;
     size_t max_world = ~(size_t)0;
-    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, NULL, NULL };
+    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL };
 
     JL_LOCK(&m->lock);
     int i = (int)module_usings_length(m) - 1;
@@ -245,16 +251,22 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
         max_world = WORLDMIN(max_world, data.max_world);
 
         jl_module_t *imp = data.mod;
+        uint8_t has_reexports = jl_atomic_load_relaxed(&imp->has_reexports);
         JL_GC_PROMISE_ROOTED(imp);
         jl_binding_t *tempb = jl_get_module_binding(imp, var, 0);
         if (!tempb) {
             // If the binding has never been allocated, it could not have been marked exported, so
             // it is irrelevant for our resolution. We can move on.
-            continue;
+            // Exception: if this module has reexports, the binding might be reexported from another module,
+            // so we need to create the binding to trigger implicit resolution
+            if (!has_reexports)
+                continue;
+            tempb = jl_get_module_binding(imp, var, 1);  // Create the binding
         }
 
         struct implicit_search_gap gap;
-        jl_binding_partition_t *tempbpart = jl_get_binding_partition_if_present(tempb, world, &gap);
+        jl_binding_partition_t *tempbpart;
+        tempbpart = jl_get_binding_partition_if_present(tempb, world, &gap);
         size_t tempbpart_flags = tempbpart ? (tempbpart->kind & PARTITION_MASK_FLAG) : gap.inherited_flags;
 
         while (tempbpart && jl_bkind_is_some_explicit_import(jl_binding_kind(tempbpart))) {
@@ -272,7 +284,8 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
         max_world = WORLDMIN(max_world, tembppart_max_world);
         min_world = WORLDMAX(min_world, tembppart_min_world);
 
-        if (!(tempbpart_flags & PARTITION_FLAG_EXPORTED)) {
+        uint8_t is_any_exported = jl_bpart_is_exported(tempbpart_flags);
+        if (!is_any_exported && (tempbpart_valid || !has_reexports)) {
             // Partition not exported - skip.
             continue;
         }
@@ -292,9 +305,15 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
             comparison = &depimpstate;
         }
 
-        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, NULL, NULL };
+        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL };
         if (!tempbpart_valid) {
             imp_resolution = jl_resolve_implicit_import(tempb, &top, world, trust_cache);
+            // imp_resolution is the resolution for import into tempb (which may have been cached for tempb
+            // if we're not in a cycle). `imp_resolution.should_be_reexported` indicates whether the binding
+            // should be reexported from `imp`, not `m`, so check here.
+            if (!(tempbpart_flags & PARTITION_FLAG_EXPORTED) && !imp_resolution.should_be_reexported)
+                continue;
+            imp_resolution.should_be_reexported = 0;
         } else {
             enum jl_partition_kind kind = jl_binding_kind(tempbpart);
             if (kind == PARTITION_KIND_IMPLICIT_GLOBAL) {
@@ -311,6 +330,10 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
                 imp_resolution.debug_only_ultimate_binding = tempb;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
             }
+        }
+        // If this using has the reexport flag, mark that the binding should be reexported
+        if (data.flags & JL_MODULE_USING_REEXPORT) {
+            imp_resolution.should_be_reexported = 1;
         }
         imp_resolution.debug_only_import_from = imp;
         update_implicit_resolution(comparison, imp_resolution);
@@ -516,6 +539,7 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
+    jl_atomic_store_relaxed(&m->has_reexports, 0);
     m->file = jl_empty_sym;
     m->line = 0;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
@@ -1340,38 +1364,61 @@ void jl_module_initial_using(jl_module_t *to, jl_module_t *from)
     struct _jl_module_using new_item = {
         .mod = from,
         .min_world = 0,
-        .max_world = ~(size_t)0
+        .max_world = ~(size_t)0,
+        .flags = 0
     };
     arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
-    memcpy(&to->usings.items[to->usings.len-3], &new_item, sizeof(struct _jl_module_using));
+    memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
     jl_gc_wb(to, from);
     jl_add_usings_backedge(from, to);
 }
 
-JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
+JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags)
 {
     if (to == from)
         return;
     check_safe_import_from(from);
     JL_LOCK(&world_counter_lock);
     JL_LOCK(&to->lock);
+
+    // Check if this module is already in the usings list
+    size_t existing_idx = (size_t)-1;
     for (size_t i = 0; i < module_usings_length(to); i++) {
         if (from == module_usings_getmod(to, i)) {
-            JL_UNLOCK(&to->lock);
-            JL_UNLOCK(&world_counter_lock);
-            return;
+            existing_idx = i;
+            break;
         }
     }
 
     size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
-    struct _jl_module_using new_item = {
-        .mod = from,
-        .min_world = new_world,
-        .max_world = ~(size_t)0
-    };
-    arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
-    memcpy(&to->usings.items[to->usings.len-3], &new_item, sizeof(struct _jl_module_using));
-    jl_gc_wb(to, from);
+
+    if (existing_idx == (size_t)-1) {
+        // Add new using entry
+        struct _jl_module_using new_item = {
+            .mod = from,
+            .min_world = new_world,
+            .max_world = ~(size_t)0,
+            .flags = flags
+        };
+        arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
+        memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
+        jl_gc_wb(to, from);
+    } else {
+        // Update existing entry to add new flags
+        struct _jl_module_using *existing = module_usings_getidx(to, existing_idx);
+        // Early out if reexport is already set (strongest form), or if all requested flags are already set
+        if ((existing->flags & JL_MODULE_USING_REEXPORT) || (existing->flags & flags) == flags) {
+            JL_UNLOCK(&to->lock);
+            JL_UNLOCK(&world_counter_lock);
+            return;
+        }
+        existing->flags |= flags;
+    }
+
+    // Set has_reexports flag if this is a reexport using
+    if (flags & JL_MODULE_USING_REEXPORT) {
+        jl_atomic_store_relaxed(&to->has_reexports, 1);
+    }
 
     JL_UNLOCK(&to->lock);
 
@@ -1384,7 +1431,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
         if ((void*)b == jl_nothing)
             break;
         jl_binding_partition_t *frombpart = jl_get_binding_partition(b, new_world);
-        if (frombpart->kind & PARTITION_FLAG_EXPORTED) {
+        if (jl_bpart_is_exported(frombpart->kind)) {
             jl_sym_t *var = b->globalref->name;
             jl_binding_t *tob = jl_get_module_binding(to, var, 0);
             if (tob) {
@@ -1494,7 +1541,7 @@ JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    return b && (bpart->kind & PARTITION_FLAG_EXPORTED);
+    return b && jl_bpart_is_exported(bpart->kind);
 }
 
 JL_DLLEXPORT int jl_module_public_p(jl_module_t *m, jl_sym_t *var)
@@ -1715,6 +1762,10 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         assert(!restriction_val);
         struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, new_world, 0);
         new_bpart->kind = resolution.ultimate_kind | (kind & PARTITION_MASK_FLAG);
+        // If the resolution indicates this should be reexported, add the implicit export flag
+        if (resolution.should_be_reexported) {
+            new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
+        }
         new_bpart->restriction = resolution.binding_or_const;
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
@@ -1731,7 +1782,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     jl_atomic_store_relaxed(&new_bpart->next, old_bpart);
     jl_gc_wb_fresh(new_bpart, old_bpart);
 
-    if (((old_bpart->kind & PARTITION_FLAG_EXPORTED) || (kind & PARTITION_FLAG_EXPORTED)) && jl_require_world != ~(size_t)0) {
+    if ((jl_bpart_is_exported(old_bpart->kind) || jl_bpart_is_exported(kind)) && jl_require_world != ~(size_t)0) {
         jl_atomic_store_release(&b->globalref->mod->export_set_changed_since_require_world, 1);
     }
 
@@ -1969,8 +2020,60 @@ void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
     jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)name);
 }
 
+static void _materialize_reexported_bindings(jl_module_t *m, size_t world, jl_array_t *visited_modules)
+{
+    size_t len = jl_array_len(visited_modules);
+    for (size_t i = 0; i < len; i++) {
+        if (jl_array_ptr_ref(visited_modules, i) == (jl_value_t*)m)
+            return;
+    }
+    jl_array_ptr_1d_push(visited_modules, (jl_value_t*)m);
+
+    JL_LOCK(&m->lock);
+    size_t usings_len = module_usings_length(m);
+    JL_UNLOCK(&m->lock);
+
+    for (size_t i = 0; i < usings_len; i++) {
+        JL_LOCK(&m->lock);
+        struct _jl_module_using data = *module_usings_getidx(m, i);
+        JL_UNLOCK(&m->lock);
+
+        if (data.min_world > world || data.max_world < world)
+            continue;
+
+        if (data.flags & JL_MODULE_USING_REEXPORT) {
+            jl_module_t *from = data.mod;
+            JL_GC_PROMISE_ROOTED(from);
+
+            _materialize_reexported_bindings(from, world, visited_modules);
+
+            jl_svec_t *table = jl_atomic_load_relaxed(&from->bindings);
+            for (size_t j = 0; j < jl_svec_len(table); j++) {
+                jl_binding_t *b = (jl_binding_t*)jl_svecref(table, j);
+                if ((void*)b == jl_nothing)
+                    break;
+
+                jl_binding_partition_t *frombpart = jl_get_binding_partition(b, world);
+                if (jl_bpart_is_exported(frombpart->kind)) {
+                    jl_sym_t *var = b->globalref->name;
+                    jl_binding_t *tob = jl_get_module_binding(m, var, 1);
+                    jl_get_binding_partition(tob, world);  // Force implicit resolution
+                }
+                table = jl_atomic_load_relaxed(&from->bindings);
+            }
+        }
+    }
+}
+
 void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
 {
+    // Materialize reexported bindings first
+    size_t world = jl_current_task->world_age;
+    jl_array_t *visited_modules = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&visited_modules);
+    _materialize_reexported_bindings(m, world, visited_modules);
+    JL_GC_POP();
+
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
@@ -1982,6 +2085,7 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
         enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) ||
+             jl_bpart_is_exported(bpart->kind) ||
              (imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) ||
              (usings && kind == PARTITION_KIND_EXPLICIT) ||
              ((kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_DECLARED) && (all || main_public))) &&
@@ -1992,13 +2096,22 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
 
 void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
 {
+    size_t world = jl_current_task->world_age;
+
+    // First, materialize all reexported bindings
+    jl_array_t *visited_modules = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&visited_modules);
+    _materialize_reexported_bindings(m, world, visited_modules);
+    JL_GC_POP();
+
+    // Now collect all exported bindings
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-        if ((bpart->kind & PARTITION_FLAG_EXPORTED) && (all || !(bpart->kind & PARTITION_FLAG_DEPRECATED)))
+        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+        if (jl_bpart_is_exported(bpart->kind) && (all || !(bpart->kind & PARTITION_FLAG_DEPRECATED)))
             _append_symbol_to_bindings_array(a, b->globalref->name);
     }
 }
