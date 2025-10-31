@@ -253,11 +253,14 @@ const PARTITION_KIND_BACKDATED_CONST    = 0xb
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
+const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
 
 const PARTITION_MASK_KIND         = 0x0f
 const PARTITION_MASK_FLAG         = 0xf0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
+
+const JL_MODULE_USING_REEXPORT = 0x1
 
 is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
