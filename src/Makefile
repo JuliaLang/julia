@@ -724,7 +724,7 @@ regenerate-compile_commands:
 compile-database: regenerate-compile_commands
 	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
-	@echo "Compilation database created: $<"
+	@echo "Compilation database created for src"
 
 .FORCE:
 .PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database .FORCE

@@ -168,7 +168,7 @@ regenerate-compile_commands:
 	fi
 
 compile-database: regenerate-compile_commands
-	@echo "Compilation database created for flisp: $<"
+	@echo "Compilation database created for src/flisp"
 
 clean:
 	rm -f $(BUILDDIR)/*.o

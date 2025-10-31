@@ -113,7 +113,7 @@ regenerate-compile_commands:
 	fi
 
 compile-database: regenerate-compile_commands
-	@echo "Compilation database created in support: $<"
+	@echo "Compilation database created for src/support"
 
 clean:
 	rm -f $(BUILDDIR)/*.o
