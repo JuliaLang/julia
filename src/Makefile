@@ -259,7 +259,7 @@ endif
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
-release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands.json
+release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -655,8 +655,8 @@ clean-analyzegc:
 	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 
 # Compilation database generation using existing clang infrastructure
-.PHONY: regenerate-compile_commands.json
-regenerate-compile_commands.json:
+.PHONY: regenerate-compile_commands
+regenerate-compile_commands:
 	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
 	echo "TMPFILE-src = $$TMPFILE"; \
 	{ \
@@ -722,7 +722,7 @@ regenerate-compile_commands.json:
 		rm -f $$TMPFILE; \
 	fi
 
-compile-database: regenerate-compile_commands.json
+compile-database: regenerate-compile_commands
 	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
 	@echo "Compilation database created: $<"

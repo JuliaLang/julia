@@ -61,9 +61,9 @@ DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
 
 default: release
 
-release: $(BUILDDIR)/$(EXENAME)$(EXE) regenerate-compile_commands.json
+release: $(BUILDDIR)/$(EXENAME)$(EXE) regenerate-compile_commands
 
-debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) regenerate-compile_commands.json
+debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) regenerate-compile_commands
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -140,8 +140,8 @@ CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) 
 INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.c:read.c flisp.c:equal.c
 
 # Compilation database generation
-.PHONY: regenerate-compile_commands.json
-regenerate-compile_commands.json:
+.PHONY: regenerate-compile_commands
+regenerate-compile_commands:
 	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
 	echo "TMPFILE-flisp = $$TMPFILE"; \
 	{ \
@@ -168,7 +168,7 @@ regenerate-compile_commands.json:
 		rm -f $$TMPFILE; \
 	fi
 
-compile-database: regenerate-compile_commands.json
+compile-database: regenerate-compile_commands
 	@echo "Compilation database created for flisp: $<"
 
 clean:

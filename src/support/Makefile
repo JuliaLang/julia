@@ -53,8 +53,8 @@ $(BUILDDIR)/host/Makefile:
 	@printf "%s\n" 'BUILDING_HOST_TOOLS=1' >> $@
 	@printf "%s\n" 'include $(SRCDIR)/Makefile' >> $@
 
-release: $(BUILDDIR)/libsupport.a regenerate-compile_commands.json
-debug: $(BUILDDIR)/libsupport-debug.a regenerate-compile_commands.json
+release: $(BUILDDIR)/libsupport.a regenerate-compile_commands
+debug: $(BUILDDIR)/libsupport-debug.a regenerate-compile_commands
 
 $(BUILDDIR)/libsupport.a: $(OBJS) | $(BUILDIR)
 	rm -rf $@
@@ -78,8 +78,8 @@ CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) 
 INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
 
 # Compilation database generation
-.PHONY: regenerate-compile_commands.json
-regenerate-compile_commands.json:
+.PHONY: regenerate-compile_commands
+regenerate-compile_commands:
 	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
 	echo "TMPFILE-support = $$TMPFILE"; \
 	{ \
@@ -113,7 +113,7 @@ regenerate-compile_commands.json:
 		rm -f $$TMPFILE; \
 	fi
 
-compile-database: regenerate-compile_commands.json
+compile-database: regenerate-compile_commands
 	@echo "Compilation database created in support: $<"
 
 clean:
