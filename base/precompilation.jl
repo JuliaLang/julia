@@ -608,11 +608,13 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     logio = io
     logcalls = nothing
     if _from_loading
-        if !isinteractive()
+        if isinteractive()
+            logcalls = CoreLogging.Info # sync with Base.compilecache
+        else
             logio = IOContext{IO}(devnull)
             fancyprint = false
+            logcalls = CoreLogging.Debug # sync with Base.compilecache
         end
-        logcalls = isinteractive() ? CoreLogging.Info : CoreLogging.Debug # sync with Base.compilecache
     end
 
     nconfigs = length(configs)
@@ -1068,7 +1070,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             # Heuristic for when precompilation is disabled, which must not over-estimate however for any dependent
             # since it will also block precompilation of all dependents
             if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
-                Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
+                @lock print_lock begin
+                    Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
+                end
                 notify(was_processed[pkg_config])
                 continue
             end
@@ -1139,8 +1143,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                         push!(freshpaths, freshpath)
                                         return nothing # returning nothing indicates another process did the recompile
                                     end
-                                    logcalls === nothing || @lock print_lock begin
-                                        Base.@logmsg logcalls "Precompiling $(repr("text/plain", pkg))"
+                                    logcalls === CoreLogging.Debug && @lock print_lock begin
+                                        @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
                                     Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts)
