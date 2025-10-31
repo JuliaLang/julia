@@ -1033,9 +1033,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             if interrupted_or_done[]
                                 return
                             end
-                            # for extensions, any extension in our direct dependencies is one we have a right to load
-                            # for packages, we may load any extension (all possible triggers are accounted for above)
-                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), direct_deps[pkg]) : nothing
+                            # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
+                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
