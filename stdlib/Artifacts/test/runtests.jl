@@ -130,19 +130,20 @@ end
     # Next, fuzz it out!  Ensure that we exactly reconstruct our platforms!
     platforms = Platform[]
     for libgfortran_version in (v"3", v"4", v"5", nothing),
-        libstdcxx_version in (v"3.4.11", v"3.4.19", nothing),
+        cxxlib in ("libstdcxx",)
+        cxxlib_version in (v"3.4.11", v"3.4.19", nothing),
         cxxstring_abi in ("cxx03", "cxx11", nothing)
 
         for arch in ("x86_64", "i686", "aarch64", "armv7l"),
             libc in ("glibc", "musl")
 
-            push!(platforms, Platform(arch, "linux"; libc, libgfortran_version, libstdcxx_version, cxxstring_abi))
+            push!(platforms, Platform(arch, "linux"; libc, libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
         end
-        push!(platforms, Platform("x86_64", "windows"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("i686", "windows"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("x86_64", "macOS"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("aarch64", "macOS"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("x86_64", "FreeBSD"; libgfortran_version, libstdcxx_version, cxxstring_abi))
+        push!(platforms, Platform("x86_64", "windows"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("i686", "windows"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("x86_64", "macOS"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("aarch64", "macOS"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("x86_64", "FreeBSD"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
     end
 
     for p in platforms
