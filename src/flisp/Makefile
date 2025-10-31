@@ -143,7 +143,6 @@ INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
 	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
-	echo "TMPFILE-flisp = $$TMPFILE"; \
 	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		echo "["; \

@@ -658,7 +658,6 @@ clean-analyzegc:
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
 	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
-	echo "TMPFILE-src = $$TMPFILE"; \
 	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		CLANG_TOOLING_CXX_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_CXX_FLAGS))"; \

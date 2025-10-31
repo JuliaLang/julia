@@ -81,7 +81,6 @@ INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
 	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
-	echo "TMPFILE-support = $$TMPFILE"; \
 	{ \
 		CLANG_TOOLING_S_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS))"; \
