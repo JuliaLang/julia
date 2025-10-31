@@ -1,0 +1,35 @@
+From ff5091aa9f73802e894b1cbdf24ab84e103200e2 Mon Sep 17 00:00:00 2001
+From: Andy Pan <i@andypan.me>
+Date: Thu, 12 Dec 2024 12:48:56 +0000
+Subject: [PATCH] async-thread: avoid closing eventfd twice
+
+When employing eventfd for socketpair, there is only one file
+descriptor. Closing that fd twice might result in fd corruption.
+Thus, we should avoid closing the eventfd twice, following the
+pattern in lib/multi.c.
+
+Fixes #15725
+Closes #15727
+Reported-by: Christian Heusel
+---
+ lib/asyn-thread.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/lib/asyn-thread.c b/lib/asyn-thread.c
+index a58e4b790494..32d496b107cb 100644
+--- a/lib/asyn-thread.c
++++ b/lib/asyn-thread.c
+@@ -195,9 +195,11 @@ void destroy_thread_sync_data(struct thread_sync_data *tsd)
+    * close one end of the socket pair (may be done in resolver thread);
+    * the other end (for reading) is always closed in the parent thread.
+    */
++#ifndef USE_EVENTFD
+   if(tsd->sock_pair[1] != CURL_SOCKET_BAD) {
+     wakeup_close(tsd->sock_pair[1]);
+   }
++#endif
+ #endif
+ 
+   memset(tsd, 0, sizeof(*tsd));
+-- 
+2.47.1

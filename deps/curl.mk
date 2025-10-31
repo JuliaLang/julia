@@ -34,6 +34,10 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
 	echo 1 > $@
 
+$(SRCCACHE)/curl-$(CURL_VER)/curl-eventfd-double-close.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+	cd $(SRCCACHE)/curl-$(CURL_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/curl-eventfd-double-close.patch
+	echo 1 > $@
+
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
@@ -65,7 +69,7 @@ CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted $(SRCCACHE)/curl-$(CURL_VER)/curl-eventfd-double-close.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \
