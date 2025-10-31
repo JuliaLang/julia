@@ -587,9 +587,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             triggers[ext] = Base.PkgId[pkg] # depends on parent package
             all_triggers_available = true
             for trigger_uuid in trigger_uuids
-                trigger_name = env.names[trigger_uuid]
-                if trigger_uuid in keys(env.deps)
-                    push!(triggers[ext], Base.PkgId(trigger_uuid, trigger_name))
+                trigger_name = Base.PkgId(trigger_uuid, env.names[trigger_uuid])
+                if trigger_uuid in keys(env.deps) || Base.in_sysimage(trigger_name)
+                    push!(triggers[ext], trigger_name)
                 else
                     all_triggers_available = false
                     break
@@ -619,6 +619,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     for ext_a in keys(ext_to_parent)
         for ext_b in keys(ext_to_parent)
             if triggers[ext_a] ⊋ triggers[ext_b]
+                push!(triggers[ext_a], ext_b)
                 push!(direct_deps[ext_a], ext_b)
             end
         end
@@ -1033,9 +1034,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             if interrupted_or_done[]
                                 return
                             end
-                            # for extensions, any extension in our direct dependencies is one we have a right to load
-                            # for packages, we may load any extension (all possible triggers are accounted for above)
-                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), direct_deps[pkg]) : nothing
+                            # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
+                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
