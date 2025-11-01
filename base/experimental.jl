@@ -695,4 +695,55 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
     end
 end
 
+"""
+    Base.Experimental.@reexport using Module
+
+Automatically re-export all exported names from a module when using it.
+
+# Examples
+
+```jldoctest
+julia> module A
+           export foo
+           foo() = "foo from A"
+       end
+A
+
+julia> module B
+           using Base.Experimental: @reexport
+           @reexport using ..A
+           # Now B exports foo, even though it's defined in A
+       end
+B
+
+julia> using .B
+
+julia> foo()
+"foo from A"
+```
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+macro reexport(ex)
+    if !Meta.isexpr(ex, :using) || isempty(ex.args)
+        error("@reexport must be used with a `using` statement, e.g., `@reexport using MyModule`")
+    end
+
+    # Check for `using Foo: x, y` syntax (not supported)
+    if any(arg -> Meta.isexpr(arg, :(:)), ex.args)
+        error("@reexport does not support `using Module: names` syntax")
+    end
+
+    # Generate _eval_using calls for each module in the using statement
+    calls = Expr(:block)
+    for mod_path in ex.args
+        push!(calls.args, :($(Core._eval_using)($(__module__), $(QuoteNode(mod_path)), $(Base.JL_MODULE_USING_REEXPORT))))
+    end
+    push!(calls.args, Expr(:latestworld))
+    push!(calls.args, :nothing)
+
+    return esc(calls)
+end
+
 end # module
