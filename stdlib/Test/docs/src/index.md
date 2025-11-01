@@ -296,6 +296,51 @@ in the test set reporting. The test will not run but gives a `Broken` `Result`.
 Test.@test_skip
 ```
 
+## Organizing Test Files
+
+When working with larger test suites, it's common to split tests across multiple files. The
+`@include_files` macro provides a convenient way to include test files with optional filtering
+based on command-line arguments.
+
+```@docs
+Test.@include_files
+```
+
+For example, a package's `test/runtests.jl` might look like:
+
+```julia
+using Test
+
+# Include utility functions
+include("test_utils.jl")
+
+# Include test files, optionally filtered by command-line args
+@include_files [
+    "basics.jl",
+    "advanced.jl",
+    "performance.jl",
+]
+```
+
+This allows running specific test files:
+
+```julia
+# Run all tests
+Pkg.test("MyPackage")
+
+# Run only files containing "basics"
+Pkg.test("MyPackage", test_args=["--files=basics"])
+
+# Run files containing "basics" or "advanced"
+Pkg.test("MyPackage", test_args=["--files=basics,advanced"])
+
+# Use regex patterns for more complex filtering
+Pkg.test("MyPackage", test_args=["--files-regex=^test_.*_integration\\.jl\$"])
+
+# Match files with "basic" or "advanced" using regex
+Pkg.test("MyPackage", test_args=["--files-regex=basic|advanced"])
+```
+
 ## Test result types
 
 ```@docs

@@ -26,6 +26,7 @@ export @test, @test_throws, @test_broken, @test_skip,
 
 export @testset
 export @inferred
+export @include_files
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
@@ -2533,6 +2534,90 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     n == 0 && return true
     Bc[end] & Base._msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
     return true
+end
+
+function filter_test_files(files::Vector, args::Vector=ARGS)
+    # Parse args to extract file filters
+    filter_args = String[]
+    use_regex = false
+
+    # Check for --files-regex= argument (takes precedence)
+    regex_idx = findfirst(arg -> startswith(arg, "--files-regex="), args)
+    if regex_idx !== nothing
+        # Extract comma-separated list from --files-regex=
+        pattern_str = args[regex_idx][15:end]  # Skip "--files-regex="
+        append!(filter_args, split(pattern_str, ','))
+        use_regex = true
+    else
+        # Check for --files= argument
+        files_idx = findfirst(arg -> startswith(arg, "--files="), args)
+        if files_idx !== nothing
+            # Extract comma-separated list from --files=
+            files_str = args[files_idx][9:end]  # Skip "--files="
+            append!(filter_args, split(files_str, ','))
+        end
+    end
+
+    # Return all files if no filters
+    isempty(filter_args) && return files
+
+    # Filter files based on basename matching
+    return filter(files) do file
+        name = basename(file)
+        if use_regex
+            any(arg -> occursin(Regex(arg), name), filter_args)
+        else
+            any(arg -> occursin(arg, name), filter_args)
+        end
+    end
+end
+
+"""
+    @include_files(files)
+
+Include test files from a list, optionally filtered by command-line test arguments.
+
+When running tests via `Pkg.test()`, files can be filtered by passing `test_args`
+with the `--files=` or `--files-regex=` flag. If no test args are provided, all files are included.
+
+!!! compat "Julia 1.13"
+    `@include_files` was added in Julia 1.13, but is available and exported in Compat.jl
+    in earlier Julia versions.
+
+# Example
+```julia
+using Test
+
+# include common utilities
+include("utils.jl")
+
+@include_files [
+    "foo.jl",
+    "bar.jl",
+    "baz.jl",
+]
+```
+
+## Usage patterns:
+
+- `Pkg.test()` → includes all files
+- `Pkg.test(test_args=["--files=foo"])` → includes only "foo.jl"
+- `Pkg.test(test_args=["--files=foo,bar"])` → includes "foo.jl" and "bar.jl"
+- `Pkg.test(test_args=["--files-regex=^test_.*\\.jl\$"])` → uses regex pattern matching
+- `Pkg.test(test_args=["--files-regex=foo|bar"])` → includes files matching "foo" or "bar"
+"""
+macro include_files(files)
+    quote
+        let test_files = $(esc(files))
+            # Filter files based on ARGS
+            filtered_files = filter_test_files(test_files, ARGS)
+
+            # Include filtered files
+            for file in filtered_files
+                include(file)
+            end
+        end
+    end
 end
 
 include("logging.jl")
