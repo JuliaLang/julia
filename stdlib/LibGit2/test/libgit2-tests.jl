@@ -1082,6 +1082,14 @@ mktempdir() do dir
                         rethrow()
                     end
                 end
+
+                # Test GitTree constructor with GitHash
+                tree1 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                tree_hash = LibGit2.GitHash(tree1)
+                tree2 = LibGit2.GitTree(repo, tree_hash)
+                @test isa(tree2, LibGit2.GitTree)
+                @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
+                @test LibGit2.count(tree1) == LibGit2.count(tree2)
             end
         end
 
