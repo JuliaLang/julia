@@ -746,4 +746,55 @@ macro reexport(ex)
     return esc(calls)
 end
 
+struct VersionedParse
+    ver::VersionNumber
+end
+
+function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    if !isdefined(Base, :JuliaSyntax)
+        if vp.ver === VERSION
+            return Core._parse
+        end
+        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
+    end
+    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+end
+
+struct VersionedLower
+    ver::VersionNumber
+end
+
+function (vp::VersionedLower)(@nospecialize(code), mod::Module,
+                              file="none", line=0, world=typemax(Csize_t), warn=false)
+    if !isdefined(Base, :JuliaLowering)
+        if vp.ver === VERSION
+            return Core._parse
+        end
+        error("JuliaLowering module is required for syntax version $(vp.ver), but it is not loaded.")
+    end
+    Base.JuliaLowering.core_lowering_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+end
+
+function Base.set_syntax_version(m::Module, ver::VersionNumber)
+    parser = VersionedParse(ver)
+    Core.declare_const(m, :_internal_julia_parse, parser)
+    #lowerer = VersionedLower(ver)
+    #Core.declare_const(m, :_internal_julia_lower, lowerer)
+    nothing
+end
+
+macro set_syntax_version(ver)
+    Expr(:call, Base.set_syntax_version, __module__, esc(ver))
+end
+
+function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __module__::Module)
+    # This macro has special handling in the parser, which puts the current syntax
+    # version into __source__.
+    if isa(__source__, LineNumberNode)
+        return v"1.13"
+    else
+        return __source__.syntax_ver
+    end
+end
+
 end # module

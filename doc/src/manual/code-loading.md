@@ -438,6 +438,52 @@ Preferences in environments higher up in the environment stack get overridden by
 This allows depot-wide preference defaults to exist, with active projects able to merge or even completely overwrite these inherited preferences.
 See the docstring for `Preferences.set_preferences!()` for the full details of how to set preferences to allow or disallow merging.
 
+### [Syntax Versioning](@id syntax-versioning)
+
+Syntax versioning allows packages to specify which version of Julia's syntax they use, enabling gradual evolution of the language without breaking existing code. When loading a package, Julia determines its syntax version and uses the appropriate parser.
+
+#### Syntax Version Determination
+
+The syntax version for a package is determined by the loading mechanism in the following order of precedence:
+
+**For project environments with a manifest file:**
+
+1. If present in the manifest file, the `syntax.julia_version` field for each package specifies its syntax version explicitly. This field is written by Pkg.jl during dependency resolution:
+   ```toml
+   [[MyPackage]]
+   uuid = "..."
+
+   [MyPackage.syntax]
+   julia_version = "1.14.0"
+   ```
+
+2. If not present in the manifest, it defaults to Julia 1.13.0. This ensures packages resolved with older versions of Pkg.jl (which don't write syntax information) continue to work with their original syntax.
+
+**For implicit environments (package directories) or when a manifest is not present:**
+
+The syntax version is determined from the package's `Project.toml` file:
+
+1. If a `syntax.julia_version` field is present in the project file, it is used directly:
+   ```toml
+   name = "MyPackage"
+   uuid = "..."
+   syntax.julia_version = "1.14"
+   ```
+
+2. Otherwise, if a `[compat]` section specifies a Julia version constraint, the minimum compatible version is used:
+   ```toml
+   [compat]
+   julia = "1.13-2"  # implies syntax version 1.13.0
+   ```
+
+3. If neither is specified, the current Julia version is used.
+
+#### Effect on Package Loading
+
+The syntax version affects how a package's source code is parsed. For example, syntax features introduced in Julia 1.14 are only available to packages that specify `syntax.julia_version = "1.14"` or higher in their Project.toml, or have this information propagated to their Manifest entry.
+
+This mechanism allows Julia to introduce syntax improvements and clean up legacy syntax issues while maintaining full backward compatibility with existing packages. Packages can upgrade their syntax version independently when their maintainers are ready, without forcing ecosystem-wide breakage.
+
 ## Conclusion
 
 Federated package management and precise software reproducibility are difficult but worthy goals in a package system. In combination, these goals lead to a more complex package loading mechanism than most dynamic languages have, but it also yields scalability and reproducibility that is more commonly associated with static languages. Typically, Julia users should be able to use the built-in package manager to manage their projects without needing a precise understanding of these interactions. A call to `Pkg.add("X")` will add to the appropriate project and manifest files, selected via `Pkg.activate("Y")`, so that a future call to `import X` will load `X` without further thought.
