@@ -81,6 +81,9 @@ New library features
 * New `Base.active_manifest()` function to return the path of the active manifest, like `Base.active_project()`.
   Also can return the manifest that would be used for a given project file ([#57937])
 
+* `match(regex, string, idx)` now supports updating `idx::Ref{Int}` to
+  point at the first character after a successful match ([#51429])
+
 Standard library changes
 ------------------------
 
