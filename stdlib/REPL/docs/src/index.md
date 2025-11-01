@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/REPL/docs/src/i
 
 # The Julia REPL
 
+```@docs
+REPL
+```
+
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
 the `julia` executable. In addition to allowing quick and easy evaluation of Julia statements,
 it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and
@@ -904,6 +908,10 @@ Out[3]: Dict{Int64, Any} with 2 entries:
 
 
 ## TerminalMenus
+
+```@docs
+REPL.TerminalMenus
+```
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
 

@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Serialization/d
 
 # Serialization
 
+```@docs
+Serialization
+```
+
 Provides serialization of Julia objects.
 
 ```@docs

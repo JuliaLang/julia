@@ -14,6 +14,8 @@ Base.repeat(::AbstractString, ::Integer)
 Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
+Core.String(::AbstractVector{UInt8})
+Core.String
 Base.SubString
 Base.LazyString
 Base.@lazy_str
@@ -22,6 +24,7 @@ Base.unsafe_string
 Base.ncodeunits(::AbstractString)
 Base.codeunit
 Base.codeunits
+Base.CodeUnits
 Base.ascii
 Base.Regex
 Base.@r_str
@@ -48,11 +51,22 @@ Base.ltruncate
 Base.rtruncate
 Base.ctruncate
 Base.findfirst(::AbstractString, ::AbstractString)
+Base.findfirst(::AbstractChar, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
 Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
+Base.findnext(::Any, ::Any)
+Base.findnext(::Function, ::Any, ::Any)
+Base.findnext(::AbstractVector{<:Union{Int8, UInt8}}, ::AbstractVector{<:Union{Int8, UInt8}}, ::Integer)
 Base.findlast(::AbstractString, ::AbstractString)
 Base.findlast(::AbstractChar, ::AbstractString)
+Base.findlast(::AbstractVector{<:Union{Int8, UInt8}}, ::AbstractVector{<:Union{Int8, UInt8}})
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
+Base.findprev(::AbstractChar, ::AbstractString, ::Integer)
+Base.findprev(::Any, ::Any)
+Base.findprev(::Function, ::Any, ::Any)
+Base.findprev(::AbstractVector{<:Union{Int8, UInt8}}, ::AbstractVector{<:Union{Int8, UInt8}}, ::Integer)
+Base.findall(::AbstractChar, ::AbstractString)
+Base.findall(::Union{AbstractPattern, AbstractString, AbstractVector{UInt8}}, ::Union{AbstractPattern, AbstractString, AbstractVector{UInt8}})
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
 Base.replace(::IO, s::AbstractString, ::Pair...)

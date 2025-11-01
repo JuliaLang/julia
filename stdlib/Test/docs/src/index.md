@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Test/docs/src/i
 
 # Unit Testing
 
+```@docs
+Test
+```
+
 ```@meta
 DocTestSetup = :(using Test)
 ```

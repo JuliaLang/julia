@@ -65,6 +65,7 @@ Base.IOContext(::IO, ::IOContext)
 
 ```@docs
 Base.show(::IO, ::Any)
+Base.showarg
 Base.summary
 Base.print
 Base.println
@@ -141,6 +142,7 @@ Base.Multimedia.istextmime
 
 ```@docs
 Base.bytesavailable
+Base.reseteof
 Base.ntoh
 Base.hton
 Base.ltoh
