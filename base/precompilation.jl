@@ -108,7 +108,7 @@ function ExplicitEnv(envpath::String)
     end
 
     manifest = project_file_manifest_path(envpath)
-    manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest)
+    manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest; manifest=true)
 
     # Dependencies in a manifest can either be stored compressed (when name is unique among all packages)
     # in which case it is a `Vector{String}` or expanded where it is a `name => uuid` mapping.

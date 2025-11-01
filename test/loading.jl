@@ -1870,3 +1870,46 @@ end
 module M58272_to end
 @eval M58272_to import ..M58272_1: M58272_2.y, x
 @test @eval M58272_to x === 1
+
+@testset "Portable scripts" begin
+    # Test with line-by-line comment syntax and path dependencies
+    portable_script = joinpath(@__DIR__, "project", "portable_script.jl")
+    output = read(`$(Base.julia_cmd()) --startup-file=no $portable_script`, String)
+
+    @test occursin("Active project: $portable_script", output)
+    @test occursin("Active manifest: $portable_script", output)
+    @test occursin("✓ Random (stdlib) loaded successfully", output)
+    @test occursin("✓ Rot13 (path dependency) loaded successfully", output)
+    @test occursin("✓ Rot13 methods available", output)
+    @test occursin("Test Summary:", output)
+    @test occursin("Portable Script Tests", output)
+    @test occursin("Pass", output)
+
+    # Test with multiline comment syntax
+    portable_script_ml = joinpath(@__DIR__, "project", "portable_script_multiline.jl")
+    output_ml = read(`$(Base.julia_cmd()) --startup-file=no $portable_script_ml`, String)
+
+    @test occursin("Active project: $portable_script_ml", output_ml)
+    @test occursin("Active manifest: $portable_script_ml", output_ml)
+    @test occursin("✓ Portable script with multiline comment syntax works!", output_ml)
+    @test occursin("✓ Random.rand()", output_ml)
+    @test occursin("✓ All checks passed!", output_ml)
+
+    # Test with custom manifest= entry in project section
+    portable_script_cm = joinpath(@__DIR__, "project", "portable_script_custom_manifest.jl")
+    output_cm = read(`$(Base.julia_cmd()) --startup-file=no $portable_script_cm`, String)
+    expected_cm = joinpath(@__DIR__, "project", "portable_script_custom.toml")
+
+    @test occursin("Active project: $portable_script_cm", output_cm)
+    @test occursin("Active manifest: $expected_cm", output_cm)
+    @test occursin("✓ Custom manifest file is being used: $expected_cm", output_cm)
+    @test occursin("✓ Random.rand()", output_cm)
+    @test occursin("✓ All checks passed!", output_cm)
+
+    # Test @script behavior with portable script
+    # When using --project=@script, it should use the script file as the project
+    output_script = read(`$(Base.julia_cmd()) --startup-file=no --project=@script $portable_script`, String)
+    @test occursin("Active project: $portable_script", output_script)
+    @test occursin("Active manifest: $portable_script", output_script)
+    @test occursin("✓ Random (stdlib) loaded successfully", output_script)
+end

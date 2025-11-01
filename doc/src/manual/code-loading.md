@@ -397,6 +397,47 @@ are stored in the manifest file in the section for that package. The dependency 
 a package are the same as for its "parent" except that the listed triggers are also considered as
 dependencies.
 
+### [Portable scripts](@id portable-scripts)
+
+Julia also understands *portable scripts*: scripts that embed their own `Project.toml` (and optionally `Manifest.toml`) so they can be executed as self-contained environments. To do this, place TOML data inside comment fences named `#!project` and `#!manifest`:
+
+```julia
+#!project begin
+# name = "HelloApp"
+# uuid = "9c5fa7d8-7220-48e8-b2f7-0042191c5f6d"
+# version = "0.1.0"
+# [deps]
+# Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+#!project end
+
+#!manifest begin
+# [[deps]]
+# name = "Markdown"
+# uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+# version = "1.0.0"
+#!manifest end
+
+using Markdown
+println(md"# Hello, single-file world!")
+```
+
+Lines inside the fenced blocks may either start with `#` (as in the example), be plain TOML, or be wrapped in multi-line comment delimiters `#= ... =#`:
+
+```julia
+#!project begin
+#=
+name = "HelloApp"
+uuid = "9c5fa7d8-7220-48e8-b2f7-0042191c5f6d"
+version = "0.1.0"
+[deps]
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+=#
+#!project end
+```
+
+
+Running `julia hello.jl` automatically activates the embedded project. The script path becomes the active project entry in `LOAD_PATH`, so package loading works exactly as if `Project.toml` and `Manifest.toml` lived next to the script. The `--project=@script` flag also expands to the script itself when no on-disk project exists but inline metadata is present.
+
 ### [Workspaces](@id workspaces)
 
 A project file can define a workspace by giving a set of projects that is part of that workspace:

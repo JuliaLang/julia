@@ -212,22 +212,20 @@ mutable struct CachedTOMLDict
     size::Int64
     hash::UInt32
     d::Dict{String, Any}
+    kind::Symbol  # :full (regular TOML), :project, :manifest (inline)
 end
 
-function CachedTOMLDict(p::TOML.Parser, path::String)
+function CachedTOMLDict(p::TOML.Parser, path::String, kind)
     s = stat(path)
-    content = read(path)
+    content = if kind === :full
+        String(read(path))
+    else
+        String(extract_inline_section(path, kind))
+    end
     crc32 = _crc32c(content)
-    TOML.reinit!(p, String(content); filepath=path)
+    TOML.reinit!(p, content; filepath=path)
     d = TOML.parse(p)
-    return CachedTOMLDict(
-        path,
-        s.inode,
-        s.mtime,
-        s.size,
-        crc32,
-        d,
-   )
+    return CachedTOMLDict(path, s.inode, s.mtime, s.size, crc32, d, kind)
 end
 
 function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
@@ -236,19 +234,125 @@ function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
     # identical but that is solvable by not doing in-place updates, and not
     # rapidly changing these files
     if s.inode != f.inode || s.mtime != f.mtime || f.size != s.size
-        content = read(f.path)
-        new_hash = _crc32c(content)
+        file_content = read(f.path)
+        new_hash = _crc32c(file_content)
         if new_hash != f.hash
             f.inode = s.inode
             f.mtime = s.mtime
             f.size = s.size
             f.hash = new_hash
-            TOML.reinit!(p, String(content); filepath=f.path)
+
+            # Extract the appropriate TOML content based on kind
+            toml_content = if f.kind == :full
+                String(file_content)
+            else
+                String(extract_inline_section(f.path, f.kind))
+            end
+
+            TOML.reinit!(p, toml_content; filepath=f.path)
             return f.d = TOML.parse(p)
         end
     end
     return f.d
 end
+
+
+function extract_inline_section(path::String, type::Symbol)
+    buf = IOBuffer()
+    start_fence = "#!$type begin"
+    end_fence = "#!$type end"
+    state = :none
+    multiline_mode = false
+    in_multiline = false
+
+    for (lineno, line) in enumerate(eachline(path))
+        stripped = lstrip(line)
+        state == :done && break
+
+        if startswith(stripped, start_fence)
+            state = :reading_first
+            continue
+        elseif startswith(stripped, end_fence)
+            state = :done
+            continue
+        elseif state === :reading_first
+            # First line determines the format
+            if startswith(stripped, "#=")
+                multiline_mode = true
+                state = :reading
+                # Check if the opening #= and closing =# are on the same line
+                if endswith(rstrip(stripped), "=#")
+                    # Single-line multi-line comment
+                    content = rstrip(stripped)[3:end-2]
+                    write(buf, content)
+                    in_multiline = false
+                else
+                    # Multi-line comment continues
+                    in_multiline = true
+                    content = stripped[3:end]  # Remove #= from start
+                    write(buf, content)
+                    write(buf, '\n')
+                end
+            else
+                # Line-by-line format
+                multiline_mode = false
+                state = :reading
+                # Process this first line
+                if startswith(stripped, '#')
+                    toml_line = lstrip(chop(stripped, head=1, tail=0))
+                    write(buf, toml_line)
+                else
+                    write(buf, line)
+                end
+                write(buf, '\n')
+            end
+        elseif state === :reading
+            if multiline_mode && in_multiline
+                # In multi-line comment mode, look for closing =#
+                if endswith(rstrip(stripped), "=#")
+                    # Found closing delimiter
+                    content = rstrip(stripped)[1:end-2]  # Remove =# from end
+                    write(buf, content)
+                    in_multiline = false
+                else
+                    # Still inside multi-line comment
+                    write(buf, line)
+                    write(buf, '\n')
+                end
+            elseif !multiline_mode
+                # Line-by-line comment mode, strip # from each line
+                if startswith(stripped, '#')
+                    toml_line = lstrip(chop(stripped, head=1, tail=0))
+                    write(buf, toml_line)
+                else
+                    write(buf, line)
+                end
+                write(buf, '\n')
+            end
+            # If multiline_mode && !in_multiline, the multiline comment has ended.
+            # Don't accumulate any more content; just wait for the end fence.
+        end
+    end
+
+    if state === :done
+        return strip(String(take!(buf)))
+    elseif state === :none
+        return ""
+    else
+        error("incomplete inline $type block in $path (missing #!$type end)")
+    end
+end
+
+function has_inline_project(path::String)::Bool
+    for line in eachline(path)
+        stripped = lstrip(line)
+        if startswith(stripped, "#!project begin")
+            return true
+        end
+    end
+    return false
+end
+
 
 struct LoadingCache
     load_path::Vector{String}
@@ -273,26 +377,38 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
-parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
-function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
+parsed_toml(toml_file::AbstractString; manifest::Bool=false, project::Bool=!manifest) =
+    parsed_toml(toml_file, TOML_CACHE, require_lock; manifest=manifest, project=project)
+function parsed_toml(toml_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock;
+                     manifest::Bool=false, project::Bool=!manifest)
+    manifest && project && throw(ArgumentError("cannot request both project and manifest TOML"))
     lock(toml_lock) do
+        # Portable script?
+        if endswith(toml_file, ".jl") && isfile_casesensitive(toml_file)
+            kind = manifest ? :manifest : :project
+            cache_key = "$(toml_file)::$(kind)"
+        else
+            kind = :full
+            cache_key = toml_file
+        end
+
         cache = LOADING_CACHE[]
-        dd = if !haskey(toml_cache.d, project_file)
-            d = CachedTOMLDict(toml_cache.p, project_file)
-            toml_cache.d[project_file] = d
+        dd = if !haskey(toml_cache.d, cache_key)
+            d = CachedTOMLDict(toml_cache.p, toml_file, kind)
+            toml_cache.d[cache_key] = d
             d.d
         else
-            d = toml_cache.d[project_file]
+            d = toml_cache.d[cache_key]
             # We are in a require call and have already parsed this TOML file
             # assume that it is unchanged to avoid hitting disk
-            if cache !== nothing && project_file in cache.require_parsed
+            if cache !== nothing && cache_key in cache.require_parsed
                 d.d
             else
                 get_updated_dict(toml_cache.p, d)
             end
         end
         if cache !== nothing
-            push!(cache.require_parsed, project_file)
+            push!(cache.require_parsed, cache_key)
         end
         return dd
     end
@@ -656,6 +772,8 @@ function env_project_file(env::String)::Union{Bool,String}
         project_file = locate_project_file(env)
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
+    elseif endswith(env, ".jl") && isfile_casesensitive(env)
+        project_file = has_inline_project(env) ? env : false
     else
         project_file = false
     end
@@ -897,7 +1015,8 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         manifest_path === missing || return manifest_path
     end
     dir = abspath(dirname(project_file))
-    isfile_casesensitive(project_file) || return nothing
+    has_file = isfile_casesensitive(project_file)
+    has_file || return nothing
     d = parsed_toml(project_file)
     base_manifest = workspace_manifest(project_file)
     if base_manifest !== nothing
@@ -910,6 +1029,10 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         if isfile_casesensitive(manifest_file)
             manifest_path = manifest_file
         end
+    end
+    if manifest_path === nothing && endswith(project_file, ".jl") && has_file
+        # portable script: manifest is the same file as the project file
+        manifest_path = project_file
     end
     if manifest_path === nothing
         for mfst in manifest_names
@@ -1038,7 +1161,7 @@ dep_stanza_get(stanza::Nothing, name::String) = nothing
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
-    d = get_deps(parsed_toml(manifest_file))
+    d = get_deps(parsed_toml(manifest_file; manifest=true))
     for (dep_name, entries) in d
         entries::Vector{Any}
         for entry in entries
@@ -1111,7 +1234,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # no manifest, skip env
 
-    d = get_deps(parsed_toml(manifest_file))
+    d = get_deps(parsed_toml(manifest_file; manifest=true))
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
     if entries !== nothing
         for entry in entries
@@ -1540,7 +1663,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         project_file isa String || return nothing
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
-        d = get_deps(parsed_toml(manifest_file))
+        d = get_deps(parsed_toml(manifest_file; manifest=true))
         for (dep_name, entries) in d
             entries::Vector{Any}
             for entry in entries
@@ -2516,7 +2639,7 @@ function find_unsuitable_manifests_versions()
         project_file isa String || continue # no project file
         manifest_file = project_file_manifest_path(project_file)
         manifest_file isa String || continue # no manifest file
-        m = parsed_toml(manifest_file)
+        m = parsed_toml(manifest_file; manifest=true)
         man_julia_version = get(m, "julia_version", nothing)
         man_julia_version isa String || @goto mark
         man_julia_version = VersionNumber(man_julia_version)
