@@ -1615,8 +1615,7 @@
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
        ((export public)
-        (let ((es (map macrocall-to-atsym
-                       (parse-comma-separated s parse-unary-prefix))))
+        (let ((es (parse-comma-separated s parse-atsym)))
           (if (not (every symbol-or-interpolate? es))
               (error (string "invalid \"" word "\" statement")))
           `(,word ,@es)))
@@ -1636,11 +1635,6 @@
       `(-> (tuple ,@doargs)
            ,(begin0 (parse-block s)
                     (expect-end s 'do)))))))
-
-(define (macrocall-to-atsym e)
-  (if (and (pair? e) (eq? (car e) 'macrocall))
-      (cadr e)
-      e))
 
 (define (parse-imports s word)
   (let* ((first (parse-import s word #f))
@@ -1678,7 +1672,7 @@
        (parse-atom s #f))))
 
 (define (parse-atsym s)
-  (let ((t (peek-token s)))
+  (let ((t (require-token s)))
     (if (eqv? t #\@)
         (begin (take-token s)
                (macroify-name (parse-macro-name s)))
