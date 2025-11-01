@@ -18,7 +18,7 @@ if !Sys.iswindows()
         # start an interactive session, ensuring `TERM` is unset since it can trigger
         # different amounts of precompilation stemming from `base/terminfo.jl` depending
         # on the value, making the test here unreliable
-        cmd = addenv(`$(Base.julia_cmd()[1]) --trace-compile=$f -q --startup-file=no -i`,
+        cmd = addenv(`$(Base.julia_cmd()) --trace-compile=$f -q --startup-file=no -i`,
                      Dict("TERM" => ""))
         pts, ptm = open_fake_pty()
         p = run(cmd, pts, pts, pts; wait=false)
@@ -26,9 +26,9 @@ if !Sys.iswindows()
         std = readuntil(ptm, "julia>")
         # check for newlines instead of equality with "julia>" because color may be on
         occursin("\n", std) && @info "There was output before the julia prompt:\n$std"
-        write(ptm, "\n")  # another prompt
+        @async write(ptm, "\n")  # another prompt
         readuntil(ptm, "julia>")
-        write(ptm, "\n")  # another prompt
+        @async write(ptm, "\n")  # another prompt
         readuntil(ptm, "julia>")
         tracecompile_out = read(f, String)
         close(ptm) # close after reading so we don't get precompiles from error shutdown
