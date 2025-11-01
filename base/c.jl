@@ -52,7 +52,7 @@ over the local variable `callable` (this is not supported on all architectures).
 See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> function foo(x::Int, y::Int)
            return x + y
        end
