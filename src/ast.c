@@ -1016,8 +1016,21 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     margs[0] = jl_array_ptr_ref(args, 0);
     // __source__ argument
     jl_value_t *lno = jl_array_ptr_ref(args, 1);
-    if (!jl_is_linenode(lno))
+    jl_value_t *retry_lno = NULL;
+    if (!jl_is_linenumbernode(lno)) {
+        if (lno != jl_nothing) {
+            // Special case: The magic @VERSION macro currently gets a special
+            // Core.MacroSource for its __source__ argument. However, to avoid
+            // giving this to macros that do not expect it, we check for that
+            // special case and retry with just the LineNumberNode if needed.
+            if (jl_typeof(lno) == jl_get_global(jl_core_module, jl_symbol("MacroSource"))) {
+                retry_lno = jl_fieldref_noalloc(lno, 0);
+                goto lno_ok;
+            }
+        }
         lno = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
+    }
+lno_ok:
     margs[1] = lno;
     margs[2] = (jl_value_t*)inmodule;
     for (i = 3; i < nargs; i++)
@@ -1029,9 +1042,17 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
         ct->world_age = world;
     jl_value_t *result;
     JL_TRY {
-        margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+        jl_module_t *ctx_module = *ctx;
+        JL_GC_PROMISE_ROOTED(ctx_module);
+        margs[0] = jl_toplevel_eval(ctx_module, margs[0]);
+        jl_method_instance_t *mfunc = NULL;
+        mfunc = jl_method_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
+        if (mfunc == NULL && retry_lno != NULL) {
+            margs[1] = retry_lno;
+            mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+            JL_GC_PROMISE_ROOTED(mfunc);
+        }
         if (mfunc == NULL) {
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
@@ -1224,15 +1245,18 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *filename, int line, size_t world, bool_t warn)
 {
-    jl_value_t *core_lower = NULL;
-    if (jl_core_module)
-        core_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
-    if (!core_lower || core_lower == jl_nothing) {
+    jl_value_t *julia_lower = NULL;
+    if (inmodule) {
+        julia_lower = jl_get_global(inmodule, jl_symbol("_internal_julia_lower"));
+    }
+    if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
+        julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
+    if (!julia_lower || julia_lower == jl_nothing) {
         return jl_fl_lower(expr, inmodule, filename, line, world, warn);
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 7);
-    args[0] = core_lower;
+    args[0] = julia_lower;
     args[1] = expr;
     args[2] = (jl_value_t*)inmodule;
     args[3] = jl_cstr_to_string(filename);
@@ -1288,20 +1312,23 @@ jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
 jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                     size_t lineno, size_t offset, jl_value_t *options)
+                     size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule)
 {
-    jl_value_t *core_parse = NULL;
-    if (jl_core_module) {
-        core_parse = jl_get_global(jl_core_module, jl_symbol("_parse"));
+    jl_value_t *parser = NULL;
+    if (inmodule) {
+        parser = jl_get_global(inmodule, jl_symbol("_internal_julia_parse"));
     }
-    if (!core_parse || core_parse == jl_nothing) {
+    if ((!parser || parser == jl_nothing) && jl_core_module) {
+        parser = jl_get_global(jl_core_module, jl_symbol("_parse"));
+    }
+    if (!parser || parser == jl_nothing) {
         // In bootstrap, directly call the builtin parser.
         jl_value_t *result = jl_fl_parse(text, text_len, filename, lineno, offset, options);
         return result;
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 6);
-    args[0] = core_parse;
+    args[0] = parser;
     args[1] = (jl_value_t*)jl_alloc_svec(2);
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
@@ -1330,7 +1357,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
 {
     jl_value_t *fname = jl_pchar_to_string(filename, filename_len);
     JL_GC_PUSH1(&fname);
-    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym);
+    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym, NULL);
     JL_GC_POP();
     return jl_svecref(p, 0);
 }
@@ -1343,7 +1370,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
     jl_value_t *fname = jl_cstr_to_string("none");
     JL_GC_PUSH1(&fname);
     jl_value_t *result = jl_parse(text, text_len, fname, 1, offset,
-                                  (jl_value_t*)(greedy ? jl_statement_sym : jl_atom_sym));
+                                  (jl_value_t*)(greedy ? jl_statement_sym : jl_atom_sym), NULL);
     JL_GC_POP();
     return result;
 }

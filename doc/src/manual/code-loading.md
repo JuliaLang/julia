@@ -438,6 +438,32 @@ Preferences in environments higher up in the environment stack get overridden by
 This allows depot-wide preference defaults to exist, with active projects able to merge or even completely overwrite these inherited preferences.
 See the docstring for `Preferences.set_preferences!()` for the full details of how to set preferences to allow or disallow merging.
 
+### [Syntax Versioning](@id syntax-versioning)
+
+Syntax versioning allows packages to specify which version of Julia's syntax they use. In particular, different
+packages can use different versions of the Julia syntax. This allows evolution of Julia's syntax in a non-breaking
+way, while allowing packages to upgrade at their own pace. The syntax version is determined from the package's
+corresponding Project.toml and propagates to all modules defined in the package.
+
+#### Syntax Version Determination
+
+The syntax version for a package is determined by the loading mechanism in the following order of precedence:
+
+1. If a `syntax.julia_version` field is present in the project file, it is used directly:
+   ```toml
+   name = "MyPackage"
+   uuid = "..."
+   syntax.julia_version = "1.14"
+   ```
+
+2. Otherwise, if a `[compat]` section specifies a Julia version constraint, the minimum compatible version is used:
+   ```toml
+   [compat]
+   julia = "1.13-2"  # implies syntax version 1.13.0
+   ```
+
+3. If neither is specified, the current Julia version is used.
+
 ## Conclusion
 
 Federated package management and precise software reproducibility are difficult but worthy goals in a package system. In combination, these goals lead to a more complex package loading mechanism than most dynamic languages have, but it also yields scalability and reproducibility that is more commonly associated with static languages. Typically, Julia users should be able to use the built-in package manager to manage their projects without needing a precise understanding of these interactions. A call to `Pkg.add("X")` will add to the appropriate project and manifest files, selected via `Pkg.activate("Y")`, so that a future call to `import X` will load `X` without further thought.

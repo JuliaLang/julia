@@ -78,19 +78,26 @@ function lower_step(iter, push_mod=nothing)
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter)
     elseif k == K"module"
-        name = ex[1]
+        name_or_version = ex[1]
+        version = nothing
+        if kind(name_or_version) == K"VERSION"
+            version = name_or_version.value
+            name = ex[2]
+        else
+            name = name_or_version
+        end
         if kind(name) != K"Identifier"
             throw(LoweringError(name, "Expected module name"))
         end
         newmod_name = Symbol(name.name_val)
-        body = ex[2]
+        body = ex[end]
         if kind(body) != K"block"
             throw(LoweringError(body, "Expected block in module body"))
         end
         std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
-        return Core.svec(:begin_module, newmod_name, std_defs, loc)
+        return Core.svec(:begin_module, version, newmod_name, std_defs, loc)
     else
         # Non macro expansion parts of lowering
         ctx2, ex2 = expand_forms_2(iter.ctx, ex)
@@ -480,9 +487,9 @@ function _eval(mod, iter)
             break
         elseif type == :begin_module
             push!(modules, mod)
-            filename = something(thunk[4].file, :none)
-            mod = @ccall jl_begin_new_module(mod::Any, thunk[2]::Symbol, thunk[3]::Cint,
-                                             filename::Cstring, thunk[4].line::Cint)::Module
+            filename = something(thunk[5].file, :none)
+            mod = @ccall jl_begin_new_module(mod::Any, thunk[3]::Symbol, thunk[2]::Any, thunk[4]::Cint,
+                                             filename::Cstring, thunk[5].line::Cint)::Module
             new_mod = mod
         elseif type == :end_module
             @ccall jl_end_new_module(mod::Module)::Cvoid
@@ -510,10 +517,11 @@ function _eval(mod, iter, new_mod=nothing)
             @assert !in_new_mod
             break
         elseif type == :begin_module
-            name = thunk[2]::Symbol
-            std_defs = thunk[3]
+            version = thunk[2]
+            name = thunk[3]::Symbol
+            std_defs = thunk[4]
             result = Core.eval(mod,
-                Expr(:module, std_defs, name,
+                Expr(:module, (version === nothing ? () : (version,))..., std_defs, name,
                      Expr(:block, thunk[4], Expr(:call, m->_eval(m, iter, m), name)))
             )
         elseif type == :end_module

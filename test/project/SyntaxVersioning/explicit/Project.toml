@@ -1,0 +1,3 @@
+[deps]
+VersionedDep1 = "f08855a0-36cb-4a32-8ae5-a227b709c612"
+VersionedDep2 = "e127e659-a899-4a00-b565-5b74face18ba"
