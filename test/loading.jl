@@ -1131,8 +1131,8 @@ end
             write(joinpath(tmp, "Env1", "Manifest.toml"), """
             """)
             # Package in current env not present in manifest
-            pkg, env = @lock Base.require_lock Base.identify_package_env("Baz")
-            @test Base.locate_package(pkg, env) === nothing
+            api, env = @lock Base.require_lock Base.identify_package_env("Baz")
+            @test Base.locate_package(api.pkg, env) === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
             copy!(DEPOT_PATH, old_depot_path)
