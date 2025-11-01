@@ -123,6 +123,13 @@
       (and (pair? ex)
            (eq? '$ (car ex)))))
 
+(define (symbol-as-or-interpolate? ex)
+  (or (symbol-or-interpolate? ex)
+      (and (pair? ex)
+           (eq? 'as (car ex))
+           (symbol-or-interpolate? (cadr ex))
+           (symbol-or-interpolate? (caddr ex)))))
+
 (define (is-word-operator? op)
   (every identifier-start-char? (string->list (symbol->string op))))
 
@@ -1378,6 +1385,14 @@
                (take-lineendings s))
         s)))
 
+(define (parse-export s)
+  (let ((ex (parse-atsym s)))
+    (if (eq? (peek-token s) 'as)
+      (begin
+        (take-token s)
+        `(as ,ex ,(parse-atsym s)))
+      ex)))
+
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
   (with-bindings
@@ -1615,8 +1630,8 @@
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
        ((export public)
-        (let ((es (parse-comma-separated s parse-atsym)))
-          (if (not (every symbol-or-interpolate? es))
+        (let ((es (parse-comma-separated s (if (eq? word 'export) parse-export parse-atsym))))
+          (if (not (every symbol-as-or-interpolate? es))
               (error (string "invalid \"" word "\" statement")))
           `(,word ,@es)))
        ((import using)
