@@ -1066,7 +1066,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         if codeinst isa CodeInstance
             need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
             if need_inlineable_code
-                src = ci_try_get_source(interp, codeinst, inferred)
+                src = ci_get_source(interp, codeinst, inferred)
                 if src === nothing
                     # Re-infer to get the appropriate source representation
                     cache_mode = CACHE_MODE_LOCAL
@@ -1114,7 +1114,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 ci_from_engine = nothing
                 need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
                 if need_inlineable_code
-                    src = ci_try_get_source(interp, codeinst, inferred)
+                    src = ci_get_source(interp, codeinst, inferred)
                     if src === nothing
                         cache_mode = CACHE_MODE_LOCAL
                         edge_ci = codeinst
@@ -1351,17 +1351,6 @@ function ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
     return ci_has_source(interp, code)
 end
 
-function ci_get_source(interp::AbstractInterpreter, code::CodeInstance)
-    codegen = codegen_cache(interp)
-    if codegen !== nothing
-        src = get(codegen, code, nothing)
-        src !== nothing && return src
-    end
-    use_const_api(code) &&
-        return codeinfo_for_const(interp, get_ci_mi(code), WorldRange(code.min_world, code.max_world), code.edges, code.rettype_const)
-    return nothing
-end
-
 """
     ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
 
@@ -1387,26 +1376,31 @@ end
 
 # Get source if available for inlining, otherwise return nothing
 # populates codegen cache for code, if successful
-function ci_try_get_source(interp::AbstractInterpreter, code::CodeInstance, @nospecialize src)
+function ci_get_source(interp::AbstractInterpreter, code::CodeInstance, @nospecialize src)
     codegen = codegen_cache(interp)
-    if codegen === nothing
-        return nothing
+    if codegen !== nothing
+        inf = get(codegen, code, nothing)
+        inf === nothing || return inf
     end
     if use_const_api(code)
         return codeinfo_for_const(interp, get_ci_mi(code), WorldRange(code.min_world, code.max_world), code.edges, code.rettype_const)
     end
-    inf = get(codegen, code, nothing)
-    inf === nothing || return inf
     if isa(src, String)
         src = _uncompressed_ir(code, src)
     end
     if isa(src, CodeInfo)
-        codegen[code] = src
+        if codegen !== nothing
+            codegen[code] = src
+        end
         return src
     elseif isa(src, IRCode)
         error("IRCode is unexpected")
     end
     return nothing
+end
+
+function ci_get_source(interp::AbstractInterpreter, code::CodeInstance)
+    return ci_get_source(interp, code, isdefined(code, :inferred) ? code.inferred : nothing)
 end
 
 function ci_has_invoke(code::CodeInstance)

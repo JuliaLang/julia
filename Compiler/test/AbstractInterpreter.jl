@@ -245,7 +245,7 @@ let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
     end |> only |> first
     ir.argtypes[1] = Tuple{}
     oc = Core.OpaqueClosure(ir)
-    @test_broken oc() == cos(0.)
+    @test oc() == cos(0.)
 end
 
 # AbstractLattice
