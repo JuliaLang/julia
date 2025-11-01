@@ -549,7 +549,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
         path_norm = normpath(path)
         possible_base_path = normpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path)
         lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
-        compiler_dir = joinpath(Base.DATAROOT, "julia", "Compiler")
+        compiler_dir = normpath(Base.DATAROOT, "julia", "Compiler/")
         if startswith(path_norm, SRC_DIR)
             remainder = only(split(path_norm, SRC_DIR, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@juliasrc", remainder
@@ -557,8 +557,8 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
             remainder = only(split(path_norm, lib_dir, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
         elseif startswith(path_norm, compiler_dir)
-            remainder = split(path, compiler_dir, keepempty=false)[end]
-            possible_compiler_path = normpath(Sys.BINDIR, Base.DATAROOT, "julia", "Compiler", remainder)
+            remainder = split(path_norm, compiler_dir, keepempty=false)[end]
+            possible_compiler_path = normpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", remainder)
             return (isfile(possible_compiler_path) ? possible_compiler_path : ""), "@Compiler", remainder
         elseif isabspath(path)
             if ispath(path)
@@ -586,11 +586,10 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
         elseif isfile(possible_base_path)
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
-            return possible_base_path, "@Base", normpath(path)
+            return possible_base_path, "@Base", path_norm
         else
             # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
-            path = normpath(path)
-            return "", "", path # drop leading "./"
+            return "", "", path_norm # drop leading "./"
         end
     end
 end
