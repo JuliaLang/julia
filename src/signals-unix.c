@@ -68,6 +68,82 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
+extern void jl_fake_signal_return(void);
+
+// create a fake function that describes the variable manipulations in jl_call_in_ctx/jl_call_in_state
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
+    "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
+    "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
+    "  nop\n"
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+#elif defined(_OS_DARWIN_) && defined(_CPU_X86_64_)
+__asm__(
+    "_jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
+    "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
+    "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
+    "  nop\n"
+    "  .cfi_endproc\n"
+);
+#elif defined(_OS_LINUX_) && defined(_CPU_X86_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    "  .cfi_def_cfa %esp, 0\n" // CFA here uses %esp directly
+    "  .cfi_offset %eip, 0\n" // previous value of %eip at CFA
+    "  .cfi_offset %esp, 4\n" // previous value of %esp at CFA
+    "  nop\n"
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+#elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    "  .cfi_def_cfa sp, 0\n" // use sp as fp here
+    "  .cfi_offset lr, 0\n"
+    "  .cfi_offset sp, 8\n"
+    // Anything else got smashed, since we didn't explicitly copy all of the
+    // state object to the stack (to build a real sigreturn frame).
+    // This is also not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
+    // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
+    // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
+    "  nop\n"
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+__asm__(
+    "_jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    "  .cfi_def_cfa sp, 0\n" // use sp as fp here
+    "  .cfi_offset lr, 0\n"
+    "  .cfi_offset sp, 8\n"
+    "  nop\n"
+    "  .cfi_endproc\n"
+);
+#else
+extern void JL_NORETURN jl_fake_signal_return(void)
+{
+    CFI_NORETURN
+    abort();
+}
+#endif
 
 #if !defined(_OS_DARWIN_)
 static inline uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
@@ -123,12 +199,25 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     // will not be part of the validation...
     uintptr_t rsp = jl_get_rsp_from_ctx(_ctx);
     rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
+    assert(rsp % 16 == 0);
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
+    // set return address to NULL
     rsp -= sizeof(void*);
     *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.gregs[REG_RSP] = rsp;
-    ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr;
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = 0;
+    // pushq %rsp
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = ctx->uc_mcontext.gregs[REG_RSP];
+    // pushq %rip
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = ctx->uc_mcontext.gregs[REG_RIP];
+    // pushq .jl_fake_signal_return + 1; aka call from jl_fake_signal_return
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = (uintptr_t)&jl_fake_signal_return + 1;
+    ctx->uc_mcontext.gregs[REG_RSP] = rsp; // set stack pointer
+    ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr; // "call" the function
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
@@ -137,10 +226,22 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     ctx->uc_mcontext.mc_rip = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
+    // set return address to NULL
     rsp -= sizeof(void*);
     *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.gregs[REG_ESP] = rsp;
-    ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr;
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = 0;
+    // pushl %esp
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = ctx->uc_mcontext.gregs[REG_ESP];
+    // pushl %eip
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = ctx->uc_mcontext.gregs[REG_EIP];
+    // pushl .jl_fake_signal_return + 1; aka call from jl_fake_signal_return
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = (uintptr_t)&jl_fake_signal_return + 1;
+    ctx->uc_mcontext.gregs[REG_ESP] = rsp; // set stack pointer
+    ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr; // "call" the function
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
@@ -155,13 +256,19 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     ctx->sc_rip = fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    ctx->uc_mcontext.sp = rsp;
-    ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
-    ctx->uc_mcontext.pc = (uintptr_t)fptr;
+    // push {%sp, %pc}
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = ctx->uc_mcontext.sp;
+    rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = (uintptr_t)ctx->uc_mcontext.pc;
+    ctx->uc_mcontext.sp = rsp; // sp
+    ctx->uc_mcontext.pc = (uint64_t)fptr; // pc
+    ctx->uc_mcontext.regs[30] = (uintptr_t)&jl_fake_signal_return + 4; // lr (x30)
 #elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     ctx->uc_mcontext.mc_gpregs.gp_sp = rsp;
-    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear link register (x29)
+    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear frame pointer (x29)
+    ctx->uc_mcontext.mc_gpregs.gp_lr = 0; // Clear link register (x30)
     ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
@@ -549,9 +656,8 @@ static void jl_try_deliver_sigint(void)
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
 static int thread0_exit_signo = 0;
-static void JL_NORETURN jl_exit_thread0_cb(void)
+static void jl_exit_thread0_cb(void)
 {
-CFI_NORETURN
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
