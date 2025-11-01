@@ -220,35 +220,6 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
-// create a fake function that describes the variable manipulations in jl_call_in_state
-__attribute__((naked)) static void fake_stack_pop(void)
-{
-#ifdef _CPU_X86_64_
-    __asm__ volatile (
-        "  .cfi_signal_frame\n"
-        "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
-        "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
-        "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
-        "  nop\n"
-    );
-#elif defined(_CPU_AARCH64_)
-    __asm__ volatile (
-        "  .cfi_signal_frame\n"
-        "  .cfi_def_cfa sp, 0\n" // use sp as fp here
-        "  .cfi_offset lr, 0\n"
-        "  .cfi_offset sp, 8\n"
-        // Anything else got smashed, since we didn't explicitly copy all of the
-        // state object to the stack (to build a real sigreturn frame).
-        // This is also not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
-        // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
-        // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
-        " nop\n"
-    );
-#else
-CFI_NORETURN
-#endif
-}
-
 static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void))
 {
 #ifdef _CPU_X86_64_
@@ -258,9 +229,11 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void))
 #endif
     sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
     assert(sp % 16 == 0);
-    sp -= 16;
 #ifdef _CPU_X86_64_
     // set return address to NULL
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = 0;
+    sp -= sizeof(void*);
     *(uintptr_t*)sp = 0;
     // pushq %sp
     sp -= sizeof(void*);
