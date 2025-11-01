@@ -3294,6 +3294,10 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
             print(io, "exported")
         end
+        if (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "re-exported")
+        end
         if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
             first ? (first = false) : print(io, ",")
             print(io, "deprecated")

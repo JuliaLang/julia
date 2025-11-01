@@ -891,17 +891,10 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
 end
 
 function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child::InferenceState)
-    # add backedge of parent <- child
-    # then add all backedges of parent <- parent.parent
+    # update all cycleid to be in the same group
     frames = parent.callstack::Vector{AbsIntState}
     @assert child.callstack === frames
     ancestorid = child.cycleid
-    while true
-        add_cycle_backedge!(parent, child)
-        parent.cycleid === ancestorid && break
-        child = parent
-        parent = cycle_parent(child)::InferenceState
-    end
     # ensure that walking the callstack has the same cycleid (DAG)
     for frameid = reverse(ancestorid:length(frames))
         frame = frames[frameid]::InferenceState
@@ -912,7 +905,6 @@ function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child:
 end
 
 function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
-    update_valid_age!(caller, frame.world.valid_worlds)
     backedge = (caller, caller.currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     return frame
@@ -931,9 +923,8 @@ end
 # frame matching `mi` is encountered, then there is a cycle in the call graph
 # (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
 # we "resolve" it by merging the call chain, which entails updating each intermediary
-# frame's `cycleid` field and adding the appropriate backedges. Finally,
-# we return `mi`'s pre-existing frame. If no cycles are found, `nothing` is
-# returned instead.
+# frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
+# If no cycles are found, `nothing` is returned instead.
 function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
@@ -1117,6 +1108,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     result.ci_as_edge = edge_ci # set the edge for the inliner usage
                     VolatileInferenceResult(result)
                 end
+                isinferred || add_cycle_backedge!(caller, frame)
                 mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
                     edge, edgecycle, edgelimited, volatile_inf_result)
                 return true
@@ -1134,6 +1126,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+    add_cycle_backedge!(caller, frame)
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
 end
 

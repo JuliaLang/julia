@@ -1486,3 +1486,10 @@ let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do sve
 end
 
 @test Compiler.is_nothrow(Base.infer_effects(length, (Core.SimpleVector,)))
+
+
+# https://github.com/JuliaLang/julia/issues/60009
+function null_offset(offset)
+    Ptr{UInt8}(C_NULL) + offset
+end
+@test null_offset(Int(100)) == Ptr{UInt8}(UInt(100))

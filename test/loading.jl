@@ -623,9 +623,12 @@ function test_find(
 end
 
 @testset "find_package with one env in load path" begin
-    for (env, (_, _, roots, graph, paths)) in envs
-        push!(empty!(LOAD_PATH), env)
-        test_find(roots, graph, paths)
+    for idx in eachindex(envs)
+        @testset let idx=idx
+            (env, (_, _, roots, graph, paths)) = envs[idx]
+            push!(empty!(LOAD_PATH), env)
+            test_find(roots, graph, paths)
+        end
     end
 end
 

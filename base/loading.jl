@@ -333,62 +333,56 @@ Same as [`Base.identify_package`](@ref) except that the path to the environment 
 is also returned, except when the identity is not identified.
 """
 identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
-function identify_package_env(where::PkgId, name::String)
-    assert_havelock(require_lock)
-    cache = LOADING_CACHE[]
-    if cache !== nothing
-        pkg_env = get(cache.identified_where, (where, name), missing)
-        pkg_env === missing || return pkg_env
-    end
-    pkg_env = nothing
-    if where.name === name
-        return (where, nothing)
-    elseif where.uuid === nothing
-        pkg_env = identify_package_env(name) # ignore `where`
-    else
-        for env in load_path()
-            pkgid = manifest_deps_get(env, where, name)
-            # If we didn't find `where` at all, keep looking through the environment stack
-            pkgid === nothing && continue
-            if pkgid.uuid !== nothing
-                pkg_env = pkgid, env
-            end
-            # If we don't have pkgid.uuid, still break here - this is a sentinel that indicates
-            # that we've found `where` but it did not have the required dependency. We terminate the search.
-            break
-        end
-        if pkg_env === nothing && is_stdlib(where)
-            # if not found it could be that manifests are from a different julia version/commit
-            # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
-            # as a fallback
-            pkg_env = identify_stdlib_project_dep(where, name)
+function identify_package_env(where::Union{PkgId, Nothing}, name::String)
+    # Special cases
+    if where !== nothing
+        if where.name === name
+            # Project tries to load itself
+            return (where, nothing)
+        elseif where.uuid === nothing
+            # Project without Project.toml - treat as toplevel load
+            where = nothing
         end
     end
-    if cache !== nothing
-        cache.identified_where[(where, name)] = pkg_env
-    end
-    return pkg_env
-end
-function identify_package_env(name::String)
+
+    # Check if we have a cached answer for this
     assert_havelock(require_lock)
     cache = LOADING_CACHE[]
+    cache_key = where === nothing ? name : (where, name)
     if cache !== nothing
-        pkg_env = get(cache.identified, name, missing)
+        env_cache = where === nothing ? cache.identified : cache.identified_where
+        pkg_env = get(env_cache, cache_key, missing)
         pkg_env === missing || return pkg_env
     end
+
+    # Main part: Search through all environments in the load path to see if we have
+    # a matching entry.
     pkg_env = nothing
     for env in load_path()
-        pkg = project_deps_get(env, name)
-        if pkg !== nothing
-            pkg_env = pkg, env # found--return it
-            break
+        pkgid = environment_deps_get(env, where, name)
+        # If we didn't find `where` at all, keep looking through the environment stack
+        pkgid === nothing && continue
+        if pkgid.uuid !== nothing || where === nothing
+            pkg_env = pkgid, env
         end
+        # If we don't have pkgid.uuid, still break here - this is a sentinel that indicates
+        # that we've found `where` but it did not have the required dependency. We terminate the search.
+        break
     end
+    if pkg_env === nothing && where !== nothing && is_stdlib(where)
+        # if not found it could be that manifests are from a different julia version/commit
+        # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
+        # as a fallback
+        pkg_env = identify_stdlib_project_dep(where, name)
+    end
+
+    # Cache the result
     if cache !== nothing
-        cache.identified[name] = pkg_env
+        env_cache[cache_key] = pkg_env
     end
     return pkg_env
 end
+identify_package_env(name::String) = identify_package_env(nothing, name)
 
 function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
     @debug """
@@ -447,19 +441,18 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
     path = nothing
     env′ = nothing
     if pkg.uuid === nothing
+        # The project we're looking for does not have a Project.toml (n.b. - present
+        # `Project.toml` without UUID gets a path-based dummy UUID). It must have
+        # come from an implicit manifest environment, so go through those only.
         for env in load_path()
-            # look for the toplevel pkg `pkg.name` in this entry
-            found = project_deps_get(env, pkg.name)
-            if found !== nothing
+            project_file = env_project_file(env)
+            (project_file isa Bool && project_file) || continue
+            found = implicit_manifest_pkgid(env, pkg.name)
+            if found !== nothing && found.uuid === nothing
                 @assert found.name == pkg.name
-                if found.uuid === nothing
-                    # pkg.name is present in this directory or project file,
-                    # return the path the entry point for the code, if it could be found
-                    # otherwise, signal failure
-                    path = implicit_manifest_uuid_path(env, pkg)
-                    env′ = env
-                    @goto done
-                end
+                path = implicit_manifest_uuid_path(env, pkg)
+                env′ = env
+                @goto done
             end
             if !(loading_extension || precompiling_extension)
                 stopenv == env && @goto done
@@ -715,17 +708,6 @@ function base_project(project_file)
     end
 end
 
-function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
-    project_file = env_project_file(env)
-    if project_file isa String
-        pkg_uuid = explicit_project_deps_get(project_file, name)
-        pkg_uuid === nothing || return PkgId(pkg_uuid, name)
-    elseif project_file
-        return implicit_project_deps_get(env, name)
-    end
-    return nothing
-end
-
 function package_get_here(project_file, name::String)
     # if `where` matches the project, use [deps] section as manifest, and stop searching
     pkg_uuid = explicit_project_deps_get(project_file, name)
@@ -733,9 +715,11 @@ function package_get_here(project_file, name::String)
     return PkgId(pkg_uuid, name)
 end
 
-function package_get(project_file, where::PkgId, name::String)
-    proj = project_file_name_uuid(project_file, where.name)
-    proj != where && return nothing
+function package_get(project_file, where::Union{Nothing, PkgId}, name::String)
+    if where !== nothing
+        proj = project_file_name_uuid(project_file, where.name)
+        proj != where && return nothing
+    end
     return package_get_here(project_file, name)
 end
 
@@ -766,23 +750,51 @@ function package_extension_get(project_file, where::PkgId, name::String)
     return nothing
 end
 
-function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
-    @assert where.uuid !== nothing
+function environment_deps_get(env::String, where::Union{Nothing,PkgId}, name::String)::Union{Nothing,PkgId}
+    @assert where === nothing || where.uuid !== nothing
     project_file = env_project_file(env)
     implicit_manifest = !(project_file isa String)
     if implicit_manifest
         project_file || return nothing
+        if where === nothing
+            # Toplevel load with a directory (implicit manifest) - all we look for is the
+            # existence of the package name in the directory.
+            pkg = implicit_manifest_pkgid(env, name)
+            return pkg
+        end
         project_file = implicit_manifest_project(env, where)
         project_file === nothing && return nothing
     end
 
-    # 1. Are we loading into the top-level project itself? dependencies come from [deps]
-    #    N.B.: Here "top-level" includes package loaded from an implicit manifest, which
-    #          uses the same code path.
+    # Are we
+    #    a) loading into a top-level project itself
+    #    b) loading into a non-top-level project that was part of an implicit
+    #       manifest environment (and for which we found the project file above)
+    #    c) performing a top-level load (where === nothing) - i.e. we're looking
+    #       at an environment's project file.
+    #
+    # If so, we may load either:
+    #   I: the project itself (if name matches where)
+    #   II: a dependency from [deps] section of the project file
+    #
+    # N.B.: Here "top-level" includes package loaded from an implicit manifest, which
+    #       uses the same code path. Otherwise this is the active project.
     pkg = package_get(project_file, where, name)
-    pkg === nothing || return pkg
+    if pkg !== nothing
+        if where === nothing && pkg.uuid === nothing
+            # This is a top-level load - even though we didn't find the dependency
+            # here, we still want to keep looking through the top-level environment stack.
+            return nothing
+        end
+        return pkg
+    end
 
-    # 2. Are we an extension of the top-level project? dependencies come from [weakdeps] and [deps]
+    @assert where !== nothing
+
+    # Are we an extension of a project from cases a), b) above
+    # If so, in addition to I, II above, we get:
+    #   III: A dependency from [weakdeps] section of the project file as long
+    #        as it is an extension trigger for `where` in the `extensions` section.
     pkg = package_extension_get(project_file, where, name)
     pkg === nothing || return pkg
 
@@ -1160,10 +1172,7 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
 end
 
 ## implicit project & manifest API ##
-
-# look for an entry point for `name` from a top-level package (no environment)
-# otherwise return `nothing` to indicate the caller should keep searching
-function implicit_project_deps_get(dir::String, name::String)::Union{Nothing,PkgId}
+function implicit_manifest_pkgid(dir::String, name::String)::Union{Nothing,PkgId}
     path, project_file = entry_point_and_project_file(dir, name)
     if project_file === nothing
         path === nothing && return nothing
@@ -1174,7 +1183,7 @@ function implicit_project_deps_get(dir::String, name::String)::Union{Nothing,Pkg
     return proj
 end
 
-function implicit_manifest_project(dir, pkg::PkgId)::Union{Nothing, String}
+function implicit_manifest_project(dir::String, pkg::PkgId)::Union{Nothing, String}
     @assert pkg.uuid !== nothing
     project_file = entry_point_and_project_file(dir, pkg.name)[2]
     if project_file === nothing

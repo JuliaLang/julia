@@ -133,9 +133,9 @@ using A.B            => _module_using(Main, Expr(:., :A, :B))
 
 See also [`_using`](@ref Core._using).
 """
-function _eval_using(to::Module, path::Expr)
+function _eval_using(to::Module, path::Expr, flags::UInt8=UInt8(0))
     from = eval_import_path_all(to, path, "using")
-    Core._using(to, from)
+    Core._using(to, from, flags)
     is_package = length(path.args) == 1 && path.args[1] !== :.
     if to == Main && is_package
         Core._import(to, from, nameof(from))

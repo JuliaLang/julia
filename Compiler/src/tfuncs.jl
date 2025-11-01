@@ -708,7 +708,7 @@ function pointer_eltype(@nospecialize(ptr))
 end
 
 @nospecs function pointerarith_tfunc(𝕃::AbstractLattice, ptr, offset)
-    return ptr
+    return widenconst(ptr)
 end
 @nospecs function pointerref_tfunc(𝕃::AbstractLattice, a, i, align)
     return pointer_eltype(a)
