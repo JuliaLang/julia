@@ -182,6 +182,7 @@
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
+    XX(jl_gethugepagesize) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
     XX(jl_get_ARCH) \
