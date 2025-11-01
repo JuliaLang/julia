@@ -65,6 +65,9 @@ const HISTORY_SAMPLE_INCOMPLETE = """
 # mode: julia
 """
 
+basichist(mode::Symbol, date::DateTime, content::String, index::Int = 0) =
+    HistEntry(mode, date, content, 0, "", "", 0.0, index, 0, false)
+
 @testset "Histfile" begin
     hpath = tempname()
     mkpath(dirname(hpath))
@@ -81,8 +84,8 @@ const HISTORY_SAMPLE_INCOMPLETE = """
             hist = HistoryFile(hpath)
             update!(hist)
             @test length(hist) == 5
-            @test hist[1] == HistEntry(:julia, DateTime("2020-10-31T05:16:39"), "cos", 1)
-            @test hist[2] == HistEntry(:help, DateTime("2020-10-31T05:16:40"), "cos", 2)
+            @test hist[1] == basichist(:julia, DateTime("2020-10-31T05:16:39"), "cos", 1)
+            @test hist[2] == basichist(:help, DateTime("2020-10-31T05:16:40"), "cos", 2)
             funccontent = """
         function is_leap_year(year)
             if year % 4 == 0 && (! year % 100 == 0 || year % 400 == 0)
@@ -91,9 +94,9 @@ const HISTORY_SAMPLE_INCOMPLETE = """
                 return false
             end
         end"""
-            @test hist[3] == HistEntry(:julia, DateTime("2021-03-12T09:03:06"), funccontent, 3)
-            @test hist[4] == HistEntry(:julia, DateTime("2021-03-23T16:48:55"), "L²norm(x -> x^2, ℐ)", 4)
-            @test hist[5] == HistEntry(:julia, DateTime("2021-03-23T16:49:06"), "L²norm(x -> 9x, ℐ)", 5)
+            @test hist[3] == basichist(:julia, DateTime("2021-03-12T09:03:06"), funccontent, 3)
+            @test hist[4] == basichist(:julia, DateTime("2021-03-23T16:48:55"), "L²norm(x -> x^2, ℐ)", 4)
+            @test hist[5] == basichist(:julia, DateTime("2021-03-23T16:49:06"), "L²norm(x -> 9x, ℐ)", 5)
             close(hist)
         end
         @testset "Format 2" begin
@@ -101,9 +104,9 @@ const HISTORY_SAMPLE_INCOMPLETE = """
             hist = HistoryFile(hpath)
             update!(hist)
             @test length(hist) == 3
-            @test hist[1] == HistEntry(:julia, DateTime("2025-10-18T18:21:03"), "Iterators.partition([1,2,3,4,5,6,7], 2) |> eltype", 1)
-            @test hist[2] == HistEntry(:julia, DateTime("2025-10-19T06:27:10"), "using Chairmarks", 2)
-            @test hist[3] == HistEntry(:julia, DateTime("2025-10-19T06:27:18"), "@b REPL.History.HistoryFile(\"/home/tec/.julia/logs/repl_history.jl\") REPL.History.update!", 3)
+            @test hist[1] == basichist(:julia, DateTime("2025-10-18T18:21:03"), "Iterators.partition([1,2,3,4,5,6,7], 2) |> eltype", 1)
+            @test hist[2] == basichist(:julia, DateTime("2025-10-19T06:27:10"), "using Chairmarks", 2)
+            @test hist[3] == basichist(:julia, DateTime("2025-10-19T06:27:18"), "@b REPL.History.HistoryFile(\"/home/tec/.julia/logs/repl_history.jl\") REPL.History.update!", 3)
             close(hist)
         end
         @testset "Malformed" begin
@@ -125,7 +128,7 @@ const HISTORY_SAMPLE_INCOMPLETE = """
             hist = HistoryFile(hpath)
             @test_nowarn update!(hist)
             @test length(hist) == 1
-            @test hist[1] == HistEntry(:julia, DateTime("2025-05-10T12:34:56"), "foo()", 1)
+            @test hist[1] == basichist(:julia, DateTime("2025-05-10T12:34:56"), "foo()", 1)
             close(hist)
         end
     end
@@ -134,9 +137,9 @@ const HISTORY_SAMPLE_INCOMPLETE = """
         write(hpath, "")
         hist = HistoryFile(hpath)
         entries = [
-            HistEntry(:julia, DateTime("2024-06-01T10:00:00"), "println(\"Hello, World!\")", 0),
-            HistEntry(:shell, DateTime("2024-06-01T10:05:00"), "ls -la", 0),
-            HistEntry(:help, DateTime("2024-06-01T10:10:00"), "? println", 0),
+            basichist(:julia, DateTime("2024-06-01T10:00:00"), "println(\"Hello, World!\")", 0),
+            basichist(:shell, DateTime("2024-06-01T10:05:00"), "ls -la", 0),
+            basichist(:help, DateTime("2024-06-01T10:10:00"), "? println", 0),
         ]
         for entry in entries
             push!(hist, entry)
@@ -161,12 +164,12 @@ const HISTORY_SAMPLE_INCOMPLETE = """
         update!(hist_a)
         update!(hist_b)
         @test length(hist_b) == 5
-        push!(hist_a, HistEntry(:julia, now(UTC), "2 + 2", 0))
+        push!(hist_a, basichist(:julia, now(UTC), "2 + 2", 0))
         @test length(hist_a) == 6
         update!(hist_b)
         @test length(hist_b) == 6
         @test hist_b[end] == hist_a[end]
-        push!(hist_b, HistEntry(:shell, now(UTC), "echo 'Hello'", 0))
+        push!(hist_b, basichist(:shell, now(UTC), "echo 'Hello'", 0))
         @test length(hist_b) == 7
         update!(hist_a)
         @test length(hist_a) == 7
@@ -264,15 +267,15 @@ end
         end
         @testset "Matching" begin
             entries = [
-                HistEntry(:julia, now(UTC), "println(\"hello world\")", 1),
-                HistEntry(:julia, now(UTC), "log2(1234.5)", 1),
-                HistEntry(:julia, now(UTC), "test case", 1),
-                HistEntry(:help, now(UTC), "cos", 1),
-                HistEntry(:julia, now(UTC), "cos(2π)", 1),
-                HistEntry(:julia, now(UTC), "case of tests", 1),
-                HistEntry(:shell, now(UTC), "echo 'Hello World'", 4),
-                HistEntry(:julia, now(UTC), "foo_bar(2, 7)", 5),
-                HistEntry(:julia, now(UTC), "test_fun()", 5),
+                basichist(:julia, now(UTC), "println(\"hello world\")", 1),
+                basichist(:julia, now(UTC), "log2(1234.5)", 1),
+                basichist(:julia, now(UTC), "test case", 1),
+                basichist(:help, now(UTC), "cos", 1),
+                basichist(:julia, now(UTC), "cos(2π)", 1),
+                basichist(:julia, now(UTC), "case of tests", 1),
+                basichist(:shell, now(UTC), "echo 'Hello World'", 4),
+                basichist(:julia, now(UTC), "foo_bar(2, 7)", 5),
+                basichist(:julia, now(UTC), "test_fun()", 5),
             ]
             results = HistEntry[]
             @testset "Words" begin
@@ -360,14 +363,14 @@ end
 end
 
 @testset "Display calculations" begin
-    entries = [HistEntry(:julia, now(UTC), "test_$i", i) for i in 1:20]
+    entries = [basichist(:julia, now(UTC), "test_$i", i) for i in 1:20]
     @testset "componentrows" begin
         @testset "Standard terminal" begin
             state = SelectorState((30, 80), "", FilterSpec(), entries)
             @test componentrows(state) == (candidates = 13, preview = 6)
             state = SelectorState((30, 80), "", FilterSpec(), entries, 0, (active = [1, 3], gathered = HistEntry[]), 1)
             @test componentrows(state) == (candidates = 13, preview = 6)
-            gathered = [HistEntry(:julia, now(UTC), "old", i) for i in 21:22]
+            gathered = [basichist(:julia, now(UTC), "old", i) for i in 21:22]
             state = SelectorState((30, 80), "", FilterSpec(), entries, gathered)
             @test componentrows(state) == (candidates = 13, preview = 6)
         end
@@ -379,7 +382,7 @@ end
         end
         @testset "Preview clamping" begin
             multiline = join(["line$i" for i in 1:20], '\n')
-            state = SelectorState((30, 80), "", FilterSpec(), [HistEntry(:julia, now(UTC), multiline, 1)], 0, (active = [1], gathered = HistEntry[]), 1)
+            state = SelectorState((30, 80), "", FilterSpec(), [basichist(:julia, now(UTC), multiline, 1)], 0, (active = [1], gathered = HistEntry[]), 1)
             @test componentrows(state) == (candidates = 7, preview = 12)
         end
     end
@@ -392,14 +395,14 @@ end
         end
         @testset "Multi-line entries" begin
             code = "begin\n    x = 10\n    y = 20\n    x + y\nend"
-            state = SelectorState((30, 80), "", FilterSpec(), [HistEntry(:julia, now(UTC), code, 1)], 0, (active = [1], gathered = HistEntry[]), 1)
+            state = SelectorState((30, 80), "", FilterSpec(), [basichist(:julia, now(UTC), code, 1)], 0, (active = [1], gathered = HistEntry[]), 1)
             @test countlines_selected(state) == 5
             huge = join(["line" for _ in 1:1000], '\n')
-            state = SelectorState((30, 80), "", FilterSpec(), [HistEntry(:julia, now(UTC), huge, 1)], 0, (active = [1], gathered = HistEntry[]), 1)
+            state = SelectorState((30, 80), "", FilterSpec(), [basichist(:julia, now(UTC), huge, 1)], 0, (active = [1], gathered = HistEntry[]), 1)
             @test countlines_selected(state) == 1000
         end
         @testset "With gathered entries" begin
-            gathered = [HistEntry(:julia, now(UTC), "old", i) for i in 21:22]
+            gathered = [basichist(:julia, now(UTC), "old", i) for i in 21:22]
             state = SelectorState((30, 80), "", FilterSpec(), entries, 0, (active = [1], gathered), 1)
             @test countlines_selected(state) == 4
         end
@@ -412,7 +415,7 @@ end
             @test gethover(state) == entries[18]
         end
         @testset "With gathered entries" begin
-            gathered = [HistEntry(:julia, now(UTC), "old_$i", i) for i in 21:22]
+            gathered = [basichist(:julia, now(UTC), "old_$i", i) for i in 21:22]
             state = SelectorState((30, 80), "", FilterSpec(), entries, 0, (active = Int[], gathered), -2)
             @test gethover(state) == gathered[2]
         end
@@ -439,7 +442,7 @@ end
             @test cands.active.selected == [-5, 5, 8]
         end
         @testset "With gathered entries" begin
-            gathered = [HistEntry(:julia, now(UTC), "gathered_$i", 20+i) for i in 1:2]
+            gathered = [basichist(:julia, now(UTC), "gathered_$i", 20+i) for i in 1:2]
             state = SelectorState((30, 80), "", FilterSpec(), entries, gathered)
             state = SelectorState(state.area, state.query, state.filter, state.candidates, -2, state.selection, 1)
             cands = candidates(state, 10)
@@ -459,13 +462,13 @@ end
             cands = candidates(state, 10)
             @test isempty(cands.active.entries)
             @test cands.active.rows == 10
-            gathered = [HistEntry(:julia, now(UTC), "old_$i", 20+i) for i in 1:15]
+            gathered = [basichist(:julia, now(UTC), "old_$i", 20+i) for i in 1:15]
             state = SelectorState((30, 80), "", FilterSpec(), entries, gathered)
             state = SelectorState(state.area, state.query, state.filter, state.candidates, -10, state.selection, -1)
             cands = candidates(state, 8)
             @test cands.gathered.rows == 7
             @test cands.active.rows == 0
-            few = [HistEntry(:julia, now(UTC), "entry_$i", i) for i in 1:3]
+            few = [basichist(:julia, now(UTC), "entry_$i", i) for i in 1:3]
             state = SelectorState((30, 80), "", FilterSpec(), few)
             cands = candidates(state, 20)
             @test cands.active.entries == few
@@ -474,7 +477,7 @@ end
 end
 
 @testset "Search state manipulation" begin
-    entries = [HistEntry(:julia, now(UTC), "test_$i", i) for i in 1:20]
+    entries = [basichist(:julia, now(UTC), "test_$i", i) for i in 1:20]
     @testset "movehover" begin
         @testset "Single step moves" begin
             state = SelectorState((30, 80), "", FilterSpec(), entries, 0, (active = Int[], gathered = HistEntry[]), 5)
@@ -493,7 +496,7 @@ end
             @test movehover(bottom, false, false).hover == 1
         end
         @testset "With gathered entries" begin
-            gathered = [HistEntry(:julia, now(UTC), "old_cmd", 21)]
+            gathered = [basichist(:julia, now(UTC), "old_cmd", 21)]
             state = SelectorState((30, 80), "", FilterSpec(), entries, gathered)
             state = SelectorState(state.area, state.query, state.filter, state.candidates, -1, state.selection, 1)
             @test movehover(state, false, false).hover == -1
@@ -507,14 +510,14 @@ end
             state = SelectorState((30, 80), "", FilterSpec(), HistEntry[])
             @test movehover(state, true, false).hover == 1
             @test movehover(state, false, false).hover == 1
-            gathered = [HistEntry(:julia, now(UTC), "old_cmd", 1)]
+            gathered = [basichist(:julia, now(UTC), "old_cmd", 1)]
             state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], gathered)
             state = SelectorState(state.area, state.query, state.filter, state.candidates, -1, state.selection, -1)
             @test movehover(state, true, false).hover == 1
             @test movehover(state, false, false).hover == -1
         end
         @testset "Single candidate" begin
-            one = [HistEntry(:julia, now(UTC), "only", 1)]
+            one = [basichist(:julia, now(UTC), "only", 1)]
             state = SelectorState((30, 80), "", FilterSpec(), one)
             @test movehover(state, true, false).hover == 1
             @test movehover(state, false, false).hover == 1
@@ -537,7 +540,7 @@ end
             @test state.selection.active == [18, 20]
         end
         @testset "Gathered entries" begin
-            gathered = [HistEntry(:julia, now(UTC), "old_$i", 20+i) for i in 1:2]
+            gathered = [basichist(:julia, now(UTC), "old_$i", 20+i) for i in 1:2]
             state = SelectorState((30, 80), "", FilterSpec(), entries, -1, (active = Int[], gathered), -1)
             @test toggleselection(state).selection.gathered == [gathered[2]]
         end
@@ -559,10 +562,10 @@ end
     end
     @testset "fullselection" begin
         entries = [
-            HistEntry(:julia, now(UTC), "using DataFrames", 1),
-            HistEntry(:julia, now(UTC), "df = load_data()", 2),
-            HistEntry(:shell, now(UTC), "cat data.csv", 3),
-            HistEntry(:julia, now(UTC), "describe(df)", 4),
+            basichist(:julia, now(UTC), "using DataFrames", 1),
+            basichist(:julia, now(UTC), "df = load_data()", 2),
+            basichist(:shell, now(UTC), "cat data.csv", 3),
+            basichist(:julia, now(UTC), "describe(df)", 4),
         ]
         @testset "No selection" begin
             state = SelectorState((30, 80), "", FilterSpec(), entries)
@@ -577,7 +580,7 @@ end
             @test fullselection(state) == (mode = :julia, text = "using DataFrames\ncat data.csv\ndescribe(df)")
         end
         @testset "With gathered entries" begin
-            gathered = [HistEntry(:julia, now(UTC), "ENV[\"COLUMNS\"] = 120", 0)]
+            gathered = [basichist(:julia, now(UTC), "ENV[\"COLUMNS\"] = 120", 0)]
             state = SelectorState((30, 80), "", FilterSpec(), entries, 0, (active = [2], gathered), 1)
             @test fullselection(state) == (mode = :julia, text = "ENV[\"COLUMNS\"] = 120\ndf = load_data()")
         end
@@ -588,7 +591,7 @@ end
             @test fullselection(state) == (mode = nothing, text = "")
             state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], 0, (active = Int[], gathered = HistEntry[]), -1)
             @test fullselection(state) == (mode = nothing, text = "")
-            gathered = [HistEntry(:julia, now(UTC), "old_1", 1)]
+            gathered = [basichist(:julia, now(UTC), "old_1", 1)]
             state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], 0, (active = Int[], gathered), -1)
             @test fullselection(state) == (mode = :julia, text = "old_1")
         end

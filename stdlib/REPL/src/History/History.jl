@@ -10,7 +10,7 @@ using Base.Threads
 using Dates
 using InteractiveUtils: clipboard
 
-export HistoryFile, HistEntry, update!, runsearch
+export HistoryFile, HistEntry, HistUpdate, update!, runsearch
 
 const FACES = (
     :REPL_History_search_separator   => Face(foreground=:blue),
