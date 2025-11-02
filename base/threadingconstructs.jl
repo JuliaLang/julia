@@ -365,31 +365,28 @@ end
 
 function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
-        let iter = $itr
-        # Collect non-indexable iterators (like ProductIterator)
-        items = (iter isa AbstractArray || hasmethod(getindex, Tuple{typeof(iter), Int})) ? iter : collect(iter)
-        c = Channel{eltype(items)}(threadpoolsize(), spawn=true) do ch
-            for item in items
-                put!(ch, item)
-            end
-        end
-        result = Vector{Vector}(undef, threadpoolsize())
-        # Initialize all result vectors to empty
-        for i in 1:threadpoolsize()
-            result[i] = []
-        end
-
-        function threadsfor_fun(tid)
-            local_results = []
-            for item in c
-                local $esc_lidx = item
-                if $esc_condition
-                    push!(local_results, $esc_body)
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
+                for item in $itr
+                    put!(ch, item)
                 end
             end
-            result[tid] = local_results
-        end
-        result  # Return result so it's accessible after threading_run
+            result = Vector{Vector}(undef, threadpoolsize())
+            # Initialize all result vectors to empty
+            for i in 1:threadpoolsize()
+                result[i] = []
+            end
+
+            function threadsfor_fun(tid)
+                local_results = []
+                for item in c
+                    local $esc_lidx = item
+                    if $esc_condition
+                        push!(local_results, $esc_body)
+                    end
+                end
+                result[tid] = local_results
+            end
+            result  # Return result so it's accessible after threading_run
         end
     end
 end
