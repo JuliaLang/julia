@@ -306,4 +306,5 @@ clean:
 	-rm -f $(BUILDDIR)/file_constants.jl
 	-rm -f $(BUILDDIR)/version_git.jl
 	-rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(BUILDDIR)/version_git_dirty
 	-rm -f $(build_private_libdir)/lib*.$(SHLIB_EXT)*
