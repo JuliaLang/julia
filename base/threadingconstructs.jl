@@ -585,8 +585,8 @@ to run two of the 1-second iterations to complete the for loop.
 ### Array comprehensions
 
 The `@threads` macro also supports array comprehensions, which return the collected results.
-Array comprehensions preserve element order for all scheduling options. Multi-dimensional 
-comprehensions preserve the dimensions of the original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` 
+Array comprehensions preserve element order for all scheduling options. Multi-dimensional
+comprehensions preserve the dimensions of the original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]`
 returns an `n×m` matrix).
 
 ```julia-repl
