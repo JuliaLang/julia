@@ -50,8 +50,6 @@ const skipfiles = [
     "../src/support/ENTRY.amd64.h",
     "../src/support/ENTRY.i387.h",
     "../src/support/_setjmp.win32.S",
-    "../src/support/MurmurHash3.c",
-    "../src/support/MurmurHash3.h",
     "../src/support/asprintf.c",
     "../src/support/dirname.c",
     "../src/support/strptime.c",

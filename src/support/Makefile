@@ -24,7 +24,7 @@ HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-FLAGS_COMMON := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
+FLAGS_COMMON := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(XXHASH_INC) -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
 FLAGS_COMMON += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
 JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
@@ -75,7 +75,7 @@ CLANG_TOOLING_S_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG)
 CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
 
 # Included files in support
-INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
+INCLUDED_SUPPORT_FILES :=
 
 # Compilation database generation
 .PHONY: regenerate-compile_commands

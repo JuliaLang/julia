@@ -61,6 +61,7 @@ USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
+USE_SYSTEM_XXHASH:=0
 USE_SYSTEM_LLD:=0
 
 # Link to the LLVM shared library
@@ -1371,6 +1372,14 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+ifeq ($(USE_SYSTEM_XXHASH), 1)
+  LIBXXHASH := -lxxhash
+  XXHASH_INC := $(LOCALBASE)/include
+else
+  LIBXXHASH := $(build_libdir)/libxxhash.a
+  XXHASH_INC := $(build_includedir)
+endif
+
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
 PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)
@@ -1438,7 +1447,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD XXHASH P7ZIP LLD LIBTRACYCLIENT BOLT
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 BB_PROJECTS += MMTK_JULIA
@@ -1458,6 +1467,12 @@ endif
 endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
+
+ifeq ($(USE_SYSTEM_XXHASH), 0)
+ifeq ($(USE_BINARYBUILDER_XXHASH), 1)
+LIBXXHASH := $(build_shlibdir)/libxxhash.$(SHLIB_EXT)
+endif
+endif
 
 
 # Warn if the user tries to build something that requires `gfortran` but they don't have it installed.

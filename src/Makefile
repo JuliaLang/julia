@@ -203,9 +203,9 @@ LIBJULIA_PATH_REL := libjulia
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
-RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd
+RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(LIBXXHASH) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
-CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
+CG_LIBS := $(LIBUNWIND) $(LIBXXHASH) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 RT_LIBS += $(MMTK_LIB)
@@ -255,6 +255,19 @@ FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_release)
 else
 FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_$(JULIA_BUILD_MODE))
 endif
+
+# Provide shared-library search paths when invoking flisp during the build so it can
+# locate BinaryBuilder-delivered dependencies such as libxxhash.
+FLISP_RUN_ENV :=
+ifeq ($(OS),Darwin)
+FLISP_RUN_ENV := DYLD_LIBRARY_PATH=$(build_libdir):$$DYLD_LIBRARY_PATH
+else ifneq ($(OS),WINNT)
+FLISP_RUN_ENV := LD_LIBRARY_PATH=$(build_libdir):$$LD_LIBRARY_PATH
+endif
+
+define with_build_libpath
+$(if $(FLISP_RUN_ENV),$(FLISP_RUN_ENV) $(1),$(1))
+endef
 
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
@@ -352,12 +365,12 @@ $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLV
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
+	@$(call PRINT_FLISP, $(call spawn,$(call with_build_libpath,$(FLISP_EXECUTABLE_release))) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
 
 $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliases.scm flisp/profile.scm \
 		julia-parser.scm julia-syntax.scm match.scm utils.scm ast.scm macroexpand.scm mk_julia_flisp_boot.scm) \
 		$(FLISP_EXECUTABLE_release)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) \
+	@$(call PRINT_FLISP, $(call spawn,$(call with_build_libpath,$(FLISP_EXECUTABLE_release))) \
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
 # additional dependency links

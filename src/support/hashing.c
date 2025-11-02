@@ -9,6 +9,7 @@
 #include "hashing.h"
 #include "timefuncs.h"
 #include "ios.h"
+#include <xxhash.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,50 +49,33 @@ uint32_t int64to32hash(uint64_t key)
     return (uint32_t)key;
 }
 
-#include "MurmurHash3.c"
+#define JL_XXHASH_DEFAULT_SEED ((XXH64_hash_t)0xcafe8881ULL)
 
-#define _MHASH_SEED_ 0xcafe8881
+static inline XXH64_hash_t jl_xxhash_seed(uint32_t seed)
+{
+    return (XXH64_hash_t)seed;
+}
 
 uint64_t memhash(const char *buf, size_t n)
 {
-    uint64_t out[2];
-
-    // TODO: expose 128-bit hash
-#ifdef _P64
-    MurmurHash3_x64_128(buf, n, _MHASH_SEED_, out);
-#else
-    MurmurHash3_x86_128(buf, n, _MHASH_SEED_, out);
-#endif
-    return out[1];
+    return (uint64_t)XXH3_64bits_withSeed(buf, n, JL_XXHASH_DEFAULT_SEED);
 }
 
 uint64_t memhash_seed(const char *buf, size_t n, uint32_t seed)
 {
-    uint64_t out[2];
-
-    // TODO: expose 128-bit hash
-#ifdef _P64
-    MurmurHash3_x64_128(buf, n, seed, out);
-#else
-    MurmurHash3_x86_128(buf, n, seed, out);
-#endif
-    return out[1];
+    const XXH64_hash_t seed64 = jl_xxhash_seed(seed);
+    return (uint64_t)XXH3_64bits_withSeed(buf, n, seed64);
 }
 
 uint32_t memhash32(const char *buf, size_t n)
 {
-    uint32_t out;
-
-    MurmurHash3_x86_32(buf, n, _MHASH_SEED_, &out);
-    return out;
+    return (uint32_t)XXH3_64bits_withSeed(buf, n, JL_XXHASH_DEFAULT_SEED);
 }
 
 uint32_t memhash32_seed(const char *buf, size_t n, uint32_t seed)
 {
-    uint32_t out;
-
-    MurmurHash3_x86_32(buf, n, seed, &out);
-    return out;
+    const XXH64_hash_t seed64 = jl_xxhash_seed(seed);
+    return (uint32_t)XXH3_64bits_withSeed(buf, n, seed64);
 }
 
 #ifdef __cplusplus

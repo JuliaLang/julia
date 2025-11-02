@@ -38,6 +38,7 @@ LIBS :=
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
+LIBS += $(LIBXXHASH)
 
 ifeq ($(USE_SYSTEM_UTF8PROC),0)
 LIBFILES_release += $(LIBUTF8PROC)

@@ -1,0 +1,9 @@
+# -*- makefile -*-
+## jll artifact
+XXHASH_JLL_NAME := xxHash
+XXHASH_JLL_VER := 0.8.3+0
+
+## source build
+XXHASH_VER := 0.8.3
+XXHASH_BRANCH=v0.8.3
+XXHASH_SHA1=e626a72bc2321cd320e953a0ccf1584cad60f363
