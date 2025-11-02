@@ -406,6 +406,10 @@ function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
             # Special case: `global x` should return nothing to avoid syntax errors with assigning to a value
             val = nothing
         else
+            if isexpr(def, :(=), 2) && isexpr(def.args[1], :curly)
+                # workaround for lowering bug #60001
+                exdef = Expr(:block, exdef)
+            end
             val = :val
             exdef = Expr(:(=), val, exdef)
         end
