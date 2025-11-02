@@ -279,7 +279,7 @@ depending on the characteristics of the operations.
 Although Julia's threads can communicate through shared memory, it is notoriously difficult to write correct and data-race free multi-threaded code. Julia's
 [`Channel`](@ref)s are thread-safe and may be used to communicate safely. There are also sections below that explain how to use [locks](@ref man-using-locks) and [atomics](@ref man-atomic-operations) to avoid data-races.
 
-In certain cases, Julia is able to detect a detect safety violations, in particular in regards to deadlocks or other known-unsafe operations such as yielding
+In certain cases, Julia is able to detect safety violations, in particular in regards to deadlocks or other known-unsafe operations such as yielding
 to the currently running task. In these cases, a [`ConcurrencyViolationError`](@ref) is thrown.
 
 ### Data-race freedom
