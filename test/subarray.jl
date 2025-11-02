@@ -381,6 +381,8 @@ end
     sA = view(A, 1:2, 3, [1 3; 4 2])
     @test ndims(sA) == 3
     @test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
+    @test axes(similar(typeof(A),axes(A))) == axes(A)
+    @test eltype(similar(typeof(A),axes(A))) == eltype(A)
 end
 
 @testset "logical indexing #4763" begin
@@ -1027,31 +1029,6 @@ catch err
     err isa ErrorException && startswith(err.msg, "syntax:")
 end
 
-
-@testset "avoid allocating in reindex" begin
-    a = reshape(1:16, 4, 4)
-    inds = ([2,3], [3,4])
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (2,3)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
-
-    inds = (reshape([eachindex(a);], size(a)),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2),)
-
-    inds = (reshape([eachindex(a);], size(a)..., 1),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2, 1:1)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
-end
-
 @testset "isassigned" begin
     a = Vector{BigFloat}(undef, 5)
     a[2] = 0
@@ -1075,50 +1052,37 @@ end
         @test !isassigned(v, 1, 2) # inbounds but not assigned
         @test !isassigned(v, 3, 3) # out-of-bounds
     end
+end
 
-    @testset "_unsetindex!" begin
-        function test_unsetindex(A, B)
-            copyto!(A, B)
-            for i in eachindex(A)
-                @test !isassigned(A, i)
-            end
-            inds = eachindex(A)
-            @test_throws BoundsError Base._unsetindex!(A, last(inds) + oneunit(eltype(inds)))
-        end
-        @testset "dest IndexLinear, src IndexLinear" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(copy(p), ntuple(_->:, ndims(p))...)
-                B = view(similar(A), ntuple(_->:, ndims(p))...)
-                test_unsetindex(A, B)
-                test_unsetindex(p, B)
-            end
-        end
+@testset "aliasing checks with shared indices" begin
+    indices = [1,3]
+    a = rand(3)
+    av = @view a[indices]
+    b = rand(3)
+    bv = @view b[indices]
+    @test !Base.mightalias(av, bv)
+    @test Base.mightalias(a, av)
+    @test Base.mightalias(b, bv)
+    @test Base.mightalias(indices, av)
+    @test Base.mightalias(indices, bv)
+    @test Base.mightalias(view(indices, :), av)
+    @test Base.mightalias(view(indices, :), bv)
+end
 
-        @testset "dest IndexLinear, src IndexCartesian" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(copy(p), ntuple(_->:, ndims(p))...)
-                B = view(similar(A), axes(A)...)
-                test_unsetindex(A, B)
-                test_unsetindex(p, B)
-            end
-        end
+@testset "aliasing checks with disjoint arrays" begin
+    A = rand(3,4,5)
+    @test Base.mightalias(view(A, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(A, :, :, 1), view(A, :, :, 2))
 
-        @testset "dest IndexCartesian, src IndexLinear" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(p, axes(p)...)
-                B = similar(A)
-                test_unsetindex(A, B)
-            end
-        end
+    B = reinterpret(UInt64, A)
+    @test Base.mightalias(view(B, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(B, :, :, 1), view(A, :, :, 2))
 
-        @testset "dest IndexCartesian, src IndexCartesian" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(p, axes(p)...)
-                B = view(similar(A), axes(A)...)
-                test_unsetindex(A, B)
-            end
-        end
-    end
+    C = reinterpret(UInt32, A)
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 1))
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 2)) # This is overly conservative
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 1))
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 2)) # This is overly conservative
 end
 
 @testset "aliasing check with reshaped subarrays" begin
@@ -1135,4 +1099,59 @@ end
     @test Base.mightalias(V1, permutedims(V1))
     @test Base.mightalias(permutedims(V1), V1)
     @test Base.mightalias(permutedims(V1), permutedims(V1))
+end
+
+
+@test @views quote var"begin" + var"end" end isa Expr
+
+@testset "@views handling of assignment" begin
+    @test @macroexpand(@views x[a:b] = c) == :(x[a:b] = c)
+    # Assignments should still work
+    let array = [1, 2, 3, 4, 5, 6, 7, 8]
+        @views array[begin:2] = [-1, -2]
+        @test array == [-1, -2, 3, 4, 5, 6, 7, 8]
+        @views array[7:end] = [-7, -8]
+        @test array == [-1, -2, 3, 4, 5, 6, -7, -8]
+        @views array[begin + 2:end - 4] = [-3, -4]
+        @test array == [-1, -2, -3, -4, 5, 6, -7, -8]
+        @views identity(array)[begin + 4:end - 2] = [-5, -6]
+        @test array == [-1, -2, -3, -4, -5, -6, -7, -8]
+
+        @views array[begin:2] .= 100
+        @test array == [100, 100, -3, -4, -5, -6, -7, -8]
+        @views array[7:end] .= 200
+        @test array == [100, 100, -3, -4, -5, -6, 200, 200]
+        @views array[begin + 2:end - 4] .= 300
+        @test array == [100, 100, 300, 300, -5, -6, 200, 200]
+        @views identity(array)[begin + 4:end - 2] .= 400
+        @test array == [100, 100, 300, 300, 400, 400, 200, 200]
+
+        @views identity(array)[begin:end] .-= 1
+        @test array == [99, 99, 299, 299, 399, 399, 199, 199]
+
+        @views identity(array)[begin:end] += [1, 2, 3, 4, 5, 6, 7, 8]
+        @test array == [100, 101, 302, 303, 404, 405, 206, 207]
+    end
+    # Nested getindex in assignment should be transformed
+    let array = [1, 2, 3, 4, 5, 6, 7, 8], array2 = [1, 2, 3, 4, 5, 6, 7, 8]
+        array[begin + 1:end - 2][2] = -1
+        array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, 3, 4, 5, 6, 7, 8]
+
+        @views array[begin + 1:end - 2][2] = -1
+        @views array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+
+        function swap_ele(ary, i, v)
+            res = ary[i]
+            ary[i] = v
+            return res
+        end
+        array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-1, -2, -3, -4, -5, -6, -7]
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+        @test array2 == [-1, -2, -3, -4, -5, -6, -7, 8]
+        @views array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-10, 2, -30, 4, -50, 6, -70]
+        @test array == [-3, 2, -1, 4, 5, -2, -4, 8]
+        @test array2 == [-10, 2, -30, 4, -50, 6, -70, 8]
+    end
 end

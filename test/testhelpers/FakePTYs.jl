@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
 module FakePTYs
 
 if Sys.iswindows()
@@ -24,10 +23,7 @@ function open_fake_pty()
         close(pts)
         pts = fds
         # convert pts handle to a TTY
-        #fds = pts.handle
-        #pts.status = Base.StatusClosed
-        #pts.handle = C_NULL
-        #pts = Base.TTY(fds, Base.StatusOpen)
+        #pts = open(fds)::Base.TTY
     else
         O_RDWR = Base.Filesystem.JL_O_RDWR
         O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
@@ -44,8 +40,9 @@ function open_fake_pty()
         pts = RawFD(fds)
 
         # pts = fdio(fds, true)
-        # pts = Base.Filesystem.File(RawFD(fds))
-        # pts = Base.TTY(RawFD(fds); readable = false)
+        # pts = Base.Filesystem.File(pts)
+        # pts = Base.TTY(pts)
+        # pts = Base.open(pts)
         ptm = Base.TTY(RawFD(fdm))
     end
     return pts, ptm

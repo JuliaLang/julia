@@ -223,6 +223,9 @@ Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
+!!! compat "Julia 1.9"
+    The `column` argument requires at least Julia 1.9.
+
 See also [`InteractiveUtils.define_editor`](@ref).
 """
 function edit(path::AbstractString, line::Integer=0, column::Integer=0)
@@ -266,7 +269,8 @@ function edit(@nospecialize f)
 end
 edit(m::Method) = edit(functionloc(m)...)
 edit(@nospecialize(f), idx::Integer) = edit(methods(f).ms[idx])
-edit(f, t)  = (@nospecialize; edit(functionloc(f, t)...))
+edit(f, t) = (@nospecialize; edit(functionloc(f, t)...))
+edit(@nospecialize argtypes::Union{Tuple, Type{<:Tuple}}) = edit(functionloc(argtypes)...)
 edit(file::Nothing, line::Integer) = error("could not find source file for function")
 edit(m::Module) = edit(pathof(m))
 

@@ -61,7 +61,7 @@ Channel(sz=0) = Channel{Any}(sz)
 """
     Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing)
 
-Create a new task from `func`, bind it to a new channel of type
+Create a new task from `func`, [`bind`](@ref) it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
 The channel is automatically closed when the task terminates.
 
@@ -130,8 +130,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
            for c in "hello world"
                put!(ch, c)
            end
-       end
-Channel{Char}(1) (2 items available)
+       end;
 
 julia> String(collect(chnl))
 "hello world"
@@ -212,11 +211,52 @@ function close(c::Channel, @nospecialize(excp::Exception))
     nothing
 end
 
-# Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
-# are forced to see `isready == true` if they see `isopen == false`. This means users must
-# call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
-# does this right for you).
-isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
+"""
+    isopen(c::Channel)
+
+Determines whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
+Notice that a `Channel` can be closed and still have buffered elements which can be
+consumed with [`take!`](@ref).
+
+# Examples
+
+## Buffered channel with task
+```jldoctest
+julia> c = Channel(ch -> put!(ch, 1), 1);
+
+julia> isopen(c) # The channel is closed to new `put!`s
+false
+
+julia> isready(c) # The channel is closed but still contains elements
+true
+
+julia> take!(c)
+1
+
+julia> isready(c)
+false
+```
+
+## Unbuffered channel
+```jldoctest
+julia> c = Channel{Int}();
+
+julia> isopen(c)
+true
+
+julia> close(c)
+
+julia> isopen(c)
+false
+```
+"""
+function isopen(c::Channel)
+    # Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
+    # are forced to see `isready == true` if they see `isopen == false`. This means users must
+    # call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
+    # does this right for you).
+    return ((@atomic :acquire c.state) === :open)
+end
 
 """
     empty!(c::Channel)
@@ -422,7 +462,7 @@ Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(3) do ch
            foreach(i -> put!(ch, i), 1:3)
@@ -453,7 +493,6 @@ function fetch_buffered(c::Channel)
 end
 fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
 
-
 """
     take!(c::Channel)
 
@@ -462,7 +501,7 @@ For unbuffered channels, blocks until a [`put!`](@ref) is performed by a differe
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1);
 
@@ -472,7 +511,7 @@ julia> take!(c)
 1
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel(0);
 
@@ -523,7 +562,7 @@ For unbuffered channels, return `true` if there are tasks waiting on a [`put!`](
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1);
 
@@ -536,7 +575,7 @@ julia> isready(c)
 true
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel();
 
@@ -550,7 +589,6 @@ julia> schedule(task);  # schedule a put! task
 julia> isready(c)
 true
 ```
-
 """
 isready(c::Channel) = n_avail(c) > 0
 isempty(c::Channel) = n_avail(c) == 0
@@ -577,7 +615,7 @@ tasks calling `put!` in parallel.
 
 # Examples
 
-Buffered channel:
+## Buffered channel
 ```jldoctest
 julia> c = Channel(1); # capacity = 1
 
@@ -590,7 +628,7 @@ julia> isfull(c)
 true
 ```
 
-Unbuffered channel:
+## Unbuffered channel
 ```jldoctest
 julia> c = Channel(); # capacity = 0
 
@@ -676,6 +714,15 @@ function iterate(c::Channel, state=nothing)
             end
         end
     else
+        # If the channel was closed with an exception, it needs to be thrown
+        if (@atomic :acquire c.state) === :closed
+            e = c.excp
+            if isa(e, InvalidStateException) && e.state === :closed
+                nothing
+            else
+                throw(e)
+            end
+        end
         return nothing
     end
 end

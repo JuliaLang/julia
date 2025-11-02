@@ -36,7 +36,7 @@ Any
 !!! compat "Julia 1.3"
     This function is exported as of Julia 1.3.
 """
-nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
+nonmissingtype(@nospecialize(T::Type)) = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
@@ -86,6 +86,8 @@ isequal(::Any, ::Missing) = false
 isless(::Missing, ::Missing) = false
 isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
+ispositive(::Missing) = missing
+isnegative(::Missing) = missing
 isapprox(::Missing, ::Missing; kwargs...) = missing
 isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
@@ -100,19 +102,14 @@ for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
           :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
 end
-for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
+for f in (:zero, :one, :oneunit)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{Missing}) = missing
-    @eval function $(f)(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        $f(T)
-    end
+    @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
 end
-for f in (:(Base.float), :(Base.complex))
-    @eval $f(::Type{Missing}) = Missing
-    @eval function $f(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        Union{$f(T), Missing}
-    end
+for f in (:float, :real, :complex)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+    @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
 end
 
 # Binary operators/functions
@@ -135,6 +132,7 @@ min(::Any,     ::Missing) = missing
 max(::Missing, ::Missing) = missing
 max(::Missing, ::Any)     = missing
 max(::Any,     ::Missing) = missing
+clamp(::Missing, lo, hi) = missing
 
 missing_conversion_msg(@nospecialize T) =
     LazyString("cannot convert a missing value to type ", T, ": use Union{", T, ", Missing} instead")

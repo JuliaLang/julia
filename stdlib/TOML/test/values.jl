@@ -4,16 +4,31 @@ using Test
 using TOML
 using TOML: Internals
 
+# Construct an explicit Parser to test the "cached" version of parsing
+const test_parser = TOML.Parser()
+
 function testval(s, v)
     f = "foo = $s"
+    # First, test with the standard entrypoint
     parsed = TOML.parse(f)["foo"]
     return isequal(v, parsed) && typeof(v) == typeof(parsed)
+    (!isequal(v, parsed) || typeof(v) != typeof(parsed)) && return false
+    # Next, test with the "cached" (explicit Parser) entrypoint
+    parsed = TOML.parse(test_parser, f)["foo"]
+    (!isequal(v, parsed) || typeof(v) != typeof(parsed)) && return false
+    return true
 end
 
 function failval(s, v)
     f = "foo = $s"
+    # First, test with the standard entrypoint
     err = TOML.tryparse(f);
     return err isa TOML.Internals.ParserError && err.type == v
+    (!isa(err, TOML.Internals.ParserError) || err.type != v) && return false
+    # Next, test with the "cached" (explicit Parser) entrypoint
+    err = TOML.tryparse(test_parser, f);
+    (!isa(err, TOML.Internals.ParserError) || err.type != v) && return false
+    return true
 end
 
 @testset "Numbers" begin
@@ -157,6 +172,6 @@ end
 @testset "Array" begin
     @test testval("[1,2,3]", Int64[1,2,3])
     @test testval("[1.0, 2.0, 3.0]", Float64[1.0, 2.0, 3.0])
-    @test testval("[1.0, 2.0, 3]", Union{Int64, Float64}[1.0, 2.0, Int64(3)])
+    @test testval("[1.0, 2.0, 3]", Any[1.0, 2.0, Int64(3)])
     @test testval("[1.0, 2, \"foo\"]", Any[1.0, Int64(2), "foo"])
 end
