@@ -26,10 +26,11 @@ using Base.Threads
         @test all(result_dynamic[i] == i^2 for i in 1:n)
         @test issorted(result_dynamic)  # should be ordered for dynamic scheduling
 
-        # Test greedy scheduling (may not preserve order)
+        # Test greedy scheduling
         result_greedy = @threads :greedy [i^2 for i in 1:n]
         @test length(result_greedy) == n
-        @test sort(result_greedy) == [i^2 for i in 1:n]  # same elements but potentially different order
+        @test all(result_greedy[i] == i^2 for i in 1:n)
+        @test issorted(result_greedy)  # should be ordered for greedy scheduling too
     end
 
     # Test filtered comprehensions
@@ -55,7 +56,7 @@ using Base.Threads
         # Test greedy scheduling with filter
         result_greedy = @threads :greedy [i^2 for i in 1:n if iseven(i)]
         @test length(result_greedy) == length(expected)
-        @test sort(result_greedy) == sort(expected)  # same elements but potentially different order
+        @test result_greedy == expected  # should preserve order
 
         # Test with more complex filter
         result_complex = @threads [i for i in 1:100 if i % 3 == 0 && i > 20]
@@ -121,7 +122,7 @@ using Base.Threads
 
         result_greedy = @threads :greedy [i * j for i in 1:3, j in 1:3]
         @test size(result_greedy) == size(expected_static)
-        @test sort(vec(result_greedy)) == sort(vec(expected_static))  # greedy may reorder but preserves shape
+        @test result_greedy == expected_static  # greedy scheduling preserves order and dimensions
 
         # Test with more than 2 loops
         result_3d = @threads [i + j + k for i in 1:2, j in 1:2, k in 1:2]
@@ -142,7 +143,7 @@ using Base.Threads
         # Test with greedy scheduling for non-indexable
         result_greedy = @threads :greedy [i^2 for i in Iterators.flatten([1:3, 4:6])]
         @test length(result_greedy) == 6
-        @test sort(result_greedy) == sort(expected)  # greedy may reorder
+        @test result_greedy == expected  # greedy scheduling preserves order
 
         # Test with filter on non-indexable iterator
         result_filter = @threads [i for i in Iterators.flatten([1:5, 6:10]) if iseven(i)]
@@ -241,7 +242,7 @@ using Base.Threads
 
         # Test with :greedy scheduler
         result_greedy = @threads :greedy [x for x in [1, 2.0, "3"]]
-        @test sort(result_greedy, by=string) == sort(expected, by=string)  # greedy may reorder
+        @test result_greedy == expected  # greedy scheduling preserves order
         @test result_greedy isa Vector{Any}
 
         # Test with :static scheduler
