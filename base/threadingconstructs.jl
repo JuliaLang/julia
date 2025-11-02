@@ -308,24 +308,15 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
         default_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
     end
 
+    # Collect (index, result) pairs from channel and sort to preserve order
     result_expr = quote
-        assigned_results = [result[i] for i in 1:length(result) if isassigned(result, i) && !isempty(result[i])]
-        if isempty(assigned_results)
+        close(result_channel)
+        pairs = collect(result_channel)
+        if isempty(pairs)
             []
         else
-            # TODO: Is try-catch the best we can do here?
-            # Try to infer concrete type from first element, but fall back to Any if conversion fails
-            T = typeof(assigned_results[1][1])
-            try
-                vcat([Vector{T}(r) for r in assigned_results]...)
-            catch e
-                if e isa MethodError || e isa InexactError
-                    # Fall back to Vector{Any} if type conversion fails (e.g., mixed types)
-                    vcat(assigned_results...)
-                else
-                    rethrow()
-                end
-            end
+            sort!(pairs, by=first)
+            [p[2] for p in pairs]
         end
     end
 
@@ -340,7 +331,7 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
 
     quote
         local threadsfor_fun
-        local result = $func
+        local result_channel = $func
         $(_threading_run_expr(schedule))
         $result_expr
     end
@@ -365,28 +356,22 @@ end
 
 function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
-        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
-                for item in $itr
-                    put!(ch, item)
-                end
+        let c = Channel(threadpoolsize(), spawn=true) do ch
+            for (idx, item) in enumerate($itr)
+                put!(ch, (idx, item))
             end
-            result = Vector{Vector}(undef, threadpoolsize())
-            # Initialize all result vectors to empty
-            for i in 1:threadpoolsize()
-                result[i] = []
-            end
+        end
+        result_channel = Channel(Inf)
 
-            function threadsfor_fun(tid)
-                local_results = []
-                for item in c
-                    local $esc_lidx = item
-                    if $esc_condition
-                        push!(local_results, $esc_body)
-                    end
+        function threadsfor_fun(tid)
+            for (idx, item) in c
+                local $esc_lidx = item
+                if $esc_condition
+                    put!(result_channel, (idx, $esc_body))
                 end
-                result[tid] = local_results
             end
-            result  # Return result so it's accessible after threading_run
+        end
+        result_channel  # Return channel so results can be collected after threading_run
         end
     end
 end
@@ -447,48 +432,18 @@ function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
         let iter = $itr
         # Collect non-indexable iterators (like ProductIterator)
         range = (iter isa AbstractArray || hasmethod(getindex, Tuple{typeof(iter), Int})) ? iter : collect(iter)
-        result = Vector{Vector}(undef, threadpoolsize())
+        result_channel = Channel(Inf)
 
         function threadsfor_fun(tid = 1; onethread = false)
             $work_dist
-            local_results = []
             for i = f:l
                 local $esc_lidx = @inbounds r[i]
                 if $esc_condition
-                    push!(local_results, $esc_body)
+                    put!(result_channel, (i, $esc_body))
                 end
             end
-            result[tid] = local_results
         end
-        result  # Return result so it's accessible after threading_run
-        end
-    end
-end
-
-function default_filtered_comprehension_func(itr, esc_lidx, body, condition)
-    work_dist = _work_distribution_code()
-    quote
-        let range = $itr
-        local thread_results = Vector{Vector}(undef, threadpoolsize())
-        # Initialize all result vectors to empty
-        for i in 1:threadpoolsize()
-            thread_results[i] = []
-        end
-
-        function threadsfor_fun(tid = 1; onethread = false)
-            $work_dist
-            # run this thread's iterations with filtering
-            local_results = []
-            for i = f:l
-                local $esc_lidx = @inbounds r[i]
-                if $condition
-                    push!(local_results, $body)
-                end
-            end
-            thread_results[tid] = local_results
-        end
-
-        result = thread_results # This will be populated by threading_run
+        result_channel  # Return channel so results can be collected after threading_run
         end
     end
 end
@@ -630,10 +585,9 @@ to run two of the 1-second iterations to complete the for loop.
 ### Array comprehensions
 
 The `@threads` macro also supports array comprehensions, which return the collected results.
-Array comprehensions preserve element order for `:static` and `:dynamic` scheduling, while
-`:greedy` returns elements in arbitrary order. Multi-dimensional comprehensions preserve
-the dimensions of the original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` returns
-an `n×m` matrix).
+Array comprehensions preserve element order for all scheduling options. Multi-dimensional 
+comprehensions preserve the dimensions of the original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` 
+returns an `n×m` matrix).
 
 ```julia-repl
 julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension
@@ -657,7 +611,7 @@ julia> Threads.@threads [i + j for i in 1:3, j in 1:3] # Multiple loops
 ```
 
 When the iterator doesn't have a known length, such as a channel, the `:greedy` scheduling
-option can be used, but note that the order of the results is not guaranteed.
+option can be used.
 ```julia-repl
 julia> c = Channel(5, spawn=true) do ch
            foreach(i -> put!(ch, i), 1:5)
@@ -665,8 +619,8 @@ julia> c = Channel(5, spawn=true) do ch
 
 julia> Threads.@threads :greedy [i^2 for i in c if iseven(i)]
 2-element Vector{Int64}:
- 16
   4
+ 16
 
 julia> # Non-indexable iterators are also supported
        Threads.@threads [i for i in Iterators.flatten([1:3, 4:6])]
