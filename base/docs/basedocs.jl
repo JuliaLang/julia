@@ -1063,6 +1063,20 @@ end
 The syntax `catch e` (where `e` is any variable) assigns the thrown
 exception object to the given variable within the `catch` block.
 
+```julia
+try
+    a_dangerous_operation()
+catch e
+    if isa(e, EOFError)
+        @warn "The operation failed - EOF."
+    elseif isa(e, OutOfMemoryError)
+        @warn "The operation failed - OOM."
+    else
+        rethrow() # ensure other exceptions can bubble up the call stack
+    end
+end
+```
+
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 

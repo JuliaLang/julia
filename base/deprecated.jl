@@ -566,3 +566,9 @@ end
 to_power_type(x) = oftype(x*x, x)
 
 # END 1.12 deprecations
+
+# BEGIN 1.13 deprecations
+
+@deprecate merge(combine::Callable, d::AbstractDict, others::AbstractDict...) mergewith(combine, d, others...)
+
+# end 1.13 deprecations

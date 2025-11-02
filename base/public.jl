@@ -53,6 +53,7 @@ public
     DL_LOAD_PATH,
     load_path,
     active_project,
+    active_manifest,
 
 # Reflection and introspection
     get_extension,
