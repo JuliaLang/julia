@@ -396,16 +396,16 @@ function _work_distribution_code()
             len, rem = 1, 0
         end
         # compute this thread's iterations
-        f = firstindex(r) + ((tid-1) * len)
-        l = f + len - 1
+        loop_first = firstindex(r) + ((tid-1) * len)
+        loop_last = loop_first + len - 1
         # distribute remaining iterations evenly
         if rem > 0
             if tid <= rem
-                f = f + (tid-1)
-                l = l + tid
+                loop_first = loop_first + (tid-1)
+                loop_last = loop_last + tid
             else
-                f = f + rem
-                l = l + rem
+                loop_first = loop_first + rem
+                loop_last = loop_last + rem
             end
         end
     end
@@ -417,7 +417,7 @@ function default_func(itr, lidx, lbody)
         let range = $itr
         function threadsfor_fun(tid = 1; onethread = false)
             $work_dist
-            for i = f:l
+            for i = loop_first:loop_last
                 local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
@@ -436,7 +436,7 @@ function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
 
         function threadsfor_fun(tid = 1; onethread = false)
             $work_dist
-            for i = f:l
+            for i = loop_first:loop_last
                 local $esc_lidx = @inbounds r[i]
                 if $esc_condition
                     put!(result_channel, (i, $esc_body))
