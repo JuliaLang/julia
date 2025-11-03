@@ -30,7 +30,8 @@ const TESTNAMES = [
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
-        "faulty_constructor_method_should_not_cause_stack_overflows"
+        "faulty_constructor_method_should_not_cause_stack_overflows",
+        "JuliaSyntax"
 ]
 
 const INTERNET_REQUIRED_LIST = [
