@@ -55,15 +55,8 @@ post-install-p7zip: $(build_prefix)/manifest/p7zip
 	mkdir -p $(build_private_libexecdir)/
 	[ ! -e $(build_bindir)/7z$(EXE) ] || mv $(build_bindir)/7z$(EXE) $(build_private_libexecdir)/7z$(EXE)
 	[ -e $(build_private_libexecdir)/7z$(EXE) ]
-ifeq ($(OS),WINNT)
-	[ ! -e $(build_bindir)/7z.dll ] || mv $(build_bindir)/7z.dll $(build_private_libexecdir)/7z.dll
-	[ -e $(build_private_libexecdir)/7z.dll ]
-endif
 pre-uninstall-p7zip:
 	-rm -f $(build_private_libexecdir)/7z$(EXE)
-ifeq ($(OS),WINNT)
-	-rm -f $(build_private_libexecdir)/7z.dll
-endif
 
 .PHONY: post-install-p7zip pre-uninstall-p7zip
 
