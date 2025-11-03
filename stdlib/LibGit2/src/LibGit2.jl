@@ -265,7 +265,8 @@ The keyword arguments are:
   * `depth::Integer=0`: limit fetching to the specified number of commits from the tip
     of each remote branch. `0` indicates a full fetch (the default).
     Use `Consts.FETCH_DEPTH_UNSHALLOW` to fetch all missing data from a shallow clone.
-    Note: depth is only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    Note: depth is, at the time of writing, only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    (https://github.com/libgit2/libgit2/issues/6634)
   * `credentials=nothing`: provides credentials and/or settings when authenticating against
     a private `remote`.
   * `callbacks=Callbacks()`: user provided callbacks and payloads.
@@ -552,7 +553,8 @@ The keyword arguments are:
   * `depth::Integer=0`: create a shallow clone with a history truncated to the
     specified number of commits. `0` indicates a full clone (the default).
     Use `Consts.FETCH_DEPTH_UNSHALLOW` to fetch all missing data from a shallow clone.
-    Note: shallow clones are only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    Note: shallow clones are, at the time of writing, only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    (https://github.com/libgit2/libgit2/issues/6634)
   * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
     against a private repository.
   * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
