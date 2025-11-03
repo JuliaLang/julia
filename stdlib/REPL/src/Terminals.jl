@@ -126,9 +126,18 @@ if Sys.iswindows()
         is_precompiling[] && return true
         check_open(t.in_stream)
         if Base.ispty(t.in_stream)
-            run((raw ? `stty raw -echo onlcr -ocrnl opost` : `stty sane`),
-                t.in_stream, t.out_stream, t.err_stream)
-            true
+            try
+                run((raw ? `stty raw -echo onlcr -ocrnl opost` : `stty sane`),
+                    t.in_stream, t.out_stream, t.err_stream)
+                true
+            catch ex
+                # Fall back to ccall if stty fails (e.g., in some CI environments)
+                if ex isa ProcessFailedException
+                    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) == 0
+                else
+                    rethrow()
+                end
+            end
         else
             ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
         end
