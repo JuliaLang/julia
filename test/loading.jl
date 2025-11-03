@@ -1885,16 +1885,6 @@ module M58272_to end
     @test occursin("Portable Script Tests", output)
     @test occursin("Pass", output)
 
-    # Test with multiline comment syntax
-    portable_script_ml = joinpath(@__DIR__, "project", "portable_script_multiline.jl")
-    output_ml = read(`$(Base.julia_cmd()) --startup-file=no $portable_script_ml`, String)
-
-    @test occursin("Active project: $portable_script_ml", output_ml)
-    @test occursin("Active manifest: $portable_script_ml", output_ml)
-    @test occursin("✓ Portable script with multiline comment syntax works!", output_ml)
-    @test occursin("✓ Random.rand()", output_ml)
-    @test occursin("✓ All checks passed!", output_ml)
-
     # Test with custom manifest= entry in project section
     portable_script_cm = joinpath(@__DIR__, "project", "portable_script_custom_manifest.jl")
     output_cm = read(`$(Base.julia_cmd()) --startup-file=no $portable_script_cm`, String)
@@ -1912,4 +1902,47 @@ module M58272_to end
     @test occursin("Active project: $portable_script", output_script)
     @test occursin("Active manifest: $portable_script", output_script)
     @test occursin("✓ Random (stdlib) loaded successfully", output_script)
+
+    # Test that regular Julia files (without inline sections) work fine as projects
+    regular_script = joinpath(@__DIR__, "project", "regular_script.jl")
+
+    # Running the script with --project= should set it as active project
+    output = read(`$(Base.julia_cmd()) --startup-file=no --project=$regular_script $regular_script`, String)
+    @test occursin("ACTIVE_PROJECT: $regular_script", output)
+    @test occursin("Hello from regular script", output)
+    @test occursin("x = 42", output)
+
+    # Running the script without --project should NOT set it as active project
+    output = read(`$(Base.julia_cmd()) --startup-file=no $regular_script`, String)
+    @test !occursin("ACTIVE_PROJECT: $regular_script", output)
+    @test occursin("Hello from regular script", output)
+    @test occursin("x = 42", output)
+
+    # Test 1: Project section not first (has code before it)
+    invalid_project_not_first = joinpath(@__DIR__, "project", "invalid_project_not_first.jl")
+    err_output = IOBuffer()
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_project_not_first`), stderr=err_output))
+    @test !success(result)
+    @test occursin("#!project section must come first", String(take!(err_output)))
+
+    # Test 2: Manifest section not last (has code after it)
+    invalid_manifest_not_last = joinpath(@__DIR__, "project", "invalid_manifest_not_last.jl")
+    err_output = IOBuffer()
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_manifest_not_last`), stderr=err_output))
+    @test !success(result)
+    @test occursin("#!manifest section must come last", String(take!(err_output)))
+
+    # Test 3: Project not first, but manifest present
+    invalid_both = joinpath(@__DIR__, "project", "invalid_both.jl")
+    err_output = IOBuffer()
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_both -e "using Test"`), stderr=err_output))
+    @test !success(result)
+    @test occursin("#!project section must come first", String(take!(err_output)))
+
+    # Test 4: Manifest with code in between sections
+    invalid_code_between = joinpath(@__DIR__, "project", "invalid_code_between.jl")
+    err_output = IOBuffer()
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_code_between -e "using Test"`), stderr=err_output))
+    @test !success(result)
+    @test occursin("#!manifest section must come last", String(take!(err_output)))
 end

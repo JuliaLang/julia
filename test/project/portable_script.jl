@@ -10,6 +10,35 @@
 # Rot13 = "43ef800a-eac4-47f4-949b-25107b932e8f"
 #!project end
 
+using Random
+using Test
+using Rot13
+
+# Verify the portable script environment is active
+println("Active project: ", Base.active_project())
+println("Active manifest: ", Base.active_manifest())
+println()
+
+# Test that stdlib packages work
+@testset "Portable Script Tests" begin
+    # Test Random (stdlib)
+    Random.seed!(42)
+    r = rand()
+    @test 0 <= r <= 1
+    println("✓ Random (stdlib) loaded successfully")
+
+    # Test Rot13 (path-based dependency)
+    @test Rot13.rot13("Hello") == "Uryyb"
+    @test Rot13.rot13("World") == "Jbeyq"
+    println("✓ Rot13 (path dependency) loaded successfully")
+
+    # Test that Rot13 module has expected functions
+    @test hasmethod(Rot13.rot13, (Char,))
+    @test hasmethod(Rot13.rot13, (AbstractString,))
+    println("✓ Rot13 methods available")
+end
+
+
 #!manifest begin
 # julia_version = "1.13.0"
 # manifest_format = "2.0"
@@ -60,31 +89,3 @@
 # uuid = "43ef800a-eac4-47f4-949b-25107b932e8f"
 # version = "0.1.0"
 #!manifest end
-
-using Random
-using Test
-using Rot13
-
-# Verify the portable script environment is active
-println("Active project: ", Base.active_project())
-println("Active manifest: ", Base.active_manifest())
-println()
-
-# Test that stdlib packages work
-@testset "Portable Script Tests" begin
-    # Test Random (stdlib)
-    Random.seed!(42)
-    r = rand()
-    @test 0 <= r <= 1
-    println("✓ Random (stdlib) loaded successfully")
-
-    # Test Rot13 (path-based dependency)
-    @test Rot13.rot13("Hello") == "Uryyb"
-    @test Rot13.rot13("World") == "Jbeyq"
-    println("✓ Rot13 (path dependency) loaded successfully")
-
-    # Test that Rot13 module has expected functions
-    @test hasmethod(Rot13.rot13, (Char,))
-    @test hasmethod(Rot13.rot13, (AbstractString,))
-    println("✓ Rot13 methods available")
-end
