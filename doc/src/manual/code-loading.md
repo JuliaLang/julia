@@ -410,31 +410,18 @@ Julia also understands *portable scripts*: scripts that embed their own `Project
 # Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 #!project end
 
+using Markdown
+println(md"# Hello, single-file world!")
+
 #!manifest begin
 # [[deps]]
 # name = "Markdown"
 # uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 # version = "1.0.0"
 #!manifest end
-
-using Markdown
-println(md"# Hello, single-file world!")
 ```
 
-Lines inside the fenced blocks may either start with `#` (as in the example), be plain TOML, or be wrapped in multi-line comment delimiters `#= ... =#`:
-
-```julia
-#!project begin
-#=
-name = "HelloApp"
-uuid = "9c5fa7d8-7220-48e8-b2f7-0042191c5f6d"
-version = "0.1.0"
-[deps]
-Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
-=#
-#!project end
-```
-
+Lines inside the fenced blocks should be commented with `#` (as in the example) or be plain TOML lines. The `#!project` section must come first in the file (after an optional shebang and empty lines). If a `#!manifest` section is present, it must come after the `#!project` section, and no Julia code is allowed after the `#!manifest end` delimiter.
 
 Running `julia hello.jl` automatically activates the embedded project. The script path becomes the active project entry in `LOAD_PATH`, so package loading works exactly as if `Project.toml` and `Manifest.toml` lived next to the script. The `--project=@script` flag also expands to the script itself when no on-disk project exists but inline metadata is present.
 

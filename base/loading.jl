@@ -258,88 +258,80 @@ end
 
 
 function extract_inline_section(path::String, type::Symbol)
-    buf = IOBuffer()
-    start_fence = "#!$type begin"
-    end_fence = "#!$type end"
+    # Read all lines
+    lines = readlines(path)
+
+    # For manifest, read backwards by reversing the lines
+    if type === :manifest
+        lines = reverse(lines)
+        start_marker = "#!manifest end"
+        end_marker = "#!manifest begin"
+        section_name = "manifest"
+        position_error = "must come last"
+    else
+        start_marker = "#!project begin"
+        end_marker = "#!project end"
+        section_name = "project"
+        position_error = "must come first"
+    end
+
     state = :none
-    multiline_mode = false
-    in_multiline = false
+    at_start = true
+    content_lines = String[]
 
-    for (lineno, line) in enumerate(eachline(path))
+    for (lineno, line) in enumerate(lines)
         stripped = lstrip(line)
-        state == :done && break
 
-        if startswith(stripped, start_fence)
-            state = :reading_first
+        # Skip empty lines and comments (including shebang) before content
+        if at_start && (isempty(stripped) || startswith(stripped, '#'))
+            if startswith(stripped, start_marker)
+                state = :reading
+                at_start = false
+                continue
+            end
             continue
-        elseif startswith(stripped, end_fence)
+        end
+
+        # Found start marker after content - error
+        if startswith(stripped, start_marker)
+            if !at_start
+                error("#!$section_name section $position_error in $path")
+            end
+            state = :reading
+            at_start = false
+            continue
+        end
+
+        at_start = false
+
+        # Found end marker
+        if startswith(stripped, end_marker) && state === :reading
             state = :done
-            continue
-        elseif state === :reading_first
-            # First line determines the format
-            if startswith(stripped, "#=")
-                multiline_mode = true
-                state = :reading
-                # Check if the opening #= and closing =# are on the same line
-                if endswith(rstrip(stripped), "=#")
-                    # Single-line multi-line comment
-                    content = rstrip(stripped)[3:end-2]
-                    write(buf, content)
-                    in_multiline = false
-                else
-                    # Multi-line comment continues
-                    in_multiline = true
-                    content = stripped[3:end]  # Remove #= from start
-                    write(buf, content)
-                    write(buf, '\n')
-                end
+            break
+        end
+
+        # Extract content
+        if state === :reading
+            if startswith(stripped, '#')
+                toml_line = lstrip(chop(stripped, head=1, tail=0))
+                push!(content_lines, toml_line)
             else
-                # Line-by-line format
-                multiline_mode = false
-                state = :reading
-                # Process this first line
-                if startswith(stripped, '#')
-                    toml_line = lstrip(chop(stripped, head=1, tail=0))
-                    write(buf, toml_line)
-                else
-                    write(buf, line)
-                end
-                write(buf, '\n')
+                push!(content_lines, line)
             end
-        elseif state === :reading
-            if multiline_mode && in_multiline
-                # In multi-line comment mode, look for closing =#
-                if endswith(rstrip(stripped), "=#")
-                    # Found closing delimiter
-                    content = rstrip(stripped)[1:end-2]  # Remove =# from end
-                    write(buf, content)
-                    in_multiline = false
-                else
-                    # Still inside multi-line comment
-                    write(buf, line)
-                    write(buf, '\n')
-                end
-            elseif !multiline_mode
-                # Line-by-line comment mode, strip # from each line
-                if startswith(stripped, '#')
-                    toml_line = lstrip(chop(stripped, head=1, tail=0))
-                    write(buf, toml_line)
-                else
-                    write(buf, line)
-                end
-                write(buf, '\n')
-            end
-            # If multiline_mode && !in_multiline, the multiline comment has ended.
-            # Don't accumulate any more content; just wait for the end fence.
         end
     end
 
+    # For manifest, reverse the content back to original order
+    if type === :manifest && !isempty(content_lines)
+        content_lines = reverse(content_lines)
+    end
+
     if state === :done
-        return strip(String(take!(buf)))
+        return strip(join(content_lines, '\n'))
     elseif state === :none
         return ""
     else
-        error("incomplete inline $type block in $path (missing #!$type end)")
+        error("incomplete inline $section_name block in $path (missing #!$section_name end)")
     end
 end
 
