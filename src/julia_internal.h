@@ -433,19 +433,53 @@ typedef struct _jl_abi_t {
 
 // The compiler uses the specific integer values returned by jl_invoke_api
 typedef enum {
-    JL_INVOKE_ARGS = 1,         // jl_fptr_args
-    JL_INVOKE_CONST = 2,        // jl_fptr_const
-    JL_INVOKE_SPARAM = 3,       // jl_fptr_sparam
+    JL_INVOKE_ARGS        = 1,  // jl_fptr_args
+    JL_INVOKE_CONST       = 2,  // jl_fptr_const
+    JL_INVOKE_SPARAM      = 3,  // jl_fptr_sparam
     JL_INVOKE_INTERPRETED = 4,  // jl_fptr_interpret_call
     JL_INVOKE_SPECSIG     = 5,  // jfptr_* wrapper
 } jl_invoke_api_t;
+
+// The symbol prefix for invoke -> specsig wrappers
+#define JL_SYM_INVOKE_SPECSIG     "jfptr_"
+#define JL_SYM_INVOKE_IMG_SPECSIG "jsysw_"
+
+// Symbol prefixes for specptr functions
+#define JL_SYM_SPECPTR_ARGS    "japi1_"
+#define JL_SYM_SPECPTR_CONST   "jconst_"
+#define JL_SYM_SPECPTR_SPARAM  "japi3_"
+#define JL_SYM_SPECPTR_SPECSIG "julia_"
+
+#define JL_SYM_SPECPTR_IMG_ARGS    "jsys1_"
+#define JL_SYM_SPECPTR_IMG_SPARAM  "jsys3_"
+#define JL_SYM_SPECPTR_IMG_SPECSIG "jlsys_"
+
+// Other defined symbols
+#define JL_SYM_CFUNCTION "jlcapi_"
+
+// Symbol prefixes for pre-linking specptr function prototypes
+#define JL_SYM_PROTO_ARGS    "j1_"
+#define JL_SYM_PROTO_SPECSIG "j_"
+
+// Symbol prefix for the GOT entry for a CodeInstance PLT
+#define JL_SYM_JLPLT_GOT "jlpkg_got_"
+// Symbol prefix for the PLT thunk for a CodeInstance
+#define JL_SYM_JLPLT "jlpkg_"
+
+typedef enum {
+    JL_SYMBOL_INVOKE_DEF,
+    JL_SYMBOL_INVOKE_IMG,
+    JL_SYMBOL_SPECPTR_DEF,
+    JL_SYMBOL_SPECPTR_PROTO,
+    JL_SYMBOL_SPECPTR_IMG,
+} jl_symbol_prefix_t;
 
 static inline int jl_jlcall_specptr_is_native(jl_invoke_api_t type)
 {
     return type == JL_INVOKE_ARGS || type == JL_INVOKE_SPARAM || type == JL_INVOKE_SPECSIG;
 }
 
-static inline jl_invoke_api_t jl_callptr_invoke_api(jl_callptr_t ptr)
+static inline jl_invoke_api_t jl_callptr_invoke_api(jl_callptr_t ptr) JL_NOTSAFEPOINT
 {
     if (ptr == jl_fptr_args_addr)
         return JL_INVOKE_ARGS;
@@ -458,7 +492,7 @@ static inline jl_invoke_api_t jl_callptr_invoke_api(jl_callptr_t ptr)
     return JL_INVOKE_SPECSIG;
 }
 
-static inline jl_callptr_t jl_invoke_api_callptr(jl_invoke_api_t type)
+static inline jl_callptr_t jl_invoke_api_callptr(jl_invoke_api_t type) JL_NOTSAFEPOINT
 {
     switch (type) {
     case JL_INVOKE_ARGS: return jl_fptr_args_addr;
