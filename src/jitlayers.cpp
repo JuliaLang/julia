@@ -219,13 +219,29 @@ std::string jl_codegen_output_t::make_name(jl_symbol_prefix_t type, jl_invoke_ap
     return make_name(jl_symbol_prefix(type, api), orig_name);
 }
 
+static std::atomic<size_t> global_name_counter;
+
+template<class... Ts>
+static std::string make_name_unique(Ts... args) JL_NOTSAFEPOINT
+{
+    std::string name;
+    raw_string_ostream s{name};
+    (s << ... << args);
+    s << "_" << global_name_counter.fetch_add(1, memory_order_relaxed);
+    return name;
+}
+
 std::string jl_codegen_output_t::make_name(StringRef prefix, StringRef orig_name)
 {
+    if (params->unique_names)
+        return make_name_unique(prefix, strip_linux(orig_name));
     return names(prefix, strip_linux(orig_name));
 }
 
 std::string jl_codegen_output_t::make_name(StringRef orig_name)
 {
+    if (params->unique_names)
+        return make_name_unique(strip_linux(orig_name));
     return names(strip_linux(orig_name));
 }
 
