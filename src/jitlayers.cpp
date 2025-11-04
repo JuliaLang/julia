@@ -1770,25 +1770,28 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 }
 
 
-static void timing_print_module_names(ThreadSafeModule &TSM) JL_NOTSAFEPOINT
-{
 #ifdef ENABLE_TIMINGS
-    TSM.withModuleDo([](Module &M) {
+static void timing_print_module_names(jl_timing_block_t *block,
+                                      ThreadSafeModule &TSM) JL_NOTSAFEPOINT
+{
+    TSM.withModuleDo([block](Module &M) {
         for (auto &f : M) {
-            if (!f.isDeclaration()){
-                jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, f.getName().str().c_str());
+            if (!f.isDeclaration()) {
+                jl_timing_puts(block, f.getName().str().c_str());
             }
         }
     });
-#endif
 }
+#endif
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
     JL_TIMING(LLVM_JIT, JIT_Total);
     ++ModulesAdded;
     TSM = optimizeModule(std::move(TSM));
-    timing_print_module_names(TSM);
+#ifdef ENABLE_TIMINGS
+    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, TSM);
+#endif
     auto Obj = compileModule(std::move(TSM));
     auto Err = JuliaOJIT::addObjectFile(JD, std::move(Obj));
     if (Err) {
@@ -1811,7 +1814,9 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
         });
 
     TSM = optimizeModule(std::move(TSM));
-    timing_print_module_names(TSM);
+#ifdef ENABLE_TIMINGS
+    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, TSM);
+#endif
     auto Obj = compileModule(std::move(TSM));
     auto MU = std::make_unique<JLMaterializationUnit>(
         JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O.linker_info), std::move(Obj)));
