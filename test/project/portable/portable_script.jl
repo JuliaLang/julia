@@ -85,7 +85,7 @@ end
 # version = "1.11.0"
 #
 # [[deps.Rot13]]
-# path = "Rot13"
+# path = "../Rot13"
 # uuid = "43ef800a-eac4-47f4-949b-25107b932e8f"
 # version = "0.1.0"
 #!manifest end
