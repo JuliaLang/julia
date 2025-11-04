@@ -3093,9 +3093,15 @@ mktempdir() do dir
                 key = joinpath(root, common_name * ".key")
                 cert = joinpath(root, common_name * ".crt")
                 pem = joinpath(root, common_name * ".pem")
+                conf = joinpath(root, common_name * ".conf")
+
+                # Make sure test doesn't depend on system OpenSSL config (which may be broken)
+                touch(conf)
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
+                run(pipeline(addenv(
+                    `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,
+                    "OPENSSL_CONF" => conf), stderr=devnull))
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 local pobj, port
