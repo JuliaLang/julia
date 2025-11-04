@@ -1262,6 +1262,28 @@ function terminate_all_workers()
     end
 end
 
+function choose_bind_addr()
+    # We prefer IPv4 over IPv6.
+    #
+    # We also prefer non-link-local over link-local.
+    # (This is because on HPC clusters, link-local addresses are usually not
+    # usable for communication between compute nodes.
+    #
+    # Therefore, our order of preference is:
+    # 1. Non-link-local IPv4
+    # 2. Non-link-local IPv6
+    # 3. Link-local IPv4
+    # 4. Link-local IPv6
+    addrs = getipaddrs()
+    i = something(
+        findfirst(ip -> !islinklocaladdr(ip) && ip isa IPv4, addrs), # first non-link-local IPv4
+        findfirst(ip -> !islinklocaladdr(ip) && ip isa IPv6, addrs), # first non-link-local IPv6
+        findfirst(ip -> ip isa IPv4, addrs), # first IPv4
+        findfirst(ip -> ip isa IPv6, addrs), # first IPv6
+    )
+    return addrs[i]
+end
+
 # initialize the local proc network address / port
 function init_bind_addr()
     opts = JLOptions()
@@ -1276,7 +1298,7 @@ function init_bind_addr()
     else
         bind_port = 0
         try
-            bind_addr = string(getipaddr())
+            bind_addr = string(choose_bind_addr())
         catch
             # All networking is unavailable, initialize bind_addr to the loopback address
             # Will cause an exception to be raised only when used.

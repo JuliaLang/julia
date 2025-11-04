@@ -1296,7 +1296,7 @@ end
             @test occursin(expected, result)
         end
     end
-    @testset "failfast" begin
+    @testset "failfast begin-end" begin
         expected = r"""
         Test Summary: | Fail  Total  Time
         Foo           |    1      1  \s*\d*.\ds
@@ -1310,6 +1310,32 @@ end
             @testset "Foo" failfast=true begin
                 @test false
                 @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast for-loop" begin
+        expected = r"""
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
+          1           \|    1      1  \s*\d*\.\ds
+        """
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @testset "\$x" for x in 1:2
+                    @test false
+                end
                 @testset "Bar" begin
                     @test false
                     @test true
