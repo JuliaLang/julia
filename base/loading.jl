@@ -346,6 +346,24 @@ function has_inline_project(path::String)::Bool
 end
 
 
+struct PortableScriptState
+    path::String
+    pkg::PkgId
+end
+
+portable_script_state_global::Union{PortableScriptState, Nothing} = nothing
+
+function set_portable_script_state(abs_path::Union{Nothing, String})
+    pkg = project_file_name_uuid(abs_path, splitext(basename(abs_path))[1])
+
+    # Verify the project and manifest delimiters:
+    parsed_toml(abs_path)
+    parsed_toml(abs_path; manifest=true)
+
+    global portable_script_state_global = PortableScriptState(abs_path, pkg)
+end
+
+
 struct LoadingCache
     load_path::Vector{String}
     dummy_uuid::Dict{String, UUID}
@@ -440,7 +458,12 @@ end
 Same as [`Base.identify_package`](@ref) except that the path to the environment where the package is identified
 is also returned, except when the identity is not identified.
 """
-identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
+function identify_package_env(where::Module, name::String)
+    if where === Main && portable_script_state_global !== nothing
+        return identify_package_env(portable_script_state_global.pkg, name)
+    end
+    return identify_package_env(PkgId(where), name)
+end
 function identify_package_env(where::Union{PkgId, Nothing}, name::String)
     # Special cases
     if where !== nothing

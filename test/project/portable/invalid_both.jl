@@ -1,5 +1,3 @@
-using Test
-
 function foo()
     return 42
 end

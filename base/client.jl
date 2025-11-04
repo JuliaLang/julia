@@ -346,7 +346,17 @@ function exec_options(opts)
             if PROGRAM_FILE == "-"
                 include_string(Main, read(stdin, String), "stdin")
             else
-                include(Main, PROGRAM_FILE)
+                abs_script_path = abspath(PROGRAM_FILE)
+                if has_inline_project(abs_script_path)
+                    set_portable_script_state(abs_script_path)
+                    try
+                        include(Main, PROGRAM_FILE)
+                    finally
+                        global portable_script_state_global = nothing
+                    end
+                else
+                    include(Main, PROGRAM_FILE)
+                end
             end
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))

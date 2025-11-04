@@ -1873,7 +1873,7 @@ module M58272_to end
 
 @testset "Portable scripts" begin
     # Test with line-by-line comment syntax and path dependencies
-    portable_script = joinpath(@__DIR__, "project", "portable_script.jl")
+    portable_script = joinpath(@__DIR__, "project", "portable", "portable_script.jl")
     output = read(`$(Base.julia_cmd()) --startup-file=no $portable_script`, String)
 
     @test occursin("Active project: $portable_script", output)
@@ -1886,9 +1886,9 @@ module M58272_to end
     @test occursin("Pass", output)
 
     # Test with custom manifest= entry in project section
-    portable_script_cm = joinpath(@__DIR__, "project", "portable_script_custom_manifest.jl")
+    portable_script_cm = joinpath(@__DIR__, "project", "portable", "portable_script_custom_manifest.jl")
     output_cm = read(`$(Base.julia_cmd()) --startup-file=no $portable_script_cm`, String)
-    expected_cm = joinpath(@__DIR__, "project", "portable_script_custom.toml")
+    expected_cm = joinpath(@__DIR__, "project", "portable", "portable_script_custom.toml")
 
     @test occursin("Active project: $portable_script_cm", output_cm)
     @test occursin("Active manifest: $expected_cm", output_cm)
@@ -1904,7 +1904,7 @@ module M58272_to end
     @test occursin("✓ Random (stdlib) loaded successfully", output_script)
 
     # Test that regular Julia files (without inline sections) work fine as projects
-    regular_script = joinpath(@__DIR__, "project", "regular_script.jl")
+    regular_script = joinpath(@__DIR__, "project", "portable", "regular_script.jl")
 
     # Running the script with --project= should set it as active project
     output = read(`$(Base.julia_cmd()) --startup-file=no --project=$regular_script $regular_script`, String)
@@ -1918,29 +1918,35 @@ module M58272_to end
     @test occursin("Hello from regular script", output)
     @test occursin("x = 42", output)
 
+    portable_script_missing = joinpath(@__DIR__, "project", "portable", "portable_script_missing_dep.jl")
+    err_output = IOBuffer()
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $portable_script_missing`), stderr=err_output))
+    @test !success(result)
+    @test occursin("Package Rot13 not found in current path", String(take!(err_output)))
+
     # Test 1: Project section not first (has code before it)
-    invalid_project_not_first = joinpath(@__DIR__, "project", "invalid_project_not_first.jl")
+    invalid_project_not_first = joinpath(@__DIR__, "project", "portable", "invalid_project_not_first.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_project_not_first`), stderr=err_output))
     @test !success(result)
     @test occursin("#!project section must come first", String(take!(err_output)))
 
     # Test 2: Manifest section not last (has code after it)
-    invalid_manifest_not_last = joinpath(@__DIR__, "project", "invalid_manifest_not_last.jl")
+    invalid_manifest_not_last = joinpath(@__DIR__, "project", "portable", "invalid_manifest_not_last.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_manifest_not_last`), stderr=err_output))
     @test !success(result)
     @test occursin("#!manifest section must come last", String(take!(err_output)))
 
     # Test 3: Project not first, but manifest present
-    invalid_both = joinpath(@__DIR__, "project", "invalid_both.jl")
+    invalid_both = joinpath(@__DIR__, "project", "portable", "invalid_both.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_both -e "using Test"`), stderr=err_output))
     @test !success(result)
     @test occursin("#!project section must come first", String(take!(err_output)))
 
     # Test 4: Manifest with code in between sections
-    invalid_code_between = joinpath(@__DIR__, "project", "invalid_code_between.jl")
+    invalid_code_between = joinpath(@__DIR__, "project", "portable", "invalid_code_between.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_code_between -e "using Test"`), stderr=err_output))
     @test !success(result)
