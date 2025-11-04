@@ -3099,9 +3099,14 @@ mktempdir() do dir
                 touch(conf)
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(addenv(
+                err = IOBuffer()
+                p = run(pipeline(addenv(
                     `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,
-                    "OPENSSL_CONF" => conf), stderr=devnull))
+                    "OPENSSL_CONF" => conf), stderr=err); wait=false)
+                wait(p)
+                @testset let err = String(take!(err))
+                    @test success(p)
+                end
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 local pobj, port
