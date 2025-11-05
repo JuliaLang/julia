@@ -166,7 +166,7 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len)
     char *n;
     name[0] = '#';
     name[1] = '#';
-	name[2 + len] = '#';
+    name[2 + len] = '#';
     memcpy(name + 2, str, len);
 
     uint32_t ctr = jl_atomic_fetch_add_relaxed(&gs_ctr, 1);
