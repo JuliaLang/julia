@@ -1923,32 +1923,4 @@ module M58272_to end
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $portable_script_missing`), stderr=err_output))
     @test !success(result)
     @test occursin("Package Rot13 not found in current path", String(take!(err_output)))
-
-    # Test 1: Project section not first (has code before it)
-    invalid_project_not_first = joinpath(@__DIR__, "project", "portable", "invalid_project_not_first.jl")
-    err_output = IOBuffer()
-    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_project_not_first`), stderr=err_output))
-    @test !success(result)
-    @test occursin("#!project section must come first", String(take!(err_output)))
-
-    # Test 2: Manifest section not last (has code after it)
-    invalid_manifest_not_last = joinpath(@__DIR__, "project", "portable", "invalid_manifest_not_last.jl")
-    err_output = IOBuffer()
-    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_manifest_not_last`), stderr=err_output))
-    @test !success(result)
-    @test occursin("#!manifest section must come last", String(take!(err_output)))
-
-    # Test 3: Project not first, but manifest present
-    invalid_both = joinpath(@__DIR__, "project", "portable", "invalid_both.jl")
-    err_output = IOBuffer()
-    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_both -e "using Test"`), stderr=err_output))
-    @test !success(result)
-    @test occursin("#!project section must come first", String(take!(err_output)))
-
-    # Test 4: Manifest with code in between sections
-    invalid_code_between = joinpath(@__DIR__, "project", "portable", "invalid_code_between.jl")
-    err_output = IOBuffer()
-    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_code_between -e "using Test"`), stderr=err_output))
-    @test !success(result)
-    @test occursin("#!manifest section must come last", String(take!(err_output)))
 end

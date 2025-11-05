@@ -399,9 +399,12 @@ dependencies.
 
 ### [Portable scripts](@id portable-scripts)
 
-Julia also understands *portable scripts*: scripts that embed their own `Project.toml` (and optionally `Manifest.toml`) so they can be executed as self-contained environments. To do this, place TOML data inside comment fences named `#!project` and `#!manifest`:
+Julia also understands scripts with inline dependencies (also called *portable scripts*). These scripts embed their own `Project.toml` (and optionally `Manifest.toml`) so they can be executed as self-contained environments. A script is marked as portable with a `#!script` marker. The TOML data is placed inside comment fences named `#!project` and `#!manifest`:
 
 ```julia
+#!/usr/bin/env julia
+#!script
+
 #!project begin
 # name = "HelloApp"
 # uuid = "9c5fa7d8-7220-48e8-b2f7-0042191c5f6d"
@@ -421,7 +424,7 @@ println(md"# Hello, single-file world!")
 #!manifest end
 ```
 
-Lines inside the fenced blocks should be commented with `#` (as in the example) or be plain TOML lines. The `#!project` section must come first in the file (after an optional shebang and empty lines). If a `#!manifest` section is present, it must come after the `#!project` section, and no Julia code is allowed after the `#!manifest end` delimiter.
+Lines inside the fenced blocks should be commented with `#`. The `#!script` marker indicates that the script has inline dependencies. The `#!project` and `#!manifest` sections can appear anywhere in the file, but by convention they are placed at the bottom with the `#!project` section first.
 
 Running `julia hello.jl` automatically activates the embedded project. The script path becomes the active project entry in `LOAD_PATH`, so package loading works exactly as if `Project.toml` and `Manifest.toml` lived next to the script. The `--project=@script` flag also expands to the script itself when no on-disk project exists but inline metadata is present.
 

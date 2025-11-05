@@ -258,51 +258,29 @@ end
 
 
 function extract_inline_section(path::String, type::Symbol)
-    # Read all lines
     lines = readlines(path)
 
-    # For manifest, read backwards by reversing the lines
     if type === :manifest
-        lines = reverse(lines)
-        start_marker = "#!manifest end"
-        end_marker = "#!manifest begin"
+        start_marker = "#!manifest begin"
+        end_marker = "#!manifest end"
         section_name = "manifest"
-        position_error = "must come last"
     else
         start_marker = "#!project begin"
         end_marker = "#!project end"
         section_name = "project"
-        position_error = "must come first"
     end
 
     state = :none
-    at_start = true
     content_lines = String[]
 
-    for (lineno, line) in enumerate(lines)
+    for line in lines
         stripped = lstrip(line)
 
-        # Skip empty lines and comments (including shebang) before content
-        if at_start && (isempty(stripped) || startswith(stripped, '#'))
-            if startswith(stripped, start_marker)
-                state = :reading
-                at_start = false
-                continue
-            end
-            continue
-        end
-
-        # Found start marker after content - error
+        # Found start marker
         if startswith(stripped, start_marker)
-            if !at_start
-                error("#!$section_name section $position_error in $path")
-            end
             state = :reading
-            at_start = false
             continue
         end
-
-        at_start = false
 
         # Found end marker
         if startswith(stripped, end_marker) && state === :reading
@@ -321,11 +299,6 @@ function extract_inline_section(path::String, type::Symbol)
         end
     end
 
-    # For manifest, reverse the content back to original order
-    if type === :manifest && !isempty(content_lines)
-        content_lines = reverse(content_lines)
-    end
-
     if state === :done
         return strip(join(content_lines, '\n'))
     elseif state === :none
@@ -338,9 +311,14 @@ end
 function has_inline_project(path::String)::Bool
     for line in eachline(path)
         stripped = lstrip(line)
-        if startswith(stripped, "#!project begin")
-            return true
+        if isempty(stripped) || startswith(stripped, '#')
+            if startswith(stripped, "#!script")
+                return true
+            end
+            continue
         end
+        # Found non-comment, non-empty line before #!script
+        return false
     end
     return false
 end

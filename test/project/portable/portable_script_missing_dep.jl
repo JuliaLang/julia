@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+#!script
 
 #!project begin
 # name = "PortableScriptMissingDep"
