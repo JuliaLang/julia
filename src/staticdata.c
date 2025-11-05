@@ -1244,12 +1244,13 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             // TODO: Remove dead entries
             newm_data->min_world = data->min_world;
             newm_data->max_world = data->max_world;
+            newm_data->flags = data->flags;
             if (s->incremental) {
                 if (data->max_world != ~(size_t)0)
                     newm_data->max_world = 0;
                 newm_data->min_world = jl_require_world;
             }
-            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[3*i])));
+            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[4*i])));
             arraylist_push(&s->relocs_list, (void*)backref_id(s, data->mod, s->link_ids_relocs));
         }
         newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
@@ -1271,11 +1272,13 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_uint(s->s, data->min_world);
                 write_uint(s->s, data->max_world);
             }
-            static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void*), "_jl_module_using mismatch");
+            write_uint(s->s, data->flags);
+            static_assert(sizeof(struct _jl_module_using) == 4*sizeof(void*), "_jl_module_using mismatch");
             tot += sizeof(struct _jl_module_using);
         }
         for (; i < module_usings_max(m); i++) {
             write_pointer(s->s);
+            write_uint(s->s, 0);
             write_uint(s->s, 0);
             write_uint(s->s, 0);
             tot += sizeof(struct _jl_module_using);
@@ -3534,23 +3537,37 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
     image->size = ZSTD_getFrameContentSize(data, *plen);
     size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
     size_t aligned_size = LLT_ALIGN(image->size, page_size);
+    int fail = 0;
 #if defined(_OS_WINDOWS_)
     size_t large_page_size = GetLargePageMinimum();
-    if (image->size > 4 * large_page_size) {
+    image->data = NULL;
+    if (large_page_size > 0 && image->size > 4 * large_page_size) {
         size_t aligned_size = LLT_ALIGN(image->size, large_page_size);
         image->data = (char *)VirtualAlloc(
             NULL, aligned_size, MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
     }
-    else {
+    if (!image->data) {
+        /* Try small pages if large pages failed. */
         image->data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
                                            PAGE_READWRITE);
     }
+    fail = !image->data;
 #else
-    image->data =
-        (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    image->data = (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    fail = image->data == (void *)-1;
 #endif
-    if (!image->data || image->data == (void *)-1) {
-        jl_printf(JL_STDERR, "ERROR: failed to allocate space for system image\n");
+    if (fail) {
+        const char *err;
+#if defined(_OS_WINDOWS_)
+        char err_buf[256];
+        win32_formatmessage(GetLastError(), err_buf, sizeof(err_buf));
+        err = err_buf;
+#else
+        err = strerror(errno);
+#endif
+        jl_printf(JL_STDERR, "ERROR: failed to allocate memory for system image: %s\n",
+                  err);
         jl_exit(1);
     }
 

@@ -91,7 +91,7 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
-function result_edges(interp::AbstractInterpreter, caller::InferenceState)
+function result_edges(::AbstractInterpreter, caller::InferenceState)
     result = caller.result
     opt = result.src
     if isa(opt, OptimizationState)
@@ -198,7 +198,6 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     di = src.debuginfo
     rettype = Any
     exctype = Any
-    rettype_const = nothing
     const_flags = 0x0
     ipo_effects = zero(UInt32)
     min_world = src.min_world
@@ -433,7 +432,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     return src
 end
 
-function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
+function discard_optimized_result(interp::AbstractInterpreter, _#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
     may_discard_trees(interp) || return false
     return inlining_cost == MAX_INLINE_COST
 end
@@ -683,7 +682,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     nothing
 end
 
-function is_already_cached(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
+function is_already_cached(interp::AbstractInterpreter, result::InferenceResult, ::CodeInstance)
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this right now
     mi = result.linfo
@@ -840,7 +839,7 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
 end
 
 # annotate types of all symbols in AST, preparing for optimization
-function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
+function type_annotate!(::AbstractInterpreter, sv::InferenceState)
     # widen `Conditional`s from `slottypes`
     slottypes = sv.slottypes
     for i = 1:length(slottypes)
@@ -892,17 +891,10 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
 end
 
 function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child::InferenceState)
-    # add backedge of parent <- child
-    # then add all backedges of parent <- parent.parent
+    # update all cycleid to be in the same group
     frames = parent.callstack::Vector{AbsIntState}
     @assert child.callstack === frames
     ancestorid = child.cycleid
-    while true
-        add_cycle_backedge!(parent, child)
-        parent.cycleid === ancestorid && break
-        child = parent
-        parent = cycle_parent(child)::InferenceState
-    end
     # ensure that walking the callstack has the same cycleid (DAG)
     for frameid = reverse(ancestorid:length(frames))
         frame = frames[frameid]::InferenceState
@@ -913,7 +905,6 @@ function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child:
 end
 
 function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
-    update_valid_age!(caller, frame.world.valid_worlds)
     backedge = (caller, caller.currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     return frame
@@ -932,9 +923,8 @@ end
 # frame matching `mi` is encountered, then there is a cycle in the call graph
 # (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
 # we "resolve" it by merging the call chain, which entails updating each intermediary
-# frame's `cycleid` field and adding the appropriate backedges. Finally,
-# we return `mi`'s pre-existing frame. If no cycles are found, `nothing` is
-# returned instead.
+# frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
+# If no cycles are found, `nothing` is returned instead.
 function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
@@ -1118,6 +1108,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     result.ci_as_edge = edge_ci # set the edge for the inliner usage
                     VolatileInferenceResult(result)
                 end
+                isinferred || add_cycle_backedge!(caller, frame)
                 mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
                     edge, edgecycle, edgelimited, volatile_inf_result)
                 return true
@@ -1135,6 +1126,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+    add_cycle_backedge!(caller, frame)
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
 end
 
@@ -1173,7 +1165,7 @@ for the code of a function that inference has found to just return a constant. F
 stored - the constant is used directly. However, because this is an ABI implementation detail, it is nice to maintain
 consistency and just synthesize a CodeInfo when the reflection APIs ask for them - this function does that.
 """
-function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
+function codeinfo_for_const(::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
     method = mi.def::Method
     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     tree.code = Any[ ReturnNode(quoted(val)) ]
@@ -1490,7 +1482,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 continue
             end
         elseif isexpr(stmt, :cfunction) && length(stmt.args) == 5
-            (pointer_type, f, rt, at, call_type) = stmt.args
+            (_, f, _, at, _) = stmt.args
             linfo = ci.parent
 
             linfo isa MethodInstance || continue

@@ -159,7 +159,8 @@ characteristics of a particular type is an implementation detail of the compiler
 concern, so some types may be colored red even if they do not impact performance.
 Small unions of concrete types are usually not a concern, so these are highlighted in yellow.
 
-Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
+Keyword argument `debuginfo` may be one of `:source`, `:none` or `:default`, to specify the verbosity of code comments.
+Unless the user changes `Base.IRShow.default_debuginfo[]`, the value `:default` is equivalent to `:source`.
 
 See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Tips page of the manual for more information.
 
@@ -201,7 +202,8 @@ function code_warntype(io::IO, arginfo::ArgInfo;
 end
 code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...) = code_warntype(io, ArgInfo(f, tt); kwargs...)
 code_warntype(io::IO, @nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...) = code_warntype(io, ArgInfo(argtypes); kwargs...)
-code_warntype(args...; kwargs...) = (@nospecialize; code_warntype(stdout, args...; kwargs...))
+code_warntype(f; kwargs...) = (@nospecialize; code_warntype(stdout, f; kwargs...))
+code_warntype(f, argtypes; kwargs...) = (@nospecialize; code_warntype(stdout, f, argtypes; kwargs...))
 
 using Base: CodegenParams
 
@@ -348,16 +350,16 @@ code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); kwa
 code_llvm(args...; kwargs...) = (@nospecialize; code_llvm(stdout, args...; kwargs...))
 
 """
-    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)
+    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true, raw=false)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
-* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (equivalently, `:default`) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
-* If `raw` is `false`, uninteresting instructions (like the safepoint function prologue) are elided.
+* If `raw` is `false` (default), uninteresting instructions (like the safepoint function prologue) are elided.
 
 See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref).
 """

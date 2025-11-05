@@ -91,8 +91,14 @@ if Sys.isunix()
         # disable coredumps for this process
         p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
         @test read(p, UInt8) == UInt8('r')
-        Base.kill(p, Base.SIGQUIT)
+        # The process might ignore the first SIGQUIT, since it will try to then run cleanup,
+        # which may fail for many reasons.
+        # The process will not ignore the second SIGQUIT, but the kernel might ignore it.
+        # So keep sending SIGQUIT every few seconds until the kernel delivers the second one
+        # and `p` exits.
+        t = Timer(0, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
         wait(p)
+        close(t)
         err_s = readchomp(errp)
         @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
         @test occursin("==== Thread ", err_s)
@@ -580,7 +586,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
             # there may be atrailing separator here so use rstrip
-            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)

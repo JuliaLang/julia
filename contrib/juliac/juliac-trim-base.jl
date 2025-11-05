@@ -12,6 +12,7 @@ end
     depwarn(msg, funcsym; force::Bool=false) = nothing
     _assert_tostring(msg) = ""
     reinit_stdio() = nothing
+    wait_forever() = while true; wait(); end
     JuliaSyntax.enable_in_core!() = nothing
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
@@ -77,9 +78,12 @@ end
             print(io, T.var.name)
         end
     end
-    # this function is not `--trim`-compatible if it resolves to a Varargs{...} specialization
+    # these functions are not `--trim`-compatible if it resolves to a Varargs{...} specialization
     # and since it only has 1-argument methods this happens too often by default (just 2-3 args)
     setfield!(typeof(throw_eachindex_mismatch_indices).name, :max_args, Int32(5), :monotonic)
+    setfield!(typeof(print).name, :max_args, Int32(10), :monotonic)
+    setfield!(typeof(println).name, :max_args, Int32(10), :monotonic)
+    setfield!(typeof(print_to_string).name, :max_args, Int32(10), :monotonic)
 end
 @eval Base.Sys begin
     __init_build() = nothing # VersionNumber parsing is not supported yet

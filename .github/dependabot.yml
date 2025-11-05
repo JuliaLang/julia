@@ -8,4 +8,4 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
-      - "domain:ci"
+      - "ci"
