@@ -408,7 +408,7 @@ mutable struct InferenceState
         # Apply generated function restrictions
         if src.min_world != 1 || src.max_world != typemax(UInt)
             # From generated functions
-            update_valid_age!(this, WorldRange(src.min_world, src.max_world))
+            update_valid_age!(this, world, WorldRange(src.min_world, src.max_world))
         end
 
         return this
@@ -851,6 +851,9 @@ mutable struct IRInterpretationState
         ssa_refined = BitSet()
         lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        if !(get_inference_world(interp) in valid_worlds)
+            error("invalid age range update")
+        end
         tasks = WorkThunk[]
         edges = Any[]
         callstack = AbsIntState[]
@@ -979,9 +982,13 @@ has_conditional(𝕃::AbstractLattice, ::InferenceState) = has_conditional(𝕃)
 has_conditional(::AbstractLattice, ::IRInterpretationState) = false
 
 # work towards converging the valid age range for sv
-function update_valid_age!(sv::AbsIntState, valid_worlds::WorldRange)
-    sv.valid_worlds = intersect(sv.valid_worlds, valid_worlds)
-    return sv.valid_worlds
+function update_valid_age!(sv::AbsIntState, world, valid_worlds::WorldRange)
+    valid_worlds = intersect(sv.valid_worlds, valid_worlds)
+    if !(world in valid_worlds)
+        error("invalid age range update")
+    end
+    sv.valid_worlds = valid_worlds
+    return valid_worlds
 end
 
 """

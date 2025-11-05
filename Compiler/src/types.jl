@@ -121,8 +121,8 @@ mutable struct InferenceResult <: InferredCallResult
     tombstone::Bool
 
     #=== uninitialized fields ===#
-    ci::CodeInstance                  # CodeInstance if this result may be added to the cache
-    ci_as_edge::CodeInstance          # CodeInstance as the edge representing locally cached result
+    ci::CodeInstance                  # CodeInstance that will contain the result in full
+    ci_as_edge::CodeInstance          # CodeInstance, that is preferred just for use when representing the result as the edge
     function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
         result = exc_result = src = nothing
         valid_worlds = WorldRange()
