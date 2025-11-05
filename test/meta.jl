@@ -286,3 +286,12 @@ end
 @testset "Base.Meta docstrings" begin
     @test isempty(Docs.undocumented_names(Meta))
 end
+
+@testset "gensym relocation tests" begin
+    res = run(`$(joinpath(dirname(pwd()), ".", "julia")) --startup=no -e """
+    push!(LOAD_PATH, $(repr(joinpath(pwd(), "GensymTestPkg")) ));
+    using GensymTestPkg;
+    f() || error()
+    """`)
+    @test res.exitcode == 0
+end

@@ -128,13 +128,21 @@ void jl_set_gs_ctr(uint32_t ctr) { jl_atomic_store_relaxed(&gs_ctr, ctr); }
 
 JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 {
-    char name[16];
+    char name[32];
     char *n;
     uint32_t ctr = jl_atomic_fetch_add_relaxed(&gs_ctr, 1);
     n = uint2str(&name[2], sizeof(name)-2, ctr, 10);
     *(--n) = '#'; *(--n) = '#';
+
+    if (jl_generating_output() == 1) {
+        size_t len = strlen(n);
+        if (len + 9 < sizeof(name))
+            strcat(n, "#precomp");
+    }
+
     return jl_symbol(n);
 }
+
 
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len)
 {
@@ -144,20 +152,31 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len)
     else if (memchr(str, 0, len)) {
         jl_exceptionf(jl_argumenterror_type, "Symbol name may not contain \\0");
     }
+
     char gs_name[14];
-    size_t alloc_len = sizeof(gs_name) + len + 3;
+    size_t base_alloc_len = sizeof(gs_name) + len + 3;
+    const char *suffix = (jl_generating_output() == 1) ? "#precomp" : "";
+    size_t suffix_len = strlen(suffix);
+    size_t alloc_len = base_alloc_len + suffix_len;
+
     if (len > MAX_SYM_LEN || alloc_len > MAX_SYM_LEN)
         jl_exceptionf(jl_argumenterror_type, "Symbol name too long");
+
     char *name = (char*)(len >= 256 ? malloc_s(alloc_len) : alloca(alloc_len));
     char *n;
     name[0] = '#';
     name[1] = '#';
-    name[2 + len] = '#';
+	name[2 + len] = '#';
     memcpy(name + 2, str, len);
+
     uint32_t ctr = jl_atomic_fetch_add_relaxed(&gs_ctr, 1);
     n = uint2str(gs_name, sizeof(gs_name), ctr, 10);
     memcpy(name + 3 + len, n, sizeof(gs_name) - (n - gs_name));
-    jl_sym_t *sym = _jl_symbol(name, alloc_len - (n - gs_name)- 1);
+
+    if (suffix_len > 0)
+        memcpy(name + alloc_len - suffix_len - 1, suffix, suffix_len);
+
+    jl_sym_t *sym = _jl_symbol(name, alloc_len - (n - gs_name) - 1);
     if (len >= 256)
         free(name);
     return sym;
