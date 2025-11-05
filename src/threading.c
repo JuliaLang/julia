@@ -800,6 +800,7 @@ void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 {
     jl_atomic_store_relaxed(&lock->owner, (jl_task_t*)NULL);
     lock->count = 0;
+    lock->record_waiting_time = 0;
     jl_profile_lock_init(lock, name);
 }
 
@@ -818,10 +819,13 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         return;
     }
     JL_TIMING(LOCK_SPIN, LOCK_SPIN);
+    uint64_t t0 = lock->record_waiting_time ? jl_hrtime() : 0;
     while (1) {
         if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
             jl_profile_lock_acquired(lock);
+            if (lock->record_waiting_time)
+                self->lock_waiting_time += jl_hrtime() - t0;
             return;
         }
         if (safepoint) {

@@ -2381,7 +2381,7 @@ JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void)
     jl_atomic_fetch_add(&jl_force_trace_compile_timing_enabled, -1);
 }
 
-static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time)
+static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time, double codegen_lock_waiting_time)
 {
     static ios_t f_precompile;
     static JL_STREAM* s_precompile = NULL;
@@ -2391,6 +2391,12 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
         return;
     if (!jl_is_method(def))
         return;
+
+    // nested layer of this precompile statement
+    int nested_level = 0;
+    if (jl_atomic_load_relaxed(&(jl_codegen_lock.owner)) == jl_current_task) {
+        nested_level = jl_codegen_lock.count;
+    }
 
     JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
@@ -2409,7 +2415,20 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
             jl_printf(s_precompile, "#= %6.1f =# ", compilation_time / 1e6);
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
-        jl_printf(s_precompile, ")\n");
+        jl_printf(s_precompile, ")");
+
+        // compilation inline properties/files as a json dictionary
+        if (force_trace_compile || jl_options.trace_compile_timing) {
+            jl_printf(s_precompile, " #= { "); // json starts
+            // nested level: 0 -> not nested, >= 1, nested amount
+            jl_printf(s_precompile, "\"nested_levels\": %d, ", nested_level);
+            // time spent waiting to acquire the codegen lock, in milliseconds
+            jl_printf(s_precompile, "\"codegen_waiting_time\": %.2f ", codegen_lock_waiting_time / 1e6);
+
+            jl_printf(s_precompile, "} =#"); // json ends
+        }
+        jl_printf(s_precompile, "\n");
+
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
@@ -2569,7 +2588,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     codeinst->rettype_const = unspec->rettype_const;
                     jl_atomic_store_release(&codeinst->invoke, unspec_invoke);
                     jl_mi_cache_insert(mi, codeinst);
-                    record_precompile_statement(mi, 0);
+                    record_precompile_statement(mi, 0, 0);
                     return codeinst;
                 }
             }
@@ -2586,7 +2605,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
-            record_precompile_statement(mi, 0);
+            record_precompile_statement(mi, 0, 0);
             return codeinst;
         }
         if (compile_option == JL_OPTIONS_COMPILE_OFF) {
@@ -2598,7 +2617,9 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     double compile_time = jl_hrtime();
     int did_compile = 0;
+    uint64_t codegen_lock_wt_before = jl_current_task->lock_waiting_time;
     codeinst = jl_generate_fptr(mi, world, &did_compile);
+    uint64_t codegen_lock_waiting_time = jl_current_task->lock_waiting_time - codegen_lock_wt_before;
     compile_time = jl_hrtime() - compile_time;
 
     if (!codeinst) {
@@ -2641,7 +2662,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_mi_cache_insert(mi, codeinst);
     }
     else if (did_compile) {
-        record_precompile_statement(mi, compile_time);
+        record_precompile_statement(mi, compile_time, (double)codegen_lock_waiting_time);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
     return codeinst;

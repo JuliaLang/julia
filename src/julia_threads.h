@@ -120,6 +120,7 @@ struct _jl_task_t;
 typedef struct {
     _Atomic(struct _jl_task_t*) owner;
     uint32_t count;
+    int32_t record_waiting_time; // 0 => no (default), 1 => yes
 } jl_mutex_t;
 
 struct _jl_bt_element_t;

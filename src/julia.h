@@ -2085,6 +2085,7 @@ typedef struct _jl_task_t {
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
+    uint64_t lock_waiting_time;
 } jl_task_t;
 
 #define JL_TASK_STATE_RUNNABLE 0

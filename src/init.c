@@ -735,6 +735,7 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
+    jl_codegen_lock.record_waiting_time = 1; // 0 = no, 1 = yes
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
 }
 
