@@ -9,7 +9,12 @@ const is_expr = isexpr
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names (in the same module).
+Generates a symbol which will not conflict with other variable names
+within the Julia session (including names in other modules).
+
+(Note that precompilation currently happens in a separate session,
+resulting in subtle potential conflicts when calling `gensym` in toplevel scope.
+See [#44903](https://github.com/JuliaLang/julia/issues/44903).)
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
