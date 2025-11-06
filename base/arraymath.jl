@@ -9,7 +9,8 @@ for f in (:+, :-)
     end
 end
 
-# using map over broadcast allows linear indexing for wide matrices with few rows
+# Using map over broadcast enables vectorization for wide matrices with few rows.
+# This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
 # https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
 function +(A::Array, Bs::Array...)
     for B in Bs
