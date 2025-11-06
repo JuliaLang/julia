@@ -3096,7 +3096,15 @@ mktempdir() do dir
                 conf = joinpath(root, common_name * ".conf")
 
                 # Make sure test doesn't depend on system OpenSSL config (which may be broken)
-                touch(conf)
+                open(conf, "w") do io
+                    write(io, """
+                        [req]
+                        distinguished_name = req_distinguished_name
+
+                        [req_distinguished_name]
+                        CN = $common_name
+                        """)
+                end
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
                 err = IOBuffer()
