@@ -39,7 +39,7 @@ end
 
 const default_msm_header = "[press: Enter=toggle, a=all, n=none, d=done, q=abort]"
 
-MultiSelectMenu(options, pagesize, pageoffset, selected, config) = 
+MultiSelectMenu(options, pagesize, pageoffset, selected, config) =
     MultiSelectMenu(options, pagesize, pageoffset, selected, Set{Int64}(), default_msm_header, config)
 
 """
@@ -64,7 +64,7 @@ Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectCo
 !!! compat "Julia 1.6"
     The `selected` argument requires Julia 1.6 or later.
 """
-function MultiSelectMenu(options::Array{String,1}; 
+function MultiSelectMenu(options::Array{String,1};
     on_cancel=Set{Int64}(), header=true, pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
 
     length(options) < 1 && error("MultiSelectMenu must have at least one option")
@@ -82,9 +82,9 @@ function MultiSelectMenu(options::Array{String,1};
         push!(_selected, item)
     end
 
-    is_not_legacy = isnothing(on_cancel) || (header != true)  || !isempty(kwargs) 
+    is_not_legacy = isnothing(on_cancel) || (header != true)  || !isempty(kwargs)
 
-    if header == true 
+    if header == true
         header = default_msm_header
     elseif header == false
         header = ""

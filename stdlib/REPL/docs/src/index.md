@@ -1054,14 +1054,14 @@ Aside from the overall `charset` option, for `RadioMenu` the configurable option
  - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
  - `on_cancel::Union{Nothing, Int}`: added in REPL v1.12; recommended value is `nothing` for consistency
- - `header::String`: added in REPL v1.12; default is "". 
+ - `header::String`: added in REPL v1.12; default is "".
  Call `RadioMenu` constructor with kwarg `header=true` to set header to "[press: Enter=select, q=abort]"
 
 In `MultiSelectMenu`, the added/differing fields are:
 
  - `checked::String="[X]"|"✓"`: string to use for checked
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
- - `on_cancel::Union{Nothing, Set{Int}}`: added in REPL v1.12; default is empty set for backward compat. 
+ - `on_cancel::Union{Nothing, Set{Int}}`: added in REPL v1.12; default is empty set for backward compat.
  It is recommended to set `on_cancel=nothing` to be able to discriminate between "nothing selected" vs. "aborted".
  - `header::String`: added in REPL v1.12; default is "[press: Enter=toggle, a=all, n=none, d=done, q=abort]. "
  Call `MultiSelectMenu` constructor with kwarg `header=false` to display no header.

@@ -38,8 +38,8 @@ const default_radio_header = "[press: Enter=select, q=abort]"
 """
 
     RadioMenu(options::Vector{String}; pagesize::Int=10,
-                                       on_cancel::Union{Nothing, Int}=-1, 
-                                       header::Union{String, Bool}=false, 
+                                       on_cancel::Union{Nothing, Int}=-1,
+                                       header::Union{String, Bool}=false,
                                        keybindings::Vector{Char}=Char[],
                                        kwargs...)
 
@@ -60,7 +60,7 @@ Any additional keyword arguments will be passed to [`TerminalMenus.Config`](@ref
 !!! compat "Julia 1.8"
     The `keybindings` argument requires Julia 1.8 or later.
 """
-function RadioMenu(options::Array{String,1}; 
+function RadioMenu(options::Array{String,1};
     on_cancel=-1, header=false, pagesize::Int=10, warn::Bool=true, keybindings::Vector{Char}=Char[], kwargs...)
 
     length(options) < 1 && error("RadioMenu must have at least one option")
@@ -76,9 +76,9 @@ function RadioMenu(options::Array{String,1};
     pageoffset = 0
     selected = -1 # none
 
-    is_not_legacy = isnothing(on_cancel) || (header != false) || !isempty(kwargs) 
+    is_not_legacy = isnothing(on_cancel) || (header != false) || !isempty(kwargs)
 
-    if header == true 
+    if header == true
          header = default_radio_header
     elseif header == false
         header = ""
