@@ -104,6 +104,7 @@ Standard library changes
 * History searching has been rewritten to use a new interactive modal dialogue, using a fzf-like style.
 * The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
 * Display of repeated frames and cycles in stack traces has been improved by bracketing them in the trace and treating them consistently ([#55841]).
+* The superscript character U+107A5 𐞥 (MODIFIER LETTER SMALL Q), which was already supported in the language, can now be accessed at the REPL with `\^q` ([#59544]).
 
 #### Test
 
