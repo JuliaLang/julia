@@ -106,9 +106,34 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
     if isdefined(result, :ci)
         ci = result.ci
         mi = result.linfo
+        result_type = result.result
+        result_type isa LimitedAccuracy && (result_type = result_type.typ)
+        @assert !(result_type === nothing)
+        const_flag = is_result_constabi_eligible(result)
+        if isa(result_type, Const)
+            rettype_const = result_type.val
+            const_flags = const_flag ? 0x3 : 0x2
+        elseif isa(result_type, PartialOpaque)
+            rettype_const = result_type
+            const_flags = 0x2
+        elseif isconstType(result_type)
+            rettype_const = result_type.parameters[1]
+            const_flags = 0x2
+        elseif isa(result_type, PartialStruct)
+            rettype_const = (_getundefs(result_type), result_type.fields)
+            const_flags = 0x2
+        elseif isa(result_type, InterConditional)
+            rettype_const = result_type
+            const_flags = 0x2
+        elseif isa(result_type, InterMustAlias)
+            rettype_const = result_type
+            const_flags = 0x2
+        else
+            rettype_const = nothing
+            const_flags = 0x0
+        end
         inferred_result = nothing
         uncompressed = result.src
-        const_flag = is_result_constabi_eligible(result)
         debuginfo = nothing
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
@@ -153,9 +178,18 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         time_now = _time_ns()
         time_self_ns = caller.time_self_ns + (time_now - time_before)
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
+        ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
+            ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, const_flags,
+            min_world, max_world,
+            ipo_effects, result.analysis_results, debuginfo, edges)
         ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
             ci, inferred_result, const_flag, min_world, max_world, ipo_effects,
             result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        if is_already_cached(me.interp, result)
+            # convert to a local cache or insert it now globally
+            engine_reject(interp, ci)
+            me.cache_mode = CACHE_MODE_LOCAL
+        end
         if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
             code_cache(interp)[result.linfo] = ci
         end
@@ -223,6 +257,9 @@ function finish_nocycle(::AbstractInterpreter, frame::InferenceState, time_befor
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
+        # check the valid_worlds hasn't been narrowed by added :invoke edges
+        valid_worlds = intersect(frame.valid_worlds, compute_recursive_worlds(opt.inlining.edges))
+        update_valid_age!(frame, get_inference_world(interp), valid_worlds)
     end
     empty!(opt_cache)
     validation_world = get_world_counter()
@@ -271,6 +308,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState}, 
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp, opt, caller.result)
+            cycle_valid_worlds = intersect(cycle_valid_worlds, compute_recursive_worlds(opt.inlining.edges))
             time_now = _time_ns()
             caller.time_self_ns += (time_now - time_before)
             time_before = time_now
@@ -290,6 +328,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState}, 
         caller.time_start = time_start
         caller.time_caches = time_caches
         caller.time_paused = time_paused
+        update_valid_age!(caller, world, cycle_valid_worlds)
         finish!(caller.interp, caller, validation_world, time_before)
         if isdefined(caller.result, :ci)
             push!(cis, caller.result.ci)
@@ -631,44 +670,11 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
 
     maybe_validate_code(me.linfo, me.src, "inferred")
 
-    # finish populating inference results into the CodeInstance if possible, and maybe cache that globally for use elsewhere
+    # check global cache again for :invoke use, and put in the opt_cache if it wasn't there at this time
     if isdefined(result, :ci)
-        result_type = result.result
-        result_type isa LimitedAccuracy && (result_type = result_type.typ)
-        @assert !(result_type === nothing)
-        if isa(result_type, Const)
-            rettype_const = result_type.val
-            const_flags = is_result_constabi_eligible(result) ? 0x3 : 0x2
-        elseif isa(result_type, PartialOpaque)
-            rettype_const = result_type
-            const_flags = 0x2
-        elseif isconstType(result_type)
-            rettype_const = result_type.parameters[1]
-            const_flags = 0x2
-        elseif isa(result_type, PartialStruct)
-            rettype_const = (_getundefs(result_type), result_type.fields)
-            const_flags = 0x2
-        elseif isa(result_type, InterConditional)
-            rettype_const = result_type
-            const_flags = 0x2
-        elseif isa(result_type, InterMustAlias)
-            rettype_const = result_type
-            const_flags = 0x2
-        else
-            rettype_const = nothing
-            const_flags = 0x0
-        end
-
-        di = nothing
-        edges = empty_edges # `edges` will be updated within `finish!`
-        ci = result.ci
-        min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
-        ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
-            ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, const_flags,
-            min_world, max_world,
-            encode_effects(result.ipo_effects), result.analysis_results, di, edges)
         if !iszero(me.cache_mode & CACHE_MODE_GLOBAL)
-            if is_already_cached(me.interp, result, ci)
+            ci = result.ci
+            if is_already_cached(me.interp, result)
                 # convert to a local cache
                 engine_reject(interp, ci)
                 me.cache_mode = CACHE_MODE_LOCAL
@@ -680,7 +686,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     nothing
 end
 
-function is_already_cached(interp::AbstractInterpreter, result::InferenceResult, ::CodeInstance)
+function is_already_cached(interp::AbstractInterpreter, result::InferenceResult)
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this right now
     mi = result.linfo
@@ -784,6 +790,16 @@ function compute_edges!(sv::InferenceState)
         append!(edges, user_edges)
     end
     nothing
+end
+
+function compute_recursive_worlds(edges::Vector{Any})
+    range = WorldRange(typemin(UInt), typemax(UInt))
+    for edge in edges
+        if edge isa CodeInstance
+            intersect(range, WorldRange(edge.min_world, edge.max_world))
+        end
+    end
+    return range
 end
 
 function record_slot_assign!(sv::InferenceState)
