@@ -9,6 +9,8 @@ for f in (:+, :-)
     end
 end
 
+# using map over broadcast allows linear indexing for wide matrices with few rows
+# https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
 function +(A::Array, Bs::Array...)
     for B in Bs
         promote_shape(A, B) # check size compatibility
@@ -27,6 +29,15 @@ for f in (:/, :\, :*)
     end
     if f !== :\
         @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
+    end
+end
+
+for f in (:/, :\, :*)
+    if f !== :/
+        @eval ($f)(A::Number, B::Array) = map(x->$f(A, x), B)
+    end
+    if f !== :\
+        @eval ($f)(A::Array, B::Number) = map(x->$f(x, B), A)
     end
 end
 
