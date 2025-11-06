@@ -1192,6 +1192,10 @@ function mode_keymap(julia_prompt::Prompt)
                 LineEdit.state(s, julia_prompt).input_buffer = buf
             end
         else
+            buf = LineEdit.buffer(s)
+            if LineEdit.try_remove_paired_delimiter(buf)
+                return LineEdit.refresh_line(s)
+            end
             LineEdit.edit_backspace(s)
         end
     end,
