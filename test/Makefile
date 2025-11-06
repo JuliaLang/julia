@@ -6,7 +6,7 @@ VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
-export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(build_private_libdir)))
 export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
