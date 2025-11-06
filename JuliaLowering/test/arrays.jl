@@ -1,4 +1,8 @@
-using Test, JuliaLowering
+using Test
+
+if !(@isdefined JuliaLowering)
+    using JuliaLowering
+end
 
 @testset "Array syntax" begin
 

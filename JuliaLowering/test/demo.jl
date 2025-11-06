@@ -1,9 +1,13 @@
 # Just some hacking
 
-using JuliaSyntax
-using JuliaLowering
+if !(@isdefined JuliaSyntax)
+    using JuliaSyntax
+end
+if !(@isdefined JuliaLowering)
+    using JuliaLowering
+end
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, is_leaf, @ast, numchildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov, lookup_binding
+using .JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, is_leaf, @ast, numchildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov, lookup_binding
 
 using JuliaSyntaxFormatter
 

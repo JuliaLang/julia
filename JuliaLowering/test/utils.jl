@@ -1,8 +1,16 @@
 # Shared testing code which should be included before running individual test files.
 using Test
 
-using JuliaLowering
-using JuliaSyntax
+if !(@isdefined JuliaSyntax)
+    using JuliaSyntax
+else
+    using .JuliaSyntax # for default exports
+end
+if !(@isdefined JuliaLowering)
+    using JuliaLowering
+else
+    using .JuliaLowering # for default exports
+end
 
 import FileWatching
 

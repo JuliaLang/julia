@@ -6,8 +6,13 @@ module JuliaLoweringREPL
 import ReplMaker
 import REPL
 
-using JuliaLowering: JuliaLowering, SyntaxTree, children
-using JuliaSyntax
+if !(@isdefined JuliaSyntax)
+    using JuliaSyntax
+end
+if !(@isdefined JuliaLowering)
+    using JuliaLowering
+end
+using .JuliaLowering: JuliaLowering, SyntaxTree, children
 
 function is_incomplete(prompt_state)
     str = String(take!(copy(REPL.LineEdit.buffer(prompt_state))))
