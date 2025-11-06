@@ -344,6 +344,29 @@ end
                 @test filterchunkrev!(results, entries, spec) == 0
                 @test results == entries[3:6]
             end
+            @testset "Uniqueness" begin
+                empty!(results)
+                # Create entries with duplicate content
+                dup_entries = [
+                    HistEntry(:julia, now(UTC), "println(\"hello\")", 1),
+                    HistEntry(:julia, now(UTC), "cos(2π)", 2),
+                    HistEntry(:julia, now(UTC), "println(\"hello\")", 3),  # duplicate
+                    HistEntry(:julia, now(UTC), "sin(π)", 4),
+                    HistEntry(:julia, now(UTC), "cos(2π)", 5),  # duplicate
+                    HistEntry(:julia, now(UTC), "println(\"hello\")", 6),  # duplicate
+                    HistEntry(:julia, now(UTC), "tan(π/4)", 7),
+                ]
+                cset = ConditionSet("")  # Match all
+                spec = FilterSpec(cset)
+                @test filterchunkrev!(results, dup_entries, spec) == 0
+                # Should only get unique entries
+                # Since we iterate in reverse (7->1), we keep the most recent occurrence of each unique content
+                @test length(results) == 4
+                @test results[1] == dup_entries[4]  # sin(π)
+                @test results[2] == dup_entries[5]  # cos(2π) - most recent
+                @test results[3] == dup_entries[6]  # println("hello") - most recent
+                @test results[4] == dup_entries[7]  # tan(π/4)
+            end
         end
         @testset "Strictness comparison" begin
             c1 = ConditionSet("hello world")
