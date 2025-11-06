@@ -623,9 +623,12 @@ function test_find(
 end
 
 @testset "find_package with one env in load path" begin
-    for (env, (_, _, roots, graph, paths)) in envs
-        push!(empty!(LOAD_PATH), env)
-        test_find(roots, graph, paths)
+    for idx in eachindex(envs)
+        @testset let idx=idx
+            (env, (_, _, roots, graph, paths)) = envs[idx]
+            push!(empty!(LOAD_PATH), env)
+            test_find(roots, graph, paths)
+        end
     end
 end
 
@@ -1487,8 +1490,10 @@ end
             """)
         write(joinpath(foo_path, "Manifest.toml"),
             """
-            julia_version = "1.13.0"
+            # This file is machine-generated - editing it directly is not advised
+            julia_version = "1.13.0-DEV"
             manifest_format = "2.0"
+            project_hash = "8699765aeeac181c3e5ddbaeb9371968e1f84d6b"
 
             [[deps.Foo51989]]
             path = "."
