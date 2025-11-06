@@ -31,7 +31,7 @@ const TESTNAMES = [
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
         "faulty_constructor_method_should_not_cause_stack_overflows",
-        "JuliaSyntax"
+        "JuliaSyntax", "JuliaLowering",
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -48,9 +48,9 @@ const INTERNET_REQUIRED_LIST = [
 const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
 
 const TOP_LEVEL_PKGS = [
-    "Compiler"
-    "JuliaSyntax"
-    "JuliaLowering"
+    "Compiler",
+    "JuliaSyntax",
+    "JuliaLowering",
 ]
 
 function test_path(test)
@@ -69,6 +69,9 @@ function test_path(test)
         testpath = length(t) >= 2 ? t[2:end] : ("runtests",)
         return joinpath(@__DIR__, "..", t[1], "test", testpath...)
     elseif t[1] == "JuliaSyntax"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    elseif t[1] == "JuliaLowering"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
         return joinpath(@__DIR__, "..", t[1], "test", testpath...)
     else
