@@ -46,11 +46,11 @@ end
     menu = MultiSelectMenu(["1st", "b", "c"]; header = false)
     output = simulate_input_and_capture_output(menu, 'q')
     @test startswith(output, "\e[2K > [ ] 1st")
-   
+
     menu = RadioMenu(["1st", "b", "c"]; warn=false)
     output = simulate_input_and_capture_output(menu, 'q')
     @test startswith(output, "\e[2K > 1st")
-   
+
     header = TerminalMenus.default_radio_header
     menu = RadioMenu(["1st", "b", "c"]; header = true)
     output = simulate_input_and_capture_output(menu, 'q')
