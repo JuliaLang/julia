@@ -176,9 +176,7 @@ struct OptimizerCache{CodeCache}
 end
 function get((; cache, opt_cache)::OptimizerCache, mi::MethodInstance, default)
     if haskey(opt_cache, mi)
-        codeinst = opt_cache[mi]
-        @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
-        return codeinst
+        return opt_cache[mi] # this is incomplete right now, but will be finished (by finish_cycle) before caching anything
     end
     return get(cache, mi, default)
 end
