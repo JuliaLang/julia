@@ -3093,9 +3093,28 @@ mktempdir() do dir
                 key = joinpath(root, common_name * ".key")
                 cert = joinpath(root, common_name * ".crt")
                 pem = joinpath(root, common_name * ".pem")
+                conf = joinpath(root, common_name * ".conf")
+
+                # Make sure test doesn't depend on system OpenSSL config (which may be broken)
+                open(conf, "w") do io
+                    write(io, """
+                        [req]
+                        distinguished_name = req_distinguished_name
+
+                        [req_distinguished_name]
+                        CN = $common_name
+                        """)
+                end
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
+                err = IOBuffer()
+                p = run(pipeline(addenv(
+                    `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,
+                    "OPENSSL_CONF" => conf), stderr=err); wait=false)
+                wait(p)
+                @testset let err = String(take!(err))
+                    @test success(p)
+                end
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 local pobj, port
