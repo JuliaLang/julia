@@ -1249,7 +1249,10 @@ let s, c, r
                 @test s[r] == "tmp-execu"
 
                 c,r = test_scomplete("replcompletions-link")
-                @test isempty(c)
+                if !Sys.isunix() || Libc.getuid() != 0
+                    # Root bypasses permissions
+                    @test isempty(c)
+                end
             end
         finally
             # If we don't fix the permissions here, our cleanup fails.
@@ -1455,6 +1458,40 @@ let (c, r) = test_complete("cd(\"folder_do_not_exist_77/file")
     @test length(c) == 0
 end
 
+# Test path completion in the middle of a line (issue #60050)
+mktempdir() do path
+    # Create test directory structure
+    foo_dir = joinpath(path, "foo_dir")
+    mkpath(foo_dir)
+    touch(joinpath(path, "foo_file.txt"))
+
+    # Completion at end of line should work
+    let (c, r, res) = test_complete("\"$(path)/foo")
+        @test res
+        @test length(c) == 2
+        @test "$(path)/foo_dir/" in c
+        @test "$(path)/foo_file.txt" in c
+    end
+
+    # Completion in middle of line should also work (regression in 1.12)
+    let (c, r, res) = test_complete_pos("\"$(path)/foo|/bar.toml\"")
+        @test res
+        @test length(c) == 2
+        @test "$(path)/foo_dir/" in c
+        @test "$(path)/foo_file.txt" in c
+        # Check that the range covers only the part before the cursor
+        @test findfirst("/bar", "\"$(path)/foo/bar.toml\"")[1] - 1 in r
+    end
+
+    # Completion in middle of function call with trailing arguments
+    let (c, r, res) = test_complete_pos("run_something(\"$(path)/foo|/bar.toml\"; kwarg=true)")
+        @test res
+        @test length(c) == 2
+        @test "$(path)/foo_dir/" in c
+        @test "$(path)/foo_file.txt" in c
+    end
+end
+
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
@@ -1523,7 +1560,8 @@ end
     @test "ⁿ" in test_complete("\\^n")[1]
     @test "ᵞ" in test_complete("\\^gamma")[1]
     @test "⁽¹²³⁾ⁿ𐞥" in test_complete("\\^(123)nq")[1]
-    @test isempty(test_complete("\\^(123)nQ")[1])
+    @test "⁽¹²³⁾ⁿꟴ" in test_complete("\\^(123)nQ")[1]
+    @test isempty(test_complete("\\^(123)nX")[1])
     @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
     @test "ₙ" in test_complete("\\_n")[1]
     @test "ᵧ" in test_complete("\\_gamma")[1]

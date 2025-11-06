@@ -259,7 +259,7 @@ endif
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
-release debug: %: libjulia-internal-% libjulia-codegen-% $(BUILDDIR)/compile_commands.json
+release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -558,6 +558,7 @@ clean:
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
+	-rm -f $(BUILDDIR)/compile_commands.json
 
 clean-flisp:
 	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
@@ -654,8 +655,10 @@ clean-analyzegc:
 	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 
 # Compilation database generation using existing clang infrastructure
-$(BUILDDIR)/compile_commands.json:
-	@{ \
+.PHONY: regenerate-compile_commands
+regenerate-compile_commands:
+	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
+	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		CLANG_TOOLING_CXX_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_CXX_FLAGS))"; \
 		echo "["; \
@@ -711,18 +714,17 @@ $(BUILDDIR)/compile_commands.json:
 			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
 		done; \
 		echo "]"; \
-	} > $@.tmp
-	@# This ensures we replace the file atomically, and avoid spurious rewrites
-	@if ! cmp -s $@.tmp $@; then \
-		mv $@.tmp $@; \
+	} > $$TMPFILE; \
+	if ! cmp -s $$TMPFILE $(BUILDDIR)/compile_commands.json; then \
+		mv $$TMPFILE $(BUILDDIR)/compile_commands.json; \
 	else \
-		rm -f $@.tmp; \
+		rm -f $$TMPFILE; \
 	fi
 
-compile-database: $(BUILDDIR)/compile_commands.json
+compile-database: regenerate-compile_commands
 	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
-	@echo "Compilation database created: $<"
+	@echo "Compilation database created for src"
 
 .FORCE:
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database $(BUILDDIR)/compile_commands.json .FORCE
+.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database .FORCE

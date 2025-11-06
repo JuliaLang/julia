@@ -1579,10 +1579,15 @@ JL_CALLABLE(jl_f__import)
 // _using(to::Module, from::Module)
 JL_CALLABLE(jl_f__using)
 {
-    JL_NARGS(_using, 2, 2);
+    JL_NARGS(_using, 2, 3);
     JL_TYPECHK(_using, module, args[0]);
     JL_TYPECHK(_using, module, args[1]);
-    jl_module_using((jl_module_t *)args[0], (jl_module_t *)args[1]);
+    size_t flags = 0;
+    if (nargs == 3) {
+        JL_TYPECHK(_using, uint8, args[2]);
+        flags = jl_unbox_uint8(args[2]);
+    }
+    jl_module_using((jl_module_t *)args[0], (jl_module_t *)args[1], flags);
     return jl_nothing;
 }
 

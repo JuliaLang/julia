@@ -163,18 +163,18 @@ This is implemented so that one can say write an `AnnotatedString` to an
 `AnnotatedIOBuffer` one character at a time without needlessly producing a
 new annotation for each character.
 """
-function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{RegionAnnotation}, offset::Int = position(io))
+function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vector{RegionAnnotation}, offset::Int = 0)
     run = 0
-    if !isempty(io.annotations) && last(last(io.annotations).region) == offset
-        for i in reverse(axes(annotations, 1))
-            annot = annotations[i]
+    if !isempty(annots) && last(last(annots).region) == offset
+        for i in reverse(axes(newannots, 1))
+            annot = newannots[i]
             first(annot.region) == 1 || continue
-            i <= length(io.annotations) || continue
-            if annot.label == last(io.annotations).label && annot.value == last(io.annotations).value
+            i <= length(annots) || continue
+            if annot.label == last(annots).label && annot.value == last(annots).value
                 valid_run = true
                 for runlen in 1:i
-                    new = annotations[begin+runlen-1]
-                    old = io.annotations[end-i+runlen]
+                    new = newannots[begin+runlen-1]
+                    old = annots[end-i+runlen]
                     if last(old.region) != offset || first(new.region) != 1 || old.label != new.label || old.value != new.value
                         valid_run = false
                         break
@@ -188,17 +188,156 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{RegionA
         end
     end
     for runindex in 0:run-1
-        old_index = lastindex(io.annotations) - run + 1 + runindex
-        old = io.annotations[old_index]
-        new = annotations[begin+runindex]
-        io.annotations[old_index] = setindex(old, first(old.region):last(new.region)+offset, :region)
+        old_index = lastindex(annots) - run + 1 + runindex
+        old = annots[old_index]
+        new = newannots[begin+runindex]
+        extannot = (region = first(old.region):last(new.region)+offset,
+                    label = old.label,
+                    value = old.value)
+        annots[old_index] = extannot
     end
-    for index in run+1:lastindex(annotations)
-        annot = annotations[index]
+    for index in run+1:lastindex(newannots)
+        annot = newannots[index]
         start, stop = first(annot.region), last(annot.region)
-        push!(io.annotations, setindex(annotations[index], start+offset:stop+offset, :region))
+        # REVIEW: For some reason, construction of `newannot`
+        # can be a significant contributor to the overall runtime
+        # of this function. For instance, executing:
+        #
+        #     replace(AnnotatedIOBuffer(), S"apple",
+        #             'e' => S"{red:x}", 'p' => S"{green:y}")
+        #
+        # results in 3 calls to `_insert_annotations!`. It takes
+        # ~570ns in total, compared to ~200ns if we push `annot`
+        # instead of `newannot`. Commenting out the `_insert_annotations!`
+        # line reduces the runtime to ~170ns, from which we can infer
+        # that constructing `newannot` is somehow responsible for
+        # a ~30ns -> ~400ns (~13x) increase in runtime!!
+        # This also comes with a marginal increase in allocations
+        # (compared to the commented out version) of 2 -> 14 (250b -> 720b).
+        #
+        # This seems quite strange, but I haven't dug into the generated
+        # LLVM or ASM code. If anybody reading this is interested in checking
+        # this out, that would be brilliant 🙏.
+        #
+        # What I have done is found that "direct tuple reconstruction"
+        # (as below) is several times faster than using `setindex`.
+        newannot = (region = start+offset:stop+offset,
+                    label = annot.label,
+                    value = annot.value)
+        push!(annots, newannot)
     end
 end
+
+_insert_annotations!(io::AnnotatedIOBuffer, newannots::Vector{RegionAnnotation}, offset::Int = position(io)) =
+    _insert_annotations!(io.annotations, newannots, offset)
+
+# String replacement
+
+# REVIEW: For some reason the `Core.kwcall` indirection seems to cause a
+# substantial slowdown here. If we remove `; count` from the signature
+# and run the sample code above in `_insert_annotations!`, the runtime
+# drops from ~4400ns to ~580ns (~7x faster). I cannot guess why this is.
+function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; count = typemax(Int))
+    if count == 0 || isempty(pat_f)
+        write(out, str)
+        return out
+    end
+    e1, patterns, replacers, repspans, notfound = _replace_init(str.string, pat_f, count)
+    if notfound
+        foreach(_free_pat_replacer, patterns)
+        write(out, str)
+        return out
+    end
+    # Modelled after `Base.annotated_chartransform`, but needing
+    # to handle a bit more complexity.
+    isappending = eof(out)
+    newannots = empty(out.annotations)
+    bytepos = bytestart = firstindex(str.string)
+    replacements = [(region = (bytestart - 1):(bytestart - 1), offset = position(out))]
+    nrep = 1
+    while nrep <= count
+        repspans, ridx, xspan, newbytes, bytepos = @inline _replace_once(
+            out.io, str.string, bytestart, e1, patterns, replacers, repspans, count, nrep, bytepos)
+        first(xspan) >= e1 && break
+        nrep += 1
+        # NOTE: When the replaced pattern ends with a multi-codeunit character,
+        # `xspan` only covers up to the start of that character. However,
+        # for us to correctly account for the changes to the string we need
+        # the /entire/ span of codeunits that were replaced.
+        if !isempty(xspan) && codeunit(str.string, last(xspan)) > 0x80
+            xspan = first(xspan):nextind(str.string, last(xspan))-1
+        end
+        drift = last(replacements).offset
+        thisrep = (region = xspan, offset = drift + newbytes - length(xspan))
+        destoff = first(xspan) - 1 + drift
+        push!(replacements, thisrep)
+        replacement = replacers[ridx]
+        _isannotated(replacement) || continue
+        annots = annotations(replacement)
+        annots′ = if eltype(annots) == Annotation # When it's a char not a string
+            region = 1:newbytes
+            [@NamedTuple{region::UnitRange{Int}, label::Symbol, value}((region, label, value))
+             for (; label, value) in annots]
+        else
+            annots
+        end::Vector{RegionAnnotation}
+        _insert_annotations!(newannots, annots′, destoff)
+    end
+    push!(replacements, (region = e1:(e1-1), offset = last(replacements).offset))
+    foreach(_free_pat_replacer, patterns)
+    write(out.io, SubString(str.string, bytepos))
+    # NOTE: To enable more efficient annotation clearing,
+    # we make use of the fact that `_replace_once` picks
+    # replacements ordered by their match start position.
+    # This means that the start of `.region`s in
+    # `replacements` is monotonically increasing.
+    isappending || _clear_annotations_in_region!(out.annotations, first(replacements).offset:position(out))
+    for (; region, label, value) in str.annotations
+        start, stop = first(region), last(region)
+        prioridx = searchsortedlast(
+            replacements, (region = start:start, offset = 0),
+            by = r -> first(r.region))
+        postidx = searchsortedfirst(
+            replacements, (region = stop:stop, offset = 0),
+            by = r -> first(r.region))
+        priorrep, postrep = replacements[prioridx], replacements[postidx]
+        if prioridx == postidx && start >= first(priorrep.region) && stop <= last(priorrep.region)
+            # Region contained with a replacement
+            continue
+        elseif postidx - prioridx <= 1 && start > last(priorrep.region) && stop < first(postrep.region)
+            # Lies between replacements
+            shiftregion = (start + priorrep.offset):(stop + priorrep.offset)
+            shiftann = (region = shiftregion, label, value)
+            push!(out.annotations, shiftann)
+        else
+            # Split between replacements
+            prevrep = replacements[max(begin, prioridx - 1)]
+            for rep in @view replacements[max(begin, prioridx - 1):min(end, postidx + 1)]
+                gap = max(start, last(prevrep.region)+1):min(stop, first(rep.region)-1)
+                if !isempty(gap)
+                    shiftregion = (first(gap) + prevrep.offset):(last(gap) + prevrep.offset)
+                    shiftann = (; region = shiftregion, label, value)
+                    push!(out.annotations, shiftann)
+                end
+                prevrep = rep
+            end
+        end
+    end
+    append!(out.annotations, newannots)
+    out
+end
+
+replace(out::IO, str::AnnotatedString, pat_f::Pair...; count=typemax(Int)) =
+    replace(out, str.string, pat_f...; count)
+
+function replace(str::AnnotatedString, pat_f::Pair...; count=typemax(Int))
+    isempty(pat_f) || iszero(count) && return str
+    out = AnnotatedIOBuffer()
+    replace(out, str, pat_f...; count)
+    read(seekstart(out), AnnotatedString)
+end
+
+# Printing
 
 function printstyled end
 

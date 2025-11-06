@@ -744,6 +744,23 @@ mktempdir() do dir
             cred_payload = LibGit2.CredentialPayload()
             @test_throws ArgumentError LibGit2.clone(cache_repo, test_repo, callbacks=callbacks, credentials=cred_payload)
         end
+        @testset "shallow clone" begin
+            @static if LibGit2.VERSION >= v"1.7.0"
+                # Note: Shallow clones are not supported with local file:// transport
+                # This is a limitation in libgit2 - shallow clones only work with
+                # network protocols (http, https, git, ssh)
+                # See online-tests.jl for tests with remote repositories
+
+                # Test normal clone is not shallow
+                normal_path = joinpath(dir, "Example.NotShallow")
+                LibGit2.with(LibGit2.clone(cache_repo, normal_path)) do repo
+                    @test !LibGit2.isshallow(repo)
+                end
+            else
+                # Test that depth parameter throws error on older libgit2
+                @test_throws ArgumentError LibGit2.clone(cache_repo, joinpath(dir, "Example.Shallow"), depth=1)
+            end
+        end
     end
 
     @testset "Update cache repository" begin
@@ -1082,6 +1099,14 @@ mktempdir() do dir
                         rethrow()
                     end
                 end
+
+                # Test GitTree constructor with GitHash
+                tree1 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                tree_hash = LibGit2.GitHash(tree1)
+                tree2 = LibGit2.GitTree(repo, tree_hash)
+                @test isa(tree2, LibGit2.GitTree)
+                @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
+                @test LibGit2.count(tree1) == LibGit2.count(tree2)
             end
         end
 
