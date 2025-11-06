@@ -1,6 +1,6 @@
 [package]
 name = "mmtk-julia"
-version = "0.31.0"
+version = "0.31.1"
 authors = ["Eduardo Souza <ledusou@gmail.com>", "Yi Lin <qinsoon@gmail.com>"]
 build = "build.rs"
 edition = "2018"
