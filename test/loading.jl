@@ -1871,40 +1871,37 @@ module M58272_to end
 @eval M58272_to import ..M58272_1: M58272_2.y, x
 @test @eval M58272_to x === 1
 
-@testset "Portable scripts" begin
+@testset "Scripts" begin
     # Test with line-by-line comment syntax and path dependencies
-    portable_script = joinpath(@__DIR__, "project", "portable", "portable_script.jl")
-    output = read(`$(Base.julia_cmd()) --startup-file=no $portable_script`, String)
+    script = joinpath(@__DIR__, "project", "scripts", "script.jl")
+    output = read(`$(Base.julia_cmd()) --startup-file=no $script`, String)
 
-    @test occursin("Active project: $portable_script", output)
-    @test occursin("Active manifest: $portable_script", output)
+    @test occursin("Active project: $script", output)
+    @test occursin("Active manifest: $script", output)
     @test occursin("✓ Random (stdlib) loaded successfully", output)
     @test occursin("✓ Rot13 (path dependency) loaded successfully", output)
     @test occursin("✓ Rot13 methods available", output)
-    @test occursin("Test Summary:", output)
-    @test occursin("Portable Script Tests", output)
-    @test occursin("Pass", output)
 
     # Test with custom manifest= entry in project section
-    portable_script_cm = joinpath(@__DIR__, "project", "portable", "portable_script_custom_manifest.jl")
-    output_cm = read(`$(Base.julia_cmd()) --startup-file=no $portable_script_cm`, String)
-    expected_cm = joinpath(@__DIR__, "project", "portable", "portable_script_custom.toml")
+    script_cm = joinpath(@__DIR__, "project", "scripts", "script_custom_manifest.jl")
+    output_cm = read(`$(Base.julia_cmd()) --startup-file=no $script_cm`, String)
+    expected_cm = joinpath(@__DIR__, "project", "scripts", "script_custom.toml")
 
-    @test occursin("Active project: $portable_script_cm", output_cm)
+    @test occursin("Active project: $script_cm", output_cm)
     @test occursin("Active manifest: $expected_cm", output_cm)
     @test occursin("✓ Custom manifest file is being used: $expected_cm", output_cm)
     @test occursin("✓ Random.rand()", output_cm)
     @test occursin("✓ All checks passed!", output_cm)
 
-    # Test @script behavior with portable script
+    # Test @script behavior with script
     # When using --project=@script, it should use the script file as the project
-    output_script = read(`$(Base.julia_cmd()) --startup-file=no --project=@script $portable_script`, String)
-    @test occursin("Active project: $portable_script", output_script)
-    @test occursin("Active manifest: $portable_script", output_script)
+    output_script = read(`$(Base.julia_cmd()) --startup-file=no --project=@script $script`, String)
+    @test occursin("Active project: $script", output_script)
+    @test occursin("Active manifest: $script", output_script)
     @test occursin("✓ Random (stdlib) loaded successfully", output_script)
 
-    # Test that regular Julia files (without inline sections) work fine as projects
-    regular_script = joinpath(@__DIR__, "project", "portable", "regular_script.jl")
+    # Test that regular Julia files (without #!script) can be set as active project
+    regular_script = joinpath(@__DIR__, "project", "scripts", "regular_script.jl")
 
     # Running the script with --project= should set it as active project
     output = read(`$(Base.julia_cmd()) --startup-file=no --project=$regular_script $regular_script`, String)
@@ -1918,37 +1915,40 @@ module M58272_to end
     @test occursin("Hello from regular script", output)
     @test occursin("x = 42", output)
 
-    portable_script_missing = joinpath(@__DIR__, "project", "portable", "portable_script_missing_dep.jl")
+    script_missing = joinpath(@__DIR__, "project", "scripts", "script_missing_dep.jl")
     err_output = IOBuffer()
-    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $portable_script_missing`), stderr=err_output))
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $script_missing`), stderr=err_output))
     @test !success(result)
     @test occursin("Package Rot13 not found in current path", String(take!(err_output)))
 
-    # Test 1: Project section not first (has code before it)
-    invalid_project_not_first = joinpath(@__DIR__, "project", "portable", "invalid_project_not_first.jl")
-    err_output = IOBuffer()
-    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_project_not_first`), stderr=err_output))
-    @test !success(result)
-    @test occursin("#!project section must come first", String(take!(err_output)))
+    # Test 1: #!script marker not at top (has code before it) - runs as regular script
+    invalid_project_not_first = joinpath(@__DIR__, "project", "scripts", "invalid_project_not_first.jl")
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_project_not_first`)))
+    @test success(result)
 
-    # Test 2: Manifest section not last (has code after it)
-    invalid_manifest_not_last = joinpath(@__DIR__, "project", "portable", "invalid_manifest_not_last.jl")
+    # Test 2: Manifest section before project section - should error when parsed
+    invalid_manifest_not_last = joinpath(@__DIR__, "project", "scripts", "invalid_manifest_not_last.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_manifest_not_last`), stderr=err_output))
     @test !success(result)
-    @test occursin("#!manifest section must come last", String(take!(err_output)))
+    @test occursin("#!manifest section must come after #!project section", String(take!(err_output)))
 
-    # Test 3: Project not first, but manifest present
-    invalid_both = joinpath(@__DIR__, "project", "portable", "invalid_both.jl")
+    # Test 3: Code before #!script marker with --project - should error
+    invalid_both = joinpath(@__DIR__, "project", "scripts", "invalid_both.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_both -e "using Test"`), stderr=err_output))
     @test !success(result)
-    @test occursin("#!project section must come first", String(take!(err_output)))
+    @test occursin("is missing #!script marker", String(take!(err_output)))
 
-    # Test 4: Manifest with code in between sections
-    invalid_code_between = joinpath(@__DIR__, "project", "portable", "invalid_code_between.jl")
+    # Test 4: Code between sections is now valid
+    valid_code_between = joinpath(@__DIR__, "project", "scripts", "valid_code_between.jl")
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $valid_code_between`)))
+    @test success(result)
+
+    # Test 5: Using --project on a non-script file errors when loading packages
+    regular_script = joinpath(@__DIR__, "project", "scripts", "regular_script.jl")
     err_output = IOBuffer()
-    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_code_between -e "using Test"`), stderr=err_output))
+    result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$regular_script -e "using Test"`), stderr=err_output))
     @test !success(result)
-    @test occursin("#!manifest section must come last", String(take!(err_output)))
+    @test occursin("is missing #!script marker", String(take!(err_output)))
 end

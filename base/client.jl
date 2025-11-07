@@ -277,7 +277,7 @@ function exec_options(opts)
 
     if arg_is_program && PROGRAM_FILE != "-" && Base.active_project(false) === nothing
         script_path = abspath(PROGRAM_FILE)
-        Base.has_inline_project(script_path) && Base.set_active_project(script_path)
+        Base.is_script(script_path) && Base.set_active_project(script_path)
     end
 
     # Load Distributed module only if any of the Distributed options have been specified.
@@ -347,12 +347,12 @@ function exec_options(opts)
                 include_string(Main, read(stdin, String), "stdin")
             else
                 abs_script_path = abspath(PROGRAM_FILE)
-                if has_inline_project(abs_script_path)
-                    set_portable_script_state(abs_script_path)
+                if is_script(abs_script_path)
+                    set_script_state(abs_script_path)
                     try
                         include(Main, PROGRAM_FILE)
                     finally
-                        global portable_script_state_global = nothing
+                        global script_state_global = nothing
                     end
                 else
                     include(Main, PROGRAM_FILE)

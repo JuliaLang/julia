@@ -261,48 +261,36 @@ function extract_inline_section(path::String, type::Symbol)
     # Read all lines
     lines = readlines(path)
 
-    # For manifest, read backwards by reversing the lines
     if type === :manifest
-        lines = reverse(lines)
-        start_marker = "#!manifest end"
-        end_marker = "#!manifest begin"
+        start_marker = "#!manifest begin"
+        end_marker = "#!manifest end"
         section_name = "manifest"
-        position_error = "must come last"
     else
         start_marker = "#!project begin"
         end_marker = "#!project end"
         section_name = "project"
-        position_error = "must come first"
     end
 
     state = :none
-    at_start = true
     content_lines = String[]
+    project_line = nothing
+    manifest_line = nothing
 
     for (lineno, line) in enumerate(lines)
         stripped = lstrip(line)
 
-        # Skip empty lines and comments (including shebang) before content
-        if at_start && (isempty(stripped) || startswith(stripped, '#'))
-            if startswith(stripped, start_marker)
-                state = :reading
-                at_start = false
-                continue
-            end
-            continue
+        # Track positions of sections for validation
+        if startswith(stripped, "#!project begin")
+            project_line = lineno
+        elseif startswith(stripped, "#!manifest begin")
+            manifest_line = lineno
         end
 
-        # Found start marker after content - error
+        # Found start marker
         if startswith(stripped, start_marker)
-            if !at_start
-                error("#!$section_name section $position_error in $path")
-            end
             state = :reading
-            at_start = false
             continue
         end
-
-        at_start = false
 
         # Found end marker
         if startswith(stripped, end_marker) && state === :reading
@@ -321,9 +309,9 @@ function extract_inline_section(path::String, type::Symbol)
         end
     end
 
-    # For manifest, reverse the content back to original order
-    if type === :manifest && !isempty(content_lines)
-        content_lines = reverse(content_lines)
+    # Validate that project comes before manifest
+    if project_line !== nothing && manifest_line !== nothing && project_line > manifest_line
+        error("#!manifest section must come after #!project section in $path")
     end
 
     if state === :done
@@ -335,10 +323,14 @@ function extract_inline_section(path::String, type::Symbol)
     end
 end
 
-function has_inline_project(path::String)::Bool
+function is_script(path::String)::Bool
     for line in eachline(path)
         stripped = lstrip(line)
-        if startswith(stripped, "#!project begin")
+        # Only whitespace and comments allowed before #!script
+        if !isempty(stripped) && !startswith(stripped, '#')
+            return false
+        end
+        if startswith(stripped, "#!script")
             return true
         end
     end
@@ -346,21 +338,21 @@ function has_inline_project(path::String)::Bool
 end
 
 
-struct PortableScriptState
+struct ScriptState
     path::String
     pkg::PkgId
 end
 
-portable_script_state_global::Union{PortableScriptState, Nothing} = nothing
+script_state_global::Union{ScriptState, Nothing} = nothing
 
-function set_portable_script_state(abs_path::Union{Nothing, String})
+function set_script_state(abs_path::Union{Nothing, String})
     pkg = project_file_name_uuid(abs_path, splitext(basename(abs_path))[1])
 
     # Verify the project and manifest delimiters:
     parsed_toml(abs_path)
     parsed_toml(abs_path; manifest=true)
 
-    global portable_script_state_global = PortableScriptState(abs_path, pkg)
+    global script_state_global = ScriptState(abs_path, pkg)
 end
 
 
@@ -393,7 +385,7 @@ function parsed_toml(toml_file::AbstractString, toml_cache::TOMLCache, toml_lock
                      manifest::Bool=false, project::Bool=!manifest)
     manifest && project && throw(ArgumentError("cannot request both project and manifest TOML"))
     lock(toml_lock) do
-        # Portable script?
+        # Script?
         if endswith(toml_file, ".jl") && isfile_casesensitive(toml_file)
             kind = manifest ? :manifest : :project
             cache_key = "$(toml_file)::$(kind)"
@@ -459,8 +451,8 @@ Same as [`Base.identify_package`](@ref) except that the path to the environment 
 is also returned, except when the identity is not identified.
 """
 function identify_package_env(where::Module, name::String)
-    if where === Main && portable_script_state_global !== nothing
-        return identify_package_env(portable_script_state_global.pkg, name)
+    if where === Main && script_state_global !== nothing
+        return identify_package_env(script_state_global.pkg, name)
     end
     return identify_package_env(PkgId(where), name)
 end
@@ -788,7 +780,7 @@ function env_project_file(env::String)::Union{Bool,String}
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
     elseif endswith(env, ".jl") && isfile_casesensitive(env)
-        project_file = has_inline_project(env) ? env : false
+        project_file = is_script(env) ? env : false
     else
         project_file = false
     end
@@ -1046,7 +1038,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         end
     end
     if manifest_path === nothing && endswith(project_file, ".jl") && has_file
-        # portable script: manifest is the same file as the project file
+        # script: manifest is the same file as the project file
         manifest_path = project_file
     end
     if manifest_path === nothing
@@ -1096,6 +1088,7 @@ end
 # Find the project file for the extension `ext` in the implicit env `dir``
 function implicit_env_project_file_extension(dir::String, ext::PkgId)
     for pkg in readdir(dir; join=true)
+        isdir(pkg) || continue
         project_file = env_project_file(pkg)
         project_file isa String || continue
         path = project_file_ext_path(project_file, ext)

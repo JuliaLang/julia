@@ -397,11 +397,17 @@ are stored in the manifest file in the section for that package. The dependency 
 a package are the same as for its "parent" except that the listed triggers are also considered as
 dependencies.
 
-### [Portable scripts](@id portable-scripts)
+### [Scripts](@id scripts)
 
-Julia also understands *portable scripts*: scripts that embed their own `Project.toml` (and optionally `Manifest.toml`) so they can be executed as self-contained environments. To do this, place TOML data inside comment fences named `#!project` and `#!manifest`:
+Julia also understands *scripts* that can embed their own `Project.toml` (and optionally `Manifest.toml`) so they can be executed as self-contained environments. A script is identified by a `#!script` marker at the top of the file (only whitespace and comments may appear before it). The embedded project and manifest data are placed inside comment fences named `#!project` and `#!manifest`:
 
 ```julia
+#!/usr/bin/env julia
+#!script
+
+using Markdown
+println(md"# Hello, single-file world!")
+
 #!project begin
 # name = "HelloApp"
 # uuid = "9c5fa7d8-7220-48e8-b2f7-0042191c5f6d"
@@ -409,9 +415,6 @@ Julia also understands *portable scripts*: scripts that embed their own `Project
 # [deps]
 # Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 #!project end
-
-using Markdown
-println(md"# Hello, single-file world!")
 
 #!manifest begin
 # [[deps]]
@@ -421,9 +424,9 @@ println(md"# Hello, single-file world!")
 #!manifest end
 ```
 
-Lines inside the fenced blocks should be commented with `#` (as in the example) or be plain TOML lines. The `#!project` section must come first in the file (after an optional shebang and empty lines). If a `#!manifest` section is present, it must come after the `#!project` section, and no Julia code is allowed after the `#!manifest end` delimiter.
+Lines inside the fenced blocks should be commented with `#` (as in the example) or be plain TOML lines. The `#!script` marker must appear at the top of the file, with only whitespace and comments (including an optional shebang) allowed before it. The `#!project` and `#!manifest` sections can appear anywhere in the file (by convention at the bottom), but `#!project` must come before `#!manifest` if both are present.
 
-Running `julia hello.jl` automatically activates the embedded project. The script path becomes the active project entry in `LOAD_PATH`, so package loading works exactly as if `Project.toml` and `Manifest.toml` lived next to the script. The `--project=@script` flag also expands to the script itself when no on-disk project exists but inline metadata is present.
+Running `julia hello.jl` automatically activates the embedded project if the file contains a `#!script` marker. The dependency loading rules for such a script is the same as for a package with the same project and manifest file. The `--project=@script` flag also expands to the script itself if the `#!script` marker is present. Using `--project=script.jl` explicitly requires that the script contains the `#!script` marker.
 
 ### [Workspaces](@id workspaces)
 

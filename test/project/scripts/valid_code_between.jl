@@ -1,3 +1,5 @@
+#!script
+
 #!project begin
 #!project end
 
