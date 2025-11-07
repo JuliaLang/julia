@@ -231,6 +231,8 @@ end
                 cset = ConditionSet("hello\\;world;=exact")
                 @test cset.words == [SubString("hello;world")]
                 @test cset.exacts == [SubString("exact")]
+                cset = ConditionSet("1 \\; 2")
+                @test cset.words == [SubString("1 ; 2")]
             end
             @testset "Complex query" begin
                 cset = ConditionSet("some = words ;; !error ; julia> ;/^def.*;")
