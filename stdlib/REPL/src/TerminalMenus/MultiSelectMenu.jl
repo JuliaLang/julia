@@ -40,11 +40,11 @@ end
 const default_msm_header = "[press: Enter=toggle, a=all, n=none, d=done, q=abort]"
 
 MultiSelectMenu(options, pagesize, pageoffset, selected, config) =
-    MultiSelectMenu(options, pagesize, pageoffset, selected, Set{Int64}(), default_msm_header, config)
+    MultiSelectMenu(options, pagesize, pageoffset, selected, Set{Int}(), default_msm_header, config)
 
 """
 
-    MultiSelectMenu(options::Vector{String}; on_cancel=Set{Int64}(), header=true, pagesize::Int=10, selected=[], kwargs...)
+    MultiSelectMenu(options::Vector{String}; on_cancel=Set{Int}(), header=true, pagesize::Int=10, selected=[], kwargs...)
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
 user input. It returns a `Set` containing the indices of options that
@@ -55,7 +55,7 @@ were selected by the user.
   - `options::Vector{String}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
   - `selected=Set{Int}()`: pre-selected items. `i ∈ selected` means that `options[i]` is preselected.
-  - `on_cancel::Union{Nothing, Set{Int}}=Set{Int64}()`: Value returned if aborted. Default is empty set for backward compat. It is recommended to set `on_cancel=nothing` to be able to discriminate between "nothing selected" vs. "aborted".
+  - `on_cancel::Union{Nothing, Set{Int}}=Set{Int}()`: Value returned if aborted. Default is empty set for backward compat. It is recommended to set `on_cancel=nothing` to be able to discriminate between "nothing selected" vs. "aborted".
   - `header::Union{String, Bool}`: Header displayed above menu. Default is `true`, producing "[press: Enter=toggle, a=all, n=none, d=done, q=abort]". `false`
 results in no header. You can provide your own string.
 
@@ -65,7 +65,7 @@ Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectCo
     The `selected` argument requires Julia 1.6 or later.
 """
 function MultiSelectMenu(options::Array{String,1};
-    on_cancel=Set{Int64}(), header=true, pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
+    on_cancel=Set{Int}(), header=true, pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
 
     length(options) < 1 && error("MultiSelectMenu must have at least one option")
 
