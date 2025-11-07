@@ -1047,7 +1047,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        s = do_string_unescape(string[intersect(r, 1:pos)])
+        s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
         if length(ret) == 1 && !closed && close_path_completion(ret[1].path)
