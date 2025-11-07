@@ -62,7 +62,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
     cands_temp = HistEntry[]
     # Filter state
     filter_idx = 0
-    filter_seen = nothing
+    filter_seen = Set{Tuple{Symbol,String}}()
+    isfiltering = false
     # Event loop
     while true
         event = @lock events if !isempty(events) take!(events) end
@@ -158,12 +159,12 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             # with no filter (empty query), show all history including duplicates.
             isfiltering = !isempty(filter_spec.exacts) || !isempty(filter_spec.negatives) ||
                           !isempty(filter_spec.regexps) || !isempty(filter_spec.modes)
-            filter_seen = isfiltering ? Set{String}() : nothing
+            empty!(filter_seen)
             filter_idx = filterchunkrev!(
                 state, cands_current;
                 maxtime = time() + 0.01,
                 maxresults = outsize[1],
-                seen = filter_seen)
+                seen = filter_seen, deduplicate = isfiltering)
             if filter_idx == 0
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
@@ -195,7 +196,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             filter_idx = filterchunkrev!(
                 state, cands_current, filter_idx;
                 maxtime = time() + 0.01,
-                seen = filter_seen)
+                seen = filter_seen, deduplicate = isfiltering)
             if filter_idx == 0
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
@@ -213,10 +214,11 @@ end
 
 function filterchunkrev!(state::SelectorState, candidates::DenseVector{HistEntry}, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates),
-                         seen::Union{Nothing,Set{String}} = nothing)
+                         seen::Set{Tuple{Symbol,String}} = Set{Tuple{Symbol,String}}(),
+                         deduplicate::Bool = false)
     oldlen = length(state.candidates)
     idx = filterchunkrev!(state.candidates, candidates, state.filter, idx;
-                          maxtime = maxtime, maxresults = maxresults, seen = seen)
+                          maxtime = maxtime, maxresults = maxresults, seen = seen, deduplicate = deduplicate)
     newlen = length(state.candidates)
     newcands = view(state.candidates, (oldlen + 1):newlen)
     gfound = Int[]

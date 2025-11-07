@@ -253,24 +253,25 @@ end
 
 
 """
-    filterchunkrev!(out, candidates, spec; idx, maxtime, maxresults, seen) -> Int
+    filterchunkrev!(out, candidates, spec; idx, maxtime, maxresults, seen, deduplicate) -> Int
 
 Incrementally filter `candidates[1:idx]` in reverse order.
 
 Pushes matches onto `out` until either `maxtime` is exceeded or `maxresults`
-collected, then returns the new resume index. When `seen` is provided (a Set{String}),
-only unique entries (by content) are added to avoid showing duplicate history items.
+collected, then returns the new resume index. When `deduplicate` is true,
+only unique entries (by mode and content) are added to avoid showing duplicate history items.
 """
 function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEntry},
                          spec::FilterSpec, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates),
-                         seen::Union{Nothing,Set{String}} = nothing)
+                         seen::Set{Tuple{Symbol,String}} = Set{Tuple{Symbol,String}}(),
+                         deduplicate::Bool = false)
     batchsize = clamp(length(candidates) ÷ 512, 10, 1000)
     for batch in Iterators.partition(idx:-1:1, batchsize)
         time() > maxtime && break
         for outer idx in batch
             entry = candidates[idx]
-            if !isnothing(seen) && entry.content ∈ seen
+            if deduplicate && (entry.mode, entry.content) ∈ seen
                 continue
             end
             if !isempty(spec.modes)
@@ -298,7 +299,7 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
                 end
             end
             matchfail && continue
-            !isnothing(seen) && push!(seen, entry.content)
+            deduplicate && push!(seen, (entry.mode, entry.content))
             pushfirst!(out, entry)
             length(out) == maxresults && break
         end

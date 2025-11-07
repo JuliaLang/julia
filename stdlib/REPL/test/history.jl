@@ -346,7 +346,7 @@ end
             end
             @testset "Uniqueness" begin
                 empty!(results)
-                # Create entries with duplicate content
+                # Create entries with duplicate content in the same mode
                 dup_entries = [
                     HistEntry(:julia, now(UTC), "println(\"hello\")", 1),
                     HistEntry(:julia, now(UTC), "cos(2π)", 2),
@@ -359,8 +359,8 @@ end
                 # When filtering with seen Set, duplicates are removed
                 cset = ConditionSet("cos")
                 spec = FilterSpec(cset)
-                seen = Set{String}()
-                @test filterchunkrev!(results, dup_entries, spec; seen=seen) == 0
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, dup_entries, spec; seen=seen, deduplicate=true) == 0
                 # Should only get unique entries matching the filter
                 # Since we iterate in reverse (7->1), we keep the most recent occurrence of each unique content
                 @test length(results) == 1
@@ -372,6 +372,21 @@ end
                 @test filterchunkrev!(results, dup_entries, spec2) == 0
                 @test length(results) == 7  # All entries, including duplicates
                 @test results == dup_entries
+                # Test that same content in different modes is NOT deduplicated
+                empty!(results)
+                mode_entries = [
+                    HistEntry(:julia, now(UTC), "ls", 1),
+                    HistEntry(:shell, now(UTC), "ls", 2),
+                    HistEntry(:julia, now(UTC), "ls", 3),  # duplicate in :julia mode
+                    HistEntry(:shell, now(UTC), "pwd", 4),
+                ]
+                seen = Set{Tuple{Symbol,String}}()
+                cset3 = ConditionSet("ls")
+                spec3 = FilterSpec(cset3)
+                @test filterchunkrev!(results, mode_entries, spec3; seen=seen, deduplicate=true) == 0
+                @test length(results) == 2  # "ls" from :julia and "ls" from :shell
+                @test results[1] == mode_entries[2]  # :shell ls
+                @test results[2] == mode_entries[3]  # :julia ls (most recent)
             end
         end
         @testset "Strictness comparison" begin
