@@ -140,7 +140,7 @@ function fixup_stdlib_path(path::String)
         if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
             compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
             if dirname(path) == compiler_folder
-                return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
+                return abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", "src", basename(path))
             end
         end
     end

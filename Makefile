@@ -417,6 +417,8 @@ ifeq ($(JULIA_BUILD_MODE),release)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
+	# Copy depot
+	cp -R -L $(build_private_libdir)/compiled/ $(DESTDIR)$(private_libdir)
 
 	# Copy in all .jl sources as well
 	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test
