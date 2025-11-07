@@ -3,7 +3,11 @@
 #include "llvm-version.h"
 #include "platform.h"
 
+#include <llvm/ExecutionEngine/JITLink/JITLink.h>
+#include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
+#include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
+
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -460,18 +464,27 @@ struct Block {
     }
 };
 
+struct Allocation {
+    // Address to write to (the one returned by the allocation function)
+    void *wr_addr;
+    // Runtime address
+    void *rt_addr;
+    size_t sz;
+    bool relocated;
+};
+
 class RWAllocator {
     static constexpr int nblocks = 8;
     Block blocks[nblocks]{};
 public:
     RWAllocator() JL_NOTSAFEPOINT = default;
-    void *alloc(size_t size, size_t align) JL_NOTSAFEPOINT
+    Allocation alloc(size_t size, size_t align) JL_NOTSAFEPOINT
     {
         size_t min_size = (size_t)-1;
         int min_id = 0;
         for (int i = 0;i < nblocks && blocks[i].ptr;i++) {
             if (void *ptr = blocks[i].alloc(size, align))
-                return ptr;
+                return {ptr, ptr, size, false};
             if (blocks[i].avail < min_size) {
                 min_size = blocks[i].avail;
                 min_id = i;
@@ -479,7 +492,8 @@ public:
         }
         size_t block_size = get_block_size(size);
         blocks[min_id].reset(map_anon_page(block_size), block_size);
-        return blocks[min_id].alloc(size, align);
+        void *ptr = blocks[min_id].alloc(size, align);
+        return {ptr, ptr, size, false};
     }
 };
 
@@ -519,16 +533,6 @@ struct SplitPtrBlock : public Block {
     }
 };
 
-struct Allocation {
-    // Address to write to (the one returned by the allocation function)
-    void *wr_addr;
-    // Runtime address
-    void *rt_addr;
-    size_t sz;
-    bool relocated;
-};
-
-template<bool exec>
 class ROAllocator {
 protected:
     static constexpr int nblocks = 8;
@@ -556,7 +560,7 @@ public:
     }
     // Allocations that have not been finalized yet.
     SmallVector<Allocation, 16> allocations;
-    void *alloc(size_t size, size_t align) JL_NOTSAFEPOINT
+    Allocation alloc(size_t size, size_t align) JL_NOTSAFEPOINT
     {
         size_t min_size = (size_t)-1;
         int min_id = 0;
@@ -572,8 +576,9 @@ public:
                     wr_ptr = get_wr_ptr(block, ptr, size, align);
                 }
                 block.state |= SplitPtrBlock::Alloc;
-                allocations.push_back(Allocation{wr_ptr, ptr, size, false});
-                return wr_ptr;
+                Allocation a{wr_ptr, ptr, size, false};
+                allocations.push_back(a);
+                return a;
             }
             if (block.avail < min_size) {
                 min_size = block.avail;
@@ -594,18 +599,21 @@ public:
 #ifdef _OS_WINDOWS_
         block.state = SplitPtrBlock::Alloc;
         void *wr_ptr = get_wr_ptr(block, ptr, size, align);
-        allocations.push_back(Allocation{wr_ptr, ptr, size, false});
+        Allocation a{wr_ptr, ptr, size, false};
+        allocations.push_back(a);
         ptr = wr_ptr;
 #else
         block.state = SplitPtrBlock::Alloc | SplitPtrBlock::InitAlloc;
-        allocations.push_back(Allocation{ptr, ptr, size, false});
+        Allocation a{ptr, ptr, size, false};
+        allocations.push_back(a);
 #endif
-        return ptr;
+        return a;
     }
 };
 
-template<bool exec>
-class DualMapAllocator : public ROAllocator<exec> {
+class DualMapAllocator : public ROAllocator {
+    bool exec;
+
 protected:
     void *get_wr_ptr(SplitPtrBlock &block, void *rt_ptr, size_t, size_t) override JL_NOTSAFEPOINT
     {
@@ -666,7 +674,7 @@ protected:
         }
     }
 public:
-    DualMapAllocator() JL_NOTSAFEPOINT
+    DualMapAllocator(bool exec) JL_NOTSAFEPOINT : exec(exec)
     {
         assert(anon_hdl != -1);
     }
@@ -679,13 +687,13 @@ public:
             finalize_block(block, true);
             block.reset(nullptr, 0);
         }
-        ROAllocator<exec>::finalize();
+        ROAllocator::finalize();
     }
 };
 
 #ifdef _OS_LINUX_
-template<bool exec>
-class SelfMemAllocator : public ROAllocator<exec> {
+class SelfMemAllocator : public ROAllocator {
+    bool exec;
     SmallVector<Block, 16> temp_buff;
 protected:
     void *get_wr_ptr(SplitPtrBlock &block, void *rt_ptr,
@@ -722,9 +730,7 @@ protected:
         }
     }
 public:
-    SelfMemAllocator() JL_NOTSAFEPOINT
-        : ROAllocator<exec>(),
-          temp_buff()
+    SelfMemAllocator(bool exec) JL_NOTSAFEPOINT : exec(exec), temp_buff()
     {
         assert(get_self_mem_fd() != -1);
     }
@@ -758,10 +764,24 @@ public:
         }
         if (cached)
             temp_buff.resize(1);
-        ROAllocator<exec>::finalize();
+        ROAllocator::finalize();
     }
 };
 #endif // _OS_LINUX_
+
+std::pair<std::unique_ptr<ROAllocator>, std::unique_ptr<ROAllocator>>
+get_preferred_allocators() JL_NOTSAFEPOINT
+{
+#ifdef _OS_LINUX_
+    if (get_self_mem_fd() != -1)
+        return {std::make_unique<SelfMemAllocator>(false),
+                std::make_unique<SelfMemAllocator>(true)};
+#endif
+    if (init_shared_map() != -1)
+        return {std::make_unique<DualMapAllocator>(false),
+                std::make_unique<DualMapAllocator>(true)};
+    return {};
+}
 
 class RTDyldMemoryManagerJL : public SectionMemoryManager {
     struct EHFrame {
@@ -772,8 +792,8 @@ class RTDyldMemoryManagerJL : public SectionMemoryManager {
     void operator=(const RTDyldMemoryManagerJL&) = delete;
     SmallVector<EHFrame, 16> pending_eh;
     RWAllocator rw_alloc;
-    std::unique_ptr<ROAllocator<false>> ro_alloc;
-    std::unique_ptr<ROAllocator<true>> exe_alloc;
+    std::unique_ptr<ROAllocator> ro_alloc;
+    std::unique_ptr<ROAllocator> exe_alloc;
     size_t total_allocated;
 
 public:
@@ -781,20 +801,9 @@ public:
         : SectionMemoryManager(),
           pending_eh(),
           rw_alloc(),
-          ro_alloc(),
-          exe_alloc(),
           total_allocated(0)
     {
-#ifdef _OS_LINUX_
-        if (!ro_alloc && get_self_mem_fd() != -1) {
-            ro_alloc.reset(new SelfMemAllocator<false>());
-            exe_alloc.reset(new SelfMemAllocator<true>());
-        }
-#endif
-        if (!ro_alloc && init_shared_map() != -1) {
-            ro_alloc.reset(new DualMapAllocator<false>());
-            exe_alloc.reset(new DualMapAllocator<true>());
-        }
+        std::tie(ro_alloc, exe_alloc) = get_preferred_allocators();
     }
     ~RTDyldMemoryManagerJL() override JL_NOTSAFEPOINT
     {
@@ -847,7 +856,7 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
     jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, Size);
     jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, Size);
     if (exe_alloc)
-        return (uint8_t*)exe_alloc->alloc(Size, Alignment);
+        return (uint8_t*)exe_alloc->alloc(Size, Alignment).wr_addr;
     return SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID,
                                                      SectionName);
 }
@@ -862,9 +871,9 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
     jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, Size);
     jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, Size);
     if (!isReadOnly)
-        return (uint8_t*)rw_alloc.alloc(Size, Alignment);
+        return (uint8_t*)rw_alloc.alloc(Size, Alignment).wr_addr;
     if (ro_alloc)
-        return (uint8_t*)ro_alloc->alloc(Size, Alignment);
+        return (uint8_t*)ro_alloc->alloc(Size, Alignment).wr_addr;
     return SectionMemoryManager::allocateDataSection(Size, Alignment, SectionID,
                                                      SectionName, isReadOnly);
 }
@@ -919,6 +928,133 @@ void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
 }
 #endif
 
+class JLJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
+    using OnFinalizedFunction =
+        jitlink::JITLinkMemoryManager::InFlightAlloc::OnFinalizedFunction;
+
+    std::mutex Mutex;
+    RWAllocator RWAlloc;
+    std::unique_ptr<ROAllocator> ROAlloc;
+    std::unique_ptr<ROAllocator> ExeAlloc;
+    SmallVector<OnFinalizedFunction> FinalizedCallbacks;
+    uint32_t InFlight{0};
+
+public:
+    class InFlightAlloc;
+
+    static std::unique_ptr<JITLinkMemoryManager> Create()
+    {
+        auto [ROAlloc, ExeAlloc] = get_preferred_allocators();
+        if (ROAlloc && ExeAlloc)
+            return std::unique_ptr<JLJITLinkMemoryManager>(
+                new JLJITLinkMemoryManager(std::move(ROAlloc), std::move(ExeAlloc)));
+
+        return cantFail(
+            orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(
+                /*Reservation Granularity*/ 16 * 1024 * 1024));
+    }
+
+    void allocate(const jitlink::JITLinkDylib *JD, jitlink::LinkGraph &G,
+                  OnAllocatedFunction OnAllocated) override;
+
+    void deallocate(std::vector<FinalizedAlloc> Allocs,
+                    OnDeallocatedFunction OnDeallocated) override
+    {
+        jl_unreachable();
+    }
+
+protected:
+    JLJITLinkMemoryManager(std::unique_ptr<ROAllocator> ROAlloc,
+                           std::unique_ptr<ROAllocator> ExeAlloc)
+      : ROAlloc(std::move(ROAlloc)), ExeAlloc(std::move(ExeAlloc))
+    {
+    }
+
+    void finalize(OnFinalizedFunction OnFinalized)
+    {
+        SmallVector<OnFinalizedFunction> Callbacks;
+        {
+            std::unique_lock Lock{Mutex};
+            FinalizedCallbacks.push_back(std::move(OnFinalized));
+
+            if (--InFlight > 0)
+                return;
+
+            ROAlloc->finalize();
+            ExeAlloc->finalize();
+            Callbacks = std::move(FinalizedCallbacks);
+        }
+
+        for (auto &CB : Callbacks)
+            std::move(CB)(FinalizedAlloc{});
+    }
+};
+
+class JLJITLinkMemoryManager::InFlightAlloc
+  : public jitlink::JITLinkMemoryManager::InFlightAlloc {
+    JLJITLinkMemoryManager &MM;
+    jitlink::LinkGraph &G;
+
+public:
+    InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G) : MM(MM), G(G) {}
+
+    void abandon(OnAbandonedFunction OnAbandoned) override { jl_unreachable(); }
+
+    void finalize(OnFinalizedFunction OnFinalized) override
+    {
+        auto *GP = &G;
+        MM.finalize([GP, OnFinalized =
+                             std::move(OnFinalized)](Expected<FinalizedAlloc> FA) mutable {
+            if (!FA)
+                return OnFinalized(FA.takeError());
+            // Need to handle dealloc actions when we GC code
+            auto E = orc::shared::runFinalizeActions(GP->allocActions());
+            if (!E)
+                return OnFinalized(E.takeError());
+            OnFinalized(std::move(FA));
+        });
+    }
+};
+
+using orc::MemProt;
+
+void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
+                                      jitlink::LinkGraph &G,
+                                      OnAllocatedFunction OnAllocated)
+{
+    jitlink::BasicLayout BL{G};
+
+    {
+        std::unique_lock Lock{Mutex};
+        for (auto &[AG, Seg] : BL.segments()) {
+            if (AG.getMemLifetime() == orc::MemLifetime::NoAlloc)
+                continue;
+            assert(AG.getMemLifetime() == orc::MemLifetime::Standard);
+
+            auto Prot = AG.getMemProt();
+            uint64_t Alignment = Seg.Alignment.value();
+            uint64_t Size = Seg.ContentSize + Seg.ZeroFillSize;
+            Allocation Alloc;
+            if (Prot == (MemProt::Read | MemProt::Write))
+                Alloc = RWAlloc.alloc(Size, Alignment);
+            else if (Prot == MemProt::Read)
+                Alloc = ROAlloc->alloc(Size, Alignment);
+            else if (Prot == (MemProt::Read | MemProt::Exec))
+                Alloc = ExeAlloc->alloc(Size, Alignment);
+            else
+                abort();
+
+            Seg.Addr = orc::ExecutorAddr::fromPtr(Alloc.rt_addr);
+            Seg.WorkingMem = (char *)Alloc.wr_addr;
+        }
+    }
+
+    if (auto Err = BL.apply())
+        return OnAllocated(std::move(Err));
+
+    ++InFlight;
+    OnAllocated(std::make_unique<InFlightAlloc>(*this, G));
+}
 }
 
 RTDyldMemoryManager* createRTDyldMemoryManager() JL_NOTSAFEPOINT
@@ -929,4 +1065,9 @@ RTDyldMemoryManager* createRTDyldMemoryManager() JL_NOTSAFEPOINT
 size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm) JL_NOTSAFEPOINT
 {
     return ((RTDyldMemoryManagerJL*)mm)->getTotalBytes();
+}
+
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager()
+{
+    return JLJITLinkMemoryManager::Create();
 }
