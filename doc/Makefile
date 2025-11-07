@@ -1,5 +1,6 @@
 # Makefile for building documentation
 
+.PHONY: default
 default: html
 
 # You can set these variables from the command line.
@@ -34,6 +35,7 @@ DOC_FILES=$(filter-out NEWS.md stdlib,$(notdir $(wildcard $(SRCDIR)/src/*)))
 src/%:
 	@mkdir -p src
 	ln -s $(SRCDIR)/src/$* $@
+.PHONY: src
 src: $(addprefix src/,$(DOC_FILES))
 
 .PHONY: deps
@@ -41,9 +43,11 @@ deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 	cp "$<" UnicodeData.txt
 
+.PHONY: alldeps
 alldeps: deps
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) deps $(DOCUMENTER_OPTIONS)
 
+.PHONY: checksum-unicodedata
 checksum-unicodedata: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 
@@ -73,6 +77,7 @@ deploy: deps
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy $(DOCUMENTER_OPTIONS)
 	@echo "Build & deploy of docs finished."
 
+.PHONY: update-documenter
 update-documenter:
 	@echo "Updating Documenter."
 	JULIA_PKG_PRECOMPILE_AUTO=0 $(JULIA_EXECUTABLE) --project=$(call cygpath_w,$(SRCDIR)/../deps/jlutilities/documenter/) --color=yes -e 'using Pkg; Pkg.update("Documenter")'

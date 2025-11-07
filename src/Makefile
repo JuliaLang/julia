@@ -319,7 +319,9 @@ $(build_includedir)/julia/uv/*.h: $(LIBUV_INC)/uv/*.h | $(build_includedir)/juli
 
 .PHONY: libccalltest
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+.PHONY: libccalllazyfoo
 libccalllazyfoo: $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
+.PHONY: libccalllazybar
 libccalllazybar: $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT)
 .PHONY: libllvmcalltest
 libllvmcalltest: $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT)
@@ -596,9 +598,11 @@ ANALYSIS_DEPS += llvmunwind
 else ifneq ($(OS),WINNT)
 ANALYSIS_DEPS += unwind
 endif
+.PHONY: install-analysis-deps
 install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
 
+.PHONY: analyzegc-deps-check
 analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc)
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
@@ -652,11 +656,13 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB
 		-- $(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
+.PHONY: tidysrc
 tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
 .PHONY: analyzesrc
 analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
 .PHONY: analyzegc
 analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
+.PHONY: analyze
 analyze: analyzesrc analyzegc tidysrc
 
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-sa-%

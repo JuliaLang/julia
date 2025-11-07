@@ -24,6 +24,8 @@ VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
 .PHONY: default
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
+
+.PHONY: all
 all: debug release
 
 # sort is used to remove potential duplicates
@@ -109,40 +111,39 @@ julia-libccalllazybar: julia-deps julia-libccalllazyfoo
 julia-libllvmcalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libllvmcalltest
 
-.PHONY: julia-src-debug
-.PHONY: julia-src-release
+.PHONY: julia-src-release julia-src-debug
 julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony julia-cli-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src $*
 
-.PHONY: julia-cli-debug
-.PHONY: julia-cli-release
+.PHONY: julia-cli-release julia-cli-debug
 julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
-.PHONY: julia-sysimg-debug
-.PHONY: julia-sysimg-release
+.PHONY: julia-sysimg-release julia-sysimg-debug
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
 # Useful for cross-bootstrapping
+.PHONY: julia-sysbase-release julia-sysbase-debug
 julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysbase-$*
 
-.PHONY: julia-debug
-.PHONY: julia-release
+.PHONY: julia-debug julia-release
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest \
                                       julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest julia-base-cache
 
+.PHONY: stdlibs-cache-release stdlibs-cache-debug
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk $*
 
-.PHONY: debug
-.PHONY: release
+.PHONY: debug release
 debug release : % : julia-% stdlibs-cache-%
 
+.PHONY: docs
 docs: julia-sysimg-$(JULIA_BUILD_MODE) stdlibs-cache-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no'
 
+.PHONY: docs-revise
 docs-revise:
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no' revise=true
 
@@ -221,6 +222,7 @@ $(build_datarootdir)/julia/%: $(JULIAHOME)/contrib/% | $(build_datarootdir)/juli
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
+.PHONY: julia-base-cache
 julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
 	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) JULIA_FALLBACK_REPL=1 WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
 		$(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/contrib/write_base_cache.jl) \
