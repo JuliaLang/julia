@@ -455,15 +455,14 @@ ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
 #---------------------
 1   TestMod.RawFD
 2   TestMod.Cint
-3   TestMod.Cint
-4   TestMod.s
-5   (call top.cconvert %₁ %₄)
-6   TestMod.F_GETFL
-7   (call top.cconvert %₂ %₆)
-8   (call top.unsafe_convert %₁ %₅)
-9   (call top.unsafe_convert %₂ %₇)
-10  (foreigncall :fcntl (static_eval TestMod.Cint) (static_eval (call core.svec TestMod.RawFD TestMod.Cint TestMod.Cint)) 2 :ccall %₈ %₉ %₅ %₇)
-11  (return %₁₀)
+3   TestMod.s
+4   (call top.cconvert %₁ %₃)
+5   TestMod.F_GETFL
+6   (call top.cconvert %₂ %₅)
+7   (call top.unsafe_convert %₁ %₄)
+8   (call top.unsafe_convert %₂ %₆)
+9   (foreigncall :fcntl (static_eval TestMod.Cint) (static_eval (call core.svec TestMod.RawFD TestMod.Cint)) 2 :ccall %₇ %₈ %₄ %₆)
+10  (return %₉)
 
 ########################################
 # Error: No return annotation on @ccall

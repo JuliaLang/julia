@@ -47,6 +47,28 @@ end
 @test JuliaLowering.include_string(test_mod, """
 ccall(:strlen, Csize_t, (Cstring,), "asdfg")
 """) == 5
+@test JuliaLowering.include_string(test_mod, """
+function cvarargs_0()
+    strp = Ref{Ptr{Cchar}}(0)
+    fmt = "hi"
+    len = ccall(:asprintf, Cint, (Ptr{Ptr{Cchar}}, Cstring, Cfloat...), strp, fmt)
+    str = unsafe_string(strp[], len)
+    Libc.free(strp[])
+    return str
+end
+""") isa Function
+@test test_mod.cvarargs_0() == "hi"
+@test JuliaLowering.include_string(test_mod, """
+function cvarargs_2(arg1::Float64, arg2::Float64)
+    strp = Ref{Ptr{Cchar}}(0)
+    fmt = "%3.1f %3.1f"
+    len = ccall(:asprintf, Cint, (Ptr{Ptr{Cchar}}, Cstring, Cfloat...), strp, fmt, arg1, arg2)
+    str = unsafe_string(strp[], len)
+    Libc.free(strp[])
+    return str
+end
+""") isa Function
+@test test_mod.cvarargs_2(1.1, 2.2) == "1.1 2.2"
 
 # cfunction
 JuliaLowering.include_string(test_mod, """

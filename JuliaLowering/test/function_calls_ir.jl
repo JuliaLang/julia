@@ -406,14 +406,15 @@ ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")
 #---------------------
 1   TestMod.Cstring
 2   TestMod.Cstring
-3   (call top.cconvert %₁ "%s = %s\n")
-4   (call top.cconvert %₂ "2 + 2")
-5   (call top.cconvert %₂ "5")
-6   (call top.unsafe_convert %₁ %₃)
-7   (call top.unsafe_convert %₂ %₄)
+3   TestMod.Cstring
+4   (call top.cconvert %₁ "%s = %s\n")
+5   (call top.cconvert %₂ "2 + 2")
+6   (call top.cconvert %₃ "5")
+7   (call top.unsafe_convert %₁ %₄)
 8   (call top.unsafe_convert %₂ %₅)
-9   (foreigncall :printf (static_eval TestMod.Cint) (static_eval (call core.svec TestMod.Cstring TestMod.Cstring TestMod.Cstring)) 1 :ccall %₆ %₇ %₈ %₃ %₄ %₅)
-10  (return %₉)
+9   (call top.unsafe_convert %₃ %₆)
+10  (foreigncall :printf (static_eval TestMod.Cint) (static_eval (call core.svec TestMod.Cstring TestMod.Cstring TestMod.Cstring)) 1 :ccall %₇ %₈ %₉ %₄ %₅ %₆)
+11  (return %₁₀)
 
 ########################################
 # Error: ccall with too few arguments

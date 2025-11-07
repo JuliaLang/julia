@@ -1706,6 +1706,16 @@ function expand_kw_call(ctx, srcref, farg, args, kws)
     ]
 end
 
+# Special rule: Any becomes core.Any regardless of the module
+# scope, and don't need GC roots.
+function expand_ccall_argtype(ctx, ex)
+    if is_same_identifier_like(ex, "Any")
+        @ast ctx ex "Any"::K"core"
+    else
+        expand_forms_2(ctx, ex)
+    end
+end
+
 # Expand the (sym,lib) argument to ccall/cglobal
 function expand_C_library_symbol(ctx, ex)
     expanded = expand_forms_2(ctx, ex)
@@ -1749,44 +1759,36 @@ function expand_ccall(ctx, ex)
     end
     arg_types = children(arg_type_tuple)
     vararg_type = nothing
-    num_required_args = length(arg_types)
     if length(arg_types) >= 1
         va = arg_types[end]
         if kind(va) == K"..."
             @chk numchildren(va) == 1
             # Ok: vararg function
-            vararg_type = va
-            if length(arg_types) <= 1
-                throw(LoweringError(vararg_type, "C ABI prohibits vararg without one required argument"))
-            else
-                num_required_args = length(arg_types) - 1
+            vararg_type = expand_ccall_argtype(ctx, va[1])
+            arg_types = arg_types[1:end-1]
+            if length(arg_types) === 0
+                throw(LoweringError(va, "C ABI prohibits vararg without one required argument"))
             end
         end
     end
     # todo: use multi-range errors here
-    if length(args) < num_required_args
+    if length(args) < length(arg_types)
         throw(LoweringError(ex, "Too few arguments in ccall compared to argument types"))
     elseif length(args) > length(arg_types) && isnothing(vararg_type)
         throw(LoweringError(ex, "More arguments than types in ccall"))
     end
     sctx = with_stmts(ctx)
     expanded_types = SyntaxList(ctx)
-    for (i, argt) in enumerate(arg_types)
+    for argt in arg_types
         if kind(argt) == K"..."
-            if i == length(arg_types)
-                argt = argt[1]
-            else
-                throw(LoweringError(argt, "only the trailing ccall argument type should have `...`"))
-            end
+            throw(LoweringError(argt, "only the trailing ccall argument type should have `...`"))
         end
-        if is_same_identifier_like(argt, "Any")
-            # Special rule: Any becomes core.Any regardless of the module
-            # scope, and don't need GC roots.
-            argt = @ast ctx argt "Any"::K"core"
-        end
-        push!(expanded_types, expand_forms_2(ctx, argt))
+        push!(expanded_types, expand_ccall_argtype(ctx, argt))
     end
-    #
+    for _ in length(arg_types)+1:length(args)
+        push!(expanded_types, vararg_type)
+    end
+
     # An improvement might be wrap the use of types in cconvert in a special
     # K"global_scope" expression which modifies the scope resolution. This
     # would at least make the rules self consistent if not pretty.
@@ -1843,7 +1845,7 @@ function expand_ccall(ctx, ex)
                     expanded_types...
                 ]
             ]
-            (isnothing(vararg_type) ? 0 : num_required_args)::K"Integer"
+            (isnothing(vararg_type) ? 0 : length(arg_types))::K"Integer"
             if isnothing(cconv)
                 "ccall"::K"Symbol"
             else
