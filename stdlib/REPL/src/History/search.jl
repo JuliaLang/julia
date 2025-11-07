@@ -63,7 +63,6 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
     # Filter state
     filter_idx = 0
     filter_seen = Set{Tuple{Symbol,String}}()
-    isfiltering = false
     # Event loop
     while true
         event = @lock events if !isempty(events) take!(events) end
@@ -157,14 +156,19 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             # Start filtering candidates
             # Only deduplicate when user has entered a search query. When browsing
             # with no filter (empty query), show all history including duplicates.
-            isfiltering = !isempty(filter_spec.exacts) || !isempty(filter_spec.negatives) ||
-                          !isempty(filter_spec.regexps) || !isempty(filter_spec.modes)
-            empty!(filter_seen)
-            filter_idx = filterchunkrev!(
-                state, cands_current;
-                maxtime = time() + 0.01,
-                maxresults = outsize[1],
-                seen = filter_seen, deduplicate = isfiltering)
+            if isempty(filter_spec.exacts) && isempty(filter_spec.negatives) &&
+               isempty(filter_spec.regexps) && isempty(filter_spec.modes)
+                # No filtering needed, just copy all candidates
+                append!(state.candidates, cands_current)
+                filter_idx = 0
+            else
+                # Filtering needed, deduplicate results
+                empty!(filter_seen)
+                filter_idx = filterchunkrev!(
+                    state, cands_current, filter_seen;
+                    maxtime = time() + 0.01,
+                    maxresults = outsize[1])
+            end
             if filter_idx == 0
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
@@ -194,9 +198,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 state.area, state.query, state.filter, cands_temp,
                 state.scroll, state.selection, state.hover)
             filter_idx = filterchunkrev!(
-                state, cands_current, filter_idx;
-                maxtime = time() + 0.01,
-                seen = filter_seen, deduplicate = isfiltering)
+                state, cands_current, filter_seen, filter_idx;
+                maxtime = time() + 0.01)
             if filter_idx == 0
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
@@ -212,13 +215,12 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
     end
 end
 
-function filterchunkrev!(state::SelectorState, candidates::DenseVector{HistEntry}, idx::Int = length(candidates);
-                         maxtime::Float64 = Inf, maxresults::Int = length(candidates),
-                         seen::Set{Tuple{Symbol,String}} = Set{Tuple{Symbol,String}}(),
-                         deduplicate::Bool = false)
+function filterchunkrev!(state::SelectorState, candidates::DenseVector{HistEntry},
+                         seen::Set{Tuple{Symbol,String}}, idx::Int = length(candidates);
+                         maxtime::Float64 = Inf, maxresults::Int = length(candidates))
     oldlen = length(state.candidates)
-    idx = filterchunkrev!(state.candidates, candidates, state.filter, idx;
-                          maxtime = maxtime, maxresults = maxresults, seen = seen, deduplicate = deduplicate)
+    idx = filterchunkrev!(state.candidates, candidates, state.filter, seen, idx;
+                          maxtime = maxtime, maxresults = maxresults)
     newlen = length(state.candidates)
     newcands = view(state.candidates, (oldlen + 1):newlen)
     gfound = Int[]
