@@ -259,6 +259,32 @@ struct F49231{a,b,c,d,e,f,g} end
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 end
 
+@testset "depth-limited types" begin
+
+    typ = typeof(view([1, 2, 3], 1:2))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 1))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 2))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 3))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 4))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 5))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 6))
+end
+
+Base.@kwdef struct F55952{A,B}
+    num::Int = 1
+end
+
+@testset "Depth-limited type printing performance for highly nested types" begin
+    nest_val(na, nb, ::Val{1}) = F55952{na, nb}()
+    nest_val(na, nb, ::Val{n}) where {n} = nest_val(F55952{na, nb}, F55952{na, nb}, Val(n-1))
+    nest_val(na, nb, n::Int) = nest_val(na, nb, Val(n))
+    nest_val(n) = nest_val(1, 1, n)
+    typ = typeof(nest_val(23))
+    # be careful with changing to a larger number
+    # ~10 seconds before #55952 is fixed:
+    @test 1 > @elapsed sprint(Base.show, typ, context = (:max_type_depth_limit => 2))
+end
+
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end
