@@ -9,8 +9,7 @@ SRCCACHE         := $(abspath $(JULIAHOME)/deps/srccache)
 include $(JULIAHOME)/Make.inc
 JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia) --startup-file=no
 
-.PHONY: help clean cleanall html pdf deps deploy
-
+.PHONY: help
 help:
 	@echo "Please use 'make <target>' where <target> is one of"
 	@echo "  html  to make standalone HTML files"
@@ -37,6 +36,7 @@ src/%:
 	ln -s $(SRCDIR)/src/$* $@
 src: $(addprefix src/,$(DOC_FILES))
 
+.PHONY: deps
 deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 	cp "$<" UnicodeData.txt
@@ -47,22 +47,27 @@ alldeps: deps
 checksum-unicodedata: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 
+.PHONY: clean
 clean:
 	rm -rf _build/* deps/* docbuild.log UnicodeData.txt
 
+.PHONY: cleanall
 cleanall: clean
 
+.PHONY: html
 html: deps
 	@echo "Building HTML documentation."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) $(DOCUMENTER_OPTIONS)
 	@echo "Build finished. The HTML pages are in _build/html."
 
+.PHONY: pdf
 pdf: deps
 	@echo "Building PDF documentation."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf $(DOCUMENTER_OPTIONS)
 	@echo "Build finished."
 
 # The deploy target should only be called in CI builds
+.PHONY: deploy
 deploy: deps
 	@echo "Deploying HTML documentation."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy $(DOCUMENTER_OPTIONS)

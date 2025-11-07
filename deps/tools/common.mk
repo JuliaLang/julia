@@ -312,5 +312,3 @@ endif
 .PHONY: reinstall-*
 .PHONY: uninstall
 .PHONY: uninstall-*
-.PHONY: update-llvm
-.PHONY: version-check
