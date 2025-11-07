@@ -2103,6 +2103,29 @@ const escape_defaults = merge!(
     )
 
 
+# Helper function to check and remove paired brackets/quotes
+# Returns true if paired delimiters were removed, false otherwise
+function try_remove_paired_delimiter(buf::IOBuffer)
+    left_brackets = ('(', '{', '[', '"', '\'', '`')
+    right_brackets = (')', '}', ']', '"', '\'', '`')
+
+    if !eof(buf) && position(buf) > 0
+        # Peek at char to the left
+        p = position(buf)
+        left_char = char_move_left(buf)
+        seek(buf, p)
+
+        i = findfirst(isequal(left_char), left_brackets)
+        if i !== nothing && peek(buf, Char) == right_brackets[i]
+            # Remove both the left and right bracket/quote
+            edit_delete(buf)
+            edit_backspace(buf)
+            return true
+        end
+    end
+    return false
+end
+
 # Keymap for automatic bracket/quote insertion and completion
 const bracket_insert_keymap = AnyDict()
 let
@@ -2125,37 +2148,33 @@ let
         return c
     end
 
-    # Check if there's an unmatched opening quote before the cursor
-    function has_unmatched_quote(buf::IOBuffer, quote_char::Char)
-        pos = position(buf)
-        content = String(buf.data[1:pos])
-        isempty(content) && return false
-
-        # Count unescaped quotes before cursor position
-        count = 0
-        i = 1
-        while i <= length(content)
-            if content[i] == quote_char
-                # Check if escaped by counting preceding backslashes
-                num_backslashes = 0
-                j = i - 1
-                while j >= 1 && content[j] == '\\'
-                    num_backslashes += 1
-                    j -= 1
-                end
-                # If even number of backslashes (including zero), the quote is not escaped
-                if num_backslashes % 2 == 0
-                    count += 1
-                end
-            end
-            i = nextind(content, i)
+    # Check if we should auto-close a quote (insert paired quotes)
+    # auto-close when "transparent" chars on both sides
+    # Transparent chars: whitespace, opening brackets ([{, closing brackets )]}, or nothing
+    function should_auto_close_quote(buf::IOBuffer, quote_char::Char)
+        # Check left side: BOF, whitespace, or opening bracket
+        left_ok = if position(buf) == 0
+            true
+        else
+            left_char = peek_char_left(buf)
+            isspace(left_char) || left_char in ('(', '[', '{')
         end
-        return isodd(count)
+
+        # Check right side: EOF, whitespace, or closing bracket
+        right_ok = if eof(buf)
+            true
+        else
+            right_char = peek(buf, Char)
+            isspace(right_char) || right_char in (')', ']', '}')
+        end
+
+        return left_ok && right_ok
     end
 
     # Left/right bracket pairs
     bracket_pairs = (('(', ')'), ('{', '}'), ('[', ']'))
-    right_brackets_ws = (')', '}', ']', ' ', '\t', '\n')
+    # Characters that are "transparent" for bracket auto-closing
+    right_brackets_ws = (')', '}', ']', ' ', '\t', '\n', '"', '\'', '`')
 
     for (left, right) in bracket_pairs
         # Left bracket: insert both and move cursor between them
@@ -2191,14 +2210,13 @@ let
             elseif position(buf) > 0 && should_skip_closing_bracket(peek_char_left(buf), quote_char)
                 # Don't auto-close (e.g., for transpose or triple quotes)
                 edit_insert(buf, quote_char)
-            elseif quote_char in ('"', '\'', '`') && has_unmatched_quote(buf, quote_char)
-                # For quotes, check if we're closing an existing string
-                edit_insert(buf, quote_char)
-            else
-                # Insert both quotes
+            elseif should_auto_close_quote(buf, quote_char)
                 edit_insert(buf, quote_char)
                 edit_insert(buf, quote_char)
                 edit_move_left(buf)
+            else
+                # Just insert single quote
+                edit_insert(buf, quote_char)
             end
             refresh_line(s)
         end
@@ -2221,18 +2239,8 @@ let
         end
 
         buf = buffer(s)
-        left_brackets = ('(', '{', '[', '"', '\'', '`')
-        right_brackets = (')', '}', ']', '"', '\'', '`')
-
-        if !eof(buf) && position(buf) > 0
-            left_char = peek_char_left(buf)
-            i = findfirst(isequal(left_char), left_brackets)
-            if i !== nothing && peek(buf, Char) == right_brackets[i]
-                # Remove both the left and right bracket/quote
-                edit_delete(buf)
-                edit_backspace(buf)
-                return refresh_line(s)
-            end
+        if try_remove_paired_delimiter(buf)
+            return refresh_line(s)
         end
         return edit_backspace(s)
     end
