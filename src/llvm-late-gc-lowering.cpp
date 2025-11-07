@@ -1258,6 +1258,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     if (RetRootsAttr.isValid()) {
                         size_t return_roots = atol(RetRootsAttr.getValueAsString().data());
                         assert(return_roots);
+                        HasDefBefore = true;
                         auto gc_allocas = FindSretAllocas(CI->getArgOperand(i)->stripInBoundsOffsets());
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
