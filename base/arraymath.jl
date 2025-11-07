@@ -2,16 +2,32 @@
 
 ## Binary arithmetic operators ##
 
-for f in (:+, :-)
-    @eval function ($f)(A::AbstractArray, B::AbstractArray)
-        promote_shape(A, B) # check size compatibility
-        broadcast_preserving_zero_d($f, A, B)
-    end
+function _broadcast_preserving_zero_d(f, A, B)
+    broadcast_preserving_zero_d(f, A, B)
 end
 
 # Using map over broadcast enables vectorization for wide matrices with few rows.
 # This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
 # https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
+function _broadcast_preserving_zero_d(f, A::Array, B::Array)
+    map(f, A, B)
+end
+
+function _broadcast_preserving_zero_d(f, A::Array, B::Number)
+    map(Fix2(f, B), A)
+end
+
+function _broadcast_preserving_zero_d(f, A::Number, B::Array)
+    map(Fix1(f, A), B)
+end
+
+for f in (:+, :-)
+    @eval function ($f)(A::AbstractArray, B::AbstractArray)
+        promote_shape(A, B) # check size compatibility
+        _broadcast_preserving_zero_d($f, A, B)
+    end
+end
+
 function +(A::Array, Bs::Array...)
     for B in Bs
         promote_shape(A, B) # check size compatibility
@@ -19,26 +35,12 @@ function +(A::Array, Bs::Array...)
     map(+, A, Bs...)
 end
 
-function -(A::Array, B::Array)
-    promote_shape(A, B) # check size compatibility
-    map(-, A, B)
-end
-
 for f in (:/, :\, :*)
     if f !== :/
-        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = _broadcast_preserving_zero_d($f, A, B)
     end
     if f !== :\
-        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
-    end
-end
-
-for f in (:/, :\, :*)
-    if f !== :/
-        @eval ($f)(A::Number, B::Array) = map(x->$f(A, x), B)
-    end
-    if f !== :\
-        @eval ($f)(A::Array, B::Number) = map(x->$f(x, B), A)
+        @eval ($f)(A::AbstractArray, B::Number) = _broadcast_preserving_zero_d($f, A, B)
     end
 end
 
