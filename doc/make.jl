@@ -25,7 +25,7 @@ end
 documenter_project_dir = joinpath(@__DIR__, "..", "deps", "jlutilities", "documenter")
 empty!(DEPOT_PATH)
 push!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
-push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
+push!(DEPOT_PATH, abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))
 using Pkg
 Pkg.activate(documenter_project_dir)
 Pkg.instantiate()
