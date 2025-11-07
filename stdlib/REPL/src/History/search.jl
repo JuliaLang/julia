@@ -62,6 +62,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
     cands_temp = HistEntry[]
     # Filter state
     filter_idx = 0
+    filter_seen = nothing
     # Event loop
     while true
         event = @lock events if !isempty(events) take!(events) end
@@ -153,10 +154,16 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 end
             end
             # Start filtering candidates
+            # Only deduplicate when user has entered a search query. When browsing
+            # with no filter (empty query), show all history including duplicates.
+            isfiltering = !isempty(filter_spec.exacts) || !isempty(filter_spec.negatives) ||
+                          !isempty(filter_spec.regexps) || !isempty(filter_spec.modes)
+            filter_seen = isfiltering ? Set{String}() : nothing
             filter_idx = filterchunkrev!(
                 state, cands_current;
                 maxtime = time() + 0.01,
-                maxresults = outsize[1])
+                maxresults = outsize[1],
+                seen = filter_seen)
             if filter_idx == 0
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
@@ -187,7 +194,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 state.scroll, state.selection, state.hover)
             filter_idx = filterchunkrev!(
                 state, cands_current, filter_idx;
-                maxtime = time() + 0.01)
+                maxtime = time() + 0.01,
+                seen = filter_seen)
             if filter_idx == 0
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
@@ -204,10 +212,11 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
 end
 
 function filterchunkrev!(state::SelectorState, candidates::DenseVector{HistEntry}, idx::Int = length(candidates);
-                         maxtime::Float64 = Inf, maxresults::Int = length(candidates))
+                         maxtime::Float64 = Inf, maxresults::Int = length(candidates),
+                         seen::Union{Nothing,Set{String}} = nothing)
     oldlen = length(state.candidates)
     idx = filterchunkrev!(state.candidates, candidates, state.filter, idx;
-                          maxtime = maxtime, maxresults = maxresults)
+                          maxtime = maxtime, maxresults = maxresults, seen = seen)
     newlen = length(state.candidates)
     newcands = view(state.candidates, (oldlen + 1):newlen)
     gfound = Int[]

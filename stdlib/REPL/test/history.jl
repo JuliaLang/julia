@@ -356,16 +356,22 @@ end
                     HistEntry(:julia, now(UTC), "println(\"hello\")", 6),  # duplicate
                     HistEntry(:julia, now(UTC), "tan(π/4)", 7),
                 ]
-                cset = ConditionSet("")  # Match all
+                # When filtering with seen Set, duplicates are removed
+                cset = ConditionSet("cos")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, dup_entries, spec) == 0
-                # Should only get unique entries
+                seen = Set{String}()
+                @test filterchunkrev!(results, dup_entries, spec; seen=seen) == 0
+                # Should only get unique entries matching the filter
                 # Since we iterate in reverse (7->1), we keep the most recent occurrence of each unique content
-                @test length(results) == 4
-                @test results[1] == dup_entries[4]  # sin(π)
-                @test results[2] == dup_entries[5]  # cos(2π) - most recent
-                @test results[3] == dup_entries[6]  # println("hello") - most recent
-                @test results[4] == dup_entries[7]  # tan(π/4)
+                @test length(results) == 1
+                @test results[1] == dup_entries[5]  # cos(2π) - most recent
+                # When browsing without seen Set, duplicates are kept
+                empty!(results)
+                cset2 = ConditionSet("")  # No filter
+                spec2 = FilterSpec(cset2)
+                @test filterchunkrev!(results, dup_entries, spec2) == 0
+                @test length(results) == 7  # All entries, including duplicates
+                @test results == dup_entries
             end
         end
         @testset "Strictness comparison" begin
