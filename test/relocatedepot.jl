@@ -189,10 +189,10 @@ if !test_relocated_depot
             file = joinpath(dir, "Project.toml")
             @test p.dir  == dir
             @test p.file == file
-            @test String(p.dir_tracked, verify_content=true)       == dir
-            @test String(p.dir_not_tracked, verify_content=false)  == dir
-            @test String(p.file_tracked, verify_content=true)      == file
-            @test String(p.file_not_tracked, verify_content=false) == file
+            @test String(p.dir_tracked)      == dir
+            @test String(p.dir_not_tracked)  == dir
+            @test String(p.file_tracked)     == file
+            @test String(p.file_not_tracked) == file
         end
     end
 
@@ -228,63 +228,37 @@ if !test_relocated_depot
 
                 @test_throws(
                     ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
-                    String(foo_tracked, verify_content=true)
+                    String(foo_tracked)
                 )
-                @test String(new_foo_tracked, verify_content=true) == foo
-                @test String(foo_tracked, verify_content=false) == foo
-                @test_throws(
-                    str -> occursin("Can't verify content for RelocPath(; track_content=false)", str),
-                    String(foo_not_tracked, verify_content=true)
-                )
-                @test String(foo_not_tracked, verify_content=false) == foo
+                @test String(new_foo_tracked) == foo
+                @test String(foo_not_tracked) == foo
 
                 @test_throws(
                     ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
-                    String(bar_tracked, verify_content=true)
+                    String(bar_tracked)
                 )
-                @test String(new_bar_tracked, verify_content=true) == bar
-                @test String(bar_tracked, verify_content=false) == bar
-                @test_throws(
-                    ErrorException("Can't verify content for RelocPath(; track_content=false)."),
-                    String(bar_not_tracked, verify_content=true)
-                )
-                @test String(bar_not_tracked, verify_content=false) == bar
+                @test String(new_bar_tracked) == bar
+                @test String(bar_not_tracked) == bar
 
                 foo_tracked = new_foo_tracked
                 bar_tracked = new_bar_tracked
                 empty!(DEPOT_PATH)
                 @test_throws(
                     ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
-                    String(foo_tracked, verify_content=true)
+                    String(foo_tracked)
                 )
                 @test_throws(
-                    ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
-                    String(foo_tracked, verify_content=false)
-                )
-                @test_throws(
-                    ErrorException("Can't verify content for RelocPath(; track_content=false)."),
-                    String(foo_not_tracked, verify_content=true)
-                )
-                @test_throws(
-                    ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
-                    String(foo_not_tracked, verify_content=false)
+                    ErrorException("Failed to relocate @depot$(foo_not_tracked.subpath) in any of DEPOT_PATH."),
+                    String(foo_not_tracked)
                 )
 
                 @test_throws(
                     ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
-                    String(bar_tracked, verify_content=true)
+                    String(bar_tracked)
                 )
                 @test_throws(
-                    ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
-                    String(bar_tracked, verify_content=false)
-                )
-                @test_throws(
-                    ErrorException("Can't verify content for RelocPath(; track_content=false)."),
-                    String(bar_not_tracked, verify_content=true)
-                )
-                @test_throws(
-                    ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
-                    String(bar_not_tracked, verify_content=false)
+                    ErrorException("Failed to relocate @depot$(bar_not_tracked.subpath) in any of DEPOT_PATH."),
+                    String(bar_not_tracked)
                 )
             end
         end
@@ -454,34 +428,26 @@ else
             @test p.file == file
             @test_throws(
                 ErrorException("Failed to relocate @depot$(p.dir_tracked.subpath) in any of DEPOT_PATH."),
-                String(p.dir_tracked, verify_content=true)
-            )
-            @test_throws(
-                ErrorException("Failed to relocate @depot$(p.dir_tracked.subpath) in any of DEPOT_PATH."),
-                String(p.dir_tracked, verify_content=false)
+                String(p.dir_tracked)
             )
             @test_throws(
                 ErrorException("Failed to relocate @depot$(p.dir_not_tracked.subpath) in any of DEPOT_PATH."),
-                String(p.dir_not_tracked, verify_content=false)
+                String(p.dir_not_tracked)
             )
             @test_throws(
                 ErrorException("Failed to relocate @depot$(p.file_tracked.subpath) in any of DEPOT_PATH."),
-                String(p.file_tracked, verify_content=true)
-            )
-            @test_throws(
-                ErrorException("Failed to relocate @depot$(p.file_tracked.subpath) in any of DEPOT_PATH."),
-                String(p.file_tracked, verify_content=false)
+                String(p.file_tracked)
             )
             @test_throws(
                 ErrorException("Failed to relocate @depot$(p.file_not_tracked.subpath) in any of DEPOT_PATH."),
-                String(p.file_not_tracked, verify_content=false)
+                String(p.file_not_tracked)
             )
 
             push!(DEPOT_PATH, @__DIR__)
-            @test String(p.dir_tracked, verify_content=true)       == dir
-            @test String(p.dir_not_tracked, verify_content=false)  == dir
-            @test String(p.file_tracked, verify_content=true)      == file
-            @test String(p.file_not_tracked, verify_content=false) == file
+            @test String(p.dir_tracked)      == dir
+            @test String(p.dir_not_tracked)  == dir
+            @test String(p.file_tracked)     == file
+            @test String(p.file_not_tracked) == file
         end
     end
 

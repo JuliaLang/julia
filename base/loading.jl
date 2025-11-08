@@ -3594,18 +3594,16 @@ struct RelocPath
     end
 end
 
-function String(r::RelocPath; verify_content::Bool=true)
-    if verify_content && isnothing(r.checksum)
-        error("Can't verify content for RelocPath(; track_content=false).")
-    end
+function String(r::RelocPath)
     for d in DEPOT_PATH
         if isdirpath(d)
             d = dirname(d)
         end
         path = string(d, r.subpath)
         if ispath(path)
-            !verify_content && return path
-            _include_dependency_hash(path) == r.checksum && return path
+            if isnothing(r.checksum) || _include_dependency_hash(path) == r.checksum
+                return path
+            end
         end
     end
     error("Failed to relocate @depot$(r.subpath) in any of DEPOT_PATH.")
