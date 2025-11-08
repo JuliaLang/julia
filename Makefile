@@ -219,9 +219,6 @@ endif
 JL_PRIVATE_LIBS-0 := libccalltest libccalllazyfoo libccalllazybar libllvmcalltest
 JL_PRIVATE_LIBS-1 := # libraries from USE_SYSTEM=1
 JL_PRIVATE_EXES := 7z
-ifeq ($(OS),WINNT)
-JL_PRIVATE_EXES += 7z.dll
-endif
 JL_PRIVATE_TOOLS :=
 ifeq ($(JULIA_BUILD_MODE),release)
 JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
