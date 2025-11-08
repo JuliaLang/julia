@@ -174,8 +174,8 @@ struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <
 
     Broadcasted(style::Union{Nothing,BroadcastStyle}, f::Tuple, args::Tuple) = error() # disambiguation: tuple is not callable
     function Broadcasted(style::Union{Nothing,BroadcastStyle}, f::F, args::Tuple, axes=nothing) where {F}
-        # using Core.Typeof rather than F preserves inferrability when f is a type
-        return new{typeof(style), typeof(axes), Core.Typeof(f), typeof(args)}(style, f, args, axes)
+        f = Base._maybe_wrap_type(f)
+        return new{typeof(style), typeof(axes), typeof(f), typeof(args)}(style, f, args, axes)
     end
 
     function Broadcasted(f::F, args::Tuple, axes=nothing) where {F}
@@ -183,11 +183,21 @@ struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <
     end
 
     function Broadcasted{Style}(f::F, args, axes=nothing) where {Style, F}
-        return new{Style, typeof(axes), Core.Typeof(f), typeof(args)}(Style()::Style, f, args, axes)
+        f = Base._maybe_wrap_type(f)
+        return new{Style, typeof(axes), typeof(f), typeof(args)}(Style()::Style, f, args, axes)
     end
 
     function Broadcasted{Style,Axes,F,Args}(f, args, axes) where {Style,Axes,F,Args}
         return new{Style, Axes, F, Args}(Style()::Style, f, args, axes)
+    end
+end
+
+function Base.getproperty(x::Broadcasted, name::Symbol)
+    field_value = getfield(x, name)
+    if name === :f
+        Base._maybe_unwrap_type(field_value)
+    else
+        field_value
     end
 end
 
