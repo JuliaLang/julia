@@ -130,12 +130,10 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing; ret
             [K"call"
                 "declare_global"::K"core"
                 mod::K"Value" name::K"Symbol" strong::K"Bool"
-                if type !== nothing
-                    type
-                end
+                type
             ]
             [K"latestworld"]
-            @ast ctx src_ex [K"removable" "nothing"::K"core"]
+            "nothing"::K"core"
         ]
         if ctx.is_toplevel_seq_point
             return decl
@@ -146,7 +144,7 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing; ret
     if ret_nothing
         nothing
     else
-        @ast ctx src_ex [K"removable" "nothing"::K"core"]
+        @ast ctx src_ex "nothing"::K"core"
     end
 end
 
