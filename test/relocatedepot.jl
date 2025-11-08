@@ -21,11 +21,12 @@ function test_harness(@nospecialize(fn); empty_load_path=true, empty_depot_path=
 end
 
 # We test relocation with these dummy pkgs:
-# - RelocationTestPkg1 - pkg with no include_dependency, also contains a RelocPath()
+# - RelocationTestPkg1 - pkg with no include_dependency
 # - RelocationTestPkg2 - pkg with include_dependency tracked by `mtime`
 # - RelocationTestPkg3 - pkg with include_dependency tracked by content
 # - RelocationTestPkg4 - pkg with no dependencies; will be compiled such that the pkgimage is
 #                        not relocatable, but no repeated recompilation happens upon loading
+# - RelocationTestPkg5 - contains RelocPath()s
 
 if !test_relocated_depot
 
@@ -171,6 +172,124 @@ if !test_relocated_depot
         end
     end
 
+    @testset "precompile RelocationTestPkg5" begin
+        pkgname = "RelocationTestPkg5"
+        test_harness(empty_depot_path=false) do
+            push!(LOAD_PATH, @__DIR__)
+            push!(DEPOT_PATH, @__DIR__) # make src files available for relocation
+            pkg = Base.identify_package(pkgname)
+            cachefiles = Base.find_all_in_cache_path(pkg)
+            rm.(cachefiles, force=true)
+            @test Base.isprecompiled(pkg) == false
+            @test Base.isrelocatable(pkg) == false # because not precompiled
+            p = Base.require(pkg)
+            @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+            @test Base.isrelocatable(pkg) == true
+            dir = joinpath(@__DIR__, "TestPkg")
+            file = joinpath(dir, "Project.toml")
+            @test p.dir  == dir
+            @test p.file == file
+            @test String(p.dir_tracked, verify_content=true)       == dir
+            @test String(p.dir_not_tracked, verify_content=false)  == dir
+            @test String(p.file_tracked, verify_content=true)      == file
+            @test String(p.file_not_tracked, verify_content=false) == file
+        end
+    end
+
+    @testset "RelocPath()" begin
+        test_harness(empty_depot_path=true) do
+            mktempdir() do tmp
+                push!(DEPOT_PATH, tmp)
+
+                foo = joinpath(tmp, "foo")
+                @test_throws(
+                    ErrorException("Can't track content of nonexistent path $foo."),
+                    Base.RelocPath(foo, track_content=true)
+                )
+                foo_not_tracked = Base.RelocPath(foo, track_content=false)
+                mkdir(foo)
+                foo_tracked = Base.RelocPath(foo, track_content=true)
+
+                bar = joinpath(foo, "bar")
+                @test_throws(
+                    ErrorException("Can't track content of nonexistent path $bar."),
+                    Base.RelocPath(bar, track_content=true)
+                )
+                bar_not_tracked = Base.RelocPath(bar, track_content=false)
+                touch(bar)
+                bar_tracked = Base.RelocPath(bar, track_content=true)
+
+                # checksum changed because we added foo/bar since
+                new_foo_tracked = Base.RelocPath(foo, track_content=true)
+                @test foo_tracked != new_foo_tracked
+                write(bar, "blabla")
+                new_bar_tracked = Base.RelocPath(bar, track_content=true)
+                @test bar_tracked != new_bar_tracked
+
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
+                    String(foo_tracked, verify_content=true)
+                )
+                @test String(new_foo_tracked, verify_content=true) == foo
+                @test String(foo_tracked, verify_content=false) == foo
+                @test_throws(
+                    str -> occursin("Can't verify content for RelocPath(; track_content=false)", str),
+                    String(foo_not_tracked, verify_content=true)
+                )
+                @test String(foo_not_tracked, verify_content=false) == foo
+
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
+                    String(bar_tracked, verify_content=true)
+                )
+                @test String(new_bar_tracked, verify_content=true) == bar
+                @test String(bar_tracked, verify_content=false) == bar
+                @test_throws(
+                    ErrorException("Can't verify content for RelocPath(; track_content=false)."),
+                    String(bar_not_tracked, verify_content=true)
+                )
+                @test String(bar_not_tracked, verify_content=false) == bar
+
+                foo_tracked = new_foo_tracked
+                bar_tracked = new_bar_tracked
+                empty!(DEPOT_PATH)
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
+                    String(foo_tracked, verify_content=true)
+                )
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
+                    String(foo_tracked, verify_content=false)
+                )
+                @test_throws(
+                    ErrorException("Can't verify content for RelocPath(; track_content=false)."),
+                    String(foo_not_tracked, verify_content=true)
+                )
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(foo_tracked.subpath) in any of DEPOT_PATH."),
+                    String(foo_not_tracked, verify_content=false)
+                )
+
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
+                    String(bar_tracked, verify_content=true)
+                )
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
+                    String(bar_tracked, verify_content=false)
+                )
+                @test_throws(
+                    ErrorException("Can't verify content for RelocPath(; track_content=false)."),
+                    String(bar_not_tracked, verify_content=true)
+                )
+                @test_throws(
+                    ErrorException("Failed to relocate @depot$(bar_tracked.subpath) in any of DEPOT_PATH."),
+                    String(bar_not_tracked, verify_content=false)
+                )
+            end
+        end
+    end
+
     @testset "#52161" begin
         # Take the src files from two pkgs Example1 and Example2,
         # which are each located in depot1 and depot2, respectively, and
@@ -246,7 +365,6 @@ if !test_relocated_depot
         end
     end
 
-
 else
 
     @testset "load stdlib from test/relocatedepot" begin
@@ -264,18 +382,12 @@ else
         pkgname = "RelocationTestPkg1"
         test_harness() do
             push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == true
             @test Base.isrelocatable(pkg) == true
-            pkg = Base.require(pkg)
-            @test String(pkg.relocpath) == joinpath(pkgdir(pkg), "src")
-            pop!(DEPOT_PATH)
-            @test_throws(
-                ErrorException("Failed to relocate @depot/RelocationTestPkg1/src in any of DEPOT_PATH."),
-                String(pkg.relocpath)
-            )
+            Base.require(pkg)
         end
     end
 
@@ -322,6 +434,54 @@ else
             # precompiled but not relocatable
             @test Base.isprecompiled(pkg) == true
             @test Base.isrelocatable(pkg) == false
+        end
+    end
+
+    @testset "load RelocationTestPkg5 from test/relocatedepot" begin
+        pkgname = "RelocationTestPkg5"
+        test_harness(empty_depot_path=true) do
+            push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
+            pkg = Base.identify_package(pkgname)
+            @test Base.isprecompiled(pkg) == true
+            @test Base.isrelocatable(pkg) == true
+            p = Base.require(pkg)
+
+            dir = joinpath(@__DIR__, "TestPkg")
+            file = joinpath(dir, "Project.toml")
+            @test p.dir  == dir
+            @test p.file == file
+            @test_throws(
+                ErrorException("Failed to relocate @depot$(p.dir_tracked.subpath) in any of DEPOT_PATH."),
+                String(p.dir_tracked, verify_content=true)
+            )
+            @test_throws(
+                ErrorException("Failed to relocate @depot$(p.dir_tracked.subpath) in any of DEPOT_PATH."),
+                String(p.dir_tracked, verify_content=false)
+            )
+            @test_throws(
+                ErrorException("Failed to relocate @depot$(p.dir_not_tracked.subpath) in any of DEPOT_PATH."),
+                String(p.dir_not_tracked, verify_content=false)
+            )
+            @test_throws(
+                ErrorException("Failed to relocate @depot$(p.file_tracked.subpath) in any of DEPOT_PATH."),
+                String(p.file_tracked, verify_content=true)
+            )
+            @test_throws(
+                ErrorException("Failed to relocate @depot$(p.file_tracked.subpath) in any of DEPOT_PATH."),
+                String(p.file_tracked, verify_content=false)
+            )
+            @test_throws(
+                ErrorException("Failed to relocate @depot$(p.file_not_tracked.subpath) in any of DEPOT_PATH."),
+                String(p.file_not_tracked, verify_content=false)
+            )
+
+            push!(DEPOT_PATH, @__DIR__)
+            @test String(p.dir_tracked, verify_content=true)       == dir
+            @test String(p.dir_not_tracked, verify_content=false)  == dir
+            @test String(p.file_tracked, verify_content=true)      == file
+            @test String(p.file_not_tracked, verify_content=false) == file
         end
     end
 

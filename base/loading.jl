@@ -2299,6 +2299,10 @@ const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions
 const _require_dependencies = Any[] # a list of (mod::Module, abspath::String, fsize::UInt64, hash::UInt32, mtime::Float64) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 
+function _include_dependency_hash(path::AbstractString, stat::Union{StatStruct,Nothing}=nothing)
+    return (isnothing(stat) ? isdir(path) : isdir(stat)) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")::UInt32
+end
+
 function _include_dependency(mod::Module, _path::AbstractString; track_content::Bool=true,
                              path_may_be_dir::Bool=false)
     _include_dependency!(_require_dependencies, _track_dependencies[], mod, _path, track_content, path_may_be_dir)
@@ -2322,7 +2326,7 @@ function _include_dependency!(dep_list::Vector{Any}, track_dependencies::Bool,
     else
         @lock require_lock begin
             if track_content
-                hash = (isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r"))::UInt32
+                hash = _include_dependency_hash(path)
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
                 push!(dep_list, (mod, path, UInt64(filesize(path)), hash, -1.0))
             else
@@ -3572,31 +3576,39 @@ true
 """
 struct RelocPath
     subpath::String
-    function RelocPath(path::AbstractString)
+    checksum::Union{UInt32,Nothing}
+    function RelocPath(path::AbstractString; track_content::Bool=true)
+        if track_content && !ispath(path)
+            error("Can't track content of nonexistent path $(path).")
+        end
         depot, _ = replace_depot_path_impl(path)
         if isnothing(depot)
             error("Failed to locate $(path) in any of DEPOT_PATH.")
         end
         subpath = replace(path, depot => ""; count=1)
-        return new(subpath)
+        return new(subpath, track_content ? _include_dependency_hash(path) : nothing)
     end
 end
 
-function String(r::RelocPath)
+function String(r::RelocPath; verify_content::Bool=true)
+    if verify_content && isnothing(r.checksum)
+        error("Can't verify content for RelocPath(; track_content=false).")
+    end
     for d in DEPOT_PATH
         if isdirpath(d)
             d = dirname(d)
         end
         path = string(d, r.subpath)
         if ispath(path)
-            return path
+            !verify_content && return path
+            _include_dependency_hash(path) == r.checksum && return path
         end
     end
     error("Failed to relocate @depot$(r.subpath) in any of DEPOT_PATH.")
 end
 
 function show(io::IO, r::RelocPath)
-    print(io, string("RelocPath(\"@depot", r.subpath, "\")"))
+    print(io, string("RelocPath(\"@depot", r.subpath, "\", track_content=$(!isnothing(r.checksum)))"))
 end
 
 function read_module_list(f::IO, has_buildid_hi::Bool)
@@ -4138,7 +4150,7 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
                 record_reason(reasons, "file size changed")
                 return true
             end
-            hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
+            hash = _include_dependency_hash(f, fstat)
             if hash != hash_req
                 @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                 record_reason(reasons, "file content changed")
