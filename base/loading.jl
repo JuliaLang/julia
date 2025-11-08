@@ -3544,13 +3544,17 @@ function resolve_depot(inc::AbstractString)
 end
 
 """
-    Base.RelocPath(path::AbstractString)
+    Base.RelocPath(path::AbstractString; track_content::Bool=true)
 
 A type to represent a relocatable path.
 
 Requires `path` to be located within one of `DEPOT_PATH` upon construction.
 
 An error is thrown if relocation fails.
+
+If `track_content=true` the content hash of `path` is stored and later used to distinguish
+different versions of `path` appearing in multiple depots. If `path` refers to a directory,
+then the content hash is based on the string list of the directory's entries.
 
 # Example
 ```jldoctest
