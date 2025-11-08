@@ -7,7 +7,7 @@ using LibGit2_jll
 using Test
 using Random, Serialization, Sockets
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
 using .Main.ChallengePrompts: challenge_prompt as basic_challenge_prompt
 
