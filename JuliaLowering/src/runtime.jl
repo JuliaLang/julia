@@ -330,7 +330,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Run code generator - this acts like a macro expander and like a macro
     # expander it gets a MacroContext.
-    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer)
+    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer, false)
     ex0 = g.gen(mctx, args...)
     if ex0 isa SyntaxTree
         if !is_compatible_graph(ctx1, ex0)

@@ -202,4 +202,15 @@ end
 
 end
 
+# SyntaxTree @eval should pass along expr_compat_mode
+@test JuliaLowering.include_string(test_mod, "@eval quote x end";
+                                   expr_compat_mode=false) isa SyntaxTree
+@test JuliaLowering.include_string(test_mod, "@eval quote x end";
+                                   expr_compat_mode=true) isa Expr
+@test JuliaLowering.include_string(test_mod, raw"""
+    let T = :foo
+        @eval @doc $"This is a $T" $T = 1
+    end
+"""; expr_compat_mode=true) === 1
+
 end

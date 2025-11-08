@@ -75,6 +75,7 @@ struct MacroContext <: AbstractLoweringContext
     graph::SyntaxGraph
     macrocall::Union{SyntaxTree,LineNumberNode,SourceRef}
     scope_layer::ScopeLayer
+    expr_compat_mode::Bool
 end
 
 function adopt_scope(ex, ctx::MacroContext)
@@ -257,7 +258,7 @@ function expand_macro(ctx, ex)
     @assert kind(ex) == K"macrocall"
 
     macname = ex[1]
-    mctx = MacroContext(ctx.graph, ex, current_layer(ctx))
+    mctx = MacroContext(ctx.graph, ex, current_layer(ctx), ctx.expr_compat_mode)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = ex[2:end]
     macro_loc = let loc = source_location(LineNumberNode, ex)

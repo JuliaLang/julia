@@ -282,6 +282,12 @@ function _at_eval_code(ctx, srcref, mod, ex)
                     JuliaLowering.eval::K"Value"
                     mod
                     [K"quote" ex]
+                    [K"parameters"
+                        [K"="
+                            "expr_compat_mode"::K"Identifier"
+                            ctx.expr_compat_mode::K"Bool"
+                        ]
+                    ]
                 ]
             ]
         ]

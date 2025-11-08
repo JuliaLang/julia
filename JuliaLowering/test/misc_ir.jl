@@ -298,26 +298,36 @@ end
 # @eval without module
 @eval $f(x, y)
 #---------------------
-1   TestMod.f
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert (call ($ f) x y)) %₂)
-4   (= slot₁/eval_result (call JuliaLowering.eval TestMod %₃))
-5   latestworld
-6   slot₁/eval_result
-7   (return %₆)
+1   JuliaLowering.eval
+2   (call core.tuple :expr_compat_mode)
+3   (call core.apply_type core.NamedTuple %₂)
+4   (call core.tuple false)
+5   (call %₃ %₄)
+6   TestMod.f
+7   (call core.tuple %₆)
+8   (call JuliaLowering.interpolate_ast SyntaxTree (inert (call ($ f) x y)) %₇)
+9   (= slot₁/eval_result (call core.kwcall %₅ %₁ TestMod %₈))
+10  latestworld
+11  slot₁/eval_result
+12  (return %₁₁)
 
 ########################################
 # @eval with module
 @eval mod $f(x, y)
 #---------------------
-1   TestMod.mod
-2   TestMod.f
-3   (call core.tuple %₂)
-4   (call JuliaLowering.interpolate_ast SyntaxTree (inert (call ($ f) x y)) %₃)
-5   (= slot₁/eval_result (call JuliaLowering.eval %₁ %₄))
-6   latestworld
-7   slot₁/eval_result
-8   (return %₇)
+1   JuliaLowering.eval
+2   (call core.tuple :expr_compat_mode)
+3   (call core.apply_type core.NamedTuple %₂)
+4   (call core.tuple false)
+5   (call %₃ %₄)
+6   TestMod.mod
+7   TestMod.f
+8   (call core.tuple %₇)
+9   (call JuliaLowering.interpolate_ast SyntaxTree (inert (call ($ f) x y)) %₈)
+10  (= slot₁/eval_result (call core.kwcall %₅ %₁ %₆ %₉))
+11  latestworld
+12  slot₁/eval_result
+13  (return %₁₂)
 
 ########################################
 # Juxtaposition
