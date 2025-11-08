@@ -71,6 +71,7 @@ endif
 	@printf "%s\n" "const PRIVATE_LIBDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libdir_rel)))) >> $@
 	@printf "%s\n" "const PRIVATE_LIBEXECDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libexecdir_rel)))) >> $@
 	@printf "%s\n" "const INCLUDEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(includedir_rel)))) >> $@
+	@printf "%s\n" "const SOURCEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(shell echo $(call cygpath_w,$(JULIAHOME)))))) >> $@
 ifeq ($(DARWIN_FRAMEWORK), 1)
 	@printf "%s\n" "const DARWIN_FRAMEWORK = true" >> $@
 	@printf "%s\n" "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
