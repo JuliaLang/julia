@@ -1555,7 +1555,8 @@ Return an integer representing the precedence of a binary operator `s`, relative
 other operators. Higher-numbered operators take precedence over lower-numbered
 operators. Return `0` if `s` is not a valid binary operator.
 
-(The precedence of *unary* operators is handled differently.)
+(The precedence of *unary* operators is handled differently, including cases like `+`
+where an operator can be either unary or binary.)
 
 # Examples
 ```jldoctest
