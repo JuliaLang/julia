@@ -247,6 +247,22 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 	rm -rf $(build_prefix)
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
+.PHONY: default
+.PHONY: get
+.PHONY: extract
+.PHONY: configure
+.PHONY: compile
+.PHONY: check
+.PHONY: fastcheck
+.PHONY: stage
+.PHONY: install
+.PHONY: version-check
+
+.PHONY: uninstall
+.PHONY: cleanall
+.PHONY: distcleanall
+.PHONY: getall
+
 include $(SRCDIR)/BOLT.mk
 include $(SRCDIR)/csl.mk
 include $(SRCDIR)/sanitizers.mk
