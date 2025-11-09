@@ -72,7 +72,7 @@ MMTK_JULIA_VER := mmtk_julia_custom
 UNINSTALL_mmtk_julia := $(MMTK_JULIA_VER) manual_mmtk_julia
 
 define manual_mmtk_julia
-.PHONY: uninstall
+.PHONY: uninstall-mmtk_julia
 uninstall-mmtk_julia:
 	-rm -f $(build_prefix)/manifest/mmtk_julia
 	-rm -f $(BUILDROOT)/usr/lib/libmmtk_julia.so
