@@ -1871,7 +1871,7 @@ module M58272_to end
 @eval M58272_to import ..M58272_1: M58272_2.y, x
 @test @eval M58272_to x === 1
 
-@testset "Scripts" begin
+@testset "Standalone Scripts" begin
     # Test with line-by-line comment syntax and path dependencies
     script = joinpath(@__DIR__, "project", "scripts", "script.jl")
     output = read(`$(Base.julia_cmd()) --startup-file=no $script`, String)
@@ -1893,14 +1893,14 @@ module M58272_to end
     @test occursin("✓ Random.rand()", output_cm)
     @test occursin("✓ All checks passed!", output_cm)
 
-    # Test @script behavior with script
+    # Test @script behavior with standalone script
     # When using --project=@script, it should use the script file as the project
     output_script = read(`$(Base.julia_cmd()) --startup-file=no --project=@script $script`, String)
     @test occursin("Active project: $script", output_script)
     @test occursin("Active manifest: $script", output_script)
     @test occursin("✓ Random (stdlib) loaded successfully", output_script)
 
-    # Test that regular Julia files (without #!script) can be set as active project
+    # Test that regular Julia files (without #!standalone) can be set as active project
     regular_script = joinpath(@__DIR__, "project", "scripts", "regular_script.jl")
 
     # Running the script with --project= should set it as active project
@@ -1921,7 +1921,7 @@ module M58272_to end
     @test !success(result)
     @test occursin("Package Rot13 not found in current path", String(take!(err_output)))
 
-    # Test 1: #!script marker not at top (has code before it) - runs as regular script
+    # Test 1: #!standalone marker not at top (has code before it) - runs as regular script
     invalid_project_not_first = joinpath(@__DIR__, "project", "scripts", "invalid_project_not_first.jl")
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $invalid_project_not_first`)))
     @test success(result)
@@ -1933,22 +1933,22 @@ module M58272_to end
     @test !success(result)
     @test occursin("#!manifest section must come after #!project section", String(take!(err_output)))
 
-    # Test 3: Code before #!script marker with --project - should error
+    # Test 3: Code before #!standalone marker with --project - should error
     invalid_both = joinpath(@__DIR__, "project", "scripts", "invalid_both.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$invalid_both -e "using Test"`), stderr=err_output))
     @test !success(result)
-    @test occursin("is missing #!script marker", String(take!(err_output)))
+    @test occursin("is missing #!standalone marker", String(take!(err_output)))
 
     # Test 4: Code between sections is now valid
     valid_code_between = joinpath(@__DIR__, "project", "scripts", "valid_code_between.jl")
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $valid_code_between`)))
     @test success(result)
 
-    # Test 5: Using --project on a non-script file errors when loading packages
+    # Test 5: Using --project on a non-standalone script file errors when loading packages
     regular_script = joinpath(@__DIR__, "project", "scripts", "regular_script.jl")
     err_output = IOBuffer()
     result = run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --project=$regular_script -e "using Test"`), stderr=err_output))
     @test !success(result)
-    @test occursin("is missing #!script marker", String(take!(err_output)))
+    @test occursin("is missing #!standalone marker", String(take!(err_output)))
 end

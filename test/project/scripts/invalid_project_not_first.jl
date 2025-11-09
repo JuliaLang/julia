@@ -1,8 +1,8 @@
-# Some code before #!script marker
+# Some code before #!standalone marker
 
 x = 1
 
-#!script
+#!standalone
 
 #!project begin
 # name = "Test"

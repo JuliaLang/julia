@@ -323,14 +323,14 @@ function extract_inline_section(path::String, type::Symbol)
     end
 end
 
-function is_script(path::String)::Bool
+function is_standalone_script(path::String)::Bool
     for line in eachline(path)
         stripped = lstrip(line)
-        # Only whitespace and comments allowed before #!script
+        # Only whitespace and comments allowed before #!standalone
         if !isempty(stripped) && !startswith(stripped, '#')
             return false
         end
-        if startswith(stripped, "#!script")
+        if startswith(stripped, "#!standalone")
             return true
         end
     end
@@ -338,21 +338,21 @@ function is_script(path::String)::Bool
 end
 
 
-struct ScriptState
+struct StandaloneScriptState
     path::String
     pkg::PkgId
 end
 
-script_state_global::Union{ScriptState, Nothing} = nothing
+standalone_script_state_global::Union{StandaloneScriptState, Nothing} = nothing
 
-function set_script_state(abs_path::Union{Nothing, String})
+function set_standalone_script_state(abs_path::Union{Nothing, String})
     pkg = project_file_name_uuid(abs_path, splitext(basename(abs_path))[1])
 
     # Verify the project and manifest delimiters:
     parsed_toml(abs_path)
     parsed_toml(abs_path; manifest=true)
 
-    global script_state_global = ScriptState(abs_path, pkg)
+    global standalone_script_state_global = StandaloneScriptState(abs_path, pkg)
 end
 
 
@@ -385,7 +385,7 @@ function parsed_toml(toml_file::AbstractString, toml_cache::TOMLCache, toml_lock
                      manifest::Bool=false, project::Bool=!manifest)
     manifest && project && throw(ArgumentError("cannot request both project and manifest TOML"))
     lock(toml_lock) do
-        # Script?
+        # Standalone script?
         if endswith(toml_file, ".jl") && isfile_casesensitive(toml_file)
             kind = manifest ? :manifest : :project
             cache_key = "$(toml_file)::$(kind)"
@@ -451,8 +451,8 @@ Same as [`Base.identify_package`](@ref) except that the path to the environment 
 is also returned, except when the identity is not identified.
 """
 function identify_package_env(where::Module, name::String)
-    if where === Main && script_state_global !== nothing
-        return identify_package_env(script_state_global.pkg, name)
+    if where === Main && standalone_script_state_global !== nothing
+        return identify_package_env(standalone_script_state_global.pkg, name)
     end
     return identify_package_env(PkgId(where), name)
 end
@@ -780,7 +780,12 @@ function env_project_file(env::String)::Union{Bool,String}
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
     elseif endswith(env, ".jl") && isfile_casesensitive(env)
-        project_file = is_script(env) ? env : false
+        if is_standalone_script(env)
+            project_file = env
+        end
+            #else
+        #    error("$env is missing #!standalone marker")
+        #end
     else
         project_file = false
     end
@@ -1038,7 +1043,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         end
     end
     if manifest_path === nothing && endswith(project_file, ".jl") && has_file
-        # script: manifest is the same file as the project file
+        # standalone script: manifest is the same file as the project file
         manifest_path = project_file
     end
     if manifest_path === nothing

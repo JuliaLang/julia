@@ -1,4 +1,4 @@
-#!script
+#!standalone
 
 #!manifest begin
 # julia_version = "1.11.0"

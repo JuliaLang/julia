@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-#!script
+#!standalone
 
 #!project begin
 # name = "PortableScriptTest"
@@ -15,7 +15,7 @@ using Random
 using Test
 using Rot13
 
-# Verify the script environment is active
+# Verify the standalone script environment is active
 println("Active project: ", Base.active_project())
 println("Active manifest: ", Base.active_manifest())
 println()

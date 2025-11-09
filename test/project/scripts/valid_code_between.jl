@@ -1,4 +1,4 @@
-#!script
+#!standalone
 
 #!project begin
 #!project end
