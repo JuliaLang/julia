@@ -28,7 +28,7 @@ TRIMMING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/trimming" "CC=$(CC)"
 TEST_JULIA_OPTIONS := --check-bounds=yes --startup-file=no --depwarn=error
 TEST_SCRIPT_OPTIONS := --buildroot=$(call cygpath_w,$(BUILDROOT))
 
-default
+.PHONY: default
 default:
 
 .PHONY: $(TESTS)
