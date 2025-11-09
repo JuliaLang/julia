@@ -156,3 +156,13 @@ end
     @test ParseStream(y) isa ParseStream
     @test parsestmt(Expr, y) == parsestmt(Expr, "1")
 end
+
+@testset "peek_behind_pos with negative byte index" begin
+    # Test that peek_behind_pos doesn't cause InexactError when byte_idx goes negative
+    # This can happen when parsing certain incomplete keywords like "do"
+    # where trivia skipping walks back past the beginning of the stream
+    @test_throws JuliaSyntax.ParseError parseall(GreenNode, "do")
+    @test_throws JuliaSyntax.ParseError parseall(GreenNode, "do ")
+    @test_throws JuliaSyntax.ParseError parseall(GreenNode, " do")
+    @test_throws JuliaSyntax.ParseError parseall(GreenNode, "do\n")
+end

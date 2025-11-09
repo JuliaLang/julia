@@ -635,8 +635,14 @@ function peek_behind_pos(stream::ParseStream; skip_trivia::Bool=true,
     while node_idx > 0
         node = stream.output[node_idx]
         if kind(node) == K"TOMBSTONE" || (skip_trivia && is_trivia(node))
-            node_idx -= 1
             byte_idx -= node.byte_span
+            # If this is a non-terminal node, skip its children without
+            # subtracting their byte_spans, as they're already included in the parent
+            if is_non_terminal(node)
+                node_idx -= (1 + node.node_span)
+            else
+                node_idx -= 1
+            end
         else
             break
         end
