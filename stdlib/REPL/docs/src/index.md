@@ -205,83 +205,92 @@ at the beginning of the line. The prompt for this mode is `pkg>`. It supports it
 entered by pressing `?` at the beginning  of the line of the `pkg>` prompt. The Package manager mode is
 documented in the Pkg manual, available at [https://julialang.github.io/Pkg.jl/v1/](https://julialang.github.io/Pkg.jl/v1/).
 
-### Search modes
+### History searching
 
 In all of the above modes, the executed lines get saved to a history file, which can be searched.
- To initiate an incremental search through the previous history, type `^R` -- the control key
-together with the `r` key. The prompt will change to ```(reverse-i-search)`':```, and as you
-type the search query will appear in the quotes. The most recent result that matches the query
-will dynamically update to the right of the colon as more is typed. To find an older result using
-the same query, simply type `^R` again.
+ To initiate an interactive search through the previous history, type `^R` -- the control key
+together with the `r` key.
 
-Just as `^R` is a reverse search, `^S` is a forward search, with the prompt ```(i-search)`':```.
- The two may be used in conjunction with each other to move through the previous or next matching
-results, respectively.
+You will be presented with an interactive history viewer. As you type your search history will be filtered;
+pressing enter will insert the selected history entry into the REPL. Detailed help for the history
+searcher is available within the REPL with the special queries `?`  and `??`.
 
 All executed commands in the Julia REPL are logged into `~/.julia/logs/repl_history.jl` along with a timestamp of when it was executed
-and the current REPL mode you were in. Search mode queries this log file in order to find the commands which you previously ran.
-This can be disabled at startup by passing the `--history-file=no` flag to Julia.
+and the current REPL mode you were in. The history searcher reads this log file in order to find the commands which you previously ran.
+Multiple REPLs can write to this file at once, and every time you begin a search the newest history is fetched.
+Use of this file can be disabled at startup by passing the `--history-file=no` flag to Julia.
 
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
-above (`^D` to exit, `^R` and `^S` for searching), but there are many more. In addition to the
+above (`^D` to exit, `^R` for searching), but there are many more. In addition to the
 control-key, there are also meta-key bindings. These vary more by platform, but most terminals
 default to using alt- or option- held down with a key to send the meta-key (or can be configured
 to do so), or pressing Esc and then the key.
 
-| Keybinding          | Description                                                                                                |
-|:------------------- |:---------------------------------------------------------------------------------------------------------- |
-| **Program control** |                                                                                                            |
-| `^D`                | Exit (when buffer is empty)                                                                                |
-| `^C`                | Interrupt or cancel                                                                                        |
-| `^L`                | Clear console screen                                                                                       |
-| Return/Enter, `^J`  | New line, executing if it is complete                                                                      |
-| meta-Return/Enter   | Insert new line without executing it                                                                       |
-| `?` or `;`          | Enter help or shell mode (when at start of a line)                                                         |
-| `^R`, `^S`          | Incremental history search, described above                                                                |
-| **Cursor movement** |                                                                                                            |
-| Right arrow, `^F`   | Move right one character                                                                                   |
-| Left arrow, `^B`    | Move left one character                                                                                    |
-| ctrl-Right, `meta-F`| Move right one word                                                                                        |
-| ctrl-Left, `meta-B` | Move left one word                                                                                         |
-| Home, `^A`          | Move to beginning of line                                                                                  |
-| End, `^E`           | Move to end of line                                                                                        |
-| Up arrow, `^P`      | Move up one line (or change to the previous history entry that matches the text before the cursor)         |
-| Down arrow, `^N`    | Move down one line (or change to the next history entry that matches the text before the cursor)           |
-| Shift-Arrow Key     | Move cursor according to the direction of the Arrow key, while activating the region ("shift selection")   |
-| Page-up, `meta-P`   | Change to the previous history entry                                                                       |
-| Page-down, `meta-N` | Change to the next history entry                                                                           |
-| `meta-<`            | Change to the first history entry (of the current session if it is before the current position in history) |
-| `meta->`            | Change to the last history entry                                                                           |
-| `^-Space`           | Set the "mark" in the editing region (and de-activate the region if it's active)                           |
-| `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
-| `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
-| `^X^X`              | Exchange the current position with the mark                                                                |
-| **Editing**         |                                                                                                            |
-| Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
-| Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
-| meta-Backspace      | Delete the previous word                                                                                   |
-| `meta-d`            | Forward delete the next word                                                                               |
-| `^W`                | Delete previous text up to the nearest whitespace                                                          |
-| `meta-w`            | Copy the current region in the kill ring                                                                   |
-| `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
-| `^U`                | "Kill" to beginning of line, placing the text in the kill ring                                             |
-| `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
-| `^Y`                | "Yank" insert the text from the kill ring                                                                  |
-| `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
-| `^T`                | Transpose the characters about the cursor                                                                  |
-| `meta-Up arrow`     | Transpose current line with line above                                                                     |
-| `meta-Down arrow`   | Transpose current line with line below                                                                     |
-| `meta-u`            | Change the next word to uppercase                                                                          |
-| `meta-c`            | Change the next word to titlecase                                                                          |
-| `meta-l`            | Change the next word to lowercase                                                                          |
-| `^/`, `^_`          | Undo previous editing action                                                                               |
-| `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-| `meta-Left Arrow`   | Indent the current line on the left                                                                        |
-| `meta-Right Arrow`  | Indent the current line on the right                                                                       |
-| `meta-.`            | Insert last word from previous history entry                                                               |
-| `meta-e`            | Edit the current input in an editor                                                                        |
+| Keybinding            | Description                                                                                                |
+|:----------------------|:-----------------------------------------------------------------------------------------------------------|
+| **Program control**   |                                                                                                            |
+| `^D`                  | Exit (when buffer is empty)                                                                                |
+| `^C`                  | Interrupt or cancel                                                                                        |
+| `^L`                  | Clear console screen                                                                                       |
+| Return/Enter, `^J`    | New line, executing if it is complete                                                                      |
+| meta-Return/Enter     | Insert new line without executing it                                                                       |
+| `?` or `;`            | Enter help or shell mode (when at start of a line)                                                         |
+| `^R`, `^S`            | Interactive history search, described above                                                                |
+| **Cursor movement**   |                                                                                                            |
+| Right arrow, `^F`     | Move right one character                                                                                   |
+| Left arrow, `^B`      | Move left one character                                                                                    |
+| ctrl-Right, `meta-F`  | Move right one word                                                                                        |
+| ctrl-Left, `meta-B`   | Move left one word                                                                                         |
+| Home, `^A`            | Move to beginning of line                                                                                  |
+| End, `^E`             | Move to end of line                                                                                        |
+| Up arrow, `^P`        | Move up one line (or change to the previous history entry that matches the text before the cursor)         |
+| Down arrow, `^N`      | Move down one line (or change to the next history entry that matches the text before the cursor)           |
+| Shift-Arrow Key       | Move cursor according to the direction of the Arrow key, while activating the region ("shift selection")   |
+| Page-up, `meta-P`     | Change to the previous history entry                                                                       |
+| Page-down, `meta-N`   | Change to the next history entry                                                                           |
+| `meta-<`              | Change to the first history entry (of the current session if it is before the current position in history) |
+| `meta->`              | Change to the last history entry                                                                           |
+| `^-Space`             | Set the "mark" in the editing region (and de-activate the region if it's active)                           |
+| `^-Space ^-Space`     | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
+| `^G`                  | De-activate the region (i.e. make it not highlighted)                                                      |
+| `^X^X`                | Exchange the current position with the mark                                                                |
+| **Editing**           |                                                                                                            |
+| Backspace, `^H`       | Delete the previous character, or the whole region when it's active                                        |
+| Delete, `^D`          | Forward delete one character (when buffer has text)                                                        |
+| meta-Backspace        | Delete the previous word                                                                                   |
+| `meta-d`              | Forward delete the next word                                                                               |
+| `^W`                  | Delete previous text up to the nearest whitespace                                                          |
+| `meta-w`              | Copy the current region in the kill ring                                                                   |
+| `meta-W`              | "Kill" the current region, placing the text in the kill ring                                               |
+| `^U`                  | "Kill" to beginning of line, placing the text in the kill ring                                             |
+| `^K`                  | "Kill" to end of line, placing the text in the kill ring                                                   |
+| `^Y`                  | "Yank" insert the text from the kill ring                                                                  |
+| `meta-y`              | Replace a previously yanked text with an older entry from the kill ring                                    |
+| `^T`                  | Transpose the characters about the cursor                                                                  |
+| `meta-Up arrow`       | Transpose current line with line above                                                                     |
+| `meta-Down arrow`     | Transpose current line with line below                                                                     |
+| `meta-u`              | Change the next word to uppercase                                                                          |
+| `meta-c`              | Change the next word to titlecase                                                                          |
+| `meta-l`              | Change the next word to lowercase                                                                          |
+| `^/`, `^_`            | Undo previous editing action                                                                               |
+| `^Q`                  | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
+| `meta-Left Arrow`     | Indent the current line on the left                                                                        |
+| `meta-Right Arrow`    | Indent the current line on the right                                                                       |
+| `meta-.`              | Insert last word from previous history entry                                                               |
+| `meta-e`              | Edit the current input in an editor                                                                        |
+| **History search**    |                                                                                                            |
+| Up arrow, `^P`, `^K`  | Move the focus one entry up                                                                                |
+| Down arrow, `^P`, `^N`| Move the focus one entry down                                                                              |
+| Page up, `^B`         | Move the focus one page up                                                                                 |
+| Page down, `^F`       | Move the focus one page down                                                                               |
+| `meta-<`              | Focus on the first (oldest) history entry                                                                  |
+| `meta->`              | Focus on the last (most recent) history entry                                                              |
+| Tab                   | Toggle selection of the currently focused entry                                                            |
+| Enter                 | Accept the currently focused/selected entries                                                              |
+| `^S`                  | Save the focused/selected entries to the clipboard or a file                                               |
+| `^C`, `^D`, `^G`      | Abort the history search                                                                                   |
 
 ### Customizing keybindings
 
@@ -731,6 +740,21 @@ inherit = "julia_rainbow_curly_2"
 </details>
 
 For a complete list of customizable faces, see the [JuliaSyntaxHighlighting package documentation](https://julialang.github.io/JuliaSyntaxHighlighting.jl/dev/).
+
+## Customising the history searcher
+
+The history searcher uses the following default faces, that can be customised:
+
+```toml
+[REPL.History.search]
+separator.fg  = "blue"
+prefix.fg = "magenta"
+selected.fg = "blue"
+unselected.fg = "grey"
+hint = { fg = "magenta", slant = "italic", weight ="light" }
+results.inherit = "shadow"
+match = { weight = "bold", underline = true }
+```
 
 ## Customizing Colors
 

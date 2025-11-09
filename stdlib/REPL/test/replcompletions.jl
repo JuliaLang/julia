@@ -1249,7 +1249,10 @@ let s, c, r
                 @test s[r] == "tmp-execu"
 
                 c,r = test_scomplete("replcompletions-link")
-                @test isempty(c)
+                if !Sys.isunix() || Libc.getuid() != 0
+                    # Root bypasses permissions
+                    @test isempty(c)
+                end
             end
         finally
             # If we don't fix the permissions here, our cleanup fails.
@@ -1523,7 +1526,8 @@ end
     @test "ⁿ" in test_complete("\\^n")[1]
     @test "ᵞ" in test_complete("\\^gamma")[1]
     @test "⁽¹²³⁾ⁿ𐞥" in test_complete("\\^(123)nq")[1]
-    @test isempty(test_complete("\\^(123)nQ")[1])
+    @test "⁽¹²³⁾ⁿꟴ" in test_complete("\\^(123)nQ")[1]
+    @test isempty(test_complete("\\^(123)nX")[1])
     @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
     @test "ₙ" in test_complete("\\_n")[1]
     @test "ᵧ" in test_complete("\\_gamma")[1]

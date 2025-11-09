@@ -219,9 +219,6 @@ endif
 JL_PRIVATE_LIBS-0 := libccalltest libccalllazyfoo libccalllazybar libllvmcalltest
 JL_PRIVATE_LIBS-1 := # libraries from USE_SYSTEM=1
 JL_PRIVATE_EXES := 7z
-ifeq ($(OS),WINNT)
-JL_PRIVATE_EXES += 7z.dll
-endif
 JL_PRIVATE_TOOLS :=
 ifeq ($(JULIA_BUILD_MODE),release)
 JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
@@ -714,7 +711,7 @@ distcleanall: cleanall
 
 # Generate compilation database (leverages existing clang tooling setup)
 compile-database:
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database-src
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database
 
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)

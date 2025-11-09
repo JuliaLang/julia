@@ -95,7 +95,7 @@ If `all` is true, then the list also includes non-public names defined in the mo
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
 are also included.
-If `usings` is true, then names explicitly imported via `using` are also included.
+If `usings` is true, then names explicitly or implicitly imported via `using` are also included.
 Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
@@ -109,6 +109,9 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
 !!! warning
     `names` may return duplicate names. The duplication happens, e.g. if an `import`ed name
     conflicts with an already existing identifier.
+
+!!! compat "Julia 1.12"
+    The `usings` argument requires Julia 1.12 or later.
 
 See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
@@ -250,11 +253,14 @@ const PARTITION_KIND_BACKDATED_CONST    = 0xb
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
+const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
 
 const PARTITION_MASK_KIND         = 0x0f
 const PARTITION_MASK_FLAG         = 0xf0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
+
+const JL_MODULE_USING_REEXPORT = 0x1
 
 is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
@@ -580,8 +586,9 @@ alignment of the elements, not the whole object.
 """
 function datatype_alignment(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, layout)).alignment
     return Int(alignment)
 end
 
@@ -664,8 +671,9 @@ Return the number of pointers in the layout of a datatype.
 """
 function datatype_npointers(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, layout)).npointers
 end
 
 """
