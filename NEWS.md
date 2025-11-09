@@ -125,6 +125,8 @@ Standard library changes
 External dependencies
 ---------------------
 
+  * 7-Zip updated from p7zip v17.06 to upstream 7-Zip v25.01. On Windows, the full 7z.exe/7z.dll bundle is replaced with standalone 7za.exe, which supports fewer formats but unifies cross-platform behavior. ([#60025]).
+
 Tooling Improvements
 --------------------
 
