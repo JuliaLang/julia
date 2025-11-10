@@ -5,7 +5,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/stdlib/stdlib.mk
 
 # set some influential environment variables
-export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(build_private_libdir)))
+export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(build_private_libdir)))$(PATHSEP)$(shell echo $(call cygpath_w,$(build_datarootdir)/julia))
 export JULIA_LOAD_PATH := @stdlib$(PATHSEP)$(shell echo $(call cygpath_w,$(JULIAHOME)/stdlib))
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
