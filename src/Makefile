@@ -568,7 +568,7 @@ clean:
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
-	-rm -f $(BUILDDIR)/compile_commands.json
+	-rm -f $(BUILDDIR)/compile_commands.json*
 
 .PHONY: clean-flisp
 clean-flisp:
@@ -677,7 +677,7 @@ clean-analyzegc:
 # Compilation database generation using existing clang infrastructure
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
-	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
+	@TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
 	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		CLANG_TOOLING_CXX_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_CXX_FLAGS))"; \
