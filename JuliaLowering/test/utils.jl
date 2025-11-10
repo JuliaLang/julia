@@ -114,7 +114,10 @@ function uncomment_description(desc)
 end
 
 function comment_description(desc)
-    replace(desc, r"^"m=>"# ")
+    lines = replace(split(desc, '\n')) do line
+        strip("# " * line)
+    end
+    join(lines, '\n')
 end
 
 function match_ir_test_case(case_str)
@@ -231,7 +234,7 @@ function refresh_ir_test_cases(filename, pattern=nothing)
         else
             ir = case.output
         end
-        println(io,
+        (case == cases[end] ? print : println)(io,
             """
             ########################################
             $(comment_description(case.description))

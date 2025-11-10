@@ -186,3 +186,25 @@ cmdmac`hello`
 cmdmac`hello`12345
 #---------------------
 1   (return "hello from cmdmac with suffix 12345")
+
+########################################
+# @nospecialize (zero args)
+function foo()
+    @nospecialize
+end
+#---------------------
+1   (method TestMod.foo)
+2   latestworld
+3   TestMod.foo
+4   (call core.Typeof %₃)
+5   (call core.svec %₄)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read)]
+    1   (meta :nospecialize)
+    2   (return core.nothing)
+10  latestworld
+11  TestMod.foo
+12  (return %₁₁)

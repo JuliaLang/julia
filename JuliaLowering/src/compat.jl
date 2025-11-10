@@ -80,7 +80,7 @@ end
 
 """
 Return `e.args`, but with any parameters in SyntaxTree (flattened, source) order.
-Parameters are expected to be as `e.args[pos]`.
+Parameters are expected to be at `e.args[pos]`.
 
 e.g. orderings of (a,b,c;d;e;f):
   Expr:       (tuple (parameters (parameters (parameters f) e) d) a b c)
@@ -463,36 +463,35 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         if e.args[1] isa Expr && e.args[1].head === :purity
             st_k = K"meta"
             child_exprs = [Expr(:quoted_symbol, :purity), Base.EffectsOverride(e.args[1].args...)]
-        else
-            @assert e.args[1] isa Symbol
-            if e.args[1] === :nospecialize
-                if nargs > 2
-                    st_k = K"block"
-                    # Kick the can down the road (should only be simple atoms?)
-                    child_exprs = map(c->Expr(:meta, :nospecialize, c), child_exprs[2:end])
-                else
-                    st_id, src = _insert_convert_expr(e.args[2], graph, src)
-                    setmeta!(SyntaxTree(graph, st_id); nospecialize=true)
-                    return st_id, src
-                end
-            elseif e.args[1] in (:inline, :noinline, :generated, :generated_only,
-                                 :max_methods, :optlevel, :toplevel, :push_loc, :pop_loc,
-                                 :no_constprop, :aggressive_constprop, :specialize, :compile, :infer,
-                                 :nospecializeinfer, :force_compile, :propagate_inbounds, :doc)
-                # TODO: Some need to be handled in lowering
-                for (i, ma) in enumerate(e.args)
-                    if ma isa Symbol
-                        # @propagate_inbounds becomes (meta inline
-                        # propagate_inbounds), but usually(?) only args[1] is
-                        # converted here
-                        child_exprs[i] = Expr(:quoted_symbol, e.args[i])
-                    end
-                end
-            else
-                # Can't throw a hard error; it is explicitly tested that meta can take arbitrary keys.
-                @error("Unknown meta form at $src: `$e`\n$(sprint(dump, e))")
-                child_exprs[1] = Expr(:quoted_symbol, e.args[1])
+        elseif nargs === 0
+            # pass
+        elseif e.args[1] === :nospecialize
+            if nargs === 1
+                child_exprs[1] = Expr(:quoted_symbol, :nospecialize)
+            elseif nargs > 2
+                st_k = K"block"
+                # Kick the can down the road (should only be simple atoms?)
+                child_exprs = map(c->Expr(:meta, :nospecialize, c), child_exprs[2:end])
+            elseif nargs === 2
+                st_id, src = _insert_convert_expr(e.args[2], graph, src)
+                setmeta!(SyntaxTree(graph, st_id); nospecialize=true)
+                return st_id, src
             end
+        elseif e.args[1] in (:inline, :noinline, :generated, :generated_only,
+                             :max_methods, :optlevel, :toplevel, :push_loc, :pop_loc,
+                             :no_constprop, :aggressive_constprop, :specialize, :compile, :infer,
+                             :nospecializeinfer, :force_compile, :propagate_inbounds, :doc)
+            # TODO: Some need to be handled in lowering
+            for (i, ma) in enumerate(e.args)
+                if ma isa Symbol
+                    # @propagate_inbounds becomes (meta inline propagate_inbounds)
+                    child_exprs[i] = Expr(:quoted_symbol, e.args[i])
+                end
+            end
+        else
+            # Can't throw a hard error; it is explicitly tested that meta can take arbitrary keys.
+            @error("Unknown meta form at $src: `$e`\n$(sprint(dump, e))")
+            child_exprs[1] = Expr(:quoted_symbol, e.args[1])
         end
     elseif e.head === :scope_layer
         @assert nargs === 2
