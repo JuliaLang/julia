@@ -422,6 +422,28 @@ static void aot_optimize_roots(jl_codegen_params_t &params, egal_set &method_roo
     }
 }
 
+static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions) JL_NOTSAFEPOINT
+{
+    jl_value_t *def = ci->def;
+    jl_value_t *owner = ci->owner;
+    jl_value_t *rettype = ci->rettype;
+    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    for (auto it = compiled_functions.begin(), E = compiled_functions.end(); it != E; ++it) {
+        auto codeinst = it->first;
+        if (codeinst != ci &&
+            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
+            jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
+            jl_egal(codeinst->def, def) &&
+            jl_egal(codeinst->owner, owner) &&
+            jl_egal(codeinst->rettype, rettype)) {
+            return it;
+        }
+    }
+    return compiled_functions.end();
+}
+
 static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_roots, jl_compiled_functions_t &compiled_functions)
 {
     jl_workqueue_t workqueue;
@@ -439,6 +461,8 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
         bool preal_specsig = false;
         {
             auto it = compiled_functions.find(codeinst);
+            if (it == compiled_functions.end())
+                it = get_ci_equiv_compiled(codeinst, compiled_functions);
             if (it != compiled_functions.end()) {
                 auto &decls = it->second.decls;
                 invokeName = decls.functionObject;
