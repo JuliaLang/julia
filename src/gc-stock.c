@@ -3612,7 +3612,6 @@ void jl_start_gc_threads(void)
         else {
             uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
         }
-        uv_thread_detach(&uvtid);
     }
 }
 
