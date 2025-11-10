@@ -463,7 +463,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
             path = manifest_uuid_path(env, pkg)
             # missing is used as a sentinel to stop looking further down in envs
             if path === missing
-                # Before stopping, try stdlib fallback for missing stdlib dependencies
+                # Before stopping, try stdlib fallback
                 is_stdlib(pkg) && @goto stdlib_fallback
                 path = nothing
                 @goto done
