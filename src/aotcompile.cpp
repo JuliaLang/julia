@@ -708,7 +708,7 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     fargs[1] = (jl_value_t*)worlds;
     jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
     int compiler_world = 1;
-    if (trim || jl_array_data(worlds, size_t)[0] == 0)
+    if (trim || jl_array_data(worlds, size_t)[0] == 0 || external_linkage)
         compiler_world = 0;
     jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
     worlds->dimsize[0] = 1 + compiler_world;

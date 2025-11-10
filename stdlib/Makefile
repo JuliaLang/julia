@@ -75,6 +75,7 @@ endif
 getall get: $(addprefix get-, $(STDLIBS_EXT) $(JLL_NAMES))
 
 install: version-check $(addprefix install-, $(STDLIBS_EXT) $(JLL_NAMES)) $(STDLIBS_LINK_TARGETS) remove-gpl-libs
+.PHONY: version-check
 version-check: $(addprefix version-check-, $(STDLIBS_EXT))
 uninstall: $(addprefix uninstall-, $(STDLIBS_EXT))
 extstdlibclean:

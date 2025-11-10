@@ -70,15 +70,40 @@ function term(io::IO, f::Footnote, columns)
     end
 end
 
-function term(io::IO, md::List, columns)
+const _list_bullets = ("•  ", "–  ", "▪  ")
+
+function term(io::IO, md::List, columns, depth::Int = 1)
+    dterm(io, md, columns, _depth)      = term(io, md, columns)
+    dterm(io, md::List, columns, depth) = term(io, md, columns, depth)
     for (i, point) in enumerate(md.items)
-        bullet = isordered(md) ? "$(i + md.ordered - 1)." : "• "
-        print(io, ' '^2margin, styled"{markdown_list:$bullet} ")
-        content = annotprint(term, point, columns - 10)
+        bullet = if isordered(md)
+            string(lpad(i + md.ordered - 1, ndigits(length(md.items))), ". ")
+        elseif depth == 1
+            first(_list_bullets)
+        else
+            _list_bullets[2 + mod(depth, length(_list_bullets) - 1)]
+        end
+        print(io, ' '^ifelse(depth == 1, 2margin, 2*(depth-1)), styled"{markdown_list:$bullet}")
+        buf = AnnotatedIOBuffer()
+        if point isa Vector && !isempty(point)
+            for (i, elt) in enumerate(point[1:end-1])
+                dterm(buf, elt, columns - 10, depth + 1)
+                println(buf)
+                (!(point[i+1] isa List) || point[i+1].loose) && println(buf)
+            end
+            dterm(buf, point[end], columns - 10, depth + 1)
+        else
+            dterm(buf, point, columns - 10, depth + 1)
+        end
+        content = read(seekstart(buf), AnnotatedString)
         lines = split(rstrip(content), '\n')
+        common_indent = minimum(
+            (sum((1 for _ in Iterators.takewhile(isspace, line)), init=0)
+             for line in Iterators.filter(!isempty, lines)),
+            init=if isempty(lines) 0 else length(first(lines)) end)
         for (l, line) in enumerate(lines)
-            l > 1 && print(io, ' '^(2margin+3))
-            print(io, lstrip(line))
+            l > 1 && print(io, ' '^ifelse(depth == 1, 2margin + 3, 3))
+            !isempty(line) && print(io, line[common_indent+1:end])
             l < length(lines) && println(io)
         end
         i < length(md.items) && print(io, '\n'^(1 + md.loose))

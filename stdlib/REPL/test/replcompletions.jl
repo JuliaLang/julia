@@ -1465,30 +1465,35 @@ mktempdir() do path
     mkpath(foo_dir)
     touch(joinpath(path, "foo_file.txt"))
 
+    # On Windows, use backslashes; on Unix, use forward slashes
+    sep = Sys.iswindows() ? "\\\\" : "/"
+    # On Windows, completion results have escaped backslashes
+    path_expected = Sys.iswindows() ? replace(path, "\\" => "\\\\") : path
+
     # Completion at end of line should work
-    let (c, r, res) = test_complete("\"$(path)/foo")
+    let (c, r, res) = test_complete("\"$(path)$(sep)foo")
         @test res
         @test length(c) == 2
-        @test "$(path)/foo_dir/" in c
-        @test "$(path)/foo_file.txt" in c
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
     end
 
     # Completion in middle of line should also work (regression in 1.12)
-    let (c, r, res) = test_complete_pos("\"$(path)/foo|/bar.toml\"")
+    let (c, r, res) = test_complete_pos("\"$(path)$(sep)foo|$(sep)bar.toml\"")
         @test res
         @test length(c) == 2
-        @test "$(path)/foo_dir/" in c
-        @test "$(path)/foo_file.txt" in c
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
         # Check that the range covers only the part before the cursor
-        @test findfirst("/bar", "\"$(path)/foo/bar.toml\"")[1] - 1 in r
+        @test findfirst("$(sep)bar", "\"$(path)$(sep)foo$(sep)bar.toml\"")[1] - 1 in r
     end
 
     # Completion in middle of function call with trailing arguments
-    let (c, r, res) = test_complete_pos("run_something(\"$(path)/foo|/bar.toml\"; kwarg=true)")
+    let (c, r, res) = test_complete_pos("run_something(\"$(path)$(sep)foo|$(sep)bar.toml\"; kwarg=true)")
         @test res
         @test length(c) == 2
-        @test "$(path)/foo_dir/" in c
-        @test "$(path)/foo_file.txt" in c
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
     end
 end
 
