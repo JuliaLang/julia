@@ -2199,13 +2199,18 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
             opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
                 _parsed_call = was_eventually_call(ps)
-                _needs_parse_call = peek(ps, 2) ∈ KSet"( ."
+                _maybe_grouping_parens = !had_commas && !had_splat && num_semis == 0 && num_subexprs == 1
+                # Skip intervening newlines only when the parentheses hold a single
+                # expression, which is the ambiguous case between a name like (::T)
+                # and an anonymous function parameter list.
+                next_kind = peek(ps, 2, skip_newlines=_maybe_grouping_parens)
+                _needs_parse_call = next_kind ∈ KSet"( ."
                 _is_anon_func = (!_needs_parse_call && !_parsed_call) || had_commas
-                return (needs_parameters = _is_anon_func,
-                        is_anon_func     = _is_anon_func,
-                        parsed_call      = _parsed_call,
-                        needs_parse_call = _needs_parse_call,
-                        maybe_grouping_parens = !had_commas && !had_splat && num_semis == 0 && num_subexprs == 1)
+                return (needs_parameters      = _is_anon_func,
+                        is_anon_func          = _is_anon_func,
+                        parsed_call           = _parsed_call,
+                        needs_parse_call      = _needs_parse_call,
+                        maybe_grouping_parens = _maybe_grouping_parens)
             end
             is_anon_func = opts.is_anon_func
             parsed_call = opts.parsed_call
