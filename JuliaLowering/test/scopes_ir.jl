@@ -79,7 +79,8 @@ end
 10  (call core.svec)
 11  SourceLocation::1:5
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
@@ -138,7 +139,7 @@ begin
 end
 #---------------------
 1   (= slot₁/y 2)
-2   (method TestMod.f)
+2   (call core.define_method TestMod :f)
 3   latestworld
 4   TestMod.f
 5   (call core.Typeof %₄)
@@ -146,7 +147,8 @@ end
 7   (call core.svec)
 8   SourceLocation::3:14
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod core.nothing %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
@@ -190,7 +192,7 @@ function f(z)
     @locals
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   TestMod.f
 4   (call core.Typeof %₃)
@@ -198,7 +200,8 @@ end
 6   (call core.svec)
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
@@ -404,7 +407,7 @@ end
 3   (call core.setfield! slot₁/x :contents %₁)
 4   (call core.declare_global TestMod :f false)
 5   latestworld
-6   (method TestMod.f)
+6   (call core.define_method TestMod :f)
 7   latestworld
 8   TestMod.f
 9   (call core.Typeof %₈)
@@ -420,11 +423,11 @@ end
     4   (return %₁)
 15  (call core.svec slot₁/x)
 16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
-17  --- method core.nothing %₁₃ %₁₆
+17  (call core.define_method TestMod core.nothing %₁₃ %₁₆)
 18  latestworld
 19  (call core.declare_global TestMod :g false)
 20  latestworld
-21  (method TestMod.g)
+21  (call core.define_method TestMod :g)
 22  latestworld
 23  TestMod.g
 24  (call core.Typeof %₂₃)
@@ -444,7 +447,7 @@ end
     8   (return %₇)
 30  (call core.svec slot₁/x)
 31  (call JuliaLowering.replace_captured_locals! %₂₉ %₃₀)
-32  --- method core.nothing %₂₈ %₃₁
+32  (call core.define_method TestMod core.nothing %₂₈ %₃₁)
 33  latestworld
 34  TestMod.g
 35  (return %₃₄)
@@ -460,7 +463,7 @@ end
 3   (call core.setfield! slot₁/x :contents %₁)
 4   (call core.declare_global TestMod :f false)
 5   latestworld
-6   (method TestMod.f)
+6   (call core.define_method TestMod :f)
 7   latestworld
 8   TestMod.f
 9   (call core.Typeof %₈)
@@ -484,7 +487,7 @@ end
     12  (return %₉)
 15  (call core.svec slot₁/x)
 16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
-17  --- method core.nothing %₁₃ %₁₆
+17  (call core.define_method TestMod core.nothing %₁₃ %₁₆)
 18  latestworld
 19  TestMod.f
 20  (return %₁₉)

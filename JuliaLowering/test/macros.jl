@@ -425,8 +425,11 @@ end
 @testset "macros producing meta forms" begin
     function find_method_ci(thunk)
         ci = thunk.args[1]::Core.CodeInfo
-        m = findfirst(x->(x isa Expr && x.head === :method && length(x.args) === 3), ci.code)
-        ci.code[m].args[3]
+        m = findfirst(ci.code) do x
+            x isa Expr && x.head === :call && length(x.args) >= 5 &&
+                x.args[1] isa GlobalRef && x.args[1].name === :define_method
+        end
+        ci.code[m].args[5]
     end
     jlower_e(s) = JuliaLowering.to_lowered_expr(
         JuliaLowering.lower(

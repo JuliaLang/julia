@@ -45,7 +45,7 @@ begin
     a = b() = c = d
 end
 #---------------------
-1   (method TestMod.b)
+1   (call core.define_method TestMod :b)
 2   latestworld
 3   TestMod.b
 4   (call core.Typeof %₃)
@@ -53,7 +53,8 @@ end
 6   (call core.svec)
 7   SourceLocation::3:9
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/c(!read,single_assign)]
     1   TestMod.d
     2   (= slot₂/c %₁)
