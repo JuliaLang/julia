@@ -381,12 +381,6 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
-    elseif k == K"method"
-        cs = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
-        # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
-        cs1 = cs[1]
-        c1 = cs1 isa QuoteNode ? cs1.value : cs1
-        Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
         Core.NewvarNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"opaque_closure_method"

@@ -283,7 +283,7 @@ function f(x)
     x
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   TestMod.f
 4   (call core.Typeof %₃)
@@ -291,7 +291,8 @@ end
 6   (call core.svec)
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read) slot₅/x(!read)]
     1   (= slot₅/x slot₂/x)
     2   1
@@ -364,7 +365,7 @@ function f()
     global x::Int .= 1
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   (call core.declare_global TestMod :x false)
 4   latestworld
@@ -374,7 +375,8 @@ end
 8   (call core.svec)
 9   SourceLocation::1:10
 10  (call core.svec %₇ %₈ %₉)
-11  --- method core.nothing %₁₀
+11  (call core.define_method TestMod core.nothing %₁₀
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.x
     2   TestMod.Int
@@ -392,7 +394,7 @@ function f()
     global x::Int += 1
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   (call core.declare_global TestMod :x false)
 4   latestworld
@@ -404,7 +406,8 @@ end
 10  (call core.svec)
 11  SourceLocation::1:10
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/tmp(!read)]
     1   TestMod.+
     2   TestMod.x
@@ -430,7 +433,7 @@ function f()
     global x::Int .+= 1
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   (call core.declare_global TestMod :x false)
 4   latestworld
@@ -440,7 +443,8 @@ end
 8   (call core.svec)
 9   SourceLocation::1:10
 10  (call core.svec %₇ %₈ %₉)
-11  --- method core.nothing %₁₀
+11  (call core.define_method TestMod core.nothing %₁₀
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.x
     2   TestMod.+

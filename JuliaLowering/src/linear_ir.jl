@@ -832,12 +832,25 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"method"
         @jl_assert ctx.is_toplevel_thunk (ex, "method not at top level")
         res = if numchildren(ex) == 1
-            if in_tail_pos
-                emit_return(ctx, ex)
-            elseif needs_value
-                ex
+            # Generic function declaration: define_method(module, name)
+            func_name = ex[1]
+            mod, name = if kind(func_name) == K"BindingId"
+                binfo = get_binding(ctx, func_name)
+                binfo.mod, binfo.name
+            elseif kind(func_name) == K"globalref"
+                func_name.mod, func_name.name_val
             else
-                emit(ctx, ex)
+                ctx.mod, func_name.name_val
+            end
+            call_ex = @ast ctx ex [K"call" "define_method"::K"core"
+                                   mod::K"Value" name::K"Symbol"]
+            if in_tail_pos
+                emit_return(ctx, call_ex)
+            elseif needs_value
+                call_ex
+            else
+                emit(ctx, call_ex)
+                nothing
             end
         else
             @jl_assert numchildren(ex) == 3 ex
@@ -852,7 +865,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            emit(ctx, @ast ctx ex [K"method" fname sig lam])
+            # Method definition: define_method(module, fname_or_mt, sig, code)
+            emit(ctx, @ast ctx ex [K"call" "define_method"::K"core"
+                                   ctx.mod::K"Value" fname sig lam])
             @jl_assert !needs_value && !in_tail_pos ex
             nothing
         end

@@ -231,20 +231,25 @@ function _deref_ssa(stmts, ex)
     ex
 end
 
+function _is_define_method_call(e)
+    kind(e) == K"call" && numchildren(e) >= 1 &&
+        kind(e[1]) == K"core" && e[1].name_val == "define_method"
+end
+
 function _find_method_lambda(ex, name)
     @jl_assert kind(ex) == K"code_info" ex
     # Heuristic search through outer thunk for the method in question.
-    method_found = false
     stmts = children(ex[1])
     for e in stmts
-        if kind(e) == K"method" && numchildren(e) >= 2
-            sig = _deref_ssa(stmts, e[2])
+        if _is_define_method_call(e) && numchildren(e) == 5
+            # define_method(module, fname, sig, lam)
+            sig = _deref_ssa(stmts, e[4])
             @jl_assert kind(sig) == K"call" ex
             arg_types = _deref_ssa(stmts, sig[2])
             @jl_assert kind(arg_types) == K"call" ex
             self_type = _deref_ssa(stmts, arg_types[2])
             if kind(self_type) == K"globalref" && occursin(name, self_type.name_val)
-                return e[3]
+                return e[5]
             end
         end
     end
@@ -291,13 +296,17 @@ function _print_ir(io::IO, ex, indent)
     stmts = children(ex[1])
     for (i, e) in enumerate(stmts)
         lno = rpad(i, 3)
-        if kind(e) == K"method" && numchildren(e) == 3
-            print(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
-            if kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
+        if _is_define_method_call(e) && numchildren(e) == 5
+            # define_method(module, fname, sig, lam)
+            print(io, indent, lno, " (call core.define_method ",
+                  string(e[2]), " ", string(e[3]), " ", string(e[4]))
+            if kind(e[5]) == K"lambda" || kind(e[5]) == K"code_info"
                 println(io)
-                _print_ir(io, e[3], indent*added_indent)
+                print(io, indent, "    --- code_info")
+                println(io)
+                _print_ir(io, e[5], indent*added_indent)
             else
-                println(io, " ", string(e[3]))
+                println(io, " ", string(e[5]), ")")
             end
         elseif kind(e) == K"opaque_closure_method"
             @jl_assert numchildren(e) == 5 e

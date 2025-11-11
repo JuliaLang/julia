@@ -422,7 +422,8 @@ end
 30  (call core.svec)
 31  SourceLocation::2:5
 32  (call core.svec %₂₉ %₃₀ %₃₁)
-33  --- method core.nothing %₃₂
+33  (call core.define_method TestMod core.nothing %₃₂
+    --- code_info
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁)
@@ -776,7 +777,8 @@ end
 38  (call core.svec)
 39  SourceLocation::3:5
 40  (call core.svec %₃₇ %₃₈ %₃₉)
-41  --- method core.nothing %₄₀
+41  (call core.define_method TestMod core.nothing %₄₀
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁ 1)
@@ -802,7 +804,7 @@ end
 50  slot₂/f
 51  (call core.svec %₅₀)
 52  (call JuliaLowering.replace_captured_locals! %₄₉ %₅₁)
-53  --- method core.nothing %₄₈ %₅₂
+53  (call core.define_method TestMod core.nothing %₄₈ %₅₂)
 54  latestworld
 55  TestMod.X
 56  (call core.apply_type core.Type %₅₅)
@@ -810,7 +812,8 @@ end
 58  (call core.svec)
 59  SourceLocation::5:5
 60  (call core.svec %₅₇ %₅₈ %₅₉)
-61  --- method core.nothing %₆₀
+61  (call core.define_method TestMod core.nothing %₆₀
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/x]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/x)
@@ -822,7 +825,8 @@ end
 66  (call core.svec)
 67  SourceLocation::6:5
 68  (call core.svec %₆₅ %₆₆ %₆₇)
-69  --- method core.nothing %₆₈
+69  (call core.define_method TestMod core.nothing %₆₈
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
     1   TestMod.ReallyXIPromise
     2   slot₁/#ctor-self#
@@ -843,7 +847,8 @@ end
 74  (call core.svec)
 75  SourceLocation::10:5
 76  (call core.svec %₇₃ %₇₄ %₇₅)
-77  --- method core.nothing %₇₆
+77  (call core.define_method TestMod core.nothing %₇₆
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/a slot₃/b(!read) slot₄/c(!read)]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/a)
@@ -909,7 +914,8 @@ end
 47  (call core.svec)
 48  SourceLocation::3:5
 49  (call core.svec %₄₆ %₄₇ %₄₈)
-50  --- method core.nothing %₄₉
+50  (call core.define_method TestMod core.nothing %₄₉
+    --- code_info
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
@@ -928,7 +934,8 @@ end
 62  (call core.svec %₆₀ %₆₁)
 63  SourceLocation::4:5
 64  (call core.svec %₅₉ %₆₂ %₆₃)
-65  --- method core.nothing %₆₄
+65  (call core.define_method TestMod core.nothing %₆₄
+    --- code_info
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
@@ -946,7 +953,8 @@ end
 76  (call core.svec)
 77  SourceLocation::5:5
 78  (call core.svec %₇₅ %₇₆ %₇₇)
-79  --- method core.nothing %₇₈
+79  (call core.define_method TestMod core.nothing %₇₈
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   TestMod.A
@@ -997,7 +1005,8 @@ end
 30  (call core.svec)
 31  SourceLocation::4:5
 32  (call core.svec %₂₉ %₃₀ %₃₁)
-33  --- method core.nothing %₃₂
+33  (call core.define_method TestMod core.nothing %₃₂
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/xs]
     1   slot₁/#ctor-self#
     2   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
@@ -1059,7 +1068,8 @@ end
 43  (call core.svec %₄₂)
 44  SourceLocation::4:5
 45  (call core.svec %₄₁ %₄₃ %₄₄)
-46  --- method core.nothing %₄₅
+46  (call core.define_method TestMod core.nothing %₄₅
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/xs slot₃/tmp slot₄/tmp]
     1   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
     2   (call core.nfields %₁)
@@ -1180,7 +1190,8 @@ A{<:Real}() = A(1)
 8   (call core.svec)
 9   SourceLocation::1:1
 10  (call core.svec %₇ %₈ %₉)
-11  --- method core.nothing %₁₀
+11  (call core.define_method TestMod core.nothing %₁₀
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.A
     2   (call %₁ 1)
@@ -1240,7 +1251,8 @@ end
 38  (call core.svec)
 39  SourceLocation::3:14
 40  (call core.svec %₃₇ %₃₈ %₃₉)
-41  --- method core.nothing %₄₀
+41  (call core.define_method TestMod core.nothing %₄₀
+    --- code_info
     slots: [slot₁/#ctor-self#(!read) slot₂/x slot₃/tmp slot₄/T(single_assign)]
     1   TestMod.typeof
     2   (= slot₄/T (call %₁ slot₂/x))

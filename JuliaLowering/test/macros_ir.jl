@@ -40,7 +40,7 @@ macro add_one(ex)
     end
 end
 #---------------------
-1   (method TestMod.@add_one)
+1   (call core.define_method TestMod :@add_one)
 2   latestworld
 3   TestMod.@add_one
 4   (call core.Typeof %₃)
@@ -48,7 +48,8 @@ end
 6   (call core.svec)
 7   SourceLocation::1:7
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
     2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ ex) 1))) %₁)
@@ -63,7 +64,7 @@ macro foo(ex)
     ctx = __context__
 end
 #---------------------
-1   (method TestMod.@foo)
+1   (call core.define_method TestMod :@foo)
 2   latestworld
 3   TestMod.@foo
 4   (call core.Typeof %₃)
@@ -71,7 +72,8 @@ end
 6   (call core.svec)
 7   SourceLocation::1:7
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read,single_assign)]
     1   slot₂/__context__
     2   (= slot₄/ctx %₁)
@@ -193,7 +195,7 @@ function foo()
     @nospecialize
 end
 #---------------------
-1   (method TestMod.foo)
+1   (call core.define_method TestMod :foo)
 2   latestworld
 3   TestMod.foo
 4   (call core.Typeof %₃)
@@ -201,7 +203,8 @@ end
 6   (call core.svec)
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (meta :nospecialize)
     2   (return core.nothing)
@@ -216,7 +219,7 @@ function foo(a, b)
     a + b
 end
 #---------------------
-1   (method TestMod.foo)
+1   (call core.define_method TestMod :foo)
 2   latestworld
 3   TestMod.foo
 4   (call core.Typeof %₃)
@@ -224,7 +227,8 @@ end
 6   (call core.svec)
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize) slot₃/b]
     1   slot₂/a
     2   TestMod.+
@@ -241,7 +245,7 @@ function foo(x, y, z)
     x + y + z
 end
 #---------------------
-1   (method TestMod.foo)
+1   (call core.define_method TestMod :foo)
 2   latestworld
 3   TestMod.foo
 4   (call core.Typeof %₃)
@@ -249,7 +253,8 @@ end
 6   (call core.svec)
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   (call core.define_method TestMod core.nothing %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(nospecialize) slot₃/y slot₄/z(nospecialize)]
     1   slot₂/x
     2   slot₄/z

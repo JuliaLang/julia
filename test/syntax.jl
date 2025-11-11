@@ -578,8 +578,10 @@ end
 let code = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code
     local src
     for i = length(code):-1:1
-        if Meta.isexpr(code[i], :method)
-            src = code[i].args[3]
+        if Meta.isexpr(code[i], :call) && length(code[i].args) >= 5 &&
+           code[i].args[1] isa GlobalRef && code[i].args[1].name == :define_method &&
+           code[i].args[5] isa Core.CodeInfo
+            src = code[i].args[5]
             break
         end
     end
@@ -4046,8 +4048,16 @@ end
     code = src.args[1].code
     for i = length(code):-1:1
         expr = code[i]
-        Meta.isexpr(expr, :method) || continue
-        @test isa(expr.args[1], Union{GlobalRef, Symbol})
+        if Meta.isexpr(expr, :call) && length(expr.args) >= 3 &&
+           expr.args[1] isa GlobalRef && expr.args[1].name == :define_method
+            # args[3] should be a QuoteNode wrapping a Symbol, or a GlobalRef
+            name_arg = expr.args[3]
+            if name_arg isa QuoteNode
+                @test isa(name_arg.value, Symbol)
+            else
+                @test isa(name_arg, GlobalRef)
+            end
+        end
     end
 end
 
@@ -4429,10 +4439,11 @@ module DoubleImport
 end
 @test DoubleImport.Random === Test.Random
 
-# Expr(:method) returns the method
+# define_method call returns the method
 let ex = @Meta.lower function return_my_method(); 1; end
     code = ex.args[1].code
-    idx = findfirst(ex->Meta.isexpr(ex, :method) && length(ex.args) > 1, code)
+    idx = findfirst(ex->Meta.isexpr(ex, :call) && length(ex.args) >= 5 &&
+                       ex.args[1] isa GlobalRef && ex.args[1].name == :define_method, code)
     code[end] = Core.ReturnNode(Core.SSAValue(idx))
     @test isa(Core.eval(@__MODULE__, ex), Method)
 end
