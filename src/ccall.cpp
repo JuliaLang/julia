@@ -909,7 +909,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(ctx, tti, &toboxed);
-        if (jl_is_datatype(tti) && jl_datatype_size((jl_datatype_t*)tti) == 0) {
+        if (t == getVoidTy(ctx.builder.getContext())) {
             emit_error(ctx, "llvmcall does not support zero-sized argument types");
             JL_GC_POP();
             return jl_cgval_t();
