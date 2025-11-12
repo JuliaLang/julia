@@ -550,8 +550,6 @@ public:
     {
         for (auto &alloc: allocations) {
             // ensure the mapped pages are consistent
-            sys::Memory::InvalidateInstructionCache(alloc.wr_addr,
-                                                    alloc.sz);
             sys::Memory::InvalidateInstructionCache(alloc.rt_addr,
                                                     alloc.sz);
         }
@@ -596,17 +594,14 @@ public:
             new_block.reset(nullptr, 0);
         }
         void *ptr = block.alloc(size, align);
-#ifdef _OS_WINDOWS_
-        block.state = SplitPtrBlock::Alloc;
-        void *wr_ptr = get_wr_ptr(block, ptr, size, align);
+        block.state |= SplitPtrBlock::Alloc;
+        void *wr_ptr;
+        if (block.state & SplitPtrBlock::InitAlloc)
+            wr_ptr = ptr;
+        else
+            wr_ptr = get_wr_ptr(block, ptr, size, align);
         Allocation a{wr_ptr, ptr, size, false};
         allocations.push_back(a);
-        ptr = wr_ptr;
-#else
-        block.state = SplitPtrBlock::Alloc | SplitPtrBlock::InitAlloc;
-        Allocation a{ptr, ptr, size, false};
-        allocations.push_back(a);
-#endif
         return a;
     }
 };
@@ -636,6 +631,9 @@ protected:
         // use `wr_ptr` to record the id initially
         auto ptr = alloc_shared_page(size, (size_t*)&new_block.wr_ptr, exec);
         new_block.reset(ptr, size);
+#ifndef _OS_WINDOWS_
+        new_block.state = SplitPtrBlock::InitAlloc;
+#endif
         return new_block;
     }
     void finalize_block(SplitPtrBlock &block, bool reset) JL_NOTSAFEPOINT
@@ -715,6 +713,7 @@ protected:
     {
         SplitPtrBlock new_block;
         new_block.reset(map_anon_page(size), size);
+        new_block.state = SplitPtrBlock::InitAlloc;
         return new_block;
     }
     void finalize_block(SplitPtrBlock &block, bool reset) JL_NOTSAFEPOINT
