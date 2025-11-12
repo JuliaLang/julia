@@ -179,7 +179,7 @@ function dummy_uuid(project_file::String)
     end
 end
 
-## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
+## package path slugs: turning UUID + SHA1 into a pair of 5-byte "slugs" ##
 
 const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
