@@ -36,6 +36,7 @@ end
 
 using Documenter
 import LibGit2
+using Logging: with_logger, NullLogger
 
 baremodule GenStdLib end
 
@@ -50,7 +51,7 @@ const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
-    for dir in readdir(STDLIB_DIR)
+    for dir in sort!(collect(readdir(STDLIB_DIR)))
         sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src")
         if dir in EXT_STDLIB_DOCS
             sourcefile = joinpath(sourcefile, "basedocs.md")
@@ -94,9 +95,9 @@ end
 documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib")),
                                 stdlib_build_dir = joinpath(buildrootdoc, "..", "stdlib")
     # Get a list of all *.version files in stdlib/..
-    version_files = filter(readdir(stdlib_dir)) do fname
+    version_files = sort!(filter(readdir(stdlib_dir)) do fname
         isfile(joinpath(stdlib_dir, fname)) && endswith(fname, ".version")
-    end
+    end)
     # .. and then parse them, each becoming an entry for makedocs's remotes.
     # The values for each are of the form path => (remote, sha1), where
     #  - path: the path to the stdlib package's root directory, i.e. "stdlib/$PACKAGE"
@@ -402,7 +403,7 @@ else
 end
 
 const output_path = joinpath(buildrootdoc, "_build", (render_pdf ? "pdf" : "html"), "en")
-makedocs(
+doc = makedocs(
     source    = joinpath(buildrootdoc, "src"),
     build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
@@ -410,13 +411,57 @@ makedocs(
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    checkdocs = :none,
+    checkdocs = :public,
+    checkdocs_ignored_modules = [Pkg], # Pkg has its own comprehensive documentation
+    warnonly  = :missing_docs, # warn about missing docstrings, but don't fail
     format    = format,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     pages     = PAGES,
     remotes   = documenter_stdlib_remotes,
+    debug     = true, # makes makedocs return the Documenter object for use later
 )
+
+# update this when the number of missing docstrings changes
+const known_missing_from_manual = 354
+
+# Check that we're not regressing in missing docs, but only check on PRs so that master builds can still pass
+if in("deploy", ARGS) && haskey(ENV,"BUILDKITE_BRANCH") && ENV["BUILDKITE_BRANCH"] != "master"
+
+    function show_buildkite_annotation(type::String, msg::String)
+        if type == "success"
+            @info msg
+        else
+            @warn msg
+        end
+        run(`buildkite-agent annotate --style $type --context "missing-docs" "$msg"`)
+    end
+
+    # ignore logging in the report because makedocs has already run this internally, we just want the number out
+    missing_from_manual = with_logger(NullLogger()) do
+        Documenter.missingdocs(doc)
+    end
+    if missing_from_manual > known_missing_from_manual
+        show_buildkite_annotation(
+            "warning",
+            """New docstrings have been added for public objects that are missing from the manual.
+            Please add these to the manual.
+            Number known to be missing=$(known_missing_from_manual), Current=$missing_from_manual.
+            See the `doctest` job for details.
+            """
+        )
+    elseif missing_from_manual < known_missing_from_manual
+        show_buildkite_annotation(
+            "success",
+            """🎉 The number of missing docstrings in the manual has decreased!
+            Update `doc/make.jl` from $known_missing_from_manual to:
+            ```term
+            const known_missing_from_manual = $missing_from_manual
+            ```
+            """
+        )
+    end
+end
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
 for (root, _, files) in walkdir(output_path), file in joinpath.(root, files)
