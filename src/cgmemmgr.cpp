@@ -115,8 +115,17 @@ static bool check_fd_or_close(int fd) JL_NOTSAFEPOINT
         return false;
     }
     // This can fail due to `noexec` mount option ....
+# ifndef _OS_DARWIN_
     void *ptr = mmap(nullptr, jl_page_size, PROT_READ | PROT_EXEC,
                      MAP_SHARED, fd, 0);
+# else
+    // Darwin requires mmap -> mprotect to get RX pages
+    void *ptr = mmap(nullptr, jl_page_size, 0, MAP_SHARED, fd, 0);
+    if (ptr != MAP_FAILED && mprotect(ptr, jl_page_size, PROT_READ | PROT_EXEC)) {
+        munmap(ptr, jl_page_size);
+        ptr = MAP_FAILED;
+    }
+# endif
     if (ptr == MAP_FAILED) {
         close(fd);
         return false;
