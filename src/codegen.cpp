@@ -4134,9 +4134,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (argv[2].constant) {
             if (!jl_is_long(argv[2].constant))
                 return false;
-            size_t nel = jl_unbox_long(argv[2].constant);
-            if (nel < 0)
-                return false;
+            // Cast to a unsigned size and let `emit_const_len_memorynew`
+            // make sure that `nel` fits in a positive signed integer.
+            size_t nel = (size_t)jl_unbox_long(argv[2].constant);
             *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
         }
         else {
