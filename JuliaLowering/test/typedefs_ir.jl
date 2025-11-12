@@ -1346,3 +1346,25 @@ function f()
     end
 #─────┘ ── this syntax is only allowed in top level code
 end
+
+########################################
+# Constructor with type parameter
+A{<:Real}() = A(1)
+#---------------------
+1   TestMod.Real
+2   (call core.TypeVar :#T1 %₁)
+3   TestMod.A
+4   (call core.apply_type %₃ %₂)
+5   (call core.UnionAll %₂ %₄)
+6   (call core.Typeof %₅)
+7   (call core.svec %₆)
+8   (call core.svec)
+9   SourceLocation::1:1
+10  (call core.svec %₇ %₈ %₉)
+11  --- method core.nothing %₁₀
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.A
+    2   (call %₁ 1)
+    3   (return %₂)
+12  latestworld
+13  (return core.nothing)

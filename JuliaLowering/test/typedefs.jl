@@ -128,6 +128,51 @@ let s = test_mod.S5{Any}(42.0, "hi")
     @test s.x === 42.0
     @test s.y == "hi"
 end
+@test JuliaLowering.include_string(test_mod, """
+function S5{Int}(x::Int)
+    S5(x, x)
+end
+""") === nothing
+let s = test_mod.S5{Int}(1)
+    @test s.x === 1
+    @test s.y === 1
+    @test s isa test_mod.S5{Int}
+end
+@test_throws MethodError test_mod.S5{Int}(1.1)
+@test JuliaLowering.include_string(test_mod, """
+function S5{T}(x, y, z) where {T<:AbstractFloat}
+    S5(x, x)
+end
+""") === nothing
+let s = test_mod.S5{Float64}(Float64(1.1), 0, 0)
+    @test s.x === 1.1
+    @test s.y === 1.1
+    @test s isa test_mod.S5{Float64}
+end
+@test JuliaLowering.include_string(test_mod, """
+S5{<:AbstractFloat}(x) = S5(x, x)
+""") === nothing
+let s = test_mod.S5{<:AbstractFloat}(Float64(1.1))
+    @test s.x === 1.1
+    @test s.y === 1.1
+    @test s isa test_mod.S5{Float64}
+end
+@test JuliaLowering.include_string(test_mod, """
+S5{T}(x::T) where {T<:Real} = S5(x, x)
+""") === nothing
+let s = test_mod.S5{Real}(pi)
+    @test s.x === pi
+    @test s.y === pi
+    @test s isa test_mod.S5{<:Real}
+end
+outer_mod = Module()
+@test JuliaLowering.include_string(test_mod, """
+Base.Vector{T}(x::T) where {S5<:T<:S5} = T[x]
+""") === nothing
+let v = Base.Vector{test_mod.S5}(test_mod.S5(1,1))
+    @test v isa Vector{test_mod.S5}
+    @test v[1] === test_mod.S5(1,1)
+end
 
 # User defined inner constructors and helper functions for structs without type params
 @test JuliaLowering.include_string(test_mod, """

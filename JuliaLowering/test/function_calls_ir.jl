@@ -599,6 +599,16 @@ function A.ccall()
 end
 
 ########################################
+# Error: Invalid function name ccall
+function ccall{<:T}()
+end
+#---------------------
+LoweringError:
+function ccall{<:T}()
+#        └───┘ ── Invalid function name
+end
+
+########################################
 # Nested splat: simple case
 tuple((xs...)...)
 #---------------------
