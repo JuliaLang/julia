@@ -211,7 +211,6 @@ int under_pressure = 0;
 // Full collection heuristics
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
-static int64_t last_live_bytes = 0; // live_bytes at last collection
 #ifdef __GLIBC__
 // maxrss at last malloc_trim
 static int64_t last_trim_maxrss = 0;
@@ -3390,7 +3389,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
 #endif
 
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect, live_bytes);
-    uint64_t max_memory = last_live_bytes + gc_num.allocd;
+    uint64_t max_memory = live_bytes + gc_num.allocd;
     if (max_memory > gc_num.max_memory) {
         gc_num.max_memory = max_memory;
     }
@@ -3398,7 +3397,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     gc_time_sweep_pause(gc_end_time, gc_num.allocd, live_bytes,
                         gc_num.freed, sweep_full);
     gc_num.full_sweep += sweep_full;
-    last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.allocd;
     jl_timing_counter_dec(JL_TIMING_COUNTER_HeapSize, gc_num.freed);
 
