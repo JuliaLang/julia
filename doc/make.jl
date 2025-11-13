@@ -8,7 +8,6 @@ using Pkg
 Pkg.instantiate()
 
 using Documenter
-using DocumenterInventoryWritingBackport
 
 baremodule GenStdLib end
 
