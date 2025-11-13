@@ -1840,6 +1840,43 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
     return hash ? hash : 1;
 }
 
+int jl_is_type_valid_for_concrete_subtype(jl_value_t *dt) {
+    if (!dt)
+        return 0;
+    if (jl_is_typevar(dt))
+        dt = ((jl_tvar_t*)dt)->ub;
+    if (dt == jl_bottom_type || (dt && !jl_is_type(dt)))
+        return 0;
+    return 1;
+}
+
+// set the `has_concrete_subtype` flag of `dt` to zero for type parameters
+// that are illegal for certain types
+int jl_are_tparams_valid_for_concrete_subtype(jl_datatype_t *dt) {
+    if (dt->name == jl_type_typename) {
+        jl_value_t *t = jl_tparam0(dt);
+        if (t && !jl_is_type(t) && !jl_is_typevar(t))
+            return 0;
+    }
+    if (dt->name == jl_genericmemory_typename) {
+        jl_value_t *t = jl_tparam1(dt);
+        if (t && !jl_is_type(t) && !jl_is_typevar(t))
+            return 0;
+    }
+    if (dt->name == jl_tuple_typename) {
+        size_t i, l = jl_nparams(dt);
+        for (i = 0; i < l; i++) {
+            jl_value_t *t = jl_tparam(dt, i);
+            if (t && jl_is_vararg(t))
+                t = ((jl_vararg_t*)t)->T;
+            if (!jl_is_type_valid_for_concrete_subtype(t))
+                return 0;
+        }
+    }
+
+    return dt->has_concrete_subtype;
+}
+
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
 {
     int istuple = (dt->name == jl_tuple_typename);
@@ -1847,6 +1884,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     dt->maybe_subtype_of_cache = 1;
     dt->isconcretetype = !dt->name->abstract;
     dt->isdispatchtuple = istuple;
+    dt->has_concrete_subtype = jl_are_tparams_valid_for_concrete_subtype(dt);
     size_t i, l = jl_nparams(dt);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_tparam(dt, i);
@@ -1867,13 +1905,6 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
         }
         if (jl_is_vararg(p))
             p = ((jl_vararg_t*)p)->T;
-        if (istuple && dt->has_concrete_subtype) {
-            // tuple types like Tuple{:x} and Tuple{Union{}} cannot have instances
-            if (p && !jl_is_type(p) && !jl_is_typevar(p))
-                dt->has_concrete_subtype = 0;
-            if (p == jl_bottom_type)
-                dt->has_concrete_subtype = 0;
-        }
         if (dt->maybe_subtype_of_cache) {
             dt->maybe_subtype_of_cache = !p || maybe_subtype_of_cache(p, istuple) || !jl_has_free_typevars(p);
         }
@@ -1881,8 +1912,6 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     assert(dt->isconcretetype || dt->isdispatchtuple ? dt->maybe_subtype_of_cache : 1);
     if (dt->name == jl_type_typename) {
         jl_value_t *p = jl_tparam(dt, 0);
-        if (!jl_is_type(p) && !jl_is_typevar(p)) // Type{v} has no subtypes, if v is not a Type
-            dt->has_concrete_subtype = 0;
         dt->maybe_subtype_of_cache = 1;
         jl_value_t *uw = jl_unwrap_unionall(p);
         // n.b. the cache for Type ignores parameter normalization except for Typeofwrapper, so it can't be used to make a stable hash value
@@ -2440,8 +2469,10 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             // recursively instantiate the types of the fields
             if (dt->types == NULL)
                 ndt->types = jl_compute_fieldtypes(ndt, stack, cacheable);
-            else
+            else {
                 ndt->types = inst_ftypes(ftypes, env, stack, cacheable);
+                jl_compute_has_concrete_subtype_from_fields(ndt);
+            }
             jl_gc_wb(ndt, ndt->types);
         }
     }
@@ -2851,6 +2882,17 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     return vm;
 }
 
+// compute a conservative estimate of whether there could exist an instance of a subtype of this
+void jl_compute_has_concrete_subtype_from_fields(jl_datatype_t *dt) {
+    size_t nfields = jl_svec_len(dt->types);
+    for (size_t i = 0; dt->has_concrete_subtype && i < nfields - dt->name->n_uninitialized; i++) {
+        jl_value_t *fld = jl_svecref(dt->types, i);
+        dt->has_concrete_subtype = jl_is_type_valid_for_concrete_subtype(fld);
+        if (jl_is_datatype(fld))
+            dt->has_concrete_subtype &= jl_are_tparams_valid_for_concrete_subtype((jl_datatype_t*)fld);
+    }
+}
+
 JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable)
 {
     assert(st->name != jl_namedtuple_typename && st->name != jl_tuple_typename);
@@ -2873,9 +2915,9 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     top.prev = (jl_typestack_t*)stack;
     st->types = inst_ftypes(wt->types, &env[n - 1], &top, cacheable);
     jl_gc_wb(st, st->types);
+    jl_compute_has_concrete_subtype_from_fields(st);
     return st->types;
 }
-
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
@@ -2921,6 +2963,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             assert(ndt->types == NULL);
             ndt->types = inst_ftypes(t->types, &env[n - 1], &top, 1);
             jl_gc_wb(ndt, ndt->types);
+            jl_compute_has_concrete_subtype_from_fields(ndt);
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
             }
