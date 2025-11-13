@@ -346,8 +346,8 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             uuid = "$pkguuid"
             """)
         touch(joinpath(pkgpath, "Manifest.toml"))
-        tmp_prec = tempname(prec_path)
-        tmp_proc = tempname(prec_path)
+        tmp_prec = tempname(prec_path; cleanup=false)
+        tmp_proc = tempname(prec_path; cleanup=false)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(joinpath(prec_path,"depot"))));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
