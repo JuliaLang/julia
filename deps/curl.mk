@@ -31,7 +31,7 @@ $(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
 
 $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	cd $(dir $<) && $(TAR) -jxf $(notdir $<)
 	echo 1 > $@
 
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
@@ -54,12 +54,9 @@ CURL_CONFIGURE_FLAGS +=											\
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
-#   On MacOS, we use SecureTransport
-#   On Linux, we use OpenSSL
+#   On other platforms, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
-else ifeq ($(OS), Darwin)
-CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
