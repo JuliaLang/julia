@@ -171,6 +171,19 @@ struct CodegenParams
     force_emit_all::Cint
 
     """
+    When enabled, run the MemorySanitizer pass.
+    """
+    sanitize_memory::Cint
+    """
+    When enabled, run the ThreadSanitizer pass.
+    """
+    sanitize_thread::Cint
+    """
+    When enabled, run the AddressSanitizer pass.
+    """
+    sanitize_address::Cint
+
+    """
     When enabled, generate names that are globally unique in this Julia session,
     across all code generated with this flag set.  Intended for llvmpasses
     tests.
@@ -182,6 +195,7 @@ struct CodegenParams
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
+                   sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false,
                    unique_names::Bool=false)
         return new(
             Cint(track_allocations), Cint(code_coverage),
@@ -189,6 +203,7 @@ struct CodegenParams
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all),
+            Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address),
             Cint(unique_names))
     end
 end

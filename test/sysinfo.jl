@@ -35,7 +35,12 @@ if Sys.isunix()
         original_path = ENV["PATH"]
         ENV["PATH"] = string(firstdir, ":", seconddir, ":", original_path)
         try
-            @test abspath(Base.Sys.which("foo")) == abspath(joinpath(seconddir, "foo"))
+            if Libc.geteuid() == 0
+                # Root bypasses permission checks
+                @test abspath(Base.Sys.which("foo")) == abspath(joinpath(firstdir, "foo"))
+            else
+                @test abspath(Base.Sys.which("foo")) == abspath(joinpath(seconddir, "foo"))
+            end
         finally
             # clean up
             chmod(firstdir, 0o777)

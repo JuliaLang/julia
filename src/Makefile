@@ -256,9 +256,13 @@ else
 FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_$(JULIA_BUILD_MODE))
 endif
 
+.PHONY: default
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
+
+.PHONY: all
 all: debug release
 
+.PHONY: release debug
 release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands
 
 $(BUILDDIR):
@@ -313,9 +317,13 @@ $(eval $(call dir_target,$(build_includedir)/julia/uv))
 $(build_includedir)/julia/uv/*.h: $(LIBUV_INC)/uv/*.h | $(build_includedir)/julia/uv
 	$(INSTALL_F) $^ $(build_includedir)/julia/uv
 
+.PHONY: libccalltest
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+.PHONY: libccalllazyfoo
 libccalllazyfoo: $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
+.PHONY: libccalllazybar
 libccalllazybar: $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT)
+.PHONY: libllvmcalltest
 libllvmcalltest: $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT)
 
 ifeq ($(OS), Linux)
@@ -349,6 +357,7 @@ $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(NO_WHOLE_ARCHIVE) $(CG_LLVMLINK)) -lpthread
 
+.PHONY: julia_flisp.boot.inc.phony
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
@@ -551,6 +560,7 @@ INCLUDED_CXX_FILES := \
 	processor.cpp:processor_arm.cpp \
 	processor.cpp:processor_fallback.cpp
 
+.PHONY: clean
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen*
 	-rm -rf $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest* $(build_shlibdir)/libccalllazyfoo* $(build_shlibdir)/libccalllazybar*
@@ -558,14 +568,17 @@ clean:
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
-	-rm -f $(BUILDDIR)/compile_commands.json
+	-rm -f $(BUILDDIR)/compile_commands.json*
 
+.PHONY: clean-flisp
 clean-flisp:
 	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
+.PHONY: clean-support
 clean-support:
 	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
+.PHONY: cleanall
 cleanall: clean clean-flisp clean-support clean-analyzegc
 
 $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
@@ -585,9 +598,11 @@ ANALYSIS_DEPS += llvmunwind
 else ifneq ($(OS),WINNT)
 ANALYSIS_DEPS += unwind
 endif
+.PHONY: install-analysis-deps
 install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
 
+.PHONY: analyzegc-deps-check
 analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc)
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
@@ -641,15 +656,20 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB
 		-- $(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
+.PHONY: tidysrc
 tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
+.PHONY: analyzesrc
 analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
+.PHONY: analyzegc
 analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
+.PHONY: analyze
 analyze: analyzesrc analyzegc tidysrc
 
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-sa-%
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-tidy-%
 $(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS))) : analyze-% : clang-sagc-%
 
+.PHONY: clean-analyzegc
 clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
@@ -657,7 +677,7 @@ clean-analyzegc:
 # Compilation database generation using existing clang infrastructure
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
-	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
+	@TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
 	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		CLANG_TOOLING_CXX_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_CXX_FLAGS))"; \
@@ -721,10 +741,11 @@ regenerate-compile_commands:
 		rm -f $$TMPFILE; \
 	fi
 
+.PHONY: compile-database
 compile-database: regenerate-compile_commands
 	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
 	@echo "Compilation database created for src"
 
 .FORCE:
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database .FORCE
+.PHONY: .FORCE

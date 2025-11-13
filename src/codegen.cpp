@@ -2700,8 +2700,9 @@ static void jl_name_jlfuncparams_args(jl_codegen_output_t &out, Function *F) JL_
     F->getArg(3)->setName("sparams::Any");
 }
 
-void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT
+void jl_init_function(Function *F, const jl_codegen_output_t &params) JL_NOTSAFEPOINT
 {
+    auto &TT = params.TargetTriple;
     // set any attributes that *must* be set on all functions
     AttrBuilder attr(F->getContext());
     if (TT.isOSWindows() && TT.getArch() == Triple::x86) {
@@ -2714,22 +2715,18 @@ void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT
         attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
     }
     attr.addAttribute("frame-pointer", "all");
-    if (!TT.isOSWindows()) {
-#if !defined(_COMPILER_ASAN_ENABLED_)
+    if (!TT.isOSWindows() && !JL_FEAT_TEST(params, sanitize_address)) {
         // ASAN won't like us accessing undefined memory causing spurious issues,
         // and Windows has platform-specific handling which causes it to mishandle
         // this annotation. Other platforms should just ignore this if they don't
         // implement it.
         attr.addAttribute("probe-stack", "inline-asm");
         //attr.addAttribute("stack-probe-size", "4096"); // can use this to change the default
-#endif
     }
-#if defined(_COMPILER_ASAN_ENABLED_)
-    attr.addAttribute(Attribute::SanitizeAddress);
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-    attr.addAttribute(Attribute::SanitizeMemory);
-#endif
+    if (JL_FEAT_TEST(params, sanitize_address))
+        attr.addAttribute(Attribute::SanitizeAddress);
+    if (JL_FEAT_TEST(params, sanitize_memory))
+        attr.addAttribute(Attribute::SanitizeMemory);
     F->addFnAttrs(attr);
 }
 
@@ -4123,9 +4120,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (argv[2].constant) {
             if (!jl_is_long(argv[2].constant))
                 return false;
-            size_t nel = jl_unbox_long(argv[2].constant);
-            if (nel < 0)
-                return false;
+            // Cast to a unsigned size and let `emit_const_len_memorynew`
+            // make sure that `nel` fits in a positive signed integer.
+            size_t nel = (size_t)jl_unbox_long(argv[2].constant);
             *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
         }
         else {
@@ -6124,7 +6121,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         F = Function::Create(get_func_sig(ctx.builder.getContext()),
                              Function::ExternalLinkage,
                              proto_oc, jl_Module);
-        jl_init_function(F, ctx.emission_context.TargetTriple);
+        jl_init_function(F, ctx.emission_context);
         jl_name_jlfunc_args(ctx.emission_context, F);
         F->setAttributes(AttributeList::get(ctx.builder.getContext(), {get_func_attrs(ctx.builder.getContext()), F->getAttributes()}));
     }
@@ -6639,7 +6636,7 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
         ArgTy.push_back(ctx.builder.getPtrTy());
     FunctionType *FT = FunctionType::get(elty, ArgTy, false);
     Function *w = Function::Create(FT, GlobalVariable::PrivateLinkage, "", M);
-    jl_init_function(w, ctx.emission_context.TargetTriple);
+    jl_init_function(w, ctx.emission_context);
     w->addFnAttr(Attribute::AlwaysInline);
     w->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
     Function::arg_iterator AI = w->arg_begin();
@@ -6698,7 +6695,7 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, jl_codeg
     Function *f = Function::Create(ctx.types().T_jlfunc,
             GlobalVariable::InternalLinkage,
             name, out.get_module());
-    jl_init_function(f, out.TargetTriple);
+    jl_init_function(f, out);
     jl_name_jlfunc_args(out, f);
     //f->setAlwaysInline();
     ctx.f = f; // for jl_Module
@@ -6921,7 +6918,7 @@ Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci
 static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target, jl_value_t *rettype_const, jl_value_t *declrt, jl_value_t *jlrettype, jl_codegen_output_t &out)
 {
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, gf_thunk_name, M);
-    jl_init_function(w, out.TargetTriple);
+    jl_init_function(w, out);
     w->setAttributes(AttributeList::get(M->getContext(), {get_func_attrs(M->getContext()), w->getAttributes()}));
     w->addFnAttr(Attribute::OptimizeNone);
     w->addFnAttr(Attribute::NoInline);
@@ -6965,7 +6962,7 @@ static void emit_specsig_to_specsig(
 {
     jl_returninfo_t returninfo = get_specsig_function(out, M, nullptr, gf_thunk_name, calltype, rettype, is_for_opaque_closure);
     Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
-    jl_init_function(gf_thunk, out.TargetTriple);
+    jl_init_function(gf_thunk, out);
     gf_thunk->setAttributes(AttributeList::get(gf_thunk->getContext(), {returninfo.attrs, gf_thunk->getAttributes()}));
     emit_specsig_to_specsig(gf_thunk, returninfo.cc, returninfo.return_roots, calltype, rettype, is_for_opaque_closure, nargs, out, target, targetsig, targetrt, targetspec, rettype_const);
 }
@@ -7215,7 +7212,7 @@ static Function *gen_cfun_wrapper(
     Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
             funcName, M);
-    jl_init_function(cw, out.TargetTriple);
+    jl_init_function(cw, out);
     cw->setAttributes(AttributeList::get(M->getContext(), {attributes, cw->getAttributes()}));
 
     jl_codectx_t ctx(out, 0, 0);
@@ -7437,7 +7434,7 @@ static Function *gen_cfun_wrapper(
                 FunctionType::get(getPointerTy(ctx.builder.getContext()), { getPointerTy(ctx.builder.getContext()), ctx.types().T_ppjlvalue }, false),
                 GlobalVariable::ExternalLinkage,
                 funcName, M);
-        jl_init_function(cw_make, ctx.emission_context.TargetTriple);
+        jl_init_function(cw_make, ctx.emission_context);
         cw_make->getArg(0)->setName("wrapper");
         cw_make->getArg(1)->setName("newval");
         BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", cw_make);
@@ -7699,7 +7696,7 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
 {
     ++GeneratedInvokeWrappers;
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, funcName, M);
-    jl_init_function(w, out.TargetTriple);
+    jl_init_function(w, out);
     jl_name_jlfunc_args(out, w);
     w->setAttributes(AttributeList::get(M->getContext(), {get_func_attrs(M->getContext()), w->getAttributes()}));
     w->addFnAttr(Attribute::OptimizeNone);
@@ -7940,7 +7937,7 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
         Function *f = M ? cast_or_null<Function>(M->getNamedValue(name)) : NULL;
         if (f == NULL) {
             f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
-            jl_init_function(f, out.TargetTriple);
+            jl_init_function(f, out);
             if (out.params->debug_info_level >= 2) {
                 ios_t sigbuf;
                 ios_mem(&sigbuf, 0);
@@ -8230,7 +8227,7 @@ static jl_llvm_functions_t
         f = cast<Function>(returninfo.decl.getCallee());
         declarations.specptr = f;
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
-        jl_init_function(f, ctx.emission_context.TargetTriple);
+        jl_init_function(f, ctx.emission_context);
 
         // common pattern: see if all return statements are an argument in that
         // case the apply-generic call can re-use the original box for the return
@@ -8271,7 +8268,7 @@ static jl_llvm_functions_t
         f = Function::Create(
             needsparams ? ctx.types().T_jlfuncparams : ctx.types().T_jlfunc,
             GlobalVariable::ExternalLinkage, specptr_name, M);
-        jl_init_function(f, ctx.emission_context.TargetTriple);
+        jl_init_function(f, ctx.emission_context);
         if (needsparams)
             jl_name_jlfuncparams_args(ctx.emission_context, f);
         else
@@ -8308,11 +8305,9 @@ static jl_llvm_functions_t
     FnAttrs.addAttribute(Attribute::StackProtectStrong);
 #endif
 
-#ifdef _COMPILER_TSAN_ENABLED_
-    // TODO: enable this only when a argument like `-race` is passed to Julia
-    //       add a macro for no_sanitize_thread
-    FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
-#endif
+    // TODO: add a macro for no_sanitize_thread
+    if (JL_FEAT_TEST(ctx, sanitize_thread))
+        FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
 
     // add the optimization level specified for this module, if any
     int optlevel = jl_get_module_optlevel(ctx.module);
@@ -9709,7 +9704,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(jl_codegen_output_t &out, jl_metho
         std::string funcName = get_function_name(true, false, ctx.name, ctx.emission_context.TargetTriple);
         jl_returninfo_t returninfo = get_specsig_function(out, M, NULL, funcName, mi->specTypes, rettype, true);
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
-        jl_init_function(gf_thunk, ctx.emission_context.TargetTriple);
+        jl_init_function(gf_thunk, ctx.emission_context);
         size_t nrealargs = jl_nparams(mi->specTypes);
         emit_specsig_to_fptr1(gf_thunk, returninfo.cc, returninfo.return_roots,
                 mi->specTypes, rettype, true, nrealargs, ctx.emission_context,

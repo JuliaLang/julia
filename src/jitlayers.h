@@ -82,6 +82,9 @@ struct OptimizationOptions {
     bool remove_ni;
     bool cleanup;
     bool warn_missed_transformations;
+    bool sanitize_memory;
+    bool sanitize_thread;
+    bool sanitize_address;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
@@ -96,12 +99,29 @@ struct OptimizationOptions {
         bool enable_vector_pipeline=true,
         bool remove_ni=true,
         bool cleanup=true,
-        bool warn_missed_transformations=false) {
+        bool warn_missed_transformations=false,
+#ifdef _COMPILER_MSAN_ENABLED_
+        bool sanitize_memory=true,
+#else
+        bool sanitize_memory=false,
+#endif
+#ifdef _COMPILER_TSAN_ENABLED_
+        bool sanitize_thread=true,
+#else
+        bool sanitize_thread=false,
+#endif
+#ifdef _COMPILER_ASAN_ENABLED_
+        bool sanitize_address=true
+#else
+        bool sanitize_address=false
+#endif
+) JL_NOTSAFEPOINT {
         return {lower_intrinsics, dump_native, external_use, llvm_only,
                 always_inline, enable_early_simplifications,
                 enable_early_optimizations, enable_scalar_optimizations,
                 enable_loop_optimizations, enable_vector_pipeline,
-                remove_ni, cleanup, warn_missed_transformations};
+                remove_ni, cleanup, warn_missed_transformations,
+                sanitize_memory, sanitize_thread, sanitize_address};
     }
 };
 
@@ -426,7 +446,7 @@ void emit_specsig_to_fptr1(
 Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci,
                                 Function *func) JL_NOTSAFEPOINT;
 Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
-void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT;
+void jl_init_function(Function *F, const jl_codegen_output_t &params) JL_NOTSAFEPOINT;
 
 jl_returninfo_t get_specsig_function(jl_codegen_output_t &ctx, Module *M, Value *fval,
                                      StringRef name, jl_value_t *sig, jl_value_t *jlrettype,

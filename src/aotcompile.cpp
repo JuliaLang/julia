@@ -555,7 +555,7 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     fargs[1] = (jl_value_t*)worlds;
     jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
     int compiler_world = 1;
-    if (trim || jl_array_data(worlds, size_t)[0] == 0)
+    if (trim || jl_array_data(worlds, size_t)[0] == 0 || external_linkage)
         compiler_world = 0;
     jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
     worlds->dimsize[0] = 1 + compiler_world;
@@ -676,6 +676,28 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     return F;
 }
 
+static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions) JL_NOTSAFEPOINT
+{
+    jl_value_t *def = ci->def;
+    jl_value_t *owner = ci->owner;
+    jl_value_t *rettype = ci->rettype;
+    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    for (auto it = compiled_functions.begin(), E = compiled_functions.end(); it != E; ++it) {
+        auto codeinst = it->first;
+        if (codeinst != ci &&
+            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
+            jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
+            jl_egal(codeinst->def, def) &&
+            jl_egal(codeinst->owner, owner) &&
+            jl_egal(codeinst->rettype, rettype)) {
+            return it;
+        }
+    }
+    return compiled_functions.end();
+}
+
 // Static version of JuliaOJIT::linkOutput
 static void aot_link_output(jl_codegen_output_t &out)
 {
@@ -686,6 +708,8 @@ static void aot_link_output(jl_codegen_output_t &out)
             continue;
 
         auto it = out.ci_funcs.find(ci);
+        if (it == out.ci_funcs.end())
+            it = get_ci_equiv_compiled(ci, out.ci_funcs);
         jl_llvm_functions_t funcs;
         if (it != out.ci_funcs.end()) {
             funcs = it->second;
@@ -723,6 +747,10 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     CreateNativeMax.updateMax(jl_array_nrows(codeinfos));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
+    jl_cgparams_t target_cgparams = *cgparams;
+    target_cgparams.sanitize_memory = jl_options.target_sanitize_memory;
+    target_cgparams.sanitize_thread = jl_options.target_sanitize_thread;
+    target_cgparams.sanitize_address = jl_options.target_sanitize_address;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     std::optional<orc::ThreadSafeContext::Lock> lock;
     if (llvmmod) {
@@ -738,7 +766,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
 
     // compile all methods for the current world and type-inference world
     egal_set method_roots;
-    out.params = cgparams;
+    out.params = &target_cgparams;
     assert(out.imaging_mode); // `_imaging_mode` controls if broken features like code-coverage are disabled
     out.external_linkage = external_linkage;
     out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
@@ -1380,7 +1408,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                 SourceTM.getCodeModel(),
                 SourceTM.getOptLevel()));
         fixupTM(*PMTM);
-        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
+        auto options = OptimizationOptions::defaults(true, true);
+        options.sanitize_memory = jl_options.target_sanitize_memory;
+        options.sanitize_thread = jl_options.target_sanitize_thread;
+        options.sanitize_address = jl_options.target_sanitize_address;
+        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
         optimizer.run(M);
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
@@ -2374,7 +2406,11 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 // }
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
-                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+                    auto opts = OptimizationOptions::defaults();
+                    opts.sanitize_memory = params.sanitize_memory;
+                    opts.sanitize_thread = params.sanitize_thread;
+                    opts.sanitize_address = params.sanitize_address;
+                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts};
                     //Safe b/c context lock is held by output
                     PM.run(output.get_module());
                     assert(!verifyLLVMIR(output.get_module()));
