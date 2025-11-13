@@ -1012,7 +1012,7 @@ public:
     void deallocate(std::vector<FinalizedAlloc> Allocs,
                     OnDeallocatedFunction OnDeallocated) override
     {
-        jl_unreachable();
+        OnDeallocated(Error::success());
     }
 
 protected:
@@ -1050,7 +1050,10 @@ class JLJITLinkMemoryManager::InFlightAlloc
 public:
     InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G) : MM(MM), G(G) {}
 
-    void abandon(OnAbandonedFunction OnAbandoned) override { jl_unreachable(); }
+    void abandon(OnAbandonedFunction OnAbandoned) override
+    {
+        OnAbandoned(Error::success());
+    }
 
     void finalize(OnFinalizedFunction OnFinalized) override
     {
