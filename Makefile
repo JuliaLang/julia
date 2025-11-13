@@ -530,7 +530,6 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in $(JL_PRIVATE_EXES) ; do \
-		[ $$j = 7z ] && continue; \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_private_libexecdir_rel)' $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
@@ -712,7 +711,7 @@ distcleanall: cleanall
 
 # Generate compilation database (leverages existing clang tooling setup)
 compile-database:
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database-src
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src compile-database
 
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)

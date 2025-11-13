@@ -7,7 +7,7 @@ using LibGit2_jll
 using Test
 using Random, Serialization, Sockets
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
 using .Main.ChallengePrompts: challenge_prompt as basic_challenge_prompt
 
@@ -743,6 +743,23 @@ mktempdir() do dir
             callbacks = LibGit2.Callbacks(:credentials => (C_NULL, 0))
             cred_payload = LibGit2.CredentialPayload()
             @test_throws ArgumentError LibGit2.clone(cache_repo, test_repo, callbacks=callbacks, credentials=cred_payload)
+        end
+        @testset "shallow clone" begin
+            @static if LibGit2.VERSION >= v"1.7.0"
+                # Note: Shallow clones are not supported with local file:// transport
+                # This is a limitation in libgit2 - shallow clones only work with
+                # network protocols (http, https, git, ssh)
+                # See online-tests.jl for tests with remote repositories
+
+                # Test normal clone is not shallow
+                normal_path = joinpath(dir, "Example.NotShallow")
+                LibGit2.with(LibGit2.clone(cache_repo, normal_path)) do repo
+                    @test !LibGit2.isshallow(repo)
+                end
+            else
+                # Test that depth parameter throws error on older libgit2
+                @test_throws ArgumentError LibGit2.clone(cache_repo, joinpath(dir, "Example.Shallow"), depth=1)
+            end
         end
     end
 

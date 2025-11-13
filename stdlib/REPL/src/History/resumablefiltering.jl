@@ -253,21 +253,25 @@ end
 
 
 """
-    filterchunkrev!(out, candidates, spec; idx, maxtime, maxresults) -> Int
+    filterchunkrev!(out, candidates, spec, seen, idx; maxtime, maxresults) -> Int
 
 Incrementally filter `candidates[1:idx]` in reverse order.
 
 Pushes matches onto `out` until either `maxtime` is exceeded or `maxresults`
-collected, then returns the new resume index.
+collected, then returns the new resume index. Only unique entries (by mode and content)
+are added to avoid showing duplicate history items.
 """
 function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEntry},
-                         spec::FilterSpec, idx::Int = length(candidates);
+                         spec::FilterSpec, seen::Set{Tuple{Symbol,String}}, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates))
     batchsize = clamp(length(candidates) ÷ 512, 10, 1000)
     for batch in Iterators.partition(idx:-1:1, batchsize)
         time() > maxtime && break
         for outer idx in batch
             entry = candidates[idx]
+            if (entry.mode, entry.content) ∈ seen
+                continue
+            end
             if !isempty(spec.modes)
                 entry.mode ∈ spec.modes || continue
             end
@@ -293,6 +297,7 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
                 end
             end
             matchfail && continue
+            push!(seen, (entry.mode, entry.content))
             pushfirst!(out, entry)
             length(out) == maxresults && break
         end

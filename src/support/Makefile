@@ -53,8 +53,8 @@ $(BUILDDIR)/host/Makefile:
 	@printf "%s\n" 'BUILDING_HOST_TOOLS=1' >> $@
 	@printf "%s\n" 'include $(SRCDIR)/Makefile' >> $@
 
-release: $(BUILDDIR)/libsupport.a $(BUILDDIR)/compile_commands.json
-debug: $(BUILDDIR)/libsupport-debug.a $(BUILDDIR)/compile_commands.json
+release: $(BUILDDIR)/libsupport.a regenerate-compile_commands
+debug: $(BUILDDIR)/libsupport-debug.a regenerate-compile_commands
 
 $(BUILDDIR)/libsupport.a: $(OBJS) | $(BUILDIR)
 	rm -rf $@
@@ -78,8 +78,10 @@ CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) 
 INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
 
 # Compilation database generation
-$(BUILDDIR)/compile_commands.json:
-	@{ \
+.PHONY: regenerate-compile_commands
+regenerate-compile_commands:
+	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
+	{ \
 		CLANG_TOOLING_S_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS))"; \
 		echo "["; \
@@ -103,16 +105,15 @@ $(BUILDDIR)/compile_commands.json:
 			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
 		done; \
 		echo "]"; \
-	} > $@.tmp
-	@# This ensures we replace the file atomically, and avoid spurious rewrites
-	@if ! cmp -s $@.tmp $@; then \
-		mv $@.tmp $@; \
+	} > $$TMPFILE; \
+	if ! cmp -s $$TMPFILE $(BUILDDIR)/compile_commands.json; then \
+		mv $$TMPFILE $(BUILDDIR)/compile_commands.json; \
 	else \
-		rm -f $@.tmp; \
+		rm -f $$TMPFILE; \
 	fi
 
-compile-database: $(BUILDDIR)/compile_commands.json
-	@echo "Compilation database created in support: $<"
+compile-database: regenerate-compile_commands
+	@echo "Compilation database created for src/support"
 
 clean:
 	rm -f $(BUILDDIR)/*.o
@@ -125,4 +126,4 @@ clean:
 	rm -f $(BUILDDIR)/compile_commands.json
 	rm -f $(BUILDDIR)/host/*
 
-.PHONY: compile-database $(BUILDDIR)/compile_commands.json
+.PHONY: compile-database

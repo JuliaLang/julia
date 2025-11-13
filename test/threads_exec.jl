@@ -1372,9 +1372,7 @@ end
                 tasks = [Threads.@spawn(div(1, i)) for i = 0:1]
                 wait(tasks[1]; throw=false)
                 wait(tasks[2]; throw=false)
-                @test_throws CompositeException begin
-                    waitall(Threads.@spawn(div(1, i)) for i = 0:1)
-                end
+                @test_throws CompositeException waitall(tasks)
             end
         end
     end

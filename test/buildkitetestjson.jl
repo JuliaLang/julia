@@ -88,14 +88,14 @@ end
 # to be able to identify the file. Also convert Windows-style paths to Unix-style paths so tests can
 # be grouped by file.
 const generalize_file_paths_cache = Dict{AbstractString,AbstractString}()
-const norm_build_root_path = normpath(Sys.BUILD_ROOT_PATH)
+const norm_sourcedir = normpath(Base.SOURCEDIR)
 const bindir_dir = dirname(Sys.BINDIR)
 const pathsep = Sys.iswindows() ? '\\' : '/'
 function generalize_file_paths(path::AbstractString)
     return get!(generalize_file_paths_cache, path) do
         path = replace(path,
             Sys.STDLIB => "stdlib",
-            string(norm_build_root_path, pathsep) => "",
+            string(norm_sourcedir, pathsep) => "",
             string(bindir_dir, pathsep) => ""
         )
         @static if Sys.iswindows()

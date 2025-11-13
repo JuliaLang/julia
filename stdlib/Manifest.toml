@@ -300,6 +300,6 @@ uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
 version = "1.66.0+0"
 
 [[deps.p7zip_jll]]
-deps = ["Artifacts", "Libdl"]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.6.0+0"
+version = "17.7.0+0"

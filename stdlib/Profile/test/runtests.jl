@@ -246,6 +246,23 @@ end
     @test occursin("@julialib" * slash, str)
 end
 
+function run_with_watchdog(cmd, timeout=120)
+    p = open(cmd)
+    t = Timer(timeout) do t
+        # should be under 10 seconds, so give it 2 minutes then report failure
+        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGKILL)
+    end
+    s = read(p, String)
+    close(t)
+    close(p)
+    success(p) ? s : ""
+end
+
 # Profile deadlocking in compilation (debuginfo registration)
 let cmd = Base.julia_cmd()
     script = """
@@ -259,22 +276,24 @@ let cmd = Base.julia_cmd()
         print(Profile.len_data())
         """
     # use multiple threads here to ensure that profiling works with threading
-    p = open(`$cmd -t2 -e $script`)
-    t = Timer(120) do t
-        # should be under 10 seconds, so give it 2 minutes then report failure
-        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
-        kill(p, Base.SIGQUIT)
-        sleep(30)
-        kill(p, Base.SIGQUIT)
-        sleep(30)
-        kill(p, Base.SIGKILL)
-    end
-    s = read(p, String)
-    close(t)
-    @test success(p)
+    s = run_with_watchdog(`$cmd -t2 -e $script`)
     @test !isempty(s)
     @test occursin("done", s)
     @test parse(Int, split(s, '\n')[end]) > 100
+end
+
+# Thread suspend deadlock - run many times (#60042)
+let cmd = Base.julia_cmd()
+    script = """
+        using Profile
+        @profile println("done")
+        """
+    good = true
+    for i=1:100
+        s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
+        good &= occursin("done", s)
+    end
+    @test good
 end
 
 if Sys.isbsd() || Sys.islinux()

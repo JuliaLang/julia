@@ -279,70 +279,123 @@ end
                 empty!(results)
                 cset = ConditionSet("hello")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, entries, spec) == 0
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[1], entries[7]]
                 empty!(results)
                 cset2 = ConditionSet("world")
                 spec2 = FilterSpec(cset2)
-                @test filterchunkrev!(results, entries, spec2) == 0
+                empty!(seen)
+                @test filterchunkrev!(results, entries, spec2, seen) == 0
                 @test results == [entries[1], entries[7]]
                 empty!(results)
                 cset3 = ConditionSet("World")
                 spec3 = FilterSpec(cset3)
-                @test filterchunkrev!(results, entries, spec3) == 0
+                empty!(seen)
+                @test filterchunkrev!(results, entries, spec3, seen) == 0
                 @test results == [entries[7]]
             end
             @testset "Exact" begin
                 empty!(results)
                 cset = ConditionSet("=test")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, entries, spec, maxresults = 2) == 5
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, entries, spec, seen; maxresults = 2) == 5
                 @test results == [entries[6], entries[9]]
                 empty!(results)
                 cset2 = ConditionSet("=test case")
                 spec2 = FilterSpec(cset2)
-                @test filterchunkrev!(results, entries, spec2) == 0
+                empty!(seen)
+                @test filterchunkrev!(results, entries, spec2, seen) == 0
                 @test results == [entries[3]]
             end
             @testset "Negative" begin
                 empty!(results)
                 cset = ConditionSet("!hello ; !test;! cos")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, entries, spec) == 0
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[2], entries[7], entries[8]]
             end
             @testset "Initialism" begin
                 empty!(results)
                 cset = ConditionSet("`tc")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, entries, spec) == 0
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[3]]
                 empty!(results)
                 cset2 = ConditionSet("`fb")
                 spec2 = FilterSpec(cset2)
-                @test filterchunkrev!(results, entries, spec2) == 0
+                empty!(seen)
+                @test filterchunkrev!(results, entries, spec2, seen) == 0
                 @test results == [entries[8]]
             end
             @testset "Regexp" begin
                 empty!(results)
                 cset = ConditionSet("/^c.s\\b")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, entries, spec) == 0
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[4], entries[5]]
             end
             @testset "Mode" begin
                 empty!(results)
                 cset = ConditionSet(">shell")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, entries, spec) == 0
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[7]]
             end
             @testset "Fuzzy" begin
                 empty!(results)
                 cset = ConditionSet("~cs")
                 spec = FilterSpec(cset)
-                @test filterchunkrev!(results, entries, spec) == 0
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == entries[3:6]
+            end
+            @testset "Uniqueness" begin
+                empty!(results)
+                # Create entries with duplicate content in the same mode
+                dup_entries = [
+                    HistEntry(:julia, now(UTC), "println(\"hello\")", 1),
+                    HistEntry(:julia, now(UTC), "cos(2π)", 2),
+                    HistEntry(:julia, now(UTC), "println(\"hello\")", 3),  # duplicate
+                    HistEntry(:julia, now(UTC), "sin(π)", 4),
+                    HistEntry(:julia, now(UTC), "cos(2π)", 5),  # duplicate
+                    HistEntry(:julia, now(UTC), "println(\"hello\")", 6),  # duplicate
+                    HistEntry(:julia, now(UTC), "tan(π/4)", 7),
+                ]
+                # When filtering with seen Set, duplicates are removed
+                cset = ConditionSet("cos")
+                spec = FilterSpec(cset)
+                seen = Set{Tuple{Symbol,String}}()
+                @test filterchunkrev!(results, dup_entries, spec, seen) == 0
+                # Should only get unique entries matching the filter
+                # Since we iterate in reverse (7->1), we keep the most recent occurrence of each unique content
+                @test length(results) == 1
+                @test results[1] == dup_entries[5]  # cos(2π) - most recent
+                # When browsing without filtering, duplicates are kept
+                empty!(results)
+                append!(results, dup_entries)
+                @test length(results) == 7  # All entries, including duplicates
+                @test results == dup_entries
+                # Test that same content in different modes is NOT deduplicated
+                empty!(results)
+                mode_entries = [
+                    HistEntry(:julia, now(UTC), "ls", 1),
+                    HistEntry(:shell, now(UTC), "ls", 2),
+                    HistEntry(:julia, now(UTC), "ls", 3),  # duplicate in :julia mode
+                    HistEntry(:shell, now(UTC), "pwd", 4),
+                ]
+                empty!(seen)
+                cset3 = ConditionSet("ls")
+                spec3 = FilterSpec(cset3)
+                @test filterchunkrev!(results, mode_entries, spec3, seen) == 0
+                @test length(results) == 2  # "ls" from :julia and "ls" from :shell
+                @test results[1] == mode_entries[2]  # :shell ls
+                @test results[2] == mode_entries[3]  # :julia ls (most recent)
             end
         end
         @testset "Strictness comparison" begin

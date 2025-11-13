@@ -7,7 +7,7 @@ import ..REPL
 # Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
 Base._track_dependencies[] = false
 try
-    Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+    Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
     @Core.latestworld
     import .FakePTYs: open_fake_pty
 finally
