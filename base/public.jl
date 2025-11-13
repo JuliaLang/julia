@@ -13,6 +13,7 @@ public
     AbstractOneTo,
     AbstractPipe,
     AsyncCondition,
+    SecretBuffer,
     CodeUnits,
     Event,
     Fix,
@@ -110,6 +111,7 @@ public
 
 # Strings
     escape_raw_string,
+    shred!,
 
 # IO
     # types
