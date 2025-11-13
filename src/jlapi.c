@@ -1170,7 +1170,7 @@ static const char *absformat(const char *in)
     return out;
 }
 
-JL_DLLEXPORT char *jl_absrealpath(const char *in, int nprefix)
+static char *absrealpath(const char *in, int nprefix)
 { // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
     char *out;
@@ -1245,7 +1245,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
         jl_options.julia_bindir = julia_bindir;
     }
     if (jl_options.julia_bindir)
-        jl_options.julia_bindir = jl_absrealpath(jl_options.julia_bindir, 0);
+        jl_options.julia_bindir = absrealpath(jl_options.julia_bindir, 0);
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
@@ -1260,33 +1260,33 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
             jl_options.image_file = free_path;
         }
         if (jl_options.image_file)
-            jl_options.image_file = jl_absrealpath(jl_options.image_file, 0);
+            jl_options.image_file = absrealpath(jl_options.image_file, 0);
         if (free_path) {
             free(free_path);
             free_path = NULL;
         }
     }
     if (jl_options.outputo)
-        jl_options.outputo = jl_absrealpath(jl_options.outputo, 0);
+        jl_options.outputo = absrealpath(jl_options.outputo, 0);
     if (jl_options.outputji)
-        jl_options.outputji = jl_absrealpath(jl_options.outputji, 0);
+        jl_options.outputji = absrealpath(jl_options.outputji, 0);
     if (jl_options.outputbc)
-        jl_options.outputbc = jl_absrealpath(jl_options.outputbc, 0);
+        jl_options.outputbc = absrealpath(jl_options.outputbc, 0);
     if (jl_options.outputasm)
-        jl_options.outputasm = jl_absrealpath(jl_options.outputasm, 0);
+        jl_options.outputasm = absrealpath(jl_options.outputasm, 0);
     if (jl_options.machine_file)
-        jl_options.machine_file = jl_absrealpath(jl_options.machine_file, 0);
+        jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
     if (jl_options.tracked_path)
-        jl_options.tracked_path = jl_absrealpath(jl_options.tracked_path, 0);
+        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
         for (; *cmdp; cmdp++) {
             const char *cmd = *cmdp;
             if (cmd[0] == 'L') {
-                *cmdp = jl_absrealpath(cmd, 1);
+                *cmdp = absrealpath(cmd, 1);
             }
         }
     }

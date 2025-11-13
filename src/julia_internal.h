@@ -1909,7 +1909,6 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
             jl_value_t *msg);
 
 JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
-JL_DLLEXPORT char *jl_absrealpath(const char *in, int nprefix) JL_NOTSAFEPOINT;
 
 // Commonly used symbols (jl_sym_t* values)
 #define JL_COMMON_SYMBOLS(XX) \
