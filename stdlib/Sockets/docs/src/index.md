@@ -34,4 +34,6 @@ Sockets.recvfrom
 Sockets.setopt
 Sockets.nagle
 Sockets.quickack
+Sockets.join_multicast_group
+Sockets.leave_multicast_group
 ```
