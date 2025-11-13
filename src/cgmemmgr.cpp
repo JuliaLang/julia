@@ -267,6 +267,8 @@ static void *create_shared_map(size_t size, size_t id) JL_NOTSAFEPOINT
 
 static intptr_t init_shared_map() JL_NOTSAFEPOINT
 {
+    if (anon_hdl != -1)
+        return anon_hdl;
     anon_hdl = get_anon_hdl();
     if (anon_hdl == -1)
         return -1;
@@ -777,6 +779,43 @@ public:
 };
 #endif // _OS_LINUX_
 
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+class MapJITAllocator : public ROAllocator {
+    static inline thread_local bool jit_rw;
+
+protected:
+    void *get_wr_ptr(SplitPtrBlock &block, void *rt_ptr, size_t size,
+                     size_t align) override JL_NOTSAFEPOINT
+    {
+        if (!jit_rw) {
+            pthread_jit_write_protect_np(0);
+            jit_rw = true;
+        }
+        return rt_ptr;
+    }
+
+    SplitPtrBlock alloc_block(size_t size) override JL_NOTSAFEPOINT
+    {
+        SplitPtrBlock block;
+        void *mem = mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                         MAP_JIT | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        assert(mem != MAP_FAILED && "Cannot allocate MAP_JIT memory");
+        block.reset(mem, size);
+        return block;
+    }
+
+public:
+    void finalize() override JL_NOTSAFEPOINT
+    {
+        if (jit_rw) {
+            pthread_jit_write_protect_np(1);
+            jit_rw = false;
+        }
+        ROAllocator::finalize();
+    }
+};
+#endif // defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+
 std::pair<std::unique_ptr<ROAllocator>, std::unique_ptr<ROAllocator>>
 get_preferred_allocators() JL_NOTSAFEPOINT
 {
@@ -784,6 +823,11 @@ get_preferred_allocators() JL_NOTSAFEPOINT
     if (get_self_mem_fd() != -1)
         return {std::make_unique<SelfMemAllocator>(false),
                 std::make_unique<SelfMemAllocator>(true)};
+#endif
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    if (pthread_jit_write_protect_supported_np() && init_shared_map() != -1)
+        return {std::make_unique<DualMapAllocator>(false),
+                std::make_unique<MapJITAllocator>()};
 #endif
     if (init_shared_map() != -1)
         return {std::make_unique<DualMapAllocator>(false),
