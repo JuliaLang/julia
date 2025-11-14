@@ -13,7 +13,7 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
 
     # TODO: fix in base
     file = file isa Ptr{UInt8} ? unsafe_string(file) : file
-    line = !(line isa Int64) ? Int64(line) : line
+    line = !(line isa Int) ? Int(line) : line
 
     local st0 = nothing
     try

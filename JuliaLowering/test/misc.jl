@@ -198,7 +198,7 @@ end
     jeval(test_mod, "\"docstr12\" f12(x::Int, y::U, z::T=1) where {T, U<:Number}")
     d = jeval(test_mod, "@doc f12")
     @test d |> string === "docstr12\n"
-    @test d.meta[:results][1].data[:typesig] === Union{Tuple{Int64, U, T}, Tuple{Int64, U}} where {T, U<:Number}
+    @test d.meta[:results][1].data[:typesig] === Union{Tuple{Int, U, T}, Tuple{Int, U}} where {T, U<:Number}
 
 end
 
