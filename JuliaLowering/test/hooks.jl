@@ -45,6 +45,8 @@ const JL = JuliaLowering
             @test isdefined(test_mod, :M)
             @test isdefined(test_mod.M, :x)
 
+            @test jeval("@ccall jl_value_ptr(nothing::Any)::Ptr{Cvoid}") isa Ptr{Cvoid}
+
             # Tricky cases with symbols
             out = jeval("""module M2
                 Base.@constprop :aggressive function f(x); x; end
