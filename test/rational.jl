@@ -217,11 +217,14 @@ end
     @test_throws DivideError (1//0) / complex(0, 0)
     @test_throws DivideError 1 // complex(0, 0)
     @test_throws DivideError 0 // complex(0, 0)
+    @test_throws DivideError complex(1) // complex(0, 0)
+    @test_throws DivideError complex(0) // complex(0, 0)
 
     # 1//200 - 1//200*im cannot be represented as Complex{Rational{Int8}}
     @test_throws OverflowError (Int8(1)//Int8(1)) / (Int8(100) + Int8(100)im)
     @test_throws OverflowError (Int8(1)//Int8(1)) // (Int8(100) + Int8(100)im)
     @test_throws OverflowError Int8(1) // (Int8(100) + Int8(100)im)
+    @test_throws OverflowError complex(Int8(1)) // (Int8(100) + Int8(100)im)
 
     @test Complex(rand_int, 0) == Rational(rand_int)
     @test Rational(rand_int) == Complex(rand_int, 0)

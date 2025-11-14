@@ -109,15 +109,24 @@ end
 # TODO Unclear if this method should be defined. It seems to conflict with the docstring that states that "The arguments must be subtypes of Integer, Rational, or composites thereof."
 //(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
-function //(x::Union{Integer, Rational, Complex{<:Union{Rational, Integer}}}, y::Complex{<:Integer})
-    # Avoid converting y to float
-    den = Complex(Rational(real(y)), Rational(imag(y)))
-    x/den
-end
-function //(x::Union{Integer, Rational, Complex{<:Union{Rational, Integer}}}, y::Complex{<:Rational})
+function //(x::Union{Integer, Rational, Complex{<:Union{Rational, Integer}}}, y::Complex{<:Union{Rational, Integer}})
     x/y
 end
-
+function //(x::Integer, y::Complex{<:Integer})
+    a, c, d = promote(x, reim(y)...)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    complex(checked_mul(a, c_r), checked_neg(checked_mul(a, d_r)))//abs2y_r
+end
+function //(x::Complex{<:Integer}, y::Complex{<:Integer})
+    a, b, c, d = promote(reim(x)..., reim(y)...)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    complex(
+        checked_add(checked_mul(a, c_r), checked_mul(b, d_r)),
+        checked_add(checked_mul(b, c_r), checked_neg(checked_mul(a, d_r)))
+    )//abs2y_r
+end
 
 //(X::AbstractArray, y::Number) = X .// y
 
