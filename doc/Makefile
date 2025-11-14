@@ -57,3 +57,8 @@ deploy: deps
 	@echo "Deploying HTML documentation."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy $(DOCUMENTER_OPTIONS)
 	@echo "Build & deploy of docs finished."
+
+.PHONY: update-documenter
+update-documenter:
+	@echo "Updating Documenter."
+	JULIA_PKG_PRECOMPILE_AUTO=0 $(JULIA_EXECUTABLE) --project=. --color=yes -e 'using Pkg; Pkg.update()'
