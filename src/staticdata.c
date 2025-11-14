@@ -3325,12 +3325,6 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
                                          ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, jl_array_t *module_init_order)
 {
-    if (jl_options.strip_ir || jl_options.trim) {
-        // make sure this is precompiled for jl_foreach_reachable_mtable
-        jl_get_loaded_modules();
-    }
-    jl_gc_collect(JL_GC_FULL);
-    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
 
     // iff emit_split
@@ -3377,6 +3371,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     if (_native_data != NULL)
         native_functions = *_native_data;
 
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     // Make sure we don't run any Julia code concurrently after this point
     // since it will invalidate our serialization preparations
     jl_gc_enable_finalizers(ct, 0);

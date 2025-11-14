@@ -2641,6 +2641,7 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *) JL_NOTSAFEPOINT;
 // codegen interface ----------------------------------------------------------
 // The root propagation here doesn't have to be literal, but callers should
 // ensure that the return value outlives the MethodInstance
+// Must be kept in sync with `base/reflection.jl` (CodegenParams)
 typedef struct {
     int track_allocations;  // can we track allocations?
     int code_coverage;      // can we measure coverage?
@@ -2656,6 +2657,11 @@ typedef struct {
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
     int force_emit_all; // Force emission of code for const return functions
+
+    // These options control the sanitizer passes and are used to AOT compile instrumented sysimages
+    int sanitize_memory;
+    int sanitize_thread;
+    int sanitize_address;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
