@@ -105,7 +105,18 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
+
+# TODO Unclear if this method should be defined. It seems to conflict with the docstring that states that "The arguments must be subtypes of Integer, Rational, or composites thereof."
 //(x::Number, y::Complex) = x*conj(y)//abs2(y)
+
+function //(x::Union{Integer, Rational, Complex{<:Union{Rational, Integer}}}, y::Complex{<:Integer})
+    # Avoid converting y to float
+    den = Complex(Rational(real(y)), Rational(imag(y)))
+    x/den
+end
+function //(x::Union{Integer, Rational, Complex{<:Union{Rational, Integer}}}, y::Complex{<:Rational})
+    x/y
+end
 
 
 //(X::AbstractArray, y::Number) = X .// y
