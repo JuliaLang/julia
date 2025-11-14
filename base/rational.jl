@@ -105,7 +105,6 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-
 //(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
 function //(x::Union{Integer, Rational, Complex{<:Union{Rational, Integer}}}, y::Complex{<:Union{Rational, Integer}})
