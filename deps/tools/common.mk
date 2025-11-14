@@ -156,7 +156,7 @@ endif
 
 ## PATHS ##
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging) $(build_prefix)/manifest)
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging) $(build_prefix)/manifest)
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(build_prefix): | $(DIRS)

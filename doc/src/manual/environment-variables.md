@@ -50,11 +50,11 @@ $JULIA_BINDIR/julia-debug
 
 by default.
 
-The global variable `Base.DATAROOTDIR` determines a relative path from
+The global variable `Base.PRIVATE_LIBDIR` determines a relative path from
 `Sys.BINDIR` to the data directory associated with Julia. Then the path
 
 ```
-$JULIA_BINDIR/$DATAROOTDIR/julia/base
+$JULIA_BINDIR/$PRIVATE_LIBDIR/base
 ```
 
 determines the directory in which Julia initially searches for source files (via
@@ -71,11 +71,11 @@ $JULIA_BINDIR/../etc/julia/startup.jl
 by default (via `Base.load_julia_startup()`).
 
 For example, a Linux installation with a Julia executable located at
-`/bin/julia`, a `DATAROOTDIR` of `../share`, and a `SYSCONFDIR` of `../etc` will
+`/bin/julia`, a `PRIVATE_LIBDIR` of `../lib/julia`, and a `SYSCONFDIR` of `../etc` will
 have [`JULIA_BINDIR`](@ref JULIA_BINDIR) set to `/bin`, a source-file search path of
 
 ```
-/share/julia/base
+/lib/julia/base
 ```
 
 and a global configuration search path of

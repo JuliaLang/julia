@@ -6,7 +6,7 @@ Julia ships with a preparsed system image containing the contents of the `Base` 
 `sys.ji`. This file is also precompiled into a shared library called `sys.{so,dll,dylib}` on
 as many platforms as possible, so as to give vastly improved startup times. On systems that do
 not ship with a precompiled system image file, one can be generated from the source files shipped
-in Julia's `DATAROOTDIR/julia/base` folder.
+in Julia's `PRIVATE_LIBDIR/base` folder.
 
 Julia will by default generate its system image on half of the available system threads. This
 may be controlled by the [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) environment variable.
