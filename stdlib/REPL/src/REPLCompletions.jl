@@ -993,6 +993,7 @@ end
 
 function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true, hint::Bool=false)
     # filename needs to be string so macro can be evaluated
+    # TODO: JuliaSyntax version API here
     node = parseall(CursorNode, string, ignore_errors=true, keep_parens=true, filename="none")
     cur = @something seek_pos(node, pos) node
 
