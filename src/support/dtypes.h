@@ -27,7 +27,9 @@
 #define WIN32_LEAN_AND_MEAN
 /* Clang does not like fvisibility=hidden with windows headers. This adds the visibility attribute there.
    Arguably this is a clang bug. */
-#define DECLSPEC_IMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
+# ifndef _COMPILER_MICROSOFT_
+#  define DECLSPEC_IMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
+# endif
 #include <windows.h>
 
 #if defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
@@ -59,15 +61,21 @@ typedef intptr_t ssize_t;
 */
 
 #ifdef _OS_WINDOWS_
+# ifndef _COMPILER_MICROSOFT_
+#  define JL_VISIBILITY_DEFAULT __attribute__ ((visibility("default")))
+# else
+#  define JL_VISIBILITY_DEFAULT
+#  define JL_VISIBILITY_HIDDEN
+# endif
 #define STDCALL  __stdcall
 # ifdef JL_LIBRARY_EXPORTS_INTERNAL
-#  define JL_DLLEXPORT __declspec(dllexport) __attribute__ ((visibility("default")))
+#  define JL_DLLEXPORT __declspec(dllexport) JL_VISIBILITY_DEFAULT
 # endif
 # ifdef JL_LIBRARY_EXPORTS_CODEGEN
-#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) __attribute__ ((visibility("default")))
+#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) JL_VISIBILITY_DEFAULT
 # endif
 #define JL_HIDDEN
-#define JL_DLLIMPORT   __declspec(dllimport) __attribute__ ((visibility("default")))
+#define JL_DLLIMPORT   __declspec(dllimport) JL_VISIBILITY_DEFAULT
 #else
 #define STDCALL
 #define JL_DLLIMPORT __attribute__ ((visibility("default")))
