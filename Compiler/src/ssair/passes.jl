@@ -1586,7 +1586,10 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             add_inlining_edge!(et, code)
             return true
         end
-        src = @atomic :monotonic code.inferred
+        # COMBAK: this has awkward and unreliable global cache effects, but
+        # this doesn't respect the bottom-up inliner order so we do not have
+        # CallInfo anymore. See `handle_finalizer_call!` too.
+        src = ci_get_source(inlining.interp, code)
     else
         return false
     end
@@ -1729,7 +1732,7 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
             if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, ci, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                newinst = add_flag(NewInstruction(Expr(:invoke, ci, argexprs...), Nothing), flag)
+                newinst = add_flag(NewInstruction(Expr(:invoke, ci, argexprs...), Any), flag)
                 insert_node!(ir, loc, newinst, attach_after)
             end
         end

@@ -295,18 +295,18 @@ Closest candidates are:
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
 function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
-    list = get!(Vector{Any}, _hint_handlers, exct)
-    push!(list, handler)
+    list = get!(Vector{Any}, _hint_handlers, Core.typename(exct))
+    push!(list, (exct, handler))
     return nothing
 end
 
-const _hint_handlers = IdDict{Type,Vector{Any}}()
+const _hint_handlers = IdDict{Core.TypeName,Vector{Any}}()
 
 """
     Experimental.show_error_hints(io, ex, args...)
 
 Invoke all handlers from [`Experimental.register_error_hint`](@ref) for the particular
-exception type `typeof(ex)`. `args` must contain any other arguments expected by
+exception type `typeof(ex)` and all of its supertypes. `args` must contain any other arguments expected by
 the handler for that type.
 
 !!! compat "Julia 1.5"
@@ -316,15 +316,20 @@ the handler for that type.
 """
 function show_error_hints(io, ex, args...)
     @nospecialize
-    hinters = get(_hint_handlers, typeof(ex), nothing)
-    isnothing(hinters) && return
-    for handler in hinters
-        try
-            @invokelatest handler(io, ex, args...)
-        catch
-            tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
+    ex_supertype = typeof(ex)
+    while ex_supertype != Any
+        hinters = get(_hint_handlers, Core.typename(ex_supertype), Any[])
+        for (exct, handler) in hinters
+            ex isa exct || continue
+            try
+                # TODO: deal with handlers accepting different signatures?
+                @invokelatest handler(io, ex, args...)
+            catch
+                tn = typeof(handler).name
+                @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+            end
         end
+        ex_supertype = supertype(ex_supertype)
     end
 end
 
@@ -688,6 +693,57 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
     finally
         Base.relockall(c.lock, token)
     end
+end
+
+"""
+    Base.Experimental.@reexport using Module
+
+Automatically re-export all exported names from a module when using it.
+
+# Examples
+
+```jldoctest
+julia> module A
+           export foo
+           foo() = "foo from A"
+       end
+A
+
+julia> module B
+           using Base.Experimental: @reexport
+           @reexport using ..A
+           # Now B exports foo, even though it's defined in A
+       end
+B
+
+julia> using .B
+
+julia> foo()
+"foo from A"
+```
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+macro reexport(ex)
+    if !Meta.isexpr(ex, :using) || isempty(ex.args)
+        error("@reexport must be used with a `using` statement, e.g., `@reexport using MyModule`")
+    end
+
+    # Check for `using Foo: x, y` syntax (not supported)
+    if any(arg -> Meta.isexpr(arg, :(:)), ex.args)
+        error("@reexport does not support `using Module: names` syntax")
+    end
+
+    # Generate _eval_using calls for each module in the using statement
+    calls = Expr(:block)
+    for mod_path in ex.args
+        push!(calls.args, :($(Core._eval_using)($(__module__), $(QuoteNode(mod_path)), $(Base.JL_MODULE_USING_REEXPORT))))
+    end
+    push!(calls.args, Expr(:latestworld))
+    push!(calls.args, :nothing)
+
+    return esc(calls)
 end
 
 end # module
