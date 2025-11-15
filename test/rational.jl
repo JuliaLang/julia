@@ -215,6 +215,7 @@ end
     @test_throws DivideError (0//1) / complex(0, 0)
     @test_throws DivideError (1//1) / complex(0, 0)
     @test_throws DivideError (1//0) / complex(0, 0)
+    @test_throws DivideError complex(1//0) // complex(1//0, 1//0)
     @test_throws DivideError 1 // complex(0, 0)
     @test_throws DivideError 0 // complex(0, 0)
     @test_throws DivideError complex(1) // complex(0, 0)
@@ -248,6 +249,14 @@ end
                 @test (a+b*im)//(c+d*im) == (a*c+b*d+(b*c-a*d)*im)//(c^2+d^2)
                 @test Complex(Rational(a)+b*im)//Complex(Rational(c)+d*im) == Complex(a+b*im)//Complex(c+d*im)
             end
+        end
+    end
+    @testset "exact division by an infinite complex number" begin
+        for y ∈ (1 // 0, -1 // 0)
+            @test (7 // complex(y)) == 0
+            @test (Rational(7) // complex(y)) == 0
+            @test (complex(7) // complex(y)) == 0
+            @test (complex(Rational(7)) // complex(y)) == 0
         end
     end
 end
@@ -632,6 +641,10 @@ end
 
 # issue #16282
 @test_throws MethodError 3 // 4.5im
+
+# issue #60137
+@test_throws MethodError 3.0 // (1 + 0im)
+@test_throws MethodError 3.0 // (1//0 + 0im)
 
 # issue #31396
 @test round(1//2, RoundNearestTiesUp) === 1//1
