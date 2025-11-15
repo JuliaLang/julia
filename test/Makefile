@@ -6,7 +6,7 @@ VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
-export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(build_private_libdir)))
 export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
@@ -51,7 +51,8 @@ relocatedepot:
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) $@)
 	@mkdir $(SRCDIR)/relocatedepot
-	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
+	@cp -R $(build_datarootdir)/julia/* $(SRCDIR)/relocatedepot
+	@cp -R $(build_private_libdir)/compiled $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot
@@ -65,7 +66,8 @@ revise-relocatedepot: revise-% :
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise $*)
 	@mkdir $(SRCDIR)/relocatedepot
-	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
+	@cp -R $(build_datarootdir)/julia/* $(SRCDIR)/relocatedepot
+	@cp -R $(build_private_libdir)/compiled $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot
