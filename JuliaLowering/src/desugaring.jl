@@ -1357,8 +1357,10 @@ function expand_assignment(ctx, ex, is_const=false)
             # Identifier in lhs[1] is a variable type declaration, eg
             # x::T = rhs
             @ast ctx ex [K"block"
-                [K"decl" lhs[1] lhs[2]]
-                is_const ? [K"const" [K"=" lhs[1] rhs]] : [K"=" lhs[1] rhs]
+                if kind(x) !== K"Placeholder"
+                     [K"decl" x T]
+                end
+                is_const ? [K"const" [K"=" x rhs]] : [K"=" x rhs]
             ]
         else
             # Otherwise just a type assertion, eg
@@ -2171,8 +2173,17 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         if type_decls
             @chk numchildren(ex) == 2
             name = ex[1]
-            @chk kind(name) == K"Identifier"
-            push!(stmts, makenode(ctx, ex, K"decl", name, ex[2]))
+            if kind(name) == K"Identifier"
+                push!(stmts, makenode(ctx, ex, K"decl", name, ex[2]))
+            else
+                # TODO: Currently, this ignores the LHS in `_::T = val`.
+                # We should probably do one of the following:
+                # - Throw a LoweringError if that's not too breaking
+                # - `convert(T, rhs)::T` and discard the result which is what
+                #   `x::T = rhs` would do if x is never used again.
+                @chk kind(name) == K"Placeholder"
+                return
+            end
         end
         make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
     elseif k == K"tuple" || k == K"parameters"
@@ -2198,7 +2209,7 @@ function expand_decls(ctx, ex)
             # expand_assignment will create the type decls
             make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
             push!(stmts, expand_assignment(ctx, binding))
-        elseif is_sym_decl(binding) || kind(binding) == K"Value"
+        elseif is_sym_decl(binding) || kind(binding) in (K"Value", K"Placeholder")
             make_lhs_decls(ctx, stmts, declkind, declmeta, binding, true)
         elseif kind(binding) == K"function"
             make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
@@ -2260,7 +2271,7 @@ end
 #-------------------------------------------------------------------------------
 # Expansion of function definitions
 
-function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw)
+function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
     ex = arg
 
     if kind(ex) == K"="
@@ -2311,7 +2322,16 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw)
             K"local"(meta=CompileHints(:is_destructured_arg, true))
             [K"=" ex name]
         ])
-    elseif k == K"Identifier" || k == K"Placeholder"
+    elseif k == K"Placeholder"
+        # Lowering should be able to use placeholder args as rvalues internally,
+        # e.g. for kw method dispatch.  Duplicate positional placeholder names
+        # should be allowed.
+        name = if is_kw
+            @ast ctx ex ex=>K"Identifier"
+        else
+            new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument)
+        end
+    elseif k == K"Identifier"
         name = ex
     else
         throw(LoweringError(ex, is_kw ? "Invalid keyword name" : "Invalid function argument"))
@@ -2649,7 +2669,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     kwtmp = new_local_binding(ctx, keywords, "kwtmp")
     for (i,arg) in enumerate(children(keywords))
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, nothing, arg, i == numchildren(keywords), true)
+            expand_function_arg(ctx, nothing, arg, i == numchildren(keywords), true, i)
         push!(kw_names, aname)
         name_sym = @ast ctx aname aname=>K"Symbol"
         push!(body_arg_names, aname)
@@ -3034,8 +3054,8 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     first_default = 0 # index into arg_names/arg_types
     arg_defaults = SyntaxList(ctx)
     for (i,arg) in enumerate(args)
-        (aname, atype, default, is_slurp) = expand_function_arg(ctx, body_stmts, arg,
-                                                                i == length(args), false)
+        (aname, atype, default, is_slurp) =
+            expand_function_arg(ctx, body_stmts, arg, i == length(args), false, i)
         has_slurp |= is_slurp
         push!(arg_names, aname)
 
@@ -3256,8 +3276,8 @@ function expand_opaque_closure(ctx, ex)
     body_stmts = SyntaxList(ctx)
     is_va = false
     for (i, arg) in enumerate(children(args))
-        (aname, atype, default, is_slurp) = expand_function_arg(ctx, body_stmts, arg,
-                                                                i == numchildren(args), false)
+        (aname, atype, default, is_slurp) =
+            expand_function_arg(ctx, body_stmts, arg, i == numchildren(args), false, i)
         is_va |= is_slurp
         push!(arg_names, aname)
         push!(arg_types, atype)

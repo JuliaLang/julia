@@ -471,6 +471,35 @@ end
     @test cl(x = 20) == 21
 end
 
+@testset "Write-only placeholder function arguments" begin
+    # positional arguments may be duplicate placeholders.  keyword arguments can
+    # contain placeholders, but they must be unique
+    params_req = [""
+                  "_"
+                  "::Int"
+                  "_, _"]
+    params_opt = [""
+                  "::Int=2"
+                  "_=2"]
+    params_va  = ["", "_..."]
+    params_kw  = [""
+                  "; _"
+                  "; _::Int"
+                  "; _::Int=1"
+                  "; _=1, __=2"
+                  "; _..."
+                  "; _=1, __..."]
+    local i = 0
+    for req in params_req, opt in params_opt, va in params_va, kw in params_kw
+        arg_str = join(filter(!isempty, (req, opt, va, kw)), ", ")
+        f_str = "function f_placeholders$i($arg_str); end"
+        i += 1
+        @testset "$f_str" begin
+            @test JuliaLowering.include_string(test_mod, f_str) isa Function
+        end
+    end
+end
+
 @testset "Generated functions" begin
     @test JuliaLowering.include_string(test_mod, raw"""
     begin

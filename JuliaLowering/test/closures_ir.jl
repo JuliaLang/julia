@@ -237,7 +237,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₈ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/g]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/g]
     1   TestMod.#f#g##2
     2   static_parameter₁
     3   (new %₁ %₂)
