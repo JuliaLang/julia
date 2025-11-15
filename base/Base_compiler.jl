@@ -350,7 +350,7 @@ include("coreir.jl")
 include("module.jl")
 
 BUILDROOT::String = ""
-DATAROOT::String = ""
+RELPRIVATE_LIBDIR::String = ""
 const DL_LOAD_PATH = String[]
 
 baremodule BuildSettings end
@@ -362,8 +362,8 @@ function process_sysimg_args!()
                 include(BuildSettings, ARGS[i+1])
             elseif Core.ARGS[i] == "--buildroot"
                 global BUILDROOT = Core.ARGS[i+1]
-            elseif Core.ARGS[i] == "--dataroot"
-                global DATAROOT = Core.ARGS[i+1]
+            elseif Core.ARGS[i] == "--private-libdir"
+                global PRIVATE_LIBDIR_ARG = Core.ARGS[i+1]
             else
                 error(strcat("invalid sysimage argument: ", Core.ARGS[i]))
             end
@@ -375,7 +375,7 @@ process_sysimg_args!()
 
 function isready end
 
-include(strcat(DATAROOT, "julia/Compiler/src/Compiler.jl"))
+include(strcat(PRIVATE_LIBDIR_ARG, "Compiler/src/Compiler.jl"))
 using .Compiler.ReinferUtils: ReinferUtils, invalidate_code_for_globalref!
 
 const _return_type = Compiler.return_type

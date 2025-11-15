@@ -51,7 +51,7 @@ relocatedepot:
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) $@)
 	@mkdir $(SRCDIR)/relocatedepot
-	@cp -R $(build_private_libdir)/* $(SRCDIR)/relocatedepot
+	@cp -R $(build_private_libdir) $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot
@@ -65,7 +65,7 @@ revise-relocatedepot: revise-% :
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise $*)
 	@mkdir $(SRCDIR)/relocatedepot
-	@cp -R $(build_private_libdir)/* $(SRCDIR)/relocatedepot
+	@cp -R $(build_private_libdir) $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot

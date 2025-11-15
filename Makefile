@@ -218,6 +218,10 @@ $(build_datarootdir)/julia/%: $(JULIAHOME)/contrib/% | $(build_datarootdir)/juli
 	mkdir -p $(dir $@)
 	$(INSTALL_M) $< $(dir $@)
 
+$(build_private_libdir)/%: | $(build_private_libdir)
+	mkdir -p $(dir $@)
+	$(INSTALL_M) $< $(dir $@)
+
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
@@ -435,12 +439,10 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 endif
 
 	# Copy in all .jl sources as well
-	mkdir -p $(DESTDIR)$(private_libdir)/base
-	# FIXME: redundant with following line?
-	# cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(private_libdir)/base
+	mkdir -p $(DESTDIR)$(private_libdir)/base $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(build_private_libdir)/* $(DESTDIR)$(private_libdir)
-	mkdir -p $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
+	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
 
 	# Set .jl sources as read-only to match package directories
 	find $(DESTDIR)$(private_libdir)/base -type f -name \*.jl -exec chmod 0444 '{}' \;
