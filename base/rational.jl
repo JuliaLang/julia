@@ -120,10 +120,7 @@ function //(x::Number, y::Complex{<:Integer})
     (x * complex(c_r, checked_neg(d_r)))//abs2y_r
 end
 function //(x::Integer, y::Complex{<:Integer})
-    a, c, d = promote(x, reim(y)...)
-    c_r, d_r = divgcd(c, d)
-    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
-    complex(checked_mul(a, c_r), checked_neg(checked_mul(a, d_r)))//abs2y_r
+    complex(x) // y
 end
 function //(x::Complex{<:Integer}, y::Complex{<:Integer})
     a, b, c, d = promote(reim(x)..., reim(y)...)
