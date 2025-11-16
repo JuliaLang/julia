@@ -185,10 +185,9 @@ const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
 function slug(x::UInt32, p::Int)
     sprint(sizehint=p) do io
-        y = x
-        n = length(slug_chars)
+        n = UInt32(length(slug_chars))
         for i = 1:p
-            y, d = divrem(y, n)
+            x, d = divrem(x, n)
             write(io, slug_chars[1+d])
         end
     end
