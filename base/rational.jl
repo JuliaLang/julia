@@ -105,19 +105,29 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-function //(x::Number, y::Complex{<:Rational})
+
+# Return a complex numerator and real denominator
+# of the exact inverse of a Complex number.
+function _complex_exact_inv(y::Complex)
     c, d = reim(y)
-    if (isinf(c) | isinf(d))
-        x * conj(zero(y))
+    num = if (isinf(c) | isinf(d))
+        conj(zero(y))
     else
-        x * conj(y)
-    end//abs2(y)
+        conj(y)
+    end
+    num, abs2(y)
 end
-function //(x::Number, y::Complex{<:Integer})
+function _complex_exact_inv(y::Complex{<:Integer})
     c, d = reim(y)
     c_r, d_r = divgcd(c, d)
     abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
-    (x * complex(c_r, checked_neg(d_r)))//abs2y_r
+    num = complex(c_r, checked_neg(d_r))
+    num, abs2y_r
+end
+
+function //(x::Number, y::Complex)
+    num, den = _complex_exact_inv(y)
+    (x * num) // den
 end
 function //(x::Integer, y::Complex{<:Integer})
     complex(x) // y
