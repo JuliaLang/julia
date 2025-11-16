@@ -130,7 +130,7 @@ end
 The `String` constructor is enhanced to accept iterators/generator objects.
 
 ### Method Details:
-- **String(x::AbstractIterator)**
+- **String(iter)**
     - Converts an iterator into a string.
     - Throws a `MethodError` if the iterator contains invalid data types (non-Char types) or if it is an infinite iterator.
     - Ensures that the result is a valid string representation composed solely of characters (`Char`).
@@ -143,7 +143,7 @@ julia> String(Iterators.map(c -> c+1, "Hello, world"))
 julia> String(Iterators.take("Hello, world", 5))
 "Hello"  # Takes the first 5 characters of the string and converts it to a string.
 """
-String(x::AbstractIterator) = sprint(io -> foreach(c -> write(io, Char(c)::Char), x))
+String(iter) = sprint(io -> foreach(c -> write(io, Char(c)::Char), iter))
 
 """
     unsafe_takestring(m::Memory{UInt8})::String
