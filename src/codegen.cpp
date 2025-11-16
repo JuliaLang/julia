@@ -605,6 +605,24 @@ AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKin
     return AttributeSet::get(C, ArrayRef<Attribute>(attrs));
 }
 
+static inline Attribute NoCaptureAttr(LLVMContext &C)
+{
+#if JL_LLVM_VERSION < 210000
+    return Attribute::get(C, Attribute::NoCapture);
+#else
+    return Attribute::getWithCaptureInfo(C, CaptureInfo(CaptureComponents::None));
+#endif
+}
+
+static inline void addNoCaptureAttr(AttrBuilder &param)
+{
+#if JL_LLVM_VERSION < 210000
+    param.addAttribute(Attribute::NoCapture);
+#else
+    param.addCapturesAttr(CaptureInfo(CaptureComponents::None));
+#endif
+}
+
 static Type *get_pjlvalue(LLVMContext &C) { return JuliaType::get_pjlvalue_ty(C); }
 
 static FunctionType *get_func_sig(LLVMContext &C) { return JuliaType::get_jlfunc_ty(C); }
@@ -617,7 +635,7 @@ static AttributeList get_func_attrs(LLVMContext &C)
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
             {AttributeSet(),
-             Attributes(C, {Attribute::NoAlias, Attribute::ReadOnly, Attribute::NoCapture, Attribute::NoUndef})});
+             Attributes(C, {Attribute::NoAlias, Attribute::ReadOnly, Attribute::NoUndef}, {NoCaptureAttr(C)})});
 }
 
 static AttributeList get_attrs_noreturn(LLVMContext &C)
@@ -996,7 +1014,7 @@ static const auto jllockvalue_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
-            {Attributes(C, {Attribute::NoCapture})}); },
+            {Attributes(C, {}, {NoCaptureAttr(C)})}); },
 };
 static const auto jlunlockvalue_func = new JuliaFunction<>{
     XSTR(jl_unlock_value),
@@ -1005,7 +1023,7 @@ static const auto jlunlockvalue_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
-            {Attributes(C, {Attribute::NoCapture})}); },
+            {Attributes(C, {}, {NoCaptureAttr(C)})}); },
 };
 static const auto jllockfield_func = new JuliaFunction<>{
     XSTR(jl_lock_field),
@@ -1014,7 +1032,7 @@ static const auto jllockfield_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
-            {Attributes(C, {Attribute::NoCapture})}); },
+            {Attributes(C, {}, {NoCaptureAttr(C)})}); },
 };
 static const auto jlunlockfield_func = new JuliaFunction<>{
     XSTR(jl_unlock_field),
@@ -1023,7 +1041,7 @@ static const auto jlunlockfield_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
-            {Attributes(C, {Attribute::NoCapture})}); },
+            {Attributes(C, {}, {NoCaptureAttr(C)})}); },
 };
 static const auto jlenter_func = new JuliaFunction<>{
     XSTR(jl_enter_handler),
@@ -1489,7 +1507,7 @@ static const auto gc_loaded_func = new JuliaFunction<>{
         RetAttrs.addAttribute(Attribute::NonNull);
         RetAttrs.addAttribute(Attribute::NoUndef);
         return AttributeList::get(C, AttributeSet::get(C,FnAttrs), AttributeSet::get(C,RetAttrs),
-                { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
+                { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}, {NoCaptureAttr(C)}),
                   Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) });
                   },
 };
@@ -1684,6 +1702,15 @@ struct jl_aliasinfo_t {
     // memory region non-aliasing. It should be deleted once the TBAA metadata
     // is improved to encode only memory layout and *not* memory regions.
     static jl_aliasinfo_t fromTBAA(jl_codectx_t &ctx, MDNode *tbaa);
+
+    AAMDNodes toAAMDNodes() const
+    {
+#if JL_LLVM_VERSION < 220000
+        return AAMDNodes(tbaa, tbaa_struct, scope, noalias);
+#else
+        return AAMDNodes(tbaa, tbaa_struct, scope, noalias, nullptr);
+#endif
+    }
 };
 
 // metadata tracking for a llvm Value* during codegen
@@ -2681,7 +2708,11 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(DL);
+#if JL_LLVM_VERSION < 210000
     m->setTargetTriple(triple.str());
+#else
+    m->setTargetTriple(triple);
+#endif
 
     if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
         // tell Win32 to assume the stack is always 16-byte aligned,
@@ -7759,7 +7790,7 @@ const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value
         crt = (jl_value_t*)jl_any_type;
     }
     bool toboxed;
-    Type *lcrt = _julia_struct_to_llvm(&params, *params.tsctx.getContext(), crt, &toboxed);
+    Type *lcrt = _julia_struct_to_llvm(&params, params.getContext(), crt, &toboxed);
     if (toboxed)
         lcrt = JuliaType::get_prjlvalue_ty(lcrt->getContext());
     size_t nargs = jl_nparams(sigt)-1;
@@ -7937,7 +7968,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         AttrBuilder param(M->getContext());
         param.addStructRetAttr(srt);
         param.addAttribute(Attribute::NoAlias);
-        param.addAttribute(Attribute::NoCapture);
+        addNoCaptureAttr(param);
         param.addAttribute(Attribute::NoUndef);
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         assert(fsig.size() == 1);
@@ -7945,7 +7976,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     if (props.cc == jl_returninfo_t::Union) {
         AttrBuilder param(M->getContext());
         param.addAttribute(Attribute::NoAlias);
-        param.addAttribute(Attribute::NoCapture);
+        addNoCaptureAttr(param);
         param.addAttribute(Attribute::NoUndef);
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         assert(fsig.size() == 1);
@@ -7954,7 +7985,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     if (props.return_roots) {
         AttrBuilder param(M->getContext());
         param.addAttribute(Attribute::NoAlias);
-        param.addAttribute(Attribute::NoCapture);
+        addNoCaptureAttr(param);
         param.addAttribute(Attribute::NoUndef);
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(getPointerTy(M->getContext()));
@@ -7988,7 +8019,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         AttrBuilder param(M->getContext());
         Type *ty = et;
         if (et == nullptr || et->isAggregateType()) { // aggregate types are passed by pointer
-            param.addAttribute(Attribute::NoCapture);
+            addNoCaptureAttr(param);
             param.addAttribute(Attribute::ReadOnly);
             ty = PointerType::get(M->getContext(), AddressSpace::Derived);
         }
@@ -8119,7 +8150,7 @@ static jl_llvm_functions_t
     size_t min_world = src->min_world;
     size_t max_world = src->max_world;
     jl_llvm_functions_t declarations;
-    jl_codectx_t ctx(*params.tsctx.getContext(), params, min_world, max_world);
+    jl_codectx_t ctx(params.getContext(), params, min_world, max_world);
     jl_datatype_t *vatyp = NULL;
     JL_GC_PUSH2(&ctx.code, &vatyp);
     ctx.code = src->code;
@@ -9879,7 +9910,9 @@ void linkFunctionBody(Function &Dst, Function &Src)
         Dst.setPersonalityFn(Src.getPersonalityFn());
     if (Src.hasPersonalityFn())
         Dst.setPersonalityFn(Src.getPersonalityFn());
+#if JL_LLVM_VERSION < 210000
     assert(Src.IsNewDbgInfoFormat == Dst.IsNewDbgInfoFormat);
+#endif
 
     // Copy over the metadata attachments without remapping.
     Dst.copyMetadata(&Src, 0);

@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallSet.h"
 #include <llvm/ADT/MapVector.h>
 #include <llvm/ADT/StringSet.h>
@@ -246,15 +247,32 @@ struct cfunc_decl_t {
 
 typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
 
+template<typename CB>
+auto withContextDo(orc::ThreadSafeContext &tsctx, CB &&cb)
+{
+#if JL_LLVM_VERSION < 210000
+    auto lock = tsctx.getLock();
+    return cb(tsctx.getContext());
+#else
+    return tsctx.withContextDo(std::forward<CB>(cb));
+#endif
+}
+
+template<typename CB>
+auto withContextDo(orc::ThreadSafeContext &&tsctx, CB &&cb)
+{
+    return withContextDo(tsctx, std::forward<CB>(cb));
+}
+
 typedef std::list<std::tuple<std::string, std::string, unsigned int>> CallFrames;
 struct jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
-    orc::ThreadSafeContext::Lock tsctx_lock;
+    LLVMContext *_ctx{nullptr};
     DataLayout DL;
     Triple TargetTriple;
 
     inline LLVMContext &getContext() JL_NOTSAFEPOINT {
-        return *tsctx.getContext();
+        return *_ctx;
     }
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
@@ -293,9 +311,9 @@ struct jl_codegen_params_t {
     bool imaging_mode;
     bool safepoint_on_entry = true;
     bool use_swiftcc = true;
-    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
+    jl_codegen_params_t(orc::ThreadSafeContext ctx,
+                        DataLayout DL, Triple triple, std::defer_lock_t) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
       : tsctx(std::move(ctx)),
-        tsctx_lock(tsctx.getLock()),
         DL(std::move(DL)),
         TargetTriple(std::move(triple)),
         imaging_mode(1)
@@ -306,7 +324,27 @@ struct jl_codegen_params_t {
     }
     jl_codegen_params_t(jl_codegen_params_t &&) JL_NOTSAFEPOINT = default;
     ~jl_codegen_params_t() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
+
+    template<typename CB>
+    auto withContextDo(CB &&cb) {
+        return ::withContextDo(tsctx, [&] (LLVMContext *_ctx) {
+            this->_ctx = _ctx;
+            auto guard = make_scope_exit([&] { this->_ctx = nullptr; });
+            return cb(_ctx);
+        });
+    }
 };
+
+template<typename CB>
+auto withCodegenParamsDo(orc::ThreadSafeContext ctx, DataLayout DL,
+                         Triple triple, CB &&cb)
+{
+    jl_codegen_params_t params(std::move(ctx), std::move(DL),
+                               std::move(triple), std::defer_lock);
+    return params.withContextDo([&] (LLVMContext*) {
+        return cb(params);
+    });
+}
 
 const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
@@ -689,8 +727,9 @@ private:
 extern JuliaOJIT *jl_ExecutionEngine;
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT;
 inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT {
-    auto lock = ctx.getLock();
-    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), DL, triple), ctx);
+    return withContextDo(ctx, [&] (LLVMContext *_ctx) JL_NOTSAFEPOINT {
+        return orc::ThreadSafeModule(jl_create_llvm_module(name, *_ctx, DL, triple), ctx);
+    });
 }
 
 Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
