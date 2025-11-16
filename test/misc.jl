@@ -1647,6 +1647,9 @@ let errs = IOBuffer()
         @test 1+1 == 2
         using Dates
         '`, devnull, stdout, errs)
+    # This test assumes Dates will bump the world, but when it's in stdlib it doesnt ;)
+    # TODO: Maybe if we take out another stdlib like Pkg
+    # that isn't precompiled this will work?
     @test occursin("disable_new_worlds", String(take!(errs)))
 end
 
