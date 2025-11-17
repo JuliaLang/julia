@@ -20,3 +20,4 @@ CODEOWNERS @JuliaLang/github-actions
 /src/gc-stock.* @d-netto
 /src/gc-tls-common.h @d-netto
 /src/gc-tls-stock.h @d-netto
+/src/gc-* @udesou @qinsoon
