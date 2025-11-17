@@ -824,7 +824,10 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         # if env names a directory, search it
         proj = implicit_manifest_uuid_path(env, pkg)
         proj === nothing || return proj
-        # if not found
+        # if not found, this might be an extension - first we fast path needing
+        # to scan the whole directory for a matching extension by peeking at
+        # EXT_PRIMED. However, this only works if the parent package was loaded.
+        # This is usually the case, but not always, e.g. in precompilation.
         triggers = get(EXT_PRIMED, pkg, nothing)
         if triggers !== nothing
             parentid = triggers[1]
@@ -836,6 +839,10 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
                     mby_ext === nothing || return mby_ext
                 end
             end
+        else
+            # We still need to scan the whole directory for extensions.
+            ext_path, ext_proj = implicit_env_project_file_extension(env, pkg)
+            ext_path === nothing || return ext_path
         end
     end
     return nothing
@@ -1130,8 +1137,8 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
             extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
-                parent_path = locate_package(PkgId(UUID(uuid), name))
-                if parent_path === nothing
+                parent_path = explicit_manifest_entry_path(manifest_file, PkgId(UUID(uuid), name), entry)
+                if parent_path === nothing || parent_path === missing
                     error("failed to find source of parent package: \"$name\"")
                 end
                 p = normpath(dirname(parent_path), "..")
@@ -4225,7 +4232,6 @@ end
                 # file before comparing it with `modpath`.
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
                 if !(isreadable(stdlib_path) && samefile(stdlib_path, modpath))
-                    !samefile(fixup_stdlib_path(includes[1].filename), modpath)
                     @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                     record_reason(reasons, "different source file path")
                     return true # cache file was compiled from a different path
