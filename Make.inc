@@ -1508,7 +1508,7 @@ RPATH_LIB := $(RPATH_ORIGIN)
 
 # --whole-archive
 ifeq ($(OS), Darwin)
-  WHOLE_ARCHIVE := -Xlinker -all_load
+  WHOLE_ARCHIVE := -Xlinker -force_load
   NO_WHOLE_ARCHIVE :=
 else
   WHOLE_ARCHIVE := -Wl,--whole-archive
@@ -1578,8 +1578,6 @@ endif
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
-WHOLE_ARCHIVE := -Xlinker -all_load
-NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif

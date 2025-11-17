@@ -107,7 +107,7 @@ function ld()
 end
 
 const WHOLE_ARCHIVE = if Sys.isapple()
-    "-all_load"
+    "-force_load"
 else
     "--whole-archive"
 end
