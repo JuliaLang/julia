@@ -1598,10 +1598,17 @@ static bool jl_is_pointerfree(jl_value_t* t)
     return layout && layout->npointers == 0;
 }
 
+static bool allpointers(size_t size, size_t npointers)
+{
+    return size == npointers * sizeof(void*);
+}
+
 static bool allpointers(jl_datatype_t *typ)
 {
-    return jl_datatype_size(typ) == typ->layout->npointers * sizeof(void*);
+    return allpointers(jl_datatype_size(typ), typ->layout->npointers);
 }
+
+
 
 // these queries are usually related, but we split them out here
 // for convenience and clarity (and because it changes the calling convention)
@@ -1630,6 +1637,8 @@ static bool deserves_sret(jl_value_t *dt, Type *T)
     assert(jl_is_datatype(dt));
     return (size_t)jl_datatype_size(dt) > sizeof(void*) && !T->isFloatingPointTy() && !T->isVectorTy();
 }
+static void union_alloca_type(jl_uniontype_t *ut,
+        bool &allunbox, size_t &nbytes, size_t &align, size_t &min_align, size_t &inline_roots);
 
 // Alias Analysis Info (analogous to llvm::AAMDNodes)
 struct jl_aliasinfo_t {
@@ -1812,24 +1821,34 @@ struct jl_cgval_t {
         }
         // discard roots that do not apply anymore
         // or drop this whole value if there are not enough roots to populate it
-        if (!inline_roots.empty() && tindex == nullptr) {
+        if (!inline_roots.empty()) {
             size_t inline_roots_count;
-            if (!deserves_stack(typ)) {
+            bool justpointers = false;
+            if (tindex) {
+                bool allunbox;
+                size_t nbytes, align, min_align;
+                union_alloca_type((jl_uniontype_t*)typ, allunbox, nbytes, align, min_align, inline_roots_count);
+                justpointers = allpointers(nbytes, inline_roots_count);
+                if (inline_roots_count > inline_roots.size())
+                    inline_roots_count = inline_roots.size();
+            }
+            else if (!deserves_stack(typ)) {
                 inline_roots_count = 0;
             }
             else {
                 const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
                 inline_roots_count = layout ? layout->npointers : 0;
+                justpointers = allpointers((jl_datatype_t*)typ);
             }
             assert(v.TIndex || inline_roots.size() == inline_roots_count);
-            if (v.V == nullptr && v.constant == nullptr && !isghost && (inline_roots_count == 0 || !allpointers((jl_datatype_t*)typ)))
+            if (V == nullptr && constant == nullptr && !isghost && (inline_roots_count == 0 || !justpointers))
                 *this = jl_cgval_t(); // no data to populate this value
             else if (inline_roots_count < inline_roots.size())
                 inline_roots.truncate(inline_roots_count);
             else if (inline_roots_count > inline_roots.size())
                 *this = jl_cgval_t(); // not enough roots to populate this value
             // drop data if all of the content is in the roots
-            if (inline_roots_count > 0 && allpointers((jl_datatype_t*)typ))
+            if (inline_roots_count > 0 && justpointers)
                 V = nullptr;
         }
     }
@@ -2368,6 +2387,8 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
         jl_value_t *utyp = jl_unwrap_unionall(typ);
         if (jl_is_datatype(utyp)) {
             bool alwaysboxed;
+            // XXX: need to make this check more precisely correct WRT v.typ, since we would need to load up the roots if it is treated as unboxed
+            // maybe call `convert_julia_type` to handle the details here (or move those details here)?
             if (jl_is_concrete_type(utyp))
                 alwaysboxed = deserves_unionbox(utyp);
             else
@@ -2687,8 +2708,8 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
                     });
                 }
                 return result;
-            } else {
-                assert(jl_type_intersection(v.typ, typ) == (jl_value_t*)jl_bottom_type);
+            }
+            else {
                 return jl_cgval_t(); // undef / unreachable
             }
         }

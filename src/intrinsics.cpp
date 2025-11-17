@@ -1154,30 +1154,18 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     setName(ctx.emission_context, isfalse, "ifelse_cond");
     jl_value_t *t1 = x.typ;
     jl_value_t *t2 = y.typ;
-    // handle cases where the condition is irrelevant based on type info
-    if (t1 == jl_bottom_type && t2 == jl_bottom_type)
-        return jl_cgval_t(); // undefined
-    if (t1 == jl_bottom_type)
-        return y;
-    if (t2 == jl_bottom_type)
-        return x;
-
-    if (t1 != t2) {
-        // type inference may know something we don't, in which case it may
-        // be illegal for us to convert to rt_hint. Check first if either
-        // of the types have empty intersection with the result type,
-        // in which case, we may use the other one.
-        if (jl_type_intersection(t1, rt_hint) == jl_bottom_type)
-            return y;
-        else if (jl_type_intersection(t2, rt_hint) == jl_bottom_type)
-            return x;
-        // if they aren't the same type, consider using the expr type
+   if (t1 != t2) {
+        // if they aren't the same type, use the expr type
         // to instantiate a union-split optimization
         x = convert_julia_type(ctx, x, rt_hint);
         y = convert_julia_type(ctx, y, rt_hint);
         t1 = x.typ;
         t2 = y.typ;
     }
+    if (t1 == jl_bottom_type)
+        return y;
+    if (t2 == jl_bottom_type)
+        return x;
 
     Value *ifelse_result;
     bool isboxed = t1 != t2 || !deserves_stack(t1);
