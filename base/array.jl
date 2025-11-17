@@ -212,6 +212,31 @@ false
 julia> Base.allocatedinline(Complex{Int})
 true
 ```
+
+Whether or not a type is `allocatedinline` determines whether or not objects of that type can be undefined
+in arrays or as fields of enclosing types, or if it will be replaced with garbage bits read from memory.
+```
+julia> Vector{Int}(undef, 1)
+1-element Vector{Int64}:
+ 8
+
+julia> Vector{Union{Int, Float64}}(undef, 1)
+1-element Vector{Union{Float64, Int64}}:
+ 0.0
+
+julia> Vector{Real}(undef, 1)
+1-element Vector{Real}:
+ #undef
+
+julia> Vector{Complex}(undef, 1)
+1-element Vector{Complex}:
+ #undef
+
+julia> Vector{Complex{Int}}(undef, 1)
+1-element Vector{Complex{Int64}}:
+ 139934851180016 + 7957332965790215680im
+```
+See also [`isdefined`](@ref), [`isassigned`](@ref)
 """
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
