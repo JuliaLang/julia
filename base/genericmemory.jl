@@ -439,9 +439,6 @@ true
 julia> Base.allocatedinline(Union{Int, Float64})
 true
 
-julia> Base.allocatedinline(Real)
-true
-
 julia> Base.allocatedinline(Complex)
 false
 
@@ -459,10 +456,6 @@ julia> Vector{Int}(undef, 1)
 julia> Vector{Union{Int, Float64}}(undef, 1)
 1-element Vector{Union{Float64, Int64}}:
  0.0
-
-julia> Vector{Real}(undef, 1)
-1-element Vector{Real}:
- #undef
 
 julia> Vector{Complex}(undef, 1)
 1-element Vector{Complex}:
