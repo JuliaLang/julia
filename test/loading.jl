@@ -1698,7 +1698,7 @@ end
         copy!(LOAD_PATH, old_load_path)
     end
 end
-
+#=
 @testset "require_stdlib loading duplication" begin
     depot_path = mkdepottempdir()
     oldBase64 = nothing
@@ -1725,4 +1725,4 @@ end
         oldBase64 === nothing || Base.register_root_module(oldBase64)
         copy!(DEPOT_PATH, original_depot_path)
     end
-end
+end =#

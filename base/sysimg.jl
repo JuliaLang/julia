@@ -96,6 +96,46 @@ let
             # 1-depth packages
             :LinearAlgebra, # Commits type-piracy and GEMM
             :Random, # Can't be removed due to rand being exported by Base
+
+            # PackageCompiler's 1.10 list
+            :LibSSH2_jll,
+            :OpenBLAS_jll,
+            :nghttp2_jll,
+            :Serialization,
+            :LibGit2_jll,
+            # :Libdl,
+            # :SHA,
+            :Downloads,
+            # ,
+            :Pkg,
+            # :FileWatching,
+            # :Artifacts,
+            :Base64,
+            :Dates,
+            :InteractiveUtils,
+            :libblastrampoline_jll,
+            :Markdown,
+            :p7zip_jll,
+            :Unicode,
+            :UUIDs,
+            :MozillaCACerts_jll,
+            :LibCURL_jll,
+            :TOML,
+            :CRC32c,
+            :Logging,
+            # :REPL, This hangs for some reason @kristoffer
+            # :MbedTLS_jll, # Complains about not being found
+            :LibCURL,
+            :NetworkOptions,
+            :Tar,
+            :LibGit2,
+            :Mmap,
+            # :LinearAlgebra,
+            # :Random,
+            # :Sockets,
+            :Future,
+            :Printf,
+            :ArgTools,
         ]
     end
     # PackageCompiler can filter out stdlibs so it can be empty
