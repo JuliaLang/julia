@@ -361,7 +361,7 @@ end
 """
     Sys.uptime()
 
-Gets the current system uptime in seconds.
+Get the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
