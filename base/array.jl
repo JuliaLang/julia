@@ -187,6 +187,32 @@ end
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
+"""
+     allocatedinline(::Type{T}) :: Bool
+
+Returns whether an object of type `T` is able to be inline allocated inside of enclosing structres or arrays,
+of if it must be allocated as a reference. Generally, types which are immutable and whose instances have a
+finite, statically determinable size can be allocated inline, whereas everything else is allocated using
+reference pointers.
+
+# Examples
+```jldoctest
+julia> Base.allocatedinline(Int)
+true
+
+julia> Base.allocatedinline(Union{Int, Float64})
+true
+
+julia> Base.allocatedinline(Real)
+true
+
+julia> Base.allocatedinline(Complex)
+false
+
+julia> Base.allocatedinline(Complex{Int})
+true
+```
+"""
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
