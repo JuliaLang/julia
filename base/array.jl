@@ -190,7 +190,7 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 """
      allocatedinline(::Type{T}) :: Bool
 
-Returns whether an object of type `T` is able to be inline allocated inside of enclosing structres or arrays,
+Returns whether an object of type `T` is able to be inline allocated inside of enclosing structs or arrays,
 of if it must be allocated as a reference. Generally, types which are immutable and whose instances have a
 finite, statically determinable size can be allocated inline, whereas everything else is allocated using
 reference pointers.
