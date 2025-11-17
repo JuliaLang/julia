@@ -107,7 +107,7 @@ let
             # :SHA,
             :Downloads,
             # ,
-            # :Pkg, # Complains about 7z locally
+            :Pkg,
             # :FileWatching,
             # :Artifacts,
             :Base64,
