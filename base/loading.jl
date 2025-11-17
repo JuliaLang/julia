@@ -4225,7 +4225,6 @@ end
                 # file before comparing it with `modpath`.
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
                 if !(isreadable(stdlib_path) && samefile(stdlib_path, modpath))
-                    !samefile(fixup_stdlib_path(includes[1].filename), modpath)
                     @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                     record_reason(reasons, "different source file path")
                     return true # cache file was compiled from a different path
