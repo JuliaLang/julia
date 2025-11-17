@@ -2676,9 +2676,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     assert(!isboxed && maybe_null_if_boxed);
                     Value *first_ptr = extract_first_ptr(ctx, realinstr);
                     assert(first_ptr != nullptr);
-                    Done = ctx.builder.CreateIsNotNull(first_ptr);
+                    // Done = Success || first_ptr != NULL
+                    Done = ctx.builder.CreateOr(Success, ctx.builder.CreateIsNotNull(first_ptr));
                 }
                 else {
+                    // Done = Success || first_ptr == NULL || oldval == cmpop)
                     // Done = !(!Success && (first_ptr != NULL && oldval == cmpop))
                     Done = emit_guarded_test(ctx, ctx.builder.CreateNot(Success), false, [&] {
                         Value *first_ptr = nullptr;
