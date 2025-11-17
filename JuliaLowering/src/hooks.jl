@@ -15,7 +15,7 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
     file = file isa Ptr{UInt8} ? unsafe_string(file) : file
     line = !(line isa Int) ? Int(line) : line
 
-    local st0 = nothing
+    local st0, st1 = nothing, nothing
     try
         st0 = code isa Expr ? expr_to_syntaxtree(code, LineNumberNode(line, file)) : code
         if kind(st0) in KSet"toplevel module"
@@ -32,7 +32,7 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
         ex = to_lowered_expr(st5)
         return Core.svec(ex, st5, ctx5)
     catch exc
-        @info("JuliaLowering threw given input:", code=code, st0=st0, file=file, line=line, mod=mod)
+        @info("JuliaLowering threw given input:", code=code, st0=st0, st1=st1, file=file, line=line, mod=mod)
         rethrow(exc)
 
         # TODO: Re-enable flisp fallback once we're done collecting errors

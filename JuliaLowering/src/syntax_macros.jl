@@ -22,6 +22,8 @@ function _apply_nospecialize(ctx, ex)
     elseif k == K"..." || k == K"::" || k == K"="
         if k == K"::" && numchildren(ex) == 1
             ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
+        elseif k == K"="
+            ex = @ast ctx ex [K"kw" ex[1] ex[2]]
         end
         mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
     else
@@ -293,7 +295,7 @@ function _at_eval_code(ctx, srcref, mod, ex)
                     mod
                     [K"quote" ex]
                     [K"parameters"
-                        [K"="
+                        [K"kw"
                             "expr_compat_mode"::K"Identifier"
                             ctx.expr_compat_mode::K"Bool"
                         ]

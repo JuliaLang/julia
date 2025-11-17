@@ -471,8 +471,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # TODO: Upstream should set a general flag for detecting parenthesized
         # expressions so we don't need to dig into `green_tree` here. Ugh!
         plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) &&
-                       kind(ex[1]) == K"Identifier" &&
-                       (sr = sourceref(ex); sr isa SourceRef && kind(sr.green_tree[2]) != K"parens")
+            kind(ex[1]) == K"Identifier" && (
+                prov = flattened_provenance(ex);
+                length(prov) >= 1 && kind(prov[end][end]) != K"parens")
         if plain_symbol
             # As a compromise for compatibility, we treat non-parenthesized
             # colon quoted identifiers like `:x` as plain Symbol literals
