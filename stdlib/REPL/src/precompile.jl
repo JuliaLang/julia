@@ -7,7 +7,8 @@ import ..REPL
 # Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
 Base._track_dependencies[] = false
 try
-    Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+    Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
+    @Core.latestworld
     import .FakePTYs: open_fake_pty
 finally
     Base._track_dependencies[] = true
@@ -23,7 +24,8 @@ function repl_workload()
     function check_errors(out)
         str = String(out)
         if occursin("ERROR:", str) && !any(occursin(e, str) for e in allowed_errors)
-            @error "Unexpected error (Review REPL precompilation with debug_output on):\n$str"
+            @error "Unexpected error (Review REPL precompilation with debug_output on):\n$str" exception=(
+                Base.PrecompilableError(), Base.backtrace())
             exit(1)
         end
     end
@@ -39,6 +41,7 @@ function repl_workload()
 
     # This is notified as soon as the first prompt appears
     repl_init_event = Base.Event()
+    repl_init_done_event = Base.Event()
 
     atreplinit() do repl
         # Main is closed so we can't evaluate in it, but atreplinit runs at
@@ -47,6 +50,7 @@ function repl_workload()
         t = @async begin
             wait(repl_init_event)
             REPL.activate(REPL.Precompile; interactive_utils=false)
+            notify(repl_init_done_event)
         end
         Base.errormonitor(t)
     end
@@ -57,6 +61,7 @@ function repl_workload()
     printstyled("a", "b")
     display([1])
     display([1 2; 3 4])
+    display("a string")
     foo(x) = 1
     @time @eval foo(1)
     ; pwd
@@ -74,17 +79,32 @@ function repl_workload()
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
+    \x12?\x7f\e[A\e[B\t history\r
     println("done")
     """
 
     JULIA_PROMPT = "julia> "
+    # The help text for `reinterpret` has example `julia>` prompts in it,
+    # so use the longer prompt to avoid desychronization.
+    ACTIVATED_JULIA_PROMPT = "(REPL.Precompile) julia> "
     PKG_PROMPT = "pkg> "
     SHELL_PROMPT = "shell> "
     HELP_PROMPT = "help?> "
 
-    blackhole = Sys.isunix() ? "/dev/null" : "nul"
+    tmphistfile = tempname()
+    write(tmphistfile, """
+    # time: 2020-10-31 13:16:39 AWST
+    # mode: julia
+    \tcos
+    # time: 2020-10-31 13:16:40 AWST
+    # mode: julia
+    \tsin
+    # time: 2020-11-01 02:19:36 AWST
+    # mode: help
+    \t?
+    """)
 
-    withenv("JULIA_HISTORY" => blackhole,
+    withenv("JULIA_HISTORY" => tmphistfile,
             "JULIA_PROJECT" => nothing, # remove from environment
             "JULIA_LOAD_PATH" => "@stdlib",
             "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
@@ -140,18 +160,24 @@ function repl_workload()
             end
             schedule(repltask)
             # wait for the definitive prompt before start writing to the TTY
-            check_errors(readuntil(output_copy, JULIA_PROMPT))
+            check_errors(readuntil(output_copy, JULIA_PROMPT, keep=true))
+
+            # Switch to the activated prompt
+            notify(repl_init_event)
+            wait(repl_init_done_event)
+            write(ptm, "\n")
+            # The prompt prints twice - once for the restatement of the input, once
+            # to indicate ready for the new prompt.
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+
             write(debug_output, "\n#### REPL STARTED ####\n")
-            sleep(0.01)
-            check_errors(readavailable(output_copy))
             # Input our script
             precompile_lines = split(repl_script::String, '\n'; keepempty=false)
             curr = 0
             for l in precompile_lines
                 sleep(0.01) # try to let a bit of output accumulate before reading again
                 curr += 1
-                # consume any other output
-                bytesavailable(output_copy) > 0 && check_errors(readavailable(output_copy))
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
                 # If the line ends with a CTRL_C, don't write an extra newline, which would
@@ -164,13 +190,12 @@ function repl_workload()
                 strbuf = ""
                 while !eof(output_copy)
                     strbuf *= String(readavailable(output_copy))
-                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(ACTIVATED_JULIA_PROMPT, strbuf) && break
                     occursin(PKG_PROMPT, strbuf) && break
                     occursin(SHELL_PROMPT, strbuf) && break
                     occursin(HELP_PROMPT, strbuf) && break
                     sleep(0.01) # try to let a bit of output accumulate before reading again
                 end
-                notify(repl_init_event)
                 check_errors(strbuf)
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
@@ -189,13 +214,18 @@ end
 
 let
     if Base.generating_output() && Base.JLOptions().use_pkgimages != 0
-        repl_workload()
-        precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
-        precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
-        precompile(Tuple{typeof(Base.:(==)), Char, String})
-        #for child in copy(Base.newly_inferred)
-        #    precompile((child::Base.CodeInstance).def)
-        #end
+        # Bare-bones PrecompileTools.jl
+        # Do we need latestworld-if-toplevel here
+        ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+        try
+            repl_workload()
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
+            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
+            precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+            precompile(Tuple{typeof(Base.:(==)), Char, String})
+        finally
+            ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+        end
     end
 end
 

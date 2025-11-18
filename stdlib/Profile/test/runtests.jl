@@ -155,6 +155,20 @@ end
 @test z == 10
 end
 
+@testset "@profile no scope" begin
+    @profile no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    @profile_walltime no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    Profile.Allocs.@profile no_scope_57858_2 = 1
+    @test @isdefined no_scope_57858_2
+    Profile.Allocs.clear()
+end
+
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
@@ -206,9 +220,19 @@ end
 
 import InteractiveUtils
 
+@generated function compile_takes_1_second(x)
+    t = time_ns()
+    while time_ns() < t + 1e9
+        # busy wait for 1 second
+    end
+    return :(x)
+end
 @testset "Module short names" begin
     Profile.clear()
-    @profile InteractiveUtils.peakflops()
+    @profile begin
+        @eval compile_takes_1_second(1) # to increase chance of profiling hitting compilation code
+        InteractiveUtils.peakflops()
+    end
     io = IOBuffer()
     ioc = IOContext(io, :displaysize=>(1000,1000))
     Profile.print(ioc, C=true)
@@ -220,6 +244,23 @@ import InteractiveUtils
     @test occursin("@LinearAlgebra" * slash, str)
     @test occursin("@juliasrc" * slash, str)
     @test occursin("@julialib" * slash, str)
+end
+
+function run_with_watchdog(cmd, timeout=120)
+    p = open(cmd)
+    t = Timer(timeout) do t
+        # should be under 10 seconds, so give it 2 minutes then report failure
+        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGKILL)
+    end
+    s = read(p, String)
+    close(t)
+    close(p)
+    success(p) ? s : ""
 end
 
 # Profile deadlocking in compilation (debuginfo registration)
@@ -235,22 +276,24 @@ let cmd = Base.julia_cmd()
         print(Profile.len_data())
         """
     # use multiple threads here to ensure that profiling works with threading
-    p = open(`$cmd -t2 -e $script`)
-    t = Timer(120) do t
-        # should be under 10 seconds, so give it 2 minutes then report failure
-        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
-        kill(p, Base.SIGQUIT)
-        sleep(30)
-        kill(p, Base.SIGQUIT)
-        sleep(30)
-        kill(p, Base.SIGKILL)
-    end
-    s = read(p, String)
-    close(t)
-    @test success(p)
+    s = run_with_watchdog(`$cmd -t2 -e $script`)
     @test !isempty(s)
     @test occursin("done", s)
     @test parse(Int, split(s, '\n')[end]) > 100
+end
+
+# Thread suspend deadlock - run many times (#60042)
+let cmd = Base.julia_cmd()
+    script = """
+        using Profile
+        @profile println("done")
+        """
+    good = true
+    for i=1:100
+        s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
+        good &= occursin("done", s)
+    end
+    @test good
 end
 
 if Sys.isbsd() || Sys.islinux()
@@ -344,6 +387,8 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
+@static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
 
@@ -373,6 +418,7 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
 end
 
 @testset "PageProfile" begin

@@ -2,10 +2,29 @@
 
 ## Binary arithmetic operators ##
 
+function _broadcast_preserving_zero_d(f, A, B)
+    broadcast_preserving_zero_d(f, A, B)
+end
+
+# Using map over broadcast enables vectorization for wide matrices with few rows.
+# This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
+# https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
+function _broadcast_preserving_zero_d(f, A::Array, B::Array)
+    map(f, A, B)
+end
+
+function _broadcast_preserving_zero_d(f, A::Array, B::Number)
+    map(Fix2(f, B), A)
+end
+
+function _broadcast_preserving_zero_d(f, A::Number, B::Array)
+    map(Fix1(f, A), B)
+end
+
 for f in (:+, :-)
     @eval function ($f)(A::AbstractArray, B::AbstractArray)
         promote_shape(A, B) # check size compatibility
-        broadcast_preserving_zero_d($f, A, B)
+        _broadcast_preserving_zero_d($f, A, B)
     end
 end
 
@@ -13,15 +32,15 @@ function +(A::Array, Bs::Array...)
     for B in Bs
         promote_shape(A, B) # check size compatibility
     end
-    broadcast_preserving_zero_d(+, A, Bs...)
+    map(+, A, Bs...)
 end
 
 for f in (:/, :\, :*)
     if f !== :/
-        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = _broadcast_preserving_zero_d($f, A, B)
     end
     if f !== :\
-        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::AbstractArray, B::Number) = _broadcast_preserving_zero_d($f, A, B)
     end
 end
 
@@ -56,8 +75,8 @@ julia> reverse(b)
 !!! compat "Julia 1.6"
     Prior to Julia 1.6, only single-integer `dims` are supported in `reverse`.
 """
-reverse(A::AbstractArray; dims=:) = _reverse(A, dims)
-_reverse(A, dims) = reverse!(copymutable(A); dims)
+reverse(A::AbstractArray; dims::D=:) where {D} = _reverse(A, dims)
+_reverse(A, dims::D) where {D} = reverse!(copymutable(A); dims)
 
 """
     reverse!(A; dims=:)
@@ -67,17 +86,17 @@ Like [`reverse`](@ref), but operates in-place in `A`.
 !!! compat "Julia 1.6"
     Multidimensional `reverse!` requires Julia 1.6.
 """
-reverse!(A::AbstractArray; dims=:) = _reverse!(A, dims)
+reverse!(A::AbstractArray; dims::D=:) where {D} = _reverse!(A, dims)
 _reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))
 _reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
 _reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
 function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
+    dims === () && return A # nothing to reverse
     dimrev = ntuple(k -> k in dims, Val{N}()) # boolean tuple indicating reversed dims
 
     if N < M || M != sum(dimrev)
         throw(ArgumentError("invalid dimensions $dims in reverse!"))
     end
-    M == 0 && return A # nothing to reverse
 
     # swapping loop only needs to traverse ≈half of the array
     halfsz = ntuple(k -> k == dims[1] ? size(A,k) ÷ 2 : size(A,k), Val{N}())

@@ -12,9 +12,12 @@ Version number type which follows the specifications of
 [semantic versioning (semver)](https://semver.org/spec/v2.0.0-rc.2.html), composed of major, minor
 and patch numeric values, followed by pre-release and build
 alphanumeric annotations.
+As an extension to this standard, Julia also allows a single, empty prerelease annotation
+if there is no build identifier present (e.g. `1.0-`), or a single, empty build annotation (e.g. `1.0+`).
 
 `VersionNumber` objects can be compared with all of the standard comparison
 operators (`==`, `<`, `<=`, etc.), with the result following semver v2.0.0-rc.2 rules.
+Different from the semver standard, build annotations are not ignored when comparing version numbers.
 
 `VersionNumber` has the following public fields:
 - `v.major::Integer`
@@ -218,7 +221,7 @@ function isless(a::VersionNumber, b::VersionNumber)
 end
 
 function hash(v::VersionNumber, h::UInt)
-    h += 0x8ff4ffdb75f9fede % UInt
+    h ⊻= 0x8ff4ffdb75f9fede % UInt
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)

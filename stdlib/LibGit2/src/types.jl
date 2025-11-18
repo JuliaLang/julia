@@ -860,6 +860,28 @@ end
 @assert Base.allocatedinline(StatusOptions)
 
 """
+    LibGit2.ApplyOptions
+
+Options for applying a diff.
+Matches the [`git_apply_options`](https://libgit2.org/libgit2/#HEAD/type/git_apply_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `delta_cb`: optional callback that will be made before each delta is applied.
+  * `hunk_cb`: optional callback that will be made before each hunk is applied.
+  * `payload`: the payload for the callback functions.
+  * `flags`: flags controlling how the apply is performed (e.g., check mode).
+"""
+@kwdef struct ApplyOptions
+    version::Cuint           = Cuint(1)
+    delta_cb::Ptr{Cvoid}     = C_NULL
+    hunk_cb::Ptr{Cvoid}      = C_NULL
+    payload::Any             = nothing
+    flags::Cuint             = Cuint(0)
+end
+@assert Base.allocatedinline(ApplyOptions)
+
+"""
     LibGit2.StatusEntry
 
 Providing the differences between the file as it exists in HEAD and the index, and
@@ -953,7 +975,7 @@ end
 @assert Base.allocatedinline(ConfigBackendEntry)
 
 """
-    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry)::Tuple{String,String,String,String}
 
 Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
 
@@ -1042,8 +1064,8 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     (:GitRevWalker,      :GitRepo,                :AbstractGitObject, :git_revwalk),
     (:GitReference,      :GitRepo,                :AbstractGitObject, :git_reference),
     (:GitDescribeResult, :GitRepo,                :AbstractGitObject, :git_describe_result),
-    (:GitDiff,           :GitRepo,                :AbstractGitObject, :git_diff),
-    (:GitDiffStats,      :GitRepo,                :AbstractGitObject, :git_diff_stats),
+    (:GitDiff,           nothing,                 :AbstractGitObject, :git_diff),
+    (:GitDiffStats,      nothing,                 :AbstractGitObject, :git_diff_stats),
     (:GitAnnotated,      :GitRepo,                :AbstractGitObject, :git_annotated_commit),
     (:GitRebase,         :GitRepo,                :AbstractGitObject, :git_rebase),
     (:GitBlame,          :GitRepo,                :AbstractGitObject, :git_blame),
@@ -1272,7 +1294,7 @@ end
 abstract type AbstractCredential end
 
 """
-    isfilled(cred::AbstractCredential) -> Bool
+    isfilled(cred::AbstractCredential)::Bool
 
 Verifies that a credential is ready for use in authentication.
 """
@@ -1444,7 +1466,7 @@ function Base.shred!(p::CredentialPayload)
 end
 
 """
-    reset!(payload, [config]) -> CredentialPayload
+    reset!(payload, [config])::CredentialPayload
 
 Reset the `payload` state back to the initial values so that it can be used again within
 the credential callback. If a `config` is provided the configuration will also be updated.
@@ -1466,7 +1488,7 @@ function reset!(p::CredentialPayload, config::GitConfig=p.config)
 end
 
 """
-    approve(payload::CredentialPayload; shred::Bool=true) -> Nothing
+    approve(payload::CredentialPayload; shred::Bool=true) -> nothing
 
 Store the `payload` credential for re-use in a future authentication. Should only be called
 when authentication was successful.
@@ -1497,7 +1519,7 @@ function approve(p::CredentialPayload; shred::Bool=true)
 end
 
 """
-    reject(payload::CredentialPayload; shred::Bool=true) -> Nothing
+    reject(payload::CredentialPayload; shred::Bool=true) -> nothing
 
 Discard the `payload` credential from begin re-used in future authentication. Should only be
 called when authentication was unsuccessful.

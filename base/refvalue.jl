@@ -9,7 +9,7 @@ mutable struct RefValue{T} <: Ref{T}
 end
 RefValue(x::T) where {T} = RefValue{T}(x)
 """
-    isassigned(ref::RefValue) -> Bool
+    isassigned(ref::RefValue)::Bool
 
 Test whether the given [`Ref`](@ref) is associated with a value.
 This is always true for a [`Ref`](@ref) of a bitstype object.

@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+irshow_was_loaded() = invokelatest(isdefinedglobal, Compiler.IRShow, :debuginfo_firstline)
 function maybe_show_ir(ir::IRCode)
-    if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+    if irshow_was_loaded()
         # ensure we use I/O that does not yield, as this gets called during compilation
         invokelatest(Core.Main.Base.show, Core.stdout, "text/plain", ir)
     else
@@ -12,7 +13,7 @@ end
 
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
-        arg isa String && return esc(:(print && println(stderr, $arg)))
+        arg isa String && return esc(:(print && println($(GlobalRef(Core, :stderr)), $arg)))
         isexpr(arg, :string) || error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
@@ -24,13 +25,17 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || head === :thunk
+is_toplevel_expr_head(head::Symbol) = head === :method || head === :thunk
 is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
     if isa(op, SSAValue)
         op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
         if op.id > length(ir.stmts)
+            if op.id - length(ir.stmts) > length(ir.new_nodes.info)
+                @verify_error "Def ($(op.id)) points to non-existent new node"
+                raise_error()
+            end
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
@@ -61,16 +66,21 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
-            @verify_error "Unbound GlobalRef not allowed in value position"
-            raise_error()
+        if op.mod !== Core && op.mod !== Base
+            (valid_worlds, alldef) = scan_leaf_partitions(nothing, op, WorldWithRange(min_world(ir.valid_worlds), ir.valid_worlds)) do _, _, bpart
+                is_defined_const_binding(binding_kind(bpart))
+            end
+            if !alldef || max_world(valid_worlds) < max_world(ir.valid_worlds) || min_world(valid_worlds) > min_world(ir.valid_worlds)
+                @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
+                raise_error()
+            end
         end
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position
-        if isforeigncall && arg_idx == 1 && op.head === :call
-            # Allow a tuple in symbol position for foreigncall - this isn't actually
-            # a real call - it's interpreted in global scope by codegen. However,
-            # we do need to keep this a real use, because it could also be a pointer.
+        if isforeigncall && arg_idx == 1 && op.head === :tuple
+            # Allow a tuple literal in symbol position for foreigncall - this
+            # is syntax for a literal value or globalref - it is interpreted in
+            # global scope by codegen.
         elseif !is_value_pos_expr_head(op.head)
             if !allow_frontend_forms || op.head !== :opaque_closure_method
                 @verify_error "Expr not allowed in value position"
@@ -96,15 +106,16 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
+_debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream}) = IRShow.debuginfo_firstline(debuginfo)
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
                    𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance,
                    mi::Union{Nothing,MethodInstance}=nothing)
     function raise_error()
         error_args = Any["IR verification failed."]
-        if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+        if irshow_was_loaded()
             # ensure we use I/O that does not yield, as this gets called during compilation
-            firstline = invokelatest(IRShow.debuginfo_firstline, ir.debuginfo)
+            firstline = invokelatest(_debuginfo_firstline, ir.debuginfo)
         else
             firstline = nothing
         end
@@ -115,7 +126,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         if mi !== nothing
             push!(error_args, "\n", "  Method instance: ", mi)
         end
-        error(error_args...)
+        invokelatest(error, error_args...)
     end
     # Verify CFG graph. Must be well formed to construct domtree
     if !(length(ir.cfg.blocks) - 1 <= length(ir.cfg.index) <= length(ir.cfg.blocks))
@@ -372,6 +383,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     if stmt.args[1] isa GlobalRef
                         # undefined GlobalRef is OK in isdefined
+                        continue
+                    end
+                elseif stmt.head === :throw_undef_if_not
+                    if length(stmt.args) > 3
+                        @verify_error "malformed throw_undef_if_not"
+                        raise_error()
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in throw_undef_if_not
                         continue
                     end
                 elseif stmt.head === :gc_preserve_end
