@@ -34,10 +34,11 @@ function Base.var"@nospecialize"(__context__::MacroContext, ex, exs...)
     _apply_nospecialize(__context__, ex)
 end
 
-function Base.var"@atomic"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
-    @ast __context__ __context__.macrocall [K"atomic" ex]
-end
+# TODO: support all forms that the original supports
+# function Base.var"@atomic"(__context__::MacroContext, ex)
+#     @chk kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
+#     @ast __context__ __context__.macrocall [K"atomic" ex]
+# end
 
 function Base.var"@label"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
