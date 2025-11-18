@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
+
 module Rebinding
     using Test
     make_foo() = Foo(1)
@@ -285,7 +287,7 @@ module RangeMerge
 
     function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
         params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-        d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
         sprint(print, d)
     end
 
@@ -317,4 +319,153 @@ module UndefinedTransitions
     let ci = first(methods(foo54733)).specializations.cache
         @test Base.Compiler.is_nothrow(Base.Compiler.decode_effects(ci.ipo_purity_bits))
     end
+end
+
+# Identical implicit partitions should be merge (#57923)
+for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),
+                convert(Core.Binding, GlobalRef(Base, :Intrinsics)))
+    # Test that these both only have two partitions
+    @test isdefined(binding, :partitions)
+    @test isdefined(binding.partitions, :next)
+    @test !isdefined(binding.partitions.next, :next)
+end
+
+# Test various scenarios for implicit partition merging
+module MergeStress
+    for i = 1:5
+        @eval module $(Symbol("M$i"))
+            export x, y
+            const x = 1
+            const y = 2
+        end
+    end
+    const before = Base.get_world_counter()
+    using .M1
+    const afterM1 = Base.get_world_counter()
+    using .M2
+    const afterM2 = Base.get_world_counter()
+    using .M3
+    const afterM3 = Base.get_world_counter()
+    using .M4
+    const afterM4 = Base.get_world_counter()
+    using .M5
+    const afterM5 = Base.get_world_counter()
+end
+
+function count_partitions(b::Core.Binding)
+    n = 0
+    isdefined(b, :partitions) || return n
+    bpart = b.partitions
+    while true
+        n += 1
+        isdefined(bpart, :next) || break
+        bpart = bpart.next
+    end
+    return n
+end
+using Base: invoke_in_world
+
+const xbinding = convert(Core.Binding, GlobalRef(MergeStress, :x))
+function access_and_count(point)
+    invoke_in_world(getglobal(MergeStress, point), getglobal, MergeStress, :x)
+    count_partitions(xbinding)
+end
+
+@test count_partitions(xbinding) == 0
+@test access_and_count(:afterM1) == 1
+# M2 is the first change to the `usings` table after M1. The partitions
+# can and should be merged
+@test access_and_count(:afterM2) == 1
+
+# There is a gap between M2 and M5 - the partitions should not be merged
+@test access_and_count(:afterM5) == 2
+
+# M4 and M5 are adjacent, these partitions should also be merged (in the opposite direction)
+@test access_and_count(:afterM4) == 2
+
+# M3 connects all, so we should have a single partition
+@test access_and_count(:afterM3) == 1
+
+# Test that delete_binding in an outdated world age works
+module BindingTestModule; end
+function create_and_delete_binding()
+    Core.eval(BindingTestModule, :(const x = 1))
+    Base.delete_binding(BindingTestModule, :x)
+end
+create_and_delete_binding()
+@test Base.binding_kind(BindingTestModule, :x) == Base.PARTITION_KIND_GUARD
+
+# Test that we properly invalidate bindings if the value changes, not just the
+# export status (#59272)
+module Invalidate59272
+    using Test
+    module Foo
+        export Bar
+        struct Bar
+        # x
+        end
+    end
+    using .Foo
+    @test isa(Bar(), Foo.Bar)
+    Core.eval(Foo, :(struct Bar; x; end))
+    @test Bar(1) == Foo.Bar(1)
+end
+
+# Test @reexport
+module ReexportTests
+    using Test
+    using Base.Experimental: @reexport
+
+    # Test dynamic export additions through reexport
+    module Source1
+        export s1
+        s1() = "s1"
+    end
+    module Reexporter1
+        import ..@reexport
+        @reexport using ..Source1
+    end
+    module User1
+        using ..Reexporter1
+    end
+    @test (:s1,) ⊆ names(Reexporter1)
+    @test User1.s1() == "s1"
+    Core.eval(Source1, :(s2() = "s2"; export s2))
+    @test (:s1, :s2) ⊆ names(Reexporter1)
+    @test User1.s2() == "s2"
+
+    # Test reexport syntax, multiple modules
+    module Source2
+        export s3
+        s3() = "s3"
+    end
+    module Reexporter2
+        import ..@reexport
+        @reexport using ..Source2, ..Source1
+    end
+    module User2
+        using ..Reexporter2
+    end
+    @test (:s1, :s3) ⊆ names(Reexporter2)
+    @test User2.s1() == "s1"
+    @test User2.s3() == "s3"
+
+    # Test same name from different modules - one with reexport, one without
+    module Source3
+        export same_name
+        const same_name = 42
+    end
+    module Source4
+        export same_name
+        const same_name = 42
+    end
+    module Reexporter3
+        import ..@reexport
+        using ..Source4  # without reexport
+        @reexport using ..Source3
+    end
+    module User3
+        using ..Reexporter3
+    end
+    @test User3.same_name == 42
 end

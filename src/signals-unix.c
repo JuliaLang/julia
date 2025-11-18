@@ -236,9 +236,9 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     signal(sig, SIG_DFL);
     uv_tty_reset_mode();
     if (sig == SIGILL)
-        jl_show_sigill(context);
+        jl_fprint_sigill(ios_safe_stderr, context);
     jl_task_t *ct = jl_get_current_task();
-    jl_critical_error(sig, info->si_code, jl_to_bt_context(context), ct);
+    jl_fprint_critical_error(ios_safe_stderr, sig, info->si_code, jl_to_bt_context(context), ct);
     if (ct)
         jl_atomic_store_relaxed(&ct->ptls->safepoint, (size_t*)NULL + 1);
     if (info->si_code == 0 ||
@@ -303,6 +303,8 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 }
 #endif
 
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx);
+
 #if defined(HAVE_MACH)
 #include "signals-mach.c"
 #else
@@ -310,34 +312,25 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #include <sys/eventfd.h>
 #include <link.h>
 
-#ifndef _OS_FREEBSD_
 typedef struct {
-    void (*f)(void*) JL_NOTSAFEPOINT;
-    void *ctx;
-} callback_t;
+    int16_t tid;
+    bt_context_t *ctx;
+    int success;
+} callback_data_t;
 static int with_dl_iterate_phdr_lock(struct dl_phdr_info *info, size_t size, void *data)
 {
     jl_lock_profile();
-    callback_t *callback = (callback_t*)data;
-    callback->f(callback->ctx);
+    callback_data_t *cb_data = (callback_data_t*)data;
+    cb_data->success = jl_thread_suspend_and_get_state(cb_data->tid, 1, cb_data->ctx);
     jl_unlock_profile();
     return 1; // only call this once
 }
-#endif
 
-void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
-#ifndef _OS_FREEBSD_
-    callback_t callback = {f, ctx};
-    dl_iterate_phdr(with_dl_iterate_phdr_lock, &callback);
-#else
-    // FreeBSD makes the questionable decisions to use a terrible implementation of a spin
-    // lock and to block all signals while a lock is held. However, that also means it is
-    // not currently vulnerable to this libunwind bug that other platforms can encounter.
-    jl_lock_profile();
-    f(ctx);
-    jl_unlock_profile();
-#endif
+    callback_data_t cb_data = {tid, ctx, 0};
+    dl_iterate_phdr(with_dl_iterate_phdr_lock, &cb_data);
+    return cb_data.success;
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
@@ -458,7 +451,7 @@ static int exit_signal_cond = -1;
 static int signal_caught_cond = -1;
 static int signals_inflight = 0;
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     int err;
     pthread_mutex_lock(&in_signal_lock);
@@ -560,7 +553,7 @@ static void JL_NORETURN jl_exit_thread0_cb(void)
 {
 CFI_NORETURN
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
-    jl_critical_error(thread0_exit_signo, 0, NULL, jl_current_task);
+    jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
 }
@@ -823,7 +816,8 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 void trigger_profile_peek(void)
 {
     jl_safe_printf("\n======================================================================================\n");
-    jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile\n", profile_peek_duration);
+    jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile.\n", profile_peek_duration);
+    jl_safe_printf("--trace-compile is enabled during profile collection.\n");
     jl_safe_printf("======================================================================================\n");
     if (profile_bt_size_max == 0) {
         // If the buffer hasn't been initialized, initialize with default size
@@ -844,7 +838,7 @@ void trigger_profile_peek(void)
 
 static jl_bt_element_t signal_bt_data[JL_MAX_BT_SIZE + 1];
 static size_t signal_bt_size = 0;
-static void do_critical_profile(void *ctx)
+static void do_critical_profile(void)
 {
     bt_context_t signal_context;
     // sample each thread, round-robin style in reverse order
@@ -852,7 +846,7 @@ static void do_critical_profile(void *ctx)
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     for (int i = nthreads; i-- > 0; ) {
         // notify thread to stop
-        if (!jl_thread_suspend_and_get_state(i, 1, &signal_context))
+        if (!jl_thread_suspend(i, &signal_context))
             continue;
 
         // do backtrace on thread contexts for critical signals
@@ -865,7 +859,7 @@ static void do_critical_profile(void *ctx)
     }
 }
 
-static void do_profile(void *ctx)
+static void do_profile(void)
 {
     bt_context_t signal_context;
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
@@ -882,7 +876,7 @@ static void do_profile(void *ctx)
             return;
         }
         // notify thread to stop
-        if (!jl_thread_suspend_and_get_state(tid, 1, &signal_context))
+        if (!jl_thread_suspend(tid, &signal_context))
             return;
         // unwinding can fail, so keep track of the current state
         // and restore from the SEGV handler if anything happens.
@@ -1061,7 +1055,7 @@ static void *signal_listener(void *arg)
         signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         if (critical) {
-            jl_with_stackwalk_lock(do_critical_profile, NULL);
+            do_critical_profile();
         }
         else if (profile) {
             if (profile_all_tasks) {
@@ -1069,7 +1063,7 @@ static void *signal_listener(void *arg)
                 jl_profile_task();
             }
             else {
-                jl_with_stackwalk_lock(do_profile, NULL);
+                do_profile();
             }
         }
 #ifndef HAVE_MACH
@@ -1111,8 +1105,11 @@ static void *signal_listener(void *arg)
             jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
             size_t i;
             for (i = 0; i < signal_bt_size; i += jl_bt_entry_size(signal_bt_data + i)) {
-                jl_print_bt_entry_codeloc(signal_bt_data + i);
+                jl_fprint_bt_entry_codeloc(ios_safe_stderr, signal_bt_data + i);
             }
+            jl_safe_printf("\n");
+            // Enable trace compilation to stderr with timing during profile collection
+            jl_force_trace_compile_timing_enable();
         }
     }
     return NULL;

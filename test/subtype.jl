@@ -68,6 +68,13 @@ function test_2()
     @test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Int,Int,Vararg{Int,1}})
     @test Tuple{Int,Vararg{Int}} == Tuple{Int,Vararg{Int}}
     @test (@UnionAll N Tuple{Int,Vararg{Int,N}}) == (@UnionAll N Tuple{Int,Vararg{Int,N}})
+    @test Union{Tuple{}, Tuple{Int}, Tuple{UInt}} <: Union{
+        Tuple{},
+        Tuple{Int},
+        Tuple{UInt},
+        Tuple{UInt, Vararg{UInt}},
+        Tuple{Int, Int, Vararg{Int}}
+    }
 
     @test issub_strict(Tuple{Tuple{Int,Int},Tuple{Int,Int}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
     @test !issub(Tuple{Tuple{Int,Int},Tuple{Int,}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
@@ -2087,8 +2094,7 @@ let A = Tuple{Any, Type{Ref{_A}} where _A},
     I = typeintersect(A, B)
     @test I != Union{}
     @test Tuple{Type{Ref{Integer}}, Type{Ref{Integer}}} <: I
-    # TODO: this intersection result seems too wide (I == B) ?
-    @test_broken !<:(Tuple{Type{Int}, Type{Int}}, I)
+    @test !<:(Tuple{Type{Int}, Type{Int}}, I)
 end
 
 @testintersect(Tuple{Type{T}, T} where T<:(Tuple{Vararg{_A, _B}} where _B where _A),
@@ -2757,3 +2763,33 @@ end
     Pair{N, T} where {N,NTuple{N,Int}<:T<:Tuple{Int,Vararg{Int}}},
     !Union{}
 )
+
+#issue 57852
+@testintersect(
+    Tuple{Type{T}, Type{<:F}, Type{<:F}} where {T, F<:Union{String, T}},
+    Tuple{Type{Complex{T}} where T, Type{Complex{T}} where T, Type{String}},
+    Tuple{Type{Complex{T}}, Type{Complex{T}}, Type{String}} where T
+)
+@testintersect(
+    Tuple{Type{T}, Type{<:Union{F, Nothing}}, Type{<:Union{F, Nothing}}} where {T, F<:Union{String, T}},
+    Tuple{Type{Complex{T}} where T, Type{Complex{T}} where T, Type{String}},
+    Tuple{Type{Complex{T}}, Type{Complex{T}}, Type{String}} where T
+)
+
+#issue 58129
+for k in 1:500
+    @eval struct $(Symbol(:T58129, k)){T} end
+end
+let Tvar = TypeVar(:Tvar)
+    V = UnionAll(Tvar, Union{(@eval($(Symbol(:T58129, k)){$Tvar}) for k in 1:500)...})
+    @test Set{<:V} <: AbstractSet{<:V}
+end
+let Tvar1 = TypeVar(:Tvar1), Tvar2 = TypeVar(:Tvar2)
+    V1 = UnionAll(Tvar1, Union{(@eval($(Symbol(:T58129, k)){$Tvar1}) for k in 1:100)...})
+    V2 = UnionAll(Tvar2, Union{(@eval($(Symbol(:T58129, k)){$Tvar2}) for k in 1:100)...})
+    @test Set{<:V2} <: AbstractSet{<:V1}
+end
+
+#issue 58115
+@test Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{             Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}  , Tuple{}} <:
+      Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}}}, Tuple{}}

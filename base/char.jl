@@ -51,7 +51,7 @@ represents a valid Unicode character.
 """
 Char
 
-@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
+@constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x)::UInt32)
 @constprop :aggressive AbstractChar(x::Number) = Char(x)
 @constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 @constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
@@ -225,7 +225,7 @@ size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
-IteratorSize(::Type{Char}) = HasShape{0}()
+IteratorSize(::Type{<:AbstractChar}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c
@@ -242,12 +242,12 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
+    hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
-isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
-==(x::AbstractChar, y::AbstractChar) = Char(x) == Char(y)
-hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
+isless(x::AbstractChar, y::AbstractChar) = isless(Char(x)::Char, Char(y)::Char)
+==(x::AbstractChar, y::AbstractChar) = Char(x)::Char == Char(y)::Char
+hash(x::AbstractChar, h::UInt) = hash(Char(x)::Char, h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
 @inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
@@ -277,7 +277,7 @@ end
 # (Packages may implement other IO subtypes to specify different encodings.)
 # In contrast, `write(io, c)` outputs a `c` in an encoding determined by typeof(c).
 print(io::IO, c::Char) = (write(io, c); nothing)
-print(io::IO, c::AbstractChar) = print(io, Char(c)) # fallback: convert to output UTF-8
+print(io::IO, c::AbstractChar) = print(io, Char(c)::Char) # fallback: convert to output UTF-8
 
 const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',

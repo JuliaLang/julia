@@ -352,6 +352,12 @@ end
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
+# Using the value of a `global` declaration is allowed, provided that value came
+# from something that isn't another `global` declaration:
+@test_nowarn Meta.lower(Main, Meta.parse("foo = global bar = baz()"))
+
+@test_nowarn Meta.lower(Main, Meta.parse("begin global foo; global bar end"))
+
 # issue #15844
 function f15844(x)
     x
@@ -596,10 +602,9 @@ let thismodule = @__MODULE__,
     @test !isdefined(M16096, :foo16096)
     @test !isdefined(M16096, :it)
     @test typeof(local_foo16096).name.module === thismodule
-    @test typeof(local_foo16096).name.mt.module === thismodule
-    @test getfield(thismodule, typeof(local_foo16096).name.mt.name) === local_foo16096
+    @test getfield(thismodule, typeof(local_foo16096).name.singletonname) === local_foo16096
     @test getfield(thismodule, typeof(local_foo16096).name.name) === typeof(local_foo16096)
-    @test !isdefined(M16096, typeof(local_foo16096).name.mt.name)
+    @test !isdefined(M16096, typeof(local_foo16096).name.singletonname)
     @test !isdefined(M16096, typeof(local_foo16096).name.name)
 end
 
@@ -1527,8 +1532,11 @@ end
 @test Meta.lower(@__MODULE__, :(return 0 for i=1:2)) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
 @test Meta.lower(@__MODULE__, :([ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
 @test Meta.lower(@__MODULE__, :(Int[ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :([ $(Expr(:thisfunction)) for i=1:2 ])) == Expr(:error, "\"@__FUNCTION__\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :($(Expr(:thisfunction)) for i=1:2)) == Expr(:error, "\"@__FUNCTION__\" not allowed inside comprehension or generator")
 @test [ ()->return 42 for i = 1:1 ][1]() == 42
 @test Function[ identity() do x; return 2x; end for i = 1:1 ][1](21) == 42
+@test @eval let f=[ ()->$(Expr(:thisfunction)) for i = 1:1 ][1]; f() === f; end
 
 # issue #27155
 macro test27155()
@@ -1939,7 +1947,7 @@ end
 # eval'ing :const exprs
 eval(Expr(:const, :_var_30877))
 @test !isdefined(@__MODULE__, :_var_30877)
-@test isconst(@__MODULE__, :_var_30877)
+@test !isconst(@__MODULE__, :_var_30877)
 
 # anonymous kw function in value position at top level
 f30926 = function (;k=0)
@@ -2287,6 +2295,11 @@ end
     @test Meta.parse("a ⥷ b") == Expr(:call, :⥷, :a, :b)
 end
 
+# issue 57143
+@testset "binary 🢲" begin
+    @test Meta.parse("a 🢲 b") == Expr(:call, :🢲, :a, :b)
+end
+
 # only allow certain characters after interpolated vars (#25231)
 @test_parseerror("\"\$x෴  \"",
                  "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
@@ -2417,15 +2430,6 @@ macro a35391(b)
 end
 @test @a35391(0) === (0,)
 
-# global declarations from the top level are not inherited by functions.
-# don't allow such a declaration to override an outer local, since it's not
-# clear what it should do.
-@test Meta.lower(Main, :(let
-                           x = 1
-                           let
-                             global x
-                           end
-                         end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
 # note: this `begin` block must be at the top level
 _temp_33553 = begin
     global _x_this_remains_undefined
@@ -2436,6 +2440,70 @@ _temp_33553 = begin
 end
 @test _temp_33553 == 2
 @test !@isdefined(_x_this_remains_undefined)
+
+module GlobalContainment
+using Test
+@testset "scope of global declarations" begin
+
+    # global declarations from the top level are not inherited by functions.
+    # don't allow such a declaration to override an outer local, since it's not
+    # clear what it should do.
+    @test Meta.lower(
+        Main,
+        :(let
+              x = 1
+              let
+                  global x
+              end
+          end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
+
+    # a declared global can shadow a local in an outer scope
+    @test let
+        function f()
+            g0 = 2
+            let; global g0 = 1; end
+            a = () -> (global g0 = 1); a();
+            return g0
+        end
+        (f(), g0);
+    end === (2, 1)
+    @test let
+        function f()
+            let; global g2 = 1; end;
+            let; try; g2 = 2; catch _; end; end;
+        end
+        (f(), g2)
+    end === (2, 1)
+
+    # an inner global declaration should not interfere with the closure (#57547)
+    @test let
+        g3 = 1
+        function f()
+            let; global g3 = 2; end;
+            return g3
+        end
+        f()
+    end === 1
+    @test_throws UndefVarError let
+        function returns_global()
+            for i in 1
+                global ge = 2
+            end
+            return ge # local declared below
+        end
+        ge = returns_global()
+    end
+    @test let
+        function f(x::T) where T
+            function g(x)
+                let; global T = 1; end
+                x::T
+            end; g(x)
+        end; f(1)
+    end === 1
+
+end
+end
 
 # lowering of adjoint
 @test (1 + im)' == 1 - im
@@ -2532,6 +2600,15 @@ end
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :broadcasted)) == 3
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :materialize)) == 1
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
+end
+
+module M59008 # dotop with global LHS in macro
+using Test
+global a = 1
+macro counter()
+    :(a += 1)
+end
+@test @counter() === 2 === a
 end
 
 # issue #37656
@@ -2838,6 +2915,9 @@ end
     @test Meta.isexpr(Meta.lower(Main, :(for _ in 1:2; 1; end)), :thunk)
     @test (try; throw(1); catch _; 2; end) === 2
     @test (let _ = 1; 2; end) === 2
+    @test (function f(_, _); 2; end)(0,0) === 2
+    @test (function f(_, _=1); 2; end)(0,0) === 2
+    @test (function f(_, _; kw1=2); kw1; end)(0,0) === 2
     # ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
     @test Meta.isexpr(Meta.lower(Main, :(_ = 1; a = _)), :error)
     @test Meta.isexpr(Meta.lower(Main, :(let; function f(); _; end; end)), :error)
@@ -3518,6 +3598,8 @@ end
 # issue #45162
 f45162(f) = f(x=1)
 @test first(methods(f45162)).called != 0
+f45162_2(f) = f([]...)
+@test first(methods(f45162_2)).called != 0
 
 # issue #45024
 @test_parseerror "const x" "expected assignment after \"const\""
@@ -4238,6 +4320,34 @@ end
 @test letf_57470(3) == 5
 @test letT_57470 === Int64
 
+# Closure conversion should happen on const assignment rhs
+module M59128
+using Test
+const        x0::Int = (()->1)()
+global       x1::Int = (()->1)()
+global const x2::Int = (()->1)()
+const global x3::Int = (()->1)()
+@test x0 === x1 === x2 === x3 === 1
+let g = 1
+    global       x4::Vector{T} where {T<:Number} = let; (()->[g])(); end
+    const global x5::Vector{T} where {T<:Number} = let; (()->[g])(); end
+    global const x6::Vector{T} where {T<:Number} = let; (()->[g])(); end
+end
+@test x4 == x5 == x6 == [1]
+const letT_57470{T} = (()->Int64)()
+@test letT_57470 == Int64
+end
+
+end # M57470_sub
+
+# lowering globaldecl with complex type
+module M58609
+using Test
+global x::T where T
+global y::Type{<:Number}
+
+@test Core.get_binding_type(M58609, :x) === Any
+@test Core.get_binding_type(M58609, :y) == Type{<:Number}
 end
 
 # #57574
@@ -4253,3 +4363,301 @@ out = let
 end
 end
 @test M57574.out === M57574.A
+
+# Double import of CONST_IMPORT symbol
+module DoubleImport
+    import Test: Random
+    import Random
+end
+@test DoubleImport.Random === Test.Random
+
+# Expr(:method) returns the method
+let ex = @Meta.lower function return_my_method(); 1; end
+    code = ex.args[1].code
+    idx = findfirst(ex->Meta.isexpr(ex, :method) && length(ex.args) > 1, code)
+    code[end] = Core.ReturnNode(Core.SSAValue(idx))
+    @test isa(Core.eval(@__MODULE__, ex), Method)
+end
+
+# Capturing a @nospecialize argument should result in an Any field in the closure
+module NoSpecClosure
+    K(@nospecialize(x)) = y -> x
+end
+let f = NoSpecClosure.K(1)
+    @test f(2) == 1
+    @test typeof(f).parameters == Core.svec()
+end
+
+@testset "@__FUNCTION__ and Expr(:thisfunction)" begin
+    @testset "Basic usage" begin
+        # @__FUNCTION__ in regular functions
+        test_function_basic() = @__FUNCTION__
+        @test test_function_basic() === test_function_basic
+
+        # Expr(:thisfunction) in regular functions
+        @eval regular_func() = $(Expr(:thisfunction))
+        @test regular_func() === regular_func
+    end
+
+    @testset "Recursion" begin
+        # Factorial with @__FUNCTION__
+        factorial_function(n) = n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1)
+        @test factorial_function(5) == 120
+
+        # Fibonacci with Expr(:thisfunction)
+        struct RecursiveCallableStruct; end
+        @eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
+        @test RecursiveCallableStruct()(10) === 55
+
+        # Anonymous function recursion
+        @test (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1))(5) == 120
+    end
+
+    @testset "Closures and nested functions" begin
+        # Prevents boxed closures
+        function make_closure()
+            fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+            return fib
+        end
+        Test.@inferred make_closure()
+        closure = make_closure()
+        @test closure(5) == 8
+        Test.@inferred closure(5)
+
+        # Complex closure of closures
+        function f1()
+            function f2()
+                function f3()
+                    return @__FUNCTION__
+                end
+                return (@__FUNCTION__), f3()
+            end
+            return (@__FUNCTION__), f2()...
+        end
+        Test.@inferred f1()
+        @test f1()[1] === f1
+        @test f1()[2] !== f1
+        @test f1()[3] !== f1
+        @test f1()[3]() === f1()[3]
+        @test f1()[2]()[2]() === f1()[3]
+    end
+
+    @testset "Do blocks" begin
+        function test_do_block()
+            result = map([1, 2, 3]) do x
+                return (@__FUNCTION__, x)
+            end
+            # All should refer to the same do-block function
+            @test all(r -> r[1] === result[1][1], result)
+            # Values should be different
+            @test [r[2] for r in result] == [1, 2, 3]
+            # It should be different than `test_do_block`
+            @test result[1][1] !== test_do_block
+        end
+        test_do_block()
+    end
+
+    @testset "Keyword arguments" begin
+        # @__FUNCTION__ with kwargs
+        foo(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
+        @test foo(n = 5) == 120
+
+        # Expr(:thisfunction) with kwargs
+        let
+            @eval f2(; n=1) = n <= 1 ? n : n * $(Expr(:thisfunction))(; n=n-1)
+            result = f2(n=5)
+            @test result == 120
+        end
+    end
+
+    @testset "Callable structs" begin
+        # @__FUNCTION__ in callable structs
+        @gensym A
+        @eval module $A
+            struct CallableStruct{T}; val::T; end
+            (c::CallableStruct)() = @__FUNCTION__
+        end
+        @eval using .$A: CallableStruct
+        c = CallableStruct(5)
+        @test c() === c
+
+        # In closures, var"#self#" should refer to the enclosing function,
+        # NOT the enclosing struct instance
+        struct CallableStruct2; end
+        @eval function (obj::CallableStruct2)()
+            function inner_func()
+                $(Expr(:thisfunction))
+            end
+            inner_func
+        end
+
+        let cs = CallableStruct2()
+            @test cs()() === cs()
+            @test cs()() !== cs
+        end
+
+        # Accessing values via self-reference
+        struct CallableStruct3
+            value::Int
+        end
+        @eval (obj::CallableStruct3)() = $(Expr(:thisfunction))
+        @eval (obj::CallableStruct3)(x) = $(Expr(:thisfunction)).value + x
+
+        let cs = CallableStruct3(42)
+            @test cs() === cs
+            @test cs(10) === 52
+        end
+
+        # Callable struct with args and kwargs
+        struct CallableStruct4
+        end
+        @eval function (obj::CallableStruct4)(x, args...; y=2, kws...)
+            return (; func=(@__FUNCTION__), x, args, y, kws)
+        end
+        c = CallableStruct4()
+        @test c(1).func === c
+        @test c(2, 3).args == (3,)
+        @test c(2; y=4).y == 4
+        @test c(2; y=4, a=5, b=6, c=7).kws[:c] == 7
+    end
+
+    @testset "Special cases" begin
+        # Generated functions
+        let @generated foo2() = Expr(:thisfunction)
+            @test foo2() === foo2
+        end
+
+        # Struct constructors
+        let
+            @eval struct Cols{T<:Tuple}
+                cols::T
+                operator
+                Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string($(Expr(:thisfunction))))
+            end
+            result = Cols(1, 2, 3)
+            @test occursin("Cols", result)
+        end
+
+        # Should not access arg-map for local variables
+        @gensym f
+        @eval begin
+            function $f end
+            function ($f::typeof($f))()
+                $f = 1
+                $(Expr(:thisfunction))
+            end
+        end
+        @test @eval($f() === $f)
+    end
+
+    @testset "Error upon misuse" begin
+        @gensym B
+        @test_throws(
+            "\"@__FUNCTION__\" can only be used inside a function",
+            @eval(module $B; @__FUNCTION__; end)
+        )
+
+        @test_throws(
+            "\"@__FUNCTION__\" not allowed inside comprehension or generator",
+            @eval([(@__FUNCTION__) for _ in 1:10])
+        )
+    end
+end
+
+let d = Dict(:a=>1)
+    # quoted symbols should not be recognized as argument uses
+    foo(a=d[:a], b=d[:a]) = 1
+    foo(a::Int) = 2
+    @test foo() == 1
+end
+
+# Test new macroexpand functionality - define test module at top level
+module MacroExpandTestModule
+    macro test_basic(x)
+        return :($x + 1)
+    end
+end
+
+@testset "hygienic-scope" begin
+    # Test macroexpand! (in-place expansion)
+    expr = :(MacroExpandTestModule.@test_basic(5))
+    result = macroexpand!(@__MODULE__, expr)
+    # macroexpand! returns a hygienic-scope wrapper with legacyscope=false (default)
+    @test Meta.isexpr(result, Symbol("hygienic-scope"))
+    @test result.args[1] == :(5 + 1)
+    @test result.args[2] === MacroExpandTestModule
+    @test result.args[3] isa Core.LineNumberNode
+
+    # Test legacyscope parameter
+    hygiene_expr = :(MacroExpandTestModule.@test_basic(100))
+
+    # With legacyscope=true (default for macroexpand)
+    expanded_with_scope = macroexpand(@__MODULE__, hygiene_expr; legacyscope=true)
+    @test expanded_with_scope == :($(GlobalRef(MacroExpandTestModule, :(+)))(100, 1))
+
+    # With legacyscope=false
+    expanded_no_scope = macroexpand(@__MODULE__, hygiene_expr; legacyscope=false)
+    @test Meta.isexpr(expanded_no_scope, Symbol("hygienic-scope"))
+    @test expanded_no_scope.args[1] == :(100 + 1)
+    @test expanded_no_scope.args[2] === MacroExpandTestModule
+    @test expanded_no_scope.args[3] isa Core.LineNumberNode
+
+    # Test macroexpand! with legacyscope=false (default for macroexpand!)
+    hygiene_copy = copy(hygiene_expr)
+    result_no_scope = macroexpand!(@__MODULE__, hygiene_copy; legacyscope=false)
+    @test Meta.isexpr(result_no_scope, Symbol("hygienic-scope"))
+    @test result_no_scope.args[1] == :(100 + 1)
+    @test result_no_scope.args[2] === MacroExpandTestModule
+    @test result_no_scope.args[3] isa Core.LineNumberNode
+end
+
+# Test error handling for malformed macro calls
+@testset "macroexpand error handling" begin
+    # Test with undefined macro
+    @test_throws UndefVarError macroexpand(@__MODULE__, :(@undefined_macro(x)))
+    @test_throws UndefVarError macroexpand!(@__MODULE__, :(@undefined_macro(x)))
+end
+
+# #59755 - Don't hoist global declarations out of toplevel-preserving syntax
+module M59755 end
+@testset "toplevel-preserving syntax" begin
+    Core.eval(M59755, :(if true
+                            global v1::Bool
+                        else
+                            const v1 = 1
+                        end))
+    @test !isdefined(M59755, :v1)
+    @test Base.binding_kind(M59755, :v1) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(M59755, :v1) == Bool
+
+    Core.eval(M59755, :(if false
+                            global v2::Bool
+                        else
+                            const v2 = 2
+                        end))
+    @test M59755.v2 === 2
+    @test Base.binding_kind(M59755, :v2) == Base.PARTITION_KIND_CONST
+
+    Core.eval(M59755, :(v3 = if true
+                            global v4::Bool
+                            4
+                        else
+                            const v4 = 5
+                            6
+                        end))
+    @test M59755.v3 == 4
+    @test !isdefined(M59755, :v4)
+    @test Base.binding_kind(M59755, :v4) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(M59755, :v4) == Bool
+
+    Core.eval(M59755, :(v5 = if false
+                            global v6::Bool
+                            4
+                        else
+                            const v6 = 5
+                            6
+                        end))
+    @test M59755.v5 === 6
+    @test M59755.v6 === 5
+    @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
+end
