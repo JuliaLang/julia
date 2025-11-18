@@ -107,7 +107,7 @@ function ld()
 end
 
 const WHOLE_ARCHIVE = if Sys.isapple()
-    "-force_load"
+    "-all_load"
 else
     "--whole-archive"
 end
@@ -116,6 +116,17 @@ const NO_WHOLE_ARCHIVE = if Sys.isapple()
     ""
 else
     "--no-whole-archive"
+end
+
+# Prefer whole_archive to WHOLE_ARCHIVE
+whole_archive(paths::String; is_cc=false) = whole_archive([paths]; is_cc)
+function whole_archive(paths::Vector{String}; is_cc=false)
+    cc_arg(a) = is_cc ? "-Wl,$a" : a
+    if Sys.isapple()
+        Cmd(collect(Iterators.flatmap(p -> (cc_arg("-force_load"), p), paths)))
+    else
+        `$(cc_arg("--whole-archive")) $paths $(cc_arg("--no-whole-archive"))`
+    end
 end
 
 const SHARED = if Sys.isapple()
@@ -152,7 +163,7 @@ function link_image_cmd(path, out)
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
+    `$(ld()) $V $SHARED -o $out $(whole_archive(path)) $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)
