@@ -4,6 +4,17 @@ JULIAHOME := $(SRCDIR)
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/stdlib/stdlib.mk
 
+# Allow building a "fat" sysimage with all stdlibs included
+# When enabled, this creates a two-stage build:
+#   1. Build the normal sysimage (with default stdlibs)
+#   2. Precompile all remaining stdlibs using the normal sysimage
+#   3. Build the final fat sysimage by loading all precompiled stdlibs on top
+# This allows stdlibs to run their __init__() during precompilation,
+# which is necessary for stdlibs with complex precompile workloads.
+# Enable by setting JULIA_BUILD_FAT_SYSIMAGE=1 in Make.user or environment
+# TODO: Default to false
+JULIA_BUILD_FAT_SYSIMAGE ?= 1
+
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
 basecompiler-ji: $(build_private_libdir)/basecompiler.ji
@@ -147,7 +158,54 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 .SECONDARY: $$(build_private_libdir)/sys$1-o.a $(build_private_libdir)/sys$1-bc.a # request Make to keep these files around
 .SECONDARY: $$(build_private_libdir)/sysbase$1-o.a $(build_private_libdir)/sysbase$1-bc.a # request Make to keep these files around
 endef
+
+# Fat sysimage builder - builds on top of normal sysimage with all stdlibs
+# Parameters: $1=suffix (e.g., -debug), $2=image name (release/debug), $3=opt flags (e.g., -O3), $4=executable
+define sysimg_builder_fat
+build_sysbase_$1 := $$(or $$(CROSS_BOOTSTRAP_SYSBASE),$$(build_private_libdir)/sysbase$1.$$(SHLIB_EXT))
+$$(build_private_libdir)/sys$1-o.a : $$(build_sysbase_$1) $$(BUILDROOT)/stdlib/$2.image $$(JULIAHOME)/base/sysimg_stdlibs.jl
+	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
+	if ! JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) \
+		 WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
+		 JULIA_LOAD_PATH='@stdlib' \
+		 JULIA_PROJECT= \
+		 JULIA_DEPOT_PATH=$$(call cygpath_w,$$(build_prefix)/share/julia) \
+		 JULIA_NUM_THREADS=1 \
+			$$(call spawn, $4) $3 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) sysimg_stdlibs.jl; then \
+		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
+		false; \
+	fi )
+	@mv $$@.tmp $$@
+.SECONDARY: $$(build_private_libdir)/sys$1-o.a # request Make to keep these files around
+endef
+
+ifeq ($(JULIA_BUILD_FAT_SYSIMAGE),1)
+# For fat sysimage, build normal sysbase first, then precompile all stdlibs, then build fat sys
+# Stage 1: Build normal sysbase (with default stdlibs)
+# Stage 2: Precompile all stdlibs (handled by pkgimage.mk)
+# Stage 3: Build final fat sys with all precompiled stdlibs
+
+# Delegate to pkgimage.mk for building the precompilation stamps
+$(BUILDROOT)/stdlib/release.image: $(build_private_libdir)/sysbase.$(SHLIB_EXT)
+	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/pkgimage.mk release JULIA_BUILD_FAT_SYSIMAGE=$(JULIA_BUILD_FAT_SYSIMAGE)
+
+$(BUILDROOT)/stdlib/debug.image: $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
+	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/pkgimage.mk debug JULIA_BUILD_FAT_SYSIMAGE=$(JULIA_BUILD_FAT_SYSIMAGE)
+
 $(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
 $(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimg_builder_fat,,release,-O3,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder_fat,-debug,debug,-O0,$(JULIA_EXECUTABLE_debug)))
+
+# In fat mode, the normal sysimg targets build the fat sysimage
+# The dependency on stdlib/.image is implicit through sys-o.a dependencies
+
+else
+$(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
+$(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+endif
