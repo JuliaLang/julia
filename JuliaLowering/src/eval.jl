@@ -44,7 +44,7 @@ function lower_init(ex::SyntaxTree, mod::Module, macro_world::UInt; expr_compat_
     LoweringIterator{typeof(graph)}(ctx, [(ex, false, 0)])
 end
 
-function lower_step(iter, push_mod=nothing)
+function lower_step(iter, world=Base.get_world_counter(), push_mod=nothing)
     if !isnothing(push_mod)
         push_layer!(iter.ctx, push_mod, false)
     end
@@ -71,7 +71,12 @@ function lower_step(iter, push_mod=nothing)
 
     k = kind(ex)
     if !(k in KSet"toplevel module")
-        ex = expand_forms_1(iter.ctx, ex)
+        ctx1 = let c = iter.ctx
+            MacroExpansionContext(
+                c.graph, c.bindings, c.scope_layers, c.scope_layer_stack,
+                c.expr_compat_mode, world)
+        end
+        ex = expand_forms_1(ctx1, ex)
         k = kind(ex)
     end
     if k == K"toplevel"
@@ -93,7 +98,7 @@ function lower_step(iter, push_mod=nothing)
         return Core.svec(:begin_module, newmod_name, std_defs, loc)
     else
         # Non macro expansion parts of lowering
-        ctx2, ex2 = expand_forms_2(iter.ctx, ex)
+        ctx2, ex2 = expand_forms_2(ctx1, ex)
         ctx3, ex3 = resolve_scopes(ctx2, ex2)
         ctx4, ex4 = convert_closures(ctx3, ex3)
         ctx5, ex5 = linearize_ir(ctx4, ex4)
@@ -378,7 +383,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             ir
         end
     elseif k == K"Value"
-        ex.value
+        ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id + stmt_offset)
     elseif k == K"gotoifnot"
@@ -473,7 +478,7 @@ function _eval(mod, iter)
     new_mod = nothing
     result = nothing
     while true
-        thunk = lower_step(iter, new_mod)::Core.SimpleVector
+        thunk = lower_step(iter, Base.get_world_counter(), new_mod)::Core.SimpleVector
         new_mod = nothing
         type = thunk[1]::Symbol
         if type == :done
@@ -503,7 +508,7 @@ function _eval(mod, iter, new_mod=nothing)
     in_new_mod = !isnothing(new_mod)
     result = nothing
     while true
-        thunk = lower_step(iter, new_mod)::Core.SimpleVector
+        thunk = lower_step(iter, Base.get_world_counter(), new_mod)::Core.SimpleVector
         new_mod = nothing
         type = thunk[1]::Symbol
         if type == :done

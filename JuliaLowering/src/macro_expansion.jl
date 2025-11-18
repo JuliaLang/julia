@@ -158,25 +158,49 @@ function fixup_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
     end
 end
 
-function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex::SyntaxTree)
-    # `ex1` might contain a nontrivial mix of scope layers so we can't just
-    # `eval()` it, as it's already been partially lowered by this point.
-    # Instead, we repeat the latter parts of `lower()` here.
-    ex1 = expand_forms_1(ctx, fixup_macro_name(ctx, ex))
-    ctx2, ex2 = expand_forms_2(ctx, ex1)
-    ctx3, ex3 = resolve_scopes(ctx2, ex2)
-    ctx4, ex4 = convert_closures(ctx3, ex3)
-    ctx5, ex5 = linearize_ir(ctx4, ex4)
+function _eval_dot(world::UInt, mod, ex::SyntaxTree)
+    if kind(ex) === K"."
+        mod = _eval_dot(world, mod, ex[1])
+        ex = ex[2]
+    end
+    kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
+        Base.invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
+        nothing
+end
+
+# If macroexpand(ex[1]) is an identifier or dot-expression, we can simply grab
+# it from the scope layer's module in ctx.macro_world.  Otherwise, we need to
+# eval arbitrary code (which, TODO: does not use the correct world age, and it
+# isn't clear the language is meant to support this).
+function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::SyntaxTree)
     mod = current_layer(ctx).mod
-    expr_form = to_lowered_expr(ex5)
+    ex = fixup_macro_name(ctx, expand_forms_1(ctx, ex0))
     try
-        # Using Core.eval here fails when precompiling packages since we hit the
-        # user-facing error (in `jl_check_top_level_effect`) that warns that
-        # effects won't persist when eval-ing into a closed module.
-        # `jl_invoke_julia_macro` bypasses this by calling `jl_toplevel_eval` on
-        # the macro name.  This is fine assuming the first argument to the
-        # macrocall is effect-free.
-        ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
+        if kind(ex) === K"Value"
+            !(ex.value isa GlobalRef) ? ex.value :
+                Base.invoke_in_world(ctx.macro_world, getglobal,
+                                     ex.value.mod, ex.value.name)
+        elseif kind(ex) === K"Identifier"
+            layer = get(ex, :scope_layer, nothing)
+            if !isnothing(layer)
+                mod = ctx.scope_layers[layer].mod
+            end
+            Base.invoke_in_world(ctx.macro_world, getproperty,
+                                 mod, Symbol(ex.name_val))
+        elseif kind(ex) === K"." &&
+                (ed = _eval_dot(ctx.macro_world, mod, ex); !isnothing(ed))
+            ed
+        else
+            # `ex` might contain a nontrivial mix of scope layers so we can't
+            # just `eval()` it, as it's already been partially lowered by this
+            # point.  Instead, we repeat the latter parts of `lower()` here.
+            ctx2, ex2 = expand_forms_2(ctx, ex)
+            ctx3, ex3 = resolve_scopes(ctx2, ex2)
+            ctx4, ex4 = convert_closures(ctx3, ex3)
+            ctx5, ex5 = linearize_ir(ctx4, ex4)
+            expr_form = to_lowered_expr(ex5)
+            ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
+        end
     catch err
         throw(MacroExpansionError(mctx, ex, "Macro not found", :all, err))
     end
