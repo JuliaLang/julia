@@ -260,10 +260,7 @@ let
 end
 #---------------------
 LoweringError:
-let
-    @atomic x
-#   └───────┘ ── unimplemented or unsupported atomic declaration
-end
+#= none:2 =# - unimplemented or unsupported atomic declaration
 
 ########################################
 # GC.@preserve support

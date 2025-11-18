@@ -270,7 +270,13 @@ function expand_macro(ctx, ex)
     # age changes concurrently.
     #
     # TODO: Allow this to be passed in
-    if hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=ctx.macro_world)
+    # TODO: hasmethod always returns false for our `typemax(UInt)` meaning
+    # "latest world," which we shouldn't be using.
+    has_new_macro = ctx.macro_world === typemax(UInt) ?
+        hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}) :
+        hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=ctx.macro_world)
+
+    if has_new_macro
         macro_args = prepare_macro_args(ctx, mctx, raw_args)
         expanded = try
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
@@ -385,16 +391,15 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier"
         name_str = ex.name_val
-        if all(==('_'), name_str)
-            @ast ctx ex ex=>K"Placeholder"
-        elseif is_ccall_or_cglobal(name_str)
+        if is_ccall_or_cglobal(name_str)
             # Lower special identifiers `cglobal` and `ccall` to `K"core"`
             # pseudo-refs very early so that cglobal and ccall can never be
             # turned into normal bindings (eg, assigned to)
             @ast ctx ex name_str::K"core"
         else
-            layerid = get(ex, :scope_layer, current_layer_id(ctx))
-            makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
+            k = all(==('_'), name_str) ? K"Placeholder" : K"Identifier"
+            scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
+            makeleaf(ctx, ex, ex; kind=k, scope_layer)
         end
     elseif k == K"StrMacroName" || k == K"CmdMacroName" || k == K"macro_name"
         # These can appear outside of a macrocall, e.g. in `import`
