@@ -9,8 +9,8 @@ end
 # Using map over broadcast enables vectorization for wide matrices with few rows.
 # This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
 # https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
-function _broadcast_preserving_zero_d(f, A::Array, B::Array)
-    map(f, A, B)
+function _broadcast_preserving_zero_d(f, A::Array{<:Any,N}, Bs::Array{<:Any,N}...) where {N}
+    map(f, A, Bs...)
 end
 
 function _broadcast_preserving_zero_d(f, A::Array, B::Number)
@@ -32,7 +32,7 @@ function +(A::Array, Bs::Array...)
     for B in Bs
         promote_shape(A, B) # check size compatibility
     end
-    map(+, A, Bs...)
+    _broadcast_preserving_zero_d(+, A, Bs...)
 end
 
 for f in (:/, :\, :*)

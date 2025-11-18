@@ -2376,3 +2376,10 @@ end
     show(io, m2)
     @test String(take!(io)) == "Any[#= circular reference @-1 =# 3; 2 4;;; 5 7; 6 8]"
 end
+
+@testset "size promotion in addition/subtraction" begin
+    A = ones(1)
+    B = ones(1,1)
+    @test A + B == fill(2.0,1,1)
+    @test A - B == zeros(1,1)
+end
