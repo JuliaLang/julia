@@ -1,4 +1,4 @@
-The Julia compiler is not part of the public interface of Julia's `Core`, and may change in non-breaking Julia releases. This file lists breaking changes introduced to the compiler to aid in adapting to those changes, intended for packages that do interface with the compiler.
+The Julia compiler is not part of the public interface of Julia's `Core`, and may change in non-breaking Julia releases. This file lists breaking changes introduced to the compiler to aid in adapting to those changes, intended for packages that do interface with the compiler. It is maintained on a best-effort basis and may be incomplete.
 
 # v1.13
 
