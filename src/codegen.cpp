@@ -6887,14 +6887,14 @@ void emit_specsig_to_fptr1(
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
         size_t nargs,
         jl_codegen_output_t &out,
-        Function *target)
+        Value *target)
 {
     emit_specsig_to_specsig(gf_thunk, cc, return_roots, calltype, rettype, is_for_opaque_closure, nargs, out, target, calltype, rettype, nullptr, nullptr);
 }
 
 // Helper for JIT linking.
 Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci,
-                                Function *func)
+                                Value *func)
 {
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
@@ -10031,7 +10031,7 @@ extern "C" void jl_init_llvm(void)
     bool jl_using_gdb_jitevents = false;
     // Register GDB event listener
 #if defined(JL_DEBUG_BUILD)
-    jl_using_gdb_jitevents = true;
+    // jl_using_gdb_jitevents = true;
 #endif
     const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
     if (jit_gdb) {

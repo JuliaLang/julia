@@ -442,9 +442,9 @@ void emit_specsig_to_fptr1(
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
         size_t nargs,
         jl_codegen_output_t &out,
-        Function *target) JL_NOTSAFEPOINT;
+        Value *target) JL_NOTSAFEPOINT;
 Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci,
-                                Function *func) JL_NOTSAFEPOINT;
+                                Value *func) JL_NOTSAFEPOINT;
 Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const jl_codegen_output_t &params) JL_NOTSAFEPOINT;
 

@@ -613,17 +613,37 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     return data;
 }
 
-// Emit a thunk that call a compiled CodeInstance from an external image.  We
-// want code that is similar to a PLT thunk (no frame pointer setup, destination
-// function pointer loaded in a scratch register that is not used for
-// arguments), so we call the target with `musttail` and use the "thunk"
-// attribute:
-//
-// > If the musttail call appears in a function with the "thunk" attribute
-// > and the caller and callee both have varargs, then any unprototyped
-// > arguments in register or memory are forwarded to the callee. Similarly,
-// > the return value of the callee is returned to the caller’s caller, even
-// > if a void return type is in use
+// x16, x17 (ip0, ip1) are the intra-procedure-call scratch registers
+const char *plt_asm_aarch64_macho =
+    "adrp  x16, ${0}@page\n"
+    "ldr   x16, [x16, ${0}@pageoff]\n"
+    "br    x16\n";
+
+const char *plt_asm_aarch64 =
+    "adrp  x16, ${0}\n"
+    "ldr   x16, [x16, :lo12:${0}]\n"
+    "br    x16\n";
+
+const char *plt_asm_x86_64 =
+    "jmpq  *${0:a}\n";
+
+const char *plt_asm_x86_pic =
+    "jmpl  *${0:a}(%ebx)\n";
+
+// const char *plt_asm_x86_static =
+//     "jmpl  *${0:a}\n";
+
+const char *plt_asm_riscv64 =
+    "1b: auipc t3, %pcrel_hi(${0})\n"
+    "    ld    t3, %pcrel_lo(1b)(t3)\n"
+    "    jalr  t1, t3";
+
+const char *plt_asm_riscv32 =
+    "1b: auipc t3, %pcrel_hi(${0})\n"
+    "    lw    t3, %pcrel_lo(1b)(t3)\n"
+    "    jalr  t1, t3";
+
+// Emit a thunk that calls a compiled CodeInstance from an external image.
 static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t *ci,
                                     Function *CallSite)
 {
@@ -631,46 +651,63 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     auto &Ctx = out.get_context();
     Type *PtrTy = PointerType::getUnqual(Ctx);
     StringRef Name = name_from_method_instance(jl_get_ci_mi(ci));
-
-    // aarch64 generates poor code when we use the guaranteed varargs thunk
-    // trick, so just copy all the arguments like normal.
-    bool UseParams = out.TargetTriple.getArch() == Triple::aarch64;
+    auto GVName = out.make_name(JL_SYM_JLPLT_GOT, Name);
 
     auto GV = new GlobalVariable(M, PtrTy, false, GlobalVariable::ExternalLinkage, nullptr,
-                                 out.make_name(JL_SYM_JLPLT_GOT, Name));
-    auto FTy = UseParams ? CallSite->getFunctionType() :
-                           FunctionType::get(Type::getVoidTy(Ctx), true);
+                                 GVName);
+
+
+    const char *Code = nullptr;
+    auto OF = out.TargetTriple.getObjectFormat();
+    if (out.TargetTriple.isAArch64()) {
+        if (OF == Triple::MachO)
+            Code = plt_asm_aarch64_macho;
+        else
+            Code = plt_asm_aarch64;
+    }
+    else if (out.TargetTriple.getArch() == Triple::x86_64) {
+        Code = plt_asm_x86_64;
+    }
+    else if (out.TargetTriple.getArch() == Triple::x86 && OF != Triple::COFF) {
+        Code = plt_asm_x86_pic;
+    }
+    else if (out.TargetTriple.getArch() == Triple::riscv64) {
+        Code = plt_asm_riscv64;
+    }
+    else if (out.TargetTriple.getArch() == Triple::riscv32) {
+        Code = plt_asm_riscv32;
+    }
+
+    auto FTy = FunctionType::get(Type::getVoidTy(Ctx), !Code);
     auto F = Function::Create(FTy, Function::PrivateLinkage, 0,
                               out.make_name(JL_SYM_JLPLT, Name), &M);
     F->setCallingConv(CallSite->getCallingConv());
     AttrBuilder Attrs{Ctx};
-    if (UseParams)
-        F->setAttributes(CallSite->getAttributes());
     Attrs.addAttribute(Attribute::NoInline);
+    Attrs.addAttribute(Attribute::NoUnwind);
+    Attrs.addAttribute(Attribute::Naked);
     Attrs.addAttribute("frame-pointer", "none");
-    Attrs.addAttribute("nounwind");
     Attrs.addAttribute("thunk");
     F->addFnAttrs(Attrs);
 
-    SmallVector<Value *> Args;
-    if (UseParams)
-        for (auto &A : F->args())
-            Args.push_back(&A);
-
-    IRBuilder<> B(Ctx);
-    auto BB = BasicBlock::Create(Ctx, "top", F);
+    IRBuilder<> B{Ctx};
+    auto BB = BasicBlock::Create(Ctx, "", F);
     B.SetInsertPoint(BB);
-    auto FPtr = B.CreateAlignedLoad(PtrTy, GV, out.DL.getPointerABIAlignment(0));
 
-    auto Call = B.CreateCall(FTy, FPtr, Args);
-    Call->setTailCallKind(CallInst::TailCallKind::TCK_MustTail);
-    Call->setCallingConv(F->getCallingConv());
-    if (UseParams)
-        Call->setAttributes(CallSite->getAttributes());
-    if (UseParams && !FTy->getReturnType()->isVoidTy())
-        B.CreateRet(Call);
-    else
+    if (Code) {
+        auto AsmTy = FunctionType::get(Type::getVoidTy(Ctx), {PtrTy}, false);
+        auto Call = B.CreateCall(InlineAsm::get(AsmTy, Code, "s", true, false), {GV});
+        Call->addFnAttr(Attribute::NoReturn);
+        B.CreateUnreachable();
+    }
+    else {
+        // Generic fallback that may be inefficient but won't mangle registers.
+        auto FPtr = B.CreateAlignedLoad(PtrTy, GV, out.DL.getPointerABIAlignment(0));
+        auto Call = B.CreateCall(FTy, FPtr, {});
+        Call->setTailCall();
+        Call->setCallingConv(F->getCallingConv());
         B.CreateRetVoid();
+    }
 
     out.external_fns.emplace_back(ci, GV);
     return F;
@@ -710,9 +747,9 @@ static void aot_link_output(jl_codegen_output_t &out)
         auto it = out.ci_funcs.find(ci);
         if (it == out.ci_funcs.end())
             it = get_ci_equiv_compiled(ci, out.ci_funcs);
-        jl_llvm_functions_t funcs;
+        jl_codeinst_funcs_t<Value *> funcs;
         if (it != out.ci_funcs.end()) {
-            funcs = it->second;
+            funcs = {it->second.invoke_api, it->second.invoke, it->second.specptr};
         }
         else if (out.external_linkage && api == JL_INVOKE_SPECSIG &&
                  (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE)) {
