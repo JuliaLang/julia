@@ -634,6 +634,13 @@ end
                 args[i] = Symbol(".", arg.args[1])
             end
         end
+    elseif k == K"meta"
+        # Expr uses plain identifiers, but JuliaSyntax uses quoted (Symbol) identifiers
+        for (i, a) in enumerate(args)
+            if a isa QuoteNode && a.value isa Symbol
+                args[i] = a.value
+            end
+        end
     end
 
     return retexpr
