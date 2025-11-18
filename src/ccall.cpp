@@ -932,7 +932,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     jl_value_t *rtt = rt;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(ctx, rtt, &retboxed);
-    if (jl_is_datatype(rtt) && jl_datatype_size((jl_datatype_t*)rtt) == 0) {
+    if (jl_is_datatype(rtt) && jl_datatype_size((jl_datatype_t*)rtt) == 0 && rettype != getVoidTy(ctx.builder.getContext())) {
         emit_error(ctx, "llvmcall does not support zero-sized return types");
         JL_GC_POP();
         return jl_cgval_t();
