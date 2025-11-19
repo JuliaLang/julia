@@ -83,9 +83,10 @@ TOP_LEVEL_PKGS := Compiler JuliaSyntax JuliaLowering
 
 TOP_LEVEL_PKG_LINK_TARGETS := $(addprefix $(build_private_libdir)/,$(TOP_LEVEL_PKGS))
 
-# Generate symlinks for top level pkgs in usr/share/julia/
+# Generate symlinks for top level pkgs in usr/lib/julia/
 $(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/$(module),$$(build_private_libdir),$(module))))
 
+.PHONY: julia-deps
 julia-deps: | $(DIRS) $(build_private_libdir)/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
@@ -225,6 +226,7 @@ $(build_private_libdir)/%: | $(build_private_libdir)
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
+.PHONY: julia-base-cache
 julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_private_libdir)
 	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) JULIA_FALLBACK_REPL=1 WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
 		$(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/contrib/write_base_cache.jl) \
@@ -440,7 +442,9 @@ endif
 
 	# Copy in all .jl sources as well
 	mkdir -p $(DESTDIR)$(private_libdir)/base $(DESTDIR)$(datarootdir)/julia/test
-	cp -R -L $(build_private_libdir)/* $(DESTDIR)$(private_libdir)
+	cp -R -L $(build_private_libdir)/base/* $(DESTDIR)$(private_libdir)/base
+	cp -R -L $(build_private_libdir)/stdlib/* $(DESTDIR)$(private_libdir)/stdlib
+	cp -R -L $(TOP_LEVEL_PKG_LINK_TARGETS) $(DESTDIR)$(private_libdir)
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
 
