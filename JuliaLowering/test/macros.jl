@@ -502,4 +502,18 @@ end
     @test JuliaLowering.include_string(test_mod, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
 end
 
+# JuliaLang/JuliaLowering.jl#120
+#
+# `__module__` should be expanded as the lexical module containing the expanded
+# code, not the module corresponding to the current hygienic scope
+JuliaLowering.include_string(test_mod, raw"""
+module Mod1
+macro indirect_MODULE()
+    return :(@__MODULE__())
+end
+end
+""")
+code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
+@test JuliaLowering.eval(test_mod, code) === test_mod # !== test_mod.Mod1
+
 end
