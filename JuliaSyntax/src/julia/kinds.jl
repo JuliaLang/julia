@@ -80,6 +80,11 @@ function _register_kinds!(kind_modules, int_to_kindstr, kind_str_to_int, mod, mo
         error("Kind module id $module_id is out of range")
     elseif length(names) >= 1 << _kind_nbits
         error("Too many kind names")
+    elseif occursin("##JETVirtualModule", string(mod))
+        # This hack is necessary when analyzing packages that use `register_kinds!` like
+        # JuliaLowering with JET.
+        # This way only packages that JuliaSyntax has pre-registered can be analyzed,
+        # but this is sufficient for analyzing JuliaLowering at least.
     elseif !haskey(kind_modules, module_id)
         kind_modules[module_id] = mod
     else
