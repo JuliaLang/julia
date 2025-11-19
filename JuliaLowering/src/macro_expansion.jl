@@ -300,7 +300,7 @@ function expand_macro(ctx, ex)
     else
         # Compat: attempt to invoke an old-style macro if there's no applicable
         # method for new-style macro arguments.
-        macro_args = Any[macro_loc, current_layer(ctx).mod]
+        macro_args = Any[macro_loc, ctx.scope_layers[1].mod]
         for arg in raw_args
             # For hygiene in old-style macros, we omit any additional scope
             # layer information from macro arguments. Old-style macros will
