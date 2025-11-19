@@ -676,16 +676,15 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     AttrBuilder Attrs{Ctx};
     Attrs.addAttribute(Attribute::NoInline);
     Attrs.addAttribute(Attribute::NoUnwind);
-    Attrs.addAttribute(Attribute::Naked);
     Attrs.addAttribute("frame-pointer", "none");
     Attrs.addAttribute("thunk");
-    F->addFnAttrs(Attrs);
 
     IRBuilder<> B{Ctx};
     auto BB = BasicBlock::Create(Ctx, "", F);
     B.SetInsertPoint(BB);
 
     if (Code) {
+        Attrs.addAttribute(Attribute::Naked);
         auto AsmTy = FunctionType::get(Type::getVoidTy(Ctx), {PtrTy}, false);
         auto Call = B.CreateCall(InlineAsm::get(AsmTy, Code, "s", true, false), {GV});
         Call->addFnAttr(Attribute::NoReturn);
@@ -699,6 +698,7 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
         Call->setCallingConv(F->getCallingConv());
         B.CreateRetVoid();
     }
+    F->addFnAttrs(Attrs);
 
     out.external_fns.emplace_back(ci, GV);
     return F;
