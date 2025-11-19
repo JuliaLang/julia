@@ -79,7 +79,7 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
-TOP_LEVEL_PKGS := Compiler
+TOP_LEVEL_PKGS := Compiler JuliaSyntax JuliaLowering
 
 TOP_LEVEL_PKG_LINK_TARGETS := $(addprefix $(build_private_libdir)/,$(TOP_LEVEL_PKGS))
 

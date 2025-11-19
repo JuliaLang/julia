@@ -1,0 +1,16 @@
+name = "JuliaSyntax"
+uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
+authors = ["Claire Foster <aka.c42f@gmail.com> and contributors"]
+version = "2.0.0-DEV"
+
+[compat]
+Serialization = "1.0"
+julia = "1.0"
+
+[extras]
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "Serialization", "Logging"]
