@@ -1103,8 +1103,12 @@ function compile_lambda(outer_ctx, ex)
         slot_rewrites[id] = i
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
+    meta = CompileHints()
+    for (k, v) in ctx.meta
+        meta = CompileHints(meta, k, v)
+    end
     @ast ctx ex [K"code_info"(is_toplevel_thunk=ex.is_toplevel_thunk,
-                              slots=slots, meta=CompileHints(ctx.meta))
+                              slots=slots, meta=meta)
         [K"block"(ex[3])
             code...
         ]
