@@ -320,10 +320,9 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     __module__ = source.module
 
-    # Macro expansion. Looking at Core.GeneratedFunctionStub, it seems that
-    # macros emitted by the generator are currently expanded in the latest
-    # world, so do that for compatibility.
-    macro_world = typemax(UInt)
+    # Macro expansion. Note that we expand in `tls_world_age()` (see
+    # Core.GeneratedFunctionStub)
+    macro_world = Base.tls_world_age()
     ctx1 = MacroExpansionContext(graph, __module__, false, macro_world)
 
     layer = only(ctx1.scope_layers)
