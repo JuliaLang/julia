@@ -340,6 +340,20 @@ static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res
     }
 }
 
+static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *data_pointer, jl_datatype_t *typ, size_t npointers, MDNode *tbaa, bool isVolatile=false)
+{
+    SmallVector<Value*,0> gcroots(npointers);
+    Type *T_prjlvalue = ctx.types().T_prjlvalue;
+    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+    for (size_t i = 0; i < npointers; i++) {
+        Value *field_ptr = emit_ptrgep(ctx, data_pointer, jl_ptr_offset(typ, i) * sizeof(jl_value_t*));
+        Instruction *root = ctx.builder.CreateAlignedLoad(T_prjlvalue, field_ptr, Align(sizeof(void*)), isVolatile);
+        roots_ai.decorateInst(root);
+        gcroots[i] = root;
+    }
+    return gcroots;
+}
+
 // load a pointer to N inlined_roots into registers (as a SmallVector)
 static llvm::SmallVector<Value*,0> load_gc_roots(jl_codectx_t &ctx, Value *inline_roots_ptr, size_t npointers, MDNode *tbaa, bool isVolatile=false)
 {
@@ -3903,6 +3917,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 }
 
 // copy src to dest, if src is justbits. if skip is true, the value of dest is undefined
+// however, regardless of `skip`, the inline_roots are all copied if the caller needs it (*may be brittle*)
 // TODO: rename this to just `emit_typed_move`
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype, MutableArrayRef<Value*> roots,
         MDNode *tbaa_dst, const jl_cgval_t &src, Value *skip, bool isVolatile=false)
@@ -3941,8 +3956,11 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_union_move", ctx.f);
         ctx.builder.SetInsertPoint(postBB);
         Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
-        for (size_t i = 0; i < roots.size(); i++)
-            roots[i] = ctx.builder.CreatePHI(Vnull->getType(), 0);
+        bool preserve_roots = roots.empty() || !src.inline_roots.empty() || src.TIndex != nullptr;
+        if (!preserve_roots) {
+            for (size_t i = 0; i < roots.size(); i++)
+                roots[i] = ctx.builder.CreatePHI(Vnull->getType(), 0);
+        }
         unsigned counter = 0;
         bool allunboxed = for_each_uniontype_small(
                 [&](unsigned idx, jl_datatype_t *jt) {
@@ -3959,8 +3977,10 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
                         }
                     }
                     tempBB = ctx.builder.GetInsertBlock();
-                    for (size_t i = 0; i < roots.size(); i++)
-                        cast<PHINode>(roots[i])->addIncoming(lroots[i], tempBB);
+                    if (!preserve_roots) {
+                        for (size_t i = 0; i < roots.size(); i++)
+                            cast<PHINode>(roots[i])->addIncoming(lroots[i], tempBB);
+                    }
                     ctx.builder.CreateBr(postBB);
                 },
                 src.typ,
@@ -3978,12 +3998,18 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
             ctx.builder.CreateUnreachable();
         }
         else {
-            Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
-            for (size_t i = 0; i < roots.size(); i++)
-                cast<PHINode>(roots[i])->addIncoming(Vnull, defaultBB);
+            if (!preserve_roots) {
+                Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
+                for (size_t i = 0; i < roots.size(); i++)
+                    cast<PHINode>(roots[i])->addIncoming(Vnull, defaultBB);
+            }
             ctx.builder.CreateBr(postBB);
         }
         ctx.builder.SetInsertPoint(postBB);
+        if (preserve_roots) {
+            for (size_t i = 0; i < std::min(roots.size(), src.inline_roots.size()); i++)
+                roots[i] = src.inline_roots[i];
+        }
     }
 }
 
