@@ -13,6 +13,16 @@ function _broadcast_preserving_zero_d(f, A::Array{<:Any,N}, Bs::Array{<:Any,N}..
     map(f, A, Bs...)
 end
 
+function _broadcast_preserving_zero_d(f, A::Array, Bs::Array...) where {N}
+    # we already know that the shapes are compatible.
+    # We just need to select the size corresponding to the higest ndims
+    # and reshape all the arrays to that size
+    sz = mapreduce(size, (x,y) -> length(x) > length(y) ? x : y, (A, Bs...))
+    # Skip reshaping where possible to avoid the overhead
+    As_sameshape = map(x -> length(sz) == ndims(x) ? x : reshape(x, sz), (A, Bs...))
+    map(f, As_sameshape...)
+end
+
 function _broadcast_preserving_zero_d(f, A::Array, B::Number)
     map(Fix2(f, B), A)
 end
