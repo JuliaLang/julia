@@ -831,21 +831,18 @@ function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::ParseStream;
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()
     sf = SourceFile(stream; filename, first_line)
-    if has_toplevel_siblings(cursor)
-        # There are multiple toplevel nodes (e.g. due to a parse error)
-        cs = SyntaxList(graph)
-        for c in reverse_toplevel_siblings(cursor)
-            is_trivia(c) && !is_error(c) && continue
-            push!(cs, SyntaxTree(graph, sf, c))
-        end
-        source = SourceRef(sf, first_byte(stream), last_byte(stream))
-        id = newnode!(graph)
-        setchildren!(graph, id, reverse(cs).ids)
-        setattr!(graph, id; source, kind=K"wrapper")
-        return SyntaxTree(graph, id)
-    else
-        return SyntaxTree(graph, sf, cursor)
+    source = SourceRef(sf, first_byte(stream), last_byte(stream))
+    cs = SyntaxList(graph)
+    for c in reverse_toplevel_siblings(cursor)
+        is_trivia(c) && !is_error(c) && continue
+        push!(cs, SyntaxTree(graph, sf, c))
     end
+    # There may be multiple non-trivia toplevel nodes (e.g. parse error)
+    length(cs) === 1 && return only(cs)
+    id = newnode!(graph)
+    setchildren!(graph, id, reverse(cs).ids)
+    setattr!(graph, id; source, kind=K"wrapper")
+    return SyntaxTree(graph, id)
 end
 
 function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
@@ -892,8 +889,6 @@ end
 # not deleting trivia under an internal node is practically zero.
 function _green_to_ast(ex::SyntaxTree; eq_to_kw=false)
     is_trivia(ex) && !is_error(ex) && return nothing
-    is_leaf(ex) && return ex
-
     graph = syntax_graph(ex)
     k = kind(ex)
     call_with_kw = (k in KSet"curly ref" ||
@@ -916,6 +911,8 @@ function _green_to_ast(ex::SyntaxTree; eq_to_kw=false)
         cs[1]
     elseif k === K"=" && eq_to_kw
         makenode(graph, ex, ex, _map_green_to_ast(children(ex)); kind=K"kw")
+    elseif is_leaf(ex)
+        return ex
     else
         makenode(graph, ex, ex, _map_green_to_ast(children(ex)))
     end
