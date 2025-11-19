@@ -694,7 +694,7 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
         // Generic fallback that may be inefficient but won't mangle registers.
         auto FPtr = B.CreateAlignedLoad(PtrTy, GV, out.DL.getPointerABIAlignment(0));
         auto Call = B.CreateCall(FTy, FPtr, {});
-        Call->setTailCall();
+        Call->setTailCallKind(CallInst::TCK_MustTail);
         Call->setCallingConv(F->getCallingConv());
         B.CreateRetVoid();
     }
