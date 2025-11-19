@@ -627,12 +627,6 @@ const char *plt_asm_aarch64 =
 const char *plt_asm_x86_64 =
     "jmpq  *${0:a}\n";
 
-const char *plt_asm_x86_pic =
-    "jmpl  *${0:a}(%ebx)\n";
-
-// const char *plt_asm_x86_static =
-//     "jmpl  *${0:a}\n";
-
 const char *plt_asm_riscv64 =
     "1b: auipc t3, %pcrel_hi(${0})\n"
     "    ld    t3, %pcrel_lo(1b)(t3)\n"
@@ -667,9 +661,6 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     }
     else if (out.TargetTriple.getArch() == Triple::x86_64) {
         Code = plt_asm_x86_64;
-    }
-    else if (out.TargetTriple.getArch() == Triple::x86 && OF != Triple::COFF) {
-        Code = plt_asm_x86_pic;
     }
     else if (out.TargetTriple.getArch() == Triple::riscv64) {
         Code = plt_asm_riscv64;
