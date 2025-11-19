@@ -350,7 +350,7 @@ include("coreir.jl")
 include("module.jl")
 
 BUILDROOT::String = ""
-RELPRIVATE_LIBDIR::String = ""
+PRIVATE_LIBDIR_ARG::String = ""
 const DL_LOAD_PATH = String[]
 
 baremodule BuildSettings end

@@ -317,7 +317,7 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+include(@__MODULE__, string(PRIVATE_LIBDIR_ARG, "JuliaSyntax/src/JuliaSyntax.jl"))
 
 end_base_include = time_ns()
 
@@ -416,8 +416,8 @@ for i = 1:length(_included_files)
         _include_dependency!(_compiler_require_dependencies, true, mod, file, true, false)
     end
 end
-# Make relative to DATAROOTDIR to allow relocation
-let basedir = joinpath(Sys.BINDIR, DATAROOTDIR)
+# Make relative to PRIVATE_LIBDIR_ARG to allow relocation
+let basedir = joinpath(Sys.BINDIR, PRIVATE_LIBDIR_ARG)
 for i = 1:length(_compiler_require_dependencies)
     tup = _compiler_require_dependencies[i]
     _compiler_require_dependencies[i] = (tup[1], relpath(tup[2], basedir), tup[3:end]...)

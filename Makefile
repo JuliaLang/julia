@@ -29,7 +29,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_private_libdir)/julia/stdlib $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_private_libdir)/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk $(BUILDROOT)/pkgimage.mk
@@ -59,7 +59,9 @@ configure:
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(build_datarootdir)/julia,$(notdir $(link)))))
+$(eval $(call symlink_target,base,$$(build_private_libdir),base))
+$(eval $(call symlink_target,$(JULIAHOME)/test,$$(build_datarootdir)/julia,test))
+
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -216,10 +218,6 @@ $(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysc
 	@cp $< $@
 
 $(build_datarootdir)/julia/%: $(JULIAHOME)/contrib/% | $(build_datarootdir)/julia
-	mkdir -p $(dir $@)
-	$(INSTALL_M) $< $(dir $@)
-
-$(build_private_libdir)/%: | $(build_private_libdir)
 	mkdir -p $(dir $@)
 	$(INSTALL_M) $< $(dir $@)
 
