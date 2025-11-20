@@ -23,7 +23,7 @@ end
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/_(!read) slot₄/y]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#arg2#(!read) slot₄/y]
     1   TestMod.+
     2   (call %₁ slot₂/x slot₄/y)
     3   (return %₂)
@@ -47,7 +47,7 @@ end
 8   SourceLocation::1:10
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/x]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 11  latestworld
@@ -160,7 +160,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₁ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/_(!read) slot₄/_(!read)]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/#arg2#(!read) slot₄/#arg3#(!read)]
     1   static_parameter₃
     2   static_parameter₁
     3   static_parameter₂
@@ -192,7 +192,7 @@ end
 14  SourceLocation::1:10
 15  (call core.svec %₁₁ %₁₃ %₁₄)
 16  --- method core.nothing %₁₅
-    slots: [slot₁/#self#(!read) slot₂/_(!read)]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read)]
     1   static_parameter₁
     2   (return %₁)
 17  latestworld
@@ -220,7 +220,7 @@ end
 13  SourceLocation::1:10
 14  (call core.svec %₁₀ %₁₂ %₁₃)
 15  --- method core.nothing %₁₄
-    slots: [slot₁/#self#(!read) slot₂/_(!read)]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read)]
     1   static_parameter₁
     2   (return %₁)
 16  latestworld
@@ -513,8 +513,8 @@ end
 8   SourceLocation::1:10
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(called) slot₂/_]
-    1   (call slot₁/#self# slot₂/_ 1 2)
+    slots: [slot₁/#self#(called) slot₂/#arg1#]
+    1   (call slot₁/#self# slot₂/#arg1# 1 2)
     2   (return %₁)
 11  latestworld
 12  TestMod.f
@@ -525,8 +525,8 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(called) slot₂/_ slot₃/y]
-    1   (call slot₁/#self# slot₂/_ slot₃/y 2)
+    slots: [slot₁/#self#(called) slot₂/#arg1# slot₃/y]
+    1   (call slot₁/#self# slot₂/#arg1# slot₃/y 2)
     2   (return %₁)
 20  latestworld
 21  TestMod.f
@@ -537,7 +537,7 @@ end
 26  SourceLocation::1:10
 27  (call core.svec %₂₄ %₂₅ %₂₆)
 28  --- method core.nothing %₂₇
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/y slot₄/z]
     1   (call core.tuple slot₃/y slot₄/z)
     2   (return %₁)
 29  latestworld
@@ -560,8 +560,8 @@ end
 8   SourceLocation::1:10
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(called) slot₂/_]
-    1   (call slot₁/#self# slot₂/_ 1)
+    slots: [slot₁/#self#(called) slot₂/#arg1#]
+    1   (call slot₁/#self# slot₂/#arg1# 1)
     2   (return %₁)
 11  latestworld
 12  TestMod.f
@@ -572,7 +572,7 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/x]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 20  latestworld
@@ -924,6 +924,25 @@ end
 20  (return %₁₉)
 
 ########################################
+# Duplicate positional placeholders ok
+function f(_, _); end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   TestMod.f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/#arg2#(!read)]
+    1   (return core.nothing)
+10  latestworld
+11  TestMod.f
+12  (return %₁₁)
+
+########################################
 # Duplicate destructured placeholders ok
 function f((_,), (_,))
 end
@@ -1215,6 +1234,14 @@ end
 75  latestworld
 76  TestMod.f_kw_simple
 77  (return %₇₆)
+
+########################################
+# Error: Duplicate keyword placeholder name
+function f_kw_placeholders(; _=1, _=2); end
+#---------------------
+LoweringError:
+function f_kw_placeholders(; _=1, _=2); end
+#                                 ╙ ── function argument name not unique
 
 ########################################
 # Keyword slurping - simple forwarding of all kws

@@ -1032,6 +1032,7 @@ register_kinds!(JuliaSyntax, 0, [
         "vect"
         "parens"
         "importpath"
+        "meta"
         # Concatenation syntax
         "braces"
         "bracescat"
