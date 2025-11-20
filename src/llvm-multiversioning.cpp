@@ -378,6 +378,8 @@ private:
     void clone_partial(Group &grp, Target &tgt);
     uint32_t get_func_id(Function *F) const;
     std::pair<uint32_t,GlobalVariable*> get_reloc_slot(Function *F) const;
+
+    Function *create_trampoline(Function *F, GlobalVariable *slot, bool autoinit=false);
     void rewrite_alias(GlobalAlias *alias, Function* F);
 
     MDNode *tbaa_const;
@@ -493,6 +495,53 @@ void CloneCtx::prepare_vmap(ValueToValueMapTy &vmap)
     }
 }
 
+Function *CloneCtx::create_trampoline(Function *F, GlobalVariable *slot, bool autoinit)
+{
+    Function *trampoline =
+        Function::Create(F->getFunctionType(), GlobalValue::ExternalLinkage, "", &M);
+
+    trampoline->copyAttributesFrom(F);
+    trampoline->setVisibility(GlobalValue::HiddenVisibility);
+    trampoline->setDSOLocal(true);
+
+    // drop multiversioning attributes
+    trampoline->removeFnAttr("julia.mv.reloc");
+    trampoline->removeFnAttr("julia.mv.clones");
+
+    auto BB = BasicBlock::Create(F->getContext(), "top", trampoline);
+    IRBuilder<> irbuilder(BB);
+
+    if (autoinit) {
+        irbuilder.CreateCall(F->getParent()->getOrInsertFunction(
+            XSTR(jl_autoinit_and_adopt_thread),
+            PointerType::get(F->getContext(), 0)
+        ));
+    }
+
+    auto ptr = irbuilder.CreateLoad(F->getType(), slot);
+    ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), None));
+
+    SmallVector<Value *, 0> Args;
+    for (auto &arg : trampoline->args())
+        Args.push_back(&arg);
+    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
+    if (F->isVarArg()) {
+        assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
+        call->setTailCallKind(CallInst::TCK_MustTail);
+    } else {
+        call->setTailCallKind(CallInst::TCK_Tail);
+
+    }
+
+    if (F->getReturnType() == Type::getVoidTy(F->getContext()))
+        irbuilder.CreateRetVoid();
+    else
+        irbuilder.CreateRet(call);
+
+    return trampoline;
+}
+
 void CloneCtx::prepare_slots()
 {
     for (auto &F : orig_funcs) {
@@ -507,7 +556,12 @@ void CloneCtx::prepare_slots()
             else {
                 auto id = get_func_id(F);
                 const_relocs[id] = GV;
-                GV->setInitializer(Constant::getNullValue(F->getType()));
+
+                // Initialize with a single-use trampoline that calls `jl_autoinit_and_adopt_thread`,
+                // so that auto-initialization works with multi-versioned entrypoints.
+                Function *trampoline = create_trampoline(F, GV, /* autoinit */ true);
+                trampoline->setName(F->getName() + ".autoinit_trampoline");
+                GV->setInitializer(trampoline);
             }
         }
     }
@@ -665,45 +719,21 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
 {
     assert(!is_vector(F->getFunctionType()));
 
-    Function *trampoline =
-        Function::Create(F->getFunctionType(), alias->getLinkage(), "", &M);
-    trampoline->copyAttributesFrom(F);
-    trampoline->takeName(alias);
-    trampoline->setVisibility(alias->getVisibility());
-    trampoline->setDSOLocal(alias->isDSOLocal());
-    // drop multiversioning attributes, add alias attribute for testing purposes
-    trampoline->removeFnAttr("julia.mv.reloc");
-    trampoline->removeFnAttr("julia.mv.clones");
-    trampoline->addFnAttr("julia.mv.alias");
-    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
-    alias->eraseFromParent();
-
     uint32_t id;
     GlobalVariable *slot;
     std::tie(id, slot) = get_reloc_slot(F);
+    assert(slot);
 
-    auto BB = BasicBlock::Create(F->getContext(), "top", trampoline);
-    IRBuilder<> irbuilder(BB);
+    Function *trampoline = create_trampoline(F, slot, /* autoinit */ false);
+    trampoline->addFnAttr("julia.mv.alias"); // add alias attribute for testing purposes
 
-    auto ptr = irbuilder.CreateLoad(F->getType(), slot);
-    ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), None));
+    trampoline->takeName(alias);
+    trampoline->setLinkage(alias->getLinkage());
+    trampoline->setVisibility(alias->getVisibility());
+    trampoline->setDSOLocal(alias->isDSOLocal());
+    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
 
-    SmallVector<Value *, 0> Args;
-    for (auto &arg : trampoline->args())
-        Args.push_back(&arg);
-    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
-    if (F->isVarArg()) {
-        assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
-        call->setTailCallKind(CallInst::TCK_MustTail);
-    } else {
-        call->setTailCallKind(CallInst::TCK_Tail);
-    }
-
-    if (F->getReturnType() == Type::getVoidTy(F->getContext()))
-        irbuilder.CreateRetVoid();
-    else
-        irbuilder.CreateRet(call);
+    alias->eraseFromParent();
 }
 
 void CloneCtx::fix_gv_uses()

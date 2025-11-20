@@ -538,7 +538,7 @@ end
 """
     isbindingresolved(m::Module, s::Symbol) -> Bool
 
-Returns whether the binding of a symbol in a module is resolved.
+Return whether the binding of a symbol in a module is resolved.
 
 See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
 
