@@ -543,7 +543,7 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
 }
 
 static void jl_dump_asm_internal(
-        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        uintptr_t Fptr, size_t Fsize, uint64_t slide,
         object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
@@ -593,7 +593,7 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char emit_mc, const char* asm_v
 
     // Find debug info (line numbers) to print alongside
     object::SectionRef Section;
-    int64_t slide = 0;
+    uint64_t slide = 0;
     uint64_t symsize = 0;
     llvm::DIContext *context = NULL;
     if (!jl_DI_for_fptr(fptr, &symsize, &slide, &Section, &context)) {
@@ -646,9 +646,9 @@ class SymbolTable {
     int Pass;
     const object::ObjectFile *object;
     uint64_t ip; // virtual instruction pointer of the current instruction
-    int64_t slide;
+    uint64_t slide;
 public:
-    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, int64_t slide, const FuncMCView &MemObj) JL_NOTSAFEPOINT
+    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, uint64_t slide, const FuncMCView &MemObj) JL_NOTSAFEPOINT
         : Ctx(Ctx), MemObj(MemObj), object(object), ip(0), slide(slide) {}
     ~SymbolTable() JL_NOTSAFEPOINT = default;
     const FuncMCView &getMemoryObject() const JL_NOTSAFEPOINT { return MemObj; }
@@ -851,7 +851,7 @@ std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Tr
 }
 
 static void jl_dump_asm_internal(
-        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        uintptr_t Fptr, size_t Fsize, uint64_t slide,
         object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
