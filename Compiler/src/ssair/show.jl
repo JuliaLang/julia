@@ -1154,7 +1154,7 @@ function Base.show(io::IO, mi_info::Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        di = mi.cache.inferred.debuginfo
+        di = mi.cache.debuginfo
         file, line = debuginfo_firstline(di)
         file = string(file)
         line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"

@@ -916,7 +916,7 @@ typedef struct _modstack_t {
 // The analyzer doesn't like looking through the arraylist, so just model the
 // access for it using this function
 STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
-    return (struct _jl_module_using *)&(m->usings.items[3*i]);
+    return (struct _jl_module_using *)&(m->usings.items[4*i]);
 }
 STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
     return module_usings_getidx(m, i)->mod;
@@ -924,11 +924,11 @@ STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROO
 #endif
 
 STATIC_INLINE size_t module_usings_length(jl_module_t *m) JL_NOTSAFEPOINT {
-    return m->usings.len/3;
+    return m->usings.len/4;
 }
 
 STATIC_INLINE size_t module_usings_max(jl_module_t *m) JL_NOTSAFEPOINT {
-    return m->usings.max/3;
+    return m->usings.max/4;
 }
 
 JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) JL_NOTSAFEPOINT;
@@ -1027,6 +1027,10 @@ STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_N
 
 STATIC_INLINE int jl_bkind_is_real_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
     return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT;
+}
+
+STATIC_INLINE int jl_bpart_is_exported(uint8_t flags) JL_NOTSAFEPOINT {
+    return flags & (PARTITION_FLAG_EXPORTED | PARTITION_FLAG_IMPLICITLY_EXPORTED);
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_GLOBALLY_ROOTED;

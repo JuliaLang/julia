@@ -658,7 +658,23 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
         /* safepoint_on_entry */ 1,
         /* gcstack_arg */ 1,
         /* use_jlplt*/ 1 ,
-        /*force_emit_all=*/ 0};
+        /*force_emit_all=*/ 0,
+#ifdef _COMPILER_MSAN_ENABLED_
+        /* sanitize_memory */ 1,
+#else
+        /* sanitize_memory */ 0,
+#endif
+#ifdef _COMPILER_TSAN_ENABLED_
+        /* sanitize_thread */ 1,
+#else
+        /* sanitize_thread */ 0,
+#endif
+#ifdef _COMPILER_ASAN_ENABLED_
+        /* sanitize_address */ 1,
+#else
+        /* sanitize_address */ 0,
+#endif
+};
 
 static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");

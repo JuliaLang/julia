@@ -491,7 +491,7 @@ static int lookup_pointer(
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
-        jl_frame_t *new_frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), n_frames);
+        jl_frame_t *new_frames = (jl_frame_t*)calloc(n_frames, sizeof(jl_frame_t));
         memcpy(&new_frames[n_frames - 1], *frames, sizeof(jl_frame_t));
         free(*frames);
         *frames = new_frames;
@@ -1277,7 +1277,7 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
 
-    jl_frame_t *frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), 1);
+    jl_frame_t *frames = (jl_frame_t*)calloc(1, sizeof(jl_frame_t));
     frames[0].line = -1;
     *frames_out = frames;
 

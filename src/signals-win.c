@@ -445,6 +445,7 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     if (ct2 == NULL) // this thread is already dead
         return 0;
     HANDLE hThread = ptls2->system_id;
+    assert(GetCurrentThreadId() != GetThreadId(hThread));
     if ((DWORD)-1 == SuspendThread(hThread)) {
         // jl_safe_fprintf(ios_safe_stderr, "failed to suspend thread %d: %lu\n", tid, GetLastError());
         return 0;

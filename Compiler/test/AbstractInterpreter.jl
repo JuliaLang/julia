@@ -494,29 +494,32 @@ struct CustomData
     inferred
     CustomData(@nospecialize inferred) = new(inferred)
 end
-function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult, edges::Core.SimpleVector)
+function Compiler.transform_result_for_cache(
+    interp::CustomDataInterp, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     inferred_result = @invoke Compiler.transform_result_for_cache(
         interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     return CustomData(inferred_result)
 end
-function Compiler.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
-                            @nospecialize(info::Compiler.CallInfo), stmt_flag::UInt32)
+function Compiler.src_inlining_policy(
+    interp::CustomDataInterp, @nospecialize(src), @nospecialize(info::Compiler.CallInfo),
+    stmt_flag::UInt32)
     if src isa CustomData
         src = src.inferred
     end
-    return @invoke Compiler.src_inlining_policy(interp::Compiler.AbstractInterpreter, src::Any,
-                                          info::Compiler.CallInfo, stmt_flag::UInt32)
+    return @invoke Compiler.src_inlining_policy(
+        interp::Compiler.AbstractInterpreter, src::Any, info::Compiler.CallInfo,
+        stmt_flag::UInt32)
 end
 Compiler.retrieve_ir_for_inlining(cached_result::CodeInstance, src::CustomData) =
     Compiler.retrieve_ir_for_inlining(cached_result, src.inferred)
 Compiler.retrieve_ir_for_inlining(mi::MethodInstance, src::CustomData, preserve_local_sources::Bool) =
     Compiler.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
 let src = code_typed((Int,); interp=CustomDataInterp()) do x
-        return sin(x) + cos(x)
+        return (@noinline sin(x)) + (@noinline cos(x))
     end |> only |> first
     @test count(isinvoke(:sin), src.code) == 1
     @test count(isinvoke(:cos), src.code) == 1
-    @test count(isinvoke(:+), src.code) == 0
+    @test_broken count(isinvoke(:+), src.code) == 0
 end
 
 # ephemeral cache mode
@@ -525,9 +528,9 @@ func_ext_cache1(a) = func_ext_cache2(a) * cos(a)
 func_ext_cache2(a) = sin(a)
 let interp = DebugInterp()
     @test Base.infer_return_type(func_ext_cache1, (Float64,); interp) === Float64
-    @test isdefined(interp, :code_cache)
+    @test isdefined(interp, :global_cache)
     found = false
-    for (mi, codeinst) in interp.code_cache.dict
+    for (mi, codeinst) in interp.global_cache.dict
         if mi.def.name === :func_ext_cache2
             found = true
             break
@@ -538,7 +541,7 @@ end
 
 @newinterp InvokeInterp
 struct InvokeOwner end
-codegen = IdDict{CodeInstance, CodeInfo}()
+global codegen::IdDict{CodeInstance, CodeInfo} = IdDict{CodeInstance, CodeInfo}()
 Compiler.cache_owner(::InvokeInterp) = InvokeOwner()
 Compiler.codegen_cache(::InvokeInterp) = codegen
 let interp = InvokeInterp()

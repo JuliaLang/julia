@@ -401,7 +401,7 @@ function ⊋ end
     ⊊(a, b)::Bool
     ⊋(b, a)::Bool
 
-Determines if `a` is a subset of, but not equal to, `b`.
+Determine if `a` is a subset of, but not equal to, `b`.
 
 See also [`issubset`](@ref) (`⊆`), [`⊈`](@ref).
 

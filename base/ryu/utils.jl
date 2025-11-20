@@ -22,7 +22,7 @@ qbound(::Type{Float64}) = 63
 """
     Ryu.log10pow2(e::Integer)
 
-Computes `floor(log10(2^e))`. This is valid for all `e < 1651`.
+Compute `floor(log10(2^e))`. This is valid for all `e < 1651`.
 """
 log10pow2(e) = (e * 78913) >> 18
 
@@ -30,14 +30,14 @@ log10pow2(e) = (e * 78913) >> 18
 """
     Ryu.log10pow5(e::Integer)
 
-Computes `floor(log10(5^e))`. This is valid for all `e < 2621`.
+Compute `floor(log10(5^e))`. This is valid for all `e < 2621`.
 """
 log10pow5(e) = (e * 732923) >> 20
 
 """
     Ryu.pow5bits(e)
 
-Computes `e == 0 ? 1 : ceil(log2(5^e))`. This is valid for `e < 3529` (if performend in `Int32` arithmetic).
+Compute `e == 0 ? 1 : ceil(log2(5^e))`. This is valid for `e < 3529` (if performend in `Int32` arithmetic).
 """
 pow5bits(e) = ((e * 1217359) >> 19) + 1
 

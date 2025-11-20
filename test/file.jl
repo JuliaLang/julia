@@ -260,13 +260,14 @@ no_error_logging(f::Function) =
         @test TEMP_CLEANUP_MAX[] == 3
         local t, f
         temps = String[]
+        npending = 0
         # mktemp is normally cleaned up on completion
         mktemp(d) do path, _
             @test isfile(path)
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 0
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # mktemp when cleanup is prevented
         no_error_logging() do
@@ -277,19 +278,26 @@ no_error_logging(f::Function) =
                 t = path
             end
         end
+        # Make deleteable again
         chmod(d, 0o700)
         close(f)
-        @test isfile(t)
-        @test length(TEMP_CLEANUP) == 1
-        @test TEMP_CLEANUP_MAX[] == 3
-        push!(temps, t)
+        if Libc.geteuid() == 0
+            # Root can delete anything
+            @test !isfile(t)
+        else
+            npending += 1
+            @test isfile(t)
+            @test length(TEMP_CLEANUP) == npending
+            @test TEMP_CLEANUP_MAX[] == 3
+            push!(temps, t)
+        end
         # mktempdir is normally cleaned up on completion
         mktempdir(d) do path
             @test isdir(path)
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 1
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # mktempdir when cleanup is prevented
         no_error_logging() do
@@ -301,16 +309,24 @@ no_error_logging(f::Function) =
                 t = path
             end
         end
+        # Make deleteable again
         chmod(d, 0o700)
         close(f)
-        @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
-        @test TEMP_CLEANUP_MAX[] == 3
-        push!(temps, t)
+        if Libc.geteuid() == 0
+            # Root can delete anything
+            @test !isdir(t)
+        else
+            @test isdir(t)
+            npending += 1
+            @test length(TEMP_CLEANUP) == npending
+            @test TEMP_CLEANUP_MAX[] == 3
+            push!(temps, t)
+        end
         # make one more temp file
         t = mktemp()[1]
+        npending += 1
         @test isfile(t)
-        @test length(TEMP_CLEANUP) == 3
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # nothing has been deleted yet
         for t in temps
@@ -319,8 +335,9 @@ no_error_logging(f::Function) =
         # another temp file triggers purge
         t = mktempdir()
         @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
-        @test TEMP_CLEANUP_MAX[] == 4
+        npending = 2
+        @test length(TEMP_CLEANUP) == npending
+        @test TEMP_CLEANUP_MAX[] == (Libc.geteuid() == 0 ? 3 : 4)
         # now all the temps are gone
         for t in temps
             @test !ispath(t)
@@ -419,6 +436,9 @@ end
 function test_stat_error(stat::Function, pth)
     if stat === lstat && !(pth isa AbstractString)
         return # no lstat for fd handles
+    end
+    if Libc.geteuid() == 0
+        return # root bypasses permission checks
     end
     ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
     @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
@@ -550,16 +570,23 @@ function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer
     return [Base._UVError(pfx, code) for code in codes]
 end
 
+read_linux_id_map_max(file) = parse(Int, split(strip(read(file, String)), " ", keepempty = false)[end]) % Cint
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     uid = Libc.geteuid()
     @test stat(file).uid == uid
     @test uid == Libc.getuid()
+    maxuid = maxgid = -1
+    # Containers may have restricted uid/gid ranges
+    if Sys.islinux() && isfile("/proc/self/uid_map")
+        maxuid = read_linux_id_map_max("/proc/self/uid_map")
+        maxgid = read_linux_id_map_max("/proc/self/gid_map")
+    end
     if uid == 0 # root user
-        chown(file, -2, -1)  # Change the file owner to nobody
-        @test stat(file).uid != 0
-        chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
-        @test stat(file).gid != 0
+        chown(file, maxuid-1, -1)  # Change the file owner to nobody
+        @test maxuid == 1 || stat(file).uid != 0
+        chown(file, 0, maxgid-1)  # Change the file group to nogroup (and owner back to root)
+        @test maxgid == 1 || stat(file).gid != 0
         @test stat(file).uid == 0
         @test chown(file, -1, 0) == file
         @test stat(file).gid == 0
@@ -1864,8 +1891,10 @@ if !Sys.iswindows()
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
-            chmod(joinpath(d, "nonempty"), 0o777)
+            if Libc.geteuid() != 0 # root can override permissions
+                @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
+                chmod(joinpath(d, "nonempty"), 0o777)
+            end
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))
         end
@@ -2032,10 +2061,10 @@ end
         chmod(fpath, 0o444)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test !Sys.iswritable(fpath)
+        @test !Sys.iswritable(fpath) skip=Libc.getuid() == 0
         chmod(fpath, 0o244)
         @test !Sys.isexecutable(fpath)
-        @test !Sys.isreadable(fpath) skip=Sys.iswindows()
+        @test !Sys.isreadable(fpath) skip=(Sys.iswindows() || Libc.getuid() == 0)
         @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,

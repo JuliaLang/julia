@@ -496,7 +496,7 @@ end
 """
     make_scratch(scratch::Union{Nothing, Vector}, T::Type, len::Integer)
 
-Returns `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
+Return `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
 that is backed by the `Vector` `s`. If `scratch !== nothing`, then `s === scratch`.
 
 This function will allocate a new vector if `scratch === nothing`, `resize!` `scratch` if it
@@ -763,7 +763,7 @@ end
 """
     IsUIntMappable(yes, no) isa Base.Sort.Algorithm
 
-Determines if the elements of a vector can be mapped to unsigned integers while preserving
+Determine if the elements of a vector can be mapped to unsigned integers while preserving
 their order under the specified ordering.
 
 If they can be, dispatch to the `yes` algorithm and record the unsigned integer type that

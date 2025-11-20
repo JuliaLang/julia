@@ -2,35 +2,76 @@
 
 # This type must be kept in sync with the C struct in src/gc-interface.h
 struct GC_Num
-    allocd          ::Int64 # GC internal
-    deferred_alloc  ::Int64 # GC internal
-    freed           ::Int64 # GC internal
-    malloc          ::Int64
-    realloc         ::Int64
-    poolalloc       ::Int64
-    bigalloc        ::Int64
-    freecall        ::Int64
-    total_time      ::Int64
-    total_allocd    ::Int64 # GC internal
-    collect         ::Csize_t # GC internal
-    pause           ::Cint
-    full_sweep      ::Cint
-    max_pause       ::Int64
-    max_memory      ::Int64
-    time_to_safepoint           ::Int64
-    max_time_to_safepoint       ::Int64
-    total_time_to_safepoint     ::Int64
-    sweep_time      ::Int64
-    mark_time       ::Int64
-    stack_pool_sweep_time ::Int64
-    total_sweep_time  ::Int64
-    total_sweep_page_walk_time              ::Int64
-    total_sweep_madvise_time                ::Int64
-    total_sweep_free_mallocd_memory_time    ::Int64
-    total_mark_time   ::Int64
+    # (GC Internal) Number of allocated bytes since the last collection. This field is reset
+    # after the end of every garbage collection cycle, so it will always be zero if observed
+    # during execution of Julia user code
+    allocd::Int64
+    # (GC Internal) Number of allocated bytes within a `gc_disable/gc_enable` block. This field is
+    # reset after every garbage collection cycle and will always be zero in case of no use
+    # of `gc_disable/gc_enable` blocks
+    deferred_alloc::Int64
+    # (GC Internal) Number of bytes freed bytes in the current collection cycle. This field is
+    # reset after every garbage collection cycle and will always be zero when observed
+    # during execution of Julia user code. It's incremented as memory is reclaimed during a collection,
+    # used to gather some statistics within the collection itself and reset at the end of a GC cycle.
+    freed::Int64
+    # Number of `malloc/calloc` calls (never reset by the runtime)
+    malloc::Int64
+    # Number of `realloc` calls (never reset by the runtime)
+    realloc::Int64
+    # Number of pool allocation calls (never reset by the runtime)
+    # NOTE: Julia's stock GC uses an internal (pool) allocator for objects up to 2032 bytes.
+    # Larger objects are allocated through `malloc/calloc`.
+    poolalloc::Int64
+    # Number of allocations for "big objects" (non-array objects larger than 2032 bytes)
+    # (never reset by the runtime)
+    bigalloc::Int64
+    # Number of `free` calls (never reset by the runtime)
+    freecall::Int64
+    # Total time spent in garbage collection (never reset by the runtime)
+    total_time::Int64
+    # (GC internal) Total number of bytes allocated since the program started
+    total_allocd::Int64
+    # (GC internal) Per-thread allocation quota before triggering a GC
+    # NOTE: This field is no longer used by the heuristics in the stock GC
+    interval::Csize_t
+    # Duration of the last GC pause in nanoseconds
+    pause::Cint
+    # Number of full GC sweeps completed so far (never reset by the runtime)
+    full_sweep::Cint
+    # Maximum pause duration observed so far in nanoseconds
+    max_pause::Int64
+    # Maximum number of bytes allocated any point in time.
+    # NOTE: This is aggregated over objects, not pages
+    max_memory::Int64
+    # Time taken to reach a safepoint in the last GC cycle in nanoseconds
+    time_to_safepoint::Int64
+    # Maximum time taken to reach a safepoint across all GCs in nanoseconds
+    max_time_to_safepoint::Int64
+    # Total time taken to reach safepoints across all GCs in nanoseconds
+    total_time_to_safepoint::Int64
+    # Time spent in the last GC sweeping phase in nanoseconds
+    sweep_time::Int64
+    # Time spent in the last GC marking phase in nanoseconds
+    mark_time::Int64
+    # Time spent sweeping stack pools in the last GC in nanoseconds
+    stack_pool_sweep_time::Int64
+    # Total time spent in sweeping phase across all GCs in nanoseconds
+    total_sweep_time::Int64
+    # Total time spent walking pool allocated pages during sweeping phase across all GCs in nanoseconds
+    total_sweep_page_walk_time::Int64
+    # Total time spent in madvise calls during sweeping phase across all GCs in nanoseconds
+    total_sweep_madvise_time::Int64
+    # Total time spent in freeing malloc'd memory during sweeping phase across all GCs in nanoseconds
+    total_sweep_free_mallocd_memory_time::Int64
+    # Total time spent in marking phase across all GCs in nanoseconds
+    total_mark_time::Int64
+    # Total time spent sweeping stack pools across all GCs in nanoseconds
     total_stack_pool_sweep_time::Int64
-    last_full_sweep ::Int64
-    last_incremental_sweep ::Int64
+    # Timestamp of the last full GC sweep in nanoseconds
+    last_full_sweep::Int64
+    # Timestamp of the last incremental GC sweep in nanoseconds
+    last_incremental_sweep::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
