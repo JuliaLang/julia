@@ -1937,7 +1937,7 @@ end
 """
     Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
 
-Returns whether a given PkgId within the active project is precompiled.
+Return whether a given PkgId within the active project is precompiled.
 
 By default this check observes the same approach that code loading takes
 with respect to when different versions of dependencies are currently loaded
@@ -1955,7 +1955,7 @@ end
 """
     Base.isrelocatable(pkg::PkgId)
 
-Returns whether a given PkgId within the active project is precompiled and the
+Return whether a given PkgId within the active project is precompiled and the
 associated cache is relocatable.
 
 !!! compat "Julia 1.11"
@@ -3305,7 +3305,7 @@ end
 """
     Base.compilecache(module::PkgId)
 
-Creates a precompiled cache file for a module and all of its dependencies.
+Create a precompiled cache file for a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.

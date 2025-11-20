@@ -34,7 +34,7 @@ Base.axes(C::Const) = axes(C.a)
 """
     @aliasscope expr
 
-Allows the compiler to assume that all `Const`s are not being modified through stores
+Allow the compiler to assume that all `Const`s are not being modified through stores
 within this scope, even if the compiler can't prove this to be the case.
 
 !!! warning
@@ -543,7 +543,7 @@ This metric is only updated when `t` yields or completes unless `t` is the curre
 which it will be updated continuously.
 See also [`Base.Experimental.task_wall_time_ns`](@ref).
 
-Returns `nothing` if task timings are not enabled.
+Return `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! note "This metric is from the Julia scheduler"
@@ -572,7 +572,7 @@ This is the time since the task first entered the run queue until the time at wh
 completed, or until the current time if the task has not yet completed.
 See also [`Base.Experimental.task_running_time_ns`](@ref).
 
-Returns `nothing` if task timings are not enabled.
+Return `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! compat "Julia 1.12"

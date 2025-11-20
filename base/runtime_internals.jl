@@ -122,7 +122,7 @@ unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=fa
 """
     isexported(m::Module, s::Symbol)::Bool
 
-Returns whether a symbol is exported from a module.
+Return whether a symbol is exported from a module.
 
 See also: [`ispublic`](@ref), [`names`](@ref)
 
@@ -148,7 +148,7 @@ isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any),
 """
     ispublic(m::Module, s::Symbol)::Bool
 
-Returns whether a symbol is marked as public in a module.
+Return whether a symbol is marked as public in a module.
 
 Exported symbols are considered public.
 
@@ -998,7 +998,7 @@ iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union |
 """
     Base.isconcretedispatch(T)
 
-Returns true if `T` is a [concrete type](@ref isconcretetype) that could appear
+Return true if `T` is a [concrete type](@ref isconcretetype) that could appear
 as an element of a [dispatch tuple](@ref isdispatchtuple).
 
 See also: [`isdispatchtuple`](@ref).
@@ -1445,7 +1445,7 @@ max_world(m::Core.CodeInfo) = m.max_world
 """
     get_world_counter()
 
-Returns the current maximum world-age counter. This counter is monotonically
+Return the current maximum world-age counter. This counter is monotonically
 increasing.
 
 !!! warning
@@ -1459,7 +1459,7 @@ get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 """
     tls_world_age()
 
-Returns the world the [current_task()](@ref) is executing within.
+Return the world the [current_task()](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
@@ -1652,7 +1652,7 @@ ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize
 """
     may_invoke_generator(method, atype, sparams)::Bool
 
-Computes whether or not we may invoke the generator for the given `method` on
+Compute whether or not we may invoke the generator for the given `method` on
 the given `atype` and `sparams`. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
