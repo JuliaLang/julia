@@ -554,7 +554,7 @@ end
 """
     tempdir()
 
-Gets the path of the temporary directory. On Windows, `tempdir()` uses the first environment
+Get the path of the temporary directory. On Windows, `tempdir()` uses the first environment
 variable found in the ordered list `TMP`, `TEMP`, `USERPROFILE`. On all other operating
 systems, `tempdir()` uses the first environment variable found in the ordered list `TMPDIR`,
 `TMP`, `TEMP`, and `TEMPDIR`. If none of these are found, the path `"/tmp"` is used.
@@ -1297,7 +1297,7 @@ end
 """
     hardlink(src::AbstractString, dst::AbstractString)
 
-Creates a hard link to an existing source file `src` with the name `dst`. The
+Create a hard link to an existing source file `src` with the name `dst`. The
 destination, `dst`, must not exist.
 
 See also: [`symlink`](@ref).
@@ -1317,7 +1317,7 @@ end
 """
     symlink(target::AbstractString, link::AbstractString; dir_target = false)
 
-Creates a symbolic link to `target` with the name `link`.
+Create a symbolic link to `target` with the name `link`.
 
 On Windows, symlinks must be explicitly declared as referring to a directory
 or not.  If `target` already exists, by default the type of `link` will be auto-
@@ -1490,7 +1490,7 @@ Base.show(io::IO, x::DiskStat) =
 """
     diskstat(path=pwd())
 
-Returns statistics in bytes about the disk that contains the file or directory pointed at by
+Return statistics in bytes about the disk that contains the file or directory pointed at by
 `path`. If no argument is passed, statistics about the disk that contains the current
 working directory are returned.
 
