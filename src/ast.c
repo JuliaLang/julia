@@ -39,6 +39,7 @@ typedef struct _jl_ast_context_t {
     value_t ssavalue_sym;
     value_t slot_sym;
     jl_module_t *module; // context module for `current-julia-module-counter`
+    uint8_t module_strict_flags; // cached strict mode flags for module
     struct _jl_ast_context_t *next; // invasive list pointer for getting free contexts
 } jl_ast_context_t;
 
@@ -151,11 +152,19 @@ static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nar
     return fl_ctx->F;
 }
 
+static value_t fl_module_strict_flags(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "julia-current-module-flags", nargs, 0);
+    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
+    return fixnum(ctx->module_strict_flags);
+}
+
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
     { "current-julia-module-counter", fl_module_unique_name },
+    { "julia-current-module-flags", fl_module_strict_flags },
     { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
 };
@@ -181,6 +190,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ctx) JL_NOTSAFEPOINT
     ctx->ssavalue_sym = symbol(fl_ctx, "ssavalue");
     ctx->slot_sym = symbol(fl_ctx, "slot");
     ctx->module = NULL;
+    ctx->module_strict_flags = 0;
     set(symbol(fl_ctx, "*scopewarn-opt*"), fixnum(jl_options.warn_scope));
 }
 
@@ -204,6 +214,8 @@ static jl_ast_context_t *jl_ast_ctx_enter(jl_module_t *m) JL_GLOBALLY_ROOTED JL_
         jl_init_ast_ctx(ctx);
     }
     ctx->module = m;
+    if (m)
+        ctx->module_strict_flags = jl_module_strict_flags(m, jl_current_task->world_age);
     return ctx;
 }
 
@@ -211,6 +223,7 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 {
     uv_mutex_lock(&flisp_lock);
     ctx->module = NULL;
+    ctx->module_strict_flags = 0;
     ctx->next = jl_ast_ctx_freed;
     jl_ast_ctx_freed = ctx;
     uv_mutex_unlock(&flisp_lock);

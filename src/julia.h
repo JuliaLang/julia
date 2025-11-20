@@ -769,6 +769,7 @@ static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 // this flag is set during implicit resolution and can be removed if the resolution changes.
 static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
 
+
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
     __declspec(align(alignment))
@@ -871,6 +872,13 @@ struct _jl_module_using {
 
 // Flags for _jl_module_using.flags
 static const uint8_t JL_MODULE_USING_REEXPORT = 0x1;
+
+// Flags for jl_module_import
+static const uint8_t JL_IMPORT_FLAG_EXPLICIT          = 0x1;
+static const uint8_t JL_IMPORT_FLAG_ALLOW_UNDEF       = 0x2;
+
+// Flags for constant declaration
+static const uint8_t JL_CONST_MAY_REPLACE_IMPORTS     = 0x1;
 
 struct _jl_globalref_t {
     JL_DATA_TYPE
@@ -2043,9 +2051,9 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_s
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs);
 JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs);
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind);
-JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici);
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, uint8_t flags);
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind, uint8_t flags);
+JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, uint8_t flags);
 JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags);
 int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world);

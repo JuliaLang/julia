@@ -581,7 +581,7 @@ jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default
 // Precondition: world_counter_lock is held
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
     jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
-    enum jl_partition_kind constant_kind, size_t new_world)
+    enum jl_partition_kind constant_kind, size_t new_world, uint8_t flags)
 {
     jl_binding_partition_t *new_prev_bpart = NULL;
     JL_GC_PUSH2(&val, &new_prev_bpart);
@@ -603,7 +603,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 new_bpart = bpart;
                 break;
             }
-        } else if (jl_bkind_is_some_explicit_import(kind)) {
+        } else if (jl_bkind_is_some_explicit_import(kind) &&
+                   !(flags & JL_CONST_MAY_REPLACE_IMPORTS)) {
             jl_errorf("cannot declare %s.%s constant; it was already declared as an import",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
         } else if (kind == PARTITION_KIND_GLOBAL) {
@@ -1109,6 +1110,11 @@ JL_DLLEXPORT jl_value_t *jl_get_existing_strong_gf(jl_binding_t *b, size_t new_w
             jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
                         jl_module_debug_name(b->globalref->mod), from ? jl_module_debug_name(from) : "<multiple modules>", jl_symbol_name(b->globalref->name));
         }
+        else if (((jl_module_strict_flags(ownerb->globalref->mod, jl_current_task->world_age) & JL_STRICT_IMPORT_TYPE) != 0))
+        {
+            jl_errorf("`@strict :typeimports` disallows extending types without explicit import in %s: function %s.%s must be explicitly imported to be extended",
+                        jl_module_debug_name(b->globalref->mod), jl_module_debug_name(from), jl_symbol_name(b->globalref->name));
+        }
         else if (!(jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION) &
                                               BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION)) {
             jl_printf(JL_STDERR, "WARNING: Constructor for type \"%s\" was extended in `%s` without explicit qualification or import.\n"
@@ -1247,9 +1253,10 @@ static int eq_bindings(jl_binding_partition_t *owner, jl_binding_t *alias, size_
     return owner == alias_bpart;
 }
 
-// NOTE: we use explici since explicit is a C++ keyword
-JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici)
+JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, uint8_t flags)
 {
+    // NOTE: we use explici since explicit is a C++ keyword
+    int explici = (flags & JL_IMPORT_FLAG_EXPLICIT) != 0;
     check_safe_import_from(from);
     jl_binding_t *b = jl_get_binding(from, s);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
@@ -1277,7 +1284,8 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
     jl_binding_partition_t *ownerbpart = bpart;
     jl_walk_binding_inplace(&ownerb, &ownerbpart, ct->world_age);
 
-    if (jl_bkind_is_some_guard(jl_binding_kind(ownerbpart))) {
+    if (jl_bkind_is_some_guard(jl_binding_kind(ownerbpart)) &&
+        !(flags & JL_IMPORT_FLAG_ALLOW_UNDEF)) {
         jl_printf(JL_STDERR,
                   "WARNING: Imported binding %s.%s was undeclared at import time during import to %s.\n",
                   jl_symbol_name(from->name), jl_symbol_name(s),
@@ -1345,7 +1353,7 @@ JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
     }
-    jl_declare_constant_val2(b, m, name, (jl_value_t*)import, PARTITION_KIND_CONST_IMPORT);
+    jl_declare_constant_val2(b, m, name, (jl_value_t*)import, PARTITION_KIND_CONST_IMPORT, 0);
 }
 
 void jl_add_usings_backedge(jl_module_t *from, jl_module_t *to)
@@ -2208,6 +2216,24 @@ JL_DLLEXPORT void jl_init_restored_module(jl_value_t *mod)
     else {
         jl_add_to_module_init_list(mod);
     }
+}
+
+JL_DLLEXPORT uint8_t jl_module_strict_flags(jl_module_t *mod, size_t world) JL_NOTSAFEPOINT
+{
+    jl_binding_t *b = jl_get_module_binding(mod, jl_symbol("_internal_module_strict_flags"), 0);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    // No binding (partition) at all - no strict mode
+    if (!bpart)
+        return 0;
+    jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    if (jl_bkind_is_some_guard(jl_binding_kind(bpart)))
+        return 0;
+    // Exists, but not a constant -> error
+    if (!jl_bkind_is_defined_constant(jl_binding_kind(bpart)))
+        jl_errorf("malformed _internal_module_strict_flags binding not a constant in module %s", jl_symbol_name(mod->name));
+    jl_value_t *val = bpart->restriction;
+    jl_typeassert(val, (jl_value_t*)jl_uint8_type);
+    return jl_unbox_uint8(val);
 }
 
 #ifdef __cplusplus

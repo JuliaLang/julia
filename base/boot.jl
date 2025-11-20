@@ -726,7 +726,7 @@ let
             a = getfield(paths, i).args
             length(a) == 1 || fail()
             s = getindex(a, 1)
-            Core._import(to, from, s, s, explicit)
+            Core._import(to, from, s, s, explicit ? 0x1 : 0x0)
             i += 1
         end
     end

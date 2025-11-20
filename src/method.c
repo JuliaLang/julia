@@ -1221,7 +1221,7 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     gf = (jl_value_t*)jl_new_generic_function(name, mod, new_world);
     // From this point on (if we didn't error), we're committed to raising the world age,
     // because we've used it to declare the type name.
-    jl_declare_constant_val3(b, mod, name, gf, PARTITION_KIND_CONST, new_world);
+    jl_declare_constant_val3(b, mod, name, gf, PARTITION_KIND_CONST, new_world, 0);
     jl_atomic_store_release(&jl_world_counter, new_world);
     JL_GC_PROMISE_ROOTED(gf);
     JL_UNLOCK(&world_counter_lock);

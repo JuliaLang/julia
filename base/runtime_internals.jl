@@ -262,6 +262,11 @@ const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
 
 const JL_MODULE_USING_REEXPORT = 0x1
 
+const JL_IMPORT_FLAG_EXPLICIT    = 0x1
+const JL_IMPORT_FLAG_ALLOW_UNDEF = 0x2
+
+const JL_CONST_MAY_REPLACE_IMPORTS = 0x1
+
 is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
