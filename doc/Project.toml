@@ -1,3 +1,2 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-DocumenterInventoryWritingBackport = "195adf08-069f-4855-af3e-8933a2cdae94"
