@@ -29,6 +29,7 @@ end
 
 PARSE_ERROR = r"\(error-t "
 
+
 with_version(v::VersionNumber, (i,o)::Pair) = ((;v=v), i) => o
 
 # TODO:
@@ -346,7 +347,6 @@ tests = [
         # parse_call_chain
         "f(a).g(b)" => "(call (. (call f a) g) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (macro_name x)))"
-
         # non-errors in space sensitive contexts
         "[f (x)]"    =>  "(hcat f (parens x))"
         "[f x]"      =>  "(hcat f x)"
@@ -364,6 +364,12 @@ tests = [
         "A.@var\"#\" a"=>  "(macrocall (. A (macro_name (var #))) a)"
         "@+x y"        =>  "(macrocall (macro_name +) x y)"
         "A.@.x"        =>  "(macrocall (. A (macro_name .)) x)"
+
+        # newline macro calls
+        "(@foo x\n y)" => "(parens (macrocall (macro_name foo) x y))"
+        "(1 + @foo x\n y)" => "(parens (call-i 1 + (macrocall (macro_name foo) x y)))"
+        "(@foo function bar()\n @baz \n x \n end)" => "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))"
+
         # Macro names
         "@! x"  => "(macrocall (macro_name !) x)"
         "@.. x" => "(macrocall (macro_name ..) x)"
