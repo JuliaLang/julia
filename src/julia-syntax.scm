@@ -1953,6 +1953,12 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
+(define (check-disallowed-iterator itr)
+  ;; N.B.: Must match JL_STRICT_LITERAL_ITERATORS in julia_internal.h
+  (if (and (test-bit (julia-current-module-flags) 2) (integer? itr))
+      (error "`@strict :nointliteraliterators` disallows integer literal iterators here")
+      itr))
+
 (define (expand-for lhss itrs body)
   (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
   (let ((copied-vars  ;; variables not declared `outer` are copied in the innermost loop
@@ -1987,7 +1993,7 @@
                            (soft-let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
                              ,body))
                          `(scope-block ,body))))
-               `(block (= ,coll ,(car itrs))
+               `(block (= ,coll ,(check-disallowed-iterator (car itrs)))
                        (local ,next)
                        (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this

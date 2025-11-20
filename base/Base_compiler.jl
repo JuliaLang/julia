@@ -2,8 +2,8 @@
 
 module Base
 
-Core._import(Base, Core, :_eval_import, :_eval_import, true)
-Core._import(Base, Core, :_eval_using, :_eval_using, true)
+Core._import(Base, Core, :_eval_import, :_eval_import, 0x1)
+Core._import(Base, Core, :_eval_using, :_eval_using, 0x1)
 
 using .Core.Intrinsics, .Core.IR
 
@@ -148,6 +148,12 @@ function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
     Core._using(mod, _topmod(mod), UInt8(0))
     Core.declare_const(mod, :include, IncludeInto(mod))
     Core.declare_const(mod, :eval, Core.EvalInto(mod))
+    parent = ccall(:jl_module_parent, Ref{Module}, (Any,), mod)
+    if parent === mod
+    else
+        Core._import(mod, parent, :_internal_module_strict_flags,
+            :_internal_module_strict_flags, 0x3)
+    end
     if syntax_ver === nothing
         return nothing
     end

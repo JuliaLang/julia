@@ -2782,7 +2782,7 @@ See also [`global`](@ref), [`setglobal!`](@ref), [`get_binding_type`](@ref Core.
 Core.declare_global
 
 """
-    declare_const(module::Module, name::Symbol, [x])
+    declare_const(module::Module, name::Symbol, [x, [flags::UInt8]])
 
 Create or replace the constant `name` in `module` with the new value `x`.  When
 replacing, `x` does not need to have the same type as the original constant.
@@ -2817,11 +2817,14 @@ See also [`const`](@ref).
 Core.declare_const
 
 """
-   _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, imported::Bool])
+   _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, flags::Uint8])
 
 With all five arguments, imports `sym` from module `from` into `to` with name
-`asname`.  `imported` is true for bindings created with `import` (set it to
-false for `using A: ...`).
+`asname`. `flags` is a bitmask of JL_IMPORT_FLAG_* flags.
+    - JL_IMPORT_FLAG_EXPLICIT is set for bindings created with `import` (unset for `using A: ...`).
+    - JL_IMPORT_FLAG_ALLOW_UNDEF allows the imported binding to be undefined at
+      import time (this is ordinarily a warning). Note that the binding may be
+      resolved later if it becomes available in the imported module.
 
 With only the first three arguments, creates a binding for the module `from`
 with name `asname` in `to`.

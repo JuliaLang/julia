@@ -113,7 +113,7 @@ function _eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, pa
         if name !== nothing
             asname = asname === nothing ? name : asname
             check_macro_rename(name, asname, keyword)
-            Core._import(to, m, asname, name, imported)
+            Core._import(to, m, asname, name, imported ? JL_IMPORT_FLAG_EXPLICIT : 0x0)
         else
             Core._import(to, m, asname === nothing ? nameof(m) : asname)
         end

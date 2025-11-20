@@ -166,7 +166,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
         }
     }
     else {
-        jl_declare_constant_val(NULL, parent_module, name, (jl_value_t*)newm);
+        jl_declare_constant_val(NULL, parent_module, name, (jl_value_t*)newm, 0);
     }
     JL_GC_POP();
 
@@ -566,20 +566,20 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
 
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
     jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
-    enum jl_partition_kind constant_kind)
+    enum jl_partition_kind constant_kind, uint8_t const_flags)
 {
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
-    jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world);
+    jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world, const_flags);
     if (jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
     return bpart;
 }
 
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val)
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val, uint8_t const_flags)
 {
-    return jl_declare_constant_val2(b, mod, var, val, val ? PARTITION_KIND_CONST : PARTITION_KIND_UNDEF_CONST);
+    return jl_declare_constant_val2(b, mod, var, val, val ? PARTITION_KIND_CONST : PARTITION_KIND_UNDEF_CONST, const_flags);
 }
 
 static jl_value_t *jl_eval_toplevel_stmts(jl_module_t *JL_NONNULL m, jl_array_t *stmts, int fast, int need_value, const char **toplevel_filename, int *toplevel_lineno)

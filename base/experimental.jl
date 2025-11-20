@@ -841,4 +841,111 @@ function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __mo
     end
 end
 
+# N.B.: Must match the values in julia_internal.h
+const JL_STRICT_IMPORT_TYPE = 0x01
+const JL_STRICT_LITERAL_ITERATORS = 0x02
+
+function strict_mode_flags(flag::Symbol)
+    if flag === :typeimports
+        return JL_STRICT_IMPORT_TYPE
+    elseif flag === :nointliteraliterators
+        return JL_STRICT_LITERAL_ITERATORS
+    else
+        error("unknown strict mode flag: $flag")
+    end
+end
+strict_mode_flags(flags) =
+    mapreduce(strict_mode_flags, |, flags; init=0x0)
+
+function set_strict_mode(mod::Module, @nospecialize(flags))
+    Core.declare_const(mod, :_internal_module_strict_flags,
+        strict_mode_flags(flags), Base.JL_CONST_MAY_REPLACE_IMPORTS)
+    return nothing
+end
+
+"""
+    Base.Experimental.@strict flags
+
+Set the `strict` mode for the current module to all flags specified in `flags`.
+Each `strict` mode flag is an independent option that disallows certain syntax or
+semantics that may be undesirable in *some* contexts. Package authors should
+consider which flags are appropriate for their package and set them at the top
+of the applicable module.
+
+# General semantics and philosophy
+
+Note that additional strict mode flags are not necessarily *safer* or *better*
+in any way; they are a reflection of of the reality that different users have
+different tradeoffs for their codebases and what may be a sensible restriction
+in a mature package could be very annoying in the REPL.
+
+As designed, there are several general guidelines that apply to strict mode flags.
+To the extent possible, they should be kept for future flag additions.
+
+1. Code that evaluates without error in strict mode should also evaluate without
+   error under the ordinary julia execution semantics.
+
+2. Strict mode should not affect parsing. If it is desirable to disallow a
+   particular syntax pattern, it should be recognized at the lowering stage.
+   If this is currently not possible, the parser should be modified to emit an
+   appropriate marker that can be checked at lowering time.
+
+3. Strict mode is not intended for for issues that are clearly bugs.
+   Those should instead use the syntax versioning mechanism (see
+   [`Base.Experimental.@set_syntax_version`](@ref)). However, `strict` mode flags
+   that gain widespread adoption may eventually be considered as candidates for
+   syntax evolution.
+
+Strict mode flags are automatically inherited by submodules, but can be
+overriden by an explicit `@strict` invocation in the submodule. Strict mode
+flags are partitioned by world age.
+
+# Specifying flags
+
+The `flags` expression is runtime-evaluated and should evaluate to a collection
+of `Symbols` as specified below. In addition, nested collections of symbols are
+allowed and will be flattened. This is intended to support specifying strict
+mode flags in a central location and enforcing them across multiple dependents.
+
+# Currently supported flags
+
+ * `typeimports`
+
+    This flag turns the 1.12 warning for implicit import of types into an error.
+    Note that the implicit import default may be removed in a future Julia syntax
+    iteration, in which case this flag will become a no-op for such versions.
+
+    ```jldoctest
+    julia> @Base.Experimental.strict :typeimports
+
+    julia> String(x) = 1
+    ERROR: `@strict :typeimports` disallows extending types without explicit import in TypeImports: function Base.String must be explicitly imported to be extended
+    ```
+
+ * `:nointliteraliterators`
+
+    Disallows (at the lowering stages) literal integers as iterators in `for` loops.
+    This protects against expressions like `for i in 10` which are commonly intended
+    to be `for i in 1:10`.
+
+    ```jldoctest
+    julia> for i in 10
+               println(i)
+           end
+    10
+
+    julia> @Base.Experimental.strict :nointliteraliterators
+
+    julia> for i in 10
+               println(i)
+           end
+    ERROR: syntax: `@strict :nointliteraliterators` disallows integer literal iterators here around none:1
+    Stacktrace:
+     [1] top-level scope
+       @ none:1
+"""
+macro strict(flags)
+    Expr(:call, set_strict_mode, __module__, esc(flags))
+end
+
 end # module

@@ -1675,3 +1675,25 @@ end
         end
     end
 end
+
+@testset "@strict propagates to child modules" begin
+    eval(:(module Outer
+        using Test
+        @Base.Experimental.strict :nointliteraliterators
+        module Inner
+            using Test
+            @test_throws ErrorException Core.eval(@__MODULE__, :(for i in 10; end))
+        end
+        # But can be overridden in child modules
+        module Inner2
+            @Base.Experimental.strict ()
+            for i in 10; end
+        end
+        # ... which does not affect the parent module
+        @test_throws ErrorException Core.eval(@__MODULE__, :(for i in 10; end))
+        # But resetting it in the parent module changes the child module as well
+        # (e.g. in Revise)
+        @Base.Experimental.strict ()
+        Core.eval(Inner, :(for i in 10; end))
+    end))
+end

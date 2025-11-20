@@ -1537,13 +1537,18 @@ JL_CALLABLE(jl_f_declare_global)
 
 JL_CALLABLE(jl_f_declare_const)
 {
-    JL_NARGS(declare_const, 2, 3);
+    JL_NARGS(declare_const, 2, 4);
     JL_TYPECHK(declare_const, module, args[0]);
     if (nargs == 3)
         JL_TYPECHK(declare_const, symbol, args[1]);
     jl_binding_t *b = jl_get_module_binding((jl_module_t *)args[0], (jl_sym_t *)args[1], 1);
-    jl_value_t *val = nargs == 3 ? args[2] : NULL;
-    jl_declare_constant_val(b, (jl_module_t *)args[0], (jl_sym_t *)args[1], val);
+    jl_value_t *val = nargs >= 3 ? args[2] : NULL;
+    uint8_t flags = 0;
+    if (nargs == 4) {
+        JL_TYPECHK(declare_const, uint8, args[3]);
+        flags = jl_unbox_uint8(args[3]);
+    }
+    jl_declare_constant_val(b, (jl_module_t *)args[0], (jl_sym_t *)args[1], val, flags);
     return nargs > 2 ? args[2] : jl_nothing;
 }
 
@@ -1569,14 +1574,14 @@ JL_CALLABLE(jl_f__import)
     }
     else if (nargs == 5) {
         JL_TYPECHK(_import, symbol, args[3]);
-        JL_TYPECHK(_import, bool, args[4]);
+        JL_TYPECHK(_import, uint8, args[4]);
         jl_module_import(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
-                         (jl_sym_t *)args[2], (jl_sym_t *)args[3], args[4] == jl_true);
+                         (jl_sym_t *)args[2], (jl_sym_t *)args[3], jl_unbox_uint8(args[4]));
     }
     return jl_nothing;
 }
 
-// _using(to::Module, from::Module)
+// _using(to::Module, from::Module, [flags::UInt8=0])
 JL_CALLABLE(jl_f__using)
 {
     JL_NARGS(_using, 2, 3);
