@@ -11,7 +11,7 @@
 typedef struct {
     const llvm::object::ObjectFile *obj;
     llvm::DIContext *ctx;
-    int64_t slide;
+    uint64_t slide;
     std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap;
 } jl_object_file_entry_t;
 
@@ -112,7 +112,7 @@ private:
     struct SectionInfo {
         LazyObjectInfo *object;
         size_t SectionSize;
-        ptrdiff_t slide;
+        uint64_t slide;
         uint64_t SectionIndex;
         SectionInfo() = delete;
         ~SectionInfo() JL_NOTSAFEPOINT = default;

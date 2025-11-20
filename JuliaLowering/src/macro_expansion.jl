@@ -300,7 +300,7 @@ function expand_macro(ctx, ex)
     else
         # Compat: attempt to invoke an old-style macro if there's no applicable
         # method for new-style macro arguments.
-        macro_args = Any[macro_loc, current_layer(ctx).mod]
+        macro_args = Any[macro_loc, ctx.scope_layers[1].mod]
         for arg in raw_args
             # For hygiene in old-style macros, we omit any additional scope
             # layer information from macro arguments. Old-style macros will
@@ -335,7 +335,6 @@ function expand_macro(ctx, ex)
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
                                              ctx.macro_world).def.module
-        expanded = fix_toplevel_expansion(ctx, expanded, mod_for_ast, macro_loc)
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
                                current_layer_id(ctx), true)
         push_layer!(ctx, mod_for_ast, true)
@@ -454,6 +453,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         end
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
+    elseif k == K"toplevel" && length(ctx.scope_layer_stack) > 1
+        fix_toplevel_expansion(ctx, ex, current_layer(ctx).mod,
+                               source_location(LineNumberNode, ex))
     elseif k == K"module" || k == K"toplevel" || k == K"inert"
         # Remove scope layer information from any inert syntax which survives
         # macro expansion so that it doesn't contaminate lowering passes which
