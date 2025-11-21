@@ -1684,6 +1684,9 @@ end
 # #16356
 @test_parseerror "0xapi"
 
+# #60189
+@test_parseerror "0x1p3.2"
+
 # #22523 #22712
 @test_parseerror "a?b:c"
 @test_parseerror "a ?b:c"
