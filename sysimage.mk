@@ -163,7 +163,7 @@ $$(build_private_libdir)/sys-JL$1-o.a $$(build_private_libdir)/sys-JL$1-bc.a : $
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
 			$(bootstrap_julia_flags) \
-			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) -e "Core.include(Base, \"$$(call cygpath_w,$$(BUILDROOT)/JuliaLowering/src/JuliaLowering.jl)\")"; then \
+			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) -e "Core.include(Base, raw\"$$(call cygpath_w,$$(BUILDROOT)/JuliaLowering/src/JuliaLowering.jl)\")"; then \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
