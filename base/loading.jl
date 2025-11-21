@@ -185,10 +185,9 @@ const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
 function slug(x::UInt32, p::Int)
     sprint(sizehint=p) do io
-        y = x
-        n = length(slug_chars)
+        n = UInt32(length(slug_chars))
         for i = 1:p
-            y, d = divrem(y, n)
+            x, d = divrem(x, n)
             write(io, slug_chars[1+d])
         end
     end
@@ -463,6 +462,8 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
             path = manifest_uuid_path(env, pkg)
             # missing is used as a sentinel to stop looking further down in envs
             if path === missing
+                # Before stopping, try stdlib fallback
+                is_stdlib(pkg) && @goto stdlib_fallback
                 path = nothing
                 @goto done
             end
@@ -474,6 +475,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 stopenv == env && break
             end
         end
+        @label stdlib_fallback
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
         mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
@@ -825,7 +827,10 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         # if env names a directory, search it
         proj = implicit_manifest_uuid_path(env, pkg)
         proj === nothing || return proj
-        # if not found
+        # if not found, this might be an extension - first we fast path needing
+        # to scan the whole directory for a matching extension by peeking at
+        # EXT_PRIMED. However, this only works if the parent package was loaded.
+        # This is usually the case, but not always, e.g. in precompilation.
         triggers = get(EXT_PRIMED, pkg, nothing)
         if triggers !== nothing
             parentid = triggers[1]
@@ -837,6 +842,10 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
                     mby_ext === nothing || return mby_ext
                 end
             end
+        else
+            # We still need to scan the whole directory for extensions.
+            ext_path, ext_proj = implicit_env_project_file_extension(env, pkg)
+            ext_path === nothing || return ext_path
         end
     end
     return nothing
@@ -1131,8 +1140,8 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
             extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
-                parent_path = locate_package(PkgId(UUID(uuid), name))
-                if parent_path === nothing
+                parent_path = explicit_manifest_entry_path(manifest_file, PkgId(UUID(uuid), name), entry)
+                if parent_path === nothing || parent_path === missing
                     error("failed to find source of parent package: \"$name\"")
                 end
                 p = normpath(dirname(parent_path), "..")
@@ -1928,7 +1937,7 @@ end
 """
     Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
 
-Returns whether a given PkgId within the active project is precompiled.
+Return whether a given PkgId within the active project is precompiled.
 
 By default this check observes the same approach that code loading takes
 with respect to when different versions of dependencies are currently loaded
@@ -1946,7 +1955,7 @@ end
 """
     Base.isrelocatable(pkg::PkgId)
 
-Returns whether a given PkgId within the active project is precompiled and the
+Return whether a given PkgId within the active project is precompiled and the
 associated cache is relocatable.
 
 !!! compat "Julia 1.11"
@@ -3296,7 +3305,7 @@ end
 """
     Base.compilecache(module::PkgId)
 
-Creates a precompiled cache file for a module and all of its dependencies.
+Create a precompiled cache file for a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
@@ -4226,7 +4235,6 @@ end
                 # file before comparing it with `modpath`.
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
                 if !(isreadable(stdlib_path) && samefile(stdlib_path, modpath))
-                    !samefile(fixup_stdlib_path(includes[1].filename), modpath)
                     @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                     record_reason(reasons, "different source file path")
                     return true # cache file was compiled from a different path

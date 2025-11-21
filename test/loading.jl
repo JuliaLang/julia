@@ -1534,13 +1534,23 @@ end
 end
 
 @testset "Fallback for stdlib deps if manifest deps aren't found" begin
+    s = Sys.iswindows() ? ';' : ':'
     mktempdir() do depot
         # This manifest has a LibGit2 entry that is missing LibGit2_jll, which should be
         # handled by falling back to the stdlib Project.toml for dependency truth.
-        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps.jl")
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+        ))
+    end
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-hash1
+        # which simulates an old manifest where LibGit2_jll was not a stdlib
+        badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
         ))
     end
 end

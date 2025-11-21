@@ -99,6 +99,7 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+    @__doc__,
 
 # External processes
     shell_escape,
