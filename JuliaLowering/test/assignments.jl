@@ -95,4 +95,18 @@ let
 end
 """) == 3
 
+# removing argument side effect in kwcall lhs
+@eval test_mod f60152(v, pa; kw) = copy(v)
+@test JuliaLowering.include_string(test_mod, """
+    f60152([1, 2, 3], 0; kw=0) .*= 2
+""") == [2,4,6]
+@test JuliaLowering.include_string(test_mod, """
+let
+    pa_execs = 0
+    kw_execs = 0
+    out = f60152([1, 2, 3], (pa_execs+=1); kw=(kw_execs+=1)) .*= 2
+    (out, pa_execs, kw_execs)
+end
+""") == ([2,4,6], 1, 1)
+
 end
