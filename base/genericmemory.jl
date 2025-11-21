@@ -426,8 +426,8 @@ end
 """
      allocatedinline(::Type{T}) :: Bool
 
-Returns whether an object of type `T` is able to be inline allocated inside of enclosing structs or arrays,
-of if it must be allocated as a reference. Generally, types which are immutable and whose instances have a
+Returns whether an object of type `T` is able to be stored inline inside of enclosing structs or arrays,
+or if it must be allocated as a reference. Generally, types which are immutable and whose instances have a
 finite, statically determinable size can be allocated inline, whereas everything else is allocated using
 reference pointers.
 
@@ -472,7 +472,7 @@ allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline,
 """
     Base.isbitsunion(::Type{T})
 
-Return whether a type is an "is-bits" Union type, meaning each type included in a Union is [`isbitstype`](@ref).
+Returns whether a type is an "is-bits" Union type, meaning each type included in a Union is [`isbitstype`](@ref).
 
 # Examples
 ```jldoctest
