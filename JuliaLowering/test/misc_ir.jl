@@ -402,59 +402,43 @@ end
 # Basic @ccall lowering
 @ccall foo(x::X, y::Y)::R
 #---------------------
-1   JuliaLowering.Base
-2   (call top.getproperty %₁ :cconvert)
-3   TestMod.X
-4   TestMod.x
-5   (= slot₁/arg1 (call %₂ %₃ %₄))
-6   JuliaLowering.Base
-7   (call top.getproperty %₆ :cconvert)
-8   TestMod.Y
-9   TestMod.y
-10  (= slot₂/arg2 (call %₇ %₈ %₉))
-11  JuliaLowering.Base
-12  (call top.getproperty %₁₁ :unsafe_convert)
-13  TestMod.X
-14  slot₁/arg1
-15  (call %₁₂ %₁₃ %₁₄)
-16  JuliaLowering.Base
-17  (call top.getproperty %₁₆ :unsafe_convert)
-18  TestMod.Y
-19  slot₂/arg2
-20  (call %₁₇ %₁₈ %₁₉)
-21  slot₁/arg1
-22  slot₂/arg2
-23  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 :($(QuoteNode((:ccall, 0x0000, false)))) %₁₅ %₂₀ %₂₁ %₂₂)
-24  (return %₂₃)
+1   TestMod.X
+2   TestMod.x
+3   (= slot₁/arg1 (call Base.cconvert %₁ %₂))
+4   TestMod.Y
+5   TestMod.y
+6   (= slot₂/arg2 (call Base.cconvert %₄ %₅))
+7   TestMod.X
+8   slot₁/arg1
+9   (call Base.unsafe_convert %₇ %₈)
+10  TestMod.Y
+11  slot₂/arg2
+12  (call Base.unsafe_convert %₁₀ %₁₁)
+13  slot₁/arg1
+14  slot₂/arg2
+15  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 :($(QuoteNode((:ccall, 0x0000, false)))) %₉ %₁₂ %₁₃ %₁₄)
+16  (return %₁₅)
 
 ########################################
 # @ccall lowering with gc_safe
 @ccall foo(x::X; y::Y)::R gc_safe=true
 #---------------------
-1   JuliaLowering.Base
-2   (call top.getproperty %₁ :cconvert)
-3   TestMod.X
-4   TestMod.x
-5   (= slot₁/arg1 (call %₂ %₃ %₄))
-6   JuliaLowering.Base
-7   (call top.getproperty %₆ :cconvert)
-8   TestMod.Y
-9   TestMod.y
-10  (= slot₂/arg2 (call %₇ %₈ %₉))
-11  JuliaLowering.Base
-12  (call top.getproperty %₁₁ :unsafe_convert)
-13  TestMod.X
-14  slot₁/arg1
-15  (call %₁₂ %₁₃ %₁₄)
-16  JuliaLowering.Base
-17  (call top.getproperty %₁₆ :unsafe_convert)
-18  TestMod.Y
-19  slot₂/arg2
-20  (call %₁₇ %₁₈ %₁₉)
-21  slot₁/arg1
-22  slot₂/arg2
-23  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 :($(QuoteNode((:ccall, 0x0000, true)))) %₁₅ %₂₀ %₂₁ %₂₂)
-24  (return %₂₃)
+1   TestMod.X
+2   TestMod.x
+3   (= slot₁/arg1 (call Base.cconvert %₁ %₂))
+4   TestMod.Y
+5   TestMod.y
+6   (= slot₂/arg2 (call Base.cconvert %₄ %₅))
+7   TestMod.X
+8   slot₁/arg1
+9   (call Base.unsafe_convert %₇ %₈)
+10  TestMod.Y
+11  slot₂/arg2
+12  (call Base.unsafe_convert %₁₀ %₁₁)
+13  slot₁/arg1
+14  slot₂/arg2
+15  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 :($(QuoteNode((:ccall, 0x0000, true)))) %₉ %₁₂ %₁₃ %₁₄)
+16  (return %₁₅)
 
 ########################################
 # non-macro ccall with vararg in signature, but none provided
