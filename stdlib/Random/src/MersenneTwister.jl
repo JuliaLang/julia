@@ -8,7 +8,7 @@ const MT_CACHE_I = 501 << 4 # number of bytes in the UInt128 cache
 @assert dsfmt_get_min_array_size() <= MT_CACHE_F
 
 mutable struct MersenneTwister <: AbstractRNG
-    seed::Any
+    seed::NTuple{2, UInt128}
     const state::DSFMT_state
     const vals::Memory{Float64}
     const ints::Vector{UInt128} # it's temporarily resized internally
@@ -22,7 +22,7 @@ mutable struct MersenneTwister <: AbstractRNG
     adv_ints::Int64     # state of advance when ints is filled-up
 
     global _MersenneTwister(::UndefInitializer) =
-        new(nothing, DSFMT_state(),
+        new((UInt128(0), UInt128(0)), DSFMT_state(),
             Memory{Float64}(undef, MT_CACHE_F),
             Vector{UInt128}(undef, MT_CACHE_I >> 4),
             MT_CACHE_F, 0, 0, Base.GMP.ZERO, -1, -1)
@@ -89,33 +89,26 @@ hash(r::MersenneTwister, h::UInt) =
     foldr(hash, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI); init=h)
 
 function show(io::IO, rng::MersenneTwister)
-    # seed
-    if rng.adv_jump == 0 && rng.adv == 0
-        return print(io, MersenneTwister, "(", repr(rng.seed), ")")
-    end
-    print(io, MersenneTwister, "(", repr(rng.seed), ", (")
-    # state
     sep = ", "
-    show(io, rng.adv_jump)
-    print(io, sep)
-    show(io, rng.adv)
+    # seed
+    print(io, MersenneTwister, "(", repr(rng.seed[1]), sep, repr(rng.seed[2]))
+    if rng.adv_jump == 0 && rng.adv == 0
+        return print(io, ")")
+    end
+    # state
+    print(io, sep, rng.adv_jump, sep, rng.adv)
     if rng.adv_vals != -1 || rng.adv_ints != -1
         # "(0, 0)" is nicer on the eyes than (-1, 1002)
         s = rng.adv_vals != -1
-        print(io, sep)
-        show(io, s ? rng.adv_vals : zero(rng.adv_vals))
-        print(io, sep)
-        show(io, s ? rng.idxF : zero(rng.idxF))
+        print(io, sep, s ? rng.adv_vals : zero(rng.adv_vals),
+              sep, s ? rng.idxF : zero(rng.idxF))
     end
     if rng.adv_ints != -1
         idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 represents one Int64
         idxI = Int(idxI) # idxI should always be an integer when using public APIs
-        print(io, sep)
-        show(io, rng.adv_ints)
-        print(io, sep)
-        show(io, idxI)
+        print(io, sep, rng.adv_ints, sep, idxI)
     end
-    print(io, "))")
+    print(io, ")")
 end
 
 ### low level API
@@ -226,27 +219,19 @@ end
 
 #### seed!()
 
-function initstate!(r::MersenneTwister, data::StridedVector, seed)
-    # we deepcopy `seed` because the caller might mutate it, and it's useful
-    # to keep it constant inside `MersenneTwister`; but multiple instances
-    # can share the same seed without any problem (e.g. in `copy`)
-    r.seed = deepcopy(seed)
-    dsfmt_init_by_array(r.state, reinterpret(UInt32, data))
+function initstate!(r::MersenneTwister, seed)
+    r.seed = seed # store the seed for `show`
+    seedvec = view(r.ints, 1:2) # re-use r.ints to temporarily store the seed
+    seedvec .= seed
+    dsfmt_init_by_array(r.state, reinterpret(UInt32, seedvec))
     reset_caches!(r)
     r.adv = 0
     r.adv_jump = Base.GMP.ZERO
     return r
 end
 
-# When a seed is not provided, we generate one via `RandomDevice()` rather
-# than calling directly `initstate!` with `rand(RandomDevice(), UInt32, 8)` because the
-# seed is printed in `show(::MersenneTwister)`, so we need one; the cost of `hash_seed` is a
-# small overhead compared to `initstate!`.
-# A random seed with 128 bits is a good compromise for almost surely getting distinct
-# seeds, while having them printed reasonably tersely.
-seed!(r::MersenneTwister, seeder::AbstractRNG) = seed!(r, rand(seeder, UInt128))
-seed!(r::MersenneTwister, ::Nothing) = seed!(r, RandomDevice())
-seed!(r::MersenneTwister, seed) = initstate!(r, rand(SeedHasher(seed), UInt32, 8), seed)
+seed!(r::MersenneTwister, seeder::AbstractRNG) =
+    initstate!(r, rand(seeder, NTuple{2, UInt128}))
 
 
 ### generation
@@ -575,14 +560,18 @@ jump!(r::MersenneTwister, steps::Integer) = copy!(r, jump(r, steps))
 # 3, 4: .adv_vals, .idxF (counters to reconstruct the float cache, optional if 5-6 not shown))
 # 5, 6: .adv_ints, .idxI (counters to reconstruct the integer cache, optional)
 
-Random.MersenneTwister(seed, advance::NTuple{6,Integer}) =
-    advance!(MersenneTwister(seed), advance...)
+MersenneTwister(s1::Integer, s2::Integer) = initstate!(_MersenneTwister(undef), (s1, s2))
 
-Random.MersenneTwister(seed, advance::NTuple{4,Integer}) =
-    MersenneTwister(seed, (advance..., 0, 0))
+MersenneTwister(s1::Integer, s2::Integer, s3::Integer, s4::Integer,
+                s5::Integer, s6::Integer, s7::Integer, s8::Integer) =
+    advance!(MersenneTwister(s1, s2), s3, s4, s5, s6, s7, s8)
 
-Random.MersenneTwister(seed, advance::NTuple{2,Integer}) =
-    MersenneTwister(seed, (advance..., 0, 0, 0, 0))
+MersenneTwister(s1::Integer, s2::Integer, s3::Integer, s4::Integer,
+                s5::Integer, s6::Integer) =
+    MersenneTwister(s1, s2, s3, s4, s5, s6, 0, 0)
+
+MersenneTwister(s1::Integer, s2::Integer, s3::Integer, s4::Integer) =
+    MersenneTwister(s1, s2, s3, s4, 0, 0, 0, 0)
 
 # advances raw state (per fill_array!) of r by n steps (Float64 values)
 function _advance_n!(r::MersenneTwister, n::Int64, work::Vector{Float64})
