@@ -1345,7 +1345,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
     if (p.isboxed)
         return emit_typeof(ctx, p.V, maybenull, justtag, notag(p.typ));
     if (p.TIndex) {
-        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
+        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
         Type *expr_type = justtag ? ctx.types().T_size : ctx.types().T_pjlvalue;
         Value *datatype_or_p = Constant::getNullValue(PointerType::getUnqual(expr_type->getContext()));
@@ -4119,11 +4119,10 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
     int union_max = jl_islayout_inline(jltype, &fsz, &al);
     assert(union_max > 0);
     // compute tindex from rhs
+    // TODO(jwn): this call not relevant/observed if ismodifyfield true?
     jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, rhs, jltype, nullptr);
-    if (!ismodifyfield) {
-        if (rhs_union.typ == jl_bottom_type)
-            return jl_cgval_t();
-    }
+    if (rhs_union.typ == jl_bottom_type)
+        return jl_cgval_t();
     if (needlock)
         emit_lockstate_value(ctx, needlock, true);
     BasicBlock *ModifyBB = NULL;
@@ -4165,7 +4164,7 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
         ctx.builder.CreateCondBr(Success, XchgBB, ismodifyfield ? ModifyBB : DoneBB);
         ctx.builder.SetInsertPoint(XchgBB);
     }
-    Value *tindex = rhs_union.TIndex;
+    Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
     tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_tindex);
     ai.decorateInst(ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
@@ -4358,7 +4357,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, fval_info, jtype, nullptr);
                     if (rhs_union.typ == jl_bottom_type)
                         return jl_cgval_t();
-                    Value *tindex = rhs_union.TIndex;
+                    Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
                     tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
                     size_t fsz = 0, al = 0;
                     bool isptr = !jl_islayout_inline(jtype, &fsz, &al);
