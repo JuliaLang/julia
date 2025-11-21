@@ -1832,7 +1832,7 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
 }
 
 // a simple case of emit_isa that is obvious not to include a safe-point
-static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt, bool could_be_null=false)
+static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt, bool could_be_null)
 {
     assert(jl_is_concrete_type((jl_value_t*)dt) || is_uniquerep_Type((jl_value_t*)dt));
     if (arg.TIndex) {
@@ -3626,8 +3626,10 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     return box;
 }
 
-static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype_tag, jl_value_t *supertype, jl_value_t *ut)
+static Value *compute_box_tindex(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *ut, bool maybenull=false)
 {
+    jl_value_t *supertype = val.typ;
+    Value *datatype_tag = emit_typeof(ctx, val, maybenull, true);
     Value *tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0);
     unsigned counter = 0;
     for_each_uniontype_small(
@@ -3652,8 +3654,7 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
         return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
-    Value *typof = emit_typeof(ctx, val, maybenull, true);
-    return compute_box_tindex(ctx, typof, val.typ, typ);
+    return compute_box_tindex(ctx, val, typ, maybenull);
 }
 
 
@@ -4118,9 +4119,11 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
     int union_max = jl_islayout_inline(jltype, &fsz, &al);
     assert(union_max > 0);
     // compute tindex from rhs
-    jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jltype);
-    if (rhs_union.typ == jl_bottom_type)
-        return jl_cgval_t();
+    jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, rhs, jltype, nullptr);
+    if (!ismodifyfield) {
+        if (rhs_union.typ == jl_bottom_type)
+            return jl_cgval_t();
+    }
     if (needlock)
         emit_lockstate_value(ctx, needlock, true);
     BasicBlock *ModifyBB = NULL;
@@ -4148,7 +4151,7 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
             }
             emit_typecheck(ctx, rhs, jltype, fname);
             rhs = update_julia_type(ctx, rhs, jltype);
-            rhs_union = convert_julia_type(ctx, rhs, jltype);
+            rhs_union = convert_julia_type_to_union(ctx, rhs, jltype, nullptr);
             if (rhs_union.typ == jl_bottom_type)
                 return jl_cgval_t();
             if (needlock)
@@ -4162,7 +4165,7 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
         ctx.builder.CreateCondBr(Success, XchgBB, ismodifyfield ? ModifyBB : DoneBB);
         ctx.builder.SetInsertPoint(XchgBB);
     }
-    Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jltype);
+    Value *tindex = rhs_union.TIndex;
     tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_tindex);
     ai.decorateInst(ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
@@ -4352,10 +4355,10 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 }
                 else if (jl_is_uniontype(jtype)) {
                     // compute tindex from rhs
-                    jl_cgval_t rhs_union = convert_julia_type(ctx, fval_info, jtype);
+                    jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, fval_info, jtype, nullptr);
                     if (rhs_union.typ == jl_bottom_type)
                         return jl_cgval_t();
-                    Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jtype);
+                    Value *tindex = rhs_union.TIndex;
                     tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
                     size_t fsz = 0, al = 0;
                     bool isptr = !jl_islayout_inline(jtype, &fsz, &al);

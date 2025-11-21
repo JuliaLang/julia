@@ -1157,15 +1157,33 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
    if (t1 != t2) {
         // if they aren't the same type, use the expr type
         // to instantiate a union-split optimization
-        x = convert_julia_type(ctx, x, rt_hint);
-        y = convert_julia_type(ctx, y, rt_hint);
+        x = update_julia_type(ctx, x, rt_hint);
+        y = update_julia_type(ctx, y, rt_hint);
         t1 = x.typ;
         t2 = y.typ;
+        if (t1 == jl_bottom_type)
+            return y;
+        if (t2 == jl_bottom_type)
+            return x;
+        if (t1 != t2 && jl_is_uniontype(rt_hint)) { // TODO: && worthwhile
+            x = convert_julia_type_to_union(ctx, x, rt_hint, nullptr);
+            y = convert_julia_type_to_union(ctx, y, rt_hint, nullptr);
+        }
     }
     if (t1 == jl_bottom_type)
         return y;
     if (t2 == jl_bottom_type)
         return x;
+    if (t1 != t2) {
+        x = mark_julia_type(ctx, boxed(ctx, x), true, rt_hint);
+        y = mark_julia_type(ctx, boxed(ctx, y), true, rt_hint);
+        t1 = x.typ;
+        t2 = y.typ;
+        if (t1 == jl_bottom_type)
+            return y;
+        if (t2 == jl_bottom_type)
+            return x;
+    }
 
     Value *ifelse_result;
     bool isboxed = t1 != t2 || !deserves_stack(t1);
