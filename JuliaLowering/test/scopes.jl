@@ -62,7 +62,7 @@ end
 function wrapscope(ex, scope_type)
     g = JuliaLowering.ensure_attributes(ex._graph, scope_type=Symbol)
     ex = JuliaLowering.reparent(g, ex)
-    makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
+    makenode(g, ex, K"scope_block", [ex._id], [:scope_type=>scope_type])
 end
 
 assign_z_2 = parsestmt(SyntaxTree, "begin z = 2 end", filename="foo.jl")

@@ -173,10 +173,6 @@ function emit(ctx::LinearIRContext, ex)
     return ex
 end
 
-function emit(ctx::LinearIRContext, srcref, k, args...)
-    emit(ctx, makenode(ctx, srcref, k, args...))
-end
-
 # Emit computation of ex, assigning the result to an ssavar and returning that
 function emit_assign_tmp(ctx::LinearIRContext, ex, name="tmp")
     tmp = ssavar(ctx, ex, name)
@@ -328,7 +324,7 @@ function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
             rhs
         ])
     else
-        emit(ctx, srcref, op, lhs, rhs)
+        emit(ctx, @ast ctx srcref [op lhs rhs])
     end
 end
 
@@ -351,7 +347,7 @@ end
 function make_label(ctx, srcref)
     id = ctx.next_label_id[]
     ctx.next_label_id[] += 1
-    makeleaf(ctx, srcref, K"label", id=id)
+    makeleaf(ctx, srcref, K"label", [:id=>id])
 end
 
 # flisp: make&mark-label
@@ -773,7 +769,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            emit(ctx, ex, K"method", fname, sig, lam)
+            emit(ctx, @ast ctx ex [K"method" fname sig lam])
             @assert !needs_value && !in_tail_pos
             nothing
         end
@@ -970,7 +966,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     if k == K"BindingId"
         id = ex.var_id
         if haskey(ssa_rewrites, id)
-            makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[id])
+            makeleaf(ctx, ex, K"SSAValue", [:var_id=>ssa_rewrites[id]])
         else
             new_id = get(slot_rewrites, id, nothing)
             binfo = lookup_binding(ctx, id)
@@ -978,12 +974,13 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
                      binfo.kind == :static_parameter                 ? K"static_parameter" :
                      throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
-                makeleaf(ctx, ex, sk; var_id=new_id)
+                makeleaf(ctx, ex, sk, [:var_id=>new_id])
             else
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
-                makeleaf(ctx, ex, K"globalref", binfo.name, mod=binfo.mod)
+                makeleaf(ctx, ex, K"globalref",
+                         [:name_val=>binfo.name, :mod=>binfo.mod])
             end
         end
     elseif k == K"meta" || k == K"static_eval"

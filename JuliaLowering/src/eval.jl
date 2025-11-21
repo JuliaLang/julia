@@ -532,3 +532,5 @@ function include_string(mod::Module, code::AbstractString, filename::AbstractStr
                         expr_compat_mode=false)
     eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
 end
+
+include(path::AbstractString) = include(JuliaLowering, path)

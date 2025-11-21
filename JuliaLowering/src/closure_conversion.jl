@@ -593,7 +593,7 @@ function closure_convert_lambda(ctx, ex)
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
-    lam = makenode(ctx, ex, ex, lambda_children; lambda_bindings=lambda_bindings)
+    lam = makenode(ctx, ex, ex, lambda_children, [:lambda_bindings=>lambda_bindings])
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
             replace_captured_locals!::K"Value"

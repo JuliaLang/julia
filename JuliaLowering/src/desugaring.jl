@@ -2166,9 +2166,9 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
         if !isnothing(declmeta)
-            push!(stmts, makenode(ctx, ex, declkind, ex; meta=declmeta))
+            push!(stmts, makenode(ctx, ex, declkind, [ex._id], [:meta=>declmeta]))
         else
-            push!(stmts, makenode(ctx, ex, declkind, ex))
+            push!(stmts, makenode(ctx, ex, declkind, [ex._id]))
         end
     elseif k == K"Placeholder"
         nothing
@@ -2177,7 +2177,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
             @chk numchildren(ex) == 2
             name = ex[1]
             if kind(name) == K"Identifier"
-                push!(stmts, makenode(ctx, ex, K"decl", name, ex[2]))
+                push!(stmts, makenode(ctx, ex, K"decl", [name._id, ex[2]._id]))
             else
                 # TODO: Currently, this ignores the LHS in `_::T = val`.
                 # We should probably do one of the following:
@@ -2516,7 +2516,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
     # Apply nospecialize to all arguments to prevent so much codegen and add
     # Core.Any type for them
     for i in first_trailing_arg:length(gen_arg_names)
-        gen_arg_names[i] = setmeta(gen_arg_names[i]; nospecialize=true)
+        gen_arg_names[i] = setmeta(gen_arg_names[i], :nospecialize, true)
         push!(gen_arg_types, @ast ctx gen_arg_names[i] "Any"::K"core")
     end
     # Code generator definition
