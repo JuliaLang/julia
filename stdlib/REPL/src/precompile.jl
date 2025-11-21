@@ -223,20 +223,6 @@ let
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
             precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
             precompile(Tuple{typeof(Base.:(==)), Char, String})
-            # For the banner
-            # TODO: Fix precompilation so this is no longer needed
-            precompile(Tuple{typeof(Base.AnnotatedDisplay.ansi_write), typeof(Base.write), Base.TTY, Base.AnnotatedString{String}})
-            precompile(Tuple{typeof(Base.all), Tuple{Bool, Bool}})
-            precompile(Tuple{typeof(Base.get), Base.Dict{Tuple{Symbol, Any}, Int64}, Tuple{Symbol, REPL.StyledStrings.Face}, Int64})
-            precompile(Tuple{typeof(Base.get), Base.Dict{Tuple{Symbol, Any}, Int64}, Tuple{Symbol, String}, Int64})
-            precompile(Tuple{typeof(Base.get), Base.Dict{Tuple{Symbol, Any}, Int64}, Tuple{Symbol, Symbol}, Int64})
-            precompile(Tuple{typeof(Base.hashindex), Tuple{Symbol, String}, Int64})
-            precompile(Tuple{typeof(Base.isempty), Base.Dict{String, Any}})
-            precompile(Tuple{typeof(Base.print), Base.TTY, Base.AnnotatedString{String}})
-            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, REPL.StyledStrings.Face}})
-            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, String}})
-            precompile(Tuple{typeof(Base.setindex!), Base.Dict{Tuple{Symbol, Any}, Int64}, Int64, Tuple{Symbol, Symbol}})
-            precompile(Tuple{typeof(REPL.banner), Base.TTY})
         finally
             ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
         end

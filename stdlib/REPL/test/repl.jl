@@ -1801,9 +1801,9 @@ let io = IOBuffer()
     seek(io, 0)
     @test countlines(io) == 9
     take!(io)
-    @test REPL.banner(io, :tiny) === nothing
+    @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
-    @test countlines(io) == 1
+    @test countlines(io) == 2
 end
 
 @testset "Docstrings" begin
