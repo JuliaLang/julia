@@ -1208,6 +1208,12 @@ public:
 #pragma clang diagnostic ignored "-Wunused-function"
 #endif
 
+// TODO: Port our memory management optimisations to JITLink instead of using the
+// default InProcessMemoryManager.
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT {
+    return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(/*Reservation Granularity*/ 16 * 1024 * 1024));
+}
+
 #ifdef _COMPILER_CLANG_
 #pragma clang diagnostic pop
 #endif
@@ -1231,7 +1237,6 @@ public:
 };
 
 RTDyldMemoryManager *createRTDyldMemoryManager(void) JL_NOTSAFEPOINT;
-std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
