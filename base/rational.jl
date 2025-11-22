@@ -105,8 +105,42 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
+# Return a complex numerator and real denominator
+# of the exact inverse of a Complex number.
+function _complex_exact_inv(y::Complex)
+    c, d = reim(y)
+    num = if (isinf(c) | isinf(d))
+        conj(zero(y))
+    else
+        conj(y)
+    end
+    num, abs2(y)
+end
+function _complex_exact_inv(y::Complex{<:Integer})
+    c, d = reim(y)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    num = complex(c_r, checked_neg(d_r))
+    num, abs2y_r
+end
+
+function //(x::Number, y::Complex)
+    num, den = _complex_exact_inv(y)
+    (x * num) // den
+end
+function //(x::Integer, y::Complex{<:Integer})
+    complex(x) // y
+end
+function //(x::Complex{<:Integer}, y::Complex{<:Integer})
+    a, b, c, d = promote(reim(x)..., reim(y)...)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    complex(
+        checked_add(checked_mul(a, c_r), checked_mul(b, d_r)),
+        checked_add(checked_mul(b, c_r), checked_neg(checked_mul(a, d_r)))
+    )//abs2y_r
+end
 
 //(X::AbstractArray, y::Number) = X .// y
 
