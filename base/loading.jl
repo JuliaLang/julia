@@ -462,6 +462,8 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
             path = manifest_uuid_path(env, pkg)
             # missing is used as a sentinel to stop looking further down in envs
             if path === missing
+                # Before stopping, try stdlib fallback
+                is_stdlib(pkg) && @goto stdlib_fallback
                 path = nothing
                 @goto done
             end
@@ -473,6 +475,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 stopenv == env && break
             end
         end
+        @label stdlib_fallback
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
         mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
@@ -1934,7 +1937,7 @@ end
 """
     Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
 
-Returns whether a given PkgId within the active project is precompiled.
+Return whether a given PkgId within the active project is precompiled.
 
 By default this check observes the same approach that code loading takes
 with respect to when different versions of dependencies are currently loaded
@@ -1952,7 +1955,7 @@ end
 """
     Base.isrelocatable(pkg::PkgId)
 
-Returns whether a given PkgId within the active project is precompiled and the
+Return whether a given PkgId within the active project is precompiled and the
 associated cache is relocatable.
 
 !!! compat "Julia 1.11"
@@ -3302,7 +3305,7 @@ end
 """
     Base.compilecache(module::PkgId)
 
-Creates a precompiled cache file for a module and all of its dependencies.
+Create a precompiled cache file for a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
@@ -4232,7 +4235,6 @@ end
                 # file before comparing it with `modpath`.
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
                 if !(isreadable(stdlib_path) && samefile(stdlib_path, modpath))
-                    !samefile(fixup_stdlib_path(includes[1].filename), modpath)
                     @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                     record_reason(reasons, "different source file path")
                     return true # cache file was compiled from a different path
