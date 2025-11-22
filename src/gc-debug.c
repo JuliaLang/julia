@@ -469,9 +469,8 @@ void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
-    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
-                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-                    pool_count + other_count, pool_count, other_count, gc_num.pause);
+    jl_safe_fprintf(s, "GC tracked (pool: %" PRIu64 ", other: %" PRIu64 "); GC pauses: %d\n",
+                    pool_count, other_count, gc_num.pause);
 }
 
 void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
@@ -568,12 +567,11 @@ void jl_gc_debug_fprint_critical_error(ios_t *s)
 
 void jl_gc_debug_fprint_status(ios_t *s)
 {
-    // May not be accurate but should be helpful enough
+    // Counts may not be accurate, especially in short-lived or crashing processes
     uint64_t pool_count = gc_num.poolalloc;
     uint64_t big_count = gc_num.bigalloc;
-    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
-                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                    pool_count + big_count, pool_count, big_count, gc_num.pause);
+    jl_safe_fprintf(s, "GC tracked (pool: %" PRIu64 ", big: %" PRIu64 "); GC pauses: %d\n",
+                    pool_count, big_count, gc_num.pause);
 }
 #endif
 
