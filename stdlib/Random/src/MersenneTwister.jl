@@ -21,7 +21,7 @@ mutable struct MersenneTwister <: AbstractRNG
     adv_vals::Int64     # state of advance when vals is filled-up
     adv_ints::Int64     # state of advance when ints is filled-up
 
-    MersenneTwister(::UndefInitializer) =
+    global _MersenneTwister(::UndefInitializer) =
         new(nothing, DSFMT_state(),
             Memory{Float64}(undef, MT_CACHE_F),
             Vector{UInt128}(undef, MT_CACHE_I >> 4),
@@ -60,7 +60,7 @@ julia> x1 == x2
 true
 ```
 """
-MersenneTwister(seed=nothing) = seed!(MersenneTwister(undef), seed)
+MersenneTwister(seed=nothing) = seed!(_MersenneTwister(undef), seed)
 
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
@@ -77,7 +77,7 @@ function copy!(dst::MersenneTwister, src::MersenneTwister)
     dst
 end
 
-copy(src::MersenneTwister) = copy!(MersenneTwister(undef), src)
+copy(src::MersenneTwister) = copy!(_MersenneTwister(undef), src)
 
 ==(r1::MersenneTwister, r2::MersenneTwister) =
     r1.seed == r2.seed && r1.state == r2.state &&
@@ -545,7 +545,7 @@ end
 function _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X)
     adv = r.adv
     adv_jump = r.adv_jump
-    s = MersenneTwister(undef)
+    s = _MersenneTwister(undef)
     s.seed = r.seed
     copy!(s.state, DSFMT.dsfmt_jump(r.state, jumppoly))
     reset_caches!(s)
