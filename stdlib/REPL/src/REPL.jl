@@ -316,7 +316,7 @@ __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_fi
 function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Csize_t}(1))
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
-        check_for_missing_packages_and_run_hooks(ast)
+        ast = insert_package_verification_calls(ast)
         return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
     end
     local value=nothing
@@ -357,60 +357,97 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     nothing
 end
 
-function check_for_missing_packages_and_run_hooks(ast)
-    isa(ast, Expr) || return
-    mods = modules_to_be_loaded(ast)
-    filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
-    if !isempty(mods)
+# Verify that packages are requireable without actually loading them.
+# If packages are missing, call install hooks.
+# This is side-effect free except for the hook calls.
+function verify_packages_requireable(pkgs::Vector{Symbol})
+    missing_mods = filter(mod -> isnothing(Base.identify_package(String(mod))), pkgs)
+    if !isempty(missing_mods)
         isempty(install_packages_hooks) && load_pkg()
         for f in install_packages_hooks
-            Base.invokelatest(f, mods) && return
+            Base.invokelatest(f, missing_mods) && break
         end
     end
+    return nothing
 end
 
-function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
-    function add!(ctx)
-        if ctx.head == :as
-            ctx = ctx.args[1]
-        end
-        if ctx.args[1] != :. # don't include local import `import .Foo`
-            push!(mods, ctx.args[1])
-        end
-    end
-    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head == :call
-        if length(ast.args) == 5 && ast.args[1] === GlobalRef(Base, :_eval_import)
-            ctx = ast.args[4]
-            if ctx isa QuoteNode # i.e. `Foo: bar`
+# Extract the package name from a using/import call expression
+function extract_package_from_call(call::Expr)
+    if call.head == :call
+        if length(call.args) == 5 && call.args[1] === GlobalRef(Base, :_eval_import)
+            ctx = call.args[4]
+            if ctx isa QuoteNode
                 ctx = ctx.value
             else
-                ctx = ast.args[5].value
+                ctx = call.args[5].value
             end
-            add!(ctx)
-        elseif length(ast.args) == 3 && ast.args[1] == GlobalRef(Base, :_eval_using)
-            add!(ast.args[3].value)
+            if ctx.head == :as
+                ctx = ctx.args[1]
+            end
+            if ctx.args[1] != :.  # don't include local import
+                return ctx.args[1]
+            end
+        elseif length(call.args) == 3 && call.args[1] == GlobalRef(Base, :_eval_using)
+            ctx = call.args[3].value
+            if ctx.head == :as
+                ctx = ctx.args[1]
+            end
+            if ctx.args[1] != :.  # don't include local import
+                return ctx.args[1]
+            end
         end
     end
-    if ast.head !== :thunk
-        for arg in ast.args
-            if isexpr(arg, (:block, :if))
-                _modules_to_be_loaded!(arg, mods)
-            end
-        end
-    else
-        code = ast.args[1]
-        for arg in code.code
-            isa(arg, Expr) || continue
-            _modules_to_be_loaded!(arg, mods)
-        end
-    end
+    return nothing
 end
 
-function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
-    _modules_to_be_loaded!(ast, mods)
-    filter!(mod::Symbol -> !in(mod, (:Base, :Main, :Core)), mods) # Exclude special non-package modules
-    return unique(mods)
+# Insert verification calls before groups of using/import statements in the AST
+function insert_package_verification_calls(@nospecialize(ast))
+    isa(ast, Expr) || return ast
+
+    # Handle thunk (lowered code block)
+    if ast.head === :thunk
+        code = ast.args[1]
+        new_code = Any[]
+        pending_packages = Symbol[]
+
+        for stmt in code.code
+            if isa(stmt, Expr)
+                pkg = extract_package_from_call(stmt)
+                if pkg !== nothing && !in(pkg, (:Base, :Main, :Core))
+                    # This is a using/import statement, add to pending group
+                    push!(pending_packages, pkg)
+                    push!(new_code, stmt)
+                    continue
+                end
+            end
+
+            # Not a using/import statement, flush pending group
+            if !isempty(pending_packages)
+                # Insert verification call before the group we just completed
+                insert_idx = length(new_code) - length(pending_packages)
+                verification_call = Expr(:call, GlobalRef(REPL, :verify_packages_requireable),
+                                        unique(pending_packages))
+                insert!(new_code, insert_idx + 1, verification_call)
+                empty!(pending_packages)
+            end
+
+            push!(new_code, stmt)
+        end
+
+        # Flush any remaining pending packages
+        if !isempty(pending_packages)
+            insert_idx = length(new_code) - length(pending_packages)
+            verification_call = Expr(:call, GlobalRef(REPL, :verify_packages_requireable),
+                                    unique(pending_packages))
+            insert!(new_code, insert_idx + 1, verification_call)
+        end
+
+        ast.args[1] = Core.CodeInfo(new_code, code.slotnames, code.slotflags,
+                                     code.slottypes, code.rettype, code.parent,
+                                     code.edges, code.min_world, code.max_world)
+    end
+
+    return ast
 end
 
 """

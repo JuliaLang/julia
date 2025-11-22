@@ -1446,67 +1446,6 @@ macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
 end
 
-@testset "Install missing packages via hooks" begin
-    @testset "Parse AST for packages" begin
-        test_find_packages(e) =
-            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, e))
-        test_find_packages(s::String) =
-            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, Meta.parse(s)))
-
-        mods = test_find_packages("using Foo")
-        @test mods == [:Foo]
-        mods = test_find_packages("import Foo")
-        @test mods == [:Foo]
-        mods = test_find_packages("using Foo, Bar")
-        @test mods == [:Foo, :Bar]
-        mods = test_find_packages("import Foo, Bar")
-        @test mods == [:Foo, :Bar]
-        mods = test_find_packages("using Foo.bar, Foo.baz")
-        @test mods == [:Foo]
-
-        mods = test_find_packages("if false using Foo end")
-        @test mods == [:Foo]
-        mods = test_find_packages("if false if false using Foo end end")
-        @test mods == [:Foo]
-        mods = test_find_packages("if false using Foo, Bar end")
-        @test mods == [:Foo, :Bar]
-        mods = test_find_packages("if false using Foo: bar end")
-        @test mods == [:Foo]
-
-        mods = test_find_packages("import Foo.bar as baz")
-        @test mods == [:Foo]
-        mods = test_find_packages("using .Foo")
-        @test isempty(mods)
-        mods = test_find_packages("using Base")
-        @test isempty(mods)
-        mods = test_find_packages("using Base: nope")
-        @test isempty(mods)
-        mods = test_find_packages("using Main")
-        @test isempty(mods)
-        mods = test_find_packages("using Core")
-        @test isempty(mods)
-
-        mods = test_find_packages(":(using Foo)")
-        @test isempty(mods)
-        mods = test_find_packages("ex = :(using Foo)")
-        @test isempty(mods)
-
-        mods = test_find_packages("@eval using Foo")
-        @test isempty(mods)
-        mods = test_find_packages("begin using Foo; @eval using Bar end")
-        @test mods == [:Foo]
-        mods = test_find_packages("Core.eval(Main,\"using Foo\")")
-        @test isempty(mods)
-        mods = test_find_packages("begin using Foo; Core.eval(Main,\"using Foo\") end")
-        @test mods == [:Foo]
-
-        mods = test_find_packages(:(import .Foo: a))
-        @test isempty(mods)
-        mods = test_find_packages(:(using .Foo: a))
-        @test isempty(mods)
-    end
-end
-
 # Test that the REPL can find `using` statements inside macro expansions
 global packages_requested = Any[]
 old_hooks = copy(REPL.install_packages_hooks)
