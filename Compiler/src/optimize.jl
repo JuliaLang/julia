@@ -99,14 +99,9 @@ end
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
-# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
-const InlineCostType = UInt16
-const MAX_INLINE_COST = typemax(InlineCostType)
-const MIN_INLINE_COST = InlineCostType(10)
-const MaybeCompressed = Union{CodeInfo, String}
-
-is_inlineable(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+inlining_cost(@nospecialize src) =
+    src isa Union{MaybeCompressed,UInt8} ? ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) : MAX_INLINE_COST
+is_inlineable(@nospecialize src) = inlining_cost(src) != MAX_INLINE_COST
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
@@ -158,47 +153,38 @@ end
 
 struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
-    world::UInt
     interp::Interp
     opt_cache::IdDict{MethodInstance,CodeInstance}
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter,
                        opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
-    return InliningState(sv.edges, frame_world(sv), interp, opt_cache)
+    return InliningState(sv.edges, interp, opt_cache)
 end
 function InliningState(interp::AbstractInterpreter,
                        opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
-    return InliningState(Any[], get_inference_world(interp), interp, opt_cache)
+    return InliningState(Any[], interp, opt_cache)
 end
 
 struct OptimizerCache{CodeCache}
-    wvc::WorldView{CodeCache}
-    owner
+    cache::CodeCache
     opt_cache::IdDict{MethodInstance,CodeInstance}
     function OptimizerCache(
-        wvc::WorldView{CodeCache},
-        @nospecialize(owner),
+        cache::CodeCache,
         opt_cache::IdDict{MethodInstance,CodeInstance}) where CodeCache
-        new{CodeCache}(wvc, owner, opt_cache)
+        return new{CodeCache}(cache, opt_cache)
     end
 end
-function get((; wvc, owner, opt_cache)::OptimizerCache, mi::MethodInstance, default)
+function get((; cache, opt_cache)::OptimizerCache, mi::MethodInstance, default)
     if haskey(opt_cache, mi)
-        codeinst = opt_cache[mi]
-        @assert codeinst.min_world ≤ wvc.worlds.min_world &&
-                wvc.worlds.max_world ≤ codeinst.max_world &&
-                codeinst.owner === owner
-        @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
-        return codeinst
+        return opt_cache[mi] # this is incomplete right now, but will be finished (by finish_cycle) before caching anything
     end
-    return get(wvc, mi, default)
+    return get(cache, mi, default)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 function code_cache(state::InliningState)
-    cache = WorldView(code_cache(state.interp), state.world)
-    owner = cache_owner(state.interp)
-    return OptimizerCache(cache, owner, state.opt_cache)
+    cache = code_cache(state.interp)
+    return OptimizerCache(cache, state.opt_cache)
 end
 
 mutable struct OptimizationResult
@@ -678,7 +664,7 @@ GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_ca
 function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,MethodInstance})
     if codeinst isa MethodInstance
         codeinst = get(code_cache, codeinst, nothing)
-        codeinst isa CodeInstance || return false
+        codeinst === nothing && return false
     end
     argescapes = traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
@@ -686,7 +672,7 @@ function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,Met
     if argescapes !== nothing
         return argescapes
     end
-    effects = decode_effects(codeinst.ipo_purity_bits)
+    effects = codeinst isa CodeInstance ? decode_effects(codeinst.ipo_purity_bits) : codeinst.ipo_effects
     if is_effect_free(effects) && is_inaccessiblememonly(effects)
         # We might not have run EA on simple frames without any escapes (e.g. when optimization
         # is skipped when result is constant-folded by abstract interpretation). If those

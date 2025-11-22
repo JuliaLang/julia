@@ -64,7 +64,7 @@ const DS6 = 1.58969099521155010221e-10
 """
     sin_kernel(yhi, ylo)
 
-Computes the sine on the interval [-π/4; π/4].
+Compute the sine on the interval [-π/4; π/4].
 """
 @inline function sin_kernel(y::DoubleFloat64)
     y² = y.hi*y.hi

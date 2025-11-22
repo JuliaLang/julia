@@ -605,7 +605,7 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
-                                     result.edgecycle, result.edgelimited, result.volatile_inf_result)
+                                     result.edgecycle, result.edgelimited, result.call_result)
     end
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
@@ -1047,7 +1047,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        s = do_string_unescape(string[r])
+        s = do_string_unescape(string[intersect(r, 1:pos)])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
         if length(ret) == 1 && !closed && close_path_completion(ret[1].path)

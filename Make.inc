@@ -1508,11 +1508,9 @@ RPATH_LIB := $(RPATH_ORIGIN)
 
 # --whole-archive
 ifeq ($(OS), Darwin)
-  WHOLE_ARCHIVE := -Xlinker -all_load
-  NO_WHOLE_ARCHIVE :=
+  whole_archive = -Xlinker -force_load $(1)
 else
-  WHOLE_ARCHIVE := -Wl,--whole-archive
-  NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
+  whole_archive = -Wl,--whole-archive $(1) -Wl,--no-whole-archive
 endif
 
 # Initialize these once, then add to them in OS-specific blocks
@@ -1558,8 +1556,7 @@ ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
 endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE)
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), OpenBSD)
@@ -1578,8 +1575,6 @@ endif
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
-WHOLE_ARCHIVE := -Xlinker -all_load
-NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
@@ -1587,7 +1582,7 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
+	-Wl,--no-whole-archive -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
 # N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
 # enforced visibility at this point.
 JLDFLAGS += -Wl,--stack,8388608

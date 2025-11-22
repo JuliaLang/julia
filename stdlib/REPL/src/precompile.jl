@@ -7,7 +7,7 @@ import ..REPL
 # Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
 Base._track_dependencies[] = false
 try
-    Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+    Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
     @Core.latestworld
     import .FakePTYs: open_fake_pty
 finally
@@ -79,6 +79,7 @@ function repl_workload()
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
+    \x12?\x7f\e[A\e[B\t history\r
     println("done")
     """
 
@@ -90,9 +91,20 @@ function repl_workload()
     SHELL_PROMPT = "shell> "
     HELP_PROMPT = "help?> "
 
-    blackhole = Sys.isunix() ? "/dev/null" : "nul"
+    tmphistfile = tempname()
+    write(tmphistfile, """
+    # time: 2020-10-31 13:16:39 AWST
+    # mode: julia
+    \tcos
+    # time: 2020-10-31 13:16:40 AWST
+    # mode: julia
+    \tsin
+    # time: 2020-11-01 02:19:36 AWST
+    # mode: help
+    \t?
+    """)
 
-    withenv("JULIA_HISTORY" => blackhole,
+    withenv("JULIA_HISTORY" => tmphistfile,
             "JULIA_PROJECT" => nothing, # remove from environment
             "JULIA_LOAD_PATH" => "@stdlib",
             "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",

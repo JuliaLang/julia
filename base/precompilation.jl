@@ -608,11 +608,13 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     logio = io
     logcalls = nothing
     if _from_loading
-        if !isinteractive()
+        if isinteractive()
+            logcalls = CoreLogging.Info # sync with Base.compilecache
+        else
             logio = IOContext{IO}(devnull)
             fancyprint = false
+            logcalls = CoreLogging.Debug # sync with Base.compilecache
         end
-        logcalls = isinteractive() ? CoreLogging.Info : CoreLogging.Debug # sync with Base.compilecache
     end
 
     nconfigs = length(configs)
@@ -659,9 +661,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             triggers[ext] = Base.PkgId[pkg] # depends on parent package
             all_triggers_available = true
             for trigger_uuid in trigger_uuids
-                trigger_name = env.names[trigger_uuid]
-                if trigger_uuid in keys(env.deps)
-                    push!(triggers[ext], Base.PkgId(trigger_uuid, trigger_name))
+                trigger_name = Base.PkgId(trigger_uuid, env.names[trigger_uuid])
+                if trigger_uuid in keys(env.deps) || Base.in_sysimage(trigger_name)
+                    push!(triggers[ext], trigger_name)
                 else
                     all_triggers_available = false
                     break
@@ -691,6 +693,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     for ext_a in keys(ext_to_parent)
         for ext_b in keys(ext_to_parent)
             if triggers[ext_a] ⊋ triggers[ext_b]
+                push!(triggers[ext_a], ext_b)
                 push!(direct_deps[ext_a], ext_b)
             end
         end
@@ -1068,7 +1071,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             # Heuristic for when precompilation is disabled, which must not over-estimate however for any dependent
             # since it will also block precompilation of all dependents
             if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
-                Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
+                @lock print_lock begin
+                    Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
+                end
                 notify(was_processed[pkg_config])
                 continue
             end
@@ -1110,9 +1115,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             if interrupted_or_done[]
                                 return
                             end
-                            # for extensions, any extension in our direct dependencies is one we have a right to load
-                            # for packages, we may load any extension (all possible triggers are accounted for above)
-                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), deps) : nothing
+                            # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
+                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
                             if !isempty(deps)
                                 # if deps is empty, either it doesn't have any (so compiled-modules is
                                 # irrelevant) or we couldn't compute them (so we actually should attempt
@@ -1140,8 +1144,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                         push!(freshpaths, freshpath)
                                         return nothing # returning nothing indicates another process did the recompile
                                     end
-                                    logcalls === nothing || @lock print_lock begin
-                                        Base.@logmsg logcalls "Precompiling $(repr("text/plain", pkg))"
+                                    logcalls === CoreLogging.Debug && @lock print_lock begin
+                                        @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
                                     Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts)
