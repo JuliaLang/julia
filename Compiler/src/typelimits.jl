@@ -194,6 +194,11 @@ function __limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     if isvarargtype(c) # Tuple{Vararg{T}} --> Tuple{T} is OK
         isdefined(c, :N) && (cN = c.N)
         c = unwrapva(c)
+        # After unwrapping, c might still be a Vararg or TypeVar (e.g., nested Vararg or Vararg{T} where T is a TypeVar)
+        # Recursively handle these cases to avoid reaching _limit_type_size with non-Type arguments
+        if isvarargtype(c) || isa(c, TypeVar)
+            return __limit_type_size(t, c, sources, depth, allowed_tuplelen)
+        end
     end
     if isa(c, TypeVar)
         if isa(t, TypeVar) && t.ub === c.ub && (t.lb === Union{} || t.lb === c.lb)
