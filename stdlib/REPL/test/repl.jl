@@ -1446,12 +1446,101 @@ macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
 end
 
+@testset "Insert package verification calls" begin
+    # Helper to check if verification calls are inserted for given code
+    function test_inserted_packages(e)
+        ast = Meta.lower(@__MODULE__, e)
+        modified_ast = REPL.insert_package_verification_calls(ast)
+        packages = Symbol[]
+        if isa(modified_ast, Expr) && modified_ast.head === :thunk
+            for stmt in modified_ast.args[1].code
+                if isa(stmt, Expr) && stmt.head === :call &&
+                   length(stmt.args) >= 2 && stmt.args[1] === GlobalRef(REPL, :verify_packages_requireable)
+                    append!(packages, stmt.args[2])
+                end
+            end
+        end
+        return unique(packages)
+    end
+    test_inserted_packages(s::String) = test_inserted_packages(Meta.parse(s))
+
+    mods = test_inserted_packages("using Foo")
+    @test mods == [:Foo]
+    mods = test_inserted_packages("import Foo")
+    @test mods == [:Foo]
+    mods = test_inserted_packages("using Foo, Bar")
+    @test sort(mods) == [:Bar, :Foo]
+    mods = test_inserted_packages("import Foo, Bar")
+    @test sort(mods) == [:Bar, :Foo]
+    mods = test_inserted_packages("using Foo.bar, Foo.baz")
+    @test mods == [:Foo]
+
+    mods = test_inserted_packages("if false using Foo end")
+    @test mods == [:Foo]
+    mods = test_inserted_packages("if false if false using Foo end end")
+    @test mods == [:Foo]
+    mods = test_inserted_packages("if false using Foo, Bar end")
+    @test sort(mods) == [:Bar, :Foo]
+    mods = test_inserted_packages("if false using Foo: bar end")
+    @test mods == [:Foo]
+
+    mods = test_inserted_packages("import Foo.bar as baz")
+    @test mods == [:Foo]
+    mods = test_inserted_packages("using .Foo")
+    @test isempty(mods)
+    mods = test_inserted_packages("using Base")
+    @test isempty(mods)
+    mods = test_inserted_packages("using Base: nope")
+    @test isempty(mods)
+    mods = test_inserted_packages("using Main")
+    @test isempty(mods)
+    mods = test_inserted_packages("using Core")
+    @test isempty(mods)
+
+    mods = test_inserted_packages(":(using Foo)")
+    @test isempty(mods)
+    mods = test_inserted_packages("ex = :(using Foo)")
+    @test isempty(mods)
+
+    mods = test_inserted_packages("@eval using Foo")
+    @test isempty(mods)
+    mods = test_inserted_packages("begin using Foo; @eval using Bar end")
+    @test mods == [:Foo]
+    mods = test_inserted_packages("Core.eval(Main,\"using Foo\")")
+    @test isempty(mods)
+    mods = test_inserted_packages("begin using Foo; Core.eval(Main,\"using Foo\") end")
+    @test mods == [:Foo]
+
+    mods = test_inserted_packages(:(import .Foo: a))
+    @test isempty(mods)
+    mods = test_inserted_packages(:(using .Foo: a))
+    @test isempty(mods)
+
+    # Test batching: consecutive using statements should be in one call
+    ast = Meta.lower(@__MODULE__, quote
+        using Foo
+        using Bar
+    end)
+    modified_ast = REPL.insert_package_verification_calls(ast)
+    verification_count = 0
+    if isa(modified_ast, Expr) && modified_ast.head === :thunk
+        for stmt in modified_ast.args[1].code
+            if isa(stmt, Expr) && stmt.head === :call &&
+               length(stmt.args) >= 1 && stmt.args[1] === GlobalRef(REPL, :verify_packages_requireable)
+                verification_count += 1
+            end
+        end
+    end
+    @test verification_count == 1  # Should batch into one call
+end
+
 # Test that the REPL can find `using` statements inside macro expansions
 global packages_requested = Any[]
 old_hooks = copy(REPL.install_packages_hooks)
 empty!(REPL.install_packages_hooks)
 push!(REPL.install_packages_hooks, function(pkgs)
     append!(packages_requested, pkgs)
+    return false  # Don't actually try to install
 end)
 
 fake_repl() do stdin_write, stdout_read, repl
