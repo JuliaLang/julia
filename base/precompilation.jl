@@ -896,7 +896,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         in_printloop || wait(t_print) # Wait to let the print loop cease first. This makes the printing incorrect, so we shouldn't wait here, but we do anyways.
         if err isa InterruptException
             @lock print_lock begin
-                println(io, " Interrupted: Exiting precompilation...", ansi_cleartoendofline)
+                println(logio, " Interrupted: Exiting precompilation...", ansi_cleartoendofline)
             end
             return true
         else
@@ -921,7 +921,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             liveprinting = true
                             pkg_liveprinted[] = pkg
                         end
-                        print(io, ansi_cleartoendofline, str)
+                        print(logio, ansi_cleartoendofline, str)
                     end
                 end
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
@@ -929,14 +929,14 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     if occursin("Waiting for background task / IO / timer", str)
                         thistaskwaiting = true
                         !liveprinting && !fancyprint && @lock print_lock begin
-                            println(io, pkg.name, color_string(str, Base.warn_color()))
+                            println(logio, pkg.name, color_string(str, Base.warn_color()))
                         end
                         push!(taskwaiting, pkg_config)
                     end
                 else
                     # XXX: don't just re-enable IO for random packages without printing the context for them first
                     !liveprinting && !fancyprint && @lock print_lock begin
-                        print(io, ansi_cleartoendofline, str)
+                        print(logio, ansi_cleartoendofline, str)
                     end
                 end
             end
@@ -1281,7 +1281,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
     end
     if !isempty(std_outputs)
-        str = sprint(context=io) do iostr
+        str = sprint(context=logio) do iostr
             # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
             # interrupting a hanging precompile job with stderr output.
             let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
@@ -1304,7 +1304,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             end
         end
         isempty(str) || @lock print_lock begin
-            println(io, str)
+            println(logio, str)
         end
     end
     # Done cleanup and sub-process output, now ensure caller aborts too with the right error
@@ -1326,7 +1326,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         err_msg = "The following $n_errs package$(pluraled) failed to precompile:$(String(take!(err_str)))\n"
         if internal_call
             # Pkg does not implement correct error handling, so this sometimes handles them instead
-            print(io, err_msg)
+            print(logio, err_msg)
         else
             throw(PkgPrecompileError(err_msg))
         end
@@ -1368,7 +1368,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
         !fancyprint && @lock print_lock begin
-            println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
+            println(logio, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         Base.release(parallel_limiter) # release so other work can be done while waiting
         try
