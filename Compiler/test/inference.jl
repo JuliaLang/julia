@@ -55,6 +55,30 @@ let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tu
     @test Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
 end
 
+# issue #59918 - handle Vararg/TypeVar after unwrapping in __limit_type_size
+# Test that after unwrapping a Vararg, if the result is still a Vararg or TypeVar,
+# we handle it correctly instead of hitting an assertion error
+let S = TypeVar(:S)
+    # Test with Vararg containing a TypeVar - after unwrapva, we get a TypeVar
+    va_with_typevar = Core.Vararg{S}
+    @test Compiler.__limit_type_size(Int, va_with_typevar, Core.svec(), 1, 10) === Int
+    @test Compiler.__limit_type_size(Tuple{Int}, va_with_typevar, Core.svec(), 1, 10) === Tuple{Int}
+
+    # Test with comparison being a TypeVar directly
+    @test Compiler.__limit_type_size(Int, S, Core.svec(), 1, 10) === Int
+
+    # Test with nested Vararg in Tuple context
+    @test Compiler.limit_type_size(Tuple{Int, Int}, Tuple{Vararg{S}}, Union{}, 1, 10) === Tuple{Int, Int}
+end
+
+# issue #59918 - test with ordinary code that triggers type inference
+struct Arr59918{T, N, S}
+    data::NTuple{N, T}
+end
+f59918(::Type{Tuple{Arr59918{T, N, S} where S, U}}) where {T,N,U} = nothing
+# This should not throw an assertion error during type inference
+@test Base.return_types(f59918, (Type{Tuple{Arr59918{Int, 3, S} where S, Nothing}},)) == [Nothing]
+
 mutable struct TS14009{T}; end
 let A = TS14009{TS14009{TS14009{TS14009{TS14009{T}}}}} where {T},
     B = Base.rewrap_unionall(TS14009{Base.unwrap_unionall(A)}, A)
