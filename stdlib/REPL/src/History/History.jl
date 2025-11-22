@@ -8,7 +8,7 @@ using StyledStrings: @styled_str as @S_str, Face, addface!, face!, annotations, 
 using JuliaSyntaxHighlighting: highlight
 using Base.Threads
 using Dates
-using InteractiveUtils: clipboard
+using InteractiveUtils: clipboard, InteractiveUtils
 
 export HistoryFile, HistEntry, update!, runsearch
 

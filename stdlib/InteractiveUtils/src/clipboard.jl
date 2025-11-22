@@ -2,6 +2,125 @@
 
 # clipboard copy and paste
 
+"""
+    _detect_osc52_support(term::Base.Terminals.TTYTerminal) -> Bool
+
+Detect if the terminal supports OSC52 clipboard operations using XTGETTCAP.
+
+Queries the terminal for the 'Ms' (clipboard) capability using the DCS + q sequence.
+Returns true if the terminal responds positively or times out (assume support),
+false if the terminal explicitly reports no support.
+"""
+function _detect_osc52_support(term::Base.Terminals.TTYTerminal)
+    # Check cache first
+    cached = get(ENV, "JULIA_OSC52_SUPPORTED", nothing)
+    cached === "1" && return true
+    cached === "0" && return false
+
+    io_in = term.in_stream
+    io_out = term.out_stream
+
+    # XTGETTCAP query for "Ms" capability (clipboard)
+    # Format: DCS + q Pt ST, where Pt is hex-encoded capability name
+    # "Ms" in hex is "4d73"
+    query = "\033P+q4d73\033\\"
+
+    # Set up for reading response
+    old_raw = nothing
+    try
+        # Save terminal mode and enter raw mode
+        old_raw = Base.Terminals.raw!(term, true)
+
+        # Send query
+        print(io_out, query)
+        flush(io_out)
+
+        # Read response with timeout
+        # Expected: DCS 1 + r 4d73=<value> ST (support) or DCS 0 + r ST (no support)
+        response = ""
+        timeout = time() + 0.1  # 100ms timeout
+
+        while time() < timeout
+            if bytesavailable(io_in) > 0
+                c = read(io_in, Char)
+                response *= c
+                # Check if we have a complete response
+                # DCS ends with ST (ESC \)
+                if endswith(response, "\033\\")
+                    break
+                end
+            else
+                sleep(0.001)
+            end
+        end
+
+        # Parse response
+        # DCS 1 + r means capability is supported
+        # DCS 0 + r means not supported
+        if occursin("\033P1+r", response)
+            ENV["JULIA_OSC52_SUPPORTED"] = "1"
+            return true
+        elseif occursin("\033P0+r", response)
+            ENV["JULIA_OSC52_SUPPORTED"] = "0"
+            return false
+        else
+            # No response or unclear - assume support (many terminals
+            # support OSC52 but don't respond to XTGETTCAP)
+            ENV["JULIA_OSC52_SUPPORTED"] = "1"
+            return true
+        end
+    catch
+        # On error, assume OSC52 is supported
+        return true
+    finally
+        # Restore terminal mode
+        if old_raw !== nothing
+            Base.Terminals.raw!(term, old_raw)
+        end
+    end
+end
+
+"""
+    clipboard(io::IO, x; osc52::Bool=true)
+
+Copy content `x` to the system clipboard using OSC52 escape sequences via `io`.
+
+OSC52 (Operating System Command 52) is a terminal escape sequence that allows
+applications to set the clipboard content even when running over SSH or in
+environments where traditional clipboard tools (xsel, xclip, pbcopy) aren't available.
+
+This works with most modern terminal emulators including:
+- iTerm2, Terminal.app (macOS)
+- Windows Terminal, ConEmu (Windows)
+- Alacritty, kitty, wezterm, foot (cross-platform)
+
+# Arguments
+- `io::IO`: The terminal output stream (typically a TTY)
+- `x`: Content to copy to clipboard
+- `osc52::Bool=true`: Whether to use OSC52 (set to false to disable)
+
+# Example
+```julia
+clipboard(stdout, "Hello, World!")
+```
+"""
+function clipboard(io::IO, x; osc52::Bool=true)
+    osc52 || error("OSC52 disabled and no alternative method specified")
+
+    # Convert content to string
+    content = sprint(print, x)
+
+    # Encode as base64
+    b64 = base64encode(content)
+
+    # Standard OSC52 sequence
+    # Format: ESC ] 52 ; <clipboard> ; <base64 data> BEL
+    # Using 'c' for clipboard (some terminals also support 'p' for primary selection)
+    print(io, "\033]52;c;", b64, "\007")
+
+    nothing
+end
+
 if Sys.isapple()
     function clipboard(x)
         pbcopy_cmd = `pbcopy`

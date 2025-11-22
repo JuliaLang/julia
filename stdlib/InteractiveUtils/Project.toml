@@ -3,6 +3,7 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 version = "1.11.0"
 
 [deps]
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [extras]

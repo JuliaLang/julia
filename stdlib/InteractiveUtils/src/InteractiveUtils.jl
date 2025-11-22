@@ -20,6 +20,7 @@ using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
     signature_type, format_bytes
 using Base.Libc
 using Markdown
+using Base64: base64encode
 
 include("editless.jl")
 include("codeview.jl")

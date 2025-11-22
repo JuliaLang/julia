@@ -177,7 +177,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             continue
         elseif event === :copy
             content = strip(fullselection(state).text)
-            isempty(content) || saveclipboard(term.out_stream, content)
+            isempty(content) || saveclipboard(term, content)
             return EMPTY_STATE
         elseif event === :filesave
             content = strip(fullselection(state).text)
@@ -379,10 +379,61 @@ end
     saveclipboard(term::Base.Terminals.TTYTerminal, content::AbstractString)
 
 Save `content` to the clipboard and record the action.
+
+Prefers OSC52 escape sequences (which work over SSH), then falls back to
+traditional clipboard tools (pbcopy, xsel, xclip, wl-clipboard) if OSC52
+is not supported by the terminal.
 """
-function saveclipboard(msgio::IO, content::AbstractString)
+function saveclipboard(term::Base.Terminals.TTYTerminal, content::AbstractString)
     nlines = count('\n', content) + 1
-    clipboard(content)
-    println(msgio, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
-                     $(ifelse(nlines == 1, \"line\", \"lines\")) to clipboard}\n")
+    msgio = term.out_stream
+
+    # Determine if we should try OSC52 first
+    try_osc52_first = false
+    try
+        # Detect OSC52 support using XTGETTCAP
+        try_osc52_first = InteractiveUtils._detect_osc52_support(term)
+    catch
+        # Detection failed, check if in SSH session
+        if haskey(ENV, "SSH_CONNECTION") || haskey(ENV, "SSH_CLIENT")
+            try_osc52_first = true
+        end
+    end
+
+    if try_osc52_first
+        # Try OSC52 first
+        try
+            clipboard(msgio, content)
+            println(msgio, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
+                             $(ifelse(nlines == 1, \"line\", \"lines\")) to clipboard}\n")
+            return
+        catch osc52_err
+            # OSC52 failed, fall back to traditional tools
+        end
+    end
+
+    # Try traditional clipboard tools
+    try
+        clipboard(content)
+        println(msgio, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
+                         $(ifelse(nlines == 1, \"line\", \"lines\")) to clipboard}\n")
+    catch err
+        if err isa ErrorException && occursin("no clipboard command found", err.msg)
+            if !try_osc52_first
+                # Fallback to OSC52 if we haven't tried it yet
+                try
+                    clipboard(msgio, content)
+                    println(msgio, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
+                                     $(ifelse(nlines == 1, \"line\", \"lines\")) to clipboard (via OSC52)}\n")
+                    return
+                catch osc52_err
+                    # Both methods failed
+                end
+            end
+            # Show helpful error message
+            println(msgio, S"\e[1G\e[2K{grey,bold:history>} {red:×} $(err.msg)\n")
+        else
+            rethrow()
+        end
+    end
 end
