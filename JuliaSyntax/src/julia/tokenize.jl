@@ -173,7 +173,7 @@ function optakessuffix(k)
         k == K"!"   ||
         k == K".'"  ||
         k == K"->"  ||
-        K"¬" <= k <= K"∜"
+        K"BEGIN_UNICODE_OPS" <= k <= K"END_UNICODE_OPS"
     )
 end
 
