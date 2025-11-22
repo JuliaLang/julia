@@ -49,6 +49,24 @@ using Random
     end
 end
 
+@testset "takestring!" begin
+    v = [0x61, 0x62, 0x63]
+    old_mem = v.ref.mem
+    @test takestring!(v) == "abc"
+    @test isempty(v)
+    @test v.ref.mem !== old_mem # memory is changed
+    for v in [
+        UInt8[],
+        [0x01, 0x02, 0x03],
+        collect(codeunits("æøå"))
+    ]
+        cp = copy(v)
+        s = takestring!(v)
+        @test isempty(v)
+        @test codeunits(s) == cp
+    end
+end
+
 @testset "{starts,ends}with" begin
     @test startswith("abcd", 'a')
     @test startswith('a')("abcd")
@@ -1078,6 +1096,7 @@ let s = "∀x∃y", u = codeunits(s)
     @test_throws Base.CanonicalIndexError (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
+    @test similar(typeof(u), 3) isa Vector{UInt8}
 end
 
 @testset "issue #24388" begin
@@ -1174,12 +1193,10 @@ end
     apple_uint8 = Vector{UInt8}("Apple")
     @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
 
-    apple_uint8 = Array{UInt8}("Apple")
-    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
-
-    Base.String(::tstStringType) = "Test"
+    Base.codeunit(::tstStringType) = UInt8
+    Base.codeunits(t::tstStringType) = t.data
     abstract_apple = tstStringType(apple_uint8)
-    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+    @test hash(abstract_apple, UInt(1)) == hash("Apple", UInt(1))
 
     @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
 
@@ -1444,4 +1461,13 @@ if Sys.iswindows()
         @test_throws ArgumentError Base.cwstring(str_2)
         @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
     end
+end
+
+
+@testset "eltype for AbstractString subtypes" begin
+    @test eltype(String) == Char
+    @test eltype(SubString{String}) == Char
+
+    u = b"hello"
+    @test eltype(u) === UInt8
 end

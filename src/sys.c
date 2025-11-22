@@ -461,7 +461,7 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
     GAPC gapc;
-    if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
+    if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0, 0)) {
         return gapc(ALL_PROCESSOR_GROUPS);
     }
     else { //fall back on GetSystemInfo
@@ -496,8 +496,8 @@ JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
-extern char **environ;
+#if !defined(_OS_WINDOWS_) || (defined(_COMPILER_GCC_) && defined(_POSIX_C_SOURCE))
+extern JL_DLLIMPORT char **environ;
 #endif
 #endif
 

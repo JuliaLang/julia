@@ -156,6 +156,7 @@ abs(x::Bool) = x
 abs2(x::Bool) = x
 iszero(x::Bool) = !x
 isone(x::Bool) = x
+ispositive(x::Bool) = x # could use fallback once #21712 is resolved
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x
