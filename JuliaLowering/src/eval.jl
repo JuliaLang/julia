@@ -147,8 +147,14 @@ else
                   error("Unrecognized CodeInfo field types: Maybe version $VERSION is too new for this version of JuliaLowering?")
               end)
         else
+            # CodeInfo has ninitialized=22, so only pass first 22 fields to constructor
+            # and set inlining_cost (field 23) separately
+            ninitialized = 22
+            init_conversions = conversions[1:ninitialized]
             :(function _CodeInfo($(fns...))
-                $(Expr(:new, :(Core.CodeInfo), conversions...))
+                ci = $(Expr(:new, :(Core.CodeInfo), init_conversions...))
+                ci.inlining_cost = inlining_cost
+                ci
             end)
         end
 
