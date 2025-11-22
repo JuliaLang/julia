@@ -173,7 +173,7 @@ function optakessuffix(k)
         k == K"!"   ||
         k == K".'"  ||
         k == K"->"  ||
-        K"¬" <= k <= K"∜"
+        K"BEGIN_UNICODE_OPS" <= k <= K"END_UNICODE_OPS"
     )
 end
 
@@ -1056,6 +1056,14 @@ function lex_digit(l::Lexer, kind)
                 accept(l, "+-−")
                 if !accept_number(l, isdigit) || !had_digits
                     return emit(l, K"ErrorInvalidNumericConstant") # `0x1p` `0x.p0`
+                end
+                # Check for invalid trailing decimal point
+                # https://github.com/JuliaLang/julia/issues/60189
+                pc = peekchar(l)
+                if pc == '.'
+                    accept_batch(l, c->(c == '.' || isdigit(c)))
+                    # `0x1p3.` `0x1p3.2` `0x1.5p2.3`
+                    return emit(l, K"ErrorInvalidNumericConstant")
                 end
             elseif isfloat
                 return emit(l, K"ErrorHexFloatMustContainP") # `0x.` `0x1.0`

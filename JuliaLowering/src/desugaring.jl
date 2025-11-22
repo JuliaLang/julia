@@ -539,7 +539,11 @@ function _arg_to_temp(ctx, stmts, ex, eq_is_kw=false)
     elseif k == K"..."
         @ast ctx ex [k _arg_to_temp(ctx, stmts, ex[1])]
     elseif k == K"=" && eq_is_kw
-        @ast ctx ex [K"=" ex[1] _arg_to_temp(ex[2])]
+        @ast ctx ex [K"=" ex[1] _arg_to_temp(ctx, stmts, ex[2], false)]
+    elseif k == K"parameters"
+        mapchildren(ctx, ex) do e
+            _arg_to_temp(ctx, stmts, e, true)
+        end
     else
         emit_assign_tmp(stmts, ctx, ex)
     end

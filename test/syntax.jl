@@ -1684,6 +1684,9 @@ end
 # #16356
 @test_parseerror "0xapi"
 
+# #60189
+@test_parseerror "0x1p3.2"
+
 # #22523 #22712
 @test_parseerror "a?b:c"
 @test_parseerror "a ?b:c"
@@ -3730,7 +3733,7 @@ end
     @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
 end
 
-@testset "removing argument sideeffects" begin
+@testset "removing argument side effects" begin
     # Allow let blocks in broadcasted LHSes, but only evaluate them once:
     execs = 0
     array = [1]
@@ -3746,6 +3749,15 @@ end
     let; execs += 1; array; end::Vector{Int} .= 7
     @test array == [7]
     @test execs == 4
+
+    # remove argument side effects on lhs kwcall
+    pa_execs = 0
+    kw_execs = 0
+    f60152(v, pa; kw) = copy(v)
+    @test (f60152([1, 2, 3], 0; kw=0) .*= 2) == [2,4,6]
+    @test (f60152([1, 2, 3], (pa_execs+=1); kw=(kw_execs+=1)) .*= 2) == [2,4,6]
+    @test pa_execs === 1
+    @test kw_execs === 1
 end
 
 # Allow GlobalRefs in macro definition
