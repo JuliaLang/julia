@@ -3080,7 +3080,7 @@ function abstract_eval_call(interp::AbstractInterpreter, e::Expr, sstate::Statem
 end
 
 function is_field_pointerfree(dt::DataType, fidx::Int)
-    dt.layout == C_NULL && return false
+    dt.layout::Ptr{Cvoid} == C_NULL && return false
     DataTypeFieldDesc(dt)[fidx].isptr && return false
     ft = fieldtype(dt, fidx)
     return ft isa DataType && datatype_pointerfree(ft)
