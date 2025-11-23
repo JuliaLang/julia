@@ -527,7 +527,7 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) J
     return 1;
 }
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
     host_thread_state_t state;
@@ -579,7 +579,7 @@ static void jl_try_deliver_sigint(void)
 
 static void JL_NORETURN jl_exit_thread0_cb(int signo)
 {
-    jl_critical_error(signo, 0, NULL, jl_current_task);
+    jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(signo);
 }
@@ -710,6 +710,14 @@ static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
     if (keymgr_locked)
         _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
     jl_unlock_profile();
+}
+
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
+{
+    int lockret = jl_lock_profile_mach(1);
+    int success = jl_thread_suspend_and_get_state(tid, 1, ctx);
+    jl_unlock_profile_mach(1, lockret);
+    return success;
 }
 
 void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)

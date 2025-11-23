@@ -334,7 +334,12 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         GV->setInitializer(nullptr);
     }
-
+    // Same workaround as in CloneCtx::prepare_vmap to avoid LLVM bug when cloning
+    auto &MD = VMap.MD();
+    if (M.getNamedMetadata("llvm.dbg.cu"))
+        for (auto cu: M.getNamedMetadata("llvm.dbg.cu")->operands()) {
+            MD[cu].reset(cu);
+        }
     // Similarly, copy over and rewrite function bodies
     for (Function *F : Functions) {
         Function *NF = cast<Function>(VMap[F]);
@@ -413,6 +418,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
             F->eraseFromParent();
         }
     }
+
 
     return true;
 }

@@ -15,11 +15,12 @@ include $(JULIAHOME)/deps/*.version
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 DIRS := $(build_datarootdir)/julia/stdlib/$(VERSDIR) $(build_prefix)/manifest/$(VERSDIR)
+
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV OPENSSL MPFR NGHTTP2 \
        BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
-       LLVMUNWIND CSL UNWIND LLD
+       ZSTD LLVMUNWIND CSL UNWIND LLD
 
 # Initialize this with JLLs that aren't in "deps/$(LibName).version"
 JLL_NAMES := MozillaCACerts_jll
@@ -60,8 +61,20 @@ $(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/
 
 STDLIBS_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/stdlib/$(VERSDIR)/,$(STDLIBS))
 
+remove-gpl-libs:
+ifeq ($(USE_GPL_LIBS),0)
+	@echo Removing GPL libs...
+	-rm -f $(build_private_libdir)/libcholmod*
+	-rm -f $(build_private_libdir)/libklu_cholmod*
+	-rm -f $(build_private_libdir)/librbio*
+	-rm -f $(build_private_libdir)/libspqr*
+	-rm -f $(build_private_libdir)/libumfpack*
+endif
+
 getall get: $(addprefix get-, $(STDLIBS_EXT) $(JLL_NAMES))
-install: version-check $(addprefix install-, $(STDLIBS_EXT) $(JLL_NAMES)) $(STDLIBS_LINK_TARGETS)
+
+install: version-check $(addprefix install-, $(STDLIBS_EXT) $(JLL_NAMES)) $(STDLIBS_LINK_TARGETS) remove-gpl-libs
+.PHONY: version-check
 version-check: $(addprefix version-check-, $(STDLIBS_EXT))
 uninstall: $(addprefix uninstall-, $(STDLIBS_EXT))
 extstdlibclean:

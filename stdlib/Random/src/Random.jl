@@ -15,7 +15,9 @@ using Base.GMP.MPZ
 using Base.GMP: Limb
 using SHA: SHA, SHA2_256_CTX, SHA2_512_CTX, SHA_CTX
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
+using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing,
+    _throw_argerror
+
 import Base: copymutable, copy, copy!, ==, hash, convert,
              rand, randn, show
 
@@ -307,7 +309,6 @@ struct UnsafeView{T} <: DenseArray{T,1}
     len::Int
 end
 
-Base.length(a::UnsafeView) = a.len
 Base.getindex(a::UnsafeView, i::Int) = unsafe_load(a.ptr, i)
 Base.setindex!(a::UnsafeView, x, i::Int) = unsafe_store!(a.ptr, x, i)
 Base.pointer(a::UnsafeView) = a.ptr

@@ -105,12 +105,12 @@ end
 
 # issue #51694
 @test Compiler.type_more_complex(
-       Base.Generator{Base.Iterators.Flatten{Array{Bool, 1}}, typeof(identity)},
-       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Base.Generator{Base.Iterators.Flatten{Vector{Bool}}, typeof(identity)},
+       Base.Generator{Vector{Bool}, typeof(identity)},
        Core.svec(), 0, 0, 0)
 @test Compiler.type_more_complex(
-       Base.Generator{Base.Iterators.Flatten{Base.Generator{Array{Bool, 1}, typeof(identity)}}, typeof(identity)},
-       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Base.Generator{Base.Iterators.Flatten{Base.Generator{Vector{Bool}, typeof(identity)}}, typeof(identity)},
+       Base.Generator{Vector{Bool}, typeof(identity)},
        Core.svec(), 0, 0, 0)
 
 let # 40336
@@ -419,7 +419,7 @@ end
 
 # issue #12826
 f12826(v::Vector{I}) where {I<:Integer} = v[1]
-@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
+@test Base.return_types(f12826,Tuple{Vector{I} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
@@ -1465,8 +1465,8 @@ let egal_tfunc
     @test egal_tfunc(Array, Array) == Bool
     @test egal_tfunc(Array, AbstractArray{Int}) == Bool
     @test egal_tfunc(Array{Real}, AbstractArray{Int}) === Const(false)
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) === Bool
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) === Const(false)
+    @test egal_tfunc(Matrix{Real}, AbstractMatrix{Real}) === Bool
+    @test egal_tfunc(Matrix{Real}, AbstractMatrix{Int}) === Const(false)
     @test egal_tfunc(DataType, Int) === Const(false)
     @test egal_tfunc(DataType, Const(Int)) === Bool
     @test egal_tfunc(DataType, Const(Array)) === Const(false)
@@ -1597,9 +1597,12 @@ let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fal
     @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
-    @test memoryref_tfunc(Memory{Int}, Int) == Union{}
-    @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
-    @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
+    @test memoryref_tfunc(Memory{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Symbol) == Union{}
+    @test memoryref_tfunc(Memory{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
+    @test memoryref_tfunc(Any, Any, Any) == GenericMemoryRef
+    @test memoryref_tfunc(Any, Any) == GenericMemoryRef
     @test memoryref_tfunc(Any) == GenericMemoryRef
     @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, Bool) === Int
     @test memoryrefget_tfunc(MemoryRef{Int}, Any, Any) === Int
@@ -2313,12 +2316,6 @@ let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance)
     @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 end
 
-@testset "issue #56913: `BoundsError` in type inference" begin
-    R = UnitRange{Int}
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
-end
-
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
 maybeget_mustalias_tmerge(x) = x
 @test Base.return_types((Union{Nothing,AliasableField{Any}},); interp=MustAliasInterpreter()) do x
@@ -2592,6 +2589,19 @@ end |> only === Compiler.InterMustAlias
     end
     return 0
 end == Integer
+
+# `isdefined` accuracy for `MustAlias`
+@test Base.infer_return_type((Any,); interp=MustAliasInterpreter()) do x
+    xx = Ref{Any}(x)
+    xxx = Some{Any}(xx)
+    Val(isdefined(xxx.value, :x))
+end == Val{true}
+
+@testset "issue #56913: `BoundsError` in type inference" begin
+    R = UnitRange{Int}
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
+end
 
 function f25579(g)
     h = g[]
@@ -3499,11 +3509,11 @@ end
 struct MixedKeyDict{T<:Tuple} #<: AbstractDict{Any,Any}
     dicts::T
 end
-Base.merge(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
-Base.merge(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.mergewith(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.mergewith(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
 function _merge(f, res, d, others...)
     ofsametype, remaining = _alloftype(Base.heads(d), ((),), others...)
-    return _merge(f, (res..., merge(f, ofsametype...)), Base.tail(d), remaining...)
+    return _merge(f, (res..., mergewith(f, ofsametype...)), Base.tail(d), remaining...)
 end
 _merge(f, res, ::Tuple{}, others...) = _merge(f, res, others...)
 _merge(f, res, d) = MixedKeyDict((res..., d...))
@@ -3527,9 +3537,9 @@ _alloftype(ofdesiredtype, accumulated) = ofdesiredtype, Base.front(accumulated)
 let
     d = MixedKeyDict((Dict(1 => 3), Dict(4. => 2)))
     e = MixedKeyDict((Dict(1 => 7), Dict(5. => 9)))
-    @test merge(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
+    @test mergewith(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
     f = MixedKeyDict((Dict(2 => 7), Dict(5. => 11)))
-    @test merge(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
+    @test mergewith(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
 end
 
 # Issue #31974
@@ -3539,8 +3549,14 @@ f31974(n::Int) = f31974(1:n)
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
 
-f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
-@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+# Issue #33472
+struct WrapperWithUnionall33472{T<:Real}
+    x::T
+end
+
+f_overly_abstract33472() = WrapperWithUnionall33472(Base.inferencebarrier(1)::Number)
+# Check that this doesn't infer as `WrapperWithUnionall33472{T<:Number}`.
+@test Base.return_types(f_overly_abstract33472, Tuple{}) == [WrapperWithUnionall33472]
 
 # Issue 26724
 const IntRange = AbstractUnitRange{<:Integer}
@@ -5203,11 +5219,11 @@ end
 @testset "#45956: non-linearized cglobal needs special treatment for stmt effects" begin
     function foo()
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end
     @test only(code_typed() do
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end)[2] === Nothing
 end
 
@@ -6442,7 +6458,7 @@ end
 global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
-end == ErrorException
+end == TypeError
 
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
@@ -6498,5 +6514,12 @@ end <: Bool
 @test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
     Core.get_binding_type(m, n, xs...)
 end <: Type
+
+# issue #59269
+function haskey_inference_test()
+    kwargs = Core.compilerbarrier(:const, Base.pairs((; item = false)))
+    return haskey(kwargs, :item) ? nothing : Any[]
+end
+@inferred haskey_inference_test()
 
 end # module inference
