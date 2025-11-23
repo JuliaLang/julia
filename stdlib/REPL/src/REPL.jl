@@ -40,6 +40,7 @@ end
 
 using Base.Meta, Sockets, StyledStrings
 using JuliaSyntaxHighlighting
+using Dates: now, UTC
 import InteractiveUtils
 import FileWatching
 import Base.JuliaSyntax: kind, @K_str, @KSet_str, Tokenize.tokenize
@@ -66,6 +67,10 @@ using Base.Terminals
 abstract type AbstractREPL end
 
 include("options.jl")
+include("StylingPasses.jl")
+using .StylingPasses
+
+function histsearch end # To work around circular dependency
 
 include("LineEdit.jl")
 using .LineEdit
@@ -93,6 +98,11 @@ using .REPLCompletions
 
 include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
+
+include("History/History.jl")
+using .History
+
+histsearch(args...) = runsearch(args...)
 
 include("Pkg_beforeload.jl")
 
@@ -865,113 +875,26 @@ function with_repl_linfo(f, repl::LineEditREPL)
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
-    history::Vector{String}
-    file_path::String
-    history_file::Union{Nothing,IO}
+    history::HistoryFile
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
     last_mode::Union{Nothing,Prompt}
     mode_mapping::Dict{Symbol,Prompt}
-    modes::Vector{Symbol}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(String[], "", nothing, 0, 0, -1, IOBuffer(),
-                        nothing, mode_mapping, UInt8[])
-
-invalid_history_message(path::String) = """
-Invalid history file ($path) format:
-If you have a history file left over from an older version of Julia,
-try renaming or deleting it.
-Invalid character: """
-
-munged_history_message(path::String) = """
-Invalid history file ($path) format:
-An editor may have converted tabs to spaces at line """
-
-function hist_open_file(hp::REPLHistoryProvider)
-    f = open(hp.file_path, read=true, write=true, create=true)
-    hp.history_file = f
-    seekend(f)
-end
-
-function hist_from_file(hp::REPLHistoryProvider, path::String)
-    getline(lines, i) = i > length(lines) ? "" : lines[i]
-    file_lines = readlines(path)
-    countlines = 0
-    while true
-        # First parse the metadata that starts with '#' in particular the REPL mode
-        countlines += 1
-        line = getline(file_lines, countlines)
-        mode = :julia
-        isempty(line) && break
-        line[1] != '#' &&
-            error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
-        while !isempty(line)
-            startswith(line, '#') || break
-            if startswith(line, "# mode: ")
-                mode = Symbol(SubString(line, 9))
-            end
-            countlines += 1
-            line = getline(file_lines, countlines)
-        end
-        isempty(line) && break
-
-        # Now parse the code for the current REPL mode
-        line[1] == ' '  &&
-            error(munged_history_message(path), countlines)
-        line[1] != '\t' &&
-            error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
-        lines = String[]
-        while !isempty(line)
-            push!(lines, chomp(SubString(line, 2)))
-            next_line = getline(file_lines, countlines+1)
-            isempty(next_line) && break
-            first(next_line) == ' '  && error(munged_history_message(path), countlines)
-            # A line not starting with a tab means we are done with code for this entry
-            first(next_line) != '\t' && break
-            countlines += 1
-            line = getline(file_lines, countlines)
-        end
-        push!(hp.modes, mode)
-        push!(hp.history, join(lines, '\n'))
-    end
-    hp.start_idx = length(hp.history)
-    return hp
-end
+    REPLHistoryProvider(HistoryFile(), 0, 0, -1, IOBuffer(),
+                        nothing, mode_mapping)
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(takestring!(copy(s.input_buffer)))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
-    !isempty(hist.history) &&
-        isequal(mode, hist.modes[end]) && str == hist.history[end] && return
-    push!(hist.modes, mode)
-    push!(hist.history, str)
-    hist.history_file === nothing && return
-    entry = """
-    # time: $(Libc.strftime("%Y-%m-%d %H:%M:%S %Z", time()))
-    # mode: $mode
-    $(replace(str, r"^"ms => "\t"))
-    """
-    try
-        seekend(hist.history_file)
-    catch err
-        (err isa SystemError) || rethrow()
-        # File handle might get stale after a while, especially under network file systems
-        # If this doesn't fix it (e.g. when file is deleted), we'll end up rethrowing anyway
-        hist_open_file(hist)
-    end
-    if isfile(hist.file_path)
-        FileWatching.mkpidlock(hist.file_path  * ".pid", stale_age=3) do
-            print(hist.history_file, entry)
-            flush(hist.history_file)
-        end
-    else # handle eg devnull
-        print(hist.history_file, entry)
-        flush(hist.history_file)
-    end
+    !isempty(hist.history) && isequal(mode, hist.history[end].mode) &&
+        str == hist.history[end].content && return
+    entry = HistEntry(mode, now(UTC), str, 0)
+    push!(hist.history, entry)
     nothing
 end
 
@@ -986,8 +909,15 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
         hist.last_mode = LineEdit.mode(s)
         hist.last_buffer = copy(LineEdit.buffer(s))
     else
-        hist.history[save_idx] = LineEdit.input_string(s)
-        hist.modes[save_idx] = mode_idx(hist, LineEdit.mode(s))
+        # NOTE: Modifying the history is a bit funky, so
+        # we reach into the internals of `HistoryFile`
+        # to do so rather than implementing `setindex!`.
+        oldrec = hist.history.records[save_idx]
+        hist.history.records[save_idx] = HistEntry(
+            mode_idx(hist, LineEdit.mode(s)),
+            oldrec.date,
+            LineEdit.input_string(s),
+            oldrec.index)
     end
 
     # load the saved line
@@ -999,9 +929,9 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
         hist.last_mode = nothing
         hist.last_buffer = IOBuffer()
     else
-        if haskey(hist.mode_mapping, hist.modes[idx])
-            LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]]) do
-                LineEdit.replace_line(s, hist.history[idx])
+        if haskey(hist.mode_mapping, hist.history[idx].mode)
+            LineEdit.transition(s, hist.mode_mapping[hist.history[idx].mode]) do
+                LineEdit.replace_line(s, hist.history[idx].content)
             end
         else
             return :skip
@@ -1014,10 +944,19 @@ end
 
 # REPL History can also transitions modes
 function LineEdit.accept_result_newmode(hist::REPLHistoryProvider)
-    if 1 <= hist.cur_idx <= length(hist.modes)
-        return hist.mode_mapping[hist.modes[hist.cur_idx]]
+    if 1 <= hist.cur_idx <= length(hist.history)
+        return hist.mode_mapping[hist.history[hist.cur_idx].mode]
     end
     return nothing
+end
+
+function history_do_initialize(hist::REPLHistoryProvider)
+    isempty(hist.history) || return false
+    update!(hist.history)
+    hist.start_idx = length(hist.history) + 1
+    hist.cur_idx = hist.start_idx
+    hist.last_idx = -1
+    true
 end
 
 function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
@@ -1045,6 +984,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
         return
     end
     num < 0 && return history_prev(s, hist, -num, save_idx)
+    history_do_initialize(hist)
     cur_idx = hist.cur_idx
     max_idx = length(hist.history) + 1
     if cur_idx == max_idx && 0 < hist.last_idx
@@ -1068,13 +1008,16 @@ history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
                  (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
-    history_next(s, hist, length(hist.history) - hist.cur_idx + 1)
+    history_next(s, hist, length(update!(hist.history)) - hist.cur_idx + 1)
 
 function history_move_prefix(s::LineEdit.PrefixSearchState,
                              hist::REPLHistoryProvider,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx::Int = hist.cur_idx)
+    if history_do_initialize(hist)
+        cur_idx = hist.cur_idx
+    end
     cur_response = takestring!(copy(LineEdit.buffer(s)))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
@@ -1084,7 +1027,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     max_idx = length(hist.history)+1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):1:max_idx)
     for idx in idxs
-        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || get(hist.mode_mapping, hist.modes[idx], nothing) !== LineEdit.mode(s)))
+        if (idx == max_idx) || (startswith(hist.history[idx].content, prefix) && (hist.history[idx].content != cur_response || get(hist.mode_mapping, hist.history[idx].mode, nothing) !== LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m === :ok
                 if idx == max_idx
@@ -1150,9 +1093,9 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # Now search all the other buffers
     idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):1:length(hist.history))
     for idx in idxs
-        h = hist.history[idx]
+        h = hist.history[idx].content
         match = backwards ? findlast(searchdata, h) : findfirst(searchdata, h)
-        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
+        if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.history[idx].mode)
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match) - 1)
@@ -1249,6 +1192,10 @@ function mode_keymap(julia_prompt::Prompt)
                 LineEdit.state(s, julia_prompt).input_buffer = buf
             end
         else
+            buf = LineEdit.buffer(s)
+            if LineEdit.try_remove_paired_delimiter(buf)
+                return LineEdit.refresh_line(s)
+            end
             LineEdit.edit_backspace(s)
         end
     end,
@@ -1329,7 +1276,11 @@ function setup_interface(
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
-        on_enter = return_callback)
+        on_enter = return_callback,
+        styling_passes = StylingPasses.StylingPass[
+            StylingPasses.SyntaxHighlightPass(),
+            StylingPasses.EnclosingParenHighlightPass()
+        ])
 
     # Setup help mode
     help_mode = Prompt(contextual_prompt(repl, HELP_PROMPT),
@@ -1399,14 +1350,13 @@ function setup_interface(
                                                  :pkg  => dummy_pkg_mode))
     if repl.history_file
         try
-            hist_path = find_hist_file()
-            mkpath(dirname(hist_path))
-            hp.file_path = hist_path
-            hist_open_file(hp)
+            path = find_hist_file()
+            mkpath(dirname(path))
+            hp.history = HistoryFile(path)
+            errormonitor(@async history_do_initialize(hp))
             finalizer(replc) do replc
-                close(hp.history_file)
+                close(hp.history)
             end
-            hist_from_file(hp, hist_path)
         catch
             # use REPL.hascolor to avoid using the local variable with the same name
             print_response(repl, Pair{Any, Bool}(current_exceptions(), true), true, REPL.hascolor(repl))
@@ -1422,10 +1372,6 @@ function setup_interface(
     dummy_pkg_mode.hist = hp
 
     julia_prompt.on_done = respond(x->Base.parse_input_line(x,filename=repl_filename(repl,hp)), repl, julia_prompt)
-
-
-    search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
-    search_prompt.complete = LatexCompletions()
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
@@ -1493,7 +1439,18 @@ function setup_interface(
                 end
                 Base.errormonitor(t_replswitch)
             else
-                edit_insert(s, ']')
+                # Use bracket insertion if enabled, otherwise just insert
+                if repl.options.auto_insert_closing_bracket
+                    buf = LineEdit.buffer(s)
+                    if !eof(buf) && LineEdit.peek(buf, Char) == ']'
+                        LineEdit.edit_move_right(buf)
+                    else
+                        edit_insert(buf, ']')
+                    end
+                    LineEdit.refresh_line(s)
+                else
+                    edit_insert(s, ']')
+                end
                 LineEdit.check_show_hint(s)
             end
         end,
@@ -1665,19 +1622,33 @@ function setup_interface(
 
     prefix_prompt, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
 
-    a = Dict{Any,Any}[skeymap, repl_keymap, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    # Build keymap list - add bracket insertion if enabled
+    base_keymaps = Dict{Any,Any}[repl_keymap, prefix_keymap, LineEdit.history_keymap]
+    if repl.options.auto_insert_closing_bracket
+        push!(base_keymaps, LineEdit.bracket_insert_keymap)
+    end
+    push!(base_keymaps, LineEdit.default_keymap, LineEdit.escape_defaults)
+
+    a = base_keymaps
     prepend!(a, extra_repl_keymap)
 
     julia_prompt.keymap_dict = LineEdit.keymap(a)
 
     mk = mode_keymap(julia_prompt)
 
-    b = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    # Build keymap list for other modes
+    mode_base_keymaps = Dict{Any,Any}[mk, prefix_keymap, LineEdit.history_keymap]
+    if repl.options.auto_insert_closing_bracket
+        push!(mode_base_keymaps, LineEdit.bracket_insert_keymap)
+    end
+    push!(mode_base_keymaps, LineEdit.default_keymap, LineEdit.escape_defaults)
+
+    b = mode_base_keymaps
     prepend!(b, extra_repl_keymap)
 
     shell_mode.keymap_dict = help_mode.keymap_dict = dummy_pkg_mode.keymap_dict = LineEdit.keymap(b)
 
-    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, search_prompt, prefix_prompt]
+    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, prefix_prompt]
     return ModalInterface(allprompts)
 end
 
@@ -1845,25 +1816,10 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return Expr(:toplevel, get_usings!([], x)..., quote
-        let __temp_val_a72df459 = $x
-            $capture_result($n, __temp_val_a72df459)
-            __temp_val_a72df459
-        end
-    end)
-end
-
-function get_usings!(usings, ex)
-    ex isa Expr || return usings
-    # get all `using` and `import` statements which are at the top level
-    for (i, arg) in enumerate(ex.args)
-        if Base.isexpr(arg, :toplevel)
-            get_usings!(usings, arg)
-        elseif Base.isexpr(arg, [:using, :import])
-            push!(usings, popat!(ex.args, i))
-        end
-    end
-    return usings
+    return Expr(:block, # avoid line numbers or scope that would leak into the output and change the meaning of x
+        :(local __temp_val_a72df459 = $x),
+        Expr(:call, capture_result, n, :__temp_val_a72df459),
+        :__temp_val_a72df459)
 end
 
 function create_global_out!(mod)
@@ -1944,7 +1900,7 @@ import .Numbered.numbered_prompt!
 Base.REPL_MODULE_REF[] = REPL
 
 if Base.generating_output()
-    include("precompile.jl")
+   include("precompile.jl")
 end
 
 end # module

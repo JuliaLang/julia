@@ -2,35 +2,76 @@
 
 # This type must be kept in sync with the C struct in src/gc-interface.h
 struct GC_Num
-    allocd          ::Int64 # GC internal
-    deferred_alloc  ::Int64 # GC internal
-    freed           ::Int64 # GC internal
-    malloc          ::Int64
-    realloc         ::Int64
-    poolalloc       ::Int64
-    bigalloc        ::Int64
-    freecall        ::Int64
-    total_time      ::Int64
-    total_allocd    ::Int64 # GC internal
-    collect         ::Csize_t # GC internal
-    pause           ::Cint
-    full_sweep      ::Cint
-    max_pause       ::Int64
-    max_memory      ::Int64
-    time_to_safepoint           ::Int64
-    max_time_to_safepoint       ::Int64
-    total_time_to_safepoint     ::Int64
-    sweep_time      ::Int64
-    mark_time       ::Int64
-    stack_pool_sweep_time ::Int64
-    total_sweep_time  ::Int64
-    total_sweep_page_walk_time              ::Int64
-    total_sweep_madvise_time                ::Int64
-    total_sweep_free_mallocd_memory_time    ::Int64
-    total_mark_time   ::Int64
+    # (GC Internal) Number of allocated bytes since the last collection. This field is reset
+    # after the end of every garbage collection cycle, so it will always be zero if observed
+    # during execution of Julia user code
+    allocd::Int64
+    # (GC Internal) Number of allocated bytes within a `gc_disable/gc_enable` block. This field is
+    # reset after every garbage collection cycle and will always be zero in case of no use
+    # of `gc_disable/gc_enable` blocks
+    deferred_alloc::Int64
+    # (GC Internal) Number of bytes freed bytes in the current collection cycle. This field is
+    # reset after every garbage collection cycle and will always be zero when observed
+    # during execution of Julia user code. It's incremented as memory is reclaimed during a collection,
+    # used to gather some statistics within the collection itself and reset at the end of a GC cycle.
+    freed::Int64
+    # Number of `malloc/calloc` calls (never reset by the runtime)
+    malloc::Int64
+    # Number of `realloc` calls (never reset by the runtime)
+    realloc::Int64
+    # Number of pool allocation calls (never reset by the runtime)
+    # NOTE: Julia's stock GC uses an internal (pool) allocator for objects up to 2032 bytes.
+    # Larger objects are allocated through `malloc/calloc`.
+    poolalloc::Int64
+    # Number of allocations for "big objects" (non-array objects larger than 2032 bytes)
+    # (never reset by the runtime)
+    bigalloc::Int64
+    # Number of `free` calls (never reset by the runtime)
+    freecall::Int64
+    # Total time spent in garbage collection (never reset by the runtime)
+    total_time::Int64
+    # (GC internal) Total number of bytes allocated since the program started
+    total_allocd::Int64
+    # (GC internal) Per-thread allocation quota before triggering a GC
+    # NOTE: This field is no longer used by the heuristics in the stock GC
+    interval::Csize_t
+    # Duration of the last GC pause in nanoseconds
+    pause::Cint
+    # Number of full GC sweeps completed so far (never reset by the runtime)
+    full_sweep::Cint
+    # Maximum pause duration observed so far in nanoseconds
+    max_pause::Int64
+    # Maximum number of bytes allocated any point in time.
+    # NOTE: This is aggregated over objects, not pages
+    max_memory::Int64
+    # Time taken to reach a safepoint in the last GC cycle in nanoseconds
+    time_to_safepoint::Int64
+    # Maximum time taken to reach a safepoint across all GCs in nanoseconds
+    max_time_to_safepoint::Int64
+    # Total time taken to reach safepoints across all GCs in nanoseconds
+    total_time_to_safepoint::Int64
+    # Time spent in the last GC sweeping phase in nanoseconds
+    sweep_time::Int64
+    # Time spent in the last GC marking phase in nanoseconds
+    mark_time::Int64
+    # Time spent sweeping stack pools in the last GC in nanoseconds
+    stack_pool_sweep_time::Int64
+    # Total time spent in sweeping phase across all GCs in nanoseconds
+    total_sweep_time::Int64
+    # Total time spent walking pool allocated pages during sweeping phase across all GCs in nanoseconds
+    total_sweep_page_walk_time::Int64
+    # Total time spent in madvise calls during sweeping phase across all GCs in nanoseconds
+    total_sweep_madvise_time::Int64
+    # Total time spent in freeing malloc'd memory during sweeping phase across all GCs in nanoseconds
+    total_sweep_free_mallocd_memory_time::Int64
+    # Total time spent in marking phase across all GCs in nanoseconds
+    total_mark_time::Int64
+    # Total time spent sweeping stack pools across all GCs in nanoseconds
     total_stack_pool_sweep_time::Int64
-    last_full_sweep ::Int64
-    last_incremental_sweep ::Int64
+    # Timestamp of the last full GC sweep in nanoseconds
+    last_full_sweep::Int64
+    # Timestamp of the last incremental GC sweep in nanoseconds
+    last_incremental_sweep::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -472,33 +513,71 @@ function gc_bytes()
     b[]
 end
 
-function allocated(f, args::Vararg{Any,N}) where {N}
+@constprop :none function allocated(f, args::Vararg{Any,N}) where {N}
     b0 = Ref{Int64}(0)
     b1 = Ref{Int64}(0)
     Base.gc_bytes(b0)
-    f(args...)
+    @noinline f(args...)
     Base.gc_bytes(b1)
     return b1[] - b0[]
 end
 only(methods(allocated)).called = 0xff
 
-function allocations(f, args::Vararg{Any,N}) where {N}
+@constprop :none function allocations(f, args::Vararg{Any,N}) where {N}
     stats = Base.gc_num()
-    f(args...)
+    @noinline f(args...)
     diff = Base.GC_Diff(Base.gc_num(), stats)
     return Base.gc_alloc_count(diff)
 end
 only(methods(allocations)).called = 0xff
 
 function is_simply_call(@nospecialize ex)
+    is_simple_atom(a) = a isa QuoteNode || a isa Symbol || !isa_ast_node(a)
     Meta.isexpr(ex, :call) || return false
     for a in ex.args
-        a isa QuoteNode && continue
-        a isa Symbol && continue
-        isa_ast_node(a) || continue
+        is_simple_atom(a) && continue
+        Meta.isexpr(a, :..., 1) && is_simple_atom(a.args[1]) && continue
         return false
     end
     return true
+end
+
+function _gen_allocation_measurer(ex, fname::Symbol)
+    if isexpr(ex, :call)
+        if !is_simply_call(ex)
+            ex = :((() -> $ex)())
+        end
+        pushfirst!(ex.args, GlobalRef(Base, fname))
+        return quote
+            Experimental.@force_compile
+            $(esc(ex))
+        end
+    elseif fname === :allocated
+        # v1.11-compatible implementation
+        return quote
+            Experimental.@force_compile
+            local b0 = Ref{Int64}(0)
+            local b1 = Ref{Int64}(0)
+            gc_bytes(b0)
+            $(esc(ex))
+            gc_bytes(b1)
+            b1[] - b0[]
+        end
+    else
+        @assert fname === :allocations
+        return quote
+            Experimental.@force_compile
+            # Note this value is unused, but without it `allocated` and `allocations`
+            # are sufficiently different that the compiler can remove allocations here
+            # that it cannot remove there, giving inconsistent numbers.
+            local b1 = Ref{Int64}(0)
+            local stats = Base.gc_num()
+            $(esc(ex))
+            local diff = Base.GC_Diff(Base.gc_num(), stats)
+            gc_bytes(b1)
+            Base.gc_alloc_count(diff)
+        end
+    end
 end
 
 """
@@ -506,6 +585,20 @@ end
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 total number of bytes allocated during evaluation of the expression.
+
+If the expression is a function call, an effort is made to measure only allocations from
+the argument expressions and during the function, excluding any overhead from calling it
+and not performing constant propagation with the provided argument values. If you want to
+include those effects, i.e. measuring the call site as well, use the syntax
+`@allocated (()->f(1))()`.
+
+It is recommended to measure function calls with only simple argument expressions, e.g.
+`x = []; @allocated f(x)` instead of `@allocated f([])` to clarify that only `f` is
+being measured.
+
+For more complex expressions, the code is simply run in place and therefore may see
+allocations due to the surrounding context. For example it is possible for
+`@allocated f(1)` and `@allocated x = f(1)` to give different results.
 
 See also [`@allocations`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
@@ -516,11 +609,7 @@ julia> @allocated rand(10^6)
 ```
 """
 macro allocated(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
-    end
-    pushfirst!(ex.args, GlobalRef(Base, :allocated))
-    return esc(ex)
+    _gen_allocation_measurer(ex, :allocated)
 end
 
 """
@@ -541,11 +630,7 @@ julia> @allocations rand(10^6)
     This macro was added in Julia 1.9.
 """
 macro allocations(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
-    end
-    pushfirst!(ex.args, GlobalRef(Base, :allocations))
-    return esc(ex)
+    _gen_allocation_measurer(ex, :allocations)
 end
 
 

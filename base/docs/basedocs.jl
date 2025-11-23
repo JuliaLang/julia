@@ -1063,6 +1063,20 @@ end
 The syntax `catch e` (where `e` is any variable) assigns the thrown
 exception object to the given variable within the `catch` block.
 
+```julia
+try
+    a_dangerous_operation()
+catch e
+    if isa(e, EOFError)
+        @warn "The operation failed - EOF."
+    elseif isa(e, OutOfMemoryError)
+        @warn "The operation failed - OOM."
+    else
+        rethrow() # ensure other exceptions can bubble up the call stack
+    end
+end
+```
+
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 
@@ -1430,8 +1444,6 @@ Note that contrary to `ccall`, the argument types must be specified as a tuple t
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
-
-[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
 
 See
 [`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
@@ -2759,6 +2771,52 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 setglobalonce!
 
 """
+    declare_global(module::Module, name::Symbol, strong::Bool=false, [ty::Type])
+
+Declare the global `name` in module `module`.  If `ty` is given, declares a
+"strong" global, which cannot be replaced with a constant binding, otherwise
+declares a weak global.
+
+See also [`global`](@ref), [`setglobal!`](@ref), [`get_binding_type`](@ref Core.get_binding_type).
+"""
+Core.declare_global
+
+"""
+    declare_const(module::Module, name::Symbol, [x])
+
+Create or replace the constant `name` in `module` with the new value `x`.  When
+replacing, `x` does not need to have the same type as the original constant.
+
+When `x` is not given, `name` becomes an undefined constant; it cannot be read
+or written to, but can be redefined.
+
+Unlike the syntax `const`, calling this function does not insert `Core.@latestworld` to update the world age of the current frame:
+```
+julia> begin
+           const x = 1
+           println(x)
+           const x = 2
+           println(x)
+           Core.declare_const(Main, :x, 3)
+           println(x)
+           Core.@latestworld
+           println(x)
+       end
+1
+2
+2
+3
+```
+
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.  Redefining constants on earlier
+    versions of Julia is unpredictable.
+
+See also [`const`](@ref).
+"""
+Core.declare_const
+
+"""
    _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, imported::Bool])
 
 With all five arguments, imports `sym` from module `from` into `to` with name
@@ -3141,7 +3199,7 @@ undef
 """
     Ptr{T}()
 
-Creates a null pointer to type `T`.
+Create a null pointer to type `T`.
 """
 Ptr{T}()
 

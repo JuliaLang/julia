@@ -44,6 +44,7 @@ ans
 err
 Base.active_project
 Base.set_active_project
+Base.active_manifest
 ```
 
 ## [Keywords](@id Keywords)
@@ -108,6 +109,7 @@ where
 .=
 .
 ->
+Base.:(:)
 ::
 []
 ```
@@ -294,6 +296,7 @@ Base.splat
 Base.Fix
 Base.Fix1
 Base.Fix2
+Returns
 ```
 
 ## Syntax
@@ -500,6 +503,7 @@ Core.modifyglobal!
 Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
+Core.declare_const
 ```
 
 ## Documentation

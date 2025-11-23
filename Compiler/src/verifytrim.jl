@@ -117,7 +117,7 @@ function verify_print_error(io::IOContext{IO}, desc::CallMissing, parents::Paren
     nothing
 end
 
-function verify_print_error(io::IOContext{IO}, desc::CCallableMissing, parents::ParentMap)
+function verify_print_error(io::IOContext{IO}, desc::CCallableMissing, ::ParentMap)
     print(io, desc.desc, " for ", desc.sig, " => ", desc.rt, "\n\n")
     nothing
 end
@@ -257,7 +257,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             end
         elseif isexpr(stmt, :cfunction)
             length(stmt.args) != 5 && continue # required by IR legality
-            (pointer_type, f, rt, at, call_type) = stmt.args
+            f, at = stmt.args[2], stmt.args[4]
 
             at isa SimpleVector || continue  # required by IR legality
             ft = argextype(f, codeinfo, sptypes)
@@ -279,9 +279,17 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             error = "unresolved cfunction"
         elseif isexpr(stmt, :foreigncall)
             foreigncall = stmt.args[1]
-            if foreigncall isa QuoteNode
-                if foreigncall.value in runtime_functions
-                    error = "disallowed ccall into a runtime function"
+            if isexpr(foreigncall, :tuple, 1)
+                foreigncall = foreigncall.args[1]
+                if foreigncall isa String
+                    foreigncall = QuoteNode(Symbol(foreigncall))
+                end
+                if foreigncall isa QuoteNode
+                    if foreigncall.value in runtime_functions
+                        error = "disallowed ccall into a runtime function"
+                    end
+                else
+                    error = "disallowed ccall with non-constant name and no library"
                 end
             end
         elseif isexpr(stmt, :new_opaque_closure)

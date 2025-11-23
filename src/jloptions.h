@@ -73,6 +73,10 @@ typedef struct {
     int16_t timeout_for_safepoint_straggler_s;
     int8_t gc_sweep_always_full;
     int8_t compress_sysimage;
+    int8_t alert_on_critical_error;
+    int8_t target_sanitize_memory;
+    int8_t target_sanitize_thread;
+    int8_t target_sanitize_address;
 } jl_options_t;
 
 #endif

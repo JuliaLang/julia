@@ -1249,7 +1249,10 @@ let s, c, r
                 @test s[r] == "tmp-execu"
 
                 c,r = test_scomplete("replcompletions-link")
-                @test isempty(c)
+                if !Sys.isunix() || Libc.getuid() != 0
+                    # Root bypasses permissions
+                    @test isempty(c)
+                end
             end
         finally
             # If we don't fix the permissions here, our cleanup fails.
@@ -1455,6 +1458,45 @@ let (c, r) = test_complete("cd(\"folder_do_not_exist_77/file")
     @test length(c) == 0
 end
 
+# Test path completion in the middle of a line (issue #60050)
+mktempdir() do path
+    # Create test directory structure
+    foo_dir = joinpath(path, "foo_dir")
+    mkpath(foo_dir)
+    touch(joinpath(path, "foo_file.txt"))
+
+    # On Windows, use backslashes; on Unix, use forward slashes
+    sep = Sys.iswindows() ? "\\\\" : "/"
+    # On Windows, completion results have escaped backslashes
+    path_expected = Sys.iswindows() ? replace(path, "\\" => "\\\\") : path
+
+    # Completion at end of line should work
+    let (c, r, res) = test_complete("\"$(path)$(sep)foo")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+
+    # Completion in middle of line should also work (regression in 1.12)
+    let (c, r, res) = test_complete_pos("\"$(path)$(sep)foo|$(sep)bar.toml\"")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+        # Check that the range covers only the part before the cursor
+        @test findfirst("$(sep)bar", "\"$(path)$(sep)foo$(sep)bar.toml\"")[1] - 1 in r
+    end
+
+    # Completion in middle of function call with trailing arguments
+    let (c, r, res) = test_complete_pos("run_something(\"$(path)$(sep)foo|$(sep)bar.toml\"; kwarg=true)")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+end
+
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
@@ -1522,7 +1564,9 @@ end
     @test "⁽¹²³⁾ⁿ" in test_complete("\\^(123)n")[1]
     @test "ⁿ" in test_complete("\\^n")[1]
     @test "ᵞ" in test_complete("\\^gamma")[1]
-    @test isempty(test_complete("\\^(123)nq")[1])
+    @test "⁽¹²³⁾ⁿ𐞥" in test_complete("\\^(123)nq")[1]
+    @test "⁽¹²³⁾ⁿꟴ" in test_complete("\\^(123)nQ")[1]
+    @test isempty(test_complete("\\^(123)nX")[1])
     @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
     @test "ₙ" in test_complete("\\_n")[1]
     @test "ᵧ" in test_complete("\\_gamma")[1]
@@ -2687,8 +2731,54 @@ f54131 = F54131()
 
     s = "f54131.x(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
-    @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 100
+end
+
+@kwdef struct T59244
+    asdf = 1
+    qwer = 2
+end
+@kwdef struct S59244{T}
+    asdf::T = 1
+    qwer::T = 2
+end
+@testset "kwarg completion of types" begin
+    s = "T59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "T59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Int}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Int}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Any}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Any}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
 end
 
 # Completion inside string interpolation

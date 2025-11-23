@@ -236,6 +236,20 @@ function exec_options(opts)
     global have_color     = colored_text(opts)
     global is_interactive = (opts.isinteractive != 0)
 
+    # Enable verbose debugging options when requested by other frameworks
+    debug_env_vars = (
+        "RUNNER_DEBUG",   # github actions when UI "debug logging" is enabled
+        "CI_DEBUG_TRACE", # gitlab CI when UI "debug" toggle is enabled
+        "SYSTEM_DEBUG",   # azure pipelines when UI "System diagnostics" is enabled
+    )
+    for v in debug_env_vars
+        if get_bool_env(v, false)
+            Base.TRACE_EVAL = Base.TRACE_EVAL === :full ? :full : :loc # Enable --trace-eval (location only)
+            ENV["JULIA_TEST_VERBOSE"] = "true" # Set JULIA_TEST_VERBOSE for this session
+            break
+        end
+    end
+
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
     repl = !arg_is_program
@@ -613,8 +627,8 @@ entrypoint. The precise semantics of the entrypoint depend on the CLI driver.
 In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be automatically called upon
 the completion of script execution.
 
-The `@main` macro may be used standalone or as part of the function definition, though in the latter
-case, parentheses are required. In particular, the following are equivalent:
+The `@main` macro may be used standalone or as part of the function definition.
+The following are equivalent:
 
 ```
 function @main(args)

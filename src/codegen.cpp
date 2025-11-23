@@ -304,10 +304,10 @@ struct jl_typecache_t {
         // use pointer abi alignment for intptr_t
         alignof_ptr = DL.getPointerABIAlignment(0);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
-        T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-        T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
+        T_pjlvalue = getPointerTy(context);
+        T_prjlvalue = PointerType::get(context, AddressSpace::Tracked);
+        T_ppjlvalue = getPointerTy(context);
+        T_pprjlvalue = getPointerTy(context);
 
         T_jlfunc = JuliaType::get_jlfunc_ty(context);
         assert(T_jlfunc != NULL);
@@ -315,12 +315,12 @@ struct jl_typecache_t {
         assert(T_jlfuncparams != NULL);
 
         T_jlgenericmemory = StructType::get(context, { T_size, T_pprjlvalue /* [, real-owner] */ });
-        Type *vaelts[] = { PointerType::get(getInt8Ty(context), AddressSpace::Loaded),
-                           PointerType::get(T_jlgenericmemory, AddressSpace::Tracked),
+        Type *vaelts[] = { PointerType::get(context, AddressSpace::Loaded),
+                           PointerType::get(context, AddressSpace::Tracked),
                            // dimsize[ndims]
         };
         T_jlarray = StructType::get(context, ArrayRef<Type*>(vaelts));
-        T_pjlarray = PointerType::get(T_jlarray, 0);
+        T_pjlarray = getPointerTy(context);
     }
 };
 
@@ -739,7 +739,7 @@ static const auto jlboxed_uint8_cache = new JuliaVariable{
 
 static const auto jlpgcstack_func = new JuliaFunction<>{
     "julia.get_pgcstack",
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_ppjlvalue_ty(C), 0), false); },
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C), false); },
     nullptr,
 };
 
@@ -770,7 +770,7 @@ static const auto jlsplatnew_func = new JuliaFunction<>{
 static const auto jlthrow_func = new JuliaFunction<>{
     XSTR(jl_throw),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlerror_func = new JuliaFunction<>{
@@ -794,13 +794,13 @@ static const auto jlatomicerror_func = new JuliaFunction<>{
 static const auto jltypeerror_func = new JuliaFunction<>{
     XSTR(jl_type_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {getPointerTy(C), JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {getPointerTy(C), JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlundefvarerror_func = new JuliaFunction<>{
     XSTR(jl_undefined_var_error),
     [](LLVMContext &C) {
-        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted);
+        Type *T = PointerType::get(C, AddressSpace::CalleeRooted);
         return FunctionType::get(getVoidTy(C), {T, T}, false);
     },
     get_attrs_noreturn,
@@ -808,20 +808,20 @@ static const auto jlundefvarerror_func = new JuliaFunction<>{
 static const auto jlhasnofield_func = new JuliaFunction<>{
     XSTR(jl_has_no_field_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted),
-             PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted),
+             PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), PointerType::getUnqual(T_size->getContext()), T_size}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted), getPointerTy(C), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_int),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), T_size}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlvboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -834,7 +834,7 @@ static const auto jluboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>
     XSTR(jl_bounds_error_unboxed_int),
     [](LLVMContext &C, Type *T_size) {
         return FunctionType::get(getVoidTy(C),
-            {PointerType::get(getInt8Ty(C), AddressSpace::Derived), JuliaType::get_pjlvalue_ty(C), T_size}, false); },
+            {PointerType::get(C, AddressSpace::Derived), JuliaType::get_pjlvalue_ty(C), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlcheckassign_func = new JuliaFunction<>{
@@ -842,7 +842,7 @@ static const auto jlcheckassign_func = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(getVoidTy(C),
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
 static const auto jlcheckreplace_func = new JuliaFunction<>{
@@ -869,7 +869,7 @@ static const auto jlcheckswap_func = new JuliaFunction<>{
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
 static const auto jlcheckassignonce_func = new JuliaFunction<>{
@@ -878,16 +878,7 @@ static const auto jlcheckassignonce_func = new JuliaFunction<>{
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
-    nullptr,
-};
-static const auto jldeclareconstval_func = new JuliaFunction<>{
-    XSTR(jl_declare_constant_val),
-    [](LLVMContext &C) {
-        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(getVoidTy(C),
-            {T_pjlvalue, T_pjlvalue, T_pjlvalue, T_prjlvalue}, false); },
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
 static const auto jldeclareglobal_func = new JuliaFunction<>{
@@ -982,9 +973,8 @@ static const auto jlopaque_closure_call_func = new JuliaFunction<>{
 static const auto jlmethod_func = new JuliaFunction<>{
     XSTR(jl_method_def),
     [](LLVMContext &C) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue,
                 {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_pjlvalue}, false);
     },
@@ -993,9 +983,8 @@ static const auto jlmethod_func = new JuliaFunction<>{
 static const auto jlgenericfunction_func = new JuliaFunction<>{
     XSTR(jl_declare_const_gf),
     [](LLVMContext &C) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue, {T_pjlvalue, T_pjlvalue}, false);
     },
     nullptr,
@@ -1003,7 +992,7 @@ static const auto jlgenericfunction_func = new JuliaFunction<>{
 static const auto jllockvalue_func = new JuliaFunction<>{
     XSTR(jl_lock_value),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1012,7 +1001,7 @@ static const auto jllockvalue_func = new JuliaFunction<>{
 static const auto jlunlockvalue_func = new JuliaFunction<>{
     XSTR(jl_unlock_value),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+            {PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1021,7 +1010,7 @@ static const auto jlunlockvalue_func = new JuliaFunction<>{
 static const auto jllockfield_func = new JuliaFunction<>{
     XSTR(jl_lock_field),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Loaded)}, false); },
+            {PointerType::get(C, AddressSpace::Loaded)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1030,7 +1019,7 @@ static const auto jllockfield_func = new JuliaFunction<>{
 static const auto jlunlockfield_func = new JuliaFunction<>{
     XSTR(jl_unlock_field),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Loaded)}, false); },
+            {PointerType::get(C, AddressSpace::Loaded)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             AttributeSet(),
@@ -1101,7 +1090,7 @@ static const auto jl_excstack_state_func = new JuliaFunction<TypeFnContextAndSiz
 static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_egal__unboxed),
     [](LLVMContext &C, Type *T_size) {
-        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
+        Type *T = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(getInt32Ty(C), {T, T, T_size}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
@@ -1115,9 +1104,8 @@ static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
 static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
     "julia.gc_alloc_obj",
     [](LLVMContext &C, Type *T_size) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue,
                 {T_pjlvalue, T_size, T_prjlvalue}, false);
     },
@@ -1140,9 +1128,8 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
 static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_alloc_genericmemory_unchecked),
     [](LLVMContext &C, Type *T_size) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        auto T_pjlvalue = getPointerTy(C);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue,
                 {T_pjlvalue, T_size, T_pjlvalue}, false);
     },
@@ -1249,7 +1236,7 @@ static const auto jlapplytype_func = new JuliaFunction<>{
 static const auto jl_object_id__func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_object_id_),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size,
-            {T_size, PointerType::get(getInt8Ty(C), AddressSpace::Derived)}, false); },
+            {T_size, PointerType::get(C, AddressSpace::Derived)}, false); },
     nullptr,
 };
 static const auto setjmp_func = new JuliaFunction<TypeFnContextAndTriple>{
@@ -1289,7 +1276,7 @@ static const auto jldlsym_func = new JuliaFunction<>{
 static const auto jllazydlsym_func = new JuliaFunction<>{
     XSTR(jl_lazy_load_and_lookup),
     [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
-            {JuliaType::get_prjlvalue_ty(C), getPointerTy(C)}, false); },
+            {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); },
     nullptr,
 };
 static const auto jltypeassert_func = new JuliaFunction<>{
@@ -1345,7 +1332,7 @@ static const auto jlfieldisdefinedchecked_func = new JuliaFunction<TypeFnContext
 static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     XSTR(jl_get_cfunction_trampoline),
     [](LLVMContext &C) {
-        auto T_pjlvalue = PointerType::get(C, 0);
+        auto T_pjlvalue = getPointerTy(C);
         auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         auto T_derived = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
@@ -1467,7 +1454,7 @@ static const auto gc_preserve_end_func = new JuliaFunction<> {
 static const auto pointer_from_objref_func = new JuliaFunction<>{
     "julia.pointer_from_objref",
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pjlvalue_ty(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived)}, false); },
+            {PointerType::get(C, AddressSpace::Derived)}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
         FnAttrs.addMemoryAttr(MemoryEffects::none());
@@ -1488,8 +1475,8 @@ static const auto gc_loaded_func = new JuliaFunction<>{
     //  top:
     //   %metadata GC base pointer is ptr(Tracked)
     //   ret addrspacecast ptr to ptr(Loaded)
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded),
-            {JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_prjlvalue_ty(C), 0)}, false); },
+    [](LLVMContext &C) { return FunctionType::get(PointerType::get(C, AddressSpace::Loaded),
+            {JuliaType::get_prjlvalue_ty(C), getPointerTy(C)}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
         FnAttrs.addAttribute(Attribute::NoSync);
@@ -1548,7 +1535,7 @@ static const auto julia_call3 = new JuliaFunction<>{
     "julia.call3",
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
+        Type *T = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
             {getPointerTy(C),
              T}, // %f
@@ -2726,8 +2713,9 @@ static void jl_name_jlfuncparams_args(jl_codegen_params_t &params, Function *F) 
     F->getArg(3)->setName("sparams::Any");
 }
 
-void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT
+void jl_init_function(Function *F, const jl_codegen_params_t &params) JL_NOTSAFEPOINT
 {
+    auto &TT = params.TargetTriple;
     // set any attributes that *must* be set on all functions
     AttrBuilder attr(F->getContext());
     if (TT.isOSWindows() && TT.getArch() == Triple::x86) {
@@ -2740,22 +2728,18 @@ void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT
         attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
     }
     attr.addAttribute("frame-pointer", "all");
-    if (!TT.isOSWindows()) {
-#if !defined(_COMPILER_ASAN_ENABLED_)
+    if (!TT.isOSWindows() && !JL_FEAT_TEST(params, sanitize_address)) {
         // ASAN won't like us accessing undefined memory causing spurious issues,
         // and Windows has platform-specific handling which causes it to mishandle
         // this annotation. Other platforms should just ignore this if they don't
         // implement it.
         attr.addAttribute("probe-stack", "inline-asm");
         //attr.addAttribute("stack-probe-size", "4096"); // can use this to change the default
-#endif
     }
-#if defined(_COMPILER_ASAN_ENABLED_)
-    attr.addAttribute(Attribute::SanitizeAddress);
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-    attr.addAttribute(Attribute::SanitizeMemory);
-#endif
+    if (JL_FEAT_TEST(params, sanitize_address))
+        attr.addAttribute(Attribute::SanitizeAddress);
+    if (JL_FEAT_TEST(params, sanitize_memory))
+        attr.addAttribute(Attribute::SanitizeMemory);
     F->addFnAttrs(attr);
 }
 
@@ -3240,8 +3224,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
                 if (!ismodifyglobal) {
-                    // TODO: use typeassert in jl_check_binding_assign_value too
-                    emit_typecheck(ctx, rval, ty, "typeassert");
+                    emit_typecheck(ctx, rval, ty, fname.c_str());
                     rval = update_julia_type(ctx, rval, ty);
                     if (rval.typ == jl_bottom_type)
                         return jl_cgval_t();
@@ -4151,9 +4134,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (argv[2].constant) {
             if (!jl_is_long(argv[2].constant))
                 return false;
-            size_t nel = jl_unbox_long(argv[2].constant);
-            if (nel < 0)
-                return false;
+            // Cast to a unsigned size and let `emit_const_len_memorynew`
+            // make sure that `nel` fits in a positive signed integer.
+            size_t nel = (size_t)jl_unbox_long(argv[2].constant);
             *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
         }
         else {
@@ -6261,7 +6244,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         F = Function::Create(get_func_sig(ctx.builder.getContext()),
                              Function::ExternalLinkage,
                              proto_oc, jl_Module);
-        jl_init_function(F, ctx.emission_context.TargetTriple);
+        jl_init_function(F, ctx.emission_context);
         jl_name_jlfunc_args(ctx.emission_context, F);
         F->setAttributes(AttributeList::get(ctx.builder.getContext(), {get_func_attrs(ctx.builder.getContext()), F->getAttributes()}));
     }
@@ -6468,43 +6451,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             true,
             jl_method_type);
         return meth;
-    }
-    else if (head == jl_const_sym) {
-        assert(nargs <= 2);
-        jl_sym_t *sym = (jl_sym_t*)args[0];
-        jl_module_t *mod = ctx.module;
-        if (jl_is_globalref(sym)) {
-            mod = jl_globalref_mod(sym);
-            sym = jl_globalref_name(sym);
-        }
-        if (jl_is_symbol(sym)) {
-            jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
-            if (nargs == 2) {
-                jl_cgval_t rhs = emit_expr(ctx, args[1]);
-                ctx.builder.CreateCall(prepare_call(jldeclareconstval_func),
-                        { julia_binding_gv(ctx, bnd), literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), boxed(ctx, rhs) });
-            } else {
-                ctx.builder.CreateCall(prepare_call(jldeclareconstval_func),
-                        { julia_binding_gv(ctx, bnd), literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), ConstantPointerNull::get(cast<PointerType>(ctx.types().T_prjlvalue)) });
-            }
-        }
-    }
-    else if (head == jl_globaldecl_sym) {
-        assert(nargs <= 2 && nargs >= 1);
-        jl_sym_t *sym = (jl_sym_t*)args[0];
-        jl_module_t *mod = ctx.module;
-        if (jl_is_globalref(sym)) {
-            mod = jl_globalref_mod(sym);
-            sym = jl_globalref_name(sym);
-        }
-        if (nargs == 2) {
-            jl_cgval_t typ = emit_expr(ctx, args[1]);
-            ctx.builder.CreateCall(prepare_call(jldeclareglobal_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), boxed(ctx, typ), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1) });
-        } else {
-            ctx.builder.CreateCall(prepare_call(jldeclareglobal_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), ConstantPointerNull::get(cast<PointerType>(ctx.types().T_prjlvalue)), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1) });
-        }
     }
     else if (head == jl_new_sym) {
         bool is_promotable = false;
@@ -6821,7 +6767,7 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
         ArgTy.push_back(ctx.builder.getPtrTy());
     FunctionType *FT = FunctionType::get(elty, ArgTy, false);
     Function *w = Function::Create(FT, GlobalVariable::PrivateLinkage, "", M);
-    jl_init_function(w, ctx.emission_context.TargetTriple);
+    jl_init_function(w, ctx.emission_context);
     w->addFnAttr(Attribute::AlwaysInline);
     w->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
     Function::arg_iterator AI = w->arg_begin();
@@ -6880,7 +6826,7 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, Module *
     Function *f = Function::Create(ctx.types().T_jlfunc,
             GlobalVariable::InternalLinkage,
             name, M);
-    jl_init_function(f, params.TargetTriple);
+    jl_init_function(f, params);
     jl_name_jlfunc_args(params, f);
     //f->setAlwaysInline();
     ctx.f = f; // for jl_Module
@@ -7078,7 +7024,7 @@ void emit_specsig_to_fptr1(
 static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target, jl_value_t *rettype_const, jl_value_t *declrt, jl_value_t *jlrettype, jl_codegen_params_t &params)
 {
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, gf_thunk_name, M);
-    jl_init_function(w, params.TargetTriple);
+    jl_init_function(w, params);
     w->setAttributes(AttributeList::get(M->getContext(), {get_func_attrs(M->getContext()), w->getAttributes()}));
     w->addFnAttr(Attribute::OptimizeNone);
     w->addFnAttr(Attribute::NoInline);
@@ -7122,7 +7068,7 @@ static void emit_specsig_to_specsig(
 {
     jl_returninfo_t returninfo = get_specsig_function(params, M, nullptr, gf_thunk_name, calltype, rettype, is_for_opaque_closure);
     Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
-    jl_init_function(gf_thunk, params.TargetTriple);
+    jl_init_function(gf_thunk, params);
     gf_thunk->setAttributes(AttributeList::get(gf_thunk->getContext(), {returninfo.attrs, gf_thunk->getAttributes()}));
     emit_specsig_to_specsig(gf_thunk, returninfo.cc, returninfo.return_roots, calltype, rettype, is_for_opaque_closure, nargs, params, target, targetsig, targetrt, targetspec, rettype_const);
 }
@@ -7368,7 +7314,7 @@ static Function *gen_cfun_wrapper(
     Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
             funcName, M);
-    jl_init_function(cw, params.TargetTriple);
+    jl_init_function(cw, params);
     cw->setAttributes(AttributeList::get(M->getContext(), {attributes, cw->getAttributes()}));
 
     jl_codectx_t ctx(M->getContext(), params, 0, 0);
@@ -7590,7 +7536,7 @@ static Function *gen_cfun_wrapper(
                 FunctionType::get(getPointerTy(ctx.builder.getContext()), { getPointerTy(ctx.builder.getContext()), ctx.types().T_ppjlvalue }, false),
                 GlobalVariable::ExternalLinkage,
                 funcName, M);
-        jl_init_function(cw_make, ctx.emission_context.TargetTriple);
+        jl_init_function(cw_make, ctx.emission_context);
         cw_make->getArg(0)->setName("wrapper");
         cw_make->getArg(1)->setName("newval");
         BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", cw_make);
@@ -7850,7 +7796,7 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
 {
     ++GeneratedInvokeWrappers;
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, funcName, M);
-    jl_init_function(w, params.TargetTriple);
+    jl_init_function(w, params);
     jl_name_jlfunc_args(params, w);
     w->setAttributes(AttributeList::get(M->getContext(), {get_func_attrs(M->getContext()), w->getAttributes()}));
     w->addFnAttr(Attribute::OptimizeNone);
@@ -8091,7 +8037,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         Function *f = M ? cast_or_null<Function>(M->getNamedValue(name)) : NULL;
         if (f == NULL) {
             f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
-            jl_init_function(f, params.TargetTriple);
+            jl_init_function(f, params);
             if (params.params->debug_info_level >= 2) {
                 ios_t sigbuf;
                 ios_mem(&sigbuf, 0);
@@ -8378,7 +8324,7 @@ static jl_llvm_functions_t
                                           ArgNames, nreq);
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
-        jl_init_function(f, ctx.emission_context.TargetTriple);
+        jl_init_function(f, ctx.emission_context);
 
         // common pattern: see if all return statements are an argument in that
         // case the apply-generic call can re-use the original box for the return
@@ -8417,7 +8363,7 @@ static jl_llvm_functions_t
         f = Function::Create(needsparams ? ctx.types().T_jlfuncparams : ctx.types().T_jlfunc,
                              GlobalVariable::ExternalLinkage,
                              declarations.specFunctionObject, M);
-        jl_init_function(f, ctx.emission_context.TargetTriple);
+        jl_init_function(f, ctx.emission_context);
         if (needsparams)
             jl_name_jlfuncparams_args(ctx.emission_context, f);
         else
@@ -8453,11 +8399,9 @@ static jl_llvm_functions_t
     FnAttrs.addAttribute(Attribute::StackProtectStrong);
 #endif
 
-#ifdef _COMPILER_TSAN_ENABLED_
-    // TODO: enable this only when a argument like `-race` is passed to Julia
-    //       add a macro for no_sanitize_thread
-    FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
-#endif
+    // TODO: add a macro for no_sanitize_thread
+    if (JL_FEAT_TEST(ctx, sanitize_thread))
+        FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
 
     // add the optimization level specified for this module, if any
     int optlevel = jl_get_module_optlevel(ctx.module);
@@ -9824,7 +9768,7 @@ jl_llvm_functions_t jl_emit_codedecls(
                 Function *f = Function::Create(needsparams ? JuliaType::get_jlfuncparams_ty(M.getContext()) : JuliaType::get_jlfunc_ty(M.getContext()),
                                      GlobalVariable::ExternalLinkage,
                                      decls.specFunctionObject, M);
-                jl_init_function(f, params.TargetTriple);
+                jl_init_function(f, params);
                 f->setAttributes(AttributeList::get(M.getContext(), {get_func_attrs(M.getContext()), f->getAttributes()}));
             }
         });
@@ -9887,7 +9831,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codeg
         std::string funcName = get_function_name(true, false, ctx.name, ctx.emission_context.TargetTriple);
         jl_returninfo_t returninfo = get_specsig_function(params, M, NULL, funcName, mi->specTypes, rettype, true);
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
-        jl_init_function(gf_thunk, ctx.emission_context.TargetTriple);
+        jl_init_function(gf_thunk, ctx.emission_context);
         size_t nrealargs = jl_nparams(mi->specTypes);
         emit_specsig_to_fptr1(gf_thunk, returninfo.cc, returninfo.return_roots,
                 mi->specTypes, rettype, true, nrealargs, ctx.emission_context,

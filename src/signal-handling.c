@@ -178,7 +178,6 @@ void jl_unlock_profile_wr(void)
 }
 
 
-#ifndef _OS_WINDOWS_
 static uint64_t profile_cong_rng_seed = 0;
 static int *profile_round_robin_thread_order = NULL;
 static int profile_round_robin_thread_order_size = 0;
@@ -209,7 +208,6 @@ static int *profile_get_randperm(int size)
     jl_shuffle_int_array_inplace(profile_round_robin_thread_order, size, &profile_cong_rng_seed);
     return profile_round_robin_thread_order;
 }
-#endif
 
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
@@ -241,24 +239,26 @@ void jl_profile_task(void)
     }
     got_mutex = 1;
 
-    arraylist_t *tasks = jl_get_all_tasks_arraylist();
-    uint64_t seed = jl_rand();
-    const int n_max_random_attempts = 4;
-    // randomly select a task that is not done
-    for (int i = 0; i < n_max_random_attempts; i++) {
-        t = (jl_task_t*)tasks->items[cong(tasks->len, &seed)];
-        assert(t == NULL || jl_is_task(t));
-        if (t == NULL) {
-            continue;
+    {
+        arraylist_t *tasks = jl_get_all_tasks_arraylist();
+        uint64_t seed = jl_rand();
+        const int n_max_random_attempts = 4;
+        // randomly select a task that is not done
+        for (int i = 0; i < n_max_random_attempts; i++) {
+            t = (jl_task_t*)tasks->items[cong(tasks->len, &seed)];
+            assert(t == NULL || jl_is_task(t));
+            if (t == NULL) {
+                continue;
+            }
+            int t_state = jl_atomic_load_relaxed(&t->_state);
+            if (t_state == JL_TASK_STATE_DONE) {
+                continue;
+            }
+            break;
         }
-        int t_state = jl_atomic_load_relaxed(&t->_state);
-        if (t_state == JL_TASK_STATE_DONE) {
-            continue;
-        }
-        break;
+        arraylist_free(tasks);
+        free(tasks);
     }
-    arraylist_free(tasks);
-    free(tasks);
 
 collect_backtrace:
 
@@ -639,6 +639,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
             jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
             jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+        if (sig == SIGQUIT) {
+            jl_print_task_backtraces(0);
+        }
     }
     jl_safe_fprintf(s, "in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
     if (context && ct) {

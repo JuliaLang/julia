@@ -614,11 +614,11 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
         jl_value_t *va = jl_tparam(tt, nfields-1);
         if (jl_vararg_kind(va) != JL_VARARG_UNBOUND) continue;
         jl_value_t *t = jl_unwrap_vararg(va);
+        size_t min_elements = nfields-1;
         for (size_t j = 0; j < nfields-1; j++)
             if (!jl_egal(jl_tparam(tt, j), t)) goto outer_loop;
 
         // look for Tuple{T, T, ...} then Tuple{T, ...}, etc
-        size_t min_elements = nfields-1;
         for (long j = i-1; j >= 0; j--) {
             jl_value_t *ttj = temp[j];
             if (!(ttj && jl_is_tuple_type(ttj))) break;
@@ -3719,7 +3719,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b000001110100011100011 }; // Set fields 1, 2, 6-8, 12, 14-16 as const
+    const static uint32_t code_instance_constfields[1]  = { 0b000001110000011100011 }; // Set fields 1, 2, 6-8, 14-16 as const
     const static uint32_t code_instance_atomicfields[1] = { 0b111110001011100011100 }; // Set fields 3-5, 9-12, 13, 17-21 as atomic
     // Fields 4-5 are only operated on by construction and deserialization, so are effectively const at runtime
     // Fields ipo_purity_bits and analysis_results are not currently threadsafe or reliable, as they get mutated after optimization, but are not declared atomic

@@ -99,14 +99,9 @@ end
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
-# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
-const InlineCostType = UInt16
-const MAX_INLINE_COST = typemax(InlineCostType)
-const MIN_INLINE_COST = InlineCostType(10)
-const MaybeCompressed = Union{CodeInfo, String}
-
-is_inlineable(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+inlining_cost(@nospecialize src) =
+    src isa Union{MaybeCompressed,UInt8} ? ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) : MAX_INLINE_COST
+is_inlineable(@nospecialize src) = inlining_cost(src) != MAX_INLINE_COST
 set_inlineable!(src::CodeInfo, val::Bool) =
     src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
@@ -143,7 +138,7 @@ function src_inlining_policy(interp::AbstractInterpreter, mi::MethodInstance,
     return src_inlining_policy(interp, src, info, stmt_flag)
 end
 
-function src_inlining_policy(interp::AbstractInterpreter,
+function src_inlining_policy(::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     isa(src, OptimizationState) && (src = src.src)
     if isa(src, MaybeCompressed)
@@ -158,47 +153,38 @@ end
 
 struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
-    world::UInt
     interp::Interp
     opt_cache::IdDict{MethodInstance,CodeInstance}
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter,
                        opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
-    return InliningState(sv.edges, frame_world(sv), interp, opt_cache)
+    return InliningState(sv.edges, interp, opt_cache)
 end
 function InliningState(interp::AbstractInterpreter,
                        opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
-    return InliningState(Any[], get_inference_world(interp), interp, opt_cache)
+    return InliningState(Any[], interp, opt_cache)
 end
 
 struct OptimizerCache{CodeCache}
-    wvc::WorldView{CodeCache}
-    owner
+    cache::CodeCache
     opt_cache::IdDict{MethodInstance,CodeInstance}
     function OptimizerCache(
-        wvc::WorldView{CodeCache},
-        @nospecialize(owner),
+        cache::CodeCache,
         opt_cache::IdDict{MethodInstance,CodeInstance}) where CodeCache
-        new{CodeCache}(wvc, owner, opt_cache)
+        return new{CodeCache}(cache, opt_cache)
     end
 end
-function get((; wvc, owner, opt_cache)::OptimizerCache, mi::MethodInstance, default)
+function get((; cache, opt_cache)::OptimizerCache, mi::MethodInstance, default)
     if haskey(opt_cache, mi)
-        codeinst = opt_cache[mi]
-        @assert codeinst.min_world ≤ wvc.worlds.min_world &&
-                wvc.worlds.max_world ≤ codeinst.max_world &&
-                codeinst.owner === owner
-        @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
-        return codeinst
+        return opt_cache[mi] # this is incomplete right now, but will be finished (by finish_cycle) before caching anything
     end
-    return get(wvc, mi, default)
+    return get(cache, mi, default)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 function code_cache(state::InliningState)
-    cache = WorldView(code_cache(state.interp), state.world)
-    owner = cache_owner(state.interp)
-    return OptimizerCache(cache, owner, state.opt_cache)
+    cache = code_cache(state.interp)
+    return OptimizerCache(cache, state.opt_cache)
 end
 
 mutable struct OptimizationResult
@@ -238,7 +224,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
-        src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
+        src.ssavaluetypes = Any[ Any for _ = 1:nssavalues ]
     else
         nssavalues = length(src.ssavaluetypes::Vector{Any})
     end
@@ -246,9 +232,9 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     nslots = length(src.slotflags)
     slottypes = src.slottypes
     if slottypes === nothing
-        slottypes = Any[ Any for i = 1:nslots ]
+        slottypes = Any[ Any for _ = 1:nslots ]
     end
-    stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
+    stmt_info = CallInfo[ NoCallInfo() for _ = 1:nssavalues ]
     # cache some useful state computations
     def = mi.def
     mod = isa(def, Method) ? def.module : def
@@ -258,7 +244,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     cfg = compute_basic_blocks(src.code)
     unreachable = BitSet()
     bb_vartables = Union{VarTable,Nothing}[]
-    for block = 1:length(cfg.blocks)
+    for _ = 1:length(cfg.blocks)
         push!(bb_vartables, VarState[
             VarState(slottypes[slot], src.slotflags[slot] & SLOT_USEDUNDEF != 0)
             for slot = 1:nslots
@@ -554,7 +540,7 @@ abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = typ
 
 Called at the end of optimization to store the resulting IR back into the OptimizationState.
 """
-function finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
+function finishopt!(::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
     opt.optresult = OptimizationResult(ir, ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src), false)
     return nothing
 end
@@ -678,7 +664,7 @@ GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_ca
 function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,MethodInstance})
     if codeinst isa MethodInstance
         codeinst = get(code_cache, codeinst, nothing)
-        codeinst isa CodeInstance || return false
+        codeinst === nothing && return false
     end
     argescapes = traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
@@ -686,7 +672,7 @@ function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,Met
     if argescapes !== nothing
         return argescapes
     end
-    effects = decode_effects(codeinst.ipo_purity_bits)
+    effects = codeinst isa CodeInstance ? decode_effects(codeinst.ipo_purity_bits) : codeinst.ipo_effects
     if is_effect_free(effects) && is_inaccessiblememonly(effects)
         # We might not have run EA on simple frames without any escapes (e.g. when optimization
         # is skipped when result is constant-folded by abstract interpretation). If those
@@ -861,10 +847,14 @@ function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
     if iscall_with_boundscheck(stmt, sv)
-        for i = 1:(length(stmt.args)-1)
+        for i = 1:length(stmt.args)
             val = stmt.args[i]
+            # SSAValue should be the only permitted argument type which can be inconsistent found here.
+            # Others (e.g. GlobalRef) should have been moved to statement position. See stmt_effect_flags.
             if isa(val, SSAValue)
-                stmt_inconsistent |= val.id in inconsistent
+                if i < length(stmt.args)  # not the boundscheck argument (which is last)
+                    stmt_inconsistent |= val.id in inconsistent
+                end
                 count!(tpdum, val)
             end
         end
@@ -891,7 +881,7 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     if isa(stmt, EnterNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
-        return nothing
+        return true # don't bail out early -- can cause tpdum counts to be off
     end
 
     scan_non_dataflow_flags!(inst, sv)
@@ -937,10 +927,11 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
         end
     end
 
-    # bail out early if there are no possibilities to refine the effects
-    if !any_refinable(sv)
-        return nothing
-    end
+    # Do not bail out early, as this can cause tpdum counts to be off.
+    # # bail out early if there are no possibilities to refine the effects
+    # if !any_refinable(sv)
+    #     return nothing
+    # end
 
     return true
 end
@@ -948,25 +939,24 @@ end
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     (; ir, inconsistent, tpdum) = sv
 
+    sv.all_retpaths_consistent || return
     scan!(ScanStmt(sv), scanner, false)
+    sv.all_retpaths_consistent || return
     complete!(tpdum); push!(scanner.bb_ip, 1)
     populate_def_use_map!(tpdum, scanner)
 
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
     for def in inconsistent
-        for use in tpdum[def]
-            if !(use in inconsistent)
-                push!(inconsistent, use)
-                append!(stmt_ip, tpdum[use])
-            end
-        end
-    end
+        append!(stmt_ip, tpdum[def])
+   end
     lazydomtree = LazyDomtree(ir)
     while !isempty(stmt_ip)
         idx = popfirst!(stmt_ip)
+        idx in inconsistent && continue # already processed
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
         if iscall_with_boundscheck(stmt, sv)
+            # recompute inconsistent flags for call while skipping boundscheck (last) argument
             any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
@@ -978,19 +968,18 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             any_non_boundscheck_inconsistent || continue
         elseif isa(stmt, ReturnNode)
             sv.all_retpaths_consistent = false
+            return
         elseif isa(stmt, GotoIfNot)
             bb = block_for_inst(ir, idx)
             cfg = ir.cfg
             blockliveness = BlockLiveness(cfg.blocks[bb].succs, nothing)
             for succ in iterated_dominance_frontier(cfg, blockliveness, get!(lazydomtree))
                 visit_bb_phis!(ir, succ) do phiidx::Int
-                    push!(inconsistent, phiidx)
-                    push!(stmt_ip, phiidx)
+                    phiidx in inconsistent || push!(stmt_ip, phiidx)
                 end
             end
         end
-        sv.all_retpaths_consistent || break
-        append!(inconsistent, tpdum[idx])
+        push!(inconsistent, idx)
         append!(stmt_ip, tpdum[idx])
     end
 end
@@ -1009,11 +998,11 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
     completed_scan = scan!(ScanStmt(sv), scanner, true)
 
     if !completed_scan
-        if sv.all_retpaths_consistent
-            check_inconsistentcy!(sv, scanner)
-        else
+        # finish scanning for all_retpaths_consistent computation
+        check_inconsistentcy!(sv, scanner)
+        if !sv.all_retpaths_consistent
             # No longer any dataflow concerns, just scan the flags
-            scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
+            scan!(scanner, false) do inst::Instruction, ::Int, ::Int
                 scan_non_dataflow_flags!(inst, sv)
                 # bail out early if there are no possibilities to refine the effects
                 if !any_refinable(sv)
@@ -1337,7 +1326,6 @@ end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
-    svdef = sv.linfo.def
     @zone "CC: DOMTREE_1" domtree = construct_domtree(ir)
     defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
@@ -1440,8 +1428,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         return params.inline_nonleaf_penalty
     elseif head === :foreigncall
         foreigncall = ex.args[1]
-        if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
-            return 1
+        if isexpr(foreigncall, :tuple, 1)
+            foreigncall = foreigncall.args[1]
+            if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
+                return 1
+            end
         end
         return 20
     elseif head === :invoke || head === :invoke_modify
