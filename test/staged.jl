@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Printf: @sprintf
+# N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
+using Test
+
 using Random
+using InteractiveUtils: code_llvm, code_native
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -32,7 +35,7 @@ stagediobuf = IOBuffer()
     :(nothing)
 end
 
-const intstr = @sprintf("%s", Int)
+const intstr = string(Int)
 splat2(1)
 @test String(take!(stagediobuf)) == "($intstr,)"
 splat2(1, 3)
@@ -42,7 +45,7 @@ splat2(5, 2)
 splat2(1:3, 5.2)
 @test String(take!(stagediobuf)) == "(UnitRange{$intstr}, Float64)"
 splat2(3, 5:2:7)
-@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr,$intstr})"
+@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr, $intstr})"
 splat2(1, 2, 3, 4)
 @test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr, $intstr)"
 splat2(1, 2, 3)
@@ -154,6 +157,7 @@ module TestGeneratedThrow
         @cfunction(foo, Cvoid, ())
         global inited = true
     end
+    inited = false
 end
 @test TestGeneratedThrow.inited
 
@@ -169,7 +173,7 @@ end
 @test _g_f_with_inner2(1)(2) == 2
 
 # @generated functions errors
-global gf_err_ref = Ref{Int}()
+const gf_err_ref = Ref{Int}()
 
 gf_err_ref[] = 0
 let gf_err, tsk = @async nothing # create a Task for yield to try to run
@@ -178,9 +182,10 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
         yield()
         gf_err_ref[] += 1000
     end
-    @test_throws ErrorException gf_err()
-    @test_throws ErrorException gf_err()
-    @test gf_err_ref[] == 4
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    @test_throws Expected gf_err()
+    @test_throws Expected gf_err()
+    @test gf_err_ref[] < 1000
 end
 
 gf_err_ref[] = 0
@@ -188,14 +193,17 @@ let gf_err2
     @generated function gf_err2(::f) where {f}
         gf_err_ref[] += 1
         reflect = f.instance
-        gf_err_ref[] += 1
-        reflect(+, (Int,Int))
+        gf_err_ref[] += 10
+        reflect(+, (Int, Int))
         gf_err_ref[] += 1000
         return nothing
     end
-    @test_throws ErrorException gf_err2(code_typed)
-    @test gf_err_ref[] == 4
-    @test gf_err2(code_lowered) === nothing
+    Expected = ErrorException("code reflection cannot be used from generated functions")
+    @test_throws Expected gf_err2(code_lowered)
+    @test_throws Expected gf_err2(code_typed)
+    @test_throws Expected gf_err2(code_llvm)
+    @test_throws Expected gf_err2(code_native)
+    @test gf_err_ref[] < 1000
 end
 
 # issue #15043
@@ -240,11 +248,17 @@ f22440kernel(x::AbstractFloat) = x * x
 f22440kernel(::Type{T}) where {T} = one(T)
 f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
 
-@generated function f22440(y)
-    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
-    code_info = Base.uncompressed_ast(method)
-    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 0, 0, :propagate)
+function f22440_gen(world::UInt, source, _, y)
+    match = only(Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, world))
+    code_info = Base.uncompressed_ir(match.method)
+    Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 0, 0, :propagate)
+    # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
+    # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return code_info
+end
+@eval function f22440(y)
+    $(Expr(:meta, :generated, f22440_gen))
+    $(Expr(:meta, :generated_only))
 end
 
 @test f22440(Int) === f22440kernel(Int)
@@ -256,12 +270,12 @@ end
 
 # PR #23168
 
-function f23168(a, x)
+@eval function f23168(a, x)
     push!(a, 1)
     if @generated
-        :(y = x + x)
+        :(y = $(+)(x, x))
     else
-        y = 2x
+        y = $(*)(2, x)
     end
     push!(a, y)
     if @generated
@@ -276,9 +290,9 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
-    @test occursin("2 * ", string(Base.uncompressed_ast(first(methods(f23168)))))
-    @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("(+)(", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("(*)(2", string(Base.uncompressed_ir(first(methods(f23168)))))
+    @test occursin("(*)(2", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
     @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
@@ -292,3 +306,176 @@ end
 end
 
 @test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)
+
+# issue #33243
+@generated function f33243()
+    :(global x33243 = 2)
+end
+@test_throws ErrorException f33243()
+global x33243::Any
+@test f33243() === 2
+@test x33243 === 2
+
+# https://github.com/JuliaDebug/CassetteOverlay.jl/issues/12
+# generated function with varargs and unfortunately placed unused slot
+@generated function f_vararg_generated(args...)
+    local unusedslot4
+    local unusedslot5
+    local unusedslot6
+    :($args)
+end
+g_vararg_generated() = f_vararg_generated((;), (;), Base.inferencebarrier((;)))
+let tup = g_vararg_generated()
+    @test all(==(typeof((;))), tup)
+    # This is just to make sure that the test is actually testing what we want:
+    # the test only works if there is an unused that matches the position of
+    # the inferencebarrier argument above (N.B. the generator function itself
+    # shifts everything over by 1)
+    @test_broken only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == 0x00
+end
+
+# respect a given linetable in code generation
+# https://github.com/JuliaLang/julia/pull/47750
+let world = Base.get_world_counter()
+    match = Base._which(Tuple{typeof(sin), Int}; world)
+    mi = Core.Compiler.specialize_method(match)
+    lwr = Core.Compiler.retrieve_code_info(mi, world)
+    nstmts = length(lwr.code)
+    di = Core.DebugInfo(Core.Compiler.DebugInfoStream(mi, lwr.debuginfo, nstmts), nstmts)
+    lwr.debuginfo = di
+    @eval function sin_generated(a)
+        $(Expr(:meta, :generated, Returns(lwr)))
+        $(Expr(:meta, :generated_only))
+    end
+    src = only(code_lowered(sin_generated, (Int,)))
+    @test src.debuginfo === di
+    @test sin_generated(42) == sin(42)
+end
+
+# Allow passing unreachable insts in generated codeinfo
+let
+    dummy() = return
+    dummy_m = which(dummy, Tuple{})
+
+    src = Base.uncompressed_ir(dummy_m)
+    src.code = Any[
+        # block 1
+        Core.ReturnNode(nothing),
+        # block 2
+        Core.ReturnNode(),
+    ]
+    nstmts = length(src.code)
+    nslots = 1
+    src.ssavaluetypes = nstmts
+    src.debuginfo = Core.DebugInfo(:f_unreachable_generated)
+    src.ssaflags = fill(Int32(0), nstmts)
+    src.slotflags = fill(0, nslots)
+    src.slottypes = Any[Any]
+
+    @eval function f_unreachable()
+        $(Expr(:meta, :generated, Returns(src)))
+        $(Expr(:meta, :generated_only))
+    end
+
+    ir, _ = Base.code_ircode(f_unreachable, ()) |> only
+    @test length(ir.cfg.blocks) == 1
+end
+
+function generate_lambda_ex(world::UInt, source::Method,
+                            argnames, spnames, @nospecialize body)
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(argnames...), Core.svec(spnames...))
+    return stub(world, source, body)
+end
+
+# Test that `Core.CachedGenerator` works as expected
+struct Generator54916 <: Core.CachedGenerator end
+function (::Generator54916)(world::UInt, source::Method, args...)
+    return generate_lambda_ex(world, source,
+        (:doit54916, :func, :arg), (), :(func(arg)))
+end
+@eval function doit54916(func, arg)
+    $(Expr(:meta, :generated, Generator54916()))
+    $(Expr(:meta, :generated_only))
+end
+@test doit54916(sin, 1) == sin(1)
+let mi = only(methods(doit54916)).specializations
+    ci = mi.cache::Core.CodeInstance
+    found = false
+    while true
+        if ci.owner === :uninferred && ci.inferred isa Core.CodeInfo
+            found = true
+            break
+        end
+        isdefined(ci, :next) || break
+        ci = ci.next
+    end
+    @test found
+end
+
+# Test that writing a bad cassette-style pass gives the expected error (#49715)
+function generator49715(world, source, self, f, tt)
+    tt = tt.parameters[1]
+    sig = Tuple{f, tt.parameters...}
+    mi = Base._which(sig; world)
+    error("oh no")
+    return generate_lambda_ex(world, source,
+        (:doit49715, :f, :tt), (), nothing)
+end
+@eval function doit49715(f, tt)
+    $(Expr(:meta, :generated, generator49715))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws "oh no" doit49715(sin, Tuple{Int})
+
+# Test that the CodeInfo returned from generated function need not match the generator.
+function overdubbee54341(a, b)
+    a + b
+end
+const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
+function overdub_generator54341(world::UInt, source::Method, selftype, fargtypes)
+    if length(fargtypes) != 2
+        return generate_lambda_ex(world, source,
+            (:overdub54341, :args), (), :(error("Wrong number of arguments")))
+    else
+        return copy(overdubee_codeinfo54341)
+    end
+end
+@eval function overdub54341(args...)
+    $(Expr(:meta, :generated, overdub_generator54341))
+    $(Expr(:meta, :generated_only))
+end
+@test overdub54341(1, 2) == 3
+# check if the inlining pass handles `nargs`/`isva` correctly
+@test first(only(code_typed((Int,Int)) do x, y; @inline overdub54341(x, y); end)) isa Core.CodeInfo
+@test first(only(code_typed((Int,)) do x; @inline overdub54341(x, 1); end)) isa Core.CodeInfo
+@test_throws "Wrong number of arguments" overdub54341(1, 2, 3)
+
+# Test the module resolution scope of generated methods that are type constructors
+module GeneratedScope57417
+    using Test
+    import ..generate_lambda_ex
+    const x = 1
+    struct Generator; end
+    @generated (::Generator)() = :x
+    f(x::Int) = 1
+    module OtherModule
+        import ..f
+        const x = 2
+        @generated f(::Float64) = :x
+    end
+    import .OtherModule: f
+    @test Generator()() == 1
+    @test f(1.0) == 2
+
+    function g_generator(world::UInt, source::Method, _)
+        return generate_lambda_ex(world, source, (:g,), (), :(return x))
+    end
+
+    @eval function g()
+        $(Expr(:meta, :generated, g_generator))
+        $(Expr(:meta, :generated_only))
+    end
+    @test g() == 1
+end
+
+@test_throws "syntax: expression too large" code_lowered(ntuple, (Returns{Nothing}, Val{1000000}))

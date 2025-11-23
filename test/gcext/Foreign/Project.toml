@@ -1,0 +1,6 @@
+name = "Foreign"
+uuid = "de1f6f7a-d7b3-400f-91c2-33f248ee89c4"
+version = "0.1.0"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"

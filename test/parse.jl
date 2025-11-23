@@ -41,6 +41,16 @@ Base.iterate(::Issue29451String, i::Integer=1) = i == 1 ? ('0', 2) : nothing
 @test Issue29451String() == "0"
 @test parse(Int, Issue29451String()) == 0
 
+# https://github.com/JuliaStrings/InlineStrings.jl/issues/57
+struct InlineStringIssue57 <: AbstractString end
+Base.ncodeunits(::InlineStringIssue57) = 4
+Base.lastindex(::InlineStringIssue57) = 4
+Base.isvalid(::InlineStringIssue57, i::Integer) = 0 < i < 5
+Base.iterate(::InlineStringIssue57, i::Integer=1) = i == 1 ? ('t', 2) : i == 2 ? ('r', 3) : i == 3 ? ('u', 4) : i == 4 ? ('e', 5) : nothing
+Base.:(==)(::SubString{InlineStringIssue57}, x::String) = x == "true"
+
+@test parse(Bool, InlineStringIssue57())
+
 @testset "Issue 20587, T=$T" for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
     for s in ["", " ", "  "]
@@ -236,6 +246,13 @@ end
     @test_throws ArgumentError parse(Int, "2", base = 63)
 end
 
+@testset "issue #42616" begin
+    @test tryparse(Bool, "") === nothing
+    @test tryparse(Bool, " ") === nothing
+    @test_throws ArgumentError parse(Bool, "")
+    @test_throws ArgumentError parse(Bool, " ")
+end
+
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
     @test_throws ArgumentError tryparse(T, "0", base = base)
@@ -243,34 +260,6 @@ end
 
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
-
-# issue #16594
-@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
-@test [1 +
-       1] == [2]
-@test [1 +1] == [1 1]
-
-@testset "issue #16594" begin
-    # note for the macro tests, order is important
-    # because the line number is included as part of the expression
-    # (i.e. both macros must start on the same line)
-    @test :(@test((1+1) == 2)) == :(@test 1 +
-                                          1 == 2)
-    @test :(@x 1 +1 -1) == :(@x(1, +1, -1))
-    @test :(@x 1 + 1 -1) == :(@x(1+1, -1))
-    @test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
-    @test :(@x(1 + 1 - 1)) == :(@x 1 +
-                                   1 -
-                                   1)
-    @test :(@x(1 + 1 + 1)) == :(@x 1 +
-                                   1 +
-                                   1)
-    @test :([x .+
-              y]) == :([x .+ y])
-end
-
-# line break in : expression disallowed
-@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
 
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
@@ -307,15 +296,9 @@ end
         @test_throws ArgumentError parse(Complex{T}, bad)
     end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
+    @test_throws ArgumentError parse(ComplexF64, "3 β+ 4im")
+    @test_throws ArgumentError parse(ComplexF64, "3 + 4αm")
 end
-
-# added ⟂ to operator precedence (#24404)
-@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
-@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
-
-# only allow certain characters after interpolated vars (#25231)
-@test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
-@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
 
 @testset "parse and tryparse type inference" begin
     @inferred parse(Int, "12")
@@ -329,7 +312,7 @@ end
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
 end
 
-@testset "isssue #29980" begin
+@testset "issue #29980" begin
     @test parse(Bool, "1") === true
     @test parse(Bool, "01") === true
     @test parse(Bool, "0") === false
@@ -338,12 +321,6 @@ end
     @test_throws ArgumentError parse(Bool, "1000000000000000000000000000000000000000000000000000")
     @test_throws ArgumentError parse(Bool, "2")
     @test_throws ArgumentError parse(Bool, "02")
-end
-
-@testset "issue #30341" begin
-    @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
-    # Ensure dotting binary doesn't break dotting unary
-    @test Meta.parse(".~[1,2]") == Expr(:call, :.~, Expr(:vect, 1, 2))
 end
 
 @testset "inf and nan parsing" begin

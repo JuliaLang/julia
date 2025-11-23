@@ -1,4 +1,0 @@
-;!@Install@!UTF-8!
-Title="The Julia Language"
-RunProgram="julia-installer.exe"
-;!@InstallEnd@!

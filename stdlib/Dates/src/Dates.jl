@@ -5,7 +5,7 @@
 
 The `Dates` module provides `Date`, `DateTime`, `Time` types, and related functions.
 
-The types are not aware of time zones, based on UT seconds
+The types are not aware of time zones, are based on UT seconds
 (86400 seconds a day, avoiding leap seconds), and
 use the proleptic Gregorian calendar, as specified in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601).
 For time zone functionality, see the TimeZones.jl package.
@@ -14,13 +14,13 @@ For time zone functionality, see the TimeZones.jl package.
 julia> dt = DateTime(2017,12,31,23,59,59,999)
 2017-12-31T23:59:59.999
 
-julia> d1 = Date(Dates.Month(12), Dates.Year(2017))
+julia> d1 = Date(Month(12), Year(2017))
 2017-12-01
 
-julia> d2 = Date("2017-12-31", Dates.DateFormat("y-m-d"))
+julia> d2 = Date("2017-12-31", DateFormat("y-m-d"))
 2017-12-31
 
-julia> Dates.yearmonthday(d2)
+julia> yearmonthday(d2)
 (2017, 12, 31)
 
 julia> d2-d1
@@ -32,7 +32,7 @@ for more information.
 """
 module Dates
 
-import Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
+import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 using Printf: @sprintf
 
 using Base.Iterators
@@ -51,7 +51,7 @@ include("parse.jl")
 include("deprecated.jl")
 
 export Period, DatePeriod, TimePeriod,
-       Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
+       Year, Quarter, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
        TimeZone, UTC, TimeType, DateTime, Date, Time,
        # periods.jl
@@ -60,6 +60,7 @@ export Period, DatePeriod, TimePeriod,
        yearmonthday, yearmonth, monthday, year, month, week, day,
        hour, minute, second, millisecond, dayofmonth,
        microsecond, nanosecond,
+       isoweekdate, isoyear, weeksinyear,
        # query.jl
        dayofweek, isleapyear, daysinmonth, daysinyear, dayofyear, dayname, dayabbr,
        dayofweekofmonth, daysofweekinmonth, monthname, monthabbr,
@@ -77,8 +78,10 @@ export Period, DatePeriod, TimePeriod,
        firstdayofmonth, lastdayofmonth,
        firstdayofyear, lastdayofyear,
        firstdayofquarter, lastdayofquarter,
-       adjust, tonext, toprev, tofirst, tolast,
+       tonext, toprev, tofirst, tolast,
        # io.jl
        ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat, RFC1123Format, @dateformat_str
+
+public format
 
 end # module

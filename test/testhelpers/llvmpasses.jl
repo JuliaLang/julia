@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using InteractiveUtils
 using Printf
 
@@ -22,4 +24,3 @@ function emit(f, tt...)
     end
     counter+=1
 end
-

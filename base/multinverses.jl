@@ -2,10 +2,11 @@
 
 module MultiplicativeInverses
 
-import Base: div, divrem, rem, unsigned
+import Base: div, divrem, mul_hi, rem, unsigned, mod
 using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
+unsigned(::Type{Bool}) = UInt
 unsigned(::Type{Int8}) = UInt8
 unsigned(::Type{Int16}) = UInt16
 unsigned(::Type{Int32}) = UInt32
@@ -13,7 +14,7 @@ unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
 unsigned(::Type{T}) where {T<:Unsigned} = T
 
-abstract type  MultiplicativeInverse{T} end
+abstract type  MultiplicativeInverse{T} <: Number end
 
 # Computes integer division by a constant using multiply, add, and bitshift.
 
@@ -27,7 +28,7 @@ abstract type  MultiplicativeInverse{T} end
 # Division of Int32 by 3:
 #   floor((2^32+2)/3 * n/2^32) = floor(n/3 + 2n/(3*2^32))
 # The correction term, 2n/(3*2^32), is strictly less than 1/3 for any
-# nonnegative n::Int32, so this divides any nonnegative Int32 by 3.
+# non-negative n::Int32, so this divides any non-negative Int32 by 3.
 # (When n < 0, we add 1, and one can show that this computes
 # ceil(n/d) = -floor(abs(n)/d).)
 #
@@ -96,7 +97,6 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
 
     function UnsignedMultiplicativeInverse{T}(d::T) where T<:Unsigned
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
-        u2 = convert(T, 2)
         add = false
         signedmin = one(d) << (sizeof(d)*8-1)
         signedmax = signedmin - one(T)
@@ -135,12 +135,12 @@ end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
 function div(a::T, b::SignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
+    x = mul_hi(a, b.multiplier)
     x += (a*b.addmul) % T
     ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % T)
 end
 function div(a::T, b::UnsignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
+    x = mul_hi(a, b.multiplier)
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     ifelse(b.divisor == 1, a, x >>> b.shift)
 end
@@ -151,6 +151,13 @@ rem(a::T, b::MultiplicativeInverse{T}) where {T} =
 function divrem(a::T, b::MultiplicativeInverse{T}) where T
     d = div(a, b)
     (d, a - d*b.divisor)
+end
+
+mod(a::T, b::UnsignedMultiplicativeInverse{T}) where {T} = rem(a, b)
+
+function mod(a::T, b::SignedMultiplicativeInverse{T}) where {T}
+    r = rem(a, b)
+    return (iszero(r) || signbit(r) == signbit(b.divisor)) ? r : r + b.divisor
 end
 
 multiplicativeinverse(x::Signed) = SignedMultiplicativeInverse(x)
