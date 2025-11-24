@@ -84,6 +84,9 @@ New library features
 Standard library changes
 ------------------------
 
+* `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
+
 #### JuliaSyntaxHighlighting
 
 #### LinearAlgebra

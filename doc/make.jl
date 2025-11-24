@@ -228,6 +228,15 @@ BaseDocs = [
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
 
+# HACK: get nicer sorting here, even though we don't have the header
+# of the .md files at hand.
+sort!(StdlibDocs, by=function(x)
+    x = replace(x, "stdlib/" => "")
+    startswith(x, "Libdl") && return lowercase("Dynamic Linker")
+    startswith(x, "Test") && return lowercase("Unit Testing")
+    return lowercase(x)
+end)
+
 DevDocs = [
     "Documentation of Julia's Internals" => [
         "devdocs/init.md",

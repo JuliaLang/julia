@@ -632,6 +632,10 @@ end
     @test onlytok("0x.p0") == K"ErrorInvalidNumericConstant"
     @test onlytok("0x.")   == K"ErrorHexFloatMustContainP"
     @test onlytok("0x1.0") == K"ErrorHexFloatMustContainP"
+    # https://github.com/JuliaLang/julia/issues/60189
+    @test onlytok("0x1p3.") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0x1p3.2") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0x1.5p2.3") == K"ErrorInvalidNumericConstant"
 end
 
 @testset "binary literals" begin
