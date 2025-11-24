@@ -2382,5 +2382,7 @@ end
         sz = ndims(A) > ndims(B) ? size(A) : size(B)
         @test A + B == fill(2.0,sz)
         @test A - B == zeros(sz)
+        @test A + B + zeros() == A + B
+        @test A - B - zeros() == A - B
     end
 end

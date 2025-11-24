@@ -9,18 +9,19 @@ end
 # Using map over broadcast enables vectorization for wide matrices with few rows.
 # This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
 # https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
-function _broadcast_preserving_zero_d(f, A::Array{<:Any,N}, Bs::Array{<:Any,N}...) where {N}
-    map(f, A, Bs...)
+function _broadcast_preserving_zero_d(f, A::Array{<:Any,N}, B::Array{<:Any,N}, Cs::Array{<:Any,N}...) where {N}
+    map(f, A, B, Cs...)
 end
 
-function _broadcast_preserving_zero_d(f, A::Array, Bs::Array...) where {N}
+function _broadcast_preserving_zero_d(f, A::Array, B::Array, Cs::Array...)
     # we already know that the shapes are compatible.
     # We just need to select the size corresponding to the higest ndims
     # and reshape all the arrays to that size
-    sz = mapreduce(size, (x,y) -> length(x) > length(y) ? x : y, (A, Bs...))
+    arrays = (A, B, Cs...)
+    sz = mapreduce(size, (x,y) -> length(x) > length(y) ? x : y, arrays)
     # Skip reshaping where possible to avoid the overhead
-    As_sameshape = map(x -> length(sz) == ndims(x) ? x : reshape(x, sz), (A, Bs...))
-    map(f, As_sameshape...)
+    arrays_sameshape = map(x -> length(sz) == ndims(x) ? x : reshape(x, sz), arrays)
+    map(f, arrays_sameshape...)
 end
 
 function _broadcast_preserving_zero_d(f, A::Array, B::Number)
