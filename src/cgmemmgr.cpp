@@ -548,13 +548,12 @@ public:
     virtual ~ROAllocator() JL_NOTSAFEPOINT {}
     virtual void finalize() JL_NOTSAFEPOINT
     {
-        for (auto &alloc: allocations) {
-            // ensure the mapped pages are consistent
-            sys::Memory::InvalidateInstructionCache(alloc.wr_addr,
-                                                    alloc.sz);
-            sys::Memory::InvalidateInstructionCache(alloc.rt_addr,
-                                                    alloc.sz);
-        }
+        // Note: on some aarch64 platforms, like Apple CPUs, we need read
+        // permission in order to invalidate instruction cache lines.  We are
+        // not guaranteed to have read permission on the wr_addr when using
+        // DualMapAllocator.
+        for (auto &alloc : allocations)
+            sys::Memory::InvalidateInstructionCache(alloc.rt_addr, alloc.sz);
         completed.clear();
         allocations.clear();
     }
