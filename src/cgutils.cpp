@@ -1369,6 +1369,9 @@ static std::tuple<Value*, jl_gc_roots_t, MDNode*> split_value(jl_codectx_t &ctx,
         }
         Align align_dst(julia_alignment((jl_value_t*)typ));
         AllocaInst *alloca = emit_static_alloca(ctx, sizes.first, align_dst);
+        setName(ctx.emission_context, alloca, [&]() {
+            return "split::" + std::string(jl_symbol_name(typ->name->name));
+        });
         auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
         split_value_into(ctx, x, x_alignment, alloca, align_dst, stack_ai, false);
         bits = alloca;
