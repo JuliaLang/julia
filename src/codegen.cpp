@@ -1104,7 +1104,16 @@ static const auto jl_excstack_state_func = new JuliaFunction<TypeFnContextAndSiz
     [](LLVMContext &C, Type *T_size) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(T_size, {T_pjlvalue}, false); },
-    nullptr,
+        [](LLVMContext &C) {
+            auto FnAttrs = AttrBuilder(C);
+            FnAttrs.addAttribute(Attribute::WillReturn);
+            FnAttrs.addAttribute(Attribute::NoUnwind);
+            FnAttrs.addMemoryAttr(MemoryEffects::readOnly());
+            return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet(),
+                None);
+        },
 };
 static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_egal__unboxed),
@@ -9733,6 +9742,7 @@ static jl_llvm_functions_t
                 // Save exception stack depth at enter for use in pop_exception
                 Value *excstack_state =
                     ctx.builder.CreateCall(prepare_call(jl_excstack_state_func), {get_current_task(ctx)});
+                setName(ctx.emission_context, excstack_state, "excstack_state");
                 assert(!ctx.ssavalue_assigned[cursor]);
                 ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
                 ctx.ssavalue_assigned[cursor] = true;
