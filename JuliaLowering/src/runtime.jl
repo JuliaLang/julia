@@ -339,7 +339,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
             ex0 = copy_ast(ctx1, ex0)
         end
     else
-        ex0 = @ast ctx ex expanded::K"Value"
+        ex0 = @ast ctx1 g.srcref ex0::K"Value"
     end
     # Expand any macros emitted by the generator
     ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
