@@ -513,6 +513,16 @@ end
     end
     """) == (NTuple{5,Int}, 5, Int)
 
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        @generated function f_gen_unnamed_args(::Type{T}, y, ::Type{U}) where {T, U}
+            return (T, y, U)
+        end
+
+        f_gen_unnamed_args(Int, UInt8(3), Float64)
+    end
+    """) == (Int, UInt8, Float64)
+
     @test JuliaLowering.include_string(test_mod, raw"""
     begin
         function f_partially_gen(x::NTuple{N,T}) where {N,T}
