@@ -3079,6 +3079,13 @@ function abstract_eval_call(interp::AbstractInterpreter, e::Expr, sstate::Statem
     end
 end
 
+function is_field_pointerfree(dt::DataType, fidx::Int)
+    dt.layout::Ptr{Cvoid} == C_NULL && return false
+    DataTypeFieldDesc(dt)[fidx].isptr && return false
+    ft = fieldtype(dt, fidx)
+    return ft isa DataType && datatype_pointerfree(ft)
+end
+
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -3089,9 +3096,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         ismutable = ismutabletype(ut)
         fcount = datatype_fieldcount(ut)
         nargs = length(e.args) - 1
-        has_any_uninitialized = (fcount === nothing || (fcount > nargs && (let t = rt
-                any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
-            end)))
+        has_any_uninitialized = fcount === nothing || (fcount > nargs &&
+            any(i::Int->is_field_pointerfree(ut, i), (nargs+1):fcount))
         if has_any_uninitialized
             # allocation with undefined field is inconsistent always
             consistent = ALWAYS_FALSE
