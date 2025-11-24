@@ -2588,7 +2588,9 @@ static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_
                 if (!v.isboxed && v.V && v.inline_roots.empty() && !v.ispointer()) {
                     // previous value was unboxed (leaftype) and hoisted (!pointer) with statically computed union tindex
                     // TODO: remove this branch once all consumers of v.TIndex understand how to handle a non-ispointer value
-                    return jl_cgval_t(value_to_pointer(ctx, v), typ, new_tindex);
+                    jl_cgval_t ret(value_to_pointer(ctx, v), typ, new_tindex);
+                    ret.inline_roots = ExtractTrackedValues(v.V, v.V->getType(), false, ctx.builder);
+                    return ret;
                 }
             }
             else if (jl_subtype(v.typ, typ)) {
@@ -9501,7 +9503,7 @@ static jl_llvm_functions_t
                         isboxed_union = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
                 }
                 else if (!returninfo.return_roots) {
-                    if (retvalinfo.V == NULL) {
+                    if (retvalinfo.V == NULL && retvalinfo.inline_roots.empty()) {
                         // treat this as a simple Ghosts
                         sret = NULL;
                     }
@@ -9534,17 +9536,19 @@ static jl_llvm_functions_t
                     Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
                     SmallVector<Value*,0> inline_roots(returninfo.return_roots, Vnull);
                     emit_unionmove(ctx, sret, jlrettype, MutableArrayRef(inline_roots), ctx.tbaa().tbaa_stack, retvalinfo, /*skip*/isboxed_union);
+                    // TODO: shrink-wrap this store to drop any Vnull?
                     store_all_roots(ctx, inline_roots, return_roots, roots_ai, false);
                 }
-                else if (retvalinfo.V == nullptr && !retvalinfo.inline_roots.empty()) {
-                    // not returning into roots and don't have a value: might just have roots (might also be all ghost)
+                else if (!retvalinfo.inline_roots.empty()) {
+                    // not returning into roots but have roots, means all of them must be roots
+                    // If we have `V`, should we use a memcpy instead?
                     store_all_roots(ctx, ArrayRef(retvalinfo.inline_roots).slice(0, std::min(retvalinfo.inline_roots.size(), (size_t)returninfo.union_bytes / sizeof(void*))),
                             sret, roots_ai, false);
                 }
                 else if (retvalinfo.ispointer()) {
                     emit_unionmove(ctx, sret, jlrettype, /*inline_roots*/MutableArrayRef<Value*>(), /*tbaa_dst*/nullptr, retvalinfo, /*skip*/isboxed_union);
                 }
-                else {
+                else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
                     ctx.builder.CreateAlignedStore(retvalinfo.V, sret, align);
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
