@@ -302,15 +302,15 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
             path = joinpath(depot, "environments", name)
             isdir(path) || continue
             for proj in project_names
-                file = abspath(path, proj)
+                file = joinpath(path, proj)
                 isfile_casesensitive(file) && return file
             end
         end
         isempty(DEPOT_PATH) && return nothing
-        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        return abspath(DEPOT_PATH[1], "environments", name, project_names[end]; safe=true)
     end
     # otherwise, it's a path
-    path = abspath(env)
+    path = abspath(env; safe=true)
     if isdir(path)
         # directory with a project file?
         for proj in project_names
@@ -337,7 +337,7 @@ function active_project(search_load_path::Bool=true)
         # there are backedges here from abspath(::AbstractString, ::String)
         project = project::String
         if !isfile_casesensitive(project) && basename(project) ∉ project_names
-            project = abspath(project, "Project.toml")
+            project = abspath(project, "Project.toml"; safe=true)
         end
         return project
     end

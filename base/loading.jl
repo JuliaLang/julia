@@ -964,7 +964,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         manifest_path = get(cache.project_file_manifest_path, project_file, missing)
         manifest_path === missing || return manifest_path
     end
-    dir = abspath(dirname(project_file))
+    dir = abspath(dirname(project_file); safe=true)
     isfile_casesensitive(project_file) || return nothing
     d = parsed_toml(project_file)
     base_manifest = workspace_manifest(project_file)
@@ -974,7 +974,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     explicit_manifest = get(d, "manifest", nothing)::Union{String, Nothing}
     manifest_path = nothing
     if explicit_manifest !== nothing
-        manifest_file = normpath(joinpath(dir, explicit_manifest))
+        manifest_file = joinpath(dir, explicit_manifest)
         if isfile_casesensitive(manifest_file)
             manifest_path = manifest_file
         end
@@ -998,10 +998,10 @@ end
 # given a directory (implicit env from LOAD_PATH) and a name,
 # check if it is an implicit package
 function entry_point_and_project_file_inside(dir::String, name::String)::Union{Tuple{Nothing,Nothing},Tuple{String,Nothing},Tuple{String,String}}
-    path = normpath(joinpath(dir, "src", "$name.jl"))
+    path = joinpath(dir, "src", "$name.jl")
     isfile_casesensitive(path) || return nothing, nothing
     for proj in project_names
-        project_file = normpath(joinpath(dir, proj))
+        project_file = joinpath(dir, proj)
         isfile_casesensitive(project_file) || continue
         return path, project_file
     end
@@ -1018,7 +1018,7 @@ function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{No
     path, project_file = entry_point_and_project_file_inside(dir_jl, name)
     path === nothing || return path, project_file
     # check for less likely case with a bare file and no src directory last to minimize stat calls
-    path = normpath(joinpath(dir, "$name.jl"))
+    path = joinpath(dir, "$name.jl")
     isfile_casesensitive(path) && return path, nothing
     return nothing, nothing
 end
@@ -1038,9 +1038,9 @@ end
 
 # given a path, name, and possibly an entryfile, return the entry point
 function entry_path(path::String, name::String, entryfile::Union{Nothing,String})::String
-    isfile_casesensitive(path) && return normpath(path)
+    isfile_casesensitive(path) && return path
     entrypoint = entryfile === nothing ? joinpath("src", "$name.jl") : entryfile
-    return normpath(joinpath(path, entrypoint))
+    return joinpath(path, entrypoint)
 end
 
 ## explicit project & manifest API ##
@@ -1204,7 +1204,7 @@ function explicit_manifest_uuid_load_spec(project_file::String, pkg::PkgId)::Uni
                     error("failed to find source of parent package: \"$name\"")
                 end
                 parent_path = parent_load_spec.path
-                p = normpath(dirname(parent_path), "..")
+                p = joinpath(dirname(parent_path), "..")
                 return PkgLoadSpec(find_ext_path(p, pkg.name), parent_load_spec.julia_syntax_version)
             end
         end
@@ -1228,7 +1228,7 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     path = get(entry, "path", nothing)::Union{Nothing, String}
     entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
     if path !== nothing
-        path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entryfile)
+        path = entry_path(joinpath(dirname(manifest_file), path), pkg.name, entryfile)
         return PkgLoadSpec(path, syntax_version)
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
@@ -1248,7 +1248,7 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), syntax_version)
+            ispath(path) && return PkgLoadSpec(entry_path(abspath(path; safe=true), pkg.name, entryfile), syntax_version)
         end
     end
     # no depot contains the package, return missing to stop looking
@@ -2394,9 +2394,9 @@ function _include_dependency!(dep_list::Vector{Any}, track_dependencies::Bool,
                               track_content::Bool, path_may_be_dir::Bool)
     prev = source_path(nothing)
     if prev === nothing
-        path = abspath(_path)
+        path = abspath(_path; safe=true)
     else
-        path = normpath(joinpath(dirname(prev), _path))
+        path = normpath(joinpath(dirname(prev), _path); safe=true)
     end
     if !track_dependencies[]
         if !path_may_be_dir && !isfile(path)
@@ -3003,9 +3003,9 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
         if from_stdlib
             # first since this is a stdlib, try to look there directly first
             if ext === nothing
-                sourcepath = normpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
+                sourcepath = joinpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
             else
-                sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
+                sourcepath = find_ext_path(joinpath(env, package_uuidkey.name), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
             newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION), UInt128(0), false; DEPOT_PATH=depot_path)
@@ -3191,13 +3191,14 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
+# Used in Pkg.jl
 function load_path_setup_code(load_path::Bool=true)
     code = """
-    append!(empty!(Base.DEPOT_PATH), $(repr(map(abspath, DEPOT_PATH))))
-    append!(empty!(Base.DL_LOAD_PATH), $(repr(map(abspath, DL_LOAD_PATH))))
+    append!(empty!(Base.DEPOT_PATH), $(repr(map(x -> abspath(x; safe=true), DEPOT_PATH))))
+    append!(empty!(Base.DL_LOAD_PATH), $(repr(map(x -> abspath(x; safe=true), DL_LOAD_PATH))))
     """
     if load_path
-        load_path = map(abspath, Base.load_path())
+        load_path = map(x -> abspath(x; safe=true), Base.load_path())
         path_sep = Sys.iswindows() ? ';' : ':'
         any(path -> path_sep in path, load_path) &&
             error("LOAD_PATH entries cannot contain $(repr(path_sep))")
@@ -3283,9 +3284,9 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
-    depot_path = String[abspath(x) for x in DEPOT_PATH]
-    dl_load_path = String[abspath(x) for x in DL_LOAD_PATH]
-    load_path = String[abspath(x) for x in Base.load_path()]
+    depot_path = String[abspath(x; safe=true) for x in DEPOT_PATH]
+    dl_load_path = String[abspath(x; safe=true) for x in DL_LOAD_PATH]
+    load_path = String[abspath(x; safe=true) for x in Base.load_path()]
     # if pkg is a stdlib, append its parent Project.toml to the load path
     triggers = get(EXT_PRIMED, pkg, nothing)
     if triggers !== nothing
@@ -3343,7 +3344,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
-        Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_syntax_version)), $(repr(depot_path)), $(repr(dl_load_path)),
+        Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path; safe=true))), $(repr(input.julia_syntax_version)), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
         """)
     close(io.in)
@@ -3372,7 +3373,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=Cac
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
     if pkg.uuid === nothing
-        abspath(cachepath, entryfile) * ".ji"
+        joinpath(cachepath, entryfile) * ".ji"
     else
         crc = _crc32c(project)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
@@ -3387,7 +3388,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=Cac
 
         crc = _crc32c(prefs_hash, crc)
         project_precompile_slug = slug(crc, 5)
-        abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
+        joinpath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
 end
 
@@ -3594,9 +3595,26 @@ function CacheHeaderIncludes(dep_tuple::Tuple{Module, String, UInt64, UInt32, Fl
     return CacheHeaderIncludes(PkgId(dep_tuple[1]), dep_tuple[2:end]..., String[])
 end
 
-function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+function replace_depot_path(path::AbstractString, depots::Vector{Union{String, Tuple{String, String}}}=normalize_depots_for_relocation())
+    # We must handle several cases:
+    # 1. The depot itself is in a symlink'ed path
+    # 2. The files were symlinked into the depot
+    # 3. A combination of both
+    this_realpath = Filesystem.realpath_default(path, nothing)
+    realpath_differs = this_realpath !== path
     for depot in depots
-        if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
+        if isa(depot, Tuple{String, String})
+            depotrealpath = depot[2]
+            depot = depot[1]
+        else
+            depotrealpath = depot
+        end
+        if this_realpath !== nothing && (startswith(this_realpath, string(depotrealpath, Filesystem.pathsep())) || this_realpath == depotrealpath)
+            # Simplest case: The file's realpath is within the depot's realpath, simply replace and go on
+            path = replace(this_realpath, depotrealpath => "@depot"; count=1)
+            break
+        elseif realpath_differs && startswith(path, string(depot, Filesystem.pathsep())) || path == depot
+            # The file's original path was loaded from symlinks within the depot - n.b.: the path may still have `..` components
             path = replace(path, depot => "@depot"; count=1)
             break
         end
@@ -3605,14 +3623,20 @@ function replace_depot_path(path::AbstractString, depots::Vector{String}=normali
 end
 
 function normalize_depots_for_relocation()
-    depots = String[]
+    depots = Union{String, Tuple{String, String}}[]
     sizehint!(depots, length(DEPOT_PATH))
     for d in DEPOT_PATH
         isdir(d) || continue
         if isdirpath(d)
             d = dirname(d)
         end
-        push!(depots, abspath(d))
+        depotrealpath = realpath(d)
+        depotabspath = abspath(d)
+        if depotrealpath != depotabspath
+            push!(depots, (depotabspath, depotrealpath))
+        else
+            push!(depots, depotrealpath)
+        end
     end
     return depots
 end
