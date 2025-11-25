@@ -968,6 +968,8 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 {
     unsigned new_idx = 0;
     unsigned new_counter = 0;
+    if (jt == jl_typeofbottom_type->super)
+        jt = jl_typeofbottom_type; // treat Tuple{union{}} as identical to typeof(Union{})
     for_each_uniontype_small(
             // find the corresponding index in the new union-type
             [&](unsigned new_idx_, jl_datatype_t *new_jt) {
@@ -1835,6 +1837,8 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
 static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt, bool could_be_null)
 {
     assert(jl_is_concrete_type((jl_value_t*)dt) || is_uniquerep_Type((jl_value_t*)dt));
+    if (arg.constant)
+        return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), jl_isa(arg.constant, (jl_value_t*)dt));
     if (arg.TIndex) {
         unsigned tindex = get_box_tindex(dt, arg.typ);
         if (tindex > 0) {
@@ -2313,7 +2317,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         bool maybe_null_if_boxed, const jl_cgval_t *modifyop, const Twine &fname,
         jl_module_t *mod, jl_sym_t *var)
 {
-    auto newval = [&](const jl_cgval_t &lhs) {
+    auto newval = [&](const jl_cgval_t &lhs) { // for ismodifyfield
         const jl_cgval_t argv[3] = { cmpop, lhs, rhs };
         jl_cgval_t ret;
         if (modifyop) {
@@ -4115,12 +4119,26 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
     assert(Order == AtomicOrdering::NotAtomic);
     if (issetfieldonce)
         return mark_julia_const(ctx, jl_false);
+    auto newval = [&](const jl_cgval_t &lhs) { // for ismodifyfield
+        const jl_cgval_t argv[3] = { cmp, lhs, rhs };
+        jl_cgval_t ret;
+        if (modifyop) {
+            ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type, true);
+        }
+        else {
+            Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
+            ret = mark_julia_type(ctx, callval, true, jl_any_type);
+        }
+        emit_typecheck(ctx, ret, jltype, fname);
+        ret = update_julia_type(ctx, ret, jltype);
+        return ret;
+    };
     size_t fsz = 0, al = 0;
     int union_max = jl_islayout_inline(jltype, &fsz, &al);
     assert(union_max > 0);
-    // compute tindex from rhs
-    // TODO(jwn): this call not relevant/observed if ismodifyfield true?
-    jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, rhs, jltype, nullptr);
+    jl_cgval_t rhs_union = rhs;
+    if (!ismodifyfield)
+        rhs_union = convert_julia_type_to_union(ctx, rhs_union, jltype, false);
     if (rhs_union.typ == jl_bottom_type)
         return jl_cgval_t();
     if (needlock)
@@ -4131,7 +4149,7 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
         ctx.builder.CreateBr(ModifyBB);
         ctx.builder.SetInsertPoint(ModifyBB);
     }
-    jl_cgval_t oldval = rhs;
+    jl_cgval_t oldval = rhs; // issetfield returns rhs
     if (!issetfield)
         oldval = emit_unionload(ctx, ptr, ptindex, jltype, fsz, al, tbaa, true, union_max, tbaa_tindex);
     Value *Success = NULL;
@@ -4140,17 +4158,8 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
         if (ismodifyfield) {
             if (needlock)
                 emit_lockstate_value(ctx, needlock, false);
-            const jl_cgval_t argv[3] = { cmp, oldval, rhs };
-            if (modifyop) {
-                rhs = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type, true);
-            }
-            else {
-                Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
-                rhs = mark_julia_type(ctx, callval, true, jl_any_type);
-            }
-            emit_typecheck(ctx, rhs, jltype, fname);
-            rhs = update_julia_type(ctx, rhs, jltype);
-            rhs_union = convert_julia_type_to_union(ctx, rhs, jltype, nullptr);
+            rhs = newval(oldval);
+            rhs_union = convert_julia_type_to_union(ctx, rhs, jltype, false);
             if (rhs_union.typ == jl_bottom_type)
                 return jl_cgval_t();
             if (needlock)
@@ -4354,7 +4363,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 }
                 else if (jl_is_uniontype(jtype)) {
                     // compute tindex from rhs
-                    jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, fval_info, jtype, nullptr);
+                    jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, fval_info, jtype, false);
                     if (rhs_union.typ == jl_bottom_type)
                         return jl_cgval_t();
                     Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));

@@ -1166,8 +1166,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
         if (t2 == jl_bottom_type)
             return x;
         if (t1 != t2 && jl_is_uniontype(rt_hint)) { // TODO(jwn): && supports TIndex
-            x = convert_julia_type_to_union(ctx, x, rt_hint, nullptr);
-            y = convert_julia_type_to_union(ctx, y, rt_hint, nullptr);
+            x = convert_julia_type_to_union(ctx, x, rt_hint, false);
+            y = convert_julia_type_to_union(ctx, y, rt_hint, false);
             t1 = x.typ;
             t2 = y.typ;
         }
