@@ -714,7 +714,7 @@ clean: | $(CLEAN_TARGETS)
 .PHONY: cleanall
 cleanall: clean
 	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
-	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
+	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv clean-utf8proc
 	-rm -fr $(build_prefix) $(build_staging)
 
 .PHONY: distcleanall
