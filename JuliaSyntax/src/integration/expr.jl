@@ -528,8 +528,9 @@ end
     elseif k == K"function"
         if length(args) > 1
             if has_flags(nodehead, SHORT_FORM_FUNCTION_FLAG)
+                a1 = args[1]
                 a2 = args[2]
-                if !@isexpr(a2, :block)
+                if !@isexpr(a2, :block) && !@isexpr(a1, Symbol("'"))
                     args[2] = Expr(:block, a2)
                 end
                 retexpr.head = :(=)
