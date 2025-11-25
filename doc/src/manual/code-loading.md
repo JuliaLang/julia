@@ -397,6 +397,37 @@ are stored in the manifest file in the section for that package. The dependency 
 a package are the same as for its "parent" except that the listed triggers are also considered as
 dependencies.
 
+### [Standalone Scripts](@id standalone-scripts)
+
+Julia also understands *standalone scripts* that can embed their own `Project.toml` (and optionally `Manifest.toml`) so they can be executed as self-contained environments. A standalone script is identified by a `#!standalone` marker at the top of the file (only whitespace and comments may appear before it). The embedded project and manifest data are placed inside comment fences named `#!project` and `#!manifest`:
+
+```julia
+#!/usr/bin/env julia
+#!standalone
+
+using Markdown
+println(md"# Hello, single-file world!")
+
+#!project begin
+# name = "HelloApp"
+# uuid = "9c5fa7d8-7220-48e8-b2f7-0042191c5f6d"
+# version = "0.1.0"
+# [deps]
+# Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+#!project end
+
+#!manifest begin
+# [[deps]]
+# name = "Markdown"
+# uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+# version = "1.0.0"
+#!manifest end
+```
+
+Lines inside the fenced blocks should be commented with `#` (as in the example) or be plain TOML lines. The `#!standalone` marker must appear at the top of the file, with only whitespace and comments (including an optional shebang) allowed before it. The `#!project` and `#!manifest` sections can appear anywhere in the file (by convention at the bottom), but `#!project` must come before `#!manifest` if both are present.
+
+Running `julia hello.jl` automatically activates the embedded project if the file contains a `#!standalone` marker. The dependency loading rules for such a standalone script is the same as for a package with the same project and manifest file. The `--project=@script` flag also expands to the script itself if the `#!standalone` marker is present. Using `--project=script.jl` explicitly requires that the script contains the `#!standalone` marker.
+
 ### [Workspaces](@id workspaces)
 
 A project file can define a workspace by giving a set of projects that is part of that workspace:

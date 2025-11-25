@@ -211,22 +211,20 @@ mutable struct CachedTOMLDict
     size::Int64
     hash::UInt32
     d::Dict{String, Any}
+    kind::Symbol  # :full (regular TOML), :project, :manifest (inline)
 end
 
-function CachedTOMLDict(p::TOML.Parser, path::String)
+function CachedTOMLDict(p::TOML.Parser, path::String, kind)
     s = stat(path)
-    content = read(path)
+    content = if kind === :full
+        String(read(path))
+    else
+        String(extract_inline_section(path, kind))
+    end
     crc32 = _crc32c(content)
-    TOML.reinit!(p, String(content); filepath=path)
+    TOML.reinit!(p, content; filepath=path)
     d = TOML.parse(p)
-    return CachedTOMLDict(
-        path,
-        s.inode,
-        s.mtime,
-        s.size,
-        crc32,
-        d,
-   )
+    return CachedTOMLDict(path, s.inode, s.mtime, s.size, crc32, d, kind)
 end
 
 function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
@@ -235,19 +233,127 @@ function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
     # identical but that is solvable by not doing in-place updates, and not
     # rapidly changing these files
     if s.inode != f.inode || s.mtime != f.mtime || f.size != s.size
-        content = read(f.path)
-        new_hash = _crc32c(content)
+        file_content = read(f.path)
+        new_hash = _crc32c(file_content)
         if new_hash != f.hash
             f.inode = s.inode
             f.mtime = s.mtime
             f.size = s.size
             f.hash = new_hash
-            TOML.reinit!(p, String(content); filepath=f.path)
+
+            # Extract the appropriate TOML content based on kind
+            toml_content = if f.kind == :full
+                String(file_content)
+            else
+                String(extract_inline_section(f.path, f.kind))
+            end
+
+            TOML.reinit!(p, toml_content; filepath=f.path)
             return f.d = TOML.parse(p)
         end
     end
     return f.d
 end
+
+
+function extract_inline_section(path::String, type::Symbol)
+    # Read all lines
+    lines = readlines(path)
+
+    if type === :manifest
+        start_marker = "#!manifest begin"
+        end_marker = "#!manifest end"
+        section_name = "manifest"
+    else
+        start_marker = "#!project begin"
+        end_marker = "#!project end"
+        section_name = "project"
+    end
+
+    state = :none
+    content_lines = String[]
+    project_line = nothing
+    manifest_line = nothing
+
+    for (lineno, line) in enumerate(lines)
+        stripped = lstrip(line)
+
+        # Track positions of sections for validation
+        if startswith(stripped, "#!project begin")
+            project_line = lineno
+        elseif startswith(stripped, "#!manifest begin")
+            manifest_line = lineno
+        end
+
+        # Found start marker
+        if startswith(stripped, start_marker)
+            state = :reading
+            continue
+        end
+
+        # Found end marker
+        if startswith(stripped, end_marker) && state === :reading
+            state = :done
+            break
+        end
+
+        # Extract content
+        if state === :reading
+            if startswith(stripped, '#')
+                toml_line = lstrip(chop(stripped, head=1, tail=0))
+                push!(content_lines, toml_line)
+            else
+                push!(content_lines, line)
+            end
+        end
+    end
+
+    # Validate that project comes before manifest
+    if project_line !== nothing && manifest_line !== nothing && project_line > manifest_line
+        error("#!manifest section must come after #!project section in $path")
+    end
+
+    if state === :done
+        return strip(join(content_lines, '\n'))
+    elseif state === :none
+        return ""
+    else
+        error("incomplete inline $section_name block in $path (missing #!$section_name end)")
+    end
+end
+
+function is_standalone_script(path::String)::Bool
+    for line in eachline(path)
+        stripped = lstrip(line)
+        # Only whitespace and comments allowed before #!standalone
+        if !isempty(stripped) && !startswith(stripped, '#')
+            return false
+        end
+        if startswith(stripped, "#!standalone")
+            return true
+        end
+    end
+    return false
+end
+
+
+struct StandaloneScriptState
+    path::String
+    pkg::PkgId
+end
+
+standalone_script_state_global::Union{StandaloneScriptState, Nothing} = nothing
+
+function set_standalone_script_state(abs_path::Union{Nothing, String})
+    pkg = project_file_name_uuid(abs_path, splitext(basename(abs_path))[1])
+
+    # Verify the project and manifest delimiters:
+    parsed_toml(abs_path)
+    parsed_toml(abs_path; manifest=true)
+
+    global standalone_script_state_global = StandaloneScriptState(abs_path, pkg)
+end
+
 
 struct LoadingCache
     load_path::Vector{String}
@@ -272,26 +378,38 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
-parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
-function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
+parsed_toml(toml_file::AbstractString; manifest::Bool=false, project::Bool=!manifest) =
+    parsed_toml(toml_file, TOML_CACHE, require_lock; manifest=manifest, project=project)
+function parsed_toml(toml_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock;
+                     manifest::Bool=false, project::Bool=!manifest)
+    manifest && project && throw(ArgumentError("cannot request both project and manifest TOML"))
     lock(toml_lock) do
+        # Standalone script?
+        if endswith(toml_file, ".jl") && isfile_casesensitive(toml_file)
+            kind = manifest ? :manifest : :project
+            cache_key = "$(toml_file)::$(kind)"
+        else
+            kind = :full
+            cache_key = toml_file
+        end
+
         cache = LOADING_CACHE[]
-        dd = if !haskey(toml_cache.d, project_file)
-            d = CachedTOMLDict(toml_cache.p, project_file)
-            toml_cache.d[project_file] = d
+        dd = if !haskey(toml_cache.d, cache_key)
+            d = CachedTOMLDict(toml_cache.p, toml_file, kind)
+            toml_cache.d[cache_key] = d
             d.d
         else
-            d = toml_cache.d[project_file]
+            d = toml_cache.d[cache_key]
             # We are in a require call and have already parsed this TOML file
             # assume that it is unchanged to avoid hitting disk
-            if cache !== nothing && project_file in cache.require_parsed
+            if cache !== nothing && cache_key in cache.require_parsed
                 d.d
             else
                 get_updated_dict(toml_cache.p, d)
             end
         end
         if cache !== nothing
-            push!(cache.require_parsed, project_file)
+            push!(cache.require_parsed, cache_key)
         end
         return dd
     end
@@ -331,7 +449,12 @@ end
 Same as [`Base.identify_package`](@ref) except that the path to the environment where the package is identified
 is also returned, except when the identity is not identified.
 """
-identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
+function identify_package_env(where::Module, name::String)
+    if where === Main && standalone_script_state_global !== nothing
+        return identify_package_env(standalone_script_state_global.pkg, name)
+    end
+    return identify_package_env(PkgId(where), name)
+end
 function identify_package_env(where::Union{PkgId, Nothing}, name::String)
     # Special cases
     if where !== nothing
@@ -658,6 +781,13 @@ function env_project_file(env::String)::Union{Bool,String}
         project_file = locate_project_file(env)
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
+    elseif endswith(env, ".jl") && isfile_casesensitive(env)
+        if is_standalone_script(env)
+            project_file = env
+        end
+            #else
+        #    error("$env is missing #!standalone marker")
+        #end
     else
         project_file = false
     end
@@ -906,7 +1036,8 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         manifest_path === missing || return manifest_path
     end
     dir = abspath(dirname(project_file))
-    isfile_casesensitive(project_file) || return nothing
+    has_file = isfile_casesensitive(project_file)
+    has_file || return nothing
     d = parsed_toml(project_file)
     base_manifest = workspace_manifest(project_file)
     if base_manifest !== nothing
@@ -919,6 +1050,10 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         if isfile_casesensitive(manifest_file)
             manifest_path = manifest_file
         end
+    end
+    if manifest_path === nothing && endswith(project_file, ".jl") && has_file
+        # standalone script: manifest is the same file as the project file
+        manifest_path = project_file
     end
     if manifest_path === nothing
         for mfst in manifest_names
@@ -967,6 +1102,7 @@ end
 # Find the project file for the extension `ext` in the implicit env `dir``
 function implicit_env_project_file_extension(dir::String, ext::PkgId)
     for pkg in readdir(dir; join=true)
+        isdir(pkg) || continue
         project_file = env_project_file(pkg)
         project_file isa String || continue
         path = project_file_ext_path(project_file, ext)
@@ -1047,7 +1183,7 @@ dep_stanza_get(stanza::Nothing, name::String) = nothing
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
-    d = get_deps(parsed_toml(manifest_file))
+    d = get_deps(parsed_toml(manifest_file; manifest=true))
     for (dep_name, entries) in d
         entries::Vector{Any}
         for entry in entries
@@ -1120,7 +1256,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # no manifest, skip env
 
-    d = get_deps(parsed_toml(manifest_file))
+    d = get_deps(parsed_toml(manifest_file; manifest=true))
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
     if entries !== nothing
         for entry in entries
@@ -1549,7 +1685,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         project_file isa String || return nothing
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
-        d = get_deps(parsed_toml(manifest_file))
+        d = get_deps(parsed_toml(manifest_file; manifest=true))
         for (dep_name, entries) in d
             entries::Vector{Any}
             for entry in entries
@@ -2525,7 +2661,7 @@ function find_unsuitable_manifests_versions()
         project_file isa String || continue # no project file
         manifest_file = project_file_manifest_path(project_file)
         manifest_file isa String || continue # no manifest file
-        m = parsed_toml(manifest_file)
+        m = parsed_toml(manifest_file; manifest=true)
         man_julia_version = get(m, "julia_version", nothing)
         man_julia_version isa String || @goto mark
         man_julia_version = VersionNumber(man_julia_version)
