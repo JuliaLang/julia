@@ -97,6 +97,9 @@ WITH_TRACY_CALLSTACKS := 0
 # Enable Timing Counts support
 WITH_TIMING_COUNTS := 0
 
+# Should --gc-sections/-dead_strip be used to remove unreferenced code?
+USE_LINKER_GC:=1
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -930,6 +933,17 @@ endif
 ifeq ($(WITH_NVTX), 1)
 JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
+endif
+
+# Linker garbage collection
+ifeq ($(USE_LINKER_GC), 1)
+ifeq ($(OS), Darwin)
+  JLDFLAGS += -Wl,-dead_strip
+else
+  JLDFLAGS += -Wl,--gc-sections
+  JCFLAGS += -ffunction-sections -fdata-sections
+  JCXXFLAGS += -ffunction-sections -fdata-sections
+endif
 endif
 
 # ===========================================================================
