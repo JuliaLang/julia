@@ -269,6 +269,12 @@
                  Expr(:block,
                       LineNumberNode(3)))
 
+        # short-form postfix function shouldn't introduce a block
+        @test parsestmt("x' = 1") ==
+            Expr(:(=),
+                 Expr(Symbol("'"), :x),
+                 1)
+
         # `.=` doesn't introduce short form functions
         @test parsestmt("f() .= xs") ==
             Expr(:(.=), Expr(:call, :f), :xs)
