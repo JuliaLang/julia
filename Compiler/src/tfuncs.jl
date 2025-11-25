@@ -708,7 +708,7 @@ function pointer_eltype(@nospecialize(ptr))
 end
 
 @nospecs function pointerarith_tfunc(𝕃::AbstractLattice, ptr, offset)
-    return ptr
+    return widenconst(ptr)
 end
 @nospecs function pointerref_tfunc(𝕃::AbstractLattice, a, i, align)
     return pointer_eltype(a)
@@ -1284,18 +1284,6 @@ end
         end
     end
     return rewrap_unionall(R, s00)
-end
-
-# checks if a field of this type is guaranteed to be defined to a value
-# and that access to an uninitialized field will cause an `UndefRefError` or return zero
-# - is_undefref_fieldtype(String) === true
-# - is_undefref_fieldtype(Integer) === true
-# - is_undefref_fieldtype(Any) === true
-# - is_undefref_fieldtype(Int) === false
-# - is_undefref_fieldtype(Union{Int32,Int64}) === false
-# - is_undefref_fieldtype(T) === false
-function is_undefref_fieldtype(@nospecialize ftyp)
-    return !has_free_typevars(ftyp) && !allocatedinline(ftyp)
 end
 
 @nospecs function setfield!_tfunc(𝕃::AbstractLattice, o, f, v, order)
@@ -3186,7 +3174,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
             rt = Bool # too many matches to analyze
         else
             (; valid_worlds, applicable) = matches
-            update_valid_age!(sv, valid_worlds)
+            update_valid_age!(sv, get_inference_world(interp), valid_worlds)
             napplicable = length(applicable)
             if napplicable == 0
                 rt = Const(false) # never any matches
@@ -3228,7 +3216,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
     match, valid_worlds = findsup(types, method_table(interp))
-    update_valid_age!(sv, valid_worlds)
+    update_valid_age!(sv, get_inference_world(interp), valid_worlds)
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)

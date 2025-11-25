@@ -482,7 +482,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                         // emit specsig-to-(jl)invoke conversion
                         proto.decl->setLinkage(GlobalVariable::InternalLinkage);
                         //protodecl->setAlwaysInline();
-                        jl_init_function(proto.decl, params.TargetTriple);
+                        jl_init_function(proto.decl, params);
                         // TODO: maybe this can be cached in codeinst->specfptr?
                         int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
                         jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
@@ -1208,12 +1208,6 @@ public:
 #pragma clang diagnostic ignored "-Wunused-function"
 #endif
 
-// TODO: Port our memory management optimisations to JITLink instead of using the
-// default InProcessMemoryManager.
-std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT {
-    return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(/*Reservation Granularity*/ 16 * 1024 * 1024));
-}
-
 #ifdef _COMPILER_CLANG_
 #pragma clang diagnostic pop
 #endif
@@ -1237,6 +1231,7 @@ public:
 };
 
 RTDyldMemoryManager *createRTDyldMemoryManager(void) JL_NOTSAFEPOINT;
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
@@ -1450,7 +1445,7 @@ namespace {
         auto operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
             fixupTM(*TM);
-            auto NPM = std::make_unique<NewPM>(std::move(TM), O);
+            auto NPM = std::make_unique<NewPM>(std::move(TM), O, OptimizationOptions::defaults());
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             {
                 std::lock_guard<std::mutex> lock(llvm_printing_mutex);

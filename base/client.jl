@@ -627,8 +627,8 @@ entrypoint. The precise semantics of the entrypoint depend on the CLI driver.
 In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be automatically called upon
 the completion of script execution.
 
-The `@main` macro may be used standalone or as part of the function definition, though in the latter
-case, parentheses are required. In particular, the following are equivalent:
+The `@main` macro may be used standalone or as part of the function definition.
+The following are equivalent:
 
 ```
 function @main(args)

@@ -143,13 +143,19 @@ function lcm(a::T, b::T) where T<:Integer
     end
 end
 
+function _promote_mixed_signs(a::Signed, b::Unsigned)
+    # handle the case a == typemin(typeof(a)) if R != typeof(a)
+    R = promote_typeof(a, b)
+    promote(abs(a % signed(R)), b)
+end
+
 gcd(a::Integer) = checked_abs(a)
 gcd(a::Rational) = checked_abs(a.num) // a.den
 lcm(a::Union{Integer,Rational}) = gcd(a)
-gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
-gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
+gcd(a::Unsigned, b::Signed) = gcd(b, a)
+gcd(a::Signed, b::Unsigned) = gcd(_promote_mixed_signs(a, b)...)
 lcm(a::Unsigned, b::Signed) = lcm(promote(a, abs(b))...)
-lcm(a::Signed, b::Unsigned) = lcm(promote(abs(a), b)...)
+lcm(a::Signed, b::Unsigned) = lcm(_promote_mixed_signs(a, b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
 lcm(a::Real, b::Real) = lcm(promote(a,b)...)
 gcd(a::Real, b::Real, c::Real...) = gcd(a, gcd(b, c...))
@@ -184,7 +190,7 @@ end
 """
     gcdx(a, b...)
 
-Computes the greatest common (positive) divisor of `a` and `b` and their Bézout
+Compute the greatest common (positive) divisor of `a` and `b` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 ``u*a + v*b = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
 
@@ -223,22 +229,31 @@ julia> gcdx(15, 12, 20)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
-    T = promote_type(typeof(a), typeof(b))
-    a == b == 0 && return (zero(T), zero(T), zero(T))
+Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Integer}
+    if iszero(a) && iszero(b)
+        return (zero(T), zero(T), zero(T))
+    elseif isone(abs(b))
+        # handles (typemin(::Signed), -1)
+        return (one(T), zero(T), b)
+    elseif isone(abs(a))
+        return (one(T), a, zero(T))
+    end
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a && s1*a0 + t1*b0 == b
-    x = a % T
-    y = b % T
-    while y != 0
-        q, r = divrem(x, y)
-        x, y = y, r
+    while !iszero(b)
+        q, r = divrem(a, b)
+        a, b = b, r
         s0, s1 = s1, s0 - q*s1
         t0, t1 = t1, t0 - q*t1
     end
-    x < 0 ? (-x, -s0, -t0) : (x, s0, t0)
+    # for cases like abs(Int8(-128))
+    if isnegative(a) && isnegative(abs(a))
+        throw(DomainError((a, b), LazyString("gcd not representable in ", T)))
+    else
+        return isnegative(a) ? (abs(a), -s0, -t0) : (a, s0, t0)
+    end
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
@@ -254,11 +269,12 @@ function gcdx(a::Real, b::Real, cs::Real...)
     d′, x, ys... = gcdx(d, cs...)
     return d′, i*x, j*x, ys...
 end
+
 function gcdx(a::Signed, b::Unsigned)
-    R = promote_type(typeof(a), typeof(b))
-    _a = a % signed(R) # handle the case a == typemin(typeof(a)) if R != typeof(a)
-    d, u, v = gcdx(promote(abs(_a), b)...)
-    d, flipsign(u, a), v
+    R = promote_typeof(a, b)
+    d, u, v = gcdx(promote(abs(a % signed(R)), b)...)
+    flip_typemin = isnegative(a) & (R <: Signed)
+    d, flipsign(u, a - flip_typemin), v
 end
 function gcdx(a::Unsigned, b::Signed)
     d, v, u = gcdx(b, a)
@@ -287,24 +303,38 @@ julia> invmod(5, 6)
 ```
 """
 function invmod(n::Integer, m::Integer)
+    # The postcondition is: mod(widemul(result, n), m) == mod(one(T), m) && iszero(div(result, m))
     iszero(m) && throw(DomainError(m, "`m` must not be 0."))
-    if n isa Signed && hastypemax(typeof(n))
-        # work around inconsistencies in gcdx
-        # https://github.com/JuliaLang/julia/issues/33781
-        T = promote_type(typeof(n), typeof(m))
-        n == typemin(typeof(n)) && m == typeof(n)(-1) && return T(0)
-        n == typeof(n)(-1) && m == typemin(typeof(n)) && return T(-1)
+    R = promote_typeof(n, m)
+    if R <: Signed
+        x = _bezout_coef(n, m)
+        return mod(x, m)
+    else
+        S = signed(R)
+        if !hastypemax(S) || (n <= typemax(S)) && (m <= typemax(S))
+            x = _bezout_coef(n % S, m % S)
+
+            # this branch is only hit if R <: Unsigned, so we don't have
+            # to worry about abs(typemin(::Signed)) overflow. If `m` is
+            # signed then `x` must be unsigned, and thus never negative
+            isnegative(x) && (x += abs(m))
+            return mod(x % R, m)
+        else
+            # since gcdx only promises bezout w.r.t overflow for unsigned ints,
+            # we have to widen to a signed type
+            W = widen(S)
+            x = _bezout_coef(n % W, m % W)
+            t = mod(x, m % W)
+            isnegative(m) && (t -= m)
+            return mod(t % R, m)
+        end
     end
-    g, x, y = gcdx(n, m)
+end
+
+function _bezout_coef(n, m)
+    g, x, _ = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
-    # Note that m might be negative here.
-    if x isa Unsigned && hastypemax(typeof(x)) && x > typemax(x)>>1
-        # x might have wrapped if it would have been negative
-        # adding back m forces a correction
-        x += m
-    end
-    # The postcondition is: mod(result * n, m) == mod(T(1), m) && div(result, m) == 0
-    return mod(x, m)
+    return x
 end
 
 """
@@ -505,20 +535,47 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
         end
     end
     (m == 1 || m == -1) && return zero(m)
-    b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
-    t = prevpow(2, p)
-    r = 1
-    while true
-        if p >= t
-            r = mod(widemul(r,b),m)
-            p -= t
+    mm = uabs(m)
+    rr = one(mm)
+    bb = oftype(mm, mod(x, mm))
+
+    # legal && profitable
+    if _powermod_mi_legal(mm) && (p > 2sizeof(mm))
+        if bb == 0
+            rr = zero(mm)
+        else
+            mis = MultiplicativeInverses.multiplicativeinverse(mm)
+            Base.@assume_effects :terminates_locally while true
+                if (p & 1) != 0
+                    rr = mod(rr * bb, mis)
+                end
+                p >>= 1
+                p == 0 && break
+                bb = mod(bb * bb, mis)
+            end
         end
-        t >>>= 1
-        t <= 0 && break
-        r = mod(widemul(r,r),m)
+    else
+        if bb == 0
+            rr = zero(mm)
+        else
+            Base.@assume_effects :terminates_locally while true
+                if (p & 1) != 0
+                    rr = oftype(mm, mod(widemul(rr, bb), mm))
+                end
+                p >>= 1
+                p == 0 && break
+                bb = oftype(mm, mod(widemul(bb, bb), mm))
+            end
+        end
     end
-    return r
+    r = oftype(m, rr)
+    return (iszero(r) || (m > 0)) ? r : r + m
+end
+
+_powermod_mi_legal(::Integer) = false
+function _powermod_mi_legal(mm::T) where {T<:Unsigned}
+    return Base.hastypemax(T) && (mm <= (typemax(T) >> (sizeof(T) << 2)))
 end
 
 # optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
@@ -977,7 +1034,8 @@ split_sign(n::Unsigned) = n, false
 Convert an integer `n` to a string in the given `base`,
 optionally specifying a number of digits to pad to.
 
-See also [`digits`](@ref), [`bitstring`](@ref), [`count_zeros`](@ref).
+See also [`digits`](@ref), [`bitstring`](@ref), [`count_zeros`](@ref),
+and the Printf standard library.
 
 # Examples
 ```jldoctest
@@ -986,6 +1044,14 @@ julia> string(5, base = 13, pad = 4)
 
 julia> string(-13, base = 5, pad = 4)
 "-0023"
+
+julia> using Printf
+
+julia> @sprintf("%04i", 5)
+"0005"
+
+julia> @sprintf("%4i", 5)
+"   5"
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)

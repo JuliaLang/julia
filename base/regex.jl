@@ -324,7 +324,7 @@ Return `true` if `s` starts with the regex pattern, `prefix`.
     `match_option` to PCRE. If compile time is amortized,
     `occursin(r"^...", s)` is faster than `startswith(s, r"...")`.
 
-See also [`occursin`](@ref) and [`endswith`](@ref).
+See also [`occursin`](@ref), [`endswith`](@ref), [`match`](@ref)
 
 !!! compat "Julia 1.2"
     This method requires at least Julia 1.2.
@@ -356,7 +356,7 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
     `match_option` to PCRE. If compile time is amortized,
     `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
 
-See also [`occursin`](@ref) and [`startswith`](@ref).
+See also [`occursin`](@ref), [`startswith`](@ref), [`match`](@ref)
 
 !!! compat "Julia 1.2"
     This method requires at least Julia 1.2.
@@ -421,6 +421,9 @@ julia> m.match
 julia> match(rx, "cabac", 3) === nothing
 true
 ```
+# See also
+[`eachmatch`](@ref), [`occursin`](@ref), [`findfirst`](@ref)
+
 """
 function match end
 
@@ -558,6 +561,9 @@ julia> count(r"a(.)a", "cabacabac", overlap=true)
 julia> count(r"a(.)a", "cabacabac")
 2
 ```
+# See also
+[`eachmatch`](@ref), [`occursin`](@ref), [`findall`](@ref)
+
 """
 function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
@@ -643,17 +649,17 @@ replace_err(repl) = error("Bad replacement string: $repl")
 function _write_capture(io::IO, group::Int, str, r, re::RegexAndMatchData)
     len = PCRE.substring_length_bynumber(re.match_data, group)
     # in the case of an optional group that doesn't match, len == 0
-    len == 0 && return
+    len == 0 && return len
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
         pointer(io.data, io.ptr), len+1)
     io.ptr += len
     io.size = max(io.size, io.ptr - 1)
-    nothing
+    return len
 end
 function _write_capture(io::IO, group::Int, str, r, re)
     group == 0 || replace_err("pattern is not a Regex")
-    return print(io, SubString(str, r))
+    return write(io, SubString(str, r))
 end
 
 
@@ -667,12 +673,13 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     repl = unescape_string(repl_s.string, KEEP_ESC)
     i = firstindex(repl)
     e = lastindex(repl)
+    nb = 0
     while i <= e
         if repl[i] == SUB_CHAR
             next_i = nextind(repl, i)
             next_i > e && replace_err(repl)
             if repl[next_i] == SUB_CHAR
-                write(io, SUB_CHAR)
+                nb += write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
             elseif isdigit(repl[next_i])
                 group = parse(Int, repl[next_i])
@@ -685,7 +692,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                         break
                     end
                 end
-                _write_capture(io, group, str, r, re)
+                nb += _write_capture(io, group, str, r, re)
             elseif repl[next_i] == GROUP_CHAR
                 i = nextind(repl, next_i)
                 if i > e || repl[i] != LBRACKET
@@ -707,16 +714,17 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 else
                     group = -1
                 end
-                _write_capture(io, group, str, r, re)
+                nb += _write_capture(io, group, str, r, re)
                 i = nextind(repl, i)
             else
                 replace_err(repl)
             end
         else
-            write(io, repl[i])
+            nb += write(io, repl[i])
             i = nextind(repl, i)
         end
     end
+    nb
 end
 
 struct RegexMatchIterator{S <: AbstractString}
@@ -789,6 +797,9 @@ julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
  RegexMatch("a2a")
  RegexMatch("a3a")
 ```
+# See also
+[`match`](@ref), [`findall`](@ref), [`count`](@ref)
+
 """
 eachmatch(re::Regex, str::AbstractString; overlap = false) =
     RegexMatchIterator(re, str, overlap)

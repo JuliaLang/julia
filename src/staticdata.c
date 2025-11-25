@@ -1244,12 +1244,13 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             // TODO: Remove dead entries
             newm_data->min_world = data->min_world;
             newm_data->max_world = data->max_world;
+            newm_data->flags = data->flags;
             if (s->incremental) {
                 if (data->max_world != ~(size_t)0)
                     newm_data->max_world = 0;
                 newm_data->min_world = jl_require_world;
             }
-            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[3*i])));
+            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[4*i])));
             arraylist_push(&s->relocs_list, (void*)backref_id(s, data->mod, s->link_ids_relocs));
         }
         newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
@@ -1271,11 +1272,13 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_uint(s->s, data->min_world);
                 write_uint(s->s, data->max_world);
             }
-            static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void*), "_jl_module_using mismatch");
+            write_uint(s->s, data->flags);
+            static_assert(sizeof(struct _jl_module_using) == 4*sizeof(void*), "_jl_module_using mismatch");
             tot += sizeof(struct _jl_module_using);
         }
         for (; i < module_usings_max(m); i++) {
             write_pointer(s->s);
+            write_uint(s->s, 0);
             write_uint(s->s, 0);
             write_uint(s->s, 0);
             tot += sizeof(struct _jl_module_using);
@@ -3322,12 +3325,6 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
                                          ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, jl_array_t *module_init_order)
 {
-    if (jl_options.strip_ir || jl_options.trim) {
-        // make sure this is precompiled for jl_foreach_reachable_mtable
-        jl_get_loaded_modules();
-    }
-    jl_gc_collect(JL_GC_FULL);
-    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
 
     // iff emit_split
@@ -3374,6 +3371,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     if (_native_data != NULL)
         native_functions = *_native_data;
 
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     // Make sure we don't run any Julia code concurrently after this point
     // since it will invalidate our serialization preparations
     jl_gc_enable_finalizers(ct, 0);
