@@ -256,7 +256,7 @@ static void *create_shared_map(size_t size, size_t id) JL_NOTSAFEPOINT
     return addr;
 }
 
-static intptr_t init_shared_map() JL_NOTSAFEPOINT
+[[maybe_unused]] static intptr_t init_shared_map() JL_NOTSAFEPOINT
 {
     anon_hdl = get_anon_hdl();
     if (anon_hdl == -1)
@@ -771,6 +771,7 @@ public:
 std::pair<std::unique_ptr<ROAllocator>, std::unique_ptr<ROAllocator>>
 get_preferred_allocators() JL_NOTSAFEPOINT
 {
+#if !(defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_))
 #ifdef _OS_LINUX_
     if (get_self_mem_fd() != -1)
         return {std::make_unique<SelfMemAllocator>(false),
@@ -779,6 +780,7 @@ get_preferred_allocators() JL_NOTSAFEPOINT
     if (init_shared_map() != -1)
         return {std::make_unique<DualMapAllocator>(false),
                 std::make_unique<DualMapAllocator>(true)};
+#endif
     return {};
 }
 
