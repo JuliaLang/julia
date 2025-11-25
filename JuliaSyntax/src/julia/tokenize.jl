@@ -1253,12 +1253,12 @@ function lex_identifier(l::Lexer, c)
     end
 end
 
-# This creates a hash for chars in [a-z] using 5 bit per char.
+# This creates a hash for chars in [A-z] using 6 bit per char.
 # Requires an additional input-length check somewhere, because
-# this only works up to ~12 chars.
+# this only works up to ~10 chars.
 @inline function simple_hash(c::Char, h::UInt64)
-    bytehash = (clamp(c - 'a' + 1, -1, 30) % UInt8) & 0x1f
-    h << 5 + bytehash
+    bytehash = (clamp(c - 'A' + 1, -1, 60) % UInt8) & 0x3f
+    h << 6 + bytehash
 end
 
 function simple_hash(str)
@@ -1313,10 +1313,11 @@ K"outer",
 K"primitive",
 K"type",
 K"var",
+K"VERSION"
 ]
 
 const _true_hash = simple_hash("true")
 const _false_hash = simple_hash("false")
-const _kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
+const _kw_hash = Dict(simple_hash(string(kw)) => kw for kw in kws)
 
 end # module

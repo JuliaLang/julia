@@ -431,6 +431,7 @@ end
         )
     end
     """) ≈ @ast_ [K"module"
+        v"1.14.0"::K"VERSION"
         "AA"::K"Identifier"
         [K"block"
         ]
