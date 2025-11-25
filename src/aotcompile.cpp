@@ -2414,28 +2414,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 decl_names.invoke = decls->invoke ? decls->invoke->getName() : "";
                 decl_names.specptr = decls->specptr ? decls->specptr->getName() : "";
                 // if compilation succeeded, prepare to return the result
-                // Similar to jl_link_global from jitlayers.cpp,
-                // so that code_llvm shows similar codegen to the jit
-                for (auto &global : output.global_targets) {
-                    if (jl_options.image_codegen) {
-                        global.second->setLinkage(GlobalValue::ExternalLinkage);
-                    }
-                    else {
-                        auto p = literal_static_pointer_val(global.first, global.second->getValueType());
-                        Type *elty = PointerType::get(p->getContext(), 0);
-                        // For pretty printing, when LLVM inlines the global initializer into its loads
-                        auto alias = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, global.second->getName() + ".jit", p, global.second->getParent());
-                        global.second->setInitializer(ConstantExpr::getBitCast(alias, global.second->getValueType()));
-                        global.second->setConstant(true);
-                        global.second->setLinkage(GlobalValue::PrivateLinkage);
-                        global.second->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
-                        global.second->setVisibility(GlobalValue::DefaultVisibility);
-                    }
-                }
-                // TODO:
-                // if (!jl_options.image_codegen) {
-                //     optimizeDLSyms(*m.getModuleUnlocked());
-                // }
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
                     auto opts = OptimizationOptions::defaults();
