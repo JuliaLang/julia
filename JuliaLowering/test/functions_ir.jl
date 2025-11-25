@@ -1559,7 +1559,7 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub TestMod.#f_only_generated@generator#0 SourceRef(SourceFile("@generated function f_only_generated(x, y)\n    generator_code(x,y)\nend", 0, nothing, 1, [1, 44, 68]), 1, (macrocall (macro_name 1-1::@-t 2-10::Identifier) 11-11::Whitespace-t (function 12-19::function-t 20-20::Whitespace-t (call 21-36::Identifier 37-37::(-t 38-38::Identifier 39-39::,-t 40-40::Whitespace-t 41-41::Identifier 42-42::)-t) (block 43-47::NewlineWs-t (call 48-61::Identifier 62-62::(-t 63-63::Identifier 64-64::,-t 65-65::Identifier 66-66::)-t) 67-67::NewlineWs-t) 68-70::end-t))) (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_only_generated@generator#0 SourceRef::1:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   (meta :generated_only)
     3   (return core.nothing)
 20  latestworld
@@ -1605,7 +1605,7 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/maybe_gen_stuff slot₅/nongen_stuff]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub TestMod.#f_partially_generated@generator#0 SourceRef(SourceFile("function f_partially_generated(x, y)\n    nongen_stuff = bothgen(x, y)\n    if @generated\n        quote\n            maybe_gen_stuff = some_gen_stuff(x, y)\n        end\n    else\n        maybe_gen_stuff = some_nongen_stuff(x, y)\n    end\n    (nongen_stuff, maybe_gen_stuff)\nend", 0, nothing, 1, [1, 38, 71, 89, 103, 154, 166, 175, 225, 233, 269]), 1, (function 1-8::function-t 9-9::Whitespace-t (call 10-30::Identifier 31-31::(-t 32-32::Identifier 33-33::,-t 34-34::Whitespace-t 35-35::Identifier 36-36::)-t) (block 37-41::NewlineWs-t (= 42-53::Identifier 54-54::Whitespace-t 55-55::=-t 56-56::Whitespace-t (call 57-63::Identifier 64-64::(-t 65-65::Identifier 66-66::,-t 67-67::Whitespace-t 68-68::Identifier 69-69::)-t)) 70-74::NewlineWs-t (if 75-76::if-t 77-77::Whitespace-t (macrocall (macro_name 78-78::@-t 79-87::Identifier)) (block 88-96::NewlineWs-t (quote (block 97-101::quote-t 102-114::NewlineWs-t (= 115-129::Identifier 130-130::Whitespace-t 131-131::=-t 132-132::Whitespace-t (call 133-146::Identifier 147-147::(-t 148-148::Identifier 149-149::,-t 150-150::Whitespace-t 151-151::Identifier 152-152::)-t)) 153-161::NewlineWs-t 162-164::end-t)) 165-169::NewlineWs-t) 170-173::else-t (block 174-182::NewlineWs-t (= 183-197::Identifier 198-198::Whitespace-t 199-199::=-t 200-200::Whitespace-t (call 201-217::Identifier 218-218::(-t 219-219::Identifier 220-220::,-t 221-221::Whitespace-t 222-222::Identifier 223-223::)-t)) 224-228::NewlineWs-t) 229-231::end-t) 232-236::NewlineWs-t (tuple-p 237-237::(-t 238-249::Identifier 250-250::,-t 251-251::Whitespace-t 252-266::Identifier 267-267::)-t) 268-268::NewlineWs-t) 269-271::end-t)) (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_partially_generated@generator#0 SourceRef::1:37 (call core.svec :#self# :x :y) (call core.svec)))
     2   TestMod.bothgen
     3   (= slot₅/nongen_stuff (call %₂ slot₂/x slot₃/y))
     4   TestMod.some_nongen_stuff

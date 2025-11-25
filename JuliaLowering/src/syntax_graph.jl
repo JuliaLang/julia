@@ -479,7 +479,10 @@ function _value_string(ex)
           k == K"static_parameter" ? "static_parameter" :
           k == K"symbolic_label" ? "label:$(ex.name_val)" :
           k == K"symbolic_goto" ? "goto:$(ex.name_val)" :
-          k == K"SourceLocation" ? "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+          k == K"SourceLocation" ?
+              "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+          k == K"Value" && ex.value isa SourceRef ?
+              "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
           repr(get(ex, :value, nothing))
     id = get(ex, :var_id, nothing)
     if isnothing(id)

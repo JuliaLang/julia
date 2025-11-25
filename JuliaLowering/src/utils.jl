@@ -118,6 +118,7 @@ function print_ir(io::IO, ex, method_filter=nothing)
     _print_ir(io, ex, "")
 end
 
+# TODO: JuliaLowering-the-module should always print the same way, ignoring parent modules
 function _print_ir(io::IO, ex, indent)
     added_indent = "    "
     @assert (kind(ex) == K"lambda" || kind(ex) == K"code_info") && kind(ex[1]) == K"block"
