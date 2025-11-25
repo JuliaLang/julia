@@ -63,6 +63,10 @@ USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
 
+# Link libjulia-internal with static libgcc and libstdc++
+USE_RT_STATIC_LIBGCC:=1
+USE_RT_STATIC_LIBSTDCXX:=1
+
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
 

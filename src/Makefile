@@ -209,10 +209,10 @@ CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 
 ifeq ($(USEGCC),1)
 ifeq ($(USE_RT_STATIC_LIBGCC),1)
-RT_LIBS := -static-libgcc
+RT_LIBS += -static-libgcc
 endif
 ifeq ($(USE_RT_STATIC_LIBSTDCXX),1)
-RT_LIBS := -static-libstdc++
+RT_LIBS += -static-libstdc++
 endif
 endif
 
