@@ -143,10 +143,11 @@ static void write_log_data(logdata_t &logData, const char *extension) JL_NOTSAFE
                 char line[1024];
                 int l = 1;
                 unsigned block = 0;
-                while (fscanf(inf, "%1023[^\n]", line) != EOF) {
+                int ret = 0;
+                while (ret != EOF && (ret = fscanf(inf, "%1023[^\n]", line)) != EOF) {
                     // Skip n non-newline chars and a single trailing newline
-                    fscanf(inf, "%*[^\n]");
-                    fscanf(inf, "%*1[\n]");
+                    if ((ret = fscanf(inf, "%*[^\n]")) != EOF)
+                        ret = fscanf(inf, "%*1[\n]");
                     logdata_block *data = NULL;
                     if (block < values.size()) {
                         data = values[block];
