@@ -939,7 +939,15 @@ JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
 endif
 
+ifeq ($(OS), WINNT)
+  USE_RT_STATIC_LIBGCC:=0
+  USE_RT_STATIC_LIBSTDCXX:=0
+endif
+
 # Linker garbage collection
+ifeq ($(OS), WINNT)
+  USE_LINKER_GC := 0
+endif
 ifeq ($(USE_LINKER_GC), 1)
 ifeq ($(OS), Darwin)
   JLDFLAGS += -Wl,-dead_strip
