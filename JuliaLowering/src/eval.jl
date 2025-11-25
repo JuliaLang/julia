@@ -370,7 +370,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             ir
         end
     elseif k == K"Value"
-        ex.value
+        ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id + stmt_offset)
     elseif k == K"gotoifnot"
