@@ -68,7 +68,7 @@ the latest stable `julia` for you and help keep it up to date. It can also let
 you install and run different Julia versions simultaneously. Instructions for
 this can be found [here](https://julialang.org/downloads/). If you want to manually
 download specific Julia binaries, you can find those on the [Manual Downloads
-page](https://julialang.org/manual-downloads/). The downloads page also provides
+page](https://julialang.org/downloads/manual-downloads/). The downloads page also provides
 details on the [different tiers of
 support](https://julialang.org/downloads/support) for OS and
 platform combinations.
