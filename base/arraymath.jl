@@ -39,11 +39,12 @@ for f in (:+, :-)
     end
 end
 
-function +(A::Array, Bs::Array...)
-    for B in Bs
-        promote_shape(A, B) # check size compatibility
+function +(A::Array, B::Array, Cs::Array...)
+    promote_shape(A, B)
+    for C in Cs
+        promote_shape(A, C) # check size compatibility
     end
-    _broadcast_preserving_zero_d(+, A, Bs...)
+    _broadcast_preserving_zero_d(+, A, B, Cs...)
 end
 
 for f in (:/, :\, :*)

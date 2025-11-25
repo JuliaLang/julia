@@ -2378,11 +2378,14 @@ end
 end
 
 @testset "size promotion in addition/subtraction" begin
-    for A in Any[ones(), ones(1), ones(1,1,1)], B in Any[ones(), ones(1), ones(1,1,1)]
-        sz = ndims(A) > ndims(B) ? size(A) : size(B)
-        @test A + B == fill(2.0,sz)
-        @test A - B == zeros(sz)
-        @test A + B + zeros() == A + B
-        @test A - B - zeros() == A - B
+    for A in Any[ones(), ones(1), ones(1,1,1)]
+        @test +(A) == A
+        for B in Any[ones(), ones(1), ones(1,1,1)]
+            sz = ndims(A) > ndims(B) ? size(A) : size(B)
+            @test A + B == fill(2.0,sz)
+            @test A - B == zeros(sz)
+            @test A + B + zeros() == A + B
+            @test A - B - zeros() == A - B
+        end
     end
 end
