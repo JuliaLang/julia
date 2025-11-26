@@ -885,33 +885,6 @@ end
 @inline broadcast_preserving_zero_d(f) = fill(f())
 @inline broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
 
-# Using map over broadcast enables vectorization for wide matrices with few rows.
-# This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
-# https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
-function broadcast_preserving_zero_d(f, A::Array{<:Any,N}, Bs::Array{<:Any,N}...) where {N}
-    map(f, A, Bs...)
-end
-
-function broadcast_preserving_zero_d(f, A::Array, B::Array, Cs::Array...)
-    # we already know that the shapes are compatible.
-    # We just need to select the size corresponding to the higest ndims
-    # and reshape all the arrays to that size
-    arrays = (A, B, Cs...)
-    sz = mapreduce(size, (x,y) -> length(x) > length(y) ? x : y, arrays)
-    # Skip reshaping where possible to avoid the overhead
-    arrays_sameshape = map(x -> length(sz) == ndims(x) ? x : reshape(x, sz), arrays)
-    map(f, arrays_sameshape...)
-end
-
-function broadcast_preserving_zero_d(f, A::Array, B::Number)
-    map(Base.Fix2(f, B), A)
-end
-
-function broadcast_preserving_zero_d(f, A::Number, B::Array)
-    map(Base.Fix1(f, A), B)
-end
-
-
 """
     Broadcast.materialize(bc)
 
