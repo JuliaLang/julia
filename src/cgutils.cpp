@@ -992,14 +992,15 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
     Value *data;
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
-        if (val)
+        if (val && !type_is_ghost(val->getType()))
             data = get_pointer_to_constant(ctx.emission_context, val, Align(julia_alignment(jl_typeof(x.constant))), "_j_const", *jl_Module);
         else
             data = literal_pointer_val(ctx, x.constant);
     }
     else if (x.V == NULL) {
         // might be a ghost union with tindex but no actual pointer
-        data = NULL;
+        // could use Undef here, but harder to debug if something goes wrong
+        data = ConstantPointerNull::get(ctx.types().T_ptr);
     }
     else {
         data = maybe_decay_tracked(ctx, x.V);

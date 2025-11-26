@@ -2759,6 +2759,8 @@ static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_
                     unsigned old_idx = v.TIndex ? get_box_tindex(jt, v.typ) : 0;
                     if (old_idx == 0) {
                         if (jl_datatype_layout(jt)->npointers) {
+                            if (!jl_subtype((jl_value_t*)jt, v.typ))
+                                return;
                             add_roots_count += 1;
                             add_roots_inline = std::max(add_roots_inline, jl_datatype_layout(jt)->npointers);
                         }
@@ -2812,6 +2814,8 @@ static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_
                         if (old_idx == 0) {
                             auto npointers = jl_datatype_layout(jt)->npointers;
                             if (npointers) {
+                                if (!jl_subtype((jl_value_t*)jt, v.typ))
+                                    return;
                                 BasicBlock *splitunboxBB = BasicBlock::Create(ctx.builder.getContext(), "split_unbox_union", ctx.f);
                                 SW->addCase(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER | idx), splitunboxBB);
                                 ctx.builder.SetInsertPoint(splitunboxBB);
