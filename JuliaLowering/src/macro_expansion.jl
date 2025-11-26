@@ -325,6 +325,13 @@ function expand_macro(ctx, ex)
         # Compat: attempt to invoke an old-style macro if there's no applicable
         # method for new-style macro arguments.
         macro_args = Any[macro_loc, ctx.scope_layers[1].mod]
+
+        if length(raw_args) >= 1 && kind(raw_args[1]) === K"VERSION"
+            # Hack: see jl_invoke_julia_macro.  We may see an extra argument
+            # depending on who parsed this macrocall.
+            macro_args[1] = Core.MacroSource(macro_loc, raw_args[1].value)
+        end
+
         for arg in raw_args
             # For hygiene in old-style macros, we omit any additional scope
             # layer information from macro arguments. Old-style macros will
@@ -335,7 +342,7 @@ function expand_macro(ctx, ex)
             # new-style macros which call old-style macros. Instead of seeing
             # `Expr(:escape)` in such situations, old-style macros will now see
             # `Expr(:scope_layer)` inside `macro_args`.
-            push!(macro_args, Expr(arg))
+            kind(arg) !== K"VERSION" && push!(macro_args, Expr(arg))
         end
         expanded = try
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
