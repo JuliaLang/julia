@@ -633,6 +633,10 @@ end
         @test dot(x, B', y) ≈ dot(B*x, y)
         elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
     end
+    for (m, n) in ((0, 0), (1, 0), (0, 1))
+        v = zeros(ComplexF64, m); a = zeros(ComplexF64, m, n); w = zeros(Float64, n)
+        @test dot(v, a, w) === zero(ComplexF64)
+    end
 end
 
 @testset "condskeel #34512" begin

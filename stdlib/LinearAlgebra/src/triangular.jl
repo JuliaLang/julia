@@ -610,7 +610,7 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     end
     x₁ = x[1]
     r = dot(x₁, A[1,1], y[1])
@@ -631,7 +631,7 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     end
     x₁ = first(x)
     r = dot(x₁, y[1])
@@ -653,7 +653,7 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     end
     r = zero(typeof(dot(first(x), first(A), first(y))))
     @inbounds for j in 1:m
@@ -673,7 +673,7 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
     m = size(A, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     end
     r = zero(typeof(dot(first(x), first(y))))
     @inbounds for j in 1:m

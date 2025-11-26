@@ -713,7 +713,7 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
     nx, ny = length(x), length(y)
     (nx == size(B, 1) == ny) || throw(DimensionMismatch())
     if nx ≤ 1
-        nx == 0 && return dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y)))
+        nx == 0 && return zero(dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y))))
         return dot(x[1], B.dv[1], y[1])
     end
     ev, dv = B.ev, B.dv

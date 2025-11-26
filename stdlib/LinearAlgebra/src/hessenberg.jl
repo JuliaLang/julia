@@ -341,7 +341,7 @@ function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
     m = size(H, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
-        return dot(zero(eltype(x)), zero(eltype(H)), zero(eltype(y)))
+        return zero(dot(zero(eltype(x)), zero(eltype(H)), zero(eltype(y))))
     end
     x₁ = x[1]
     r = dot(x₁, H[1,1], y[1])

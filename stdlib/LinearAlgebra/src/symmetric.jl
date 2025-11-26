@@ -530,6 +530,7 @@ function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)
     n = length(x)
     (n == length(y) == size(A, 1)) || throw(DimensionMismatch())
+    iszero(n) && return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     data = A.data
     r = dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     iszero(n) && return r

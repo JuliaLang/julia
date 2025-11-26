@@ -922,6 +922,8 @@ dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by 
 
 function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
+    # outermost zero call to avoid spurious sign ambiguity (like 0.0 - 0.0im)
+    any(isempty, (x, y)) && return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     T = typeof(dot(first(x), first(A), first(y)))
     s = zero(T)
     i₁ = first(eachindex(x))
