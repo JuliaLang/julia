@@ -102,6 +102,8 @@
     XX(jl_dlopen) \
     XX(jl_dlsym) \
     XX(jl_dump_host_cpu) \
+    XX(jl_dump_host_cpu2) \
+    XX(jl_dump_specific_cpu) \
     XX(jl_check_pkgimage_clones) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
