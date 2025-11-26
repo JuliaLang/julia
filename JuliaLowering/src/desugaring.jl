@@ -1724,13 +1724,12 @@ end
 
 # Expand the (sym,lib) argument to ccall/cglobal
 function expand_C_library_symbol(ctx, ex)
-    expanded = expand_forms_2(ctx, ex)
     if kind(ex) == K"tuple"
-        expanded = @ast ctx ex [K"static_eval"(meta=name_hint("function name and library expression"))
-            expanded
+        return @ast ctx ex [K"static_eval"(meta=name_hint("function name and library expression"))
+            mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
         ]
     end
-    return expanded
+    return expand_forms_2(ctx, ex)
 end
 
 function expand_ccall(ctx, ex)

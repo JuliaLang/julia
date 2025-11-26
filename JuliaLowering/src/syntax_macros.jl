@@ -90,10 +90,10 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
         typ = Base.CFunction
     else
         # Kinda weird semantics here - without `$`, the callable is a top level
-        # expression which will be evaluated by `jl_resolve_globals_in_ir`,
-        # implicitly within the module where the `@cfunction` is expanded into.
-        fptr = @ast __context__ callable [K"static_eval"(
-                meta=name_hint("cfunction function name"))
+        # expression evaluated within the module where the `@cfunction` is
+        # expanded into.
+        fptr = @ast __context__ callable [K"inert"(
+                meta=CompileHints(:as_Expr, true))
             callable
         ]
         typ = Ptr{Cvoid}

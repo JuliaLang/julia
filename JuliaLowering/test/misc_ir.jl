@@ -355,7 +355,7 @@ JuxtuposeTest.@emit_juxtupose
 # @cfunction expansion with global generic function as function argument
 @cfunction(callable, Int, (Int, Float64))
 #---------------------
-1   (cfunction Ptr{Nothing} (static_eval TestMod.callable) (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
+1   (cfunction Ptr{Nothing} (inert callable) (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
 2   (return %₁)
 
 ########################################
