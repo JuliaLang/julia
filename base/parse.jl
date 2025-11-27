@@ -5,9 +5,10 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 ## string to integer functions ##
 
 """
-    parse(type, str; base)
+    parse(type, str)
+    parse(<:Integer, str; base=10)
 
-Parse a string as a number. For `Integer` types, a base can be specified
+Parse a string (or character) as a number. For `Integer` types, a base can be specified
 (the default is 10). For floating-point types, the string is parsed as a decimal
 floating-point number.  `Complex` types are parsed from decimal strings
 of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"` can also be
@@ -16,6 +17,9 @@ If the string does not contain a valid number, an error is raised.
 
 !!! compat "Julia 1.1"
     `parse(Bool, str)` requires at least Julia 1.1.
+
+!!! compat "Julia 1.13"
+    `parse(type, AbstractChar)` requires at least Julia 1.13 for non-integer types.
 
 # Examples
 ```jldoctest
@@ -38,14 +42,32 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 parse(T::Type, str; base = Int)
 parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
+"""
+    tryparse(type, str)
+    tryparse(<:Integer, str; base=10)
+
+Like [`parse`](@ref), but returns either a value of the requested type,
+or [`nothing`](@ref) if the string does not contain a valid number.
+
+!!! compat "Julia 1.13"
+    `tryparse(type, AbstractChar)` requires at least Julia 1.13.
+"""
+tryparse(T::Type, str; base = Int)
+
 function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
-    a::Int = (base <= 36 ? 10 : 36)
-    2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-    d = '0' <= c <= '9' ? c-'0'    :
-        'A' <= c <= 'Z' ? c-'A'+10 :
-        'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
-    d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
-    convert(T, d)
+    tryparse_internal(T, c, base, true)
+end
+# For consistency with parse(t, AbstractString), support a `base` argument only when T<:Integer
+function parse(::Type{T}, c::AbstractChar) where T
+    tryparse_internal(T, c, 10, true)
+end
+
+function tryparse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
+    tryparse_internal(T, c, base, false)
+end
+# For consistency with tryparse(t, AbstractString), support a `base` argument only when T<:Integer
+function tryparse(::Type{T}, c::AbstractChar) where T
+    tryparse_internal(T, c, 10, false)
 end
 
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
@@ -108,6 +130,20 @@ end
         base
 end
 
+function tryparse_internal(::Type{T}, c::AbstractChar, base::Integer, raise::Bool) where T
+    a::UInt8 = (base <= 36 ? 10 : 36)
+    check_valid_base(base)
+    base = base % UInt8
+    codepoint = c > 'z' ? 0xff : UInt8(c)
+    d = UInt8('0') ≤ codepoint ≤ UInt8('9') ? codepoint - UInt8('0') :
+        UInt8('A') ≤ codepoint ≤ UInt8('Z') ? codepoint - UInt8('A') + UInt8(10) :
+        UInt8('a') ≤ codepoint ≤ UInt8('z') ? codepoint - UInt8('a') + a :
+        0xff
+    if d > base
+        raise ? throw(ArgumentError("invalid base $base digit $(repr(c))")) : return nothing
+    end
+    convert(T, d)::T
+end
 
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
@@ -239,12 +275,6 @@ end
     throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 end
 
-"""
-    tryparse(type, str; base)
-
-Like [`parse`](@ref), but returns either a value of the requested type,
-or [`nothing`](@ref) if the string does not contain a valid number.
-"""
 function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     # Zero base means, "figure it out"
     tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
