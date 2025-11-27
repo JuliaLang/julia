@@ -1642,6 +1642,14 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
             atype = argtypes_to_type(argtypes)
+        elseif isexpr(stmt, :new)
+            # When creating a struct of Function type, check to see if we should
+            # proactively compile the lambda
+            t = argextype(stmt.args[1], ci, sptypes)
+            t isa Const || continue
+            t.val::DataType
+            t.val <: Function || continue
+            atype = Tuple{t.val, Vararg}
         else
             # TODO: handle other StmtInfo like OpaqueClosure?
             continue
