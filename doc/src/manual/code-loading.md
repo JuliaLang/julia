@@ -42,6 +42,9 @@ These environment each serve a different purpose:
 * Package directories provide **convenience** when a full carefully-tracked project environment is unnecessary. They are useful when you want to put a set of packages somewhere and be able to directly use them, without needing to create a project environment for them.
 * Stacked environments allow for **adding** tools to the primary environment. You can push an environment of development tools onto the end of the stack to make them available from the REPL and scripts, but not from inside packages.
 
+!!! note
+    When loading a package from another environment in the stack other than the active environment the package is loaded in the context of the active environment. This means that the package will be loaded as if it were imported in the active environment, which may affect how its dependencies versions are resolved. When such a package is precompiling it will be marked as a `(serial)` precompile job, which means that its dependencies will be precompiled in series within the same job, which will likely be slower.
+
 At a high-level, each environment conceptually defines three maps: roots, graph and paths. When resolving the meaning of `import X`, the roots and graph maps are used to determine the identity of `X`, while the paths map is used to locate the source code of `X`. The specific roles of the three maps are:
 
 - **roots:** `name::Symbol` ⟶ `uuid::UUID`
@@ -403,7 +406,9 @@ A project file can define a workspace by giving a set of projects that is part o
 projects = ["test", "benchmarks", "docs", "SomePackage"]
 ```
 
-Each subfolder contains its own `Project.toml` file, which may include additional dependencies and compatibility constraints. In such cases, the package manager gathers all dependency information from all the projects in the workspace generating a single manifest file that combines the versions of all dependencies.
+Each project listed in the `projects` array is specified by its relative path from the workspace root. This can be a direct child directory (e.g., `"test"`) or a nested subdirectory (e.g., `"nested/subdir/MyPackage"`). Each project contains its own `Project.toml` file, which may include additional dependencies and compatibility constraints. In such cases, the package manager gathers all dependency information from all the projects in the workspace generating a single manifest file that combines the versions of all dependencies.
+
+When Julia loads a project, it searches upward through parent directories until it reaches the user's home directory to find a workspace that includes that project. This allows workspace projects to be nested at arbitrary depth within the workspace directory tree.
 
 Furthermore, workspaces can be "nested", meaning a project defining a workspace can also be part of another workspace. In this scenario, a single manifest file is still utilized, stored alongside the "root project" (the project that doesn't have another workspace including it). An example file structure could look like this:
 

@@ -34,6 +34,7 @@ end
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
 original_depot_path = copy(Base.DEPOT_PATH)
+include("tempdepot.jl")
 include("precompile_utils.jl")
 
 loaded_files = String[]
@@ -226,7 +227,6 @@ end
     end
 end
 
-
 ## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
@@ -236,8 +236,9 @@ watcher_counter = Ref(0)
 push!(Base.active_project_callbacks, () -> watcher_counter[] += 1)
 push!(Base.active_project_callbacks, () -> error("broken"))
 
+const testdefaultdepot = mkdepottempdir()
 push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
-append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
+append!(empty!(DEPOT_PATH), [testdefaultdepot, joinpath(@__DIR__, "depot")])
 @test watcher_counter[] == 0
 @test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
 @test watcher_counter[] == 1
@@ -461,7 +462,7 @@ function make_env(flat, root, roots, graph, paths, dummies)
     )
 end
 
-const depots = [mktempdir() for _ = 1:3]
+const depots = [mkdepottempdir() for _ = 1:3]
 const envs = Dict{String,Any}()
 
 append!(empty!(DEPOT_PATH), depots)
@@ -755,13 +756,6 @@ end
 for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
-for depot in depots
-    try
-        rm(depot, force=true, recursive=true)
-    catch err
-        @show err
-    end
-end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
@@ -1043,9 +1037,10 @@ end
         _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
     end
     """
-    depot_path = mktempdir()
-    try
-        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+    depot_path = mkdepottempdir()
+    proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+
+    begin
 
         function gen_extension_cmd(compile, distr=false)
             load_distr = distr ? "using Distributed; addprocs(1)" : ""
@@ -1155,7 +1150,7 @@ end
 
         # Extension-to-extension dependencies
 
-        mktempdir() do depot # Parallel pre-compilation
+        mkdepottempdir() do depot # Parallel pre-compilation
             code = """
             Base.disable_parallel_precompile = false
             using ExtToExtDependency
@@ -1171,7 +1166,7 @@ end
             )
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
-        mktempdir() do depot # Serial pre-compilation
+        mkdepottempdir() do depot # Serial pre-compilation
             code = """
             Base.disable_parallel_precompile = true
             using ExtToExtDependency
@@ -1188,7 +1183,7 @@ end
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
 
-        mktempdir() do depot # Parallel pre-compilation
+        mkdepottempdir() do depot # Parallel pre-compilation
             code = """
             Base.disable_parallel_precompile = false
             using CrossPackageExtToExtDependency
@@ -1204,7 +1199,7 @@ end
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
-        mktempdir() do depot # Serial pre-compilation
+        mkdepottempdir() do depot # Serial pre-compilation
             code = """
             Base.disable_parallel_precompile = true
             using CrossPackageExtToExtDependency
@@ -1224,7 +1219,7 @@ end
         # Extensions for "parent" dependencies
         # (i.e. an `ExtAB`  where A depends on / loads B, but B provides the extension)
 
-        mktempdir() do depot # Parallel pre-compilation
+        mkdepottempdir() do depot # Parallel pre-compilation
             code = """
             Base.disable_parallel_precompile = false
             using Parent
@@ -1239,7 +1234,7 @@ end
             )
             @test occursin("Hello parent!", String(read(cmd)))
         end
-        mktempdir() do depot # Serial pre-compilation
+        mkdepottempdir() do depot # Serial pre-compilation
             code = """
             Base.disable_parallel_precompile = true
             using Parent
@@ -1253,13 +1248,6 @@ end
                 "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
             )
             @test occursin("Hello parent!", String(read(cmd)))
-        end
-
-    finally
-        try
-            rm(depot_path, force=true, recursive=true)
-        catch err
-            @show err
         end
     end
 end
@@ -1361,7 +1349,7 @@ end
 end
 
 @testset "relocatable upgrades #51989" begin
-    mktempdir() do depot
+    mkdepottempdir() do depot
         # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
         # project path so the cache file slug will be different if the tempdir is given as a symlink
         # (which it often is on MacOS) which would break the test.
@@ -1435,7 +1423,7 @@ end
 end
 
 @testset "code coverage disabled during precompilation" begin
-    mktempdir() do depot
+    mkdepottempdir() do depot
         cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
         cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
         function rm_cov_files()
@@ -1479,7 +1467,7 @@ end
 end
 
 @testset "command-line flags" begin
-    mktempdir() do depot_path mktempdir() do dir
+    mkdepottempdir() do depot_path mktempdir() do dir
         # generate a Parent.jl and Child.jl package, with Parent depending on Child
         open(joinpath(dir, "Child.jl"), "w") do io
             println(io, """
@@ -1495,7 +1483,7 @@ end
 
         # helper function to load a package and return the output
         function load_package(name, args=``)
-            code = "using $name"
+            code = "Base.disable_parallel_precompile = true; using $name"
             cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
                         "JULIA_LOAD_PATH" => dir,
                         "JULIA_DEPOT_PATH" => depot_path,
@@ -1562,7 +1550,7 @@ end
 end
 
 @testset "including non-existent file throws proper error #52462" begin
-    mktempdir() do depot
+    mkdepottempdir() do depot
         project_path = joinpath(depot, "project")
         mkpath(project_path)
 
@@ -1670,6 +1658,14 @@ end
        @test isfile(Base.locate_package(id_dev))
        @test Base.identify_package("Devved2") === nothing
 
+       # Test that workspace projects can be specified with subfolder paths
+       # and that base_project searches upward through multiple directory levels
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "nested", "deep"))
+       proj_file = joinpath(@__DIR__, "project", "SubProject", "nested", "deep", "Project.toml")
+       base_proj = Base.base_project(proj_file)
+       @test base_proj == joinpath(@__DIR__, "project", "SubProject", "Project.toml")
+
     finally
        copy!(LOAD_PATH, old_load_path)
     end
@@ -1704,7 +1700,7 @@ end
 end
 
 @testset "require_stdlib loading duplication" begin
-    depot_path = mktempdir()
+    depot_path = mkdepottempdir()
     oldBase64 = nothing
     try
         push!(empty!(DEPOT_PATH), depot_path)
@@ -1728,6 +1724,5 @@ end
     finally
         oldBase64 === nothing || Base.register_root_module(oldBase64)
         copy!(DEPOT_PATH, original_depot_path)
-        rm(depot_path, force=true, recursive=true)
     end
 end

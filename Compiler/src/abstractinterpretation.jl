@@ -872,11 +872,12 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     concrete_eval_result = nothing
     if eligibility === :concrete_eval
         concrete_eval_result = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
-        # if we don't inline the result of this concrete evaluation,
-        # give const-prop' a chance to inline a better method body
-        if !may_optimize(interp) || (
-            may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
-            concrete_eval_result.rt === Bottom) # unless this call deterministically throws and thus is non-inlineable
+        if (concrete_eval_result !== nothing &&  # allow external abstract interpreters to disable concrete evaluation ad-hoc
+            # if we don't inline the result of this concrete evaluation,
+            # give const-prop' a chance to inline a better method body
+            (!may_optimize(interp) ||
+             may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
+             concrete_eval_result.rt === Bottom)) # unless this call deterministically throws and thus is non-inlineable
             return concrete_eval_result
         end
         # TODO allow semi-concrete interp for this call?
@@ -2488,7 +2489,7 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
             (rt, exct) = global_assignment_rt_exct(interp, sv, saw_latestworld, gr, v)
             return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(convert(Core.Binding, gr)))
         end
-        return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+        return CallMeta(Union{}, Union{TypeError, ErrorException}, EFFECTS_THROWS, NoCallInfo())
     end
     ⊑ = partialorder(typeinf_lattice(interp))
     if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
@@ -3444,16 +3445,20 @@ function refine_partial_type(@nospecialize t)
     return t
 end
 
-abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::IRInterpretationState) = nothing
+abstract_eval_nonlinearized_foreigncall_name(
+        ::AbstractInterpreter, @nospecialize(e), ::StatementState, ::IRInterpretationState
+    ) = nothing
 
-function abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::AbsIntState)
+function abstract_eval_nonlinearized_foreigncall_name(
+        interp::AbstractInterpreter, @nospecialize(e), sstate::StatementState, sv::InferenceState
+    )
     if isexpr(e, :call)
         n = length(e.args)
         argtypes = Vector{Any}(undef, n)
         callresult = Future{CallMeta}()
         i::Int = 1
         nextstate::UInt8 = 0x0
-        local ai, res
+        local ai::Future, res::Future
         function evalargs(interp, sv)
             if nextstate === 0x1
                 @goto state1
@@ -3728,7 +3733,7 @@ end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Pair{Any,Any}(newty, ErrorException)
+        return Pair{Any,Any}(newty, Union{TypeError, ErrorException})
     end
     newty′ = RefValue{Any}(newty)
     (valid_worlds, ret) = scan_partitions(interp, g, sv.world) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
@@ -3743,15 +3748,16 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     if is_some_guard(kind)
         return Pair{Any,Any}(newty, ErrorException)
     elseif is_some_const_binding(kind) || is_some_imported(kind)
-        return Pair{Any,Any}(Bottom, ErrorException)
+        # N.B.: Backdating should not improve inference in an earlier world
+        return Pair{Any,Any}(kind == PARTITION_KIND_BACKDATED_CONST ? newty : Bottom, ErrorException)
     end
     ty = kind == PARTITION_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
-        return Pair{Any,Any}(Bottom, ErrorException)
+        return Pair{Any,Any}(Bottom, TypeError)
     elseif !(wnewty <: ty)
         retty = tmeet(typeinf_lattice(interp), newty, ty)
-        return Pair{Any,Any}(retty, ErrorException)
+        return Pair{Any,Any}(retty, TypeError)
     end
     return Pair{Any,Any}(newty, Bottom)
 end

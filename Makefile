@@ -110,13 +110,7 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.in
 julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
-julia-sysimg-ji : $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-ji JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
-
-julia-sysimg-bc : $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-bc JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
-
-julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-src-%
+julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% julia-src-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest \
@@ -210,6 +204,9 @@ endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
 JL_PRIVATE_LIBS-0 := libccalltest libccalllazyfoo libccalllazybar libllvmcalltest
+JL_PRIVATE_LIBS-1 := # libraries from USE_SYSTEM=1
+JL_PRIVATE_EXES := 7z
+JL_PRIVATE_TOOLS := lld$(EXE) dsymutil$(EXE)
 ifeq ($(JULIA_BUILD_MODE),release)
 JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
 else ifeq ($(JULIA_BUILD_MODE),debug)
@@ -331,9 +328,6 @@ endif
 	-$(INSTALL_M) $(wildcard $(build_private_libdir)/*.a) $(DESTDIR)$(private_libdir)/
 	-rm -f $(DESTDIR)$(private_libdir)/sys-o.a
 
-	# We have a single exception; we want 7z.dll to live in private_libexecdir,
-	# not bindir, so that 7z.exe can find it.
-	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(private_libexecdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libssp.dll.a $(DESTDIR)$(libdir)/
 else
@@ -390,14 +384,12 @@ endif
 		done \
 	done
 endif
-	# Install `7z` into private_libexecdir
-	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(private_libexecdir)/
-
-	# Install `lld` into private_libexecdir
-	$(INSTALL_M) $(build_depsbindir)/lld$(EXE) $(DESTDIR)$(private_libexecdir)/
-
-	# Install `dsymutil` into private_libexecdir/
-	$(INSTALL_M) $(build_depsbindir)/dsymutil$(EXE) $(DESTDIR)$(private_libexecdir)/
+	for exe in $(JL_PRIVATE_EXES) ; do \
+		$(INSTALL_M) $(build_private_libexecdir)/$$exe $(DESTDIR)$(private_libexecdir) || exit 1; \
+	done
+	for exe in $(JL_PRIVATE_TOOLS) ; do \
+		$(INSTALL_M) $(build_depsbindir)/$$exe $(DESTDIR)$(private_libexecdir) || exit 1; \
+	done
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia

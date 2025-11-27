@@ -15,6 +15,9 @@ include("buildkitetestjson.jl")
 
 using .BuildkiteTestJSON
 
+# Set JULIA_TESTS so that precompilation output is suppressed in test subprocesses
+ENV["JULIA_TESTS"] = "true"
+
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
 const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
 

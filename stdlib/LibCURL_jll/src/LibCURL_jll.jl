@@ -4,8 +4,7 @@
 
 baremodule LibCURL_jll
 using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll
-if !(Sys.iswindows() || Sys.isapple())
-    # On Windows and macOS we use system SSL/crypto libraries
+if !Sys.iswindows()
     using OpenSSL_jll
 end
 

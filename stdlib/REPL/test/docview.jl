@@ -111,6 +111,24 @@ end
     @test endswith(get_help_standard("Int.not_a_field"), "`$Int` has no fields.\n")
 end
 
+@testset "Parametric struct field help (#59524)" begin
+    "NonParametricStruct docstring"
+    struct NonParametricStruct
+        "field_x docstring"
+        field_x::Float64
+    end
+
+    "ParametricStruct docstring"
+    struct ParametricStruct{T<:Real}
+        "field_y docstring"
+        field_y::T
+    end
+
+    @test occursin("field_x docstring", get_help_standard("NonParametricStruct.field_x"))
+    @test occursin("field_y docstring", get_help_standard("ParametricStruct.field_y"))
+    @test endswith(get_help_standard("ParametricStruct.not_a_field"), "ParametricStruct` has field `field_y`.\n")
+end
+
 module InternalWarningsTests
 
     module A
