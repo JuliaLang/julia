@@ -1348,6 +1348,24 @@ end
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
+@testset "Eltype conversion (PR #48894)" begin
+    # StepRangeLen
+    @test 0.:5. isa StepRangeLen # just in case
+    @test convert(AbstractRange{Int},0.:5.) === convert(AbstractVector{Int},0.:5.) === convert(AbstractArray{Int},0.:5.) === StepRangeLen(0,1,6)
+    @test convert(AbstractRange{Float16},0.:5.) === convert(AbstractVector{Float16},0.:5.) === convert(AbstractArray{Float16},0.:5.) === Float16(0.):Float16(5.)
+
+    # Try to preserve type when possible
+    @test AbstractArray{Int8}(Base.oneto(5)) === Base.oneto(Int8(5)) # OneTo
+    @test AbstractArray{Int32}(0:5) === Int32(0):Int32(5) # UnitRange
+    @test AbstractArray{Int128}(0:2:5) === Int128(0):Int128(2):4 # StepRange
+    @test AbstractArray{Float64}(LinRange(1,5,5)) === LinRange(1.0,5.0,5) # LinRange
+    @test AbstractArray{Float64}(Base.oneto(5)) === AbstractArray{Float64}(1:5) === AbstractArray{Float64}(1:1:5) === 1.:1.:5. # fallback
+
+    # Edge cases where floating point can be glitchy. Credit: @mcabbott
+    @test convert(AbstractArray{Float64}, 0*(1:10)) === range(0.0,0.0,10)
+    @test length(convert(AbstractArray{Float16}, range(1/43^2, 1, 43))) == 43
+end
+
 @testset "Ranges with <:Integer eltype but non-integer step (issue #32419)" begin
     @test eltype(StepRange(1, 1//1, 2)) === Int
     @test_throws ArgumentError StepRange(1, 1//2, 2)
