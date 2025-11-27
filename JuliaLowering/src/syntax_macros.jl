@@ -24,7 +24,7 @@ function _apply_nospecialize(ctx, ex)
         # Desugaring uses this helper internally, so we may see K"kw" too.
         if k == K"::" && numchildren(ex) == 1
             ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
-        elseif k == K"="
+        elseif k == K"=" && numchildren(ex) === 2
             ex = @ast ctx ex [K"kw" ex[1] ex[2]]
         end
         mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)

@@ -578,23 +578,12 @@ function JuliaSyntax.fixup_Expr_child(::Type{<:SyntaxTree}, head::SyntaxHead,
                                       @nospecialize(arg), first::Bool)
     isa(arg, Expr) || return arg
     k = kind(head)
-    in_call = !first && (k == K"ref" ||
-        (k in KSet"call dotcall" && is_prefix_call(head)))
-    eq_head_in_params = k in KSet"vect ref braces curly" ? :(=) : :kw
     coalesce_dot = k in KSet"call dotcall curly" ||
                    (k == K"quote" && has_flags(head, COLON_QUOTE))
-    if @isexpr(arg, :kw) && !in_call
-        arg.head = :(=)
-    elseif @isexpr(arg, :., 1) && arg.args[1] isa Tuple
+    if @isexpr(arg, :., 1) && arg.args[1] isa Tuple
         h, a = arg.args[1]::Tuple{SyntaxHead,Any}
         arg = ((coalesce_dot && first) || is_syntactic_operator(h)) ?
             Symbol(".", a) : Expr(:., a)
-    elseif @isexpr(arg, :parameters)
-        for pa in arg.args
-            if pa isa Expr && pa.head in (:kw, :(=))
-                pa.head = eq_head_in_params
-            end
-        end
     end
     return arg
 end
@@ -853,7 +842,7 @@ function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
         offset = raw_offset - sf.byte_offset
         _insert_green(graph, sf, txtbuf, offset, cursor)
     end
-    out = _green_to_ast(SyntaxTree(graph, green_id))
+    out = _green_to_ast(K"None", SyntaxTree(graph, green_id))
     @assert !isnothing(out) "SyntaxTree requires >0 nontrivia nodes"
     return out
 end
@@ -887,41 +876,44 @@ end
 # Leaves are shared.  Unlike `mapchildren`, doesn't bother checking for
 # unchanged children so internal nodes can be shared, since the likelihood of
 # not deleting trivia under an internal node is practically zero.
-function _green_to_ast(ex::SyntaxTree; eq_to_kw=false)
+function _green_to_ast(parent::Kind, ex::SyntaxTree; eq_to_kw=false)
     is_trivia(ex) && !is_error(ex) && return nothing
     graph = syntax_graph(ex)
     k = kind(ex)
-    call_with_kw = (k in KSet"curly ref" ||
-        k === K"dotcall" && is_prefix_call(ex) ||
-        k === K"call" && (is_prefix_call(ex) ||
-                is_prefix_op_call(ex) && numchildren(ex) > 2))
-    if call_with_kw
+    if k === K"ref" ||
+        (k in KSet"call dotcall" && (
+            is_prefix_call(ex) || is_prefix_op_call(ex) && numchildren(ex) > 2))
         cs = SyntaxList(ex)
         for c in children(ex)
-            c2 = _green_to_ast(c; eq_to_kw=length(cs)>0)
+            c2 = _green_to_ast(k, c; eq_to_kw=length(cs)>0)
             !isnothing(c2) && push!(cs, c2)
         end
         makenode(graph, ex, ex, cs)
-    elseif k in KSet"tuple parameters"
-        makenode(graph, ex, ex, _map_green_to_ast(children(ex); eq_to_kw=true))
-    elseif k in KSet"parens var char"
-        cs = _map_green_to_ast(children(ex);
-                               eq_to_kw=(k === K"parens" ? eq_to_kw : false))
+    elseif k === K"parameters"
+        eq_to_kw = parent != K"vect"   && parent != K"curly" &&
+                   parent != K"braces" && parent != K"ref"
+        makenode(graph, ex, ex, _map_green_to_ast(k, children(ex); eq_to_kw))
+    elseif k === K"parens"
+        cs = _map_green_to_ast(parent, children(ex); eq_to_kw)
+        @assert length(cs) === 1
+        cs[1]
+    elseif k in KSet"var char"
+        cs = _map_green_to_ast(parent, children(ex))
         @assert length(cs) === 1
         cs[1]
     elseif k === K"=" && eq_to_kw
-        makenode(graph, ex, ex, _map_green_to_ast(children(ex)); kind=K"kw")
+        makenode(graph, ex, ex, _map_green_to_ast(k, children(ex)); kind=K"kw")
     elseif is_leaf(ex)
         return ex
     else
-        makenode(graph, ex, ex, _map_green_to_ast(children(ex)))
+        makenode(graph, ex, ex, _map_green_to_ast(k, children(ex)))
     end
 end
 
-function _map_green_to_ast(cs::SyntaxList; eq_to_kw=false)
+function _map_green_to_ast(parent::Kind, cs::SyntaxList; eq_to_kw=false)
     out = SyntaxList(cs)
     for c in cs
-        c2 = _green_to_ast(c; eq_to_kw)
+        c2 = _green_to_ast(parent, c; eq_to_kw)
         !isnothing(c2) && push!(out, c2)
     end
     return out

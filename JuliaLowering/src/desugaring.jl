@@ -1612,7 +1612,7 @@ function _merge_named_tuple(ctx, srcref, old, new)
     end
 end
 
-function expand_named_tuple(ctx, ex, kws;
+function expand_named_tuple(ctx, ex, kws, eq_is_kw;
                             field_name="named tuple field",
                             element_name="named tuple element")
     name_strs = Set{String}()
@@ -1627,7 +1627,8 @@ function expand_named_tuple(ctx, ex, kws;
             # x  ==>  x = x
             name = to_symbol(ctx, kw)
             value = kw
-        elseif k == K"kw"
+        elseif k == K"kw" || (eq_is_kw && k == K"=")
+            # syntax TODO: This should parse to K"kw"
             # x = a
             if kind(kw[1]) != K"Identifier" && kind(kw[1]) != K"Placeholder"
                 throw(LoweringError(kw[1], "invalid $field_name name"))
@@ -1695,7 +1696,7 @@ end
 function expand_kw_call(ctx, srcref, farg, args, kws)
     @ast ctx srcref [K"block"
         func := farg
-        kw_container := expand_named_tuple(ctx, srcref, kws;
+        kw_container := expand_named_tuple(ctx, srcref, kws, false;
                                            field_name="keyword argument",
                                            element_name="keyword argument")
         if all(kind(kw) == K"..." for kw in kws)
@@ -3234,6 +3235,29 @@ end
 
 #-------------------------------------------------------------------------------
 # Anon function syntax
+function expand_arrow_args(ctx, arglist)
+    k = kind(arglist)
+    # The arglist can sometimes be parsed as a block, or something else, and
+    # fixing this is extremely awkward when nested inside `where`. See
+    # https://github.com/JuliaLang/JuliaSyntax.jl/pull/522
+    if k == K"block"
+        @chk numchildren(arglist) == 2
+        kw = arglist[2]
+        if kind(kw) === K"="
+            kw = @ast ctx kw [K"kw" children(kw)...]
+        end
+        arglist = @ast ctx arglist [K"tuple"
+            arglist[1]
+            [K"parameters" kw]
+        ]
+    elseif k != K"tuple"
+        arglist = @ast ctx arglist [K"tuple" arglist]
+    end
+    return mapchildren(ctx, arglist) do a
+        kind(a) === K"=" ? @ast(ctx, a, [K"kw" children(a)...]) : a
+    end
+end
+
 function expand_arrow_arglist(ctx, arglist, arrowname)
     k = kind(arglist)
     if k == K"where"
@@ -3242,27 +3266,9 @@ function expand_arrow_arglist(ctx, arglist, arrowname)
             arglist[2]
         ]
     else
-        # The arglist can sometimes be parsed as a block, or something else, and
-        # fixing this is extremely awkward when nested inside `where`. See
-        # https://github.com/JuliaLang/JuliaSyntax.jl/pull/522
-        if k == K"block"
-            @chk numchildren(arglist) == 2
-            kw = kind(arglist[2]) === K"=" ?
-                @ast(ctx, arglist[2], [K"kw" children(arglist[2])...]) :
-                arglist[2]
-
-            arglist = @ast ctx arglist [K"tuple"
-                arglist[1]
-                [K"parameters" kw]
-            ]
-        elseif k != K"tuple"
-            arglist = @ast ctx arglist [K"tuple"
-                arglist[1]
-            ]
-        end
         @ast ctx arglist [K"call"
             arrowname::K"Placeholder"
-            children(arglist)...
+            children(expand_arrow_args(ctx, arglist))...
         ]
     end
 end
@@ -3285,7 +3291,7 @@ function expand_opaque_closure(ctx, ex)
     func_expr = ex[5]
     @chk kind(func_expr) == K"->"
     @chk numchildren(func_expr) == 2
-    args = func_expr[1]
+    args = expand_arrow_args(ctx, func_expr[1])
     @chk kind(args) == K"tuple"
     check_no_parameters(ex, args)
 
@@ -4517,9 +4523,9 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             if numchildren(ex) > 1
                 throw(LoweringError(ex[end], "unexpected semicolon in tuple - use `,` to separate tuple elements"))
             end
-            expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex[1])))
-        elseif any(kind(c) == K"kw" for c in children(ex))
-            expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex)))
+            expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex[1]), true))
+        elseif any_assignment(children(ex))
+            expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex), true))
         else
             expand_forms_2(ctx, @ast ctx ex [K"call"
                 "tuple"::K"core"

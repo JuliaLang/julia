@@ -49,17 +49,10 @@ function _expr_replace(@nospecialize(e), replace_pred::Function, replacer::Funct
     if replace_pred(e)
         replacer(e)
     elseif e isa Expr && recurse_pred(e)
-        Expr(e.head, [_expr_replace(a, replace_pred, replacer, recurse_pred) for a in e.args]...)
+        Expr(e.head, Any[_expr_replace(a, replace_pred, replacer, recurse_pred) for a in e.args]...)
     else
         e
     end
-end
-
-function _eq_to_kw(@nospecialize(e))
-    _expr_replace(e,
-        (x)->x isa Expr && x.head === :(=),
-        (x)->Expr(:kw, x.args...),
-        (x)->x.head in (:escape, :var"hygienic-scope"))
 end
 
 function _to_iterspec(exs::Vector, is_generator::Bool)
@@ -89,25 +82,19 @@ Parameters are expected to be at `e.args[pos]`.
 e.g. orderings of (a,b,c;d;e;f):
   Expr:       (tuple (parameters (parameters (parameters f) e) d) a b c)
   SyntaxTree: (tuple a b c (parameters d) (parameters e) (parameters f))
-
-`ensure_kw` converts `=` to `kw` within parameters blocks (needed for ref,
-curly, vect, and braces).
 """
-function collect_expr_parameters(e::Expr, pos::Int, ensure_kw::Bool)
+function collect_expr_parameters(e::Expr, pos::Int)
     params = expr_parameters(e, pos)
     isnothing(params) && return copy(e.args)
     args = Any[e.args[1:pos-1]..., e.args[pos+1:end]...]
-    return _flatten_params!(args, params, ensure_kw)
+    return _flatten_params!(args, params)
 end
-function _flatten_params!(out::Vector{Any}, params::Expr, ensure_kw)
+function _flatten_params!(out::Vector{Any}, params::Expr)
     p,p_esc = unwrap_esc(params)
     p1 = expr_parameters(p, 1)
     if !isnothing(p1)
-        p_args = ensure_kw ? map(_eq_to_kw, p.args[2:end]) : p.args[2:end]
-        push!(out, p_esc(Expr(:parameters, p_args...)))
-        _flatten_params!(out, p_esc(p1), ensure_kw)
-    elseif ensure_kw && params isa Expr && params.head === :parameters
-        push!(out, Expr(:parameters, map(_eq_to_kw, params.args)...))
+        push!(out, p_esc(Expr(:parameters, p.args[2:end]...)))
+        _flatten_params!(out, p_esc(p1))
     else
         push!(out, params::Any)
     end
@@ -272,7 +259,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     elseif e.head === :macrocall
         @assert nargs >= 2
         a1,a1_esc = unwrap_esc(e.args[1])
-        child_exprs = collect_expr_parameters(e, 3, false)
+        child_exprs = collect_expr_parameters(e, 3)
         if child_exprs[2] isa LineNumberNode
             src = child_exprs[2]
         end
@@ -307,7 +294,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         a2, a2_esc = unwrap_esc(e.args[2])
         if a2 isa Expr && a2.head === :tuple
             st_k = K"dotcall"
-            tuple_exprs = collect_expr_parameters(a2_esc(a2), 1, false)
+            tuple_exprs = collect_expr_parameters(a2_esc(a2), 1)
             child_exprs = pushfirst!(tuple_exprs, e.args[1])
         elseif a2 isa QuoteNode
             child_exprs[2] = a2_esc(a2.value)
@@ -321,16 +308,10 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         if !(e2 isa Expr && e2.head === :braces)
             child_exprs = Any[e.args[1], Expr(:braces, e.args[2:end]...)]
         end
-    elseif e.head === :ref
-        child_exprs = collect_expr_parameters(e, 2, true)
-    elseif e.head === :curly
-        child_exprs = collect_expr_parameters(e, 2, true)
-        map!(_eq_to_kw, child_exprs[2:end])
-    elseif e.head in (:vect, :braces)
-        child_exprs = collect_expr_parameters(e, 1, true)
-    elseif e.head === :tuple
-        child_exprs = collect_expr_parameters(e, 1, false)
-        map!(_eq_to_kw, child_exprs)
+    elseif e.head in (:tuple, :vect, :braces)
+        child_exprs = collect_expr_parameters(e, 1)
+    elseif e.head in (:curly, :ref)
+        child_exprs = collect_expr_parameters(e, 2)
     elseif e.head === :try
         child_exprs = Any[e.args[1]]
         # Expr:
@@ -382,9 +363,10 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             lam_eqs = Any[]
             for a in a1.args
                 a isa LineNumberNode && continue
-                a isa Expr && a.head === :(=) ? push!(lam_eqs, a) : push!(lam_args, a)
+                a isa Expr && a.head === :(=) ?
+                    push!(lam_eqs, Expr(:kw, a.args...)) : push!(lam_args, a)
             end
-            !isempty(lam_eqs) && push!(lam_args, Expr(:parameters, map(_eq_to_kw, lam_eqs)...))
+            !isempty(lam_eqs) && push!(lam_args, Expr(:parameters, lam_eqs...))
             child_exprs[1] = a1_esc(Expr(:tuple, lam_args...))
         elseif !(a1 isa Expr && (a1.head in (:tuple, :where)))
             child_exprs[1] = a1_esc(Expr(:tuple, a1))
@@ -392,7 +374,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         src = maybe_extract_lnn(e.args[2], src)
         child_exprs[2] = maybe_unwrap_arg(e.args[2])
     elseif e.head === :call
-        child_exprs = collect_expr_parameters(e, 2, false)
+        child_exprs = collect_expr_parameters(e, 2)
         a1,a1_esc = unwrap_esc(child_exprs[1])
         if a1 isa Symbol
             a1s = string(a1)
@@ -427,7 +409,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         # (do (call f args...) (-> (tuple lam_args...) (block ...)))
         # SyntaxTree:
         # (call f args... (do (tuple lam_args...) (block ...)))
-        callargs = collect_expr_parameters(e.args[1], 2, false)
+        callargs = collect_expr_parameters(e.args[1], 2)
         if e.args[1].head === :macrocall
             st_k = K"macrocall"
             if callargs[2] isa LineNumberNode
