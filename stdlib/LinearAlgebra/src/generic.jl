@@ -881,7 +881,8 @@ function dot(x::AbstractArray, y::AbstractArray)
         throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     if lx == 0
-        return dot(zero(eltype(x)), zero(eltype(y)))
+        # make sure the returned result equals exactly the zero element
+        return zero(dot(zero(eltype(x)), zero(eltype(y))))
     end
     s = zero(dot(first(x), first(y)))
     for (Ix, Iy) in zip(eachindex(x), eachindex(y))
