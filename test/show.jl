@@ -1364,7 +1364,10 @@ end
         @test repr == "Ptr{UInt8}($(Base.repr(UInt(1))))\n"
     end
     let repr = sprint(show, UInt(42); context=(:hexunsigned => false))
-        @test repr == "42u"
+        @test repr == "$(UInt)(42)"
+    end
+    let repr = sprint(show, UInt16[1, 2]; context=(:hexunsigned => false))
+        @test repr == "UInt16[1, 2]"
     end
     let repr = sprint(dump, Core.svec())
         @test repr == "empty SimpleVector\n"

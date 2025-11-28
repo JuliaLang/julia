@@ -1302,7 +1302,11 @@ function show(io::IO, n::Unsigned)
     if get(io, :hexunsigned, true)::Bool
         print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
     else
-        print(io, string(n), "u")
+        if get(io, :typeinfo, Nothing)::Type == typeof(n)
+            print(io, n)
+        else
+            print(io, typeof(n), "($(n))")
+        end
     end
 end
 print(io::IO, n::Unsigned) = print(io, string(n))
