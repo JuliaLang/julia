@@ -1844,3 +1844,42 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
         source.module,
         source.isva)
 end
+
+# Symbol currying
+struct GetpropertyLens{N}
+    syms::Tuple{Vararg{Symbol, N}}
+end
+
+Base.getproperty() = GetpropertyLens(())
+Base.getproperty(lens::GetpropertyLens, s::Symbol) =
+    GetpropertyLens(tuple(getfield(lens, :syms)..., s))
+
+function (lens::GetpropertyLens)(strct)
+    syms = getfield(lens, :syms)
+    isempty(syms) && return strct
+    sym = first(syms)
+    return GetpropertyLens(Base.tail(syms))(Base.getproperty(strct, sym))
+end
+
+"""
+    (s::Symbol)(obj)
+
+Get the property of `obj` named by symbol `s`. In effect, symbols act as
+curried form of `getproperty` (equivalently `Fix1(getproperty, s)`).
+
+!!! compat "Julia 1.14"
+    This behavior feature at least Julia 1.14.
+"""
+(s::Symbol)(str) = getproperty(str, s)
+
+"""
+    getproperty(a::Symbol, b::Symbol)
+
+Constructs a curried accessor for the `s`.`a`.`b` property of some future struct
+`s`. This essentially extends the currying-behavior of symbols into nested
+hieararchies. See also `(s::Symbol)(obj)`.
+
+!!! compat "Julia 1.14"
+    This feature requires at least Julia 1.14.
+"""
+getproperty(s::Symbol, y::Symbol) = GetpropertyLens((s, y))
