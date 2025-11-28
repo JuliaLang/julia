@@ -1141,4 +1141,10 @@ typename(union::UnionAll) = typename(union.body)
 
 include(Core, "optimized_generics.jl")
 
+# Used only be the magic @VERSION macro
+struct MacroSource
+    lno::Any # ::LineNumberNode, but needs to be a pointer
+    syntax_ver::Any # ::VersionNumber =#
+end
+
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

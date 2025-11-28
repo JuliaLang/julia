@@ -70,19 +70,26 @@ function lower_step(iter, mod, world=Base.get_world_counter())
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod)
     elseif k == K"module"
-        name = ex[1]
+        name_or_version = ex[1]
+        version = nothing
+        if kind(name_or_version) == K"VERSION"
+            version = name_or_version.value
+            name = ex[2]
+        else
+            name = name_or_version
+        end
         if kind(name) != K"Identifier"
             throw(LoweringError(name, "Expected module name"))
         end
         newmod_name = Symbol(name.name_val)
-        body = ex[2]
+        body = ex[end]
         if kind(body) != K"block"
             throw(LoweringError(body, "Expected block in module body"))
         end
         std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
-        return Core.svec(:begin_module, newmod_name, std_defs, loc)
+        return Core.svec(:begin_module, version, newmod_name, std_defs, loc)
     else
         # Non macro expansion parts of lowering
         ctx2, ex2 = expand_forms_2(ctx1, ex)
@@ -370,7 +377,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             ir
         end
     elseif k == K"Value"
-        ex.value
+        ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id + stmt_offset)
     elseif k == K"gotoifnot"
@@ -467,10 +474,10 @@ function _eval(mod, iter)
         if type == :done
             break
         elseif type == :begin_module
-            filename = something(thunk[4].file, :none)
+            filename = something(thunk[5].file, :none)
             mod = @ccall jl_begin_new_module(
-                modules[end]::Any, thunk[2]::Symbol, thunk[3]::Cint,
-                filename::Cstring, thunk[4].line::Cint)::Module
+                modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, thunk[4]::Cint,
+                filename::Cstring, thunk[5].line::Cint)::Module
             push!(modules, mod)
         elseif type == :end_module
             @ccall jl_end_new_module(modules[end]::Module)::Cvoid
