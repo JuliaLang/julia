@@ -516,6 +516,30 @@ struct VecElement{T}
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
+# inference lattice element types (moved from jltypes.c)
+struct Const
+    val
+end
+
+struct PartialStruct
+    typ
+    undefs
+    fields::Array{Any, 1}
+end
+
+struct InterConditional
+    slot::Int
+    thentype
+    elsetype
+end
+
+struct PartialOpaque
+    typ::Type
+    env
+    parent::MethodInstance
+    source
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
