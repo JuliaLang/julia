@@ -71,19 +71,35 @@ function check_whitespace()
         file_err(msg) = push!(errors, (path, 0, msg))
         line_err(msg) = push!(errors, (path, lineno, msg))
 
-        isfile(path) || continue
-        for line in eachline(path, keep=true)
-            lineno += 1
-            contains(line, '\r')   && file_err("non-UNIX line endings")
-            contains(line, '\ua0') && line_err("non-breaking space")
-            allow_tabs(path) ||
-                contains(line, '\t')   && line_err("tab")
-            endswith(line, '\n')   || line_err("no trailing newline")
-            line = chomp(line)
-            endswith(line, r"\s")  && line_err("trailing whitespace")
-            contains(line, r"\S")  && (non_blank = lineno)
+        
+
+    local is_regular_file = false
+    try
+        is_regular_file = isfile(path)
+    catch e
+        if Sys.iswindows() && isa(e, IOError)
+            @debug "Skipping $path due to permission error (likely a symlink)"
+            continue
+        else
+           
+            rethrow(e)
         end
-        non_blank < lineno         && line_err("trailing blank lines")
+    end
+
+    is_regular_file || continue
+
+    for line in eachline(path, keep=true)
+        lineno += 1
+        contains(line, '\r')   && file_err("non-UNIX line endings")
+        contains(line, '\ua0') && line_err("non-breaking space")
+        allow_tabs(path) ||
+            contains(line, '\t')   && line_err("tab")
+        endswith(line, '\n')   || line_err("no trailing newline")
+        line = chomp(line)
+        endswith(line, r"\s")  && line_err("trailing whitespace")
+        contains(line, r"\S")  && (non_blank = lineno)
+    end
+    non_blank < lineno         && line_err("trailing blank lines")
     end
 
     if isempty(errors)
