@@ -13,25 +13,25 @@ function emoji_data(url)
     for emj in emojis
         name = "\\:" * emj["short_name"] * ":"
         unicode = emj["unified"]
-        c = if '-' in unicode
-            String(map(u -> Char(parse(UInt32, u, base = 16)),
+        s = String(map(u -> Char(parse(UInt32, u, base = 16)),
                    split(unicode, '-')))
-        else
-            string(Char(parse(UInt32, unicode, base = 16)))
-        end
-        if emj["short_name"] == "satellite" || emj["name"] == "SATELLITE"
-            println(url)
-            println("satellite = ", c)
-        else
-            println(emj["short_name"], " => ", c)
-        end
-        result[name] = c
+        result[name] = s
     end
     return result
 end
 
+function merge_but_arrows!(a, b)
+    for (k, v) in b
+        if haskey(a, k) && occursin("arrow", k)
+            continue
+        end
+        a[k] = v
+    end
+    return a
+end
+
 # We combine multiple versions as the data changes, and not only by growing.
-result = mapfoldr(emoji_data, merge, [
+result = mapfoldr(emoji_data, merge_but_arrows!, [
     # Newer versions must be added to the bottom list as we want the newer versions to
     # overwrite the old with names that changed but still keep old ones that were removed
     "https://raw.githubusercontent.com/iamcal/emoji-data/0f0cf4ea8845eb52d26df2a48c3c31c3b8cad14e/emoji_pretty.json",
@@ -39,7 +39,7 @@ result = mapfoldr(emoji_data, merge, [
     "https://raw.githubusercontent.com/iamcal/emoji-data/a8174c74675355c8c6a9564516b2e961fe7257ef/emoji_pretty.json",
     "https://raw.githubusercontent.com/iamcal/emoji-data/3cf4d12c20b15ecdc53215b6b625b8515117aa93/emoji_pretty.json",
     ];
-    init=Dict()
+    init=Dict{String,String}()
 )
 
 skeys = sort(collect(keys(result)))
@@ -96,24 +96,24 @@ const emoji_symbols = Dict(
     "\\:apple:" => "🍎",
     "\\:aquarius:" => "♒",
     "\\:aries:" => "♈",
-    "\\:arrow_backward:" => "◀️",
+    "\\:arrow_backward:" => "◀",
     "\\:arrow_double_down:" => "⏬",
     "\\:arrow_double_up:" => "⏫",
-    "\\:arrow_down:" => "⬇️",
+    "\\:arrow_down:" => "⬇",
     "\\:arrow_down_small:" => "🔽",
-    "\\:arrow_forward:" => "▶️",
-    "\\:arrow_heading_down:" => "⤵️",
-    "\\:arrow_heading_up:" => "⤴️",
-    "\\:arrow_left:" => "⬅️",
-    "\\:arrow_lower_left:" => "↙️",
-    "\\:arrow_lower_right:" => "↘️",
-    "\\:arrow_right:" => "➡️",
-    "\\:arrow_right_hook:" => "↪️",
-    "\\:arrow_up:" => "⬆️",
-    "\\:arrow_up_down:" => "↕️",
+    "\\:arrow_forward:" => "▶",
+    "\\:arrow_heading_down:" => "⤵",
+    "\\:arrow_heading_up:" => "⤴",
+    "\\:arrow_left:" => "⬅",
+    "\\:arrow_lower_left:" => "↙",
+    "\\:arrow_lower_right:" => "↘",
+    "\\:arrow_right:" => "➡",
+    "\\:arrow_right_hook:" => "↪",
+    "\\:arrow_up:" => "⬆",
+    "\\:arrow_up_down:" => "↕",
     "\\:arrow_up_small:" => "🔼",
-    "\\:arrow_upper_left:" => "↖️",
-    "\\:arrow_upper_right:" => "↗️",
+    "\\:arrow_upper_left:" => "↖",
+    "\\:arrow_upper_right:" => "↗",
     "\\:arrows_clockwise:" => "🔃",
     "\\:arrows_counterclockwise:" => "🔄",
     "\\:art:" => "🎨",
@@ -1081,9 +1081,9 @@ const emoji_symbols = Dict(
     "\\:ledger:" => "📒",
     "\\:left-facing_fist:" => "🤛",
     "\\:left_luggage:" => "🛅",
-    "\\:left_right_arrow:" => "↔️",
+    "\\:left_right_arrow:" => "↔",
     "\\:left_speech_bubble:" => "🗨️",
-    "\\:leftwards_arrow_with_hook:" => "↩️",
+    "\\:leftwards_arrow_with_hook:" => "↩",
     "\\:leftwards_hand:" => "🫲",
     "\\:leftwards_pushing_hand:" => "🫷",
     "\\:leg:" => "🦵",
