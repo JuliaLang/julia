@@ -2562,6 +2562,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
             # technically have scope resolved at top level.
             [K"new"
                 GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
+                ctx.expr_compat_mode::K"Value"
                 gen_name
                 # Truncate provenance to just the source file range, as this
                 # will live permanently in the IR and we probably don't want

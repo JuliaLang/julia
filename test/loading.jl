@@ -1840,8 +1840,8 @@ end
         Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
         oldBase64 = Base.unreference_module(Base64_key)
         cc = Base.compilecache(Base64_key)
-        sourcepath = Base.locate_package(Base64_key)
-        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcepath, cc[1]) !== true
+        sourcespec = Base.locate_package_load_spec(Base64_key)
+        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcespec, cc[1]) !== true
         empty!(DEPOT_PATH)
         Base.require_stdlib(Base64_key)
         push!(DEPOT_PATH, depot_path)
@@ -1878,3 +1878,40 @@ end
 module M58272_to end
 @eval M58272_to import ..M58272_1: M58272_2.y, x
 @test @eval M58272_to x === 1
+
+@testset "Syntax Versioning" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        # Test implicit environments (packages loaded from directories)
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SyntaxVersioning", "implicit"))
+        # Explicit syntax.julia_version = "1.13"
+        @test invokelatest(getglobal, (@eval (using Versioned1; Versioned1)), :ver) == v"1.13"
+        # Explicit syntax.julia_version = "1.14"
+        @test invokelatest(getglobal, (@eval (using Versioned2; Versioned2)), :ver) == v"1.14"
+        # Inherited from compat.julia = "1.13-2"
+        @test invokelatest(getglobal, (@eval (using Versioned3; Versioned3)), :ver) == v"1.13"
+        # No syntax.julia_version, falls back to current VERSION
+        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(VERSION.major, VERSION.minor)
+        # Inherited from compat.julia = "1.14-2"
+        @test invokelatest(getglobal, (@eval (using Versioned5; Versioned5)), :ver) == v"1.14"
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test explicit environments (packages loaded from Manifest.toml)
+    old_load_path = copy(LOAD_PATH)
+    old_active_project = Base.ACTIVE_PROJECT[]
+    try
+        explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
+        Base.ACTIVE_PROJECT[] = joinpath(explicit_env, "Project.toml")
+        empty!(LOAD_PATH)
+        push!(LOAD_PATH, "@")
+        # syntax.julia_version from Manifest = "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep1; VersionedDep1)), :ver) == v"1.13"
+        # syntax.julia_version from Manifest = "1.14"
+        @test invokelatest(getglobal, (@eval (using VersionedDep2; VersionedDep2)), :ver) == v"1.14"
+    finally
+        Base.ACTIVE_PROJECT[] = old_active_project
+        copy!(LOAD_PATH, old_load_path)
+    end
+end
