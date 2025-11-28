@@ -23,7 +23,7 @@ Julia's pool allocator often has better runtime performance than `libc` `malloc`
 
 The pool allocator segregates objects on different size classes. Each large memory block (16k bytes) managed by the pool allocator only contains objects belonging to the same size class.
 
-Each pool-allocated memory block is paired with a metadata structure containing information such as whether the block has live objects at all, the number of free memory slots in the block, the offsets to the first and last objects in the block, etc. This metadata is used to aggregate statistics such as number of objects freed during a collection cycle. It's also used to optimize the sweeping phase of GC: pages that have no live objects whatsoever don't need to be linearly scanned during the sweeping phase.
+Each pool-allocated memory block is paired with a metadata structure containing information such as whether the block has live objects at all, the number of free memory slots in the block, the offsets to the first and last objects in the block, etc. This metadata is used to aggregate statistics such as number of objects freed during a collection cycle. It's also used to optimize the sweeping phase of the GC: blocks that have no live objects whatsoever don't need to be linearly scanned during the sweeping phase.
 
 Julia's pool allocator stores memory blocks into different global lock-free lists depending on whether the block has been mapped but never accessed (`page_pool_clean`),  whether the page has been lazily swept and it's waiting to be scavenged by a background GC thread (`page_pool_lazily_freed`), or whether the page has been scavenged (`page_pool_freed`).
 
@@ -49,7 +49,7 @@ Although Julia currently uses `libc` `malloc`, it also supports pre-loading othe
 
 Julia’s mark phase is implemented through a parallel depth-first-search that traverses the object graph to determine which objects are alive.
 
-Because Julia’s GC is non-moving, object age information can’t be only determined through the object's memory address, such as in GC implementations that allocate young objects in certain memory regions and relocate them to other memory regions during object promotion. Age information needs to be encoded in the object header or on a side table. Julia implements the former: the lowest two bits of an object’s header store a mark bit, set when an object is marked, and an age bit, set when the object is promoted.
+Julia stores age information for its generational GC in the object header: the lowest two bits of an object’s header store a mark bit, set when an object is marked, and an age bit, set when the object is promoted. Because Julia’s GC is non-moving, object age information can’t be only determined through the object's memory address, such as in GC implementations that allocate young objects in certain memory regions and relocate them to other memory regions during object promotion.
 
 Generational collection is implemented through sticky bits: objects are only pushed to the mark-stack, and therefore traced, if their mark-bits have not been set. When objects reach the oldest generation, their mark-bits aren't reset during a quick sweep, so these objects aren't traced during a subsequent mark phase. A full sweep, however, resets the mark-bits of all objects, so all of them are traced in a subsequent collection.
 
