@@ -1197,6 +1197,17 @@ static const auto jl_write_barrier_func = new JuliaFunction<>{
     },
 };
 
+static const auto jl_cancellation_point_func = new JuliaFunction<>{
+    "julia.cancellation_point",
+    [](LLVMContext &C) {
+        return FunctionType::get(getInt32Ty(C), {}, false);
+    },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::ReturnsTwice}),
+            AttributeSet(),
+            None); }
+};
+
 static const auto jlisa_func = new JuliaFunction<>{
     XSTR(jl_isa),
     [](LLVMContext &C) {
@@ -4940,6 +4951,51 @@ isdefined_unknown_idx:
     else if (f == BUILTIN(compilerbarrier) && (nargs == 2)) {
         emit_typecheck(ctx, argv[1], (jl_value_t*)jl_symbol_type, "compilerbarrier");
         *ret = argv[2];
+        return true;
+    }
+
+    else if (f == BUILTIN(cancellation_point) && nargs == 0) {
+        // Emit the cancellation point intrinsic call first
+        ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
+
+        // Now do the same as the runtime version:
+        // 1. Load cancellation_request with relaxed ordering for fast path check
+        Value *ct = get_current_task(ctx);
+        Value *cr_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, cancellation_request), "cancellation_request");
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        LoadInst *cr_relaxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, cr_ptr, ctx.types().alignof_ptr);
+        cr_relaxed->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(cr_relaxed);
+
+        // 2. Check if cr == NULL || cr == jl_nothing
+        Value *is_null = ctx.builder.CreateIsNull(cr_relaxed);
+        Value *nothing_val = literal_pointer_val(ctx, jl_nothing);
+        Value *is_nothing = ctx.builder.CreateICmpEQ(decay_derived(ctx, cr_relaxed), decay_derived(ctx, nothing_val));
+        Value *no_cancel = ctx.builder.CreateOr(is_null, is_nothing);
+
+        // Save current basic block before branching
+        BasicBlock *currBB = ctx.builder.GetInsertBlock();
+
+        // Create basic blocks for the branch
+        BasicBlock *has_cancel_bb = BasicBlock::Create(ctx.builder.getContext(), "has_cancellation", ctx.f);
+        BasicBlock *merge_bb = BasicBlock::Create(ctx.builder.getContext(), "cancellation_merge", ctx.f);
+
+        ctx.builder.CreateCondBr(no_cancel, merge_bb, has_cancel_bb);
+
+        // In the has_cancel case, do an acquire load
+        ctx.builder.SetInsertPoint(has_cancel_bb);
+        LoadInst *cr_acquire = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, cr_ptr, ctx.types().alignof_ptr);
+        cr_acquire->setOrdering(AtomicOrdering::Acquire);
+        ai.decorateInst(cr_acquire);
+        ctx.builder.CreateBr(merge_bb);
+
+        // Merge the results
+        ctx.builder.SetInsertPoint(merge_bb);
+        PHINode *result = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+        result->addIncoming(nothing_val, currBB);
+        result->addIncoming(cr_acquire, has_cancel_bb);
+
+        *ret = mark_julia_type(ctx, result, /*boxed*/ true, rt);
         return true;
     }
 

@@ -225,8 +225,11 @@ typedef struct _jl_handler_t jl_handler_t;
 
 typedef struct _jl_task_t {
     JL_DATA_TYPE
-    jl_value_t *next; // invasive linked list for scheduler
-    jl_value_t *queue; // invasive linked list for scheduler
+    // This invasive linked list is used by the scheduler. The fields are protected
+    // by the lock of the parent object of the containing queue.
+    jl_value_t *next;
+    jl_value_t *queue;
+
     jl_value_t *tls;
     jl_value_t *donenotify;
     jl_value_t *result;
@@ -252,6 +255,9 @@ typedef struct _jl_task_t {
     // timestamp this task finished (i.e. entered state DONE or FAILED).
     _Atomic(uint64_t) finished_at;
 
+    // Cancellation request - can be an arbitary julia value, but the runtime recognizes
+    // CANCEL_REQUEST_ enum values.
+    _Atomic(jl_value_t *) cancellation_request;
 // hidden state:
 
     // id of owning thread - does not need to be defined until the task runs
@@ -280,6 +286,9 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved thread state
     jl_ucontext_t ctx; // pointer into stkbuf, if suspended
+    // current reset point for cancellation. Technically, we only need volatile
+    // here, but _Atomic makes the intent clearer.
+    volatile _jl_ucontext_t *reset_ctx;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);

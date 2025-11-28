@@ -302,14 +302,14 @@ function task_local_storage(body::Function, key, val)
 end
 
 # just wait for a task to be done, no error propagation
-function _wait(t::Task)
+function _wait(t::Task; expected_cancellation = nothing)
     t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
         try
-            while !istaskdone(t)
-                wait(donenotify)
+            while !istaskdone(t) && cancellation_request() === expected_cancellation
+                wait(donenotify; cancel_check=false)
             end
         finally
             unlock(donenotify)
@@ -359,10 +359,26 @@ Throws a `ConcurrencyViolationError` if `t` is the currently running task, to pr
 """
 function wait(t::Task; throw=true)
     _wait(t)
+    cr = cancellation_request()
+    if cr !== nothing
+        propagate_cancellation!(t, cr)
+    end
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
     end
     nothing
+end
+
+"""
+    wait_nocancel(t::Task)
+
+Like `wait`, but do not propagate cancellation of this task to the waited-on task.
+"""
+function wait_nocancel(t::Task; throw=true)
+    _wait(t)
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
+    end
 end
 
 # Wait multiple tasks
@@ -587,6 +603,10 @@ function sync_end(c::Channel{Any})
         r = take!(c)
         if isa(r, Task)
             _wait(r)
+            cr = cancellation_request()
+            if cr !== nothing
+                return sync_cancel!(c, r, cr, @isdefined(c_ex) ? c_ex : CompositeException())
+            end
             if istaskfailed(r)
                 if !@isdefined(c_ex)
                     c_ex = CompositeException()
@@ -899,12 +919,13 @@ mutable struct IntrusiveLinkedListSynchronized{T}
     lock::Threads.SpinLock
     IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
-isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
-length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
+waitqueue(l::IntrusiveLinkedListSynchronized) = ILLRef(l.queue, l)
+isempty(W::IntrusiveLinkedListSynchronized) = isempty(waitqueue(W))
+length(W::IntrusiveLinkedListSynchronized) = length(waitqueue(W))
 function push!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        push!(W.queue, t)
+        push!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -913,7 +934,7 @@ end
 function pushfirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        pushfirst!(W.queue, t)
+        pushfirst!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -922,7 +943,7 @@ end
 function pop!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
-        return pop!(W.queue)
+        return pop!(waitqueue(W))
     finally
         unlock(W.lock)
     end
@@ -930,7 +951,7 @@ end
 function popfirst!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
-        return popfirst!(W.queue)
+        return popfirst!(waitqueue(W))
     finally
         unlock(W.lock)
     end
@@ -938,7 +959,7 @@ end
 function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        list_deletefirst!(W.queue, t)
+        list_deletefirst!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -953,7 +974,10 @@ workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    _enq_work(t)
+end
 
+function _enq_work(t::Task)
     # Sticky tasks go into their thread's work queue.
     if t.sticky
         tid = Threads.threadid(t)
@@ -1271,4 +1295,175 @@ function maybe_record_enqueued!(t::Task)
         @atomic :monotonic t.first_enqueued_at = time_ns()
     end
     return t
+end
+
+## Cancellation
+
+struct CancellationRequest
+    request::UInt8
+end
+
+"""
+	CANCEL_REQUEST_SAFE
+
+Request safe cancelation of the current task. If the task is waiting for any
+other resources, it will request safe cancellation of any such resources and
+wait for the cancellation of such resources to be completed.
+
+As a result, if either the task itself or any of its dependent resources are
+currently unable to process cancelation, the request may hang and a more
+aggressive cancelation method may be required. However, in general _SAFE
+should be tried first.
+"""
+const CANCEL_REQUEST_SAFE = CancellationRequest(0x0)
+
+"""
+	CANCEL_REQUEST_ACK
+
+Set by the task itself to indicate that a (safe) cancellation request was
+received and acknowledged, but that there are dependent tasks for whom
+cancelation is still pending.
+"""
+const CANCEL_REQUEST_ACK = CancellationRequest(0x1)
+
+"""
+	CANCEL_REQUEST_QUERY
+
+Request that the system create an asynchronous report of why the task is currently
+not able to be canceled. The report will be provided in the ->cancelation_request
+field of the current task (as long as this field is still CANCEL_REQUEST_QUERY).
+
+N.B.: Transition to CANCEL_REQUEST_QUERY is only allowed from CANCEL_REQUEST_ACK.
+	  Once the waiting task has read the cancelation report, it may set the cancelation
+	  request back to CANCEL_REQUEST_ACK.
+"""
+const CANCEL_REQUEST_QUERY = CancellationRequest(0x2)
+
+"""
+	CANCEL_REQUEST_ABANDON_EXTERNAL
+
+Request a cancelation that will cease waiting for any external resources (e.g. I/O objects)
+without going through a safe cancelation procedure for such resources. However, the
+task will wait for any internal computational tasks to complete cancelation.
+
+This is a middleground between CANCEL_REQUEST_SAFE and CANCEL_REQUEST_ABANDON_ALL. As external
+I/O is often engineered for robustness in case of sudden disapperance of peers
+"""
+const CANCEL_REQUEST_ABANDON_EXTERNAL = CancellationRequest(0x3)
+
+"""
+	CANCEL_REQUEST_ABANDON_ALL
+
+Request a cancelation that will cease waiting for all external resources and all unacknowledged
+internal tasks. Such tasks will be frozen and become unschedulable in the future.
+
+!!! warning
+	If any canceled task has acquired locks or other resources that are contested, this method of
+	cancelation may leak such resources and create deadlocks in future code. It is intended as a
+	last-resort method to recover a system, but the necessity of this operation should in general
+	be considered a bug (e.g. due to insufficient cancellation points in computationally-heavy code).
+"""
+const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
+
+function Base.showerror(io::IO, cr::CancellationRequest)
+    print(io, "CancellationRequest: ")
+    if cr === CANCEL_REQUEST_SAFE
+        print(io, "Safe Cancellation (CANCEL_REQUEST_SAFE)")
+    else
+        print(io, "Unknown ($(cr.request))")
+    end
+end
+
+function conform_cancellation_request(@nospecialize(cr))
+    if isa(cr, UInt8)
+        return CancellationRequest(cr)
+    end
+    return cr
+end
+
+"""
+    cancellation_request()
+
+Returns the cancellation request for the current task or `nothing` if no
+cancellation has been requested. If a cancellation request is present, it is
+loaded with acquire semantics.
+"""
+function cancellation_request()
+    ct = current_task()
+    req = @atomic :monotonic ct.cancellation_request
+    req === nothing && return req
+    cr = @atomic :acquire ct.cancellation_request
+    return conform_cancellation_request(cr)
+end
+
+"""
+    Core.cancellation_point!()
+
+Like [`cancellation_request`](@ref), but additionally gives the optimizer license
+to establish this point as a cancellation reset point. If safe to do, the runtime
+will attempt to unwind execution to the nearest preceeding cancellation point
+when a cancellation is requested.
+"""
+Core.cancellation_point!
+
+function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
+    @atomic :release t.cancellation_request = crequest
+    while !istaskdone(t)
+        waitee = t.queue
+        waitee === nothing && (yield(); continue)
+        invokelatest(cancel_wait!, waitee, t) && break
+    end
+end
+
+"""
+    Base.reset_cancellation!()
+
+Resets the cancellation status of the current task.
+This should only be used from the root task after normal operation has been
+resumed (e.g. by returning control to the user).
+"""
+function reset_cancellation!()
+    ct = current_task()
+    @assert ct === roottask
+    @atomic :release ct.cancellation_request = nothing
+end
+
+function propagate_cancellation!(t::Task, crequest)
+    if crequest != CANCEL_REQUEST_SAFE
+        error("Not yet supported")
+    end
+    cancel!(t, crequest)
+    _wait(t; expected_cancellation=crequest)
+end
+
+@noinline function sync_cancel!(c::Channel{Any}, t::Task, @nospecialize(cr), c_ex::CompositeException)
+    if cr !== CANCEL_REQUEST_SAFE
+        error("Not yet supported")
+    end
+    waitees = Any[t]
+    cancel!(t, cr)
+    while isready(c)
+        r = take!(c)
+        cancel!(r, cr)
+        push!(waitees, r)
+    end
+    close(c)
+    for r in waitees
+        if isa(r, Task)
+            _wait(r; expected_cancellation=cr)
+            if istaskfailed(r)
+                push!(c_ex, TaskFailedException(r))
+            end
+        else
+            try
+                wait(r)
+            catch e
+                push!(c_ex, e)
+            end
+        end
+    end
+    if !isempty(c_ex)
+        throw(c_ex)
+    end
+    return nothing
 end

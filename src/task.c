@@ -1151,6 +1151,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->running_time_ns, 0);
     jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
+    jl_atomic_store_relaxed(&t->cancellation_request, jl_nothing);
 
     if (t->ctx.copy_stack)
         t->ctx.copy_ctx = NULL;
@@ -1603,6 +1604,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         jl_atomic_store_relaxed(&ct->first_enqueued_at, 0);
         jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
     }
+    jl_atomic_store_relaxed(&ct->cancellation_request, jl_nothing);
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);

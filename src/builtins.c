@@ -2496,6 +2496,16 @@ JL_CALLABLE(jl_f_intrinsic_call)
     abort();
 }
 
+JL_CALLABLE(jl_f_cancellation_point)
+{
+    JL_NARGS(cancellation_point, 0, 0);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *cr = jl_atomic_load_relaxed(&ct->cancellation_request);
+    if (cr == NULL || cr == jl_nothing)
+        return jl_nothing;
+    return jl_atomic_load_acquire(&ct->cancellation_request);
+}
+
 JL_DLLEXPORT const char *jl_intrinsic_name(int f)
 {
     switch ((enum intrinsic)f) {

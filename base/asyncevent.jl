@@ -192,6 +192,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
                 unlock(t.cond)
                 unpreserve_handle(t)
             end
+            @cancel_check()
         end
         iolock_end()
     end

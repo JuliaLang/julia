@@ -418,7 +418,6 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
         }
         return;
     }
@@ -989,14 +988,20 @@ static void *signal_listener(void *arg)
 #endif
 
         if (sig == SIGINT) {
-            if (jl_ignore_sigint()) {
-                continue;
-            }
-            else if (exit_on_sigint) {
+            if (exit_on_sigint) {
                 critical = 1;
             }
             else {
-                jl_try_deliver_sigint();
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                // Set the cancellation request, then notify the sigint listener
+                // that we want to cancel - if the task is not currently running,
+                // the sigint listener will take care of safely moving us through
+                // the cancellation state machine.
+                // TODO: If there is only one thread, we may need to ask the currently
+                // running task to yield, so that the sigint listener can run.
+                jl_atomic_store_release(&ptls2->root_task->cancellation_request,
+                    jl_box_uint8(0x00));
+                deliver_sigint_notification();
                 continue;
             }
         }
