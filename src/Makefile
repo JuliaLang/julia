@@ -207,6 +207,15 @@ RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
 CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 
+ifeq ($(USEGCC),1)
+ifeq ($(USE_RT_STATIC_LIBGCC),1)
+RT_LIBS += -static-libgcc
+endif
+ifeq ($(USE_RT_STATIC_LIBSTDCXX),1)
+RT_LIBS += -static-libstdc++
+endif
+endif
+
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 RT_LIBS += $(MMTK_LIB)
 CG_LIBS += $(MMTK_LIB)
