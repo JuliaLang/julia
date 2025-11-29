@@ -1910,6 +1910,8 @@ module M58272_to end
         @test invokelatest(getglobal, (@eval (using VersionedDep1; VersionedDep1)), :ver) == v"1.13"
         # syntax.julia_version from Manifest = "1.14"
         @test invokelatest(getglobal, (@eval (using VersionedDep2; VersionedDep2)), :ver) == v"1.14"
+        # syntax.julia_version from Manifest = "1.0" should be clamped to "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep3; VersionedDep3)), :ver) == v"1.13"
     finally
         Base.ACTIVE_PROJECT[] = old_active_project
         copy!(LOAD_PATH, old_load_path)

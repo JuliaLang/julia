@@ -1222,6 +1222,10 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     syntax_table = get(entry, "syntax", nothing)
     if syntax_table !== nothing
         syntax_version = VersionNumber(get(syntax_table, "julia_version", nothing))
+        # Clamp to minimum supported syntax version
+        if syntax_version <= NON_VERSIONED_SYNTAX
+            syntax_version = NON_VERSIONED_SYNTAX
+        end
     end
 
     # Resolve path
