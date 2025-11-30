@@ -211,7 +211,7 @@ end
 """
     code_typed(f, types; kw...)
 
-Returns an array of type-inferred lowered form (IR) for the methods matching the given
+Return an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature.
 
 # Keyword Arguments
@@ -618,7 +618,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> rt::Type
 
-Returns an inferred return type of the function call specified by `f` and `types`.
+Return an inferred return type of the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -764,7 +764,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> exct::Type
 
-Returns the type of exception potentially thrown by the function call specified by `f` and `types`.
+Return the type of exception potentially thrown by the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -833,7 +833,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> effects::Effects
 
-Returns the possible computation effects of the function call specified by `f` and `types`.
+Return the possible computation effects of the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -963,7 +963,7 @@ end
 """
     which(f, types)
 
-Returns the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
+Return the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 
@@ -987,7 +987,7 @@ end
 """
     which(types::Type{<:Tuple})
 
-Returns the method that would be called by the given type signature (as a tuple type).
+Return the method that would be called by the given type signature (as a tuple type).
 """
 function which(@nospecialize(tt#=::Type=#))
     return _which(tt).method

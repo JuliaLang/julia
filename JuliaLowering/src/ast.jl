@@ -175,6 +175,7 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
               k == K"Char"    ? convert(Char,    value) :
               k == K"Value"   ? value                   :
               k == K"Bool"    ? value                   :
+              k == K"VERSION" ? value                   :
               error("Unexpected leaf kind `$k`")
         makeleaf(graph, srcref, k; value=val, kws...)
     end

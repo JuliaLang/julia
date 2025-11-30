@@ -111,7 +111,25 @@ static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct)
         (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
 }
 
-JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name,
+JL_DLLEXPORT void jl_setup_new_module(jl_module_t *m, jl_value_t *syntax_version)
+{
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_setup_module!"), ct->world_age);
+    if (f != NULL) {
+        jl_value_t **fargs;
+        JL_GC_PUSHARGS(fargs, 3);
+        fargs[0] = f;
+        fargs[1] = (jl_value_t*)m;
+        fargs[2] = syntax_version;
+        jl_apply(fargs, 3);
+        JL_GC_POP();
+    }
+    ct->world_age = last_age;
+}
+
+JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name, jl_value_t *syntax_version,
                                               int std_imports, const char *filename, int lineno)
 {
     jl_task_t *ct = jl_current_task;
@@ -133,17 +151,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
 
     // add standard imports unless baremodule
     if (std_imports && jl_base_module != NULL) {
-        jl_module_t *base = jl_add_standard_imports(newm);
-        jl_datatype_t *include_into = (jl_datatype_t *)jl_get_global(base, jl_symbol("IncludeInto"));
-        if (include_into) {
-            form = jl_new_struct(include_into, newm);
-            jl_set_initial_const(newm, jl_symbol("include"), form, 0);
-        }
-        jl_datatype_t *eval_into = (jl_datatype_t *)jl_get_global(jl_core_module, jl_symbol("EvalInto"));
-        if (eval_into) {
-            form = jl_new_struct(eval_into, newm);
-            jl_set_initial_const(newm, jl_symbol("eval"), form, 0);
-        }
+        jl_setup_new_module(newm, syntax_version);
     }
 
     if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {
@@ -216,20 +224,27 @@ JL_DLLEXPORT void jl_end_new_module(jl_module_t *newm) {
 static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex, const char **toplevel_filename, int *toplevel_lineno)
 {
     assert(ex->head == jl_module_sym);
-    if (jl_array_nrows(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex, 2))) {
+
+    jl_value_t *syntax_version = jl_nothing;
+    int idx = 0;
+    if (!jl_is_bool(jl_exprarg(ex, idx))) {
+        syntax_version = jl_exprarg(ex, idx++);
+    }
+
+    if (jl_array_nrows(ex->args) != idx+3 || !jl_is_expr(jl_exprarg(ex, idx+2))) {
         jl_error("syntax: malformed module expression");
     }
 
-    if (((jl_expr_t *)(jl_exprarg(ex, 2)))->head != jl_symbol("block")) {
-        jl_error("syntax: module expression third argument must be a block");
-    }
-    jl_array_t *stmts = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
-
-    int std_imports = (jl_exprarg(ex, 0) == jl_true);
-    jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
+    int std_imports = (jl_exprarg(ex, idx++) == jl_true);
+    jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, idx++);
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
+
+    if (((jl_expr_t *)(jl_exprarg(ex, idx)))->head != jl_symbol("block")) {
+        jl_error("syntax: module expression third argument must be a block");
+    }
+    jl_array_t *stmts = ((jl_expr_t*)jl_exprarg(ex, idx))->args;
 
     int lineno = 0;
     const char *filename = "none";
@@ -243,7 +258,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
-    jl_module_t *newm = jl_begin_new_module(parent_module, name, std_imports, filename, lineno);
+    jl_module_t *newm = jl_begin_new_module(parent_module, name, syntax_version, std_imports, filename, lineno);
     JL_GC_PROMISE_ROOTED(newm); // Rooted in jl_current_modules
     jl_eval_toplevel_stmts(newm, stmts, 1, 0, toplevel_filename, toplevel_lineno);
     jl_end_new_module(newm);
@@ -830,7 +845,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     JL_GC_PUSH3(&ast, &result, &expression);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
-                              filename, 1, 0, (jl_value_t*)jl_all_sym), 0);
+                              filename, 1, 0, (jl_value_t*)jl_all_sym, module), 0);
     if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != jl_toplevel_sym) {
         jl_errorf("jl_parse_all() must generate a top level expression");
     }

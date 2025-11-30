@@ -740,7 +740,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     rethrow()
                 end
             end
-            ast = Base.parse_input_line(line)
+            ast = Base.parse_input_line(line; mod=Base.active_module(repl))
             (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
@@ -814,7 +814,8 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
+Base.active_module(mistate::MIState) = mistate.active_module
+Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : Base.active_module(mistate)
 Base.active_module(::AbstractREPL) = Main
 Base.active_module(d::REPLDisplay) = Base.active_module(d.repl)
 
@@ -1117,7 +1118,7 @@ end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
-    ast = Base.parse_input_line(takestring!(copy(LineEdit.buffer(s))), depwarn=false)
+    ast = Base.parse_input_line(takestring!(copy(LineEdit.buffer(s))); mod=Base.active_module(s), depwarn=false)
     return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 
@@ -1290,7 +1291,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line::String->helpmode(outstream(repl), line, repl.mistate.active_module),
+        on_done = respond(line::String->helpmode(outstream(repl), line, Base.active_module(repl)),
                           repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
 
@@ -1371,7 +1372,7 @@ function setup_interface(
     help_mode.hist = hp
     dummy_pkg_mode.hist = hp
 
-    julia_prompt.on_done = respond(x->Base.parse_input_line(x,filename=repl_filename(repl,hp)), repl, julia_prompt)
+    julia_prompt.on_done = respond(x->Base.parse_input_line(x; filename=repl_filename(repl,hp), mod=Base.active_module(repl)), repl, julia_prompt)
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
@@ -1535,7 +1536,7 @@ function setup_interface(
                 dump_tail = false
                 nl_pos = findfirst('\n', input[oldpos:end])
                 if s.current_mode == julia_prompt
-                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
+                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, mod=Base.active_module(s))
                     if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                             (pos > ncodeunits(input) && !endswith(input, '\n'))
                         # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
@@ -1791,7 +1792,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         end
         line = readline(repl.stream, keep=true)
         if !isempty(line)
-            ast = Base.parse_input_line(line)
+            ast = Base.parse_input_line(line; mod=Base.active_module(repl))
             if have_color
                 print(repl.stream, Base.color_normal)
             end

@@ -39,6 +39,11 @@ $(BUILDDIR)/loader_lib.o: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
 $(BUILDDIR)/loader_lib.dbg.obj: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
 endif # MSYS2
 
+ifeq ($(USE_RT_STATIC_LIBSTDCXX),1)
+SHIPFLAGS += -DRT_STATIC_LIBSTDCXX
+DEBUGFLAGS += -DRT_STATIC_LIBSTDCXX
+endif # USE_RT_STATIC_LIBSTDCXX
+
 EXE_OBJS := $(BUILDDIR)/loader_exe.o
 EXE_DOBJS := $(BUILDDIR)/loader_exe.dbg.obj
 LIB_OBJS := $(BUILDDIR)/loader_lib.o

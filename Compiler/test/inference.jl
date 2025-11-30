@@ -105,12 +105,12 @@ end
 
 # issue #51694
 @test Compiler.type_more_complex(
-       Base.Generator{Base.Iterators.Flatten{Array{Bool, 1}}, typeof(identity)},
-       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Base.Generator{Base.Iterators.Flatten{Vector{Bool}}, typeof(identity)},
+       Base.Generator{Vector{Bool}, typeof(identity)},
        Core.svec(), 0, 0, 0)
 @test Compiler.type_more_complex(
-       Base.Generator{Base.Iterators.Flatten{Base.Generator{Array{Bool, 1}, typeof(identity)}}, typeof(identity)},
-       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Base.Generator{Base.Iterators.Flatten{Base.Generator{Vector{Bool}, typeof(identity)}}, typeof(identity)},
+       Base.Generator{Vector{Bool}, typeof(identity)},
        Core.svec(), 0, 0, 0)
 
 let # 40336
@@ -419,7 +419,7 @@ end
 
 # issue #12826
 f12826(v::Vector{I}) where {I<:Integer} = v[1]
-@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
+@test Base.return_types(f12826,Tuple{Vector{I} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
@@ -1465,8 +1465,8 @@ let egal_tfunc
     @test egal_tfunc(Array, Array) == Bool
     @test egal_tfunc(Array, AbstractArray{Int}) == Bool
     @test egal_tfunc(Array{Real}, AbstractArray{Int}) === Const(false)
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) === Bool
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) === Const(false)
+    @test egal_tfunc(Matrix{Real}, AbstractMatrix{Real}) === Bool
+    @test egal_tfunc(Matrix{Real}, AbstractMatrix{Int}) === Const(false)
     @test egal_tfunc(DataType, Int) === Const(false)
     @test egal_tfunc(DataType, Const(Int)) === Bool
     @test egal_tfunc(DataType, Const(Array)) === Const(false)
@@ -6463,6 +6463,7 @@ end == TypeError
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
     module B58257
+        const age = Base.get_world_counter()
         using ..A58257
         # World age here is N
     end
@@ -6474,7 +6475,7 @@ end
 ## The sequence of events is critical here.
 A58257.get!      # Creates binding partition in A, N+1:∞
 A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
-Base.invoke_in_world(UInt(38678), getglobal, A58257, :get!) # Expands binding partition in A through <N
+Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
 
 function tt57873(a::Vector{String}, pref)

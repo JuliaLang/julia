@@ -28,6 +28,7 @@ extern "C" {
 // GC Big objects
 // =========================================================================== //
 
+// layout for big (>2k) objects
 JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
     struct _bigval_t *prev;

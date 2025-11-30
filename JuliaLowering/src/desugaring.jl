@@ -539,7 +539,11 @@ function _arg_to_temp(ctx, stmts, ex, eq_is_kw=false)
     elseif k == K"..."
         @ast ctx ex [k _arg_to_temp(ctx, stmts, ex[1])]
     elseif k == K"=" && eq_is_kw
-        @ast ctx ex [K"=" ex[1] _arg_to_temp(ex[2])]
+        @ast ctx ex [K"=" ex[1] _arg_to_temp(ctx, stmts, ex[2], false)]
+    elseif k == K"parameters"
+        mapchildren(ctx, ex) do e
+            _arg_to_temp(ctx, stmts, e, true)
+        end
     else
         emit_assign_tmp(stmts, ctx, ex)
     end
@@ -2530,6 +2534,16 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
         ]
     ]
 
+    function stub_argname(n::SyntaxTree, i)
+        if kind(n) == K"Identifier"
+            return n.name_val::String
+        elseif kind(n) == K"BindingId"
+            # flisp lowering calls these unnamed arguments "#unused#", but JL does
+            # not accept that as a repeated argument name
+            return "#arg" * string(i) * "#"
+        else @assert false "Unexpected argument kind: $(kind(n))" end
+    end
+
     # Extract non-generated body
     nongen_body = @ast ctx body [K"block"
         # The Julia runtime associates the code generator with the
@@ -2548,6 +2562,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
             # technically have scope resolved at top level.
             [K"new"
                 GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
+                ctx.expr_compat_mode::K"Value"
                 gen_name
                 # Truncate provenance to just the source file range, as this
                 # will live permanently in the IR and we probably don't want
@@ -2558,7 +2573,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
                 [K"call"
                     "svec"::K"core"
                     "#self#"::K"Symbol"
-                    (n.name_val::K"Symbol"(n) for n in arg_names[2:end])...
+                    (stub_argname(n,i)::K"Symbol"(n) for (i,n) in enumerate(arg_names[2:end]))...
                 ]
                 [K"call"
                     "svec"::K"core"

@@ -1859,10 +1859,16 @@ static void construct_vars(Module &M, Partition &partition, StringRef suffix) {
     gidxs_var->setDSOLocal(true);
 }
 
-extern "C" void lambda_trampoline(void* arg) {
-    std::function<void()>* func = static_cast<std::function<void()>*>(arg);
-    (*func)();
-    delete func;
+template<typename CB>
+static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
+{
+    auto func = new CB(std::move(cb));
+    // Use libuv thread to avoid issues with stack sizes
+    uv_thread_create(worker, [] (void *arg) {
+        auto func = static_cast<CB*>(arg);
+        (*func)();
+        delete func;
+    }, func);
 }
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
@@ -1962,7 +1968,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         JL_TIMING(NATIVE_AOT, NATIVE_Opt);
         std::vector<uv_thread_t> workers(threads);
         for (unsigned i = 0; i < threads; i++) {
-            std::function<void()> func = [&, i]() {
+            schedule_uv_thread(&workers[i], [&, i]() {
                 LLVMContext ctx;
                 ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module
@@ -1993,9 +1999,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 timers[i].construct.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
-            };
-            auto arg = new std::function<void()>(func);
-            uv_thread_create(&workers[i], lambda_trampoline, arg); // Use libuv thread to avoid issues with stack sizes
+            });
         }
 
         // Wait for all of the worker threads to finish

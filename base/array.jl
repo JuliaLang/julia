@@ -399,10 +399,10 @@ end
 
 ## Constructors ##
 
-similar(a::Array{T,1}) where {T}                    = Vector{T}(undef, size(a,1))
-similar(a::Array{T,2}) where {T}                    = Matrix{T}(undef, size(a,1), size(a,2))
-similar(a::Array{T,1}, S::Type) where {T}           = Vector{S}(undef, size(a,1))
-similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1), size(a,2))
+similar(a::Vector{T}) where {T}                    = Vector{T}(undef, size(a,1))
+similar(a::Matrix{T}) where {T}                    = Matrix{T}(undef, size(a,1), size(a,2))
+similar(a::Vector{T}, S::Type) where {T}           = Vector{S}(undef, size(a,1))
+similar(a::Matrix{T}, S::Type) where {T}           = Matrix{S}(undef, size(a,1), size(a,2))
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
@@ -1832,12 +1832,12 @@ julia> insert!(Any[1:6;], 3, "here")
  6
 ```
 """
-function insert!(a::Array{T,1}, i::Integer, item) where T
+function insert!(a::Vector{T}, i::Integer, item) where T
     @_propagate_inbounds_meta
     item = item isa T ? item : convert(T, item)::T
     return _insert!(a, i, item)
 end
-function _insert!(a::Array{T,1}, i::Integer, item::T) where T
+function _insert!(a::Vector{T}, i::Integer, item::T) where T
     @_noub_meta
     # Throw convert error before changing the shape of the array
     _growat!(a, i, 1)

@@ -431,6 +431,7 @@ end
         )
     end
     """) ≈ @ast_ [K"module"
+        v"1.14.0"::K"VERSION"
         "AA"::K"Identifier"
         [K"block"
         ]
@@ -500,6 +501,42 @@ end
     @test JuliaLowering.include_string(test_mod, "MacroMod.@escaped_toplevel") === test_mod
     @test JuliaLowering.include_string(test_mod, "MacroMod.@inner_escaped_toplevel") === test_mod
     @test JuliaLowering.include_string(test_mod, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+end
+
+# JuliaLang/JuliaLowering.jl#120
+#
+# `__module__` should be expanded as the lexical module containing the expanded
+# code, not the module corresponding to the current hygienic scope
+JuliaLowering.include_string(test_mod, raw"""
+module Mod1
+macro indirect_MODULE()
+    return :(@__MODULE__())
+end
+end
+""")
+code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
+@test JuliaLowering.eval(test_mod, code) === test_mod # !== test_mod.Mod1
+# the lowering/eval iterator needs to expand in the correct world age (currently
+# the only way to hit this from user code is macros producing toplevel)
+
+@testset "macros defining macros" begin
+    @eval test_mod macro make_and_use_macro_toplevel()
+        Expr(:toplevel,
+             esc(:(macro from_toplevel_expansion()
+                   :(123)
+               end)),
+             esc(:(@from_toplevel_expansion())))
+    end
+
+    @test JuliaLowering.include_string(
+        test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=true) === 123
+
+    if isdefined(test_mod, Symbol("@from_toplevel_expansion"))
+        Base.delete_binding(test_mod, Symbol("@from_toplevel_expansion"))
+    end
+
+    @test JuliaLowering.include_string(
+        test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=false) === 123
 end
 
 end
