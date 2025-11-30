@@ -1081,8 +1081,8 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x12: // H12 Cebu p-Core "Lightning"
         case 0x13: // H12 Cebu e-Core "Thunder"
             return CPU::apple_a13;
-        case 0x20: // H13 Sicily e-Core "Icestorm"
-        case 0x21: // H13 Sicily p-Core "Firestorm"
+        case 0x20: // H13P Sicily e-Core "Icestorm"
+        case 0x21: // H13P Sicily p-Core "Firestorm"
             return CPU::apple_a14;
         case 0x22: // H13G Tonga e-Core "Icestorm" used in Apple M1
         case 0x23: // H13G Tonga p-Core "Firestorm" used in Apple M1
@@ -1091,8 +1091,8 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x28: // H13J Jade Die e-Core "Icestorm" used in Apple M1 Max / Ultra
         case 0x29: // H13J Jade Die p-Core "Firestorm" used in Apple M1 Max / Ultra
             return CPU::apple_m1;
-        case 0x30: // H14 Ellis e-Core "Blizzard" used in Apple A15
-        case 0x31: // H14 Ellis p-Core "Avalanche" used in Apple A15
+        case 0x30: // H14P Ellis e-Core "Blizzard" used in Apple A15
+        case 0x31: // H14P Ellis p-Core "Avalanche" used in Apple A15
             return CPU::apple_a15;
         case 0x32: // H14G Staten e-Core "Blizzard" used in Apple M2
         case 0x33: // H14G Staten p-Core "Avalanche" used in Apple M2
@@ -1108,8 +1108,8 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x43: // H15 Ibiza p-Core "Everest" used in Apple M3
         case 0x44: // H15 Lobos e-Core "Sawtooth" used in Apple M3 Pro
         case 0x45: // H15 Lobos p-Core "Everest" used in Apple M3 Pro
-        case 0x49: // H15 Palma e-Core "Sawtooth" used in Apple M3 Max
-        case 0x48: // H15 Palma p-Core "Everest" used in Apple M3 Max
+        case 0x48: // H15 Palma e-Core "Sawtooth" used in Apple M3 Max
+        case 0x49: // H15 Palma p-Core "Everest" used in Apple M3 Max
             return CPU::apple_m3;
         //case 0x46: // M11 e-Core "Sawtooth" used in Apple S9
         //case 0x47:  does not exist
@@ -1128,7 +1128,15 @@ static CPU get_cpu_name(CPUID cpuid)
         //case 0x61: // H17P Tahiti p-Core used in Apple A18 Pro
         //case 0x6a: // H17A Tupai e-Core used in Apple A18
         //case 0x6b: // H17A Tupai p-Core used in Apple A18
-            //return CPU::apple_a18;
+        //     return CPU::apple_a18;
+        // case 0x62: // H17G Hidra e-Core used in Apple M5
+        // case 0x63: // H17G Hidra p-Core used in Apple M5
+        //     return CPU::apple_m5;
+        // case 0x70: // H18P Thera e-Core used in Apple A19 Pro
+        // case 0x71: // H18P Thera p-Core used in Apple A19 Pro
+        // case 0x7a: // H18A Tilos e-Core used in Apple A19
+        // case 0x7b: // H18A Tilos p-Core used in Apple A19
+        //     return CPU::apple_a19;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
