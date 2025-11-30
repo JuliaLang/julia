@@ -543,7 +543,7 @@ static void sweep_big(jl_ptls_t ptls) JL_NOTSAFEPOINT
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 == NULL) {
             continue;
-    }
+        }
         bigval_t *last_node = sweep_list_of_young_bigvals(ptls2->gc_tls.heap.young_generation_of_bigvals);
         if (ptls == ptls2) {
             last_node_in_my_list = last_node;
