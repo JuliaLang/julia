@@ -253,6 +253,7 @@ constexpr auto armv8_4a_crypto = armv8_4a | get_feature_masks(aes, sha2);
 constexpr auto armv8_5a = armv8_4a | get_feature_masks(v8_5a, sb, ccdp, altnzcv, fptoint);
 constexpr auto armv8_5a_crypto = armv8_5a | get_feature_masks(aes, sha2);
 constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
+constexpr auto armv8_6a_crypto = armv8_6a | get_feature_masks(aes, sha2);
 
 // For ARM cores, the features required can be found in the technical reference manual
 // The relevant register values and the features they are related to are:
@@ -349,19 +350,22 @@ constexpr auto samsung_exynos_m2 = armv8a_crc_crypto;
 constexpr auto samsung_exynos_m3 = armv8a_crc_crypto;
 constexpr auto samsung_exynos_m4 = armv8_2a_crypto | get_feature_masks(dotprod, fullfp16);
 constexpr auto samsung_exynos_m5 = samsung_exynos_m4;
+
 constexpr auto apple_a7 = armv8a_crc_crypto;
 constexpr auto apple_a10 = armv8a_crc_crypto | get_feature_masks(rdm);
 constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
 constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
-constexpr auto apple_a15 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
-constexpr auto apple_a16 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
-constexpr auto apple_a17 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
-constexpr auto apple_m1 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
-constexpr auto apple_m2 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
-constexpr auto apple_m3 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
-constexpr auto apple_m4 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_a15 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_a16 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_a17 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_m4 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+// Aliased definitions
+constexpr auto apple_m1 = apple_a14;
+constexpr auto apple_m2 = apple_a15;
+constexpr auto apple_m3 = apple_a16;
+
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
 constexpr auto apple_s4 = apple_a12;
