@@ -167,6 +167,7 @@ enum class CPU : uint32_t {
     apple_a15,
     apple_a16,
     apple_a17,
+    apple_a18,
     apple_m1,
     apple_m2,
     apple_m3,
@@ -365,6 +366,7 @@ constexpr auto apple_m4 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, f
 constexpr auto apple_m1 = apple_a14;
 constexpr auto apple_m2 = apple_a15;
 constexpr auto apple_m3 = apple_a16;
+constexpr auto apple_a18 = apple_m4;
 
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
@@ -450,6 +452,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a15", CPU::apple_a15, CPU::apple_a14, 160000, Feature::apple_a15},
     {"apple-a16", CPU::apple_a16, CPU::apple_a14, 160000, Feature::apple_a16},
     {"apple-a17", CPU::apple_a17, CPU::apple_a16, 190000, Feature::apple_a17},
+    {"apple-a18", CPU::apple_a18, CPU::apple_a17, 210000, Feature::apple_a18},
     {"apple-m1", CPU::apple_m1, CPU::apple_a14, 130000, Feature::apple_m1},
     {"apple-m2", CPU::apple_m2, CPU::apple_m1, 160000, Feature::apple_m2},
     {"apple-m3", CPU::apple_m3, CPU::apple_m2, 180000, Feature::apple_m3},
@@ -1128,11 +1131,11 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x58: // H16C Brava C e-Core used in Apple M4 Max
         case 0x59: // H16C Brava C p-Core used in Apple M4 Max
             return CPU::apple_m4;
-        //case 0x60: // H17P Tahiti e-Core used in Apple A18 Pro
-        //case 0x61: // H17P Tahiti p-Core used in Apple A18 Pro
-        //case 0x6a: // H17A Tupai e-Core used in Apple A18
-        //case 0x6b: // H17A Tupai p-Core used in Apple A18
-        //     return CPU::apple_a18;
+        case 0x60: // H17P Tahiti e-Core used in Apple A18 Pro
+        case 0x61: // H17P Tahiti p-Core used in Apple A18 Pro
+        case 0x6a: // H17A Tupai e-Core used in Apple A18
+        case 0x6b: // H17A Tupai p-Core used in Apple A18
+            return CPU::apple_a18;
         // case 0x62: // H17G Hidra e-Core used in Apple M5
         // case 0x63: // H17G Hidra p-Core used in Apple M5
         //     return CPU::apple_m5;
