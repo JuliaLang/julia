@@ -72,10 +72,12 @@ endif
 endif
 endif
 
+PATCHELF_MANIFEST :=
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
+PATCHELF_MANIFEST:=$(build_prefix)/manifest/patchelf
 else
 PATCHELF:=patchelf
 endif

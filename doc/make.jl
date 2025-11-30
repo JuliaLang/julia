@@ -4,7 +4,7 @@ empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
 push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
-push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
+push!(DEPOT_PATH, abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))
 using Pkg
 Pkg.instantiate()
 
@@ -201,6 +201,15 @@ BaseDocs = [
 ]
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
+
+# HACK: get nicer sorting here, even though we don't have the header
+# of the .md files at hand.
+sort!(StdlibDocs, by=function(x)
+    x = replace(x, "stdlib/" => "")
+    startswith(x, "Libdl") && return lowercase("Dynamic Linker")
+    startswith(x, "Test") && return lowercase("Unit Testing")
+    return lowercase(x)
+end)
 
 DevDocs = [
     "Documentation of Julia's Internals" => [

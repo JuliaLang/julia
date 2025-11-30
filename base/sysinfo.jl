@@ -14,6 +14,7 @@ export BINDIR,
        MACHINE,
        KERNEL,
        JIT,
+       PAGESIZE,
        cpu_info,
        cpu_summary,
        uptime,
@@ -39,7 +40,7 @@ export BINDIR,
        which,
        detectwsl
 
-import ..Base: show
+import ..Base: DATAROOTDIR, show
 
 """
     Sys.BINDIR::String
@@ -53,12 +54,10 @@ global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/$DATAROOTDIR/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
-# Similarly, this is the root of the julia repo directory that julia was built from
-const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 
@@ -143,6 +142,13 @@ Note: Included in the detailed system information via `versioninfo(verbose=true)
 """
 global JIT::String
 
+"""
+    Sys.PAGESIZE::Clong
+
+A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+"""
+global PAGESIZE::Clong
+
 function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
@@ -161,6 +167,7 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
     __init_build()
     nothing
 end
@@ -169,7 +176,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR, DATAROOTDIR, "julia", "stdlib", vers)
     nothing
 end
 
