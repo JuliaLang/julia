@@ -394,3 +394,9 @@ let m = first(methods(Core.kwcall, (NamedTuple,typeof(kwf1),Vararg)))
     @test Core.kwcall(1) == "hi 1"
     @test which(Core.kwcall, (Int,)).name === :kwcall
 end
+
+# issue #50518
+function f50518(xs...=["a", "b", "c"]...; debug=false)
+    return xs[1]
+end
+@test f50518() == f50518(;debug=false) == "a"

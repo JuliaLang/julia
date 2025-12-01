@@ -22,7 +22,7 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power           |
 | `x % y`    | remainder      | equivalent to `rem(x, y)`               |
 
-A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
+A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x + y)`, is treated as a multiplication, except with higher precedence than other binary operations. See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
@@ -47,18 +47,6 @@ julia> 3*2/12
 operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
 and then `2` is added to that result.)
 
-When used in multiplication, `false` acts as a *strong zero*:
-
-```jldoctest
-julia> NaN * false
-0.0
-
-julia> false * Inf
-0.0
-```
-
-This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
-
 ## Boolean Operators
 
 The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
@@ -71,7 +59,29 @@ The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 
 Negation changes `true` to `false` and vice versa. The short-circuiting operations are explained on the linked page.
 
-Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
+## Arithmetic operations with `Bool` values
+
+Note that `Bool` is an integer type, such that `false` is numerically equal to `0` and `true` is numerically equal to `1`. All the usual promotion rules and numeric operators are also defined on it, with a special behavior of arithmetic (non-Boolean) operations when all the arguments are `Bool`: in those cases, the arguments are promoted to `Int` instead of keeping their type. Compare e.g. the following equivalent operations with `Bool` and with a different numeric type (`UInt8`):
+
+```jldoctest
+julia> true - true
+0
+
+julia> 0x01 - 0x01
+0x00
+```
+
+Also, when used in multiplication, `false` acts as a *strong zero*:
+
+```jldoctest
+julia> NaN * false
+0.0
+
+julia> false * Inf
+0.0
+```
+
+This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
 
 ## Bitwise Operators
 
@@ -174,7 +184,7 @@ to perform `^` element-by-element on arrays. For example,
 `[1, 2, 3] ^ 3` is not defined, since there is no standard
 mathematical meaning to "cubing" a (non-square) array, but
 `[1, 2, 3] .^ 3` is defined as computing the elementwise
-(or "vectorized") result `[1^3, 2^3, 3^3]`.  Similarly for unary
+(or "vectorized") result `[1^3, 2^3, 3^3]`. Similarly for unary
 operators like `!` or `√`, there is a corresponding `.√` that
 applies the operator elementwise.
 
@@ -204,9 +214,9 @@ as `a .= a .+ b`, where `.=` is a fused *in-place* assignment operation
 (see the [dot syntax documentation](@ref man-vectorized)).
 
 Note the dot syntax is also applicable to user-defined operators.
-For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
+For example, if you define `⊗(A, B) = kron(A, B)` to give a convenient
 infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
-`[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
+`[A, B] .⊗ [C, D]` will compute `[A⊗C, B⊗D]` with no additional coding.
 
 Combining dot operators with numeric literals can be ambiguous.
 For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
@@ -332,7 +342,7 @@ Mixed-type comparisons between signed integers, unsigned integers, and floats ca
 great deal of care has been taken to ensure that Julia does them correctly.
 
 For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==`](@ref) method.  If you define
+equality for your own types then you only need to add a [`==`](@ref) method. If you define
 your own equality function, you should probably define a corresponding [`hash`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
@@ -394,7 +404,7 @@ Julia applies the following order and associativity of operations, from highest 
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
-| Unary          | `+ - √`                                                                                           | Right[^1]                  |
+| Unary          | `+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓ <: >:`                                                                     | Right[^1]                  |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Fractions      | `//`                                                                                              | Left                       |
 | Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
@@ -457,7 +467,7 @@ Juxtaposition parses like a unary operator, which has the same natural asymmetry
 Julia supports three forms of numerical conversion, which differ in their handling of inexact
 conversions.
 
-  * The notation `T(x)` or `convert(T,x)` converts `x` to a value of type `T`.
+  * The notation `T(x)` or `convert(T, x)` converts `x` to a value of type `T`.
 
       * If `T` is a floating-point type, the result is the nearest representable value, which could be
         positive or negative infinity.
@@ -502,7 +512,7 @@ julia> round(Int8,127.4)
 127
 
 julia> round(Int8,127.6)
-ERROR: InexactError: trunc(Int8, 128.0)
+ERROR: InexactError: Int8(128.0)
 Stacktrace:
 [...]
 ```
@@ -534,7 +544,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`mod1(x, y)`](@ref)       | `mod` with offset 1; returns `r∈(0, y]` for `y>0` or `r∈[y, 0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
 | [`mod2pi(x)`](@ref)        | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
 | [`divrem(x, y)`](@ref)     | returns `(div(x, y),rem(x, y))`                                                                           |
-| [`fldmod(x, y)`](@ref)     | returns `(fld(x, y),mod(x, y ))`                                                                          |
+| [`fldmod(x, y)`](@ref)     | returns `(fld(x, y), mod(x, y))`                                                                          |
 | [`gcd(x, y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
 | [`lcm(x, y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
@@ -551,21 +561,22 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Powers, logs and roots
 
-| Function                 | Description                                                                |
-|:------------------------ |:-------------------------------------------------------------------------- |
-| [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
-| [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
-| [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
-| [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x)-1` for `x` near zero                                      |
-| [`ldexp(x, n)`](@ref)    | `x*2^n` computed efficiently for integer values of `n`                     |
-| [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
-| [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
-| [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
-| [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
-| [`log1p(x)`](@ref)       | accurate `log(1+x)` for `x` near zero                                      |
-| [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
-| [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
+| Function                      | Description                                                                |
+|:----------------------------- |:-------------------------------------------------------------------------- |
+| [`sqrt(x)`](@ref), `√x`       | square root of `x`                                                         |
+| [`cbrt(x)`](@ref), `∛x`       | cube root of `x`                                                           |
+| [`fourthroot(x)`](@ref), `∜x` | fourth root of `x`                                                         |
+| [`hypot(x, y)`](@ref)         | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`exp(x)`](@ref)              | natural exponential function at `x`                                        |
+| [`expm1(x)`](@ref)            | accurate `exp(x) - 1` for `x` near zero                                    |
+| [`ldexp(x, n)`](@ref)         | `x * 2^n` computed efficiently for integer values of `n`                   |
+| [`log(x)`](@ref)              | natural logarithm of `x`                                                   |
+| [`log(b, x)`](@ref)           | base `b` logarithm of `x`                                                  |
+| [`log2(x)`](@ref)             | base 2 logarithm of `x`                                                    |
+| [`log10(x)`](@ref)            | base 10 logarithm of `x`                                                   |
+| [`log1p(x)`](@ref)            | accurate `log(1 + x)` for `x` near zero                                    |
+| [`exponent(x)`](@ref)         | binary exponent of `x`                                                     |
+| [`significand(x)`](@ref)      | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
 For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
@@ -587,7 +598,7 @@ These are all single-argument functions, with [`atan`](@ref) also accepting two 
 corresponding to a traditional [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 
 Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
-of [`sin(pi*x)`](@ref) and [`cos(pi*x)`](@ref) respectively.
+of [`sin(pi * x)`](@ref) and [`cos(pi * x)`](@ref) respectively.
 
 In order to compute trigonometric functions with degrees instead of radians, suffix the function
 with `d`. For example, [`sind(x)`](@ref) computes the sine of `x` where `x` is specified in degrees.

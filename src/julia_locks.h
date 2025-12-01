@@ -3,6 +3,10 @@
 #ifndef JL_LOCKS_H
 #define JL_LOCKS_H
 
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,7 +38,13 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT JL_NOTSA
     // Hide this body from the analyzer, otherwise it complains that we're calling
     // a non-safepoint from this function. The 0 arguments guarantees that we do
     // not reach the safepoint, but the analyzer can't figure that out
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_pre_lock(lock, __tsan_mutex_write_reentrant);
+#endif
     jl_mutex_wait(lock, 0);
+#ifdef _COMPILER_TSAN_ENABLED_
+    __tsan_mutex_post_lock(lock, __tsan_mutex_write_reentrant, 1);
+#endif
 #endif
 }
 
@@ -96,8 +106,41 @@ static inline void jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEP
 #define JL_LOCK_NOGC(m) jl_mutex_lock_nogc(m)
 #define JL_UNLOCK_NOGC(m) jl_mutex_unlock_nogc(m)
 
+JL_DLLEXPORT void jl_lock_value(jl_mutex_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_value(jl_mutex_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_lock_field(jl_mutex_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_field(jl_mutex_t *v) JL_NOTSAFEPOINT;
+
 #ifdef __cplusplus
 }
+
+#include <mutex>
+#include <condition_variable>
+// simple C++ shim around a std::unique_lock + gc-safe + disabled finalizers region
+// since we nearly always want that combination together
+class jl_unique_gcsafe_lock {
+public:
+    int8_t gc_state;
+    std::unique_lock<std::mutex> native;
+    explicit jl_unique_gcsafe_lock(std::mutex &native) JL_NOTSAFEPOINT_ENTER
+    {
+        jl_task_t *ct = jl_current_task;
+        gc_state = jl_gc_safe_enter(ct->ptls); // contains jl_gc_safepoint after enter
+        this->native = std::unique_lock<std::mutex>(native);
+        ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
+    }
+    jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &&native) = delete;
+    jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &native) = delete;
+    ~jl_unique_gcsafe_lock() JL_NOTSAFEPOINT_LEAVE {
+        jl_task_t *ct = jl_current_task;
+        native.unlock();
+        jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint after leave
+        ct->ptls->engine_nqueued--; // enable finalizers (but don't run them until the next gc)
+    }
+    void wait(std::condition_variable& cond) JL_NOTSAFEPOINT {
+        cond.wait(native);
+    }
+};
 #endif
 
 #endif

@@ -3,6 +3,13 @@
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
 """
+    IO
+
+Abstract supertype for input/output types.
+"""
+IO
+
+"""
     EOFError()
 
 No more data was available to read from a file or stream.
@@ -25,19 +32,25 @@ end
 
 lock(::IO) = nothing
 unlock(::IO) = nothing
+
+"""
+    reseteof(io)
+
+Clear the EOF flag from IO so that further reads (and possibly writes) are
+again allowed. Note that it may immediately get re-set, if the underlying
+stream object is at EOF and cannot be resumed.
+"""
 reseteof(x::IO) = nothing
 
 const SZ_UNBUFFERED_IO = 65536
 buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 
 """
-    isopen(object) -> Bool
+    isopen(object)::Bool
 
-Determine whether an object - such as a stream or timer
--- is not yet closed. Once an object is closed, it will never produce a new event.
-However, since a closed stream may still have data to read in its buffer,
-use [`eof`](@ref) to check for the ability to read data.
-Use the `FileWatching` package to be notified when a stream might be writable or readable.
+Determine whether an object, such as an IO or timer, is still open and hence active.
+
+See also: [`close`](@ref)
 
 # Examples
 ```jldoctest
@@ -55,9 +68,19 @@ false
 function isopen end
 
 """
-    close(stream)
+    close(io::IO)
 
-Close an I/O stream. Performs a [`flush`](@ref) first.
+Close `io`. Performs a [`flush`](@ref) first.
+
+Closing an IO signals that its underlying resources (OS handle, network
+connections, etc) should be destroyed.
+A closed IO is in an undefined state and should not be written to or read from.
+When attempting to do so, the IO may throw an exception, continue to behave
+normally, or read/write zero bytes, depending on the implementation.
+However, implementations should make sure that reading to or writing from a
+closed IO does not cause undefined behaviour.
+
+See also: [`isopen`](@ref)
 """
 function close end
 
@@ -67,6 +90,10 @@ function close end
 Shutdown the write half of a full-duplex I/O stream. Performs a [`flush`](@ref)
 first. Notify the other end that no more data will be written to the underlying
 file. This is not supported by all IO types.
+
+If implemented, `closewrite` causes subsequent `read` or `eof` calls that would
+block to instead throw EOF or return true, respectively. If the stream is
+already closed, this is idempotent.
 
 # Examples
 ```jldoctest
@@ -85,9 +112,11 @@ julia> read(io, String)
 function closewrite end
 
 """
-    flush(stream)
+    flush(io::IO)
 
-Commit all currently buffered writes to the given stream.
+Commit all currently buffered writes to the given io.
+This has a default implementation `flush(::IO) = nothing`, so may be called
+in generic IO code.
 """
 function flush end
 
@@ -119,8 +148,10 @@ data has already been buffered. The result is a `Vector{UInt8}`.
 """
 function readavailable end
 
+function isexecutable end
+
 """
-    isreadable(io) -> Bool
+    isreadable(io)::Bool
 
 Return `false` if the specified IO object is not readable.
 
@@ -143,7 +174,7 @@ julia> rm("myfile.txt")
 isreadable(io::IO) = isopen(io)
 
 """
-    iswritable(io) -> Bool
+    iswritable(io)::Bool
 
 Return `false` if the specified IO object is not writable.
 
@@ -166,7 +197,7 @@ julia> rm("myfile.txt")
 iswritable(io::IO) = isopen(io)
 
 """
-    eof(stream) -> Bool
+    eof(stream)::Bool
 
 Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
 function will block to wait for more data if necessary, and then return `false`. Therefore
@@ -233,7 +264,7 @@ The endianness of the written value depends on the endianness of the host system
 Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
 [`ltoh`](@ref)) to get results that are consistent across platforms.
 
-You can write multiple values with the same `write` call. i.e. the following are equivalent:
+You can write multiple values with the same `write` call, i.e. the following are equivalent:
 
     write(io, x, y...)
     write(io, x) + write(io, y...)
@@ -263,13 +294,13 @@ julia> io = IOBuffer();
 julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 56
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization. It has many members."
 
 julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 44
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Sometimes those members write documentation."
 ```
 User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
@@ -337,7 +368,7 @@ peek(s) = peek(s, UInt8)::UInt8
 # Generic `open` methods
 
 """
-    open_flags(; keywords...) -> NamedTuple
+    open_flags(; keywords...)::NamedTuple
 
 Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
 a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
@@ -402,7 +433,14 @@ end
 """
     AbstractPipe
 
-`AbstractPipe` is the abstract supertype for IO pipes that provide for communication between processes.
+`AbstractPipe` is an abstract supertype that exists for the convenience of creating
+pass-through wrappers for other IO objects, so that you only need to implement the
+additional methods relevant to your type. A subtype only needs to implement one or both of
+these methods:
+
+    struct P <: AbstractPipe; ...; end
+    pipe_reader(io::P) = io.out
+    pipe_writer(io::P) = io.in
 
 If `pipe isa AbstractPipe`, it must obey the following interface:
 
@@ -522,8 +560,9 @@ julia> rm("my_file.txt")
 ```
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
-readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...)))
+readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
+readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
 """
@@ -544,10 +583,10 @@ Similar to [`readuntil`](@ref), which returns a `String`; in contrast,
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", 'L')))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", 'L'))
 "Julia"
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true)))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true))
 "JuliaLang is a GitHub organization."
 
 julia> rm("my_file.txt")
@@ -594,8 +633,7 @@ Logan
 """
 readline(filename::AbstractString; keep::Bool=false) =
     open(io -> readline(io; keep), filename)
-readline(s::IO=stdin; keep::Bool=false) =
-    String(_unsafe_take!(copyline(IOBuffer(sizehint=70), s; keep)))
+readline(s::IO=stdin; keep::Bool=false) = takestring!(copyline(IOBuffer(sizehint=16), s; keep))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -620,10 +658,10 @@ See also [`copyuntil`](@ref) for reading until more general delimiters.
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt")))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt"))
 "JuliaLang is a GitHub organization."
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt", keep=true)))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt", keep=true))
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
@@ -746,7 +784,7 @@ htol(x)
 
 
 """
-    isreadonly(io) -> Bool
+    isreadonly(io)::Bool
 
 Determine whether a stream is read-only.
 
@@ -779,10 +817,17 @@ end
 @noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
     unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
+function write(s::IO, x::Ref{T}) where {T}
+    x isa Ptr && error("write cannot copy from a Ptr")
+    if isbitstype(T)
+        Int(unsafe_write(s, x, Core.sizeof(T)))
+    else
+        write(s, x[])
+    end
+end
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
 function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
-    return write(s, Ref(x))
+    return unsafe_write(s, Ref(x), Core.sizeof(x))
 end
 
 write(s::IO, x::Bool) = write(s, UInt8(x))
@@ -793,48 +838,52 @@ function write(s::IO, A::AbstractArray)
         error("`write` is not supported on non-isbits arrays")
     end
     nb = 0
+    r = Ref{eltype(A)}()
     for a in A
-        nb += write(s, a)
+        r[] = a
+        nb += @noinline unsafe_write(s, r, Core.sizeof(r)) # r must be heap-allocated
     end
     return nb
 end
 
-function write(s::IO, a::Array)
-    if isbitstype(eltype(a))
-        return GC.@preserve a unsafe_write(s, pointer(a), sizeof(a))
-    else
+function write(s::IO, A::StridedArray)
+    if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
-end
-
-function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
-    if !isbitstype(T) || !isa(a, StridedArray)
-        return invoke(write, Tuple{IO, AbstractArray}, s, a)
+    _checkcontiguous(Bool, A) &&
+        return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
+    sz::Dims = size(A)
+    st::Dims = strides(A)
+    msz, mst, n = merge_adjacent_dim(sz, st)
+    mst == 1 || return invoke(write, Tuple{IO, AbstractArray}, s, A)
+    n == ndims(A) &&
+        return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
+    sz′, st′ = tail(sz), tail(st)
+    while n > 1
+        sz′ = (tail(sz′)..., 1)
+        st′ = (tail(st′)..., 0)
+        n -= 1
     end
-    elsz = elsize(a)
-    colsz = size(a,1) * elsz
-    GC.@preserve a if stride(a,1) != 1
-        for idxs in CartesianIndices(size(a))
-            unsafe_write(s, pointer(a, idxs), elsz)
+    GC.@preserve A begin
+        nb = 0
+        iter = CartesianIndices(sz′)
+        for I in iter
+            p = pointer(A)
+            for i in 1:length(sz′)
+                p += elsize(A) * st′[i] * (I[i] - 1)
+            end
+            nb += unsafe_write(s, p, elsize(A) * msz)
         end
-        return elsz * length(a)
-    elseif N <= 1
-        return unsafe_write(s, pointer(a, 1), colsz)
-    else
-        for colstart in CartesianIndices((1, size(a)[2:end]...))
-            unsafe_write(s, pointer(a, colstart), colsz)
-        end
-        return colsz * trailingsize(a,2)
+        return nb
     end
 end
 
 function write(io::IO, c::Char)
     u = bswap(reinterpret(UInt32, c))
-    n = 1
+    n = 0
     while true
-        write(io, u % UInt8)
+        n += write(io, u % UInt8)
         (u >>= 8) == 0 && return n
-        n += 1
     end
 end
 # write(io, ::AbstractChar) is not defined: implementations
@@ -855,37 +904,81 @@ end
 
 @noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-read!(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
+function read!(s::IO, x::Ref{T}) where {T}
+    x isa Ptr && error("read! cannot copy into a Ptr")
+    if isbitstype(T)
+        unsafe_read(s, x, Core.sizeof(T))
+    else
+        x[] = read(s, T)
+    end
+    return x
+end
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
 function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
-    return read!(s, Ref{T}(0))[]::T
+    r = Ref{T}(0)
+    unsafe_read(s, r, Core.sizeof(T))
+    return r[]
 end
 
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
-function read!(s::IO, a::Array{UInt8})
-    GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
-    return a
-end
-
-function read!(s::IO, a::AbstractArray{T}) where T
-    if isbitstype(T) && (a isa Array || a isa FastContiguousSubArray{T,<:Any,<:Array{T}})
-        GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
+function read!(s::IO, A::AbstractArray{T}) where {T}
+    if isbitstype(T) && _checkcontiguous(Bool, A)
+        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
-        for i in eachindex(a)
-            a[i] = read(s, T)
+        if isbitstype(T)
+            r = Ref{T}()
+            for i in eachindex(A)
+                @noinline unsafe_read(s, r, Core.sizeof(r)) # r must be heap-allocated
+                A[i] = r[]
+            end
+        else
+            for i in eachindex(A)
+                A[i] = read(s, T)
+            end
         end
     end
-    return a
+    return A
+end
+
+function read!(s::IO, A::StridedArray{T}) where {T}
+    if !isbitstype(T) || _checkcontiguous(Bool, A)
+        return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+    end
+    sz::Dims = size(A)
+    st::Dims = strides(A)
+    msz, mst, n = merge_adjacent_dim(sz, st)
+    mst == 1 || return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+    if n == ndims(A)
+        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
+    else
+        sz′, st′ = tail(sz), tail(st)
+        while n > 1
+            sz′ = (tail(sz′)..., 1)
+            st′ = (tail(st′)..., 0)
+            n -= 1
+        end
+        GC.@preserve A begin
+            iter = CartesianIndices(sz′)
+            for I in iter
+                p = pointer(A)
+                for i in 1:length(sz′)
+                    p += elsize(A) * st′[i] * (I[i] - 1)
+                end
+                unsafe_read(s, p, elsize(A) * msz)
+            end
+        end
+    end
+    return A
 end
 
 function read(io::IO, ::Type{Char})
     b0 = read(io, UInt8)::UInt8
-    l = 8(4-leading_ones(b0))
+    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
     c = UInt32(b0) << 24
-    if l < 24
+    if l ≤ 0x10
         s = 16
         while s ≥ l && !eof(io)::Bool
             peek(io) & 0xc0 == 0x80 || break
@@ -914,6 +1007,10 @@ function copyuntil(out::IO, s::IO, delim::AbstractChar; keep::Bool=false)
 end
 
 # note: optimized methods of copyuntil for IOStreams and delim::UInt8 in iostream.jl
+#       and for IOBuffer with delim::UInt8 in iobuffer.jl
+copyuntil(out::IO, s::IO, delim; keep::Bool=false) = _copyuntil(out, s, delim, keep)
+
+# supports out::Union{IO, AbstractVector} for use with both copyuntil & readuntil
 function _copyuntil(out, s::IO, delim::T, keep::Bool) where T
     output! = isa(out, IO) ? write : push!
     for c in readeach(s, T)
@@ -925,12 +1022,6 @@ function _copyuntil(out, s::IO, delim::T, keep::Bool) where T
     end
     return out
 end
-readuntil(s::IO, delim::T; keep::Bool=false) where T =
-    _copyuntil(Vector{T}(), s, delim, keep)
-readuntil(s::IO, delim::UInt8; keep::Bool=false) =
-    _copyuntil(resize!(StringVector(70), 0), s, delim, keep)
-copyuntil(out::IO, s::IO, delim::T; keep::Bool=false) where T =
-    _copyuntil(out, s, delim, keep)
 
 # requires that indices for target are the integer unit range from firstindex to lastindex
 # returns whether the delimiter was matched
@@ -1035,7 +1126,7 @@ function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
 end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
-    out = (T === UInt8 ? resize!(StringVector(70), 0) : Vector{T}())
+    out = (T === UInt8 ? resize!(StringVector(16), 0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
 end
@@ -1215,7 +1306,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
         empty!(chunks) # will cause next iteration to terminate
         seekend(r.itr.stream) # reposition to end of stream for isdone
-        s = String(_unsafe_take!(buf))
+        s = unsafe_takestring!(buf)
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         if ichunk == jchunk # common case: current and previous newline in same chunk
@@ -1232,7 +1323,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             end
             write(buf, view(chunks[jchunk], 1:jnewline))
             buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
-            s = String(_unsafe_take!(buf))
+            s = unsafe_takestring!(buf)
 
             # overwrite obsolete chunks (ichunk+1:jchunk)
             i = jchunk
@@ -1350,7 +1441,7 @@ previously marked position. Throw an error if the stream is not marked.
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset(io::T) where T<:IO
-    ismarked(io) || throw(ArgumentError("$T not marked"))
+    ismarked(io) || throw(ArgumentError(LazyString(T, " not marked")))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail

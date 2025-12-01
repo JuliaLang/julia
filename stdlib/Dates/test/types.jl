@@ -41,6 +41,7 @@ end
     @test Dates.isleapyear(-1) == false
     @test Dates.isleapyear(4) == true
     @test Dates.isleapyear(-4) == true
+    @test_throws MethodError Dates.isleapyear(Dates.Year(1992))
 end
 # Create "test" check manually
 y = Dates.Year(1)
@@ -72,6 +73,12 @@ ms = Dates.Millisecond(1)
     @test Dates.DateTime(Dates.Second(10), Dates.Month(2), y, Dates.Hour(4)) == Dates.DateTime(1, 2, 1, 4, 0, 10)
     @test Dates.DateTime(Dates.Year(1), Dates.Month(2), Dates.Day(1),
                          Dates.Hour(4), Dates.Second(10)) == Dates.DateTime(1, 2, 1, 4, 0, 10)
+end
+
+@testset "DateTime construction from Date and Time" begin
+    @test Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12)) == Dates.DateTime(2023, 08, 07, 12, 0, 0, 0)
+    @test_throws InexactError Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12, 0, 0, 0, 42))
+    @test_throws InexactError Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12, 0, 0, 0, 0, 42))
 end
 
 @testset "Date construction by parts" begin
@@ -256,7 +263,11 @@ end
 end
 
 @testset "issue #31524" begin
-    dt1 = Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
+    # Ensure the result doesn't depend on local timezone, especially on macOS
+    # where an extra internal call to `mktime` is affected by timezone settings.
+    dt1 = withenv("TZ" => "UTC") do
+        Libc.strptime("%Y-%m-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
+    end
     dt2 = Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
 
     time = Time(dt1)

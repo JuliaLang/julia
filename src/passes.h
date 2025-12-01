@@ -15,10 +15,6 @@ struct DemoteFloat16Pass : PassInfoMixin<DemoteFloat16Pass> {
     static bool isRequired() { return true; }
 };
 
-struct CombineMulAddPass : PassInfoMixin<CombineMulAddPass> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-};
-
 struct LateLowerGCPass : PassInfoMixin<LateLowerGCPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
@@ -33,10 +29,6 @@ struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass
     static bool isRequired() { return true; }
 };
 
-struct LowerExcHandlersPass : PassInfoMixin<LowerExcHandlersPass> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
 
 struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
     bool Strong;
@@ -45,6 +37,16 @@ struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
+
+struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+    static bool isRequired() { return true; }
+};
+
+struct ExpandAtomicModifyPass : PassInfoMixin<ExpandAtomicModifyPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
 
 // Module Passes
 struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
@@ -57,19 +59,9 @@ struct RemoveNIPass : PassInfoMixin<RemoveNIPass> {
     static bool isRequired() { return true; }
 };
 
-struct LowerSIMDLoopPass : PassInfoMixin<LowerSIMDLoopPass> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
-struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
 struct MultiVersioningPass : PassInfoMixin<MultiVersioningPass> {
     bool external_use;
-    MultiVersioningPass(bool external_use = false) : external_use(external_use) {}
+    MultiVersioningPass(bool external_use = false) JL_NOTSAFEPOINT : external_use(external_use) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
@@ -99,6 +91,11 @@ struct LowerPTLSPass : PassInfoMixin<LowerPTLSPass> {
 
 // Loop Passes
 struct JuliaLICMPass : PassInfoMixin<JuliaLICMPass> {
+    PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
+};
+
+struct LowerSIMDLoopPass : PassInfoMixin<LowerSIMDLoopPass> {
     PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
                           LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
 };
@@ -145,5 +142,9 @@ MODULE_MARKER_PASS(AfterIntrinsicLowering)
 MODULE_MARKER_PASS(BeforeCleanup)
 MODULE_MARKER_PASS(AfterCleanup)
 MODULE_MARKER_PASS(AfterOptimization)
+
+bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT;
+bool verifyLLVMIR(const Function &F) JL_NOTSAFEPOINT;
+bool verifyLLVMIR(const Loop &L) JL_NOTSAFEPOINT;
 
 #endif

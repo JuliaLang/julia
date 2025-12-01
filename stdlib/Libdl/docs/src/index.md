@@ -1,3 +1,11 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Libdl/docs/src/index.md"
+```
+
+```@docs
+Libdl
+```
+
 # Dynamic Linker
 
 ```@docs
@@ -12,4 +20,13 @@ Libdl.dllist
 Libdl.dlpath
 Libdl.find_library
 Libdl.DL_LOAD_PATH
+```
+
+# Lazy Library Loading
+
+```@docs
+Libdl.LazyLibrary
+Libdl.LazyLibraryPath
+Libdl.BundledLazyLibraryPath
+Libdl.add_dependency!
 ```
