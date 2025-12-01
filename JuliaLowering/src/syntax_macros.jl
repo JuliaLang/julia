@@ -189,13 +189,20 @@ function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_s
             ]
         ]
     elseif kf == K"$"
-        check = @SyntaxTree quote
-            func = $(func[1])
-            if !isa(func, Ptr{Cvoid})
-                name = :($(func[1]))
-                throw(ArgumentError("interpolated function `$name` was not a `Ptr{Cvoid}`, but $(typeof(func))"))
-            end
-        end
+        fid = @ast ctx func[1] "func"::K"Identifier"
+        check = @ast ctx func [K"block"
+            [K"=" fid func[1]]
+            [K"if"
+                [K"call" (!isa)::K"Value" fid [K"curly" Ptr::K"Value" Cvoid::K"Value"]]
+                [K"block"
+                    [K"=" "name"::K"Identifier" [K"quote" func[1]]]
+                    [K"call" throw::K"Value"
+                        [K"call" ArgumentError::K"Value"
+                            [K"string"
+                                "interpolated function `"::K"String"
+                                "name"::K"Identifier"
+                                "` was not a `Ptr{Cvoid}`, but "::K"String"
+                                [K"call" typeof::K"Value" fid]]]]]]]
         push!(statements, check)
         lowered_func = check[1][1]
     else
@@ -208,9 +215,11 @@ function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_s
     for (i, (type, arg)) in enumerate(zip(types, args))
         argi = @ast ctx arg "arg$i"::K"Identifier"
         # TODO: Does it help to emit ssavar() here for the `argi`?
-        push!(statements, @SyntaxTree :(local $argi = Base.cconvert($type, $arg)))
+        push!(statements,
+              @ast ctx arg [K"local"
+                  [K"=" argi [K"call" Base.cconvert::K"Value" type arg]]])
         push!(roots, argi)
-        push!(cargs, @SyntaxTree :(Base.unsafe_convert($type, $argi)))
+        push!(cargs, @ast ctx ex [K"call" Base.unsafe_convert::K"Value" type argi])
     end
     effect_flags = UInt16(0)
     push!(statements, @ast ctx ex [K"foreigncall"

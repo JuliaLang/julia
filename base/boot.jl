@@ -516,6 +516,30 @@ struct VecElement{T}
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
+# inference lattice element types (moved from jltypes.c)
+struct Const
+    val
+end
+
+struct PartialStruct
+    typ
+    undefs
+    fields::Array{Any, 1}
+end
+
+struct InterConditional
+    slot::Int
+    thentype
+    elsetype
+end
+
+struct PartialOpaque
+    typ::Type
+    env
+    parent::MethodInstance
+    source
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -1140,5 +1164,11 @@ typename(union::UnionAll) = typename(union.body)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
+
+# Used only be the magic @VERSION macro
+struct MacroSource
+    lno::Any # ::LineNumberNode, but needs to be a pointer
+    syntax_ver::Any # ::VersionNumber =#
+end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

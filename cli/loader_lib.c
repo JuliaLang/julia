@@ -497,7 +497,13 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                 // If the probe rejected the system libstdc++ (or didn't find one!)
                 // just load our bundled libstdc++ as identified by curr_dep;
                 if (!probe_successful) {
+# ifdef RT_STATIC_LIBSTDCXX
+                    // If we have a statically-linked libstdc++, it is ok for
+                    // this to fail.
+                    load_library(curr_dep, lib_dir, 0);
+# else
                     load_library(curr_dep, lib_dir, 1);
+# endif
                 }
 #endif
             } else if (special_idx == 1) {

@@ -279,7 +279,7 @@ if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
 
     # This callback function called by dl_iterate_phdr() on Linux and BSD's
     # DL_ITERATE_PHDR(3) on freebsd
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Vector{String})
         name = unsafe_string(di.name)
         push!(dynamic_libraries, name)
         return Cint(0)

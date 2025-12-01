@@ -9,8 +9,19 @@ end
 # Using map over broadcast enables vectorization for wide matrices with few rows.
 # This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
 # https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
-function _broadcast_preserving_zero_d(f, A::Array, B::Array)
-    map(f, A, B)
+function _broadcast_preserving_zero_d(f, A::Array{<:Any,N}, B::Array{<:Any,N}, Cs::Array{<:Any,N}...) where {N}
+    map(f, A, B, Cs...)
+end
+
+function _broadcast_preserving_zero_d(f, A::Array, B::Array, Cs::Array...)
+    # we already know that the shapes are compatible.
+    # We just need to select the size corresponding to the higest ndims
+    # and reshape all the arrays to that size
+    arrays = (A, B, Cs...)
+    sz = mapreduce(size, (x,y) -> length(x) > length(y) ? x : y, arrays)
+    # Skip reshaping where possible to avoid the overhead
+    arrays_sameshape = map(x -> length(sz) == ndims(x) ? x : reshape(x, sz), arrays)
+    map(f, arrays_sameshape...)
 end
 
 function _broadcast_preserving_zero_d(f, A::Array, B::Number)
@@ -28,11 +39,12 @@ for f in (:+, :-)
     end
 end
 
-function +(A::Array, Bs::Array...)
-    for B in Bs
-        promote_shape(A, B) # check size compatibility
+function +(A::Array, B::Array, Cs::Array...)
+    promote_shape(A, B)
+    for C in Cs
+        promote_shape(A, C) # check size compatibility
     end
-    map(+, A, Bs...)
+    _broadcast_preserving_zero_d(+, A, B, Cs...)
 end
 
 for f in (:/, :\, :*)

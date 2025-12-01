@@ -199,7 +199,7 @@ end
 
 function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     args = retexpr.args
-    firstchildhead = head(cursor)
+    firstchildhead = secondchildhead = head(cursor)
     firstchildrange::UnitRange{UInt32} = byte_range(cursor)
     itr = reverse_nontrivia_children(cursor)
     r = iterate(itr)
@@ -208,11 +208,12 @@ function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor, source, txtbuf::
         r = iterate(itr, state)
         expr = node_to_expr(child, source, txtbuf, txtbuf_offset)
         @assert expr !== nothing
+        secondchildhead = firstchildhead
         firstchildhead = head(child)
         firstchildrange = byte_range(child)
         pushfirst!(args, fixup_Expr_child(head(cursor), expr, r === nothing))
     end
-    return (firstchildhead, firstchildrange)
+    return (firstchildhead, secondchildhead, firstchildrange)
 end
 
 _expr_leaf_val(node::SyntaxNode, _...) = node.val
@@ -235,6 +236,9 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
             return k == K"error" ?
                 Expr(:error) :
                 Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
+        elseif k == K"VERSION"
+            nv = numeric_flags(flags(nodehead))
+            return VersionNumber(1, nv ÷ 10, nv % 10)
         else
             scoped_val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
             val = @isexpr(scoped_val, :scope_layer) ? scoped_val.args[1] : scoped_val
@@ -292,10 +296,11 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
     end
 
     # Now recurse to parse all arguments
-    (firstchildhead, firstchildrange) = parseargs!(retexpr, loc, cursor, source, txtbuf, txtbuf_offset)
+    (firstchildhead, secondchildhead, firstchildrange) =
+        parseargs!(retexpr, loc, cursor, source, txtbuf, txtbuf_offset)
 
     return _node_to_expr(retexpr, loc, srcrange,
-                         firstchildhead, firstchildrange,
+                         firstchildhead, secondchildhead, firstchildrange,
                          nodehead, source)
 end
 
@@ -318,7 +323,7 @@ end
 # tree types.
 @noinline function _node_to_expr(retexpr::Expr, loc::LineNumberNode,
                                  srcrange::UnitRange{UInt32},
-                                 firstchildhead::SyntaxHead,
+                                 firstchildhead::SyntaxHead, secondchildhead::SyntaxHead,
                                  firstchildrange::UnitRange{UInt32},
                                  nodehead::SyntaxHead,
                                  source)
@@ -354,6 +359,11 @@ end
             if @isexpr(a2, :macrocall) && kind(firstchildhead) == K"CmdMacroName"
                 # Fix up for custom cmd macros like foo`x`
                 args[2] = a2.args[3]
+            end
+            if kind(secondchildhead) == K"VERSION"
+                # Encode the syntax version into `loc` so that the argument order
+                # matches what ordinary macros expect.
+                loc = Core.MacroSource(loc, popat!(args, 2))
             end
         end
         do_lambda = _extract_do_lambda!(args)
@@ -528,8 +538,9 @@ end
     elseif k == K"function"
         if length(args) > 1
             if has_flags(nodehead, SHORT_FORM_FUNCTION_FLAG)
+                a1 = args[1]
                 a2 = args[2]
-                if !@isexpr(a2, :block)
+                if !@isexpr(a2, :block) && !@isexpr(a1, Symbol("'"))
                     args[2] = Expr(:block, a2)
                 end
                 retexpr.head = :(=)
@@ -554,8 +565,8 @@ end
             pushfirst!((args[2]::Expr).args, loc)
         end
     elseif k == K"module"
-        pushfirst!(args, !has_flags(nodehead, BARE_MODULE_FLAG))
-        pushfirst!((args[3]::Expr).args, loc)
+        insert!(args, kind(firstchildhead) == K"VERSION" ? 2 : 1, !has_flags(nodehead, BARE_MODULE_FLAG))
+        pushfirst!((args[end]::Expr).args, loc)
     elseif k == K"quote"
         if length(args) == 1
             a1 = only(args)

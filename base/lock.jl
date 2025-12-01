@@ -366,7 +366,7 @@ This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a
 and thus can improve the performance.
 
 !!! compat
-    `@lock` was added in Julia 1.3, and exported in Julia 1.10.
+    `@lock` was added in Julia 1.3, and exported in Julia 1.7.
 """
 macro lock(l, expr)
     quote
