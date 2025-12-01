@@ -149,11 +149,11 @@ function hasattr(graph::SyntaxGraph, name::Symbol)
 end
 
 # TODO: Probably terribly non-inferable?
-function setattr!(graph::SyntaxGraph, id, k::Symbol, @nospecialize(v))
+function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
     if !isnothing(v)
         getattr(graph, k)[id] = v
     end
-    nothing
+    id
 end
 
 function deleteattr!(graph::SyntaxGraph, id::NodeId, name::Symbol)

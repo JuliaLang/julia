@@ -126,6 +126,10 @@ function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals::SyntaxL
     append!(ids, vals.ids)
 end
 
+# TODO: "proto", if SyntaxTree, is rarely different from srcref. reorganize to:
+# newnode/newleaf(ctx, srcref, k::Kind[, attrs])
+# makenode/makeleaf(ctx, old::SyntaxTree[, attrs])
+
 function makeleaf(graph::SyntaxGraph, srcref, proto::Union{Kind, SyntaxTree})
     id = newnode!(graph)
     ex = SyntaxTree(graph, id)
@@ -506,17 +510,19 @@ end
 #-------------------------------------------------------------------------------
 function set_scope_layer(ctx, ex, layer_id, force)
     k = kind(ex)
-    attrs = [:scope_layer=>(force ? layer_id : get(ex, :scope_layer, layer_id))]
-    if k == K"module" || k == K"toplevel" || k == K"inert"
-        makenode(ctx, ex, ex, children(ex), attrs)
+    new_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
+
+    ex2 = if k == K"module" || k == K"toplevel" || k == K"inert"
+        makenode(ctx, ex, ex, children(ex))
     elseif k == K"."
-        children = [set_scope_layer(ctx, ex[1], layer_id, force), ex[2]]
-        makenode(ctx, ex, ex, children, attrs)
+        children = NodeId[set_scope_layer(ctx, ex[1], layer_id, force), ex[2]]
+        makenode(ctx, ex, ex, children)
     elseif !is_leaf(ex)
-        mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex, attrs)
+        mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex)
     else
-        makeleaf(ctx, ex, ex, attrs)
+        makeleaf(ctx, ex, ex)
     end
+    setattr!(ex2, :scope_layer, new_layer)
 end
 
 """
@@ -525,7 +531,7 @@ end
 Copy `ex`, adopting the scope layer of `ref`.
 """
 function adopt_scope(ex::SyntaxTree, scope_layer::LayerId)
-    set_scope_layer(ex, ex, scope_layer, true)
+    set_scope_layer(ex._graph, ex, scope_layer, true)
 end
 
 function adopt_scope(ex::SyntaxTree, layer::ScopeLayer)
