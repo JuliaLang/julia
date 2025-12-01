@@ -357,11 +357,11 @@ constexpr auto apple_a10 = armv8a_crc_crypto | get_feature_masks(rdm);
 constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
-constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
-constexpr auto apple_a15 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
-constexpr auto apple_a16 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
-constexpr auto apple_a17 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
-constexpr auto apple_m4 = armv8_6a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
+constexpr auto apple_a15 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
+constexpr auto apple_a16 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
+constexpr auto apple_a17 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
+constexpr auto apple_m4 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
 // Aliased definitions
 constexpr auto apple_m1 = apple_a14;
 constexpr auto apple_m2 = apple_a15;
