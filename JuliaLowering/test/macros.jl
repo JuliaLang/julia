@@ -122,6 +122,19 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
     "y"
 ]
 
+@test JuliaLowering.include_string(test_mod, raw"""
+v"1.14"
+""") isa VersionNumber
+@test JuliaLowering.include_string(test_mod, raw"""
+v"1.14"
+""";expr_compat_mode=true) isa VersionNumber
+@test JuliaLowering.include_string(test_mod, raw"""
+Base.Experimental.@VERSION
+""") isa NamedTuple
+@test JuliaLowering.include_string(test_mod, raw"""
+Base.Experimental.@VERSION
+""";expr_compat_mode=true) isa NamedTuple
+
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()

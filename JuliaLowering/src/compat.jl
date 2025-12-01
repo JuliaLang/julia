@@ -211,9 +211,6 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         id_inner = _insert_tree_node(graph, K"String", src; value=e)
         setchildren!(graph, st_id, [id_inner])
         return st_id, src
-    elseif e isa VersionNumber
-        st_id = _insert_tree_node(graph, K"VERSION", src, JS.set_numeric_flags(e.minor*10); value=e)
-        return st_id, src
     elseif !(e isa Expr)
         # There are other kinds we could potentially back-convert (e.g. Float),
         # but Value should work fine.
@@ -407,7 +404,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             st_flags |= JS.BARE_MODULE_FLAG
         end
         child_exprs = has_version ?
-            Any[e.args[1], e.args[2+has_version], e.args[3+has_version]] :
+            Any[Expr(:mod_version, e.args[1]), e.args[2+has_version], e.args[3+has_version]] :
             Any[e.args[2+has_version], e.args[3+has_version]]
     elseif e.head === :do
         # Expr:
@@ -565,6 +562,13 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         child_exprs = nothing
     elseif e.head === :do_lambda
         st_k = K"do"
+    elseif e.head === :mod_version
+        v = e.args[1]
+        @assert v isa VersionNumber
+        st_k = K"VERSION"
+        st_flags = JS.set_numeric_flags(v.minor*10)
+        st_attrs[:value] = v
+        child_exprs = nothing
     end
 
     #---------------------------------------------------------------------------
