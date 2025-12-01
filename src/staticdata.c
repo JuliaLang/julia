@@ -91,6 +91,30 @@ External links:
 #include "valgrind.h"
 #include "julia_assert.h"
 
+// Define JL_DEBUG_LOADING to enable detailed timing of pkgimage loading
+// #define JL_DEBUG_LOADING
+
+#ifdef JL_DEBUG_LOADING
+#define JL_LOAD_TIMING_PRINT(fmt, ...) \
+    jl_printf(JL_STDERR, "[pkgload] " fmt, ##__VA_ARGS__)
+
+#define JL_LOAD_TIMING_START(varname) \
+    uint64_t varname##_start = jl_hrtime()
+
+#define JL_LOAD_TIMING_END(varname, desc) \
+    do { \
+        uint64_t varname##_end = jl_hrtime(); \
+        jl_printf(JL_STDERR, "[pkgload]   %-40s %8.3f ms\n", desc, (varname##_end - varname##_start) / 1e6); \
+    } while(0)
+
+#define JL_LOAD_TIMING_COUNTER(var) var
+#else
+#define JL_LOAD_TIMING_PRINT(fmt, ...) ((void)0)
+#define JL_LOAD_TIMING_START(varname) ((void)0)
+#define JL_LOAD_TIMING_END(varname, desc) ((void)0)
+#define JL_LOAD_TIMING_COUNTER(var) ((void)0)
+#endif
+
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
 JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world = ~(size_t)0;
@@ -3767,6 +3791,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t **new_ext_cis, jl_array_t **method_roots_list,
                                                  pkgcachesizes *cachesizes) JL_GC_DISABLED
 {
+    JL_LOAD_TIMING_START(total);
+    JL_LOAD_TIMING_START(init);
     jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
@@ -3796,6 +3822,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
 
     // step 1: read section map
+    JL_LOAD_TIMING_END(init, "initialization");
+    JL_LOAD_TIMING_START(section_map);
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
     size_t sizeof_sysdata = read_uint(f);
     ios_static_buffer(&sysimg, f->buf, sizeof_sysdata + sizeof(uintptr_t));
@@ -3833,6 +3861,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_skip(f, sizeof_fptr_record);
 
     // step 2: get references to special values
+    JL_LOAD_TIMING_END(section_map, "read section map");
+    JL_LOAD_TIMING_START(special_refs);
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
@@ -3909,10 +3939,14 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     s.s = NULL;
 
     // step 3: apply relocations
+    JL_LOAD_TIMING_END(special_refs, "read special refs & link ids");
+    JL_LOAD_TIMING_START(symbols);
     assert(!ios_eof(f));
     jl_read_symbols(&s);
     ios_close(&symbols);
+    JL_LOAD_TIMING_END(symbols, "read symbols");
 
+    JL_LOAD_TIMING_START(relocations);
     char *image_base = (char*)&sysimg.buf[0];
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
@@ -3937,6 +3971,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         arraylist_new(&s.fixup_types, 0);
     }
     jl_read_arraylist(s.relocs, &s.fixup_objs);
+    JL_LOAD_TIMING_END(relocations, "apply relocations");
+    JL_LOAD_TIMING_PRINT("    uniquing_types: %zu, uniquing_objs: %zu, fixup_types: %zu, fixup_objs: %zu\n",
+                         s.uniquing_types.len, s.uniquing_objs.len, s.fixup_types.len, s.fixup_objs.len);
+
     // Perform the uniquing of objects that we don't "own" and consequently can't promise
     // weren't created by some other package before this one got loaded:
     // - iterate through all objects that need to be uniqued. The first encounter has to be the
@@ -3951,6 +3989,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     arraylist_new(&cleanup_list, 0);
     arraylist_t delay_list;
     arraylist_new(&delay_list, 0);
+    JL_LOAD_TIMING_START(type_uniquing);
+#ifdef JL_DEBUG_LOADING
+    size_t n_already_done = 0, n_lookup_found = 0, n_must_be_new = 0, n_lookup_miss = 0, n_singleton = 0;
+#endif
     JL_LOCK(&typecache_lock); // Might GC--prevent other threads from changing any type caches while we inspect them all
     for (size_t i = 0; i < s.uniquing_types.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_types.items[i];
@@ -4004,16 +4046,23 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             jl_datatype_t *dt = (jl_datatype_t*)obj[0], *newdt;
             if (jl_is_datatype(dt)) {
                 newdt = dt; // already done
+                JL_LOAD_TIMING_COUNTER(n_already_done++);
             }
             else {
                 dt = (jl_datatype_t*)obj;
                 arraylist_push(&cleanup_list, (void*)obj);
                 ptrhash_remove(&new_dt_objs, (void*)obj); // unmark obj as invalid before must_be_new_dt
-                if (must_be_new_dt((jl_value_t*)dt, &new_dt_objs, image_base, sizeof_sysimg))
+                if (must_be_new_dt((jl_value_t*)dt, &new_dt_objs, image_base, sizeof_sysimg)) {
                     newdt = NULL;
-                else
+                    JL_LOAD_TIMING_COUNTER(n_must_be_new++);
+                }
+                else {
                     newdt = jl_lookup_cache_type_(dt);
+                    if (newdt != NULL)
+                        JL_LOAD_TIMING_COUNTER(n_lookup_found++);
+                }
                 if (newdt == NULL) {
+                    JL_LOAD_TIMING_COUNTER(n_lookup_miss++);
                     // make a non-owned copy of obj so we don't accidentally
                     // assume this is the unique copy later
                     newdt = jl_new_uninitialized_datatype();
@@ -4041,6 +4090,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             newobj = ((jl_datatype_t*)otyp)->instance;
             assert(newobj && newobj != jl_nothing);
             arraylist_push(&cleanup_list, (void*)obj);
+            JL_LOAD_TIMING_COUNTER(n_singleton++);
         }
         if (tag == 1)
             *pfld = (uintptr_t)newobj | GC_OLD | GC_IN_IMAGE;
@@ -4095,7 +4145,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     JL_UNLOCK(&typecache_lock); // Might GC
     jl_safepoint_resume_all_threads(ct); // TODO: move this later to also protect MethodInstance allocations, but we would need to acquire all jl_specializations_get_linfo and jl_module_globalref locks, which is hard
+    JL_LOAD_TIMING_PRINT("    type uniquing breakdown: already_done=%zu, lookup_found=%zu, must_be_new=%zu, lookup_miss=%zu, singleton=%zu\n",
+                         n_already_done, n_lookup_found, n_must_be_new, n_lookup_miss, n_singleton);
+    JL_LOAD_TIMING_END(type_uniquing, "type uniquing & caching");
+
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.
+    JL_LOAD_TIMING_START(obj_uniquing);
+#ifdef JL_DEBUG_LOADING
+    size_t n_mi_done = 0, n_mi_lookup = 0, n_bind_done = 0, n_bind_lookup = 0;
+#endif
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_objs.items[i];
         // check whether this is a gvar index
@@ -4122,6 +4180,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             jl_value_t *m = obj[0];
             if (jl_is_method_instance(m)) {
                 newobj = m; // already done
+                JL_LOAD_TIMING_COUNTER(n_mi_done++);
             }
             else {
                 arraylist_push(&cleanup_list, (void*)obj);
@@ -4129,18 +4188,21 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                 jl_value_t *sparams = obj[2];
                 newobj = (jl_value_t*)jl_specializations_get_linfo((jl_method_t*)m, specTypes, (jl_svec_t*)sparams);
                 obj[0] = newobj;
+                JL_LOAD_TIMING_COUNTER(n_mi_lookup++);
             }
         }
         else if (otyp == (uintptr_t)jl_binding_type) {
             jl_value_t *m = obj[0];
             if (jl_is_binding(m)) {
                 newobj = m; // already done
+                JL_LOAD_TIMING_COUNTER(n_bind_done++);
             }
             else {
                 arraylist_push(&cleanup_list, (void*)obj);
                 jl_value_t *name = obj[1];
                 newobj = (jl_value_t*)jl_get_module_binding((jl_module_t*)m, (jl_sym_t*)name, 1);
                 obj[0] = newobj;
+                JL_LOAD_TIMING_COUNTER(n_bind_lookup++);
             }
         }
         else {
@@ -4163,6 +4225,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
+    JL_LOAD_TIMING_PRINT("    obj uniquing breakdown: mi_done=%zu, mi_lookup=%zu, bind_done=%zu, bind_lookup=%zu\n",
+                         n_mi_done, n_mi_lookup, n_bind_done, n_bind_lookup);
+    JL_LOAD_TIMING_END(obj_uniquing, "object uniquing (MI, bindings)");
+
+    JL_LOAD_TIMING_START(fixup_objs);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -4210,6 +4277,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             abort();
         }
     }
+    JL_LOAD_TIMING_END(fixup_objs, "fixup objects (methods, modules)");
+
+    JL_LOAD_TIMING_START(binding_validation);
     if (s.incremental) {
         int no_replacement = jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0;
         for (size_t i = 0; i < s.fixup_objs.len; i++) {
@@ -4232,6 +4302,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             }
         }
     }
+    JL_LOAD_TIMING_END(binding_validation, "binding validation");
+
+    JL_LOAD_TIMING_START(gvar_rooting);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
 
@@ -4244,24 +4317,25 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     htable_free(&new_dt_objs);
 
     s.s = NULL;
+    JL_LOAD_TIMING_END(gvar_rooting, "gvar rooting & cleanup");
 
-    if (0) {
-        printf("sysimg size breakdown:\n"
-               "     sys data: %8u\n"
-               "  isbits data: %8u\n"
-               "      symbols: %8u\n"
-               "    tags list: %8u\n"
-               "   reloc list: %8u\n"
-               "    gvar list: %8u\n"
-               "    fptr list: %8u\n",
-            (unsigned)sizeof_sysdata,
-            (unsigned)sizeof_constdata,
-            (unsigned)sizeof_symbols,
-            (unsigned)sizeof_tags,
-            (unsigned)(sizeof_relocations - sizeof_tags),
-            (unsigned)sizeof_gvar_record,
-            (unsigned)sizeof_fptr_record);
-    }
+#ifdef JL_DEBUG_LOADING
+    jl_printf(JL_STDERR, "[pkgload] sysimg size breakdown:\n"
+           "[pkgload]      sys data: %8u\n"
+           "[pkgload]   isbits data: %8u\n"
+           "[pkgload]       symbols: %8u\n"
+           "[pkgload]     tags list: %8u\n"
+           "[pkgload]    reloc list: %8u\n"
+           "[pkgload]     gvar list: %8u\n"
+           "[pkgload]     fptr list: %8u\n",
+        (unsigned)sizeof_sysdata,
+        (unsigned)sizeof_constdata,
+        (unsigned)sizeof_symbols,
+        (unsigned)sizeof_tags,
+        (unsigned)(sizeof_relocations - sizeof_tags),
+        (unsigned)sizeof_gvar_record,
+        (unsigned)sizeof_fptr_record);
+#endif
     if (cachesizes) {
         cachesizes->sysdata = sizeof_sysdata;
         cachesizes->isbitsdata = sizeof_constdata;
@@ -4272,10 +4346,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         cachesizes->fptrlist = sizeof_fptr_record;
     }
 
+    JL_LOAD_TIMING_START(fptr_relocs);
     s.s = &sysimg;
     jl_update_all_fptrs(&s, image); // fptr relocs and registration
     s.s = NULL;
+    JL_LOAD_TIMING_END(fptr_relocs, "fptr relocs & registration");
 
+    JL_LOAD_TIMING_START(finalization);
     ios_close(&fptr_record);
     ios_close(&sysimg);
 
@@ -4302,12 +4379,17 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
     rebuild_image_blob_tree();
+    JL_LOAD_TIMING_END(finalization, "finalization & blob tree rebuild");
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
     jl_gc_enable(en);
 
+    JL_LOAD_TIMING_START(add_methods);
     if (s.incremental)
         jl_add_methods(*extext_methods);
+    JL_LOAD_TIMING_END(add_methods, "add methods");
+    JL_LOAD_TIMING_END(total, "TOTAL restore time");
+    JL_LOAD_TIMING_PRINT("    image size: %zu bytes\n", sizeof_sysimg);
 }
 
 static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos, int64_t *datastartpos)
@@ -4343,10 +4425,13 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, pkgname);
+    JL_LOAD_TIMING_PRINT("Loading package: %s\n", pkgname);
+    JL_LOAD_TIMING_START(validate);
     uint64_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;
     jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos, &datastartpos);
+    JL_LOAD_TIMING_END(validate, "validate cache file");
 
     if (verify_fail)
         return verify_fail;
@@ -4384,13 +4469,17 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list, &cachesizes);
             JL_SIGATOMIC_END();
 
+            JL_LOAD_TIMING_START(copy_roots);
             // Add roots to methods
             int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
             if (failed != 0) {
                 jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
                 abort();
             }
+            JL_LOAD_TIMING_END(copy_roots, "copy method roots");
+
             // Insert method extensions and handle edges
+            JL_LOAD_TIMING_START(activate_methods);
             int new_methods = jl_array_nrows(extext_methods) > 0;
             if (!new_methods) {
                 size_t i, l = jl_array_nrows(internal_methods);
@@ -4414,6 +4503,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 jl_atomic_store_release(&jl_world_counter, world);
             // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
+            JL_LOAD_TIMING_END(activate_methods, "activate methods");
+            JL_LOAD_TIMING_PRINT("    extext_methods: %zu, internal_methods: %zu, new_methods: %d\n",
+                                 jl_array_nrows(extext_methods), jl_array_nrows(internal_methods), new_methods);
 
             if (completeinfo) {
                 cachesizes_sv = jl_alloc_svec(7);
