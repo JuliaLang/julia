@@ -2166,9 +2166,9 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
         if !isnothing(declmeta)
-            push!(stmts, makenode(ctx, ex, declkind, [ex._id], [:meta=>declmeta]))
+            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id], [:meta=>declmeta]))
         else
-            push!(stmts, makenode(ctx, ex, declkind, [ex._id]))
+            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id]))
         end
     elseif k == K"Placeholder"
         nothing
@@ -2177,7 +2177,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
             @chk numchildren(ex) == 2
             name = ex[1]
             if kind(name) == K"Identifier"
-                push!(stmts, makenode(ctx, ex, K"decl", [name._id, ex[2]._id]))
+                push!(stmts, makenode(ctx, ex, K"decl", NodeId[name._id, ex[2]._id]))
             else
                 # TODO: Currently, this ignores the LHS in `_::T = val`.
                 # We should probably do one of the following:

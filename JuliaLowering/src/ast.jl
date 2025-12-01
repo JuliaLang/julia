@@ -208,7 +208,7 @@ top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 # Return (variable, assignment_node)
 function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var = ssavar(ctx, ex, name)
-    assign_var = makenode(ctx, ex, K"=", [var._id, ex._id])
+    assign_var = makenode(ctx, ex, K"=", NodeId[var._id, ex._id])
     var, assign_var
 end
 
@@ -217,7 +217,7 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, makenode(ctx, ex, K"=", [var._id, ex._id]))
+    push!(stmts, makenode(ctx, ex, K"=", NodeId[var._id, ex._id]))
     var
 end
 
