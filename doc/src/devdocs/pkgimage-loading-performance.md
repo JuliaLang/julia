@@ -198,6 +198,56 @@ The 30x difference comes from which methods are being extended - Base's core ari
 | Parallel type intersection checks | 20-40% | High | Not tested |
 | Pre-compute intersection flags at precompile | 10-20% | Medium | Not tested |
 | Lazy method activation (on-demand) | Up to 100% for unused methods | High | Not tested |
+| Skip invalidation during precompilation | 3% | Low | ✅ Implemented |
+
+### Skip Invalidation During Precompilation (Implemented)
+
+During incremental precompilation (`jl_generating_output() && jl_options.incremental`), method activation can skip the expensive invalidation checks because:
+
+1. **No user-compiled code exists to invalidate** - all caches are being built fresh
+2. **Dispatch correctness is maintained** - `dispatch_status` and `interferences` are still computed
+3. **The final pkgimage captures correct state** - whatever we compute gets saved
+
+**Implementation:** Added `skip_invalidation` flag in `jl_method_table_activate` (`src/gf.c`) that skips:
+
+- Per-MethodInstance type intersection checks (`jl_type_intersection2`)
+- Backedge invalidation (`_invalidate_dispatch_backedges`)
+- Cache invalidation (`_typename_invalidate_backedges`, `invalidate_mt_cache`)
+- Method table invalidation for replaced methods (`jl_method_table_invalidate`)
+
+**Results:**
+
+| Metric | Master | PR | Improvement |
+|--------|--------|-----|-------------|
+| GLMakie precompilation (247 deps) | 201s | 195s | **3% faster** |
+
+The improvement is modest because the type intersection and morespecific checks (which we keep for dispatch correctness) dominate the activation cost. The invalidation loops we skip are relatively cheap.
+
+### Further Opportunities (Not Yet Implemented)
+
+The remaining expensive operations in method activation are:
+
+1. **`get_intersect_matches`** - Finds all methods in Base that intersect with the new method's signature. Required to compute `dispatch_bits` and update other methods' `interferences`.
+
+2. **`jl_type_morespecific` loop** - Called for each intersecting method to determine ambiguity and update dispatch optimization flags.
+
+3. **Interference set updates** - Updates both the new method's `interferences` and existing methods' interference sets.
+
+**Why these can't be skipped during precompilation:**
+
+- **Interference sets are required for correct dispatch**, not just optimization. Skipping updates to other methods' interference sets causes `MethodError` during precompilation when dispatch relies on these sets to find the correct method.
+- The `interferences` field is used in method sorting during dispatch to determine which methods should be considered.
+- Even though Base methods aren't saved with the package, their interference sets must be correct during precompilation for any code that runs (e.g., `__init__`, type inference).
+
+**Tested and rejected:** Skipping interference set updates during precompilation caused `MethodError` failures - dispatch couldn't find methods that should have matched.
+
+**Potential future optimizations:**
+
+| Approach | Expected Impact | Complexity | Risk |
+|----------|-----------------|------------|------|
+| Lazy interference computation (on first dispatch) | 10-30% | Very High | Requires dispatch changes |
+| Parallel type intersection checks | 20-40% | High | Thread safety concerns |
+| Cache intersection results across pkgimage loads | 5-15% | Medium | Memory overhead |
 
 ### Medium Impact: Apply Relocations (16%)
 
