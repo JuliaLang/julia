@@ -3854,7 +3854,22 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    void *b = malloc_cache_align(allocsz);
+    #ifdef MADV_HUGEPAGE
+        void *b = NULL;
+        if (allocsz >= 1u<<18u) {
+            b = malloc_page_align(allocsz);
+            if (jl_hugepage_size > 0) {
+                size_t leftover = jl_hugepage_size - (allocsz % jl_hugepage_size);
+                if ((leftover <= allocsz / 4) || (leftover == jl_hugepage_size))  // limit fragmentation
+                    madvise(b, allocsz, MADV_HUGEPAGE);
+            }
+        }
+        else {
+            b = malloc_cache_align(allocsz);
+        }
+    #else
+        void *b = malloc_cache_align(allocsz);
+    #endif
     if (b == NULL)
         jl_throw(jl_memory_exception);
 

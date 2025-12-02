@@ -7,6 +7,9 @@
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
+#ifndef MADV_HUGEPAGE
+#define MADV_HUGEPAGE 14 //  Compatibility for kernels < 2.6.38 (as in numpy implementation)
+#endif
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -135,6 +138,7 @@ STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 #endif
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
 #define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
+#define malloc_page_align(sz) jl_malloc_aligned(sz, jl_getpagesize())
 
 // =========================================================================== //
 // Pointer tagging
