@@ -1247,6 +1247,7 @@ end == Vector{Int}
     # unknown length.  In this test, the answer is (5, 4), but we can't know that without
     # a greedy algorithm
     @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), Iterators.filter(x -> x % 2 == 0, -5:5)))  # (5, 4)
+end
 
 @testset "unzip" begin
     for itrs in ((1:3,), (1:3, 4:6), (1:3,4:6,7:9),
