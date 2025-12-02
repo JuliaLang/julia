@@ -83,7 +83,7 @@ julia> NaN == NaN, isequal(NaN, NaN), isnan(NaN)
 !!! note
     Always use [`isnan`](@ref) or [`isequal`](@ref) for checking for `NaN`.
     Using `x === NaN` may give unexpected results:
-    ```julia-repl
+    ```jldoctest
     julia> reinterpret(UInt32, NaN32)
     0x7fc00000
 
@@ -224,7 +224,7 @@ function ieee754_representation(
 end
 
 """
-    uabs(x::Integer)
+    Base.uabs(x::Integer)
 
 Return the absolute value of `x`, possibly returning a different type should the
 operation be susceptible to overflow. This typically arises when `x` is a two's complement
@@ -391,7 +391,7 @@ Float64
 """
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
 float(::Type{T}) where {T<:AbstractFloat} = T
-float(::Type{Union{}}, slurp...) = Union{}(0.0)
+float(::Type{Union{}}, slurp...) = Union{}
 
 """
     unsafe_trunc(T, x)
@@ -619,7 +619,6 @@ end
 
 ## floating point comparisons ##
 ==(x::T, y::T) where {T<:IEEEFloat} = eq_float(x, y)
-!=(x::T, y::T) where {T<:IEEEFloat} = ne_float(x, y)
 <( x::T, y::T) where {T<:IEEEFloat} = lt_float(x, y)
 <=(x::T, y::T) where {T<:IEEEFloat} = le_float(x, y)
 
@@ -709,7 +708,7 @@ See also: [`iszero`](@ref), [`isone`](@ref), [`isinf`](@ref), [`ismissing`](@ref
 isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Number) = false
 
-isfinite(x::AbstractFloat) = !isnan(x - x)
+isfinite(x::AbstractFloat) = !(isnan(x - x)::Bool)
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
@@ -808,13 +807,8 @@ precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, b
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
 
 
-"""
-    nextfloat(x::AbstractFloat, n::Integer)
-
-The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
-applications of [`prevfloat`](@ref) if `n < 0`.
-"""
-function nextfloat(f::IEEEFloat, d::Integer)
+function _nextfloat(f::IEEEFloat, dneg::Bool, da::Integer)
+    # da must be > 0
     F = typeof(f)
     fumax = reinterpret(Unsigned, F(Inf))
     U = typeof(fumax)
@@ -824,8 +818,6 @@ function nextfloat(f::IEEEFloat, d::Integer)
     fneg = fi < 0
     fu = unsigned(fi & typemax(fi))
 
-    dneg = d < 0
-    da = uabs(d)
     if da > typemax(U)
         fneg = dneg
         fu = fumax
@@ -853,6 +845,14 @@ function nextfloat(f::IEEEFloat, d::Integer)
 end
 
 """
+    nextfloat(x::AbstractFloat, n::Integer)
+
+The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
+applications of [`prevfloat`](@ref) if `n < 0`.
+"""
+nextfloat(f::AbstractFloat, d::Integer) = _nextfloat(f, isnegative(d), uabs(d))
+
+"""
     nextfloat(x::AbstractFloat)
 
 Return the smallest floating point number `y` of the same type as `x` such that `x < y`.
@@ -860,7 +860,7 @@ If no such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
 
 See also: [`prevfloat`](@ref), [`eps`](@ref), [`issubnormal`](@ref).
 """
-nextfloat(x::AbstractFloat) = nextfloat(x,1)
+nextfloat(x::AbstractFloat) = nextfloat(x, 1)
 
 """
     prevfloat(x::AbstractFloat, n::Integer)
@@ -868,7 +868,7 @@ nextfloat(x::AbstractFloat) = nextfloat(x,1)
 The result of `n` iterative applications of `prevfloat` to `x` if `n >= 0`, or `-n`
 applications of [`nextfloat`](@ref) if `n < 0`.
 """
-prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
+prevfloat(x::AbstractFloat, d::Integer) = _nextfloat(x, ispositive(d), uabs(d))
 
 """
     prevfloat(x::AbstractFloat)
@@ -876,7 +876,7 @@ prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
 Return the largest floating point number `y` of the same type as `x` such that `y < x`.
 If no such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then return `x`.
 """
-prevfloat(x::AbstractFloat) = nextfloat(x,-1)
+prevfloat(x::AbstractFloat) = nextfloat(x, -1)
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     for Tf in (Float16, Float32, Float64)
@@ -1064,6 +1064,13 @@ julia> 1.0 + eps()
 julia> 1.0 + eps()/2
 1.0
 ```
+
+More generally, for any floating-point numeric type, `eps` corresponds to an
+upper bound on the distance to the nearest floating-point complex value: if ``\text{fl}(x)`` is the closest
+floating-point value to a number ``x`` (e.g. an arbitrary real number), then ``\text{fl}(x)``
+satisfies ``|x - \text{fl}(x)| ≤ \text{eps}(x)/2``, not including overflow cases.
+This allows the definition of `eps` to be extended to complex numbers,
+for which ``\text{fl}(a + ib) = \text{fl}(a) + i \text{fl}(b)``.
 """
 eps(::Type{<:AbstractFloat})
 

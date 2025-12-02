@@ -410,7 +410,7 @@ struct TypeError <: Exception
     # `context` optionally adds extra detail, e.g. the name of the type parameter
     # that got a bad value.
     func::Symbol
-    context::Union{AbstractString,Symbol}
+    context::Union{AbstractString,GlobalRef,Symbol}
     expected::Type
     got
     TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
@@ -516,6 +516,37 @@ struct VecElement{T}
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
+# inference lattice element types (moved from jltypes.c)
+struct Const
+    val
+    Const(@nospecialize(v)) = new(v)
+end
+
+struct PartialStruct
+    typ
+    undefs::Array{Union{Nothing,Bool}, 1}
+    fields::Array{Any, 1}
+    # N.B. The constructor for this struct is intentionally not defined here.
+    # It is defined in coreir.jl along with some validation logic.
+    global _PartialStruct
+    _PartialStruct(@nospecialize(typ), undef::Array{Union{Nothing,Bool}, 1}, fields::Array{Any, 1}) = new(typ, undef, fields)
+end
+
+struct InterConditional
+    slot::Int
+    thentype
+    elsetype
+    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = new(slot, thentype, elsetype)
+end
+
+struct PartialOpaque
+    typ::Type
+    env
+    parent::MethodInstance
+    source
+    PartialOpaque(@nospecialize(typ::Type), @nospecialize(env), parent::MethodInstance, source) = new(typ, env, parent, source)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -542,10 +573,6 @@ eval(Core, quote
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
-    Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    _PartialStruct(@nospecialize(typ), undef, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :undef, :fields))
-    PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
-    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
@@ -590,8 +617,9 @@ const undef = UndefInitializer()
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
 
+# memoryref is simply convenience wrapper function around memoryrefnew
 memoryref(mem::GenericMemory) = memoryrefnew(mem)
-memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(mem, Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
@@ -744,17 +772,19 @@ let
 end
 
 # module providing the IR object model
+# excluding types already exported by Core (GlobalRef, QuoteNode, Expr, LineNumberNode)
+# any type beyond these is self-quoting (see also Base.isa_ast_node)
 module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode
 
 end # module IR
 
@@ -1137,5 +1167,11 @@ typename(union::UnionAll) = typename(union.body)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
+
+# Used only be the magic @VERSION macro
+struct MacroSource
+    lno::Any # ::LineNumberNode, but needs to be a pointer
+    syntax_ver::Any # ::VersionNumber =#
+end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)
