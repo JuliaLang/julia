@@ -725,11 +725,11 @@ restart_switch:
                 }
                 jl_options.nthreads = nthreads + nthreadsi;
             }
-            // TODO: Currently we assume a fixed number of threadpools
-            int nthreadpools = 2;
-            int16_t *ntpp = (int16_t *)malloc_s(nthreadpools * sizeof(int16_t));
+            assert(jl_options.nthreadpools == 1 || jl_options.nthreadpools == 2);
+            int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
             ntpp[0] = (int16_t)nthreads;
-            ntpp[1] = (int16_t)nthreadsi;
+            if (jl_options.nthreadpools == 2)
+                ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
             break;
         }
