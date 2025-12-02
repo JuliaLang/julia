@@ -22,6 +22,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `'`         | a trailing apostrophe is the [`adjoint`](@ref) (that is, the complex transpose) operator Aᴴ |
 | [`*`](@ref) | the asterisk is used for multiplication, including matrix multiplication and [string concatenation](@ref man-concatenation) |
 | [`/`](@ref) | forward slash divides the argument on its left by the one on its right                      |
+| [`//`](@ref) | double forward slash performs exact, rational division                                     |
 | [`\`](@ref) | backslash operator divides the argument on its right by the one on its left, commonly used to solve matrix equations |
 | `()`        | parentheses with no arguments constructs an empty [`Tuple`](@ref)                           |
 | `(a,...)`   | parentheses with comma-separated arguments constructs a tuple containing its arguments      |

@@ -1,0 +1,3 @@
+name = "VersionedDep3"
+uuid = "6ae26a88-8a9e-4c29-a00a-ea2b9a48e6e1"
+syntax.julia_version = "1.0"

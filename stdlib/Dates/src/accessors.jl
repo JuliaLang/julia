@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
-# Reference: http://mysite.verizon.net/aesir_research/date/date0.htm
+# Reference: https://www.researchgate.net/profile/Peter-Baum/publication/316558298_Date_Algorithms/links/5f90c3f992851c14bcdb0da6/Date-Algorithms.pdf
 function yearmonthday(days)
     z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
@@ -32,6 +32,8 @@ function day(days)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
     return c - div(153m - 457, 5)
 end
+
+# ISO year utils
 # https://en.wikipedia.org/wiki/Talk:ISO_week_date#Algorithms
 const WEEK_INDEX = (15, 23, 3, 11)
 function week(days)
@@ -40,6 +42,80 @@ function week(days)
     w = (w * 28 + WEEK_INDEX[c + 1]) % 1461
     return div(w, 28) + 1
 end
+
+"""
+Return the number of ISO weeks in the given year (see https://en.wikipedia.org/wiki/ISO_week_date).
+
+# Examples
+```jldoctest
+julia> weeksinyear(Year(2022))
+52
+
+julia> weeksinyear(Year(2020))
+53
+```
+!!! compat "Julia 1.13"
+    This function requires Julia 1.13 or later.
+"""
+function weeksinyear(y::Year)
+    firstday = firstdayofyear(Date(y))
+    lastday = lastdayofyear(Date(y))
+
+    if dayofweek(firstday) == 4 || dayofweek(lastday) == 4
+        return 53
+    end
+    return 52
+end
+
+"""
+Return the ISO year that contains `dt` (see https://en.wikipedia.org/wiki/ISO_week_date).
+
+# Examples
+```jldoctest
+julia> isoyear(Date(2022, 1, 1))
+2021 years
+
+julia> isoyear(Date(2021, 12, 31))
+2021 years
+```
+!!! compat "Julia 1.13"
+    This function requires Julia 1.13 or later.
+"""
+function isoyear(dt::DateTime)
+    thisyear = Year(dt)
+    thismonth = Month(dt)
+    weeknumber = week(dt)
+    if weeknumber >= 52 && thismonth.value == 1
+        # If it is january, then its the iso year from before
+        return Year(thisyear.value - 1)
+    elseif weeknumber == 1 && thismonth.value == 12
+        # If it is december, then its the next year
+        return Year(thisyear.value + 1)
+    else
+        return thisyear
+    end
+end
+isoyear(dt::Date) = isoyear(DateTime(dt))
+
+"""
+Return the ISO week date that corresponds to `dt` (see
+https://en.wikipedia.org/wiki/ISO_week_date).
+
+The return type is a tuple of `Year`, `Week` and `Int64` (from 1 to 7).
+
+# Examples
+```jldoctest
+julia> isoweekdate(Date(2023, 03, 06))
+(2023, 10, 1)
+
+julia> isoweekdate(Date(2023, 01, 01))
+(2022, 52, 7)
+```
+!!! compat "Julia 1.13"
+    This function requires Julia 1.13 or later.
+"""
+isoweekdate(dt::DateTime) = (isoyear(dt).value, week(dt), dayofweek(dt))
+isoweekdate(dt::Date) = isoweekdate(DateTime(dt))
 
 function quarter(days)
     m = month(days)
@@ -79,7 +155,7 @@ for func in (:year, :month, :quarter)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType)::Int64
 
         The $($name) of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
@@ -87,7 +163,7 @@ for func in (:year, :month, :quarter)
 end
 
 """
-    week(dt::TimeType) -> Int64
+    week(dt::TimeType)::Int64
 
 Return the [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) of a `Date` or
 `DateTime` as an [`Int64`](@ref). Note that the first week of a year is the week that
@@ -113,7 +189,7 @@ for func in (:day, :dayofmonth)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType)::Int64
 
         The day of month of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
@@ -121,7 +197,7 @@ for func in (:day, :dayofmonth)
 end
 
 """
-    hour(dt::DateTime) -> Int64
+    hour(dt::DateTime)::Int64
 
 The hour of day of a `DateTime` as an [`Int64`](@ref).
 """
@@ -131,7 +207,7 @@ for func in (:minute, :second, :millisecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::DateTime) -> Int64
+            $($name)(dt::DateTime)::Int64
 
         The $($name) of a `DateTime` as an [`Int64`](@ref).
         """ $func(dt::DateTime)
@@ -155,7 +231,7 @@ for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(t::Time) -> Int64
+            $($name)(t::Time)::Int64
 
         The $($name) of a `Time` as an [`Int64`](@ref).
         """ $func(t::Time)

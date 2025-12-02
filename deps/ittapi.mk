@@ -10,7 +10,7 @@ ITTAPI_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DITT_API_IPT_SUPPORT=
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(ITTAPI_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(ITTAPI_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured
@@ -40,4 +40,5 @@ fastcheck-ittapi: #none
 check-ittapi: #none
 
 clean-ittapi:
-	-rm -f $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled $(build_libdir)/libopenlibm.a
+	-rm -f $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled
+	-rm -f $(build_libdir)/libittnotify.a $(build_libdir)/libjitprofiling.a

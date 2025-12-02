@@ -7,26 +7,22 @@ precompilation cache. It is the implementation of the `import` statement.
 The features below are experimental and not part of the stable Julia API.
 Before building upon them inform yourself about the current thinking and whether they might change soon.
 
-### Module loading callbacks
+### Package loading callbacks
 
-It is possible to listen to the modules loaded by `Base.require`, by registering a callback.
+It is possible to listen to the packages loaded by `Base.require`, by registering a callback.
 
 ```julia
-loaded_packages = Channel{Symbol}()
-callback = (mod::Symbol) -> put!(loaded_packages, mod)
+loaded_packages = Base.PkgId[]
+callback = (pkg::Base.PkgId) -> push!(loaded_packages, pkg)
 push!(Base.package_callbacks, callback)
 ```
 
-Please note that the symbol given to the callback is a non-unique identifier and
-it is the responsibility of the callback provider to walk the module chain to
-determine the fully qualified name of the loaded binding.
+Using this would look something like:
 
-The callback below is an example of how to do that:
+```julia-repl
+julia> using Example
 
-```julia
-# Get the fully-qualified name of a module.
-function module_fqn(name::Symbol)
-    fqn = fullname(Base.root_module(name))
-    return join(fqn, '.')
-end
+julia> loaded_packages
+1-element Vector{Base.PkgId}:
+ Example [7876af07-990d-54b4-ab0e-23690620f79a]
 ```

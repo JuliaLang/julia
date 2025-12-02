@@ -52,7 +52,7 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     // Use pass by reference for all structs
-    if (dt->layout->nfields > 0) {
+    if (dt->layout->nfields > 0 || dt->layout->npointers) {
         ab.addByValAttr(Ty);
         return true;
     }
@@ -63,7 +63,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
 {
     // Arguments are either scalar or passed by value
     // rewrite integer sized (non-sret) struct to the corresponding integer
-    if (!dt->layout->nfields)
+    if (!dt->layout->nfields && !dt->layout->npointers)
         return NULL;
     return Type::getIntNTy(ctx, jl_datatype_nbits(dt));
 }

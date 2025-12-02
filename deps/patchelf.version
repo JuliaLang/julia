@@ -1,3 +1,4 @@
 ## source build
 # Patchelf (we don't ship this or even use a JLL, we just always build it)
-PATCHELF_VER := 0.13
+# NOTE: Do not upgrade this to 0.18+ until https://github.com/NixOS/patchelf/issues/492 is fixed
+PATCHELF_VER := 0.17.2

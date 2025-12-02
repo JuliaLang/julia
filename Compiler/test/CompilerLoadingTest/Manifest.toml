@@ -1,0 +1,16 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.0-DEV"
+manifest_format = "2.0"
+project_hash = "10c2816629fed766649b89eb6670e7001df6ea18"
+
+[[deps.Compiler]]
+path = "../.."
+uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
+version = "0.0.1"
+
+[[deps.CompilerLoadingTest]]
+deps = ["Compiler"]
+path = "."
+uuid = "95defb8a-f82d-44d7-b2c9-37d658f648c1"
+version = "0.0.0"

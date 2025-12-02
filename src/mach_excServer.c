@@ -20,7 +20,7 @@
  * terms of an Apple operating system software license agreement.
  *
  * Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this file.
+ * https://www.opensource.apple.com/apsl/ and read it before using this file.
  *
  * The Original Code and all software distributed under the License are
  * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER

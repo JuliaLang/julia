@@ -33,7 +33,7 @@ end
 function get_data()
     tmp = mktempdir()
     path = joinpath(tmp, basename(url))
-    Downloads.download(url, path)
+    retry(Downloads.download, delays=fill(10,5))(url, path)
     Tar.extract(`$(exe7z()) x $path -so`, joinpath(tmp, "testfiles"))
     return joinpath(tmp, "testfiles", "toml-test-julia-$version", "testfiles")
 end

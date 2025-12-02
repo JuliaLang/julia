@@ -129,7 +129,7 @@ end
 ##################################################################
 
 """
-    header(m::AbstractMenu) -> String
+    header(m::AbstractMenu)::String
 
 Return a header string to be printed above the menu.
 Defaults to "".
@@ -137,7 +137,7 @@ Defaults to "".
 header(m::AbstractMenu) = ""
 
 """
-    keypress(m::AbstractMenu, i::UInt32) -> Bool
+    keypress(m::AbstractMenu, i::UInt32)::Bool
 
 Handle any non-standard keypress event.
 If `true` is returned, [`TerminalMenus.request`](@ref) will exit.
@@ -146,7 +146,7 @@ Defaults to `false`.
 keypress(m::AbstractMenu, i::UInt32) = false
 
 """
-    numoptions(m::AbstractMenu) -> Int
+    numoptions(m::AbstractMenu)::Int
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
 
@@ -176,7 +176,7 @@ Returns `selected(m)`.
 !!! compat "Julia 1.6"
     The `cursor` argument requires Julia 1.6 or later.
 """
-request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
+request(m::AbstractMenu; kwargs...) = request(default_terminal(), m; kwargs...)
 
 function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Union{Int, Base.RefValue{Int}}=1, suppress_output=false)
     if cursor isa Int
@@ -252,7 +252,7 @@ end
 
 Shorthand for `println(msg); request(m)`.
 """
-request(msg::AbstractString, m::AbstractMenu; kwargs...) = request(terminal, msg, m; kwargs...)
+request(msg::AbstractString, m::AbstractMenu; kwargs...) = request(default_terminal(), msg, m; kwargs...)
 
 function request(term::REPL.Terminals.TTYTerminal, msg::AbstractString, m::AbstractMenu; kwargs...)
     println(term.out_stream, msg)

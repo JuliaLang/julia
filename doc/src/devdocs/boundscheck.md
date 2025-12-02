@@ -105,7 +105,7 @@ checkbounds_indices(Bool, (IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) 
                                                       checkbounds_indices(Bool, IA, I)
 ```
 
-so `checkindex` checks a single dimension.  All of these functions, including the unexported
+so `checkindex` checks a single dimension. All of these functions, including the unexported
 `checkbounds_indices` have docstrings accessible with `?` .
 
 If you have to customize bounds checking for a specific array type, you should specialize `checkbounds(Bool, A, I...)`.
@@ -113,10 +113,10 @@ However, in most cases you should be able to rely on `checkbounds_indices` as lo
 useful `axes` for your array type.
 
 If you have novel index types, first consider specializing `checkindex`, which handles a single
-index for a particular dimension of an array.  If you have a custom multidimensional index type
+index for a particular dimension of an array. If you have a custom multidimensional index type
 (similar to `CartesianIndex`), then you may have to consider specializing `checkbounds_indices`.
 
-Note this hierarchy has been designed to reduce the likelihood of method ambiguities.  We try
+Note this hierarchy has been designed to reduce the likelihood of method ambiguities. We try
 to make `checkbounds` the place to specialize on array type, and try to avoid specializations
 on index types; conversely, `checkindex` is intended to be specialized only on index type (especially,
 the last argument).

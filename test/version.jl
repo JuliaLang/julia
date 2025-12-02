@@ -219,11 +219,14 @@ for major=0:3, minor=0:3, patch=0:3
     end
 end
 
-# banner
-import Base.banner
-io = IOBuffer()
-@test banner(io) === nothing
-@test length(String(take!(io))) > 50
+# VersionNumber has the promised fields
+let v = v"4.2.1-1.x+a.9"
+    @test v.major isa Integer
+    @test v.minor isa Integer
+    @test v.patch isa Integer
+    @test v.prerelease isa Tuple{Vararg{Union{Integer, AbstractString}}}
+    @test v.build isa Tuple{Vararg{Union{Integer, AbstractString}}}
+end
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())

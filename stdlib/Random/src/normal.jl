@@ -3,7 +3,7 @@
 # Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
-# Paper and reference code: http://www.jstatsoft.org/v05/i08/
+# Paper and reference code: https://www.jstatsoft.org/v05/i08/
 
 # randmtzig (covers also exponential variates)
 
@@ -14,27 +14,51 @@
 
 Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
-Optionally generate an array of normally-distributed random numbers.
-The `Base` module currently provides an implementation for the types
-[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
-[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
-from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
+Given the optional `dims` argument(s), generate an array of size `dims` of such numbers.
+Julia's standard library supports `randn` for any floating-point type
+that implements [`rand`](@ref), e.g. the `Base` types
+[`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref) (the default), and [`BigFloat`](@ref),
+along with their [`Complex`](@ref) counterparts.
+
+(When `T` is complex, the values are drawn
+from the circularly symmetric complex normal distribution of variance 1, corresponding to real and imaginary parts
+having independent normal distribution with mean zero and variance `1/2`).
 
 See also [`randn!`](@ref) to act in-place.
 
 # Examples
+
+Generating a single random number (with the default `Float64` type):
+
+```julia-repl
+julia> randn()
+-0.942481877315864
+```
+
+Generating a matrix of normal random numbers (with the default `Float64` type):
+
+```julia-repl
+julia> randn(2,3)
+2×3 Matrix{Float64}:
+  1.18786   -0.678616   1.49463
+ -0.342792  -0.134299  -1.45005
+```
+
+Setting up of the random number generator `rng` with a user-defined seed (for reproducible numbers)
+and using it to generate a random `Float32` number or a matrix of `ComplexF32` random numbers:
+
 ```jldoctest
 julia> using Random
 
-julia> rng = MersenneTwister(1234);
+julia> rng = Xoshiro(123);
 
-julia> randn(rng, ComplexF64)
-0.6133070881429037 - 0.6376291670853887im
+julia> randn(rng, Float32)
+-0.6457307f0
 
 julia> randn(rng, ComplexF32, (2, 3))
 2×3 Matrix{ComplexF32}:
- -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
-  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
+  -1.03467-1.14806im  0.693657+0.056538im   0.291442+0.419454im
+ -0.153912+0.34807im    1.0954-0.948661im  -0.543347-0.0538589im
 ```
 """
 @inline function randn(rng::AbstractRNG=default_rng())
@@ -72,8 +96,8 @@ end
 @noinline function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
         while true
-            xx = -ziggurat_nor_inv_r*log(rand(rng))
-            yy = -log(rand(rng))
+            xx = -ziggurat_nor_inv_r*log1p(-rand(rng))
+            yy = -log1p(-rand(rng))
             yy+yy > xx*xx &&
                 return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
         end
@@ -114,16 +138,16 @@ The `Base` module currently provides an implementation for the types
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
+julia> rng = Xoshiro(123);
 
 julia> randexp(rng, Float32)
-2.4835055f0
+1.1757717f0
 
 julia> randexp(rng, 3, 3)
 3×3 Matrix{Float64}:
- 1.5167    1.30652   0.344435
- 0.604436  2.78029   0.418516
- 0.695867  0.693292  0.643644
+ 1.37766  0.456653  0.236418
+ 3.40007  0.229917  0.0684921
+ 0.48096  0.577481  0.71835
 ```
 """
 randexp(rng::AbstractRNG=default_rng()) = _randexp(rng, rand(rng, UInt52Raw()))
@@ -140,7 +164,7 @@ end
 
 @noinline function randexp_unlikely(rng, idx, x)
     @inbounds if idx == 0
-        return ziggurat_exp_r - log(rand(rng))
+        return ziggurat_exp_r - log1p(-rand(rng))
     elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
         return x # return from the triangular area
     else
@@ -162,15 +186,13 @@ Also see the [`rand`](@ref) function.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randn!(rng, zeros(5))
+julia> randn!(Xoshiro(123), zeros(5))
 5-element Vector{Float64}:
-  0.8673472019512456
- -0.9017438158568171
- -0.4944787535042339
- -0.9029142938652416
-  0.8644013132535154
+ -0.6457306721039767
+ -1.4632513788889214
+ -1.6236037455860806
+ -0.21766510678354617
+  0.4922456865251828
 ```
 """
 function randn! end
@@ -183,15 +205,13 @@ Fill the array `A` with random numbers following the exponential distribution
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randexp!(rng, zeros(5))
+julia> randexp!(Xoshiro(123), zeros(5))
 5-element Vector{Float64}:
- 2.4835053723904896
- 1.516703605376473
- 0.6044364871025417
- 0.6958665886385867
- 1.3065196315496677
+ 1.1757716836348473
+ 1.758884569451514
+ 1.0083623637301151
+ 0.3510644315565272
+ 0.6348266443720407
 ```
 """
 function randexp! end

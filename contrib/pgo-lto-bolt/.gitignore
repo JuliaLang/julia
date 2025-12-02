@@ -1,0 +1,14 @@
+stage0*
+stage1*
+stage2*
+bolt
+bolt_instrument
+merge_data
+copy_originals
+
+profiles
+profiles-bolt
+
+toolchain
+pgo-instrumented.build
+optimized.build

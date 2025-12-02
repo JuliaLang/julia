@@ -43,7 +43,7 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
     @test mapf(f, Int[], Int[], Complex{Int}[]) == Union{}[]
 
     # In-place map
-    if inplace_mapf != nothing
+    if inplace_mapf !== nothing
         A = Float64[1:10...]
         inplace_mapf(x -> x*x, A, A)
         @test A == map(x -> x*x, Float64[1:10...])

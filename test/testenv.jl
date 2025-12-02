@@ -35,8 +35,14 @@ if !@isdefined(testenv_defined)
         const rr_exename = ``
     end
 
+    const test_relocated_depot = haskey(ENV, "RELOCATEDEPOT")
+
     function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
+        if X isa Integer
+            heap_size=round(Int,(Sys.total_memory()/(1024^2)/(X+1)))
+            push!(test_exeflags.exec, "--heap-size-hint=$(heap_size)M")
+        end
         addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
     end
 

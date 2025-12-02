@@ -87,6 +87,39 @@ mktempdir() do dir
                 @test ex.code == LibGit2.Error.EAUTH
             end
         end
+
+        @testset "Shallow clone" begin
+            @static if LibGit2.VERSION >= v"1.7.0"
+                # Test shallow clone with depth=1
+                repo_path = joinpath(dir, "Example.Shallow")
+                c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
+                repo = LibGit2.clone(repo_url, repo_path, depth=1, credentials=c)
+                try
+                    @test isdir(repo_path)
+                    @test isdir(joinpath(repo_path, ".git"))
+                    @test LibGit2.isshallow(repo)
+                finally
+                    close(repo)
+                end
+            end
+        end
+    end
+end
+
+@testset "Remote" begin
+    repo_url = "https://github.com/JuliaLang/Example.jl"
+    LibGit2.with(LibGit2.GitRemoteDetached(repo_url)) do remote
+        @test !LibGit2.connected(remote)
+        c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
+        LibGit2.connect(remote, LibGit2.Consts.DIRECTION_FETCH, credentials=c)
+        @test LibGit2.connected(remote)
+        remote_heads = LibGit2.ls(remote)
+        default_branch = LibGit2.default_branch(remote)
+        @test !isempty(remote_heads)
+        @test startswith(default_branch, "refs/heads/")
+        @test any(head.name == default_branch for head in remote_heads)
+        LibGit2.disconnect(remote)
+        @test !LibGit2.connected(remote)
     end
 end
 

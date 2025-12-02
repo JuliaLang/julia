@@ -864,7 +864,7 @@
 
 		 (else #f)))))))
 
-; From SRFI 89 by Marc Feeley (http://srfi.schemers.org/srfi-89/srfi-89.html)
+; From SRFI 89 by Marc Feeley (https://srfi.schemers.org/srfi-89/srfi-89.html)
 ; Copyright (C) Marc Feeley 2006. All Rights Reserved.
 ;
 ; "alist" is a list of pairs of the form "(keyword . value)"

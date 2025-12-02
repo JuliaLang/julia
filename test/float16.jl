@@ -79,7 +79,8 @@ end
     @test unsafe_trunc(Int16, Float16(3)) === Int16(3)
     @test unsafe_trunc(UInt128, Float16(3)) === UInt128(3)
     @test unsafe_trunc(Int128, Float16(3)) === Int128(3)
-    @test unsafe_trunc(Int16, NaN16) === Int16(0)  #18771
+    # `unsafe_trunc` of `NaN` can be any value, see #56582
+    @test unsafe_trunc(Int16, NaN16) isa Int16 # #18771
 end
 @testset "fma and muladd" begin
     @test fma(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ fma(0.1,0.9,0.5)
@@ -202,6 +203,11 @@ const minsubf16_32 = Float32(minsubf16)
 
 # issues #33076
 @test Float16(1f5) == Inf16
+
+# issue #52394
+@test Float16(10^8 // (10^9 + 1)) == convert(Float16, 10^8 // (10^9 + 1)) == Float16(0.1)
+@test Float16((typemax(UInt128)-0x01) // typemax(UInt128)) == Float16(1.0)
+@test Float32((typemax(UInt128)-0x01) // typemax(UInt128)) == Float32(1.0)
 
 @testset "conversion to Float16 from" begin
     for T in (Float32, Float64, BigFloat)

@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function args_morespecific(a, b)
-    sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
+    sp = Base.morespecific(a, b)
     if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
-        @test ccall(:jl_type_morespecific, Cint, (Any,Any), b, a) == 0
+        @test !Base.morespecific(b, a)
     end
     return sp
 end
@@ -170,7 +170,7 @@ let A = Tuple{Ref, Tuple{T}} where T,
 end
 
 # issue #22339
-let A = Tuple{T, Array{T, 1}} where T,
+let A = Tuple{T, Vector{T}} where T,
     B = Tuple{T} where T,
     C = Tuple{T} where T<:AbstractFloat
     @test args_morespecific(B, A)
@@ -316,3 +316,14 @@ end
 @test args_morespecific(Tuple{typeof(Union{}), Any}, Tuple{Any, Type{Union{}}})
 @test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any}, Tuple{Type{Union{}}, Any, Type{Union{}}})
 @test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any, Type{Union{}}}, Tuple{Type{Union{}}, Any, Type{Union{}}, Type{Union{}}})
+
+# requires assertions enabled
+let root = NTuple
+    N = root.var
+    T = root.body.var
+    x1 = root.body.body
+    x2 = Dict{T,Tuple{N}}
+    A = UnionAll(N, UnionAll(T, Tuple{Union{x1, x2}}))
+    B = Tuple{Union{UnionAll(N, UnionAll(T, x1)), UnionAll(N, UnionAll(T, x2))}}
+    @ccall jl_type_morespecific_no_subtype(A::Any, B::Any)::Cint
+end
