@@ -22,9 +22,6 @@ Language changes
 
 * Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
 
-Compiler/Runtime improvements
------------------------------
-
 Command-line option changes
 ---------------------------
 
@@ -44,9 +41,6 @@ Multi-threading changes
   the first time it is called, and then always return the same result value of type `T`
   every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
   similar usage with threads or tasks. ([#TBD])
-
-Build system changes
---------------------
 
 New library functions
 ---------------------
@@ -84,12 +78,6 @@ New library features
 Standard library changes
 ------------------------
 
-#### JuliaSyntaxHighlighting
-
-#### LinearAlgebra
-
-#### Profile
-
 #### Random
 
 * `randperm!` and `randcycle!` now support non-`Array` `AbstractArray` inputs, assuming they are mutable and their indices are one-based ([#58596]).
@@ -126,9 +114,6 @@ External dependencies
 ---------------------
 
   * 7-Zip updated from p7zip v17.06 to upstream 7-Zip v25.01. On Windows, the full 7z.exe/7z.dll bundle is replaced with standalone 7za.exe, which supports fewer formats but unifies cross-platform behavior. ([#60025]).
-
-Tooling Improvements
---------------------
 
 Deprecated or removed
 ---------------------
