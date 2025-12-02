@@ -54,7 +54,7 @@ void *jl_loader_open_via_mmap(const char *filepath, size_t *size)
     return buffer;
 }
 
-static const char *search_ldcache(struct cache_file_new *cache, const char *libname, size_t *index)
+static const char *search_ldcache_new(struct cache_file_new *cache, const char *libname, size_t *index)
 {
     if (strncmp(cache->magic, CACHEMAGIC_NEW, sizeof(CACHEMAGIC_NEW) - 1) != 0)
         return NULL;
@@ -63,6 +63,36 @@ static const char *search_ldcache(struct cache_file_new *cache, const char *libn
         struct file_entry_new *lib = &cache->libs[*index];
 
         const char *strtab = (const char *)cache;
+        const char *key = &strtab[lib->key];
+        const char *value = &strtab[lib->value];
+
+        if (strcmp(key, libname) != 0)
+            continue;
+
+        (*index)++;
+        return value;
+    }
+
+    return NULL;
+}
+
+static const char *search_ldcache(struct cache_file *cache, size_t cachesize, const char *libname, size_t *index)
+{
+    if (strncmp(cache->magic, CACHEMAGIC, sizeof(CACHEMAGIC) - 1) != 0)
+        return search_ldcache_new((struct cache_file_new *)cache, libname, index);
+
+    // check for an embedded / hybrid 'new'-style cache
+    size_t offset = ALIGN_CACHE(sizeof(struct cache_file) + cache->nlibs * sizeof(struct file_entry));
+    if (cachesize >= offset + sizeof(struct cache_file_new)) {
+        struct cache_file_new *new_cache = (struct cache_file_new *)((void *)cache + offset);
+        if (strncmp(new_cache->magic, CACHEMAGIC_NEW, sizeof(CACHEMAGIC_NEW) - 1) == 0)
+            return search_ldcache_new(new_cache, libname, index);
+    }
+
+    for (; *index < cache->nlibs; (*index)++) {
+        struct file_entry *lib = &cache->libs[*index];
+
+        const char *strtab = (const char *)&cache->libs[cache->nlibs];
         const char *key = &strtab[lib->key];
         const char *value = &strtab[lib->value];
 
@@ -146,15 +176,15 @@ const char *jl_loader_probe_system_library(const char *libname, const char *symb
     size_t npaths = sizeof(ldcache_dirs) / sizeof(const char *);
     for (size_t i = 0; i < npaths; i++) {
         size_t sz;
-        struct cache_file_new *cache =
-            (struct cache_file_new *)jl_loader_open_via_mmap(ldcache_dirs[i], &sz);
+        struct cache_file *cache =
+            (struct cache_file *)jl_loader_open_via_mmap(ldcache_dirs[i], &sz);
 
         if (cache == NULL)
             continue; // ld.so.cache was not found (could be NixOS)
 
         size_t iter = 0;
         const char *library;
-        while ((library = search_ldcache(cache, libname, &iter)) != NULL) {
+        while ((library = search_ldcache(cache, sz, libname, &iter)) != NULL) {
             if (jl_loader_locate_symbol(library, symbol)) {
                 library = strdup(library);
                 munmap((void *)cache, sz);
