@@ -78,7 +78,7 @@ unsigned getCompositeNumElements(Type *T) {
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
-void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<SmallVector<unsigned, 0>, 0> &Numberings) {
+static void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<SmallVector<unsigned, 0>, 0> &Numberings) {
     if (isa<PointerType>(T)) {
         if (isSpecialPtr(T))
             Numberings.push_back(Idxs);
@@ -1471,85 +1471,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
 }
 
 
-
-static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> &irbuilder) {
-    Type *T_int32 = Type::getInt32Ty(V->getContext());
-    if (isptr) {
-        SmallVector<Value*, 0> IdxList{Idxs.size() + 1};
-        IdxList[0] = ConstantInt::get(T_int32, 0);
-        for (unsigned j = 0; j < Idxs.size(); ++j) {
-            IdxList[j + 1] = ConstantInt::get(T_int32, Idxs[j]);
-        }
-        Value *GEP = irbuilder.CreateInBoundsGEP(VTy, V, IdxList);
-        Type *T = GetElementPtrInst::getIndexedType(VTy, IdxList);
-        assert(T->isPointerTy());
-        V = irbuilder.CreateAlignedLoad(T, GEP, Align(sizeof(void*)));
-        // since we're doing stack operations, it should be safe do this non-atomically
-        cast<LoadInst>(V)->setOrdering(AtomicOrdering::NotAtomic);
-    }
-    else if (isa<PointerType>(V->getType())) {
-        assert(Idxs.empty());
-    }
-    else if (!Idxs.empty()) {
-        auto IdxsNotVec = Idxs.slice(0, Idxs.size() - 1);
-        Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
-        bool IsVector = isa<VectorType>(FinalT);
-        IRBuilder<InstSimplifyFolder> foldbuilder(irbuilder.getContext(), InstSimplifyFolder(irbuilder.GetInsertBlock()->getModule()->getDataLayout()));
-        foldbuilder.restoreIP(irbuilder.saveIP());
-        foldbuilder.SetCurrentDebugLocation(irbuilder.getCurrentDebugLocation());
-        if (Idxs.size() > IsVector)
-            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
-        if (IsVector)
-            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
-    }
-    return V;
-}
-
-static unsigned getFieldOffset(const DataLayout &DL, Type *STy, ArrayRef<unsigned> Idxs)
-{
-    SmallVector<Value*,4> IdxList{Idxs.size() + 1};
-    Type *T_int32 = Type::getInt32Ty(STy->getContext());
-    IdxList[0] = ConstantInt::get(T_int32, 0);
-    for (unsigned j = 0; j < Idxs.size(); ++j)
-        IdxList[j + 1] = ConstantInt::get(T_int32, Idxs[j]);
-    auto offset = DL.getIndexedOffsetInType(STy, IdxList);
-    assert(offset >= 0);
-    return (unsigned)offset;
-}
-
-SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> &irbuilder, ArrayRef<unsigned> perm_offsets) {
-    auto Tracked = TrackCompositeType(STy);
-    SmallVector<Value*, 0> Ptrs;
-    unsigned perm_idx = 0;
-    auto ignore_field = [&] (ArrayRef<unsigned> Idxs) {
-        if (perm_idx >= perm_offsets.size())
-            return false;
-        // Assume the indices returned from `TrackCompositeType` is ordered and do a
-        // single pass over `perm_offsets`.
-        assert(!isptr);
-        auto offset = getFieldOffset(irbuilder.GetInsertBlock()->getModule()->getDataLayout(),
-                                     STy, Idxs);
-        do {
-            auto perm_offset = perm_offsets[perm_idx];
-            if (perm_offset > offset)
-                return false;
-            perm_idx++;
-            if (perm_offset == offset) {
-                return true;
-            }
-        } while (perm_idx < perm_offsets.size());
-        return false;
-    };
-    for (unsigned i = 0; i < Tracked.size(); ++i) {
-        auto Idxs = ArrayRef<unsigned>(Tracked[i]);
-        if (ignore_field(Idxs))
-            continue;
-        Value *Elem = ExtractScalar(Src, STy, isptr, Idxs, irbuilder);
-        if (isTrackedValue(Elem)) // ignore addrspace Loaded when it appears
-            Ptrs.push_back(Elem);
-    }
-    return Ptrs;
-}
 
 //static unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
 //    auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
