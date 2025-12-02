@@ -66,9 +66,10 @@ static const char *search_ldcache_new(struct cache_file_new *cache, const char *
         const char *key = &strtab[lib->key];
         const char *value = &strtab[lib->value];
 
+        if (!_dl_cache_check_flags(lib->flags))
+            continue;
         if (strcmp(key, libname) != 0)
             continue;
-
         (*index)++;
         return value;
     }
@@ -96,9 +97,10 @@ static const char *search_ldcache(struct cache_file *cache, size_t cachesize, co
         const char *key = &strtab[lib->key];
         const char *value = &strtab[lib->value];
 
+        if (!_dl_cache_check_flags(lib->flags))
+            continue;
         if (strcmp(key, libname) != 0)
             continue;
-
         (*index)++;
         return value;
     }
