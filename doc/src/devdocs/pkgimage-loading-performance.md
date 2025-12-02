@@ -26,14 +26,14 @@ The system image is dominated by relocation processing due to the large number o
 
 | Phase | Time (ms) | % of Total |
 |-------|-----------|------------|
-| object uniquing (MI, bindings) | 13.3 | 38% |
-| apply relocations | 7.8 | 22% |
-| type uniquing & caching | 5.8 | 17% |
-| fixup objects | 4.2 | 12% |
+| object uniquing (MI, bindings) | 12.1 | 36% |
+| apply relocations | 8.0 | 24% |
+| type uniquing & caching | 5.7 | 17% |
+| fixup objects | 3.7 | 11% |
 | read symbols | 2.0 | 6% |
-| other | 1.9 | 5% |
-| **TOTAL restore** | **35.0** | |
-| activate methods | 4.3 | (post-restore) |
+| other | 2.4 | 7% |
+| **TOTAL restore** | **33.9** | |
+| activate methods | 4.4 | (post-restore) |
 
 Large packages spend most time in uniquing operations - ensuring types and method instances match those already in the runtime.
 
@@ -78,18 +78,18 @@ The `jl_read_relocations` function processes relocation lists that patch pointer
 
 ### 2. Object Uniquing (Largest Bottleneck for Packages)
 
-Method instances and bindings must be matched with existing runtime objects or created if new. For Plots with ~62K objects, this takes ~13-15ms.
+Method instances and bindings must be matched with existing runtime objects or created if new. For Plots with ~62K objects, this takes ~12ms.
 
 **Detailed breakdown for Plots:**
 
 | Category | Count | % |
 |----------|-------|---|
-| MI already done | 36,766 | 59% |
+| MI already done | 36,767 | 59% |
 | MI requiring lookup/insert | 25,217 | 41% |
 | Bindings done | 6 | ~0% |
 | Bindings lookup | 3 | ~0% |
 
-**Per-lookup cost:** ~530ns per MethodInstance lookup/insertion via `jl_specializations_get_linfo`
+**Per-lookup cost:** ~480ns per MethodInstance lookup/insertion via `jl_specializations_get_linfo`
 
 **Current implementation:**
 
@@ -157,56 +157,130 @@ Representative size breakdown for the system image:
 
 ## Instrumentation
 
-To enable detailed timing output, set the environment variable:
+To enable detailed timing output, uncomment `#define JL_DEBUG_LOADING` near the top of `src/staticdata.c` and rebuild Julia:
 
-```bash
-JULIA_DEBUG_LOADING=1 julia -e "using SomePackage"
+```c
+// Define JL_DEBUG_LOADING to enable detailed timing of pkgimage loading
+#define JL_DEBUG_LOADING
 ```
 
-This will print timing for each phase of image loading, including detailed breakdowns of type and object uniquing operations.
+Then rebuild with `make -C src` and run:
+
+```bash
+julia -e "using SomePackage"
+```
+
+This will print timing for each phase of image loading, including detailed breakdowns of type and object uniquing operations. The instrumentation is compile-time guarded for zero overhead in release builds.
 
 ## Summary of Optimization Opportunities
 
-| Priority | Target | Expected Impact | Complexity | Status |
-|----------|--------|-----------------|------------|--------|
-| High | Object uniquing (MI sorting) | ~3-4ms for large pkgs | Low | Tested - promising |
-| High | Type uniquing lock scope | 2-6ms for large pkgs | Medium | Analysis complete |
-| Medium | Parallel relocations | Tested - not beneficial | Medium | ❌ Rejected |
-| Medium | Method activation batching | 1-130ms for method-heavy pkgs | Medium | Not started |
-| Low | Symbol reading optimization | 1-2ms for large pkgs | Low | Not started |
+### Highest Impact: Method Activation (63% of total time)
 
-### Tested Optimizations
+The `activate methods` phase dominates package loading time, accounting for 206ms out of ~330ms total for `using Plots`. A single package (SparseArrays) takes 139ms - 67% of all method activation time.
 
-#### Save-side sorting of uniquing_objs by method pointer
+**Why SparseArrays is slow:** It extends Base methods (arithmetic operators, indexing, etc.) that have large method tables. Each external method requires:
 
-**Approach:** During pkgimage serialization, sort the `uniquing_objs` list by method pointer before writing. This requires:
+- `get_intersect_matches` - find all intersecting methods in Base's method tables
+- `jl_type_morespecific` checks for each intersection
+- `jl_type_intersection2` checks for each MethodInstance
+- Potential invalidation of existing compiled code
 
-1. Add a parallel arraylist `uniquing_objs_methods` to store method pointers alongside offsets
-2. In `record_uniquing`, store the method pointer for each MI (NULL for bindings)
-3. Before writing `uniquing_objs`, build an array of (offset, method) pairs, sort by method, then write just the offsets
+SparseArrays: 55μs per external method (2,528 methods)
+Plots: 1.8μs per external method (2,388 methods)
 
-**Implementation details:**
+The 30x difference comes from which methods are being extended - Base's core arithmetic has much larger method tables than plotting-specific methods.
 
-- Add `uniquing_obj_entry_t` struct with offset and method pointer
-- Add `uniquing_obj_entry_cmp` comparator function
-- Modify `record_uniquing` to also push to `uniquing_objs_methods`
-- Before `jl_write_arraylist` for uniquing_objs, sort and reorder
+**Potential optimizations:**
 
-**Results:** ~24% reduction in object uniquing time (14.9ms → 11.3ms for Plots). The improvement comes from better cache locality - consecutive MIs for the same method keep the method's specializations hash table hot in CPU cache.
+| Approach | Expected Impact | Complexity | Status |
+|----------|-----------------|------------|--------|
+| Batch method activation by method table | 10-30% | Medium | ❌ Rejected - sorting overhead |
+| Parallel type intersection checks | 20-40% | High | Not tested |
+| Pre-compute intersection flags at precompile | 10-20% | Medium | Not tested |
+| Lazy method activation (on-demand) | Up to 100% for unused methods | High | Not tested |
 
-**Trade-offs:**
+### Medium Impact: Apply Relocations (16%)
 
-- Adds ~10-20ms to pkgimage save time (one-time cost during precompilation)
-- Increases serialization memory usage slightly
+52ms for all packages. Currently sequential processing.
 
-### Performance Characteristics
+**Status:** Parallel attempt failed due to memory allocation overhead and cache effects.
 
-**Object uniquing rate:** ~4.1K objects/ms (~240ns per object)
+**Remaining ideas:**
+
+- SIMD pointer arithmetic
+- Memory-mapped I/O for large images
+- Streaming decode with prefetching
+
+### Lower Impact: Uniquing Operations (12%)
+
+Object uniquing: 24ms (7%)
+Type uniquing: 15ms (5%)
+
+**Tested and rejected:** Save-side sorting by method pointer made things 15% slower by destroying natural serialization locality.
+
+**Remaining ideas:**
+
+| Approach | Expected Impact | Complexity | Status |
+|----------|-----------------|------------|--------|
+| Type uniquing lock scope reduction | 2-6ms | Medium | Not tested |
+| Reduce uniquing_objs count at precompile | Variable | High | Not tested |
+| Pre-warm method specialization tables | 1-3ms | Low | Not tested |
+| Sort uniquing_objs by method pointer | ~3ms | Low | ❌ Rejected |
+
+### Lower Priority
+
+| Target | Time | Notes |
+|--------|------|-------|
+| read symbols | 19ms | Could investigate compression |
+| fixup objects | 9ms | Sequential, may benefit from batching |
+| add methods | 5ms | Already fast |
+
+## Rejected Optimizations
+
+### Parallel Relocations
+
+Attempted a two-phase approach: decode all relocation entries into a buffer, then apply in parallel using pthreads.
+
+**Result:** Slower (45ms → 48ms) due to memory allocation overhead, thread creation/join cost, and cache effects from non-sequential access.
+
+### Save-side Sorting of uniquing_objs
+
+**Hypothesis:** Sorting MIs by method pointer during serialization would improve cache locality during load, keeping each method's specializations hash table hot in CPU cache.
+
+**Implementation:** Added parallel arraylist to store method pointers, sorted (offset, method) pairs before writing.
+
+**Results from `using Plots` benchmark:**
+
+| Metric | Master | PR (sorted) | Diff |
+|--------|--------|-------------|------|
+| Object uniquing (Plots) | 12.1 ms | 13.9 ms | **+15% slower** |
+| Total restore (Plots) | 33.9 ms | 36.7 ms | +8% slower |
+| Total restore (all 123 pkgs) | 131.1 ms | 222.9 ms | **+70% slower** |
+| mi_done / mi_lookup | 36767 / 25217 | 36767 / 25217 | Same |
+
+**Why it failed:** The identical mi_done/mi_lookup ratios show that sorting doesn't change the "already done" cache hit rate. The sorting appears to have **destroyed** natural locality that existed in the original serialization order. Objects are serialized in traversal order, which likely groups related items together. Sorting by method pointer spreads out items that were naturally co-located.
+
+**Lesson learned:** The serialization traversal order may already have good cache locality properties that shouldn't be disturbed.
+
+### Batch Method Activation by Method Table
+
+**Hypothesis:** Sorting external methods by their method table before activation would improve cache locality when accessing `mt->defs` for intersection checks.
+
+**Implementation:** Added qsort to order entries by method table pointer before the activation loop.
+
+**Result:** 10% slower than master. The sorting overhead outweighed any cache benefits, and likely destroyed beneficial natural ordering (methods are serialized in dependency order which may naturally group related activations).
+
+**Lesson learned:** Same as above - the natural serialization order has good properties.
+
+## Performance Characteristics
+
+**Object uniquing rate:** ~5.2K objects/ms (~195ns per object average)
 
 - 59% cache hit rate (already uniquified by earlier references)
 - 41% require lookup/insertion via `jl_specializations_get_linfo`
+- Per-lookup cost: ~480ns
 
-**Type uniquing rate:** ~8.2K types/ms (~122ns per type)
+**Type uniquing rate:** ~8.7K types/ms (~115ns per type average)
 
 - 68% cache hit rate (already uniquified by dependencies)
 - 1% found via cache lookup
