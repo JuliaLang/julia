@@ -19,9 +19,13 @@ function _apply_nospecialize(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
         setmeta(ex; nospecialize=true)
-    elseif k == K"..." || k == K"::" || k == K"="
+    elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
+        # The @nospecialize macro is responsible for converting K"=" to K"kw".
+        # Desugaring uses this helper internally, so we may see K"kw" too.
         if k == K"::" && numchildren(ex) == 1
             ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
+        elseif k == K"=" && numchildren(ex) === 2
+            ex = @ast ctx ex [K"kw" ex[1] ex[2]]
         end
         mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
     else
@@ -293,7 +297,7 @@ function _at_eval_code(ctx, srcref, mod, ex)
                     mod
                     [K"quote" ex]
                     [K"parameters"
-                        [K"="
+                        [K"kw"
                             "expr_compat_mode"::K"Identifier"
                             ctx.expr_compat_mode::K"Bool"
                         ]

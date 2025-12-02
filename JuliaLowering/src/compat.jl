@@ -34,9 +34,7 @@ end
     graph = syntax_graph(ctx)
     toplevel_src = if isnothing(lnn)
         # Provenance sinkhole for all nodes until we hit a linenode
-        dummy_src = SourceRef(
-            SourceFile("No source for expression"),
-            1, JS.GreenNode(K"None", 0))
+        dummy_src = SourceRef(SourceFile("No source for expression"), 1, 0)
         _insert_tree_node(graph, K"None", dummy_src)
     else
         lnn
@@ -46,15 +44,14 @@ end
     return out
 end
 
-function _expr_replace!(@nospecialize(e), replace_pred::Function, replacer!::Function,
+function _expr_replace(@nospecialize(e), replace_pred::Function, replacer::Function,
                         recurse_pred=(@nospecialize e)->true)
     if replace_pred(e)
-        replacer!(e)
-    end
-    if e isa Expr && recurse_pred(e)
-        for a in e.args
-            _expr_replace!(a, replace_pred, replacer!, recurse_pred)
-        end
+        replacer(e)
+    elseif e isa Expr && recurse_pred(e)
+        Expr(e.head, Any[_expr_replace(a, replace_pred, replacer, recurse_pred) for a in e.args]...)
+    else
+        e
     end
 end
 
@@ -366,7 +363,8 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             lam_eqs = Any[]
             for a in a1.args
                 a isa LineNumberNode && continue
-                a isa Expr && a.head === :(=) ? push!(lam_eqs, a) : push!(lam_args, a)
+                a isa Expr && a.head === :(=) ?
+                    push!(lam_eqs, Expr(:kw, a.args...)) : push!(lam_args, a)
             end
             !isempty(lam_eqs) && push!(lam_args, Expr(:parameters, lam_eqs...))
             child_exprs[1] = a1_esc(Expr(:tuple, lam_args...))
@@ -436,11 +434,9 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         child_exprs = child_exprs[2:end]
         # TODO handle docstrings after refactor
     elseif (e.head === :using || e.head === :import)
-        _expr_replace!(e,
-                       (e)->(e isa Expr && e.head === :.),
-                       (e)->(e.head = :importpath))
-    elseif e.head === :kw
-        st_k = K"="
+        e2 = _expr_replace(e, (e)->(e isa Expr && e.head === :.),
+                           (e)->Expr(:importpath, e.args...))
+        child_exprs = e2.args
     elseif e.head in (:local, :global) && nargs > 1
         # Possible normalization
         # child_exprs = Any[Expr(:tuple, child_exprs...)]
