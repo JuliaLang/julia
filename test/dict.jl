@@ -907,6 +907,10 @@ import Base.ImmutableDict
     @test d6[:b] == 3
 
     @test !haskey(ImmutableDict(-0.0=>1), 0.0)
+
+    d7 = ImmutableDict(:a => 1)
+    @test Base.setindex(d7, 2, :a) == ImmutableDict(:a => 1, :a => 2)
+    @test Base.setindex(d7, 2, :b) == ImmutableDict(:a => 1, :b => 2)
 end
 
 @testset "filtering" begin
