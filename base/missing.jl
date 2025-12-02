@@ -40,8 +40,8 @@ nonmissingtype(@nospecialize(T::Type)) = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
-    R >: T && error("could not compute non-missing type")
-    R <: Union{} && error("cannot convert a value to missing for assignment")
+    R >: T && throw(ArgumentError("could not compute non-missing type"))
+    R <: Union{} && throw(ArgumentError("cannot convert a value to missing for assignment"))
     return R
 end
 
@@ -103,12 +103,12 @@ for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
     @eval ($f)(::Missing) = missing
 end
 for f in (:zero, :one, :oneunit)
-    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+    @eval ($f)(::Type{Any}) = throw(NotImplementedError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{Missing}) = missing
     @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
 end
 for f in (:float, :real, :complex)
-    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+    @eval ($f)(::Type{Any}) = throw(NotImplementedError($f, (Any,))) # To prevent StackOverflowError
     @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
 end
 

@@ -345,12 +345,12 @@ fld(x::Signed, y::Unsigned) = div(x, y, RoundDown)
 fld(x::Unsigned, y::Signed) = div(x, y, RoundDown)
 cld(x::Signed, y::Unsigned) = div(x, y, RoundUp)
 cld(x::Unsigned, y::Signed) = div(x, y, RoundUp)
-fld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundDown)))
-cld(x::T, y::T) where {T<:Real} = throw(MethodError(div, (x, y, RoundUp)))
+fld(x::T, y::T) where {T<:Real} = throw(NotImplementedError(div, (x, y, RoundDown), Real))
+cld(x::T, y::T) where {T<:Real} = throw(NotImplementedError(div, (x, y, RoundUp), Real))
 
 # Promotion
 function div(x::Real, y::Real, r::RoundingMode)
-    typeof(x) === typeof(y) && throw(MethodError(div, (x, y, r)))
+    typeof(x) === typeof(y) && throw(NotImplementedError(div, (x, y, r), Real))
     if r === RoundToZero
         # For compat. Remove in 2.0.
         div(promote(x, y)...)
