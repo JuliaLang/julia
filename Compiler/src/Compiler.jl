@@ -19,7 +19,7 @@ end
 # the system image and simply returns that copy of the compiler. If not,
 # we proceed to load/precompile this as an ordinary package.
 elseif (isdefined(Base, :generating_output) && Base.generating_output(true) &&
-        Base.samefile(joinpath(Sys.BINDIR, Base.LIBDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
+        Base.samefile(joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
         !Base.any_includes_stale(
             map(Base.compiler_chi, Base._compiler_require_dependencies),
             "sysimg", nothing))

@@ -549,7 +549,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
         path_norm = normpath(path)
         possible_base_path = normpath(Sys.BINDIR, Base.PRIVATE_LIBDIR, "base", path)
         lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
-        compiler_dir = normpath(Base.PRIVATE_LIBDIR, "Compiler/")
+        compiler_dir = normpath(Base.PRIVATE_LIBDIR_ARG, "Compiler/")
         if startswith(path_norm, SRC_DIR)
             remainder = only(split(path_norm, SRC_DIR, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@juliasrc", remainder

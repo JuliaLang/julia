@@ -416,8 +416,8 @@ for i = 1:length(_included_files)
         _include_dependency!(_compiler_require_dependencies, true, mod, file, true, false)
     end
 end
-# Make relative to PRIVATE_LIBDIR_ARG to allow relocation
-let basedir = joinpath(Sys.BINDIR, PRIVATE_LIBDIR_ARG)
+# Make relative to PRIVATE_LIBDIR to allow relocation
+let basedir = joinpath(Sys.BINDIR, PRIVATE_LIBDIR)
 for i = 1:length(_compiler_require_dependencies)
     tup = _compiler_require_dependencies[i]
     _compiler_require_dependencies[i] = (tup[1], relpath(tup[2], basedir), tup[3:end]...)

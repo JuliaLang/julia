@@ -91,7 +91,7 @@ RELPRIVATE_LIBDIR := $(call rel_path,$(JULIAHOME)/base,$(build_private_libdir))/
 $(build_private_libdir)/basecompiler.ji: $(COMPILER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	JULIA_NUM_THREADS=1 $(call spawn,$(JULIA_EXECUTABLE)) $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp \
-		--startup-file=no --warn-overwrite=yes --depwarn=error -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl --buildroot $(RELBUILDROOT) --private_libdir $(RELPRIVATE_LIBDIR))
+		--startup-file=no --warn-overwrite=yes --depwarn=error -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl --buildroot $(RELBUILDROOT) --private-libdir $(RELPRIVATE_LIBDIR))
 	@mv $@.tmp $@
 
 define base_builder

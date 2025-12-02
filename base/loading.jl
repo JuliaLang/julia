@@ -4443,7 +4443,7 @@ function prepare_compiler_stub_image!()
 end
 
 function expand_compiler_path(tup)
-    (tup[1], joinpath(Sys.BINDIR, LIBDIR, tup[2]), tup[3:end]...)
+    (tup[1], joinpath(Sys.BINDIR, PRIVATE_LIBDIR, tup[2]), tup[3:end]...)
 end
 compiler_chi(tup::Tuple) = CacheHeaderIncludes(expand_compiler_path(tup))
 

@@ -64,16 +64,16 @@ function test_path(test)
         end
     elseif t[1] == "Compiler" && length(t) ≥ 3 && t[2] == "extras"
         testpath = length(t) >= 4 ? t[4:end] : ("runtests",)
-        return joinpath(@__DIR__, "..", t[1], t[2], t[3], "test", testpath...)
+        return joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR, t[1], t[2], t[3], "test", testpath...)
     elseif t[1] == "Compiler"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests",)
-        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+        return joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR, t[1], "test", testpath...)
     elseif t[1] == "JuliaSyntax"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
-        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+        return joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR, t[1], "test", testpath...)
     elseif t[1] == "JuliaLowering"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
-        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+        return joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR, t[1], "test", testpath...)
     else
         return joinpath(@__DIR__, test)
     end
