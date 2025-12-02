@@ -115,8 +115,10 @@ const char *ldcache_dirs[] = {
 const char *default_libdirs[] = {
     "/lib/",
     "/usr/lib/",
+#ifdef _P64
     "/lib64/",
     "/usr/lib64/",
+#endif
 };
 
 /**

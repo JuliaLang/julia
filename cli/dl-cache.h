@@ -60,7 +60,7 @@
 #elif defined(_CPU_RISCV64_)
 
 /* For now we only support the natural XLEN ABI length on all targets, so the
-   only bits that need to go into ld.so.cache are the FLEG ABI length.  */
+   only bits that need to go into ld.so.cache are the flags for ABI length.  */
 #if defined __riscv_float_abi_double
 # define _DL_CACHE_DEFAULT_ID    (FLAG_RISCV_FLOAT_ABI_DOUBLE | FLAG_ELF_LIBC6)
 #else

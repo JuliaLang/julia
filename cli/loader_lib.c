@@ -228,6 +228,10 @@ JL_DLLEXPORT const char * jl_get_libdir()
 // The path returned must be freed.
 static const char *libstdcxxprobe(void)
 {
+    void *handle = dlopen("libstdc++.so.6\0*", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+    if (handle != NULL)
+        return NULL; // libstdc++ already loaded - nothing we can do
+
     return jl_loader_probe_system_library("libstdc++.so.6", GLIBCXX_LEAST_VERSION_SYMBOL);
 }
 #endif
