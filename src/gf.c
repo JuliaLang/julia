@@ -2882,6 +2882,10 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_atomic_store_relaxed(&newentry->min_world, world);
     jl_atomic_store_relaxed(&method->primary_world, world);
     size_t max_world = world - 1;
+    // During incremental precompilation, skip expensive invalidation since there's
+    // no user-compiled code to invalidate. Dispatch correctness is maintained by
+    // still computing dispatch_status and interferences.
+    int skip_invalidation = jl_generating_output() && jl_options.incremental;
     jl_value_t *loctag = NULL;  // debug info for invalidation
     jl_value_t *isect = NULL;
     jl_value_t *isect2 = NULL;
@@ -2924,7 +2928,8 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             invalidated = 1;
             method_overwrite(newentry, m);
             // This is an optimized version of below, given we know the type-intersection is exact
-            jl_method_table_invalidate(m, max_world);
+            if (!skip_invalidation)
+                jl_method_table_invalidate(m, max_world);
             int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
             // Clear METHOD_SIG_LATEST_ONLY and METHOD_SIG_LATEST_WHICH bits
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
@@ -2958,22 +2963,24 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     jl_gc_wb(m2, m2_interferences);
                 }
             }
-            loctag = jl_atomic_load_relaxed(&m->specializations); // use loctag for a gcroot
-            _Atomic(jl_method_instance_t*) *data;
-            size_t l;
-            if (jl_is_svec(loctag)) {
-                data = (_Atomic(jl_method_instance_t*)*)jl_svec_data(loctag);
-                l = jl_svec_len(loctag);
-            }
-            else {
-                data = (_Atomic(jl_method_instance_t*)*) &loctag;
-                l = 1;
-            }
-            for (size_t i = 0; i < l; i++) {
-                jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
-                if ((jl_value_t*)mi == jl_nothing)
-                    continue;
-                jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
+            if (!skip_invalidation) {
+                loctag = jl_atomic_load_relaxed(&m->specializations); // use loctag for a gcroot
+                _Atomic(jl_method_instance_t*) *data;
+                size_t l;
+                if (jl_is_svec(loctag)) {
+                    data = (_Atomic(jl_method_instance_t*)*)jl_svec_data(loctag);
+                    l = jl_svec_len(loctag);
+                }
+                else {
+                    data = (_Atomic(jl_method_instance_t*)*) &loctag;
+                    l = 1;
+                }
+                for (size_t i = 0; i < l; i++) {
+                    jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
+                    if ((jl_value_t*)mi == jl_nothing)
+                        continue;
+                    jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
+                }
             }
             d = NULL;
             n = 0;
@@ -3010,6 +3017,10 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                 // Add methods that intersect but are not more specific to interference list
                 jl_atomic_store_relaxed(&m->dispatch_status, m_dispatch);
                 if (morespec[j])
+                    continue;
+
+                // Skip invalidation during precompilation - no user code to invalidate
+                if (skip_invalidation)
                     continue;
 
                 // Now examine if this caused any invalidations.
@@ -3075,39 +3086,41 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
 
     jl_methcache_t *mc = jl_method_table->cache;
     JL_LOCK(&mc->writelock);
-    struct _typename_invalidate_backedge typename_env = {type, &isect, &isect2, d, n, max_world, invalidated};
-    if (!jl_foreach_top_typename_for(_typename_invalidate_backedges, type, 1, &typename_env)) {
-        // if the new method cannot be split into exact backedges, scan the whole table for anything that might be affected
-        jl_genericmemory_t *allbackedges = jl_method_table->backedges;
-        for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
-            jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
-            jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i+1);
-            if (tn && tn != jl_nothing && backedges)
-                _typename_invalidate_backedges((jl_typename_t*)tn, 0, &typename_env);
-        }
-    }
-    invalidated |= typename_env.invalidated;
-    if (oldmi && jl_array_nrows(oldmi)) {
-        // drop leafcache and search mc->cache and drop anything that might overlap with the new method
-        // this is very cheap, so we don't mind being very conservative at over-approximating this
-        struct invalidate_mt_env mt_cache_env;
-        mt_cache_env.max_world = max_world;
-        mt_cache_env.shadowed = oldmi;
-        mt_cache_env.newentry = newentry;
-
-        jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
-        jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-        size_t i, l = leafcache->length;
-        for (i = 1; i < l; i += 2) {
-            jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
-            if (entry) {
-                while (entry != jl_nothing) {
-                    jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, max_world);
-                    entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
-                }
+    if (!skip_invalidation) {
+        struct _typename_invalidate_backedge typename_env = {type, &isect, &isect2, d, n, max_world, invalidated};
+        if (!jl_foreach_top_typename_for(_typename_invalidate_backedges, type, 1, &typename_env)) {
+            // if the new method cannot be split into exact backedges, scan the whole table for anything that might be affected
+            jl_genericmemory_t *allbackedges = jl_method_table->backedges;
+            for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
+                jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
+                jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i+1);
+                if (tn && tn != jl_nothing && backedges)
+                    _typename_invalidate_backedges((jl_typename_t*)tn, 0, &typename_env);
             }
         }
-        jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
+        invalidated |= typename_env.invalidated;
+        if (oldmi && jl_array_nrows(oldmi)) {
+            // drop leafcache and search mc->cache and drop anything that might overlap with the new method
+            // this is very cheap, so we don't mind being very conservative at over-approximating this
+            struct invalidate_mt_env mt_cache_env;
+            mt_cache_env.max_world = max_world;
+            mt_cache_env.shadowed = oldmi;
+            mt_cache_env.newentry = newentry;
+
+            jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
+            jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
+            size_t i, l = leafcache->length;
+            for (i = 1; i < l; i += 2) {
+                jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
+                if (entry) {
+                    while (entry != jl_nothing) {
+                        jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, max_world);
+                        entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
+                    }
+                }
+            }
+            jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
+        }
     }
     JL_UNLOCK(&mc->writelock);
     if (invalidated && _jl_debug_method_invalidation) {
