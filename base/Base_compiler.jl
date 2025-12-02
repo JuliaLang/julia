@@ -360,6 +360,8 @@ include("anyall.jl")
 include("ordering.jl")
 using .Order
 
+include("interface_callables_base.jl")
+
 include("coreir.jl")
 include("module.jl")
 
