@@ -159,7 +159,7 @@ struct Fail <: Result
         return new(test_type,
             string(orig_expr),
             data === nothing ? nothing : string(data),
-            string(isa(data, Type) ? typeof(value) : value),
+            repr(isa(data, Type) ? typeof(value) : value),
             context,
             source,
             message_only,
