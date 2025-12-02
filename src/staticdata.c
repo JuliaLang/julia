@@ -217,22 +217,6 @@ static int ptr_cmp(const void *l, const void *r) JL_NOTSAFEPOINT
     return (left > right) - (left < right);
 }
 
-// Entry for sorting uniquing_objs by method pointer during serialization
-typedef struct {
-    uintptr_t offset;    // offset in serialized stream
-    uintptr_t method;    // method pointer for sorting (MIs only)
-} uniquing_obj_entry_t;
-
-static int uniquing_obj_entry_cmp(const void *a, const void *b) JL_NOTSAFEPOINT
-{
-    const uniquing_obj_entry_t *ea = (const uniquing_obj_entry_t*)a;
-    const uniquing_obj_entry_t *eb = (const uniquing_obj_entry_t*)b;
-    // Sort by method pointer, with bindings (method=0) at the end
-    if (ea->method < eb->method) return -1;
-    if (ea->method > eb->method) return 1;
-    return 0;
-}
-
 // Build an eytzinger tree from a sorted array
 static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n) JL_NOTSAFEPOINT
 {
@@ -374,7 +358,6 @@ typedef struct {
     arraylist_t uniquing_types; // a list of locations that reference types that must be de-duplicated
     arraylist_t uniquing_super; // a list of datatypes, used in super fields, that need to be marked in uniquing_types once they are reached, for handling unique-ing of them on deserialization
     arraylist_t uniquing_objs;  // a list of locations that reference non-types that must be de-duplicated
-    arraylist_t uniquing_objs_methods; // parallel list of method pointers for sorting uniquing_objs
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
     // mapping from a buildid_idx to a depmods_idx
@@ -1202,17 +1185,8 @@ static void record_uniquing(jl_serializer_state *s, jl_value_t *fld, uintptr_t o
     if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld, s->query_cache)) {
         if (jl_is_datatype(fld) || jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(fld)))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)offset);
-        else if (jl_is_method_instance(fld)) {
+        else if (jl_is_method_instance(fld) || jl_is_binding(fld))
             arraylist_push(&s->uniquing_objs, (void*)(uintptr_t)offset);
-            // Store method pointer for sorting - improves cache locality during load
-            jl_method_instance_t *mi = (jl_method_instance_t*)fld;
-            arraylist_push(&s->uniquing_objs_methods, (void*)mi->def.method);
-        }
-        else if (jl_is_binding(fld)) {
-            arraylist_push(&s->uniquing_objs, (void*)(uintptr_t)offset);
-            // Bindings don't have methods, use NULL (will sort to end)
-            arraylist_push(&s->uniquing_objs_methods, NULL);
-        }
         else
             assert(0 && "unknown object type with needs_uniquing set");
     }
@@ -3052,7 +3026,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_new(&s.uniquing_types, 0);
     arraylist_new(&s.uniquing_super, 0);
     arraylist_new(&s.uniquing_objs, 0);
-    arraylist_new(&s.uniquing_objs_methods, 0);
     arraylist_new(&s.fixup_types, 0);
     arraylist_new(&s.fixup_objs, 0);
     s.buildid_depmods_idxs = image_to_depmodidx(mod_array);
@@ -3249,22 +3222,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     jl_write_offsetlist(s.relocs, sysimg_size, &s.memref_list);
     if (s.incremental) {
         jl_write_arraylist(s.relocs, &s.uniquing_types);
-        // Sort uniquing_objs by method pointer for cache locality during load
-        assert(s.uniquing_objs.len == s.uniquing_objs_methods.len);
-        size_t n = s.uniquing_objs.len;
-        if (n > 0) {
-            uniquing_obj_entry_t *entries = (uniquing_obj_entry_t*)malloc(n * sizeof(uniquing_obj_entry_t));
-            for (size_t i = 0; i < n; i++) {
-                entries[i].offset = (uintptr_t)s.uniquing_objs.items[i];
-                entries[i].method = (uintptr_t)s.uniquing_objs_methods.items[i];
-            }
-            qsort(entries, n, sizeof(uniquing_obj_entry_t), uniquing_obj_entry_cmp);
-            // Write back sorted offsets
-            for (size_t i = 0; i < n; i++) {
-                s.uniquing_objs.items[i] = (void*)entries[i].offset;
-            }
-            free(entries);
-        }
         jl_write_arraylist(s.relocs, &s.uniquing_objs);
         jl_write_arraylist(s.relocs, &s.fixup_types);
     }
@@ -3344,7 +3301,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&s.uniquing_types);
     arraylist_free(&s.uniquing_super);
     arraylist_free(&s.uniquing_objs);
-    arraylist_free(&s.uniquing_objs_methods);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
     arraylist_free(&s.memowner_list);
