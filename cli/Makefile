@@ -88,30 +88,35 @@ DIRS = $(build_bindir) $(build_libdir)
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 ifeq ($(OS),WINNT)
-$(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
+$(BUILDDIR)/julia_res.o $(BUILDDIR)/julia_res_debug.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
 		'/^(\d+)\.?(\d*)\.?(\d*)/ && \
 		print int $$1,",",int $$2,",",int $$3,",0"'` && \
 	$(CROSS_COMPILE)windres $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
 EXE_OBJS += $(BUILDDIR)/julia_res.o
-EXE_DOBJS += $(BUILDDIR)/julia_res.o
+EXE_DOBJS += $(BUILDDIR)/julia_res_debug.o
 endif
 
 # Embed an Info.plist in the julia executable
 # Create an intermediate target Info.plist for Darwin code signing.
 ifeq ($(DARWIN_FRAMEWORK),1)
-$(BUILDDIR)/Info.plist: $(JULIAHOME)/VERSION
-	/usr/libexec/PlistBuddy -x -c "Clear dict" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string julia" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(darwin_codesign_id_julia_ui)" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleInfoDictionaryVersion string 6.0" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleShortVersionString string $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)" $@
-.INTERMEDIATE: $(BUILDDIR)/Info.plist # cleanup this file after we are done using it
+.PHONY: Info.plist.phony
+Info.plist.phony:
+	@TMPFILE=$$(mktemp -u $(abspath $(BUILDDIR)/Info.plist.XXXXXX)); \
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string julia" $$TMPFILE; \
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(darwin_codesign_id_julia_ui)" $$TMPFILE; \
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleInfoDictionaryVersion string 6.0" $$TMPFILE; \
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $$TMPFILE; \
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleShortVersionString string $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)" $$TMPFILE; \
+	if ! cmp -s $(BUILDDIR)/Info.plist $$TMPFILE; then \
+		mv $$TMPFILE $(BUILDDIR)/Info.plist; \
+	else \
+		rm -f $$TMPFILE; \
+	fi
 JLDFLAGS += -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
-$(build_bindir)/julia$(EXE): $(BUILDDIR)/Info.plist
-$(build_bindir)/julia-debug$(EXE): $(BUILDDIR)/Info.plist
+$(build_bindir)/julia$(EXE): Info.plist.phony
+$(build_bindir)/julia-debug$(EXE): Info.plist.phony
 endif
 
 julia-release: $(build_bindir)/julia$(EXE)
@@ -164,11 +169,14 @@ $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
 $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
-	sed <'$<' >'$@' -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'
+	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	sed <'$<' >$$TMPFILE -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'; \
+	mv $$TMPFILE $@
 
 clean: | $(CLEAN_TARGETS)
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
-	rm -f $(BUILDDIR)/julia.expmap
+	rm -f $(BUILDDIR)/julia.expmap*
+	rm -f $(BUILDDIR)/Info.plist*
 
 .PHONY: clean release debug julia-release julia-debug
