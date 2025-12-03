@@ -412,10 +412,6 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
             makeleaf(ctx, ex, ex, [:kind=>k, :scope_layer=>scope_layer])
         end
-    elseif k == K"StrMacroName" || k == K"CmdMacroName" || k == K"macro_name"
-        # These can appear outside of a macrocall, e.g. in `import`
-        e2 = fixup_macro_name(ctx, ex)
-        expand_forms_1(ctx, e2)
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes
         @chk numchildren(ex) == 1
