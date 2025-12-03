@@ -54,7 +54,7 @@ end
 7   SourceLocation::3:9
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self#(!read) slot₂/c(!read)]
+    slots: [slot₁/#self#(!read) slot₂/c(!read,single_assign)]
     1   TestMod.d
     2   (= slot₂/c %₁)
     3   (return %₁)

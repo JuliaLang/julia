@@ -102,9 +102,7 @@ function is_valid_body_ir_argument(ctx, ex)
         true
     elseif kind(ex) == K"BindingId"
         binfo = get_binding(ctx, ex)
-        # Arguments are always defined
-        # TODO: use equiv of vinfo:never-undef when we have it
-        binfo.kind == :argument
+        binfo.kind == :argument && binfo.is_always_defined
     else
         false
     end
@@ -116,12 +114,12 @@ function is_simple_arg(ctx, ex)
            k == K"top" || k == K"core" || k == K"globalref" || k == K"static_eval"
 end
 
+# flisp note: arguments are always counted as single-assign, so effects on
+# arguments within compile_args are thrown out (intentional?)
 function is_single_assign_var(ctx::LinearIRContext, ex)
     kind(ex) == K"BindingId" || return false
     binfo = get_binding(ctx, ex)
-    # Arguments are always single-assign
-    # TODO: Use equiv of vinfo:sa when we have it
-    return binfo.kind == :argument
+    return binfo.kind == :argument || binfo.is_assigned_once
 end
 
 function is_const_read_arg(ctx, ex)
@@ -1072,22 +1070,21 @@ function compile_lambda(outer_ctx, ex)
             @assert kind(arg) == K"BindingId"
             id = arg.var_id
             binfo = get_binding(ctx, id)
-            lbinfo = lookup_lambda_binding(ctx, id)
             @assert binfo.kind == :local || binfo.kind == :argument
-            # FIXME: is_single_assign, is_maybe_undef
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
-                              lbinfo.is_read, false, false, lbinfo.is_called))
+                              binfo.is_read, binfo.is_assigned_once,
+                              binfo.is_used_undef, binfo.is_called))
             slot_rewrites[id] = length(slots)
         end
     end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    for (id, lbinfo) in sort(collect(pairs(lambda_bindings.bindings)), by=first)
-        if !lbinfo.is_captured
+    for (id, is_capt) in sort(collect(pairs(lambda_bindings.locals_capt)), by=first)
+        if !is_capt
             binfo = get_binding(ctx.bindings, id)
             if binfo.kind == :local
-                # FIXME: is_single_assign, is_maybe_undef
                 push!(slots, Slot(binfo.name, :local, false,
-                                  lbinfo.is_read, false, false, lbinfo.is_called))
+                                  binfo.is_read, binfo.is_assigned_once,
+                                  binfo.is_used_undef, binfo.is_called))
                 slot_rewrites[id] = length(slots)
             end
         end

@@ -61,7 +61,8 @@ function captured_var_access(ctx, ex)
 end
 
 function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
-    undef_var = new_local_binding(ctx, var, get_binding(ctx, var.var_id).name)
+    undef_var = new_local_binding(ctx, var, get_binding(ctx, var.var_id).name;
+                                  is_used_undef=true)
     @ast ctx var [K"block"
         box := box_ex
         # Lower in an UndefVar check to a similarly named variable
@@ -233,10 +234,8 @@ end
 function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     capture_ids = Vector{IdTag}()
     for lambda_bindings in closure_binds.lambdas
-        for (id, lbinfo) in lambda_bindings.bindings
-            if lbinfo.is_captured
-                push!(capture_ids, id)
-            end
+        for (id, is_capt) in lambda_bindings.locals_capt
+            is_capt && push!(capture_ids, id)
         end
     end
     # sort here to avoid depending on undefined Dict iteration order.
@@ -305,7 +304,7 @@ function is_boxed(binfo::BindingInfo)
     # True for
     # * :argument when it's not reassigned
     # * :static_parameter (these can't be reassigned)
-    defined_but_not_assigned = binfo.is_always_defined && binfo.n_assigned == 0
+    defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
     # For now, we box almost everything but later we'll want to do dominance
     # analysis on the untyped IR.
     return binfo.is_captured && !defined_but_not_assigned
@@ -317,8 +316,7 @@ end
 
 # Is captured in the closure's `self` argument
 function is_self_captured(ctx, x)
-    lbinfo = lookup_lambda_binding(ctx, x)
-    !isnothing(lbinfo) && lbinfo.is_captured
+    get(ctx.lambda_bindings.locals_capt, _binding_id(x), false)
 end
 
 # Map the children of `ex` through _convert_closures, lifting any toplevel

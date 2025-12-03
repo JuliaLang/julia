@@ -26,7 +26,7 @@ end
 16  SourceLocation::3:14
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(!read) slot₂/y slot₃/x(!read)]
+    slots: [slot₁/#self#(!read) slot₂/y slot₃/x(!read,maybe_undef)]
     1   TestMod.+
     2   (call core.getfield slot₁/#self# :x)
     3   (call core.isdefined %₂ :contents)
@@ -130,7 +130,7 @@ end
 18  SourceLocation::1:10
 19  (call core.svec %₁₆ %₁₇ %₁₈)
 20  --- method core.nothing %₁₉
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/g(called) slot₄/x(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read,maybe_undef)]
     1   (= slot₂/x (call core.Box slot₂/x))
     2   TestMod.#f#g##0
     3   (new %₂ slot₂/x)
@@ -170,7 +170,7 @@ end
 10  SourceLocation::2:14
 11  (call core.svec %₈ %₉ %₁₀)
 12  --- method core.nothing %₁₁
-    slots: [slot₁/#self#(!read) slot₂/y(!read)]
+    slots: [slot₁/#self#(!read) slot₂/y(!read,single_assign)]
     1   (call core.getfield slot₁/#self# :x)
     2   (= slot₂/y %₁)
     3   (return %₁)
@@ -182,7 +182,7 @@ end
 18  SourceLocation::1:10
 19  (call core.svec %₁₆ %₁₇ %₁₈)
 20  --- method core.nothing %₁₉
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/g slot₄/z(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/g(single_assign) slot₄/z(!read,single_assign)]
     1   TestMod.#f#g##1
     2   (call core.typeof slot₂/x)
     3   (call core.apply_type %₁ %₂)
@@ -215,7 +215,7 @@ end
 10  SourceLocation::2:14
 11  (call core.svec %₈ %₉ %₁₀)
 12  --- method core.nothing %₁₁
-    slots: [slot₁/#self#(!read) slot₂/T(!read)]
+    slots: [slot₁/#self#(!read) slot₂/T(!read,maybe_undef)]
     1   TestMod.use
     2   (call core.getfield slot₁/#self# :T)
     3   (call core.isdefined %₂ :contents)
@@ -237,7 +237,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₈ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/g]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/g(single_assign)]
     1   TestMod.#f#g##2
     2   static_parameter₁
     3   (new %₁ %₂)
@@ -274,7 +274,7 @@ end
 10  SourceLocation::2:14
 11  (call core.svec %₈ %₉ %₁₀)
 12  --- method core.nothing %₁₁
-    slots: [slot₁/#self#(!read) slot₂/z]
+    slots: [slot₁/#self#(!read) slot₂/z(single_assign)]
     1   (= slot₂/z 3)
     2   (call core.getfield slot₁/#self# :y)
     3   (call core.isdefined %₂ :contents)
@@ -289,7 +289,7 @@ end
 18  SourceLocation::1:10
 19  (call core.svec %₁₆ %₁₇ %₁₈)
 20  --- method core.nothing %₁₉
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/g slot₄/y]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/g(single_assign) slot₄/y(single_assign)]
     1   (= slot₄/y (call core.Box))
     2   TestMod.#f#g##3
     3   (call core.typeof slot₂/x)
@@ -320,7 +320,7 @@ function f_nest(x)
     end
 end
 #---------------------
-slots: [slot₁/#self#(!read) slot₂/y(!read) slot₃/h_nest]
+slots: [slot₁/#self#(!read) slot₂/y slot₃/h_nest(single_assign)]
 1   TestMod.#f_nest#g_nest#h_nest##0
 2   (call core.getfield slot₁/#self# :x)
 3   (call core.typeof %₂)
@@ -354,7 +354,7 @@ end
 11  SourceLocation::3:14
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
     1   TestMod.+
     2   (captured_local 1)
     3   (call core.isdefined %₂ :contents)
@@ -465,7 +465,7 @@ end
 LoweringError:
 function f(::g) where {g}
     function g()
-#            ╙ ── local variable name `g` conflicts with a static parameter
+#            ╙ ── cannot overwrite a static parameter
     end
 end
 
@@ -483,7 +483,7 @@ end
 6   (call core.apply_type core.Tuple core.Any %₅)
 7   (call core.apply_type core.Union)
 8   --- opaque_closure_method  core.nothing 2 false SourceLocation::2:31
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/z slot₄/y(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/z slot₄/y(!read,maybe_undef)]
     1   TestMod.-
     2   TestMod.+
     3   TestMod.*
@@ -554,7 +554,7 @@ end
 15  SourceLocation::2:14
 16  (call core.svec %₁₃ %₁₄ %₁₅)
 17  --- method core.nothing %₁₆
-    slots: [slot₁/#self#(!read) slot₂/recursive_b(!read)]
+    slots: [slot₁/#self#(!read) slot₂/recursive_b(!read,maybe_undef)]
     1   (call core.getfield slot₁/#self# :recursive_b)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -580,7 +580,7 @@ end
 31  SourceLocation::5:14
 32  (call core.svec %₂₉ %₃₀ %₃₁)
 33  --- method core.nothing %₃₂
-    slots: [slot₁/#self#(!read) slot₂/recursive_a(!read)]
+    slots: [slot₁/#self#(!read) slot₂/recursive_a(!read,maybe_undef)]
     1   (call core.getfield slot₁/#self# :recursive_a)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -638,7 +638,7 @@ end
 28  SourceLocation::2:14
 29  (call core.svec %₂₆ %₂₇ %₂₈)
 30  --- method core.nothing %₂₉
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self#(!read) slot₄/y(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self# slot₄/y(!read,maybe_undef)]
     1   (meta :nkw 1)
     2   TestMod.+
     3   (call core.getfield slot₁/#self# :y)
@@ -658,7 +658,7 @@ end
 36  SourceLocation::2:14
 37  (call core.svec %₃₄ %₃₅ %₃₆)
 38  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/#f_kw_closure#0(!read)]
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/#f_kw_closure#0(!read,maybe_undef)]
     1   (newvar slot₅/x)
     2   (call core.isdefined slot₂/kws :x)
     3   (gotoifnot %₂ label₁₄)
@@ -702,7 +702,7 @@ end
 47  SourceLocation::2:14
 48  (call core.svec %₄₅ %₄₆ %₄₇)
 49  --- method core.nothing %₄₈
-    slots: [slot₁/#self# slot₂/#f_kw_closure#0(!read)]
+    slots: [slot₁/#self# slot₂/#f_kw_closure#0(!read,maybe_undef)]
     1   (call core.getfield slot₁/#self# :#f_kw_closure#0)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -729,7 +729,7 @@ let T=Blah
     x
 end
 #---------------------
-slots: [slot₁/#self#(!read) slot₂/T(!read) slot₃/tmp(!read)]
+slots: [slot₁/#self#(!read) slot₂/T(!read,maybe_undef) slot₃/tmp(!read)]
 1   2.0
 2   (call core.getfield slot₁/#self# :x)
 3   (call core.getfield slot₁/#self# :T)
