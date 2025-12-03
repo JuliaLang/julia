@@ -1210,6 +1210,17 @@ void jl_init_tasks(void) JL_GC_DISABLED
 static void NOINLINE JL_NORETURN _start_task(void);
 #endif
 
+static void NOINLINE _handle_start_task_cancellation(jl_value_t *creq)
+{
+    jl_value_t *cancel_handler = jl_get_global(jl_base_module, jl_symbol("handle_cancellation!"));
+    if (!cancel_handler) {
+        jl_safe_printf("Task cancellation requested but Base.handle_cancellation! is not defined\n");
+        jl_exit(1);
+    }
+    jl_value_t *fargs[2] = { cancel_handler, creq };
+    jl_apply(fargs, 2);
+}
+
 static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
 {
 CFI_NORETURN
@@ -1270,6 +1281,12 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT, ROOT);
+            for (;;) {
+                jl_value_t *creq = jl_atomic_load_relaxed(&ct->cancellation_request);
+                if (creq == jl_nothing)
+                    break;
+                _handle_start_task_cancellation(creq);
+            }
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
@@ -1663,6 +1680,13 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
     return t->threadpoolid;
 }
 
+JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid)
+{
+    jl_task_t *task = jl_atomic_load_relaxed(&jl_all_tls_states[tid]->current_task);
+    jl_value_t *expected = jl_nothing;
+    // If the task is already being cancelled, that's good enough for preemption
+    jl_atomic_cmpswap(&task->cancellation_request, &expected, jl_box_uint8(0x5));
+}
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_)

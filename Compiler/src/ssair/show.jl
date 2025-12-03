@@ -1062,7 +1062,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     finish_show_ir(io, uncompacted_cfg, config)
 end
 
-function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
+function effectbits_letter(effects::Effects, name::Symbol, suffix::Union{Char, String})
     ft = fieldtype(Effects, name)
     if ft === UInt8
         prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
@@ -1093,6 +1093,8 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :consistent,  'c'); color=effectbits_color(e, :consistent))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :effect_free, 'e'); color=effectbits_color(e, :effect_free))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :reset_safe, "re"); color=effectbits_color(e, :reset_safe))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :nothrow,     'n'); color=effectbits_color(e, :nothrow))
     print(io, ',')

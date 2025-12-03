@@ -145,9 +145,11 @@ end
 
 # task states
 
-const task_state_runnable = UInt8(0)
-const task_state_done     = UInt8(1)
-const task_state_failed   = UInt8(2)
+const task_state_runnable  = UInt8(0)
+const task_state_done      = UInt8(1)
+const task_state_failed    = UInt8(2)
+# like _failed, but allows schedule to succeed
+const task_state_cancelled = UInt8(3)
 
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
@@ -159,6 +161,8 @@ const task_state_failed   = UInt8(2)
             return :done
         elseif st === task_state_failed
             return :failed
+        elseif st === task_state_cancelled
+            return :cancelled
         else
             @assert false
         end
@@ -250,7 +254,10 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = ((@atomic :acquire t._state) === task_state_failed)
+function istaskfailed(t::Task)
+    state = (@atomic :acquire t._state)
+    return state === task_state_failed || state === task_state_cancelled
+end
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
@@ -309,7 +316,7 @@ function _wait(t::Task; expected_cancellation = nothing)
         lock(donenotify)
         try
             while !istaskdone(t) && cancellation_request() === expected_cancellation
-                wait(donenotify; cancel_check=false)
+                wait(donenotify; waitee=t)
             end
         finally
             unlock(donenotify)
@@ -317,6 +324,7 @@ function _wait(t::Task; expected_cancellation = nothing)
     end
     nothing
 end
+cancel_wait!(waitee::Task, waiter::Task) = cancel_wait!(waitee.donenotify, waiter, nothing; waitee)
 
 # have `waiter` wait for `t`
 function _wait2(t::Task, waiter::Task)
@@ -973,7 +981,17 @@ const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprec
 workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
-    (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    state = t._state
+    if state === task_state_cancelled
+        # When canelled, we allow `enq_work`, but simply transition to failed state.
+        # All other task cleanup is already done.
+        state = (@atomicreplace t._state task_state_cancelled => task_state_failed).old
+        # Catch double `schedule` calls on cancelled tasks.
+        state === task_state_cancelled && return
+    end
+    if !(state === task_state_runnable && t.queue === nothing)
+        error("schedule: Task not runnable")
+    end
     _enq_work(t)
 end
 
@@ -1066,18 +1084,19 @@ true
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
-    t._state === task_state_runnable || Base.error("schedule: Task not runnable")
-    if error
-        q = t.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
-        setfield!(t, :result, arg)
-        setfield!(t, :_isexception, true)
-    else
-        t.queue === nothing || Base.error("schedule: Task not runnable")
-        setfield!(t, :result, arg)
+    state = t._state
+    if t._state === task_state_runnable
+        if error
+            q = t.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
+            setfield!(t, :result, arg)
+            setfield!(t, :_isexception, true)
+        else
+            t.queue === nothing || Base.error("schedule: Task not runnable")
+            setfield!(t, :result, arg)
+        end
     end
     # [task] created -scheduled-> wait_time
-    maybe_record_enqueued!(t)
-    enq_work(t)
+    schedule(t)
     return t
 end
 
@@ -1365,6 +1384,17 @@ internal tasks. Such tasks will be frozen and become unschedulable in the future
 """
 const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 
+"""
+	CANCEL_REQUEST_YIELD
+
+Request that the task yield to the scheduler at the next cancellation point to
+allow another task to run its cancellation propagation logic. The cancelled task
+itself will reset to ordinary operation before yielding, but may of course be
+canceled by said other task before it resumes operation.
+"""
+const CANCEL_REQUEST_YIELD = CancellationRequest(0x5)
+
+
 function Base.showerror(io::IO, cr::CancellationRequest)
     print(io, "CancellationRequest: ")
     if cr === CANCEL_REQUEST_SAFE
@@ -1379,6 +1409,18 @@ function conform_cancellation_request(@nospecialize(cr))
         return CancellationRequest(cr)
     end
     return cr
+end
+
+# This is the slow path of @cancel_check
+@noinline function handle_cancellation!(@nospecialize(_req))
+    req = conform_cancellation_request(_req)
+    if req === CANCEL_REQUEST_YIELD
+        @atomicreplace :sequentially_consistent :monotonic current_task().cancellation_request _req => nothing
+        yield()
+        req = cancellation_request()
+    end
+    req === nothing && return
+    throw(req)
 end
 
 """
@@ -1407,11 +1449,54 @@ when a cancellation is requested.
 Core.cancellation_point!
 
 function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
+    # TODO: Raise task priority
     @atomic :release t.cancellation_request = crequest
+    # TODO: SYS_membarrier() ?
+    # Special case: If the task hasn't started yet at this point, we want to set
+    # it up to cancel any waits, but we need to be a bit careful with concurrent
+    # starts of the task.
+    if !istaskstarted(t)
+        t.result = crequest
+        t._isexception = true
+        if (@atomicreplace :sequentially_consistent :monotonic t._state task_state_runnable => task_state_cancelled).success
+            lock(t.donenotify)
+            notify(t.donenotify)
+            unlock(t.donenotify)
+        end
+        return
+    end
     while !istaskdone(t)
         waitee = t.queue
         waitee === nothing && (yield(); continue)
         invokelatest(cancel_wait!, waitee, t) && break
+    end
+    if t.sticky
+        # If this task is sticky, it won't be able to run if the task currently
+        # running on its thread is blocking. Use the cancellation mechanism to
+        # try and pre-empt that task.
+        # N.B.: This is a best-effort attempt; the task we end up with may get
+        # descheduled before we get around to cancelling it. However, that's
+        # fine - it's not a correctness issue to deschedule the task. The
+        # important thing is that the thread re-enter the scheduler to pick up
+        # our cancelled task.
+        # In the future, we may want to use the same mechanism for more general
+        # pre-emption, but this helps avoid situations where tasks that have
+        # cancellation points, but no yield points become uncancellable.
+        tid = Threads.threadid(t)
+        if tid != 0
+            ccall(:jl_preempt_thread_task, Cvoid, (Int16,), (tid - 1) % Int16)
+        end
+    end
+end
+
+function cancel_wait!(q::StickyWorkqueue, t::Task)
+    # Tasks in the workqueue are runnable - we do not cancel the wait,
+    # but we do need to check whether it's in there
+    lock(q.lock)
+    try
+        return (t in q.queue)
+    finally
+        unlock(q.lock)
     end
 end
 

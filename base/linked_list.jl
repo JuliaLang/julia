@@ -9,8 +9,9 @@ end
 
 struct ILLRef{T}
     list::IntrusiveLinkedList{T}
-    waitee::Any # Invariant: waitqueue(waitee) === list
+    waitee::Any # Invariant: waitqueue(waitee).list === list
 end
+ILLRef(ref::ILLRef, @nospecialize(waitee)) = typeof(ref)(ref.list, waitee)
 waitqueue(list::IntrusiveLinkedList{T}) where {T} = ILLRef(list, list)
 
 #const list_append!! = append!
@@ -126,6 +127,17 @@ function list_deletefirst!(qr::ILLRef{T}, val::T) where T
     val.next = nothing
     val.queue = nothing
     return q
+end
+
+function in(val::T, list::IntrusiveLinkedList{T}) where T
+    head = list.head
+    while head !== nothing
+        if val === head
+            return true
+        end
+        head = head.next
+    end
+    return false
 end
 
 # TODO: Delete this compatibility wrapper

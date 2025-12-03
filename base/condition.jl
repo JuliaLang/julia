@@ -82,13 +82,13 @@ islocked(c::GenericCondition) = islocked(c.lock)
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
 # have waiter wait for c
-function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
+function _wait2(c::GenericCondition, waiter::Task, waitee=c, first::Bool=false)
     ct = current_task()
     assert_havelock(c)
     if first
-        pushfirst!(waitqueue(c), waiter)
+        pushfirst!(ILLRef(waitqueue(c), waitee), waiter)
     else
-        push!(waitqueue(c), waiter)
+        push!(ILLRef(waitqueue(c), waitee), waiter)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
@@ -130,9 +130,7 @@ function wait end
 macro cancel_check()
     quote
         local req = Core.cancellation_point!()
-        if req !== nothing
-            throw(conform_cancellation_request(req))
-        end
+        req !== nothing && handle_cancellation!(req)
     end
 end
 
@@ -144,9 +142,9 @@ Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notif
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
 """
-function wait(c::GenericCondition; first::Bool=false, cancel_check::Bool=true)
+function wait(c::GenericCondition; first::Bool=false, waitee=c)
     ct = current_task()
-    _wait2(c, ct, first)
+    _wait2(c, ct, waitee, first)
     token = unlockall(c.lock)
     try
         return wait()
@@ -156,18 +154,30 @@ function wait(c::GenericCondition; first::Bool=false, cancel_check::Bool=true)
     finally
         relockall(c.lock, token)
     end
-    cancel_check && @cancel_check()
 end
 
-function cancel_wait!(c::GenericCondition, t::Task)
+function cancel_wait!(c::GenericCondition, t::Task; waitee = c)
     @assert (@atomic :monotonic t.cancellation_request) !== nothing
     lock(c)
-    if t.queue !== c
+    if t.queue !== waitee
         unlock(c)
         return false
     end
-    Base.list_deletefirst!(waitqueue(c), t)
-    enq_work(t)
+    Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
+    schedule(t, conform_cancellation_request(t.cancellation_request), error=true)
+    unlock(c)
+    return true
+end
+
+function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(val); waitee=c)
+    @assert (@atomic :monotonic t.cancellation_request) !== nothing
+    lock(c)
+    if t.queue !== waitee
+        unlock(c)
+        return false
+    end
+    Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
+    schedule(t, val)
     unlock(c)
     return true
 end

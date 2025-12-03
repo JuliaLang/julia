@@ -646,7 +646,7 @@ millisecond.
 """
 function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     ct = current_task()
-    Base._wait2(c, ct, first)
+    Base._wait2(c, ct, c, first)
     token = Base.unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing

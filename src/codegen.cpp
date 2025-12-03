@@ -4969,7 +4969,7 @@ isdefined_unknown_idx:
 
         // 2. Check if cr == NULL || cr == jl_nothing
         Value *is_null = ctx.builder.CreateIsNull(cr_relaxed);
-        Value *nothing_val = literal_pointer_val(ctx, jl_nothing);
+        Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
         Value *is_nothing = ctx.builder.CreateICmpEQ(decay_derived(ctx, cr_relaxed), decay_derived(ctx, nothing_val));
         Value *no_cancel = ctx.builder.CreateOr(is_null, is_nothing);
 

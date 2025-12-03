@@ -183,7 +183,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
                 set = t.set
                 if !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
                     iolock_end()
-                    set = wait(t.cond)
+                    set = wait(t.cond; waitee=t)
                     unlock(t.cond)
                     iolock_begin()
                     lock(t.cond)
@@ -192,7 +192,6 @@ function _trywait(t::Union{Timer, AsyncCondition})
                 unlock(t.cond)
                 unpreserve_handle(t)
             end
-            @cancel_check()
         end
         iolock_end()
     end
@@ -200,8 +199,13 @@ function _trywait(t::Union{Timer, AsyncCondition})
     return set
 end
 
+cancel_wait!(t::Union{Timer, AsyncCondition}, task::Task) =
+    cancel_wait!(t.cond, task, false; waitee=t)
+
 function wait(t::Union{Timer, AsyncCondition})
-    _trywait(t) || throw(EOFError())
+    ok = _trywait(t)
+    @cancel_check
+    ok || throw(EOFError())
     nothing
 end
 
