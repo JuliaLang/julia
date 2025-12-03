@@ -18,7 +18,7 @@
 function _apply_nospecialize(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
-        setmeta(ex; nospecialize=true)
+        setmeta(ex, :nospecialize, true)
     elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
         # The @nospecialize macro is responsible for converting K"=" to K"kw".
         # Desugaring uses this helper internally, so we may see K"kw" too.

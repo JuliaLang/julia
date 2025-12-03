@@ -126,48 +126,53 @@ function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals::SyntaxL
     append!(ids, vals.ids)
 end
 
-function makeleaf(graph::SyntaxGraph, srcref, proto; attrs...)
+# TODO: "proto", if SyntaxTree, is rarely different from srcref. reorganize to:
+# newnode/newleaf(ctx, srcref, k::Kind[, attrs])
+# makenode/makeleaf(ctx, old::SyntaxTree[, attrs])
+
+function makeleaf(graph::SyntaxGraph, srcref, proto::Union{Kind, SyntaxTree})
     id = newnode!(graph)
     ex = SyntaxTree(graph, id)
     copy_attrs!(ex, proto, true)
-    setattr!(graph, id; source=_unpack_srcref(graph, srcref), attrs...)
+    ex.source = _unpack_srcref(graph, srcref)
     return ex
 end
 
-function _makenode(graph::SyntaxGraph, srcref, proto, children; attrs...)
-    id = newnode!(graph)
-    setchildren!(graph, id, children)
-    ex = SyntaxTree(graph, id)
-    copy_attrs!(ex, proto, true)
-    setattr!(graph, id; source=_unpack_srcref(graph, srcref), attrs...)
-    return SyntaxTree(graph, id)
-end
-function _makenode(ctx, srcref, proto, children; attrs...)
-    _makenode(syntax_graph(ctx), srcref, proto, children; attrs...)
+function makeleaf(ctx::AbstractLoweringContext, srcref, proto)
+    makeleaf(syntax_graph(ctx), srcref, proto)
 end
 
-function makenode(ctx, srcref, proto, children...; attrs...)
-    _makenode(ctx, srcref, proto, _node_ids(syntax_graph(ctx), children...); attrs...)
-end
-
-function makeleaf(ctx, srcref, proto; kws...)
-    makeleaf(syntax_graph(ctx), srcref, proto; kws...)
-end
-
-function makeleaf(ctx, srcref, k::Kind, value; kws...)
+function makeleaf(ctx, srcref, proto, @nospecialize(attrs::AbstractVector))
     graph = syntax_graph(ctx)
+    ex = makeleaf(graph, srcref, proto)
+    for (k, v) in attrs
+        setattr!(graph, ex._id, k, v)
+    end
+    return ex
+end
+
+function makenode(ctx, srcref, proto, children, attrs=nothing)
+    graph = syntax_graph(ctx)
+    ex = isnothing(attrs) ? makeleaf(graph, srcref, proto) :
+        makeleaf(graph, srcref, proto, attrs)
+    setchildren!(graph, ex._id, children isa SyntaxList ? children.ids : children)
+    return ex
+end
+
+function newleaf(ctx, srcref, k::Kind, @nospecialize(value))
+    leaf = makeleaf(ctx, srcref, k)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
             k == K"globalref" || k == K"Placeholder" ||
             k == K"StrMacroName" || k == K"CmdMacroName"
-        makeleaf(graph, srcref, k; name_val=value, kws...)
+        setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k == K"BindingId"
-        makeleaf(graph, srcref, k; var_id=value, kws...)
+        setattr!(leaf._graph, leaf._id, :var_id, value)
     elseif k == K"label"
-        makeleaf(graph, srcref, k; id=value, kws...)
+        setattr!(leaf._graph, leaf._id, :id, value)
     elseif k == K"symbolic_label"
-        makeleaf(graph, srcref, k; name_val=value, kws...)
+        setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel"
-        makeleaf(graph, srcref, k; kws...)
+        # no attributes
     else
         val = k == K"Integer" ? convert(Int,     value) :
               k == K"Float"   ? convert(Float64, value) :
@@ -177,8 +182,9 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
               k == K"Bool"    ? value                   :
               k == K"VERSION" ? value                   :
               error("Unexpected leaf kind `$k`")
-        makeleaf(graph, srcref, k; value=val, kws...)
+        setattr!(leaf._graph, leaf._id, :value, val)
     end
+    leaf
 end
 
 # TODO: Replace this with makeleaf variant?
@@ -192,7 +198,7 @@ end
 
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
-core_ref(ctx, ex, name) = makeleaf(ctx, ex, K"core", name)
+core_ref(ctx, ex, name) = newleaf(ctx, ex, K"core", name)
 svec_type(ctx, ex) = core_ref(ctx, ex, "svec")
 nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
 
@@ -202,7 +208,7 @@ top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 # Return (variable, assignment_node)
 function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var = ssavar(ctx, ex, name)
-    assign_var = makenode(ctx, ex, K"=", var, ex)
+    assign_var = makenode(ctx, ex, K"=", NodeId[var._id, ex._id])
     var, assign_var
 end
 
@@ -211,7 +217,7 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, makenode(ctx, ex, K"=", var, ex))
+    push!(stmts, makenode(ctx, ex, K"=", NodeId[var._id, ex._id]))
     var
 end
 
@@ -225,31 +231,38 @@ function _match_srcref(ex)
     end
 end
 
-function _match_kind(f::Function, srcref, ex)
+function _kw_to_pair(ex)
+    if ex isa Expr && ex.head === :kw && ex.args[1] isa Symbol
+        (QuoteNode(ex.args[1]), esc(ex.args[2]))
+    elseif ex isa Symbol
+        (QuoteNode(ex), esc(ex))
+    else
+        @assert false "invalid keyword form in @ast $ex"
+    end
+end
+
+function _match_kind(srcref, ex)
     kws = []
     if Meta.isexpr(ex, :call)
         kind = esc(ex.args[1])
         args = ex.args[2:end]
         if Meta.isexpr(args[1], :parameters)
-            kws = map(esc, args[1].args)
+            kws = map(_kw_to_pair, args[1].args)
             popfirst!(args)
         end
         while length(args) >= 1 && Meta.isexpr(args[end], :kw)
-            pushfirst!(kws, esc(pop!(args)))
+            pushfirst!(kws, _kw_to_pair(pop!(args)))
         end
         if length(args) == 1
             srcref_tmp = gensym("srcref")
-            return quote
-                $srcref_tmp = $(_match_srcref(args[1]))
-                $(f(kind, srcref_tmp, kws))
-            end
+            return (kind, _match_srcref(args[1]), kws)
         elseif length(args) > 1
             error("Unexpected: extra srcref argument in `$ex`?")
         end
     else
         kind = esc(ex)
     end
-    f(kind, srcref, kws)
+    return (kind, srcref, kws)
 end
 
 function _expand_ast_tree(ctx, srcref, tree)
@@ -262,8 +275,12 @@ function _expand_ast_tree(ctx, srcref, tree)
             val = nothing
             kindspec = tree.args[1]
         end
-        _match_kind(srcref, kindspec) do kind, srcref, kws
-            :(makeleaf($ctx, $srcref, $kind, $(val), $(kws...)))
+        let (kind, srcref, kws) = _match_kind(srcref, kindspec)
+            n = :(newleaf($ctx, $srcref, $kind, $val))
+            for (attr, val) in kws
+                n = :(setattr!($n, $attr, $val))
+            end
+            n
         end
     elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
         # Leaf node with copied attributes
@@ -292,8 +309,12 @@ function _expand_ast_tree(ctx, srcref, tree)
             end
         end
         push!(child_stmts, :(child_ids))
-        _match_kind(srcref, flatargs[1]) do kind, srcref, kws
-            :(_makenode($ctx, $srcref, $kind, $children_ex; $(kws...)))
+        let (kind, srcref, kws) = _match_kind(srcref, flatargs[1])
+            n = :(makenode($ctx, $srcref, $kind, $children_ex))
+            for (attr, val) in kws
+                n = :(setattr!($n, $attr, $val))
+            end
+            n
         end
     elseif Meta.isexpr(tree, :(:=))
         lhs = tree.args[1]
@@ -389,17 +410,17 @@ end
 
 function copy_attrs!(dest, head::Union{Kind,JuliaSyntax.SyntaxHead}, all=false)
     if all
-        sethead!(dest._graph, dest._id, head)
+        setattr!(dest._graph, dest._id, :kind, kind(head))
+        !(head isa Kind) && setattr!(dest._graph, dest._id, :syntax_flags, flags(head))
     end
 end
 
-function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function;
-                     extra_attrs...)
+function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function)
     if is_leaf(ex)
         return ex
     end
     orig_children = children(ex)
-    cs = isempty(extra_attrs) ? nothing : SyntaxList(ctx)
+    cs = nothing
     for (i,e) in enumerate(orig_children)
         newchild = do_map_child(i) ? f(e) : e
         if isnothing(cs)
@@ -418,14 +439,12 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function;
         return ex
     end
     cs::SyntaxList
-    ex2 = makenode(ctx, ex, head(ex), cs)
-    copy_attrs!(ex2, ex)
-    setattr!(ex2; extra_attrs...)
+    ex2 = makenode(ctx, ex, ex, cs)
     return ex2
 end
 
-function mapchildren(f::Function, ctx, ex::SyntaxTree, mapped_children::AbstractVector{<:Integer};
-                     extra_attrs...)
+function mapchildren(f::Function, ctx, ex::SyntaxTree,
+                     mapped_children::AbstractVector{<:Integer})
     j = Ref(firstindex(mapped_children))
     function do_map_child(i)
         ind = j[]
@@ -436,11 +455,11 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree, mapped_children::Abstract
             false
         end
     end
-    mapchildren(f, ctx, ex, do_map_child; extra_attrs...)
+    mapchildren(f, ctx, ex, do_map_child)
 end
 
-function mapchildren(f::Function, ctx, ex::SyntaxTree; extra_attrs...)
-    mapchildren(f, ctx, ex, i->true; extra_attrs...)
+function mapchildren(f::Function, ctx, ex::SyntaxTree)
+    mapchildren(f, ctx, ex, i->true)
 end
 
 
@@ -477,7 +496,7 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
         src1
     end
     copy_attrs!(SyntaxTree(graph2, id2), SyntaxTree(graph1, id1), true)
-    setattr!(graph2, id2; source=src2)
+    setattr!(graph2, id2, :source, src2)
     if !is_leaf(graph1, id1)
         cs = NodeId[]
         for cid in children(graph1, id1)
@@ -491,20 +510,19 @@ end
 #-------------------------------------------------------------------------------
 function set_scope_layer(ctx, ex, layer_id, force)
     k = kind(ex)
-    scope_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
-    if k == K"module" || k == K"toplevel" || k == K"inert"
-        makenode(ctx, ex, ex, children(ex);
-                 scope_layer=scope_layer)
+    new_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
+
+    ex2 = if k == K"module" || k == K"toplevel" || k == K"inert"
+        makenode(ctx, ex, ex, children(ex))
     elseif k == K"."
-        makenode(ctx, ex, ex, set_scope_layer(ctx, ex[1], layer_id, force), ex[2],
-                 scope_layer=scope_layer)
+        children = NodeId[set_scope_layer(ctx, ex[1], layer_id, force), ex[2]]
+        makenode(ctx, ex, ex, children)
     elseif !is_leaf(ex)
-        mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex;
-                    scope_layer=scope_layer)
+        mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex)
     else
-        makeleaf(ctx, ex, ex;
-                 scope_layer=scope_layer)
+        makeleaf(ctx, ex, ex)
     end
+    setattr!(ex2, :scope_layer, new_layer)
 end
 
 """
@@ -513,7 +531,7 @@ end
 Copy `ex`, adopting the scope layer of `ref`.
 """
 function adopt_scope(ex::SyntaxTree, scope_layer::LayerId)
-    set_scope_layer(ex, ex, scope_layer, true)
+    set_scope_layer(ex._graph, ex, scope_layer, true)
 end
 
 function adopt_scope(ex::SyntaxTree, layer::ScopeLayer)
@@ -539,19 +557,17 @@ end
 # the middle of a pass.
 const CompileHints = Base.ImmutableDict{Symbol,Any}
 
-function setmeta!(ex::SyntaxTree; kws...)
-    @assert length(kws) == 1 # todo relax later ?
-    key = first(keys(kws))
-    value = first(values(kws))
+function setmeta!(ex::SyntaxTree, key::Symbol, @nospecialize(val))
     meta = begin
         m = get(ex, :meta, nothing)
-        isnothing(m) ? CompileHints(key, value) : CompileHints(m, key, value)
+        isnothing(m) ? CompileHints(key, val) : CompileHints(m, key, val)
     end
-    setattr!(ex; meta=meta)
+    setattr!(ex, :meta, meta)
     ex
 end
 
-setmeta(ex::SyntaxTree; kws...) = setmeta!(copy_node(ex); kws...)
+setmeta(ex::SyntaxTree, k::Symbol, @nospecialize(v)) =
+    setmeta!(copy_node(ex), k, v)
 
 function getmeta(ex::SyntaxTree, name::Symbol, default)
     meta = get(ex, :meta, nothing)

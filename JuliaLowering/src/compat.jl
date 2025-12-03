@@ -1,11 +1,14 @@
 const JS = JuliaSyntax
 
 function _insert_tree_node(graph::SyntaxGraph, k::Kind, src::SourceAttrType,
-                           flags::UInt16=0x0000; attrs...)
+                           attrs=[], flags::UInt16=0x0000)
     id = newnode!(graph)
-    sethead!(graph, id, k)
-    flags !== 0 && setflags!(graph, id, flags)
-    setattr!(graph, id; source=src, attrs...)
+    setattr!(graph, id, :kind, k)
+    flags !== 0 && setattr!(graph, id, :syntax_flags, flags)
+    setattr!(graph, id, :source, src)
+    for (k,v) in attrs
+        setattr!(graph, id, k, v)
+    end
     return id
 end
 
@@ -184,14 +187,14 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     #---------------------------------------------------------------------------
     # Non-expr types
     if isnothing(e)
-        st_id = _insert_tree_node(graph, K"core", src; name_val="nothing")
+        st_id = _insert_tree_node(graph, K"core", src, [:name_val=>"nothing"])
         return st_id, src
     elseif e isa LineNumberNode
         # A LineNumberNode in value position evaluates to nothing
-        st_id = _insert_tree_node(graph, K"core", src; name_val="nothing")
+        st_id = _insert_tree_node(graph, K"core", src, [:name_val=>"nothing"])
         return st_id, e
     elseif e isa Symbol
-        st_id = _insert_tree_node(graph, K"Identifier", src; name_val=String(e))
+        st_id = _insert_tree_node(graph, K"Identifier", src, [:name_val=>String(e)])
         return st_id, src
     elseif e isa QuoteNode
         if e.value isa Symbol
@@ -199,13 +202,13 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         elseif e.value isa Expr
             return _insert_convert_expr(Expr(:inert, e.value), graph, src)
         elseif e.value isa LineNumberNode
-            return _insert_tree_node(graph, K"Value", src; value=e.value), src
+            return _insert_tree_node(graph, K"Value", src, [:value=>e.value]), src
         else
             return _insert_convert_expr(e.value, graph, src)
         end
     elseif e isa String
         st_id = _insert_tree_node(graph, K"string", src)
-        id_inner = _insert_tree_node(graph, K"String", src; value=e)
+        id_inner = _insert_tree_node(graph, K"String", src, [:value=>e])
         setchildren!(graph, st_id, [id_inner])
         return st_id, src
     elseif !(e isa Expr)
@@ -214,7 +217,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         st_k = e isa Bool ? K"Bool" :
             e isa Integer ? K"Integer" :
             find_kind(string(typeof(e)))
-        st_id = _insert_tree_node(graph, isnothing(st_k) ? K"Value" : st_k, src; value=e)
+        st_id = _insert_tree_node(graph, isnothing(st_k) ? K"Value" : st_k, src, [:value=>e])
         return st_id, src
     end
 
@@ -497,7 +500,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         @assert e.args[1] isa Symbol
         @assert e.args[2] isa LayerId
         st_id, src = _insert_convert_expr(e.args[1], graph, src)
-        setattr!(graph, st_id, scope_layer=e.args[2])
+        setattr!(graph, st_id, :scope_layer, e.args[2])
         return st_id, src
     elseif e.head === :symbolicgoto || e.head === :symboliclabel
         @assert nargs === 1
@@ -576,7 +579,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         return nothing, src
     end
 
-    st_id = _insert_tree_node(graph, st_k, src, st_flags; st_attrs...)
+    st_id = _insert_tree_node(graph, st_k, src, collect(st_attrs), st_flags)
 
     # child_exprs === nothing means we want a leaf.  Note that setchildren! with
     # an empty list makes a node non-leaf.

@@ -63,9 +63,9 @@ function _interpolated_value(ctx::InterpolationContext, srcref, ex)
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
         # be used interchangeably in macros.
-        makeleaf(ctx, srcref, K"Identifier", string(ex))
+        newleaf(ctx, srcref, K"Identifier", string(ex))
     else
-        makeleaf(ctx, srcref, K"Value", ex)
+        newleaf(ctx, srcref, K"Value", ex)
     end
 end
 

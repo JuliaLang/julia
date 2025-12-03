@@ -143,7 +143,8 @@ function fixup_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
     if k == K"StrMacroName" || k == K"CmdMacroName"
         layerid = get(ex, :scope_layer, current_layer_id(ctx))
         newname = JuliaSyntax.lower_identifier_name(ex.name_val, k)
-        makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid, name_val=newname)
+        makeleaf(ctx, ex, ex, [:kind=>K"Identifier", :scope_layer=>layerid,
+                               :name_val=>newname])
     elseif k == K"macro_name"
         @chk numchildren(ex) === 1
         if kind(ex[1]) === K"."
@@ -151,7 +152,7 @@ function fixup_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
         else
             layerid = get(ex, :scope_layer, current_layer_id(ctx))
             newname = JuliaSyntax.lower_identifier_name(ex[1].name_val, K"macro_name")
-            makeleaf(ctx, ex[1], ex[1], kind=kind(ex[1]), name_val=newname)
+            makeleaf(ctx, ex[1], ex[1], [:kind=>kind(ex[1]), :name_val=>newname])
         end
     else
         mapchildren(e->fixup_macro_name(ctx,e), ctx, ex)
@@ -215,7 +216,7 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
     k = kind(ex)
     scope_layer = get(ex, :scope_layer, layer_ids[layer_idx])
     if is_leaf(ex)
-        makeleaf(ctx, ex, ex; scope_layer=scope_layer)
+        makeleaf(ctx, ex, ex, [:scope_layer=>scope_layer])
     else
         inner_layer_idx = layer_idx
         if k == K"escape"
@@ -229,8 +230,9 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
                 throw(MacroExpansionError(ex, "`escape` node in outer context"))
             end
         end
-        mapchildren(e->set_macro_arg_hygiene(ctx, e, layer_ids, inner_layer_idx),
-                    ctx, ex; scope_layer=scope_layer)
+        node = mapchildren(e->set_macro_arg_hygiene(
+            ctx, e, layer_ids, inner_layer_idx), ctx, ex)
+        setattr!(node, :scope_layer, scope_layer)
     end
 end
 
@@ -380,10 +382,10 @@ function append_sourceref(ctx, ex, secondary_prov)
     srcref = (ex, secondary_prov)
     if !is_leaf(ex)
         if kind(ex) == K"macrocall"
-            makenode(ctx, srcref, ex, children(ex)...)
+            makenode(ctx, srcref, ex, children(ex))
         else
-            makenode(ctx, srcref, ex,
-                     map(e->append_sourceref(ctx, e, secondary_prov), children(ex))...)
+            cs = map(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
+            makenode(ctx, srcref, ex, cs)
         end
     else
         makeleaf(ctx, srcref, ex)
@@ -429,7 +431,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         else
             k = all(==('_'), name_str) ? K"Placeholder" : K"Identifier"
             scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
-            makeleaf(ctx, ex, ex; kind=k, scope_layer)
+            makeleaf(ctx, ex, ex, [:kind=>k, :scope_layer=>scope_layer])
         end
     elseif k == K"StrMacroName" || k == K"CmdMacroName" || k == K"macro_name"
         # These can appear outside of a macrocall, e.g. in `import`
@@ -567,7 +569,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # TODO: Should every form get layerid systematically? Or only the ones
         # which expand_forms_2 needs?
         layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        mapchildren(e->expand_forms_1(ctx,e), ctx, ex; scope_layer=layerid)
+        setattr(mapchildren(e->expand_forms_1(ctx,e), ctx, ex),
+                :scope_layer, layerid)
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end

@@ -17,7 +17,7 @@ using .JuliaSyntax: sourcetext, set_numeric_flags
 using .JuliaLowering:
     SyntaxGraph, newnode!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
-    makenode, makeleaf, setattr!, sethead!,
+    makenode, makeleaf, setattr!,
     is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
     syntax_graph, Bindings, ScopeLayer, mapchildren
@@ -33,8 +33,8 @@ end
 
 function _source_node(graph, src)
     id = newnode!(graph)
-    sethead!(graph, id, K"None")
-    setattr!(graph, id, source=src)
+    setattr!(graph, id, :kind, K"None")
+    setattr!(graph, id, :source, src)
     SyntaxTree(graph, id)
 end
 

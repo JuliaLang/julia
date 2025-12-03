@@ -95,7 +95,7 @@ const JL = JuliaLowering
             end
             pre_st_flags = (JS.flags(st) & ~JS.INFIX_FLAG) | JS.PREFIX_CALL_FLAG
             JL.setchildren!(st._graph, st._id, pre_st_args)
-            JL.setflags!(st._graph, st._id, pre_st_flags)
+            JL.setattr!(st._graph, st._id, :syntax_flags, pre_st_flags)
         elseif JS.is_postfix_op_call(st) && (k === K"call" || k === K"dotcall")
             pre_st_args = JL.NodeId[st[end]._id]
             for c in st[1:end-1]
@@ -103,23 +103,23 @@ const JL = JuliaLowering
             end
             pre_st_flags = (JS.flags(st) & ~JS.POSTFIX_OP_FLAG) | JS.PREFIX_CALL_FLAG
             JL.setchildren!(st._graph, st._id, pre_st_args)
-            JL.setflags!(st._graph, st._id, pre_st_flags)
+            JL.setattr!(st._graph, st._id, :syntax_flags, pre_st_flags)
         elseif k in JS.KSet"tuple block macrocall"
-            JL.setflags!(st._graph, st._id, JS.flags(st) & ~JS.PARENS_FLAG)
+            JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.PARENS_FLAG)
         elseif k === K"toplevel"
-            JL.setflags!(st._graph, st._id, JS.flags(st) & ~JS.TOPLEVEL_SEMICOLONS_FLAG)
+            JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.TOPLEVEL_SEMICOLONS_FLAG)
         end
 
         if k in JS.KSet"tuple call dotcall macrocall vect curly braces <: >:"
-            JL.setflags!(st._graph, st._id, JS.flags(st) & ~JS.TRAILING_COMMA_FLAG)
+            JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.TRAILING_COMMA_FLAG)
         end
 
-        k === K"quote" && JL.setflags!(st._graph, st._id, JS.flags(st) & ~JS.COLON_QUOTE)
-        k === K"wrapper" && JL.sethead!(st._graph, st._id, K"block")
+        k === K"quote" && JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.COLON_QUOTE)
+        k === K"wrapper" && JL.setattr!(st._graph, st._id, :kind, K"block")
 
         # All ops are prefix ops in an expr.
         # Ignore trivia (shows up on some K"error"s)
-        JL.setflags!(st._graph, st._id, JS.flags(st) &
+        JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) &
             ~JS.PREFIX_OP_FLAG & ~JS.INFIX_FLAG & ~JS.TRIVIA_FLAG & ~JS.NON_TERMINAL_FLAG)
 
         for c in JS.children(st)
