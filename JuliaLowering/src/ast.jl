@@ -162,8 +162,7 @@ end
 function newleaf(ctx, srcref, k::Kind, @nospecialize(value))
     leaf = makeleaf(ctx, srcref, k)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
-            k == K"globalref" || k == K"Placeholder" ||
-            k == K"StrMacroName" || k == K"CmdMacroName"
+            k == K"globalref" || k == K"Placeholder"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k == K"BindingId"
         setattr!(leaf._graph, leaf._id, :var_id, value)
