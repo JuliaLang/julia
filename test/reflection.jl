@@ -193,7 +193,7 @@ let
         :TestModSub9475, :d7648, :eval, :f7648, :include])
     imported = Set(Symbol[:convert, :curmod_name, :curmod])
     usings_from_Test = Set(Symbol[
-        Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"), Symbol("@test_deprecated"),
+        Symbol("@inferred"), Symbol("@include_files"), Symbol("@test"), Symbol("@test_broken"), Symbol("@test_deprecated"),
         Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"), Symbol("@test_throws"),
         Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict, :GenericOrder,
         :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
