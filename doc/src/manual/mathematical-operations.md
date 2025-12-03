@@ -418,7 +418,7 @@ Julia applies the following order and associativity of operations, from highest 
 | Arrows         | (`← → ↔ ↚ ↛ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔`, etc.)                                                         | Right                      |
 | Control flow   | `?`                                                                                               | Right                      |
 | Pair           | `=>`                                                                                              | Right                      |
-| Assignments    | `= += -= −= *= /= //= \= ^= ÷= %= <<= >>= >>>= \|= &= ⊻= ~` (`≔ ⩴ ≕ :=`)                          | Right                      |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= \|= &= ⊻= ~` (`≔ ⩴ ≕ :=`)                             | Right                      |
 
 [^1]:
     Unary operators and juxtaposition of numeric literals *within the exponent* take precedence.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`.
