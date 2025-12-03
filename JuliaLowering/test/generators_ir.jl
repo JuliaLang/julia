@@ -37,7 +37,7 @@
 8   SourceLocation::1:2
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x slot₅/y]
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
     3   (= slot₃/iterstate (call core.getfield %₁ 2))
@@ -72,7 +72,7 @@
 8   SourceLocation::1:29
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x slot₅/y(!read)]
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
     3   (= slot₃/iterstate (call core.getfield %₁ 2))
@@ -136,7 +136,7 @@ LoweringError:
 8   SourceLocation::1:2
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x(!read) slot₅/y(!read)]
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x(!read,single_assign) slot₅/y(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
     3   (= slot₃/iterstate (call core.getfield %₁ 2))
@@ -206,7 +206,7 @@ LoweringError:
 12  SourceLocation::1:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method core.nothing %₁₃
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/x]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/x(single_assign)]
     1   slot₂/x
     2   (= slot₃/x %₁)
     3   slot₃/x
@@ -270,12 +270,12 @@ T[(x,y) for x in xs, y in ys]
 21  (call top.not_int %₂₀)
 22  (gotoifnot %₂₁ label₄₄)
 23  slot₄/y
-24  (= slot₆/y %₂₃)
+24  (= slot₅/y %₂₃)
 25  slot₂/next
-26  (= slot₅/x (call core.getfield %₂₅ 1))
+26  (= slot₆/x (call core.getfield %₂₅ 1))
 27  (call core.getfield %₂₅ 2)
-28  slot₅/x
-29  slot₆/y
+28  slot₆/x
+29  slot₅/y
 30  (call core.tuple %₂₈ %₂₉)
 31  (gotoifnot %₅ label₃₄)
 32  (call top.push! %₇ %₃₀)

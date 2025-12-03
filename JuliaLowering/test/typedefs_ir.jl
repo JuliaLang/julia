@@ -537,17 +537,17 @@ end
 #---------------------
 1   (call core.declare_global TestMod :X false)
 2   latestworld
-3   (= slot₂/U (call core.TypeVar :U))
+3   (= slot₃/U (call core.TypeVar :U))
 4   TestMod.S
 5   TestMod.T
-6   (= slot₃/V (call core.TypeVar :V %₄ %₅))
-7   slot₂/U
-8   slot₃/V
+6   (= slot₄/V (call core.TypeVar :V %₄ %₅))
+7   slot₃/U
+8   slot₄/V
 9   (call core.svec %₇ %₈)
 10  (call core.svec)
 11  (call core.svec)
 12  (call core._structtype TestMod :X %₉ %₁₀ %₁₁ false 0)
-13  (= slot₄/X %₁₂)
+13  (= slot₂/X %₁₂)
 14  TestMod.Z
 15  (call core._setsuper! %₁₂ %₁₄)
 16  (call core.isdefinedglobal TestMod :X false)
@@ -569,20 +569,20 @@ end
 32  (call top.getproperty %₃₁ :body)
 33  (call top.getproperty %₃₂ :parameters)
 34  (call top.indexed_iterate %₃₃ 1)
-35  (= slot₂/U (call core.getfield %₃₄ 1))
+35  (= slot₃/U (call core.getfield %₃₄ 1))
 36  (= slot₁/iterstate (call core.getfield %₃₄ 2))
 37  slot₁/iterstate
 38  (call top.indexed_iterate %₃₃ 2 %₃₇)
-39  (= slot₃/V (call core.getfield %₃₈ 1))
+39  (= slot₄/V (call core.getfield %₃₈ 1))
 40  (call core.svec)
 41  (call core._typebody! %₂₈ %₁₂ %₄₀)
 42  (call core.declare_const TestMod :X %₄₁)
 43  latestworld
-44  slot₂/U
-45  slot₃/V
+44  slot₃/U
+45  slot₄/V
 46  TestMod.X
-47  slot₂/U
-48  slot₃/V
+47  slot₃/U
+48  slot₄/V
 49  (call core.apply_type %₄₆ %₄₇ %₄₈)
 50  (call core.apply_type core.Type %₄₉)
 51  (call core.UnionAll %₄₅ %₅₀)
@@ -715,13 +715,13 @@ end
 #---------------------
 1   (call core.declare_global TestMod :X false)
 2   latestworld
-3   (= slot₁/U (call core.TypeVar :U))
-4   slot₁/U
+3   (= slot₂/U (call core.TypeVar :U))
+4   slot₂/U
 5   (call core.svec %₄)
 6   (call core.svec :x)
 7   (call core.svec)
 8   (call core._structtype TestMod :X %₅ %₆ %₇ false 1)
-9   (= slot₂/X %₈)
+9   (= slot₁/X %₈)
 10  (call core._setsuper! %₈ core.Any)
 11  (call core.isdefinedglobal TestMod :X false)
 12  (gotoifnot %₁₁ label₁₆)
@@ -741,15 +741,15 @@ end
 26  (call top.getproperty %₂₅ :body)
 27  (call top.getproperty %₂₆ :parameters)
 28  (call top.indexed_iterate %₂₇ 1)
-29  (= slot₁/U (call core.getfield %₂₈ 1))
-30  slot₁/U
+29  (= slot₂/U (call core.getfield %₂₈ 1))
+30  slot₂/U
 31  (call core.svec %₃₀)
 32  (call core._typebody! %₂₃ %₈ %₃₁)
 33  (call core.declare_const TestMod :X %₃₂)
 34  latestworld
-35  slot₁/U
+35  slot₂/U
 36  TestMod.X
-37  slot₁/U
+37  slot₂/U
 38  (call core.apply_type %₃₆ %₃₇)
 39  (call core.apply_type core.Type %₃₈)
 40  (call core.UnionAll %₃₅ %₃₉)
@@ -774,9 +774,9 @@ end
 46  latestworld
 47  TestMod.X
 48  (call core.apply_type core.Type %₄₇)
-49  slot₁/U
+49  slot₂/U
 50  (call core.svec %₄₈ %₄₉)
-51  slot₁/U
+51  slot₂/U
 52  (call core.svec %₅₁)
 53  SourceLocation::1:1
 54  (call core.svec %₅₀ %₅₂ %₅₃)
@@ -803,14 +803,14 @@ end
 4   TestMod.Vector
 5   slot₃/T
 6   (call core.apply_type %₄ %₅)
-7   (= slot₂/S (call core.TypeVar :S %₆))
+7   (= slot₄/S (call core.TypeVar :S %₆))
 8   slot₃/T
-9   slot₂/S
+9   slot₄/S
 10  (call core.svec %₈ %₉)
 11  (call core.svec :v)
 12  (call core.svec)
 13  (call core._structtype TestMod :X %₁₀ %₁₁ %₁₂ false 1)
-14  (= slot₄/X %₁₃)
+14  (= slot₂/X %₁₃)
 15  (call core._setsuper! %₁₃ core.Any)
 16  (call core.isdefinedglobal TestMod :X false)
 17  (gotoifnot %₁₆ label₂₁)
@@ -835,19 +835,19 @@ end
 36  (= slot₁/iterstate (call core.getfield %₃₄ 2))
 37  slot₁/iterstate
 38  (call top.indexed_iterate %₃₃ 2 %₃₇)
-39  (= slot₂/S (call core.getfield %₃₈ 1))
+39  (= slot₄/S (call core.getfield %₃₈ 1))
 40  TestMod.Vector
-41  slot₂/S
+41  slot₄/S
 42  (call core.apply_type %₄₀ %₄₁)
 43  (call core.svec %₄₂)
 44  (call core._typebody! %₂₈ %₁₃ %₄₃)
 45  (call core.declare_const TestMod :X %₄₄)
 46  latestworld
 47  slot₃/T
-48  slot₂/S
+48  slot₄/S
 49  TestMod.X
 50  slot₃/T
-51  slot₂/S
+51  slot₄/S
 52  (call core.apply_type %₄₉ %₅₀ %₅₁)
 53  (call core.apply_type core.Type %₅₂)
 54  (call core.UnionAll %₄₈ %₅₃)
@@ -874,11 +874,11 @@ end
 62  TestMod.X
 63  (call core.apply_type core.Type %₆₂)
 64  TestMod.Vector
-65  slot₂/S
+65  slot₄/S
 66  (call core.apply_type %₆₄ %₆₅)
 67  (call core.svec %₆₃ %₆₆)
 68  slot₃/T
-69  slot₂/S
+69  slot₄/S
 70  (call core.svec %₆₈ %₆₉)
 71  SourceLocation::1:1
 72  (call core.svec %₆₇ %₇₀ %₇₁)
@@ -960,7 +960,7 @@ end
 47  SourceLocation::4:5
 48  (call core.svec %₄₅ %₄₆ %₄₇)
 49  --- code_info
-    slots: [slot₁/#ctor-self#(!read) slot₂/f(!read)]
+    slots: [slot₁/#ctor-self#(!read) slot₂/f(!read,maybe_undef)]
     1   (captured_local 1)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -1039,15 +1039,15 @@ end
 1   (newvar slot₅/f)
 2   (call core.declare_global TestMod :X false)
 3   latestworld
-4   (= slot₂/S (call core.TypeVar :S))
-5   (= slot₃/T (call core.TypeVar :T))
-6   slot₂/S
-7   slot₃/T
+4   (= slot₃/S (call core.TypeVar :S))
+5   (= slot₄/T (call core.TypeVar :T))
+6   slot₃/S
+7   slot₄/T
 8   (call core.svec %₆ %₇)
 9   (call core.svec :x)
 10  (call core.svec)
 11  (call core._structtype TestMod :X %₈ %₉ %₁₀ false 1)
-12  (= slot₄/X %₁₁)
+12  (= slot₂/X %₁₁)
 13  (call core._setsuper! %₁₁ core.Any)
 14  (call core.isdefinedglobal TestMod :X false)
 15  (gotoifnot %₁₄ label₁₉)
@@ -1068,11 +1068,11 @@ end
 30  (call top.getproperty %₂₉ :body)
 31  (call top.getproperty %₃₀ :parameters)
 32  (call top.indexed_iterate %₃₁ 1)
-33  (= slot₂/S (call core.getfield %₃₂ 1))
+33  (= slot₃/S (call core.getfield %₃₂ 1))
 34  (= slot₁/iterstate (call core.getfield %₃₂ 2))
 35  slot₁/iterstate
 36  (call top.indexed_iterate %₃₁ 2 %₃₅)
-37  (= slot₃/T (call core.getfield %₃₆ 1))
+37  (= slot₄/T (call core.getfield %₃₆ 1))
 38  (call core.svec core.Any)
 39  (call core._typebody! %₂₆ %₁₁ %₃₈)
 40  (call core.declare_const TestMod :X %₃₉)
@@ -1193,13 +1193,13 @@ end
 #---------------------
 1   (call core.declare_global TestMod :X false)
 2   latestworld
-3   (= slot₁/T (call core.TypeVar :T))
-4   slot₁/T
+3   (= slot₂/T (call core.TypeVar :T))
+4   slot₂/T
 5   (call core.svec %₄)
 6   (call core.svec :x :y)
 7   (call core.svec)
 8   (call core._structtype TestMod :X %₅ %₆ %₇ false 2)
-9   (= slot₂/X %₈)
+9   (= slot₁/X %₈)
 10  (call core._setsuper! %₈ core.Any)
 11  (call core.isdefinedglobal TestMod :X false)
 12  (gotoifnot %₁₁ label₁₆)
@@ -1219,8 +1219,8 @@ end
 26  (call top.getproperty %₂₅ :body)
 27  (call top.getproperty %₂₆ :parameters)
 28  (call top.indexed_iterate %₂₇ 1)
-29  (= slot₁/T (call core.getfield %₂₈ 1))
-30  slot₁/T
+29  (= slot₂/T (call core.getfield %₂₈ 1))
+30  slot₂/T
 31  TestMod.A
 32  (call core.svec %₃₀ %₃₁)
 33  (call core._typebody! %₂₃ %₈ %₃₂)
