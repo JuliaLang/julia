@@ -445,8 +445,8 @@ suffixes include the Unicode combining  characters, along with the subscripts, s
 resulting operators can be used with either functional or infix notation, and have the same precedence and
 associativity as the base operator.  For example, `⋆̂ᵝ₁′` could be defined as a function, and used as an infix operator
 with the same precedence and associativity as `⋆` and `*`.  However, operators ending with a subscript or superscript
-letter should be followed by a space when used in infix notation to distinguish them from variable names that begin
-with a subscript or superscript letter.  For example, if `+ᵃ` is an operator, then `+ᵃx` should be written as `+ᵃ x`
+letter must be followed by a space when used in infix notation to distinguish them from variable names that begin
+with a subscript or superscript letter.  For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x`
 to distinguish it from `+ ᵃx`.
 
 You can also find the numerical precedence for any binary or ternary operator via the
