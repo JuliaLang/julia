@@ -6,7 +6,7 @@ function is_valid_ir_argument(ctx, ex)
     if is_simple_atom(ctx, ex) || k in KSet"inert top core quote static_eval"
         true
     elseif k == K"BindingId"
-        binfo = lookup_binding(ctx, ex)
+        binfo = get_binding(ctx, ex)
         bk = binfo.kind
         bk === :slot
         # TODO: We should theoretically be able to allow `bk ===
@@ -20,7 +20,7 @@ function is_valid_ir_argument(ctx, ex)
 end
 
 function is_ssa(ctx, ex)
-    kind(ex) == K"BindingId" && lookup_binding(ctx, ex).is_ssa
+    kind(ex) == K"BindingId" && get_binding(ctx, ex).is_ssa
 end
 
 # Target to jump to, including info on try handler nesting and catch block
@@ -101,7 +101,7 @@ function is_valid_body_ir_argument(ctx, ex)
     if is_valid_ir_argument(ctx, ex)
         true
     elseif kind(ex) == K"BindingId"
-        binfo = lookup_binding(ctx, ex)
+        binfo = get_binding(ctx, ex)
         # Arguments are always defined
         # TODO: use equiv of vinfo:never-undef when we have it
         binfo.kind == :argument
@@ -118,7 +118,7 @@ end
 
 function is_single_assign_var(ctx::LinearIRContext, ex)
     kind(ex) == K"BindingId" || return false
-    binfo = lookup_binding(ctx, ex)
+    binfo = get_binding(ctx, ex)
     # Arguments are always single-assign
     # TODO: Use equiv of vinfo:sa when we have it
     return binfo.kind == :argument
@@ -143,7 +143,7 @@ end
 
 function check_no_local_bindings(ctx, ex, msg)
     contains_nonglobal_binding = contains_unquoted(ex) do e
-        kind(e) == K"BindingId" && lookup_binding(ctx, e).kind !== :global
+        kind(e) == K"BindingId" && get_binding(ctx, e).kind !== :global
     end
     if contains_nonglobal_binding
         throw(LoweringError(ex, msg))
@@ -314,7 +314,7 @@ end
 # `op` may be either K"=" (where global assignments are converted to setglobal!)
 # or K"constdecl".  flisp: emit-assignment-or-setglobal
 function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
-    binfo = lookup_binding(ctx, lhs.var_id)
+    binfo = get_binding(ctx, lhs.var_id)
     if binfo.kind == :global
         emit(ctx, @ast ctx srcref [
             K"call"
@@ -614,7 +614,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif k == K"constdecl" && numchildren(ex) == 1
             # No RHS - make undefined constant
             mod, name = if kind(ex[1]) == K"BindingId"
-                binfo = lookup_binding(ctx, ex[1])
+                binfo = get_binding(ctx, ex[1])
                 binfo.mod, binfo.name
             else
                 @assert kind(ex[1]) == K"Value" && typeof(ex[1].value) === GlobalRef
@@ -903,7 +903,7 @@ function unnecessary_newvar_ids(ctx, stmts)
         k = kind(ex)
         if k == K"newvar"
             id = ex[1].var_id
-            if !lookup_binding(ctx, id).is_captured
+            if !get_binding(ctx, id).is_captured
                 push!(vars, id)
             end
         elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
@@ -969,7 +969,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
             makeleaf(ctx, ex, K"SSAValue", [:var_id=>ssa_rewrites[id]])
         else
             new_id = get(slot_rewrites, id, nothing)
-            binfo = lookup_binding(ctx, id)
+            binfo = get_binding(ctx, id)
             if !isnothing(new_id)
                 sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
                      binfo.kind == :static_parameter                 ? K"static_parameter" :
@@ -1071,7 +1071,7 @@ function compile_lambda(outer_ctx, ex)
         else
             @assert kind(arg) == K"BindingId"
             id = arg.var_id
-            binfo = lookup_binding(ctx, id)
+            binfo = get_binding(ctx, id)
             lbinfo = lookup_lambda_binding(ctx, id)
             @assert binfo.kind == :local || binfo.kind == :argument
             # FIXME: is_single_assign, is_maybe_undef
@@ -1083,7 +1083,7 @@ function compile_lambda(outer_ctx, ex)
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
     for (id, lbinfo) in sort(collect(pairs(lambda_bindings.bindings)), by=first)
         if !lbinfo.is_captured
-            binfo = lookup_binding(ctx.bindings, id)
+            binfo = get_binding(ctx.bindings, id)
             if binfo.kind == :local
                 # FIXME: is_single_assign, is_maybe_undef
                 push!(slots, Slot(binfo.name, :local, false,
@@ -1095,7 +1095,7 @@ function compile_lambda(outer_ctx, ex)
     for (i,arg) in enumerate(children(static_parameters))
         @assert kind(arg) == K"BindingId"
         id = arg.var_id
-        info = lookup_binding(ctx.bindings, id)
+        info = get_binding(ctx.bindings, id)
         @assert info.kind == :static_parameter
         slot_rewrites[id] = i
     end

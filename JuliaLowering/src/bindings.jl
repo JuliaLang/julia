@@ -110,7 +110,7 @@ function update_binding!(bindings::Bindings, x;
         type=nothing, is_const=nothing, add_assigned=0,
         is_always_defined=nothing, is_captured=nothing)
     id = _binding_id(x)
-    b = lookup_binding(bindings, id)
+    b = get_binding(bindings, id)
     bindings.info[id] = BindingInfo(
         b.id,
         b.name,
@@ -129,12 +129,12 @@ function update_binding!(bindings::Bindings, x;
     )
 end
 
-function lookup_binding(bindings::Bindings, x)
+function get_binding(bindings::Bindings, x)
     bindings.info[_binding_id(x)]
 end
 
-function lookup_binding(ctx::AbstractLoweringContext, x)
-    lookup_binding(ctx.bindings, x)
+function get_binding(ctx::AbstractLoweringContext, x)
+    get_binding(ctx.bindings, x)
 end
 
 function update_binding!(ctx::AbstractLoweringContext, x; kws...)
@@ -180,7 +180,7 @@ function binding_ex(ctx::AbstractLoweringContext, id::IdTag)
     # here, because that's got a concrete type. Whereas if we stored SyntaxTree
     # that would contain the type of the graph used in the pass where the
     # bindings were created and we'd need to call reparent(), etc.
-    SyntaxTree(syntax_graph(ctx), lookup_binding(ctx, id).node_id)
+    SyntaxTree(syntax_graph(ctx), get_binding(ctx, id).node_id)
 end
 
 
