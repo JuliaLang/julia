@@ -667,4 +667,13 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 
 JL_DLLEXPORT void jl_membarrier(void) {
     FlushProcessWriteBuffers();
+
+
+// Send a signal to the specified thread to longjmp to its reset_ctx if available.
+// This is used for task cancellation to interrupt a running task at a safe point.
+// TODO: Implement Windows support using SuspendThread/GetThreadContext/SetThreadContext
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid)
+{
+    // Not yet implemented on Windows
+    (void)tid;
 }

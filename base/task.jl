@@ -1323,7 +1323,7 @@ struct CancellationRequest
 end
 
 """
-	CANCEL_REQUEST_SAFE
+    CANCEL_REQUEST_SAFE
 
 Request safe cancelation of the current task. If the task is waiting for any
 other resources, it will request safe cancellation of any such resources and
@@ -1337,7 +1337,7 @@ should be tried first.
 const CANCEL_REQUEST_SAFE = CancellationRequest(0x0)
 
 """
-	CANCEL_REQUEST_ACK
+    CANCEL_REQUEST_ACK
 
 Set by the task itself to indicate that a (safe) cancellation request was
 received and acknowledged, but that there are dependent tasks for whom
@@ -1346,20 +1346,20 @@ cancelation is still pending.
 const CANCEL_REQUEST_ACK = CancellationRequest(0x1)
 
 """
-	CANCEL_REQUEST_QUERY
+    CANCEL_REQUEST_QUERY
 
 Request that the system create an asynchronous report of why the task is currently
 not able to be canceled. The report will be provided in the ->cancelation_request
 field of the current task (as long as this field is still CANCEL_REQUEST_QUERY).
 
 N.B.: Transition to CANCEL_REQUEST_QUERY is only allowed from CANCEL_REQUEST_ACK.
-	  Once the waiting task has read the cancelation report, it may set the cancelation
-	  request back to CANCEL_REQUEST_ACK.
+      Once the waiting task has read the cancelation report, it may set the cancelation
+      request back to CANCEL_REQUEST_ACK.
 """
 const CANCEL_REQUEST_QUERY = CancellationRequest(0x2)
 
 """
-	CANCEL_REQUEST_ABANDON_EXTERNAL
+    CANCEL_REQUEST_ABANDON_EXTERNAL
 
 Request a cancelation that will cease waiting for any external resources (e.g. I/O objects)
 without going through a safe cancelation procedure for such resources. However, the
@@ -1371,21 +1371,21 @@ I/O is often engineered for robustness in case of sudden disapperance of peers
 const CANCEL_REQUEST_ABANDON_EXTERNAL = CancellationRequest(0x3)
 
 """
-	CANCEL_REQUEST_ABANDON_ALL
+    CANCEL_REQUEST_ABANDON_ALL
 
 Request a cancelation that will cease waiting for all external resources and all unacknowledged
 internal tasks. Such tasks will be frozen and become unschedulable in the future.
 
 !!! warning
-	If any canceled task has acquired locks or other resources that are contested, this method of
-	cancelation may leak such resources and create deadlocks in future code. It is intended as a
-	last-resort method to recover a system, but the necessity of this operation should in general
-	be considered a bug (e.g. due to insufficient cancellation points in computationally-heavy code).
+    If any canceled task has acquired locks or other resources that are contested, this method of
+    cancelation may leak such resources and create deadlocks in future code. It is intended as a
+    last-resort method to recover a system, but the necessity of this operation should in general
+    be considered a bug (e.g. due to insufficient cancellation points in computationally-heavy code).
 """
 const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 
 """
-	CANCEL_REQUEST_YIELD
+    CANCEL_REQUEST_YIELD
 
 Request that the task yield to the scheduler at the next cancellation point to
 allow another task to run its cancellation propagation logic. The cancelled task
@@ -1464,6 +1464,11 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
             unlock(t.donenotify)
         end
         return
+    end
+    # Try to interrupt the task if it's at a cancellation point (has reset_ctx set)
+    tid = Threads.threadid(t)
+    if tid != 0
+        ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), (tid - 1) % Int16)
     end
     while !istaskdone(t)
         waitee = t.queue

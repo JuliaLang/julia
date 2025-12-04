@@ -320,6 +320,7 @@ merge_effectbits(old::Bool, new::Bool) = old & new
 
 is_consistent(effects::Effects)          = effects.consistent === ALWAYS_TRUE
 is_effect_free(effects::Effects)         = effects.effect_free === ALWAYS_TRUE
+is_reset_safe(effects::Effects)          = effects.reset_safe === ALWAYS_TRUE
 is_nothrow(effects::Effects)             = effects.nothrow
 is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
@@ -355,6 +356,8 @@ is_consistent_if_notreturned(effects::Effects)         = !iszero(effects.consist
 is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
 
 is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect_free & EFFECT_FREE_IF_INACCESSIBLEMEMONLY)
+
+is_reset_safe_if_inaccessiblememonly(effects::Effects) = !iszero(effects.reset_safe & RESET_SAFE_IF_INACCESSIBLEMEMONLY)
 
 is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly === INACCESSIBLEMEM_OR_ARGMEMONLY
 

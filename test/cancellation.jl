@@ -13,7 +13,7 @@ const collatz_code = quote
             i += 1
         end
     end
-    function find_collatz_counterexample_inner()
+    @noinline function find_collatz_counterexample_inner()
         i = 1
         while true
             j = i
