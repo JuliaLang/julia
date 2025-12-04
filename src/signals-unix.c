@@ -67,6 +67,8 @@ static int thread0_exit_count = 0;
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
 
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
+int jl_simulate_min_longjmp(jl_min_jmp_buf *buf, bt_context_t *c) JL_NOTSAFEPOINT;
+static void jl_eh_longjmp_in_ctx(int sig, void *_ctx, jl_handler_t *eh);
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
 
 #if !defined(_OS_DARWIN_)
@@ -210,8 +212,8 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *e, int sig, void *sigctx)
     ptls->io_wait = 0;
     jl_handler_t *eh = ct->eh;
     if (eh != NULL) {
-        asan_unpoison_task_stack(ct, &eh->eh_ctx);
-        jl_longjmp_in_ctx(sig, sigctx, eh->eh_ctx);
+        asan_unpoison_eh_task_stack(ct, eh);
+        jl_eh_longjmp_in_ctx(sig, sigctx, eh);
     }
     else {
         jl_no_exc_handler(e, ct);
@@ -1152,6 +1154,20 @@ static void fpe_handler(int sig, siginfo_t *info, void *context)
         sigdie_handler(sig, info, context);
     else
         jl_throw_in_ctx(ct, jl_diverror_exception, sig, context);
+}
+
+static void jl_eh_longjmp_in_ctx(int sig, void *_ctx, jl_handler_t *eh)
+{
+    bt_context_t *ctx = jl_to_bt_context(_ctx);
+    if (eh->min_jmp ?
+            jl_simulate_min_longjmp(&((struct _jl_handler_min_setjmp*)eh)->min_eh_ctx, ctx) :
+            jl_simulate_longjmp(((struct _jl_handler_setjmp*)eh)->eh_ctx, ctx))
+        return;
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    jl_eh_longjmp(eh);
 }
 
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf)

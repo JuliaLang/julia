@@ -1358,6 +1358,20 @@ return 0;
 #endif
 }
 
+int jl_simulate_min_longjmp(jl_min_jmp_buf *buf, bt_context_t *c) JL_NOTSAFEPOINT
+{
+#if defined(_CPU_X86_64_)
+    // minimal longjmp for libunwind on x86_64
+    mcontext_t *mc = &c->uc_mcontext;
+    mc->gregs[REG_RBP] = ptr_demangle((uintptr_t)buf->rbp);
+    mc->gregs[REG_RSP] = ptr_demangle((uintptr_t)buf->rsp);
+    mc->gregs[REG_RIP] = ptr_demangle((uintptr_t)buf->rip);
+    return 1;
+#endif
+return 0;
+
+}
+
 JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
 {
     int16_t tid = ptls2->tid;

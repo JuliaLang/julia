@@ -268,6 +268,23 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
     eh->gcstack = ct->gcstack;
     eh->scope = ct->scope;
     eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    eh->min_jmp = 0;  // Default to traditional setjmp; caller may override if using minimal setjmp
+    eh->locks_len = ct->ptls->locks.len;
+    eh->defer_signal = ct->ptls->defer_signal;
+    eh->world_age = ct->world_age;
+#ifdef ENABLE_TIMINGS
+    eh->timing_stack = ct->ptls->timing_stack;
+#endif
+}
+
+JL_DLLEXPORT void jl_enter_min_handler(jl_task_t *ct, jl_handler_t *eh)
+{
+    // Must have no safepoint
+    eh->prev = ct->eh;
+    eh->gcstack = ct->gcstack;
+    eh->scope = ct->scope;
+    eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    eh->min_jmp = 1;
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
     eh->world_age = ct->world_age;

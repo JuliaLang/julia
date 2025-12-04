@@ -106,6 +106,7 @@
     XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__bitstag) \
+    XX(jl_eh_longjmp) \
     XX(jl_eh_restore_state) \
     XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
@@ -301,6 +302,8 @@
     XX(jl_maxrss) \
     XX(jl_method_def) \
     XX(jl_method_instance_add_backedge) \
+    XX(jl_minimal_longjmp) \
+    XX(jl_minimal_setjmp) \
     XX(jl_method_table_add_backedge) \
     XX(jl_method_table_disable) \
     XX(jl_method_table_for) \

@@ -35,6 +35,22 @@
     #define jl_jmp_buf jmp_buf
 #endif
 
+// Minimal setjmp buffer: stores stack pointer and return address.
+// Used with preserve_none calling convention where the compiler spills all
+// live registers before the call.
+typedef struct {
+    void *rbp;  // Base pointer
+    void *rsp;  // Stack pointer (as it was before the call to setjmp)
+    void *rip;  // Return address (where to resume after longjmp)
+} jl_min_jmp_buf;
+
+// Check if minimal setjmp is available for this platform
+#if defined(__x86_64__) && defined(__linux__) && !defined(_OS_WINDOWS_)
+#define JL_HAVE_MIN_SETJMP 1
+#else
+#define JL_HAVE_MIN_SETJMP 0
+#endif
+
 // Define the largest size (bytes) of a properly aligned object that the
 // processor family (MAX_ATOMIC_SIZE) and compiler (MAX_POINTERATOMIC_SIZE)
 // typically supports without a lock (assumed to be at least a pointer size)
@@ -2304,16 +2320,30 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 // tasks and exceptions -------------------------------------------------------
 
 // info describing an exception handler
+// The eh_ctx field can hold either a full jl_jmp_buf or a minimal jl_min_jmp_buf.
+// When using minimal setjmp, the low bit of the buffer pointer (when passed to
+// longjmp wrapper) indicates which type is in use.
 struct _jl_handler_t {
-    jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
     jl_value_t *scope;
     struct _jl_handler_t *prev;
     int8_t gc_state;
+    int8_t min_jmp;              // 1 if using minimal setjmp buffer, 0 otherwise
     size_t locks_len;
     sig_atomic_t defer_signal;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    // eh_ctx follows
+};
+
+struct _jl_handler_setjmp {
+    struct _jl_handler_t _handler;
+    jl_jmp_buf eh_ctx;           // Full setjmp buffer
+};
+
+struct _jl_handler_min_setjmp {
+    struct _jl_handler_t _handler;
+    jl_min_jmp_buf min_eh_ctx;   // Minimal setjmp buffer (stack pointer only)
 };
 
 #define JL_TASK_STATE_RUNNABLE 0
@@ -2350,6 +2380,7 @@ JL_DLLEXPORT jl_value_t *jl_exception_occurred(void);
 JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh) JL_NOTSAFEPOINT ;
+JL_DLLEXPORT void jl_enter_min_handler(jl_task_t *ct, jl_handler_t *eh) JL_NOTSAFEPOINT ;
 JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh);
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_pop_handler(jl_task_t *ct, int n) JL_NOTSAFEPOINT;
@@ -2403,6 +2434,43 @@ extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
 #endif
 #endif
 
+// Minimal setjmp/longjmp declarations for x86_64 Linux
+// These work with preserve_none calling convention where the compiler
+// spills all live registers, so we only need to save the stack pointer.
+#if JL_HAVE_MIN_SETJMP
+
+// Check if preserve_none calling convention is supported.
+// This calling convention makes ALL registers caller-saved, which means the
+// caller will spill any live registers before calling. This is essential for
+// the minimal setjmp to work correctly.
+#if defined(__has_attribute) && __has_attribute(preserve_none)
+#define JL_HAVE_PRESERVE_NONE 1
+#define JL_PRESERVE_NONE __attribute__((preserve_none))
+typedef struct _jl_handler_min_setjmp jl_handler_preferred_t;
+JL_DLLEXPORT int __attribute__((__nothrow__, __returns_twice__))
+    jl_minimal_setjmp(jl_min_jmp_buf *buf) JL_PRESERVE_NONE;
+#define JL_EH_SETJMP(eh) (eh._handler.min_jmp = 1,\
+    jl_minimal_setjmp(&eh.min_eh_ctx))
+#else
+typedef struct _jl_handler_setjmp jl_handler_preferred_t;
+#define JL_HAVE_PRESERVE_NONE 0
+static inline int jl_minimal_setjmp(jl_min_jmp_buf *buf)
+{
+    abort(); // Not supported
+}
+#define JL_EH_SETJMP(eh) (eh._handler.min_jmp = 0,\
+    jl_setjmp(&eh.eh_ctx, 0))
+#endif
+
+JL_DLLEXPORT void __attribute__((__nothrow__, __noreturn__))
+    jl_minimal_longjmp(jl_min_jmp_buf *buf, int val);
+#endif // JL_HAVE_MIN_SETJMP
+
+// Unified longjmp wrapper that handles both minimal and full buffers.
+// Declared in task.c
+JL_DLLEXPORT void __attribute__((__nothrow__, __noreturn__))
+    jl_eh_longjmp(jl_handler_t *eh);
+
 
 #ifdef __clang_gcanalyzer__
 
@@ -2426,17 +2494,20 @@ extern int had_exception;
 
 #else
 
+// Use minimal setjmp when available and the compiler supports preserve_none.
+// This saves memory by having the compiler spill only live registers instead
+// of saving all callee-saved registers like traditional setjmp.
 #define JL_TRY                                                      \
-    int i__try, i__catch; jl_handler_t __eh; jl_task_t *__eh_ct;    \
+    int i__try, i__catch; jl_handler_preferred_t __eh; jl_task_t *__eh_ct;    \
     __eh_ct = jl_current_task;                                      \
     size_t __excstack_state = jl_excstack_state(__eh_ct);           \
-    jl_enter_handler(__eh_ct, &__eh);                               \
-    if (!jl_setjmp(__eh.eh_ctx, 0))                                 \
-        for (i__try=1, __eh_ct->eh = &__eh; i__try; i__try=0, /* TRY BLOCK; */ jl_eh_restore_state_noexcept(__eh_ct, &__eh))
+    jl_enter_handler(__eh_ct, &__eh._handler);                      \
+    if (!JL_EH_SETJMP(__eh))                                        \
+        for (i__try=1, __eh_ct->eh = &__eh._handler; i__try; i__try=0, /* TRY BLOCK; */ jl_eh_restore_state_noexcept(__eh_ct, &__eh._handler))
 
 #define JL_CATCH                                                    \
     else                                                            \
-        for (i__catch=1, jl_eh_restore_state(__eh_ct, &__eh); i__catch; i__catch=0, /* CATCH BLOCK; */ jl_restore_excstack(__eh_ct, __excstack_state))
+        for (i__catch=1, jl_eh_restore_state(__eh_ct, &__eh._handler); i__catch; i__catch=0, /* CATCH BLOCK; */ jl_restore_excstack(__eh_ct, __excstack_state))
 
 #endif
 
