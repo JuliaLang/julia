@@ -73,7 +73,7 @@ stage1: | $(STAGE1_BUILD)
 copy_originals: stage1
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		cp $$abs_file "$$abs_file.original"; \
+		cp -a $$abs_file "$$abs_file.original"; \
 	done && \
 	touch $@
 
@@ -83,10 +83,9 @@ copy_originals: stage1
 bolt_instrument: copy_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		old_time=$$(stat -c %Y $$abs_file); \
 		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file --instrument --instrumentation-file-append-pid --instrumentation-file="$(PROFILE_DIR)/$$file-prof" -no-huge-pages; \
 		mkdir -p $$(dirname "$(PROFILE_DIR)/$$file-prof"); \
-		touch -d "@$$old_time" $$abs_file; \
+		touch -r "$$abs_file.original" $$abs_file; \
 		printf "\n"; \
 	done && \
 	touch $@
@@ -111,9 +110,8 @@ merge_data: bolt_instrument
 bolt: merge_data
 	for file in $(FILES_TO_OPTIMIZE); do \
         abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		old_time=$$(stat -c %Y $$abs_file); \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE1_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text -split-strategy=cdsplit"; fi); \
-		touch -d "@$$old_time" $$abs_file; \
+		touch -r "$$abs_file.original" $$abs_file; \
     done && \
     touch $@
 
