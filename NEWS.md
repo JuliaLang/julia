@@ -48,6 +48,12 @@ Multi-threading changes
   the first time it is called, and then always return the same result value of type `T`
   every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
   similar usage with threads or tasks. ([#TBD])
+* `Threads.@threads` now supports array comprehensions with syntax like `@threads [f(i) for i in 1:n]`,
+  filtered comprehensions like `@threads [f(i) for i in 1:n if condition(i)]`, and multi-dimensional
+  comprehensions like `@threads [f(i,j) for i in 1:n, j in 1:m]` (preserves dimensions). All scheduling
+  options (`:static`, `:dynamic`, `:greedy`) are supported. Results preserve element order for
+  `:static` and `:dynamic` scheduling, while `:greedy` returns elements in arbitrary order for
+  better performance with non-uniform workloads. Non-indexable iterators are also supported. ([#59019])
 
 Build system changes
 --------------------

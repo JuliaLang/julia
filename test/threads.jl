@@ -335,6 +335,10 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+    # Test bad arguments for comprehensions
+    @test_throws ArgumentError @macroexpand(@threads [i for i in 1:10] 2) # wrong number of args
+    @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
+    @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for or comprehension
 end
 
 @testset "rand_ptls underflow" begin
