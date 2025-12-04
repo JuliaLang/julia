@@ -1274,3 +1274,128 @@ JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
 }
+
+// Linux and FreeBSD have compatible membarrier support
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+#if defined(_OS_LINUX_)
+# include <sys/syscall.h>
+# if defined(__has_include)
+#   if __has_include(<linux/membarrier.h>)
+#       include <linux/membarrier.h>
+#       define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
+#   else
+#     if defined(__NR_membarrier)
+enum membarrier_cmd {
+    MEMBARRIER_CMD_QUERY                        = 0,
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
+};
+#         define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
+#     else
+#         warning "Missing linux kernel headers for membarrier syscall, support disabled"
+#         define membarrier(...) -ENOSYS
+#     endif
+#  endif
+# else
+#   include <linux/membarrier.h>
+# endif
+#elif defined(_OS_FREEBSD_)
+# include <sys/param.h>
+# if __FreeBSD_version >= 1401500
+#   include <sys/membarrier.h>
+# else
+#   define MEMBARRIER_CMD_QUERY                         0x00
+#   define MEMBARRIER_CMD_PRIVATE_EXPEDITED             0x08
+#   define MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED    0x10
+#   define membarrier(...) -ENOSYS
+# endif
+#endif
+
+// Implementation of the `mprotect` based membarrier fallback.
+// This is a common fallback based on the observation that `mprotect` happens to
+// issue the necessary memory barriers. However, there is no spec that
+// guarantees this behavior, and indeed AArch64 macos does not. However, we
+// only use it as a fallback here for older versions of Linux and FreeBSD where
+// we know that it happens to work.
+static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
+static void jl_init_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    if (mprotect_barrier_page == NULL) {
+        size_t pagesize = jl_getpagesize();
+
+        mprotect_barrier_page = (_Atomic(uint64_t) *)
+                                     mmap(NULL, pagesize, PROT_NONE,
+                                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (mprotect_barrier_page == MAP_FAILED) {
+            jl_safe_printf("fatal: failed to allocate barrier page.\n");
+            abort();
+        }
+        result = mlock(mprotect_barrier_page, pagesize);
+        if (result != 0) {
+            jl_safe_printf("fatal: failed to mlock barrier page.\n");
+            abort();
+        }
+    }
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+}
+
+static void jl_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    size_t pagesize = jl_getpagesize();
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_NONE);
+    jl_atomic_fetch_add_relaxed(mprotect_barrier_page, 1);
+    assert(result == 0);
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_READ | PROT_WRITE);
+    assert(result == 0);
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+}
+
+// Implementation of `jl_membarrier`
+enum membarrier_implementation {
+    MEMBARRIER_IMPLEMENTATION_UNKNOWN        = 0,
+    MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER = 1,
+    MEMBARRIER_IMPLEMENTATION_MPROTECT       = 2
+};
+
+static _Atomic(enum membarrier_implementation) membarrier_impl = MEMBARRIER_IMPLEMENTATION_UNKNOWN;
+
+static enum membarrier_implementation jl_init_membarrier(void) {
+    int ret = membarrier(MEMBARRIER_CMD_QUERY, 0);
+    int needed = MEMBARRIER_CMD_PRIVATE_EXPEDITED | MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
+    if (ret > 0 && ((ret & needed) == needed)) {
+        // supported
+        if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0) == 0) {
+            // working
+            jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER);
+            return MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER;
+        }
+    }
+    jl_init_mprotect_membarrier();
+    jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_MPROTECT);
+    return MEMBARRIER_IMPLEMENTATION_MPROTECT;
+}
+
+JL_DLLEXPORT void jl_membarrier(void) {
+    enum membarrier_implementation impl = jl_atomic_load_relaxed(&membarrier_impl);
+    if (impl == MEMBARRIER_IMPLEMENTATION_UNKNOWN) {
+        impl = jl_init_membarrier();
+    }
+    if (impl == MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER) {
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0);
+        assert(ret);
+        (void)ret;
+    } else {
+        assert(impl == MEMBARRIER_IMPLEMENTATION_MPROTECT);
+        jl_mprotect_membarrier();
+    }
+}
+#endif

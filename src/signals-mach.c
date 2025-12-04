@@ -5,6 +5,7 @@
 #include <mach/clock.h>
 #include <mach/clock_types.h>
 #include <mach/clock_reply.h>
+#include <mach/thread_state.h>
 #include <mach/mach_traps.h>
 #include <mach/task.h>
 #include <mach/mig_errors.h>
@@ -890,4 +891,55 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     profile_running = 0;
     profile_all_tasks = 0;
     uv_mutex_unlock(&bt_data_prof_lock);
+}
+
+// The mprotect implementation in signals-unix.c does not work on macOS/aarch64, as mentioned.
+// This implementation comes from dotnet, but is similarly dependent on undocumented behavior of the OS.
+// Copyright (c) .NET Foundation and Contributors
+// MIT LICENSE
+JL_DLLEXPORT void jl_membarrier(void) {
+    mach_msg_type_number_t cThreads;
+    thread_act_t *pThreads;
+    kern_return_t machret = task_threads(mach_task_self(), &pThreads, &cThreads);
+    HANDLE_MACH_ERROR("task_threads()", machret);
+
+    uintptr_t sp;
+    uintptr_t registerValues[128];
+
+    // Iterate through each of the threads in the list.
+    for (mach_msg_type_number_t i = 0; i < cThreads; i++)
+    {
+        if (__builtin_available (macOS 10.14, iOS 12, tvOS 9, *))
+        {
+            // Request the threads pointer values to force the thread to emit a memory barrier
+            size_t registers = 128;
+            machret = thread_get_register_pointer_values(pThreads[i], &sp, &registers, registerValues);
+        }
+        else
+        {
+            // fallback implementation for older OS versions
+#if defined(_CPU_X86_64_)
+            x86_thread_state64_t threadState;
+            mach_msg_type_number_t count = x86_THREAD_STATE64_COUNT;
+            machret = thread_get_state(pThreads[i], x86_THREAD_STATE64, (thread_state_t)&threadState, &count);
+#elif defined(_CPU_AARCH64_)
+            arm_thread_state64_t threadState;
+            mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+            machret = thread_get_state(pThreads[i], ARM_THREAD_STATE64, (thread_state_t)&threadState, &count);
+#else
+            #error Unexpected architecture
+#endif
+        }
+
+        if (machret == KERN_INSUFFICIENT_BUFFER_SIZE)
+        {
+            HANDLE_MACH_ERROR("thread_get_register_pointer_values()", machret);
+        }
+
+        machret = mach_port_deallocate(mach_task_self(), pThreads[i]);
+        HANDLE_MACH_ERROR("mach_port_deallocate()", machret);
+    }
+    // Deallocate the thread list now we're done with it.
+    machret = vm_deallocate(mach_task_self(), (vm_address_t)pThreads, cThreads * sizeof(thread_act_t));
+    HANDLE_MACH_ERROR("vm_deallocate()", machret);
 }

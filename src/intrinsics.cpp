@@ -915,6 +915,15 @@ static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
 static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &ord = argv[0];
+    const jl_cgval_t &ssid_arg = argv[1];
+    llvm::SyncScope::ID ssid = llvm::SyncScope::System;
+    if (!ssid_arg.constant || !jl_is_symbol(ssid_arg.constant) ||
+        ((jl_sym_t*)ssid_arg.constant != jl_singlethread_sym &&
+            (jl_sym_t*)ssid_arg.constant != jl_system_sym)) {
+        return emit_runtime_call(ctx, atomic_fence, argv, 2);
+    }
+    if ((jl_sym_t*)ssid_arg.constant == jl_singlethread_sym)
+        ssid = llvm::SyncScope::SingleThread;
     if (ord.constant && jl_is_symbol(ord.constant)) {
         enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, true);
         if (order == jl_memory_order_invalid) {
@@ -922,10 +931,10 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
             return jl_cgval_t(); // unreachable
         }
         if (order > jl_memory_order_monotonic)
-            ctx.builder.CreateFence(get_llvm_atomic_order(order));
+            ctx.builder.CreateFence(get_llvm_atomic_order(order), ssid);
         return ghostValue(ctx, jl_nothing_type);
     }
-    return emit_runtime_call(ctx, atomic_fence, argv, 1);
+    return emit_runtime_call(ctx, atomic_fence, argv, 2);
 }
 
 static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
@@ -1339,7 +1348,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     case atomic_fence:
         ++Emitted_atomic_fence;
-        assert(nargs == 1);
+        assert(nargs == 2);
         return emit_atomicfence(ctx, argv);
     case atomic_pointerref:
         ++Emitted_atomic_pointerref;

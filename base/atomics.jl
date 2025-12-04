@@ -329,4 +329,28 @@ fences should not be necessary in most cases.
 
 For further details, see LLVM's `fence` instruction.
 """
-atomic_fence() = Core.Intrinsics.atomic_fence(:sequentially_consistent)
+atomic_fence() = Core.Intrinsics.atomic_fence(:sequentially_consistent, :system)
+
+"""
+    Threads.atomic_fence_light()
+
+This is a read-optimized sequential-consistency memory fence.
+On supported operating systems and architectures, this fence is cheaper
+than `Threads.atomic_fence()`, but synchronizes only with
+[`atomic_fence_heavy`](@ref) calls from other threads.
+"""
+atomic_fence_light() = Core.Intrinsics.atomic_fence(:sequentially_consistent, :singlethread)
+
+"""
+    Threads.atomic_fence_heavy()
+
+This is a write-optimized sequential-consistency memory fence.
+This fence is significantly more expensive than `Threads.atomic_fence`.
+It generally requires a system call and a full interprocessor interrupt
+to all other processors in the system. It synchronizes with both
+[`atomic_fence_light`](@ref) and [`atomic_fence`](@ref) calls from other threads.
+
+For further details, see the Linux `membarrier` syscall or the Windows
+`FlushProcessWriteBuffers` API.
+"""
+atomic_fence_heavy() = ccall(:jl_membarrier, Cvoid, ())
