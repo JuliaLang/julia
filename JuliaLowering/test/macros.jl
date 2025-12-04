@@ -347,6 +347,14 @@ end
         GC.@preserve x unsafe_load(p)
     end""") === 101 # Expr(:gc_preserve)
 
+    # JuliaLowering.jl/issues/121
+    @test JuliaLowering.include_string(test_mod, """
+    GC.@preserve @static if true @__MODULE__ else end
+    """) isa Module
+    @test JuliaLowering.include_string(test_mod, """
+    GC.@preserve @static if true v"1.14" else end
+    """) isa VersionNumber
+
     # only invokelatest produces :isglobal now, so MWE here
     Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
     @test JuliaLowering.include_string(test_mod, """
