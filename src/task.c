@@ -1686,6 +1686,7 @@ JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid)
     jl_value_t *expected = jl_nothing;
     // If the task is already being cancelled, that's good enough for preemption
     jl_atomic_cmpswap(&task->cancellation_request, &expected, jl_box_uint8(0x5));
+    jl_send_cancellation_signal(tid);
 }
 
 #ifdef _OS_WINDOWS_
