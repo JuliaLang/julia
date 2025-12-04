@@ -32,6 +32,9 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The bundled depots are now always appended to `DEPOT_PATH` when `JULIA_DEPOT_PATH` is set,
+  removing the need for a trailing `:` or `;`. Set `JULIA_DEPOT_PATH_BUNDLED=false` to disable
+  this behavior.
 * The option `--sysimage-native-code=no` has been deprecated.
 * The `JULIA_CPU_TARGET` environment variable now supports a `sysimage` keyword to match (or extend) the CPU target used to build the current system image ([#58970]).
 * The `--code-coverage=all` option now automatically throws away sysimage caches so that code coverage can be accurately measured on methods within the sysimage. It is thrown away after startup (and after startup.jl), before any user code is executed ([#59234])

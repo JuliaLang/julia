@@ -841,10 +841,12 @@ end
     tmp = "/this/does/not/exist"
     default = joinpath(homedir(), ".julia")
     bundled = Base.append_bundled_depot_path!(String[])
+    # With the new behavior, bundled depots are always appended unless JULIA_DEPOT_PATH_BUNDLED=false
     cases = Dict{Any,Vector{String}}(
         nothing => [default; bundled],
         "" => [],
         "$s" => [default; bundled],
+        "$tmp" => [tmp; bundled],  # bundled depots now always appended
         "$tmp$s" => [tmp; bundled],
         "$s$tmp" => [default; bundled; tmp],
         )
@@ -852,6 +854,14 @@ end
         script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
         cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+    end
+    # Test JULIA_DEPOT_PATH_BUNDLED=false disables bundled depot appending
+    for bundled_val in ["false", "0", "no"]
+        script = "DEPOT_PATH == $(repr([tmp])) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr([tmp])), ':'))"
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        cmd = addenv(cmd, "JULIA_DEPOT_PATH" => tmp, "JULIA_DEPOT_PATH_BUNDLED" => bundled_val)
         cmd = pipeline(cmd; stdout, stderr)
         @test success(cmd)
     end

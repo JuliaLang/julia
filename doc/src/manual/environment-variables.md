@@ -136,21 +136,20 @@ as Julia's code loading mechanisms, look for package registries, installed packa
 environments, repo clones, cached compiled package images, configuration files, and the default
 location of the REPL's history file.
 
+When [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is set, the bundled depots (containing resources
+shipped with Julia, like cache files, artifacts, etc.) are always appended to `DEPOT_PATH`,
+unless [`JULIA_DEPOT_PATH_BUNDLED`](@ref JULIA_DEPOT_PATH_BUNDLED) is set to `false`.
+For example, to switch the user depot to `/foo/bar`:
+```sh
+export JULIA_DEPOT_PATH="/foo/bar"
+```
+All package operations, like cloning registries or installing packages, will now write to
+`/foo/bar`, and the bundled resources will still be available.
+
 Unlike the shell `PATH` variable but similar to [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
 empty entries in [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) have special behavior:
 - At the end, it is expanded to the default value of `DEPOT_PATH`, *excluding* the user depot.
 - At the start, it is expanded to the default value of `DEPOT_PATH`, *including* the user depot.
-This allows easy overriding of the user depot, while still retaining access to resources that
-are bundled with Julia, like cache files, artifacts, etc. For example, to switch the user depot
-to `/foo/bar` use a trailing `:`
-```sh
-export JULIA_DEPOT_PATH="/foo/bar:"
-```
-All package operations, like cloning registries or installing packages, will now write to
-`/foo/bar`, but since the empty entry is expanded to the default system depot, any bundled
-resources will still be available. If you really only want to use the depot at `/foo/bar`,
-and not load any bundled resources, simply set the environment variable to `/foo/bar`
-without the trailing colon.
 
 To append a depot at the end of the full default list, including the default user depot, use a
 leading `:`
@@ -179,6 +178,16 @@ it to the string `:`.
     `startup.jl` is too late in the startup process; at that point you can instead
     directly modify the `DEPOT_PATH` array, which is populated from the environment
     variable.
+
+### [`JULIA_DEPOT_PATH_BUNDLED`](@id JULIA_DEPOT_PATH_BUNDLED)
+
+Controls whether the bundled depots (containing resources shipped with Julia) are
+automatically appended to [`DEPOT_PATH`](@ref) when [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH)
+is set. By default, bundled depots are always included. Set to a falsy value
+(e.g., `false`, `no`, or `0`) to disable this behavior:
+```sh
+export JULIA_DEPOT_PATH_BUNDLED=false
+```
 
 ### [`JULIA_HISTORY`](@id JULIA_HISTORY)
 
