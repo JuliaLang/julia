@@ -138,27 +138,6 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     end
 end
 
-function fixup_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
-    k = kind(ex)
-    if k == K"StrMacroName" || k == K"CmdMacroName"
-        layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        newname = JuliaSyntax.lower_identifier_name(ex.name_val, k)
-        makeleaf(ctx, ex, ex, [:kind=>K"Identifier", :scope_layer=>layerid,
-                               :name_val=>newname])
-    elseif k == K"macro_name"
-        @chk numchildren(ex) === 1
-        if kind(ex[1]) === K"."
-            @ast ctx ex [K"." ex[1][1] [K"macro_name" ex[1][2]]]
-        else
-            layerid = get(ex, :scope_layer, current_layer_id(ctx))
-            newname = JuliaSyntax.lower_identifier_name(ex[1].name_val, K"macro_name")
-            makeleaf(ctx, ex[1], ex[1], [:kind=>kind(ex[1]), :name_val=>newname])
-        end
-    else
-        mapchildren(e->fixup_macro_name(ctx,e), ctx, ex)
-    end
-end
-
 function _eval_dot(world::UInt, mod, ex::SyntaxTree)
     if kind(ex) === K"."
         mod = _eval_dot(world, mod, ex[1])
@@ -175,7 +154,7 @@ end
 # isn't clear the language is meant to support this).
 function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::SyntaxTree)
     mod = current_layer(ctx).mod
-    ex = fixup_macro_name(ctx, expand_forms_1(ctx, ex0))
+    ex = expand_forms_1(ctx, ex0)
     try
         if kind(ex) === K"Value"
             !(ex.value isa GlobalRef) ? ex.value :
@@ -433,10 +412,6 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
             makeleaf(ctx, ex, ex, [:kind=>k, :scope_layer=>scope_layer])
         end
-    elseif k == K"StrMacroName" || k == K"CmdMacroName" || k == K"macro_name"
-        # These can appear outside of a macrocall, e.g. in `import`
-        e2 = fixup_macro_name(ctx, ex)
-        expand_forms_1(ctx, e2)
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes
         @chk numchildren(ex) == 1
@@ -512,7 +487,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
     elseif k == K"cmdstring"
         @chk numchildren(ex) == 1
-        e2 = @ast ctx ex [K"macrocall" [K"macro_name" "cmd"::K"core"] ex[1]]
+        e2 = @ast ctx ex [K"macrocall" "@cmd"::K"core" ex[1]]
         expand_macro(ctx, e2)
     elseif (k == K"call" || k == K"dotcall")
         # Do some initial desugaring of call and dotcall here to simplify

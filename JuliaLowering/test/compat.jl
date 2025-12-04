@@ -494,7 +494,7 @@ const JL = JuliaLowering
         # `@mac x` with macro name escaped
         @test JuliaLowering.expr_to_syntaxtree(Expr(:macrocall, esc(Symbol("@mac")), nothing, :x)) ≈
             @ast_ [K"macrocall"
-                [K"escape" [K"macro_name" "mac"::K"Identifier"]]
+                [K"escape" "@mac"::K"Identifier"]
                 "x"::K"Identifier"
             ]
 
@@ -505,7 +505,7 @@ const JL = JuliaLowering
             [K"escape"
                 [K"."
                     "A"::K"Identifier"
-                    [K"macro_name" "mac"::K"Identifier"]
+                    "@mac"::K"Identifier"
                 ]
             ]
             "x"::K"Identifier"
@@ -577,7 +577,7 @@ const JL = JuliaLowering
             Expr(:macrocall, Expr(:var"hygienic-scope", Symbol("@mac"), :other, :args), nothing, :x)) ≈
             @ast_ [K"macrocall"
                 [K"hygienic_scope"
-                    [K"macro_name" "mac"::K"Identifier"]
+                    "@mac"::K"Identifier"
                     "other"::K"Identifier" # (<- normally a Module)
                     "args"::K"Identifier" # (<- normally a LineNumberNode)
                 ]
@@ -587,7 +587,7 @@ const JL = JuliaLowering
         # One example of double escaping
         @test JuliaLowering.expr_to_syntaxtree(Expr(:macrocall, esc(esc(Symbol("@mac"))), nothing, :x)) ≈
             @ast_ [K"macrocall"
-                [K"escape" [K"escape" [K"macro_name" "mac"::K"Identifier"]]]
+                [K"escape" [K"escape" "@mac"::K"Identifier"]]
                 "x"::K"Identifier"
             ]
 
@@ -600,7 +600,7 @@ const JL = JuliaLowering
             @ast_ [K"macrocall"
                 [K"hygienic_scope"
                     [K"escape"
-                        [K"macro_name" "mac"::K"Identifier"]
+                        "@mac"::K"Identifier"
                     ]
                     "other"::K"Identifier" # (<- normally a Module)
                     "args"::K"Identifier" # (<- normally a LineNumberNode)

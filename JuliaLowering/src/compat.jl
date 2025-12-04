@@ -267,14 +267,10 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             src = child_exprs[2]
         end
         deleteat!(child_exprs, 2)
-        if a1 isa Symbol
-            child_exprs[1] = a1_esc(Expr(:macro_name, a1))
-        elseif a1 isa Expr && a1.head === :(.)
-            a12,a12_esc = unwrap_esc(a1.args[2])
-            if a12 isa QuoteNode
-                child_exprs[1] = a1_esc(Expr(:(.), a1.args[1],
-                                             Expr(:macro_name, a12_esc(a12.value))))
-            end
+        if a1 isa Symbol && a1 === Symbol("@__dot__")
+            child_exprs[1] = Symbol("@.")
+        elseif a1 isa Expr && nargs === 2 && a1.args[2] === Symbol("@__dot__")
+            child_exprs[1] = Expr(a1.head, a1.args[1], Symbol("@."))
         elseif a1 isa GlobalRef && a1.mod === Core
             # Syntax-introduced macrocalls are listed here for reference.  We
             # probably don't need to convert these.
@@ -412,16 +408,15 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         # (do (call f args...) (-> (tuple lam_args...) (block ...)))
         # SyntaxTree:
         # (call f args... (do (tuple lam_args...) (block ...)))
-        callargs = collect_expr_parameters(e.args[1], 2)
         if e.args[1].head === :macrocall
             st_k = K"macrocall"
+            callargs = collect_expr_parameters(e.args[1], 3)
             if callargs[2] isa LineNumberNode
                 src = callargs[2]
             end
             deleteat!(callargs, 2)
-            c1,c1_esc = unwrap_esc(callargs[1])
-            callargs[1] = c1_esc(Expr(:macro_name, c1))
         else
+            callargs = collect_expr_parameters(e.args[1], 2)
             st_k = K"call"
         end
         child_exprs = Any[callargs..., Expr(:do_lambda, e.args[2].args...)]
@@ -538,20 +533,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
 
     #---------------------------------------------------------------------------
     # Possibly-temporary heads introduced by us converting the parent expr
-    if e.head === :macro_name
-        @assert nargs === 1
-        # Trim `@` for a correct SyntaxTree, although we need to add it back
-        # later for finding the macro
-        if e.args[1] === :(.)
-            mac_name = string(e.args[1][2])
-            mac_name = mac_name == "@__dot__" ? "." : mac_name[2:end]
-            child_exprs[1] = Expr(:(.), e.args[1][1], Symbol(mac_name))
-        else
-            mac_name = string(e.args[1])
-            mac_name = mac_name == "@__dot__" ? "." : mac_name[2:end]
-            child_exprs[1] = Symbol(mac_name)
-        end
-    elseif e.head === :catch_var_placeholder
+    if e.head === :catch_var_placeholder
         st_k = K"Placeholder"
         st_attrs[:name_val] = ""
         child_exprs = nothing
