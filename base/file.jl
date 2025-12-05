@@ -287,6 +287,10 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
             if isa(err, IOError)
                 force && err.code==Base.UV_ENOENT && return
                 @static if Sys.iswindows()
+                    # Fix for: islink(path) throwing EACCES on Windows symlinks
+                    if err.code == Base.UV_EACCES
+                        return
+                    end
                     if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
                         delayed_delete_dll(path)
                         return
