@@ -52,6 +52,12 @@ Base.Threads.atomic_min!
 Base.Threads.atomic_fence
 ```
 
+## Semaphores
+
+```@docs
+Base.@acquire
+```
+
 ## ccall using a libuv threadpool (Experimental)
 
 ```@docs
