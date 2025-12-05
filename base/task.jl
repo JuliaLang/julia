@@ -316,7 +316,7 @@ function _wait(t::Task; expected_cancellation = nothing)
         lock(donenotify)
         try
             while !istaskdone(t) && cancellation_request() === expected_cancellation
-                wait(donenotify; waitee=t)
+                wait(donenotify; waitee=t, expected_cancellation)
             end
         finally
             unlock(donenotify)
@@ -324,7 +324,11 @@ function _wait(t::Task; expected_cancellation = nothing)
     end
     nothing
 end
-cancel_wait!(waitee::Task, waiter::Task) = cancel_wait!(waitee.donenotify, waiter, nothing; waitee)
+
+# We handle cancellation explicitly above - just suppress the error here
+cancel_wait!(waitee::Task, @nospecialize(creq)) = nothing
+cancel_wait!(waitee::Task, waiter::Task, @nospecialize(creq)) =
+    cancel_wait!(waitee.donenotify, waiter, creq, nothing; waitee)
 
 # have `waiter` wait for `t`
 function _wait2(t::Task, waiter::Task)
@@ -367,7 +371,7 @@ Throws a `ConcurrencyViolationError` if `t` is the currently running task, to pr
 """
 function wait(t::Task; throw=true)
     _wait(t)
-    cr = cancellation_request()
+    cr = cancellation_request_or_yield()
     if cr !== nothing
         propagate_cancellation!(t, cr)
     end
@@ -611,7 +615,7 @@ function sync_end(c::Channel{Any})
         r = take!(c)
         if isa(r, Task)
             _wait(r)
-            cr = cancellation_request()
+            cr = cancellation_request_or_yield()
             if cr !== nothing
                 return sync_cancel!(c, r, cr, @isdefined(c_ex) ? c_ex : CompositeException())
             end
@@ -1423,6 +1427,14 @@ end
     throw(req)
 end
 
+function cancellation_request_raw()
+    ct = current_task()
+    req = @atomic :monotonic ct.cancellation_request
+    req === nothing && return req
+    req = @atomic :acquire ct.cancellation_request
+    return req
+end
+
 """
     cancellation_request()
 
@@ -1431,11 +1443,24 @@ cancellation has been requested. If a cancellation request is present, it is
 loaded with acquire semantics.
 """
 function cancellation_request()
-    ct = current_task()
-    req = @atomic :monotonic ct.cancellation_request
-    req === nothing && return req
-    cr = @atomic :acquire ct.cancellation_request
+    cr = cancellation_request_raw()
     return conform_cancellation_request(cr)
+end
+
+"""
+    cancellation_request_or_yield()
+
+Like [`cancellation_request`](@ref), but specifically handles CANCEL_REQUEST_YIELD
+by calling yield internally and re-checking for cancellation requests.
+"""
+function cancellation_request_or_yield()
+    while true
+        _cr = cancellation_request_raw()
+        cr = conform_cancellation_request(_cr)
+        cr !== CANCEL_REQUEST_YIELD && return cr
+        @atomicreplace :sequentially_consistent :monotonic current_task().cancellation_request _cr => nothing
+        yield()
+    end
 end
 
 """
@@ -1451,7 +1476,7 @@ Core.cancellation_point!
 function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
     # TODO: Raise task priority
     @atomic :release t.cancellation_request = crequest
-    # TODO: SYS_membarrier() ?
+    Threads.atomic_fence_heavy()
     # Special case: If the task hasn't started yet at this point, we want to set
     # it up to cancel any waits, but we need to be a bit careful with concurrent
     # starts of the task.
@@ -1465,15 +1490,29 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
         end
         return
     end
-    # Try to interrupt the task if it's at a cancellation point (has reset_ctx set)
+    # Try to interrupt the task. The barrier above synchronizes with the establishment
+    # of a wait object and guarantees that either:
+    # 1. We have the wait object in t.queue, or
+    # 2. The task saw the cancellation and called (a different method of) cancel_wait!
+    #    itself.
+    # Note that it is possible for both to be true, in which case the task wins
+    # and our call to cancel_wait! is will no-op after acquiring the waitee lock.
+    #
+    # Additionally, if there is no wait object, either
+    # 1. The task is suspended, but not using our wait object protocol.
+    #    In this case, cancellation will not succeed.
+    # 2. The task is running.
+    #
+    # We can't tell the difference, but we unconditionally try to send the cancellation
+    # signal. If a reset_ctx exists, this will cause the task to be interrupted.
     tid = Threads.threadid(t)
-    if tid != 0
-        ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), (tid - 1) % Int16)
-    end
-    while !istaskdone(t)
+    if !istaskdone(t)
         waitee = t.queue
-        waitee === nothing && (yield(); continue)
-        invokelatest(cancel_wait!, waitee, t) && break
+        if waitee !== nothing
+            invokelatest(cancel_wait!, waitee, t, crequest)
+        elseif tid != 0
+            ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), (tid - 1) % Int16)
+        end
     end
     if t.sticky
         # If this task is sticky, it won't be able to run if the task currently
@@ -1494,7 +1533,7 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
     end
 end
 
-function cancel_wait!(q::StickyWorkqueue, t::Task)
+function cancel_wait!(q::StickyWorkqueue, t::Task, @nospecialize(creq))
     # Tasks in the workqueue are runnable - we do not cancel the wait,
     # but we do need to check whether it's in there
     lock(q.lock)

@@ -142,35 +142,62 @@ Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notif
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
 """
-function wait(c::GenericCondition; first::Bool=false, waitee=c)
+function wait(c::GenericCondition; first::Bool=false, waitee=c, expected_cancellation=nothing)
     ct = current_task()
     _wait2(c, ct, waitee, first)
-    token = unlockall(c.lock)
-    try
-        return wait()
-    catch
-        q = ct.queue; q === c && Base.list_deletefirst!(waitqueue(c), ct)
-        rethrow()
-    finally
-        relockall(c.lock, token)
+
+@label before_barrier
+    # Synchronize with atomic_fence_heavy in cancel!
+    Threads.atomic_fence_light()
+    # We need to check if we were cancelled and should not suspend if we were.
+    # The fencing above ensures that we either see the cancellation request
+    # or the cancelling task will call cancel_wait! to wake us again.
+    cr = cancellation_request()
+    if cr !== expected_cancellation
+        if cr === CANCEL_REQUEST_YIELD
+            # We are about to yield anyway, so we can acknowledge the cancellation now.
+            # However, for the integrity of the cancellation_request syncrhonization,
+            # we must revisit the barrier above and re-check the cancellation request
+            @atomicreplace :acquire_release :monotonic ct.cancellation_request cr => nothing
+            @goto before_barrier
+        else
+            Base.list_deletefirst!(waitqueue(c), ct)
+            return invokelatest(cancel_wait!, waitee, cr)
+        end
     end
+    token = unlockall(c.lock)
+
+    ret = try
+        wait()
+    catch
+        relockall(c.lock, token)
+        # This cleans up our entry in the waitqueue if we were resumes from an
+        # unexpected `throwto`. Modern code should generally avoid this pattern.
+        q = ct.queue; q === waitee && Base.list_deletefirst!(waitqueue(c), ct)
+        rethrow()
+    end
+
+    relockall(c.lock, token)
+    return ret
 end
 
-function cancel_wait!(c::GenericCondition, t::Task; waitee = c)
-    @assert (@atomic :monotonic t.cancellation_request) !== nothing
+function cancel_wait!(c::GenericCondition, creq; waitee = c)
+    throw(creq)
+end
+
+function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(creq); waitee = c)
     lock(c)
     if t.queue !== waitee
         unlock(c)
         return false
     end
     Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
-    schedule(t, conform_cancellation_request(t.cancellation_request), error=true)
+    schedule(t, conform_cancellation_request(creq), error=true)
     unlock(c)
     return true
 end
 
-function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(val); waitee=c)
-    @assert (@atomic :monotonic t.cancellation_request) !== nothing
+function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(creq), @nospecialize(val); waitee=c)
     lock(c)
     if t.queue !== waitee
         unlock(c)

@@ -199,8 +199,9 @@ function _trywait(t::Union{Timer, AsyncCondition})
     return set
 end
 
-cancel_wait!(t::Union{Timer, AsyncCondition}, task::Task) =
-    cancel_wait!(t.cond, task, false; waitee=t)
+cancel_wait!(t::Union{Timer, AsyncCondition}, @nospecialize(creq)) = false
+cancel_wait!(t::Union{Timer, AsyncCondition}, task::Task, @nospecialize(creq)) =
+    cancel_wait!(t.cond, task, creq, false; waitee=t)
 
 function wait(t::Union{Timer, AsyncCondition})
     ok = _trywait(t)

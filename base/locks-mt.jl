@@ -108,3 +108,5 @@ end
 function islocked(l::AbstractSpinLock)
     return (@atomic :monotonic l.owned) != 0
 end
+
+Base.show(io::IO, ::AbstractSpinLock) = print(io, typeof(ans), "(", islocked(ans) ? "locked" : "unlocked", ")")
