@@ -465,8 +465,8 @@ end
 test_fence()
 
 # Test asymmetric thread fences
-const asymmetric_test_count = 200_000
 struct AsymmetricFenceTestData
+    n::Int
     x::AtomicMemory{Int}
     y::AtomicMemory{Int}
     read_x::AtomicMemory{Int}
@@ -482,23 +482,25 @@ function test_asymmetric_fence(data::AsymmetricFenceTestData, cond1, cond2, thre
     else
         @atomic :monotonic data.y[it] = 1
         Threads.atomic_fence_light()
-        @atomic :monotonic data.read_x[it] = data.x[it]
+        @atomic :monotonic data.read_x[it] = @atomic :monotonic data.x[it]
         notify(cond1)
         wait(cond2)
     end
 end
-function test_asymmetric_fence(data, cond1, cond2, threadid)
-    for i = 1:asymmetric_test_count
+function test_asymmetric_fence(data::AsymmetricFenceTestData, cond1, cond2, threadid)
+    for i = 1:data.n
         test_asymmetric_fence(data, cond1, cond2, threadid, i)
     end
 end
 function test_asymmetric_fence()
+    asymmetric_test_count = 200_000
     cond1 = Threads.Event(true)
     cond2 = Threads.Event(true)
-    data = AsymmetricFenceTestData(AtomicMemory{Int}(undef, asymmetric_test_count),
-                                  AtomicMemory{Int}(undef, asymmetric_test_count),
-                                  AtomicMemory{Int}(undef, asymmetric_test_count),
-                                  AtomicMemory{Int}(undef, asymmetric_test_count))
+    data = AsymmetricFenceTestData(asymmetric_test_count,
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count))
     for i = 1:asymmetric_test_count
         @atomic :monotonic data.x[i] = 0
         @atomic :monotonic data.y[i] = 0

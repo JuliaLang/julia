@@ -898,22 +898,20 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 // Copyright (c) .NET Foundation and Contributors
 // MIT LICENSE
 JL_DLLEXPORT void jl_membarrier(void) {
-    mach_msg_type_number_t cThreads;
-    thread_act_t *pThreads;
-    kern_return_t machret = task_threads(mach_task_self(), &pThreads, &cThreads);
-    HANDLE_MACH_ERROR("task_threads()", machret);
-
     uintptr_t sp;
     uintptr_t registerValues[128];
+    kern_return_t machret;
 
     // Iterate through each of the threads in the list.
-    for (mach_msg_type_number_t i = 0; i < cThreads; i++)
-    {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        thread_act_t thread = pthread_mach_thread_np(ptls2->system_id);
         if (__builtin_available (macOS 10.14, iOS 12, tvOS 9, *))
         {
             // Request the threads pointer values to force the thread to emit a memory barrier
             size_t registers = 128;
-            machret = thread_get_register_pointer_values(pThreads[i], &sp, &registers, registerValues);
+            machret = thread_get_register_pointer_values(thread, &sp, &registers, registerValues);
         }
         else
         {
@@ -921,11 +919,11 @@ JL_DLLEXPORT void jl_membarrier(void) {
 #if defined(_CPU_X86_64_)
             x86_thread_state64_t threadState;
             mach_msg_type_number_t count = x86_THREAD_STATE64_COUNT;
-            machret = thread_get_state(pThreads[i], x86_THREAD_STATE64, (thread_state_t)&threadState, &count);
+            machret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&threadState, &count);
 #elif defined(_CPU_AARCH64_)
             arm_thread_state64_t threadState;
             mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-            machret = thread_get_state(pThreads[i], ARM_THREAD_STATE64, (thread_state_t)&threadState, &count);
+            machret = thread_get_state(thread, ARM_THREAD_STATE64, (thread_state_t)&threadState, &count);
 #else
             #error Unexpected architecture
 #endif
@@ -935,11 +933,5 @@ JL_DLLEXPORT void jl_membarrier(void) {
         {
             HANDLE_MACH_ERROR("thread_get_register_pointer_values()", machret);
         }
-
-        machret = mach_port_deallocate(mach_task_self(), pThreads[i]);
-        HANDLE_MACH_ERROR("mach_port_deallocate()", machret);
     }
-    // Deallocate the thread list now we're done with it.
-    machret = vm_deallocate(mach_task_self(), (vm_address_t)pThreads, cThreads * sizeof(thread_act_t));
-    HANDLE_MACH_ERROR("vm_deallocate()", machret);
 }

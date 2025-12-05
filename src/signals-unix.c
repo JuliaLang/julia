@@ -1275,48 +1275,15 @@ JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
     return raise(SIGTSTP);
 }
 
-// Linux and FreeBSD have compatible membarrier support
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-#if defined(_OS_LINUX_)
-# include <sys/syscall.h>
-# if defined(__has_include)
-#   if __has_include(<linux/membarrier.h>)
-#       include <linux/membarrier.h>
-#       define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
-#   else
-#     if defined(__NR_membarrier)
-enum membarrier_cmd {
-    MEMBARRIER_CMD_QUERY                        = 0,
-    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
-    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
-};
-#         define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
-#     else
-#         warning "Missing linux kernel headers for membarrier syscall, support disabled"
-#         define membarrier(...) -ENOSYS
-#     endif
-#  endif
-# else
-#   include <linux/membarrier.h>
-# endif
-#elif defined(_OS_FREEBSD_)
-# include <sys/param.h>
-# if __FreeBSD_version >= 1401500
-#   include <sys/membarrier.h>
-# else
-#   define MEMBARRIER_CMD_QUERY                         0x00
-#   define MEMBARRIER_CMD_PRIVATE_EXPEDITED             0x08
-#   define MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED    0x10
-#   define membarrier(...) -ENOSYS
-# endif
-#endif
-
+#if !defined(_OS_DARWIN_)
 // Implementation of the `mprotect` based membarrier fallback.
 // This is a common fallback based on the observation that `mprotect` happens to
 // issue the necessary memory barriers. However, there is no spec that
-// guarantees this behavior, and indeed AArch64 macos does not. However, we
-// only use it as a fallback here for older versions of Linux and FreeBSD where
-// we know that it happens to work.
+// guarantees this behavior, and indeed AArch64 Darwin does not (so we don't use it
+// there). However, we only use it as a fallback here for older versions of
+// Linux and FreeBSD where we know that it happens to work. We also use it as a
+// fallback for unknown Unix systems under the assumption that it will work,
+// but this is not guaranteed.
 static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
 static void jl_init_mprotect_membarrier(void)
@@ -1335,7 +1302,7 @@ static void jl_init_mprotect_membarrier(void)
         }
         result = mlock(mprotect_barrier_page, pagesize);
         if (result != 0) {
-            jl_safe_printf("fatal: failed to mlock barrier page.\n");
+            jl_safe_printf("fatal: failed to mlock barrier page (try increasing RLIMIT_MEMLOCK with `ulimit -l`).\n");
             abort();
         }
     }
@@ -1349,15 +1316,43 @@ static void jl_mprotect_membarrier(void)
     int result = pthread_mutex_lock(&mprotect_barrier_lock);
     assert(result == 0);
     size_t pagesize = jl_getpagesize();
-    result = mprotect(mprotect_barrier_page, pagesize, PROT_NONE);
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_READ | PROT_WRITE);
     jl_atomic_fetch_add_relaxed(mprotect_barrier_page, 1);
     assert(result == 0);
-    result = mprotect(mprotect_barrier_page, pagesize, PROT_READ | PROT_WRITE);
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_NONE);
     assert(result == 0);
     result = pthread_mutex_unlock(&mprotect_barrier_lock);
     assert(result == 0);
     (void)result;
 }
+#endif
+
+// Linux and FreeBSD have compatible membarrier support
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+#if defined(_OS_LINUX_)
+#   include <sys/syscall.h>
+#   if defined(__NR_membarrier)
+enum membarrier_cmd {
+    MEMBARRIER_CMD_QUERY                        = 0,
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
+};
+#    define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
+#  else
+#    warning "Missing linux kernel headers for membarrier syscall, support disabled"
+#    define membarrier(...) (errno = ENOSYS, -1)
+#  endif
+#elif defined(_OS_FREEBSD_)
+#  include <sys/param.h>
+#  if __FreeBSD_version >= 1401500
+#    include <sys/membarrier.h>
+#  else
+#    define MEMBARRIER_CMD_QUERY                         0x00
+#    define MEMBARRIER_CMD_PRIVATE_EXPEDITED             0x08
+#    define MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED    0x10
+#    define membarrier(...) (errno = ENOSYS, -1)
+#  endif
+#endif
 
 // Implementation of `jl_membarrier`
 enum membarrier_implementation {
@@ -1391,11 +1386,17 @@ JL_DLLEXPORT void jl_membarrier(void) {
     }
     if (impl == MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER) {
         int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0);
-        assert(ret);
+        assert(ret == 0);
         (void)ret;
     } else {
         assert(impl == MEMBARRIER_IMPLEMENTATION_MPROTECT);
         jl_mprotect_membarrier();
     }
+}
+#elif !defined(_OS_DARWIN_)
+JL_DLLEXPORT void jl_membarrier(void) {
+    if (!mprotect_barrier_page)
+        jl_init_mprotect_membarrier();
+    jl_mprotect_membarrier();
 }
 #endif
