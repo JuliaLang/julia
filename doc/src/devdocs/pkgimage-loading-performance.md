@@ -157,20 +157,31 @@ Representative size breakdown for the system image:
 
 ## Instrumentation
 
-To enable detailed timing output, uncomment `#define JL_DEBUG_LOADING` near the top of `src/staticdata.c` and rebuild Julia:
+To enable detailed timing output for package **loading**, uncomment `#define JL_DEBUG_LOADING` near the top of `src/staticdata.c` and rebuild Julia:
 
 ```c
 // Define JL_DEBUG_LOADING to enable detailed timing of pkgimage loading
 #define JL_DEBUG_LOADING
 ```
 
+To enable detailed timing output for package cache **generation** (saving), uncomment `#define JL_DEBUG_SAVING`:
+
+```c
+// Define JL_DEBUG_SAVING to enable detailed timing of pkgimage generation
+#define JL_DEBUG_SAVING
+```
+
 Then rebuild with `make -C src` and run:
 
 ```bash
+# For loading timing
 julia -e "using SomePackage"
+
+# For saving timing (during precompilation)
+julia -e "using Pkg; Pkg.precompile()"
 ```
 
-This will print timing for each phase of image loading, including detailed breakdowns of type and object uniquing operations. The instrumentation is compile-time guarded for zero overhead in release builds.
+This will print timing for each phase of image loading/saving, including detailed breakdowns of type and object uniquing operations. The instrumentation is compile-time guarded for zero overhead in release builds.
 
 ## Summary of Optimization Opportunities
 
@@ -335,4 +346,3 @@ Attempted a two-phase approach: decode all relocation entries into a buffer, the
 - 68% cache hit rate (already uniquified by dependencies)
 - 1% found via cache lookup
 - 31% new types requiring creation
-

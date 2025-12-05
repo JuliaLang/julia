@@ -3217,10 +3217,40 @@ end
 # Const global for GC root
 const newly_inferred = CodeInstance[]
 
+# Debug timing support for precompilation (controlled by JL_DEBUG_SAVING in staticdata.c)
+function _debug_saving_enabled()
+    ccall(:jl_is_debug_saving_enabled, Cint, ()) != 0
+end
+
+function _pkgsave_print(msg::AbstractString)
+    str = "[pkgsave] " * string(msg) * "\n"
+    ccall(:jl_safe_printf, Cvoid, (Cstring,), str)
+end
+
+function _pkgsave_timing(desc::AbstractString, elapsed_ns::UInt64)
+    elapsed_s = Float64(elapsed_ns) / 1e9
+    # Format with 3 decimal places - manually ensure trailing zeros
+    rounded = round(elapsed_s, digits=3)
+    int_part = trunc(Int, rounded)
+    frac_part = round(Int, (rounded - int_part) * 1000)
+    time_str = string(int_part) * "." * lpad(string(frac_part), 3, '0')
+    padded_desc = rpad(string(desc), 40)
+    padded_time = lpad(time_str, 9)  # Match C's %9.3f format
+    str = "[pkgsave]     " * padded_desc * " " * padded_time * " s\n"
+    ccall(:jl_safe_printf, Cvoid, (Cstring,), str)
+end
+
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
+    debug_timing = _debug_saving_enabled()
+    total_start = time_ns()
 
+    if debug_timing
+        _pkgsave_print("=== Precompiling $(pkg.name) ===")
+    end
+
+    setup_start = time_ns()
     @lock require_lock begin
     m = start_loading(pkg, UInt128(0), false)
     @assert m === nothing
@@ -3246,6 +3276,12 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     __toplevel__._internal_julia_parse = Experimental.VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
+
+    if debug_timing
+        _pkgsave_timing("setup & dependency loading", time_ns() - setup_start)
+    end
+
+    include_start = time_ns()
     try
         Base.include(Base.__toplevel__, input)
     catch ex
@@ -3255,6 +3291,11 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     finally
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
     end
+
+    if debug_timing
+        _pkgsave_timing("include (parse, lower, inference)", time_ns() - include_start)
+    end
+
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)
     m isa Module || check_package_module_loaded_error(pkg)
@@ -3266,6 +3307,10 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     @lock require_lock end_loading(pkg, m)
     # insert_extension_triggers(pkg)
     # run_package_callbacks(pkg)
+
+    if debug_timing
+        _pkgsave_timing("TOTAL Julia-side precompilation", time_ns() - total_start)
+    end
 end
 
 function check_package_module_loaded_error(pkg)
