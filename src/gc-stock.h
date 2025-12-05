@@ -70,7 +70,7 @@ typedef struct {
 // large arrays that have not been scanned yet)
 
 typedef enum {
-    GC_empty_chunk = 0, // sentine value representing no chunk
+    GC_empty_chunk = 0, // sentinel value representing no chunk
     GC_objary_chunk,    // for chunk of object array
     GC_ary8_chunk,      // for chunk of array with 8 bit field descriptors
     GC_ary16_chunk,     // for chunk of array with 16 bit field descriptors
