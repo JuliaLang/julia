@@ -824,6 +824,16 @@ Open a file and serialize the given value to it.
 """
 serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w")
 
+"""
+    serialize(value) -> Vector{UInt8}
+
+Serialize the given value to a byte vector and return it.
+
+See [`serialize(::IO, value)`](@ref serialize(::IO, ::Any)) for more details on serialization format and caveats.
+
+!!! compat "Julia 1.13"
+    This method is available as of Julia 1.13.
+"""
 function serialize(x)::Vector{UInt8}
     buf = IOBuffer()
     serialize(buf, x)
@@ -853,6 +863,16 @@ Open a file and deserialize its contents.
 """
 deserialize(filename::AbstractString) = open(deserialize, filename)
 
+"""
+    deserialize(data::Vector{UInt8})
+
+Deserialize the given byte vector and return the resulting value.
+
+See [`deserialize(::IO)`](@ref deserialize(::IO)) for more details and caveats.
+
+!!! compat "Julia 1.13"
+    This method is available as of Julia 1.13.
+"""
 deserialize(data::Vector{UInt8}) = deserialize(IOBuffer(data))
 
 function deserialize(s::AbstractSerializer)
