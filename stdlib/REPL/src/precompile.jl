@@ -64,6 +64,7 @@ function repl_workload()
     display("a string")
     foo(x) = 1
     @time @eval foo(1)
+    ;
     $CTRL_C
     $CTRL_R$CTRL_C#
     ? reinterpret
