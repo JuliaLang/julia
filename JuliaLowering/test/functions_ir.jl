@@ -23,7 +23,7 @@ end
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/_(!read) slot₄/y]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#arg2#(!read) slot₄/y]
     1   TestMod.+
     2   (call %₁ slot₂/x slot₄/y)
     3   (return %₂)
@@ -47,7 +47,7 @@ end
 8   SourceLocation::1:10
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/x]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 11  latestworld
@@ -160,7 +160,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₁ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/_(!read) slot₄/_(!read)]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/#arg2#(!read) slot₄/#arg3#(!read)]
     1   static_parameter₃
     2   static_parameter₁
     3   static_parameter₂
@@ -192,7 +192,7 @@ end
 14  SourceLocation::1:10
 15  (call core.svec %₁₁ %₁₃ %₁₄)
 16  --- method core.nothing %₁₅
-    slots: [slot₁/#self#(!read) slot₂/_(!read)]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read)]
     1   static_parameter₁
     2   (return %₁)
 17  latestworld
@@ -220,7 +220,7 @@ end
 13  SourceLocation::1:10
 14  (call core.svec %₁₀ %₁₂ %₁₃)
 15  --- method core.nothing %₁₄
-    slots: [slot₁/#self#(!read) slot₂/_(!read)]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read)]
     1   static_parameter₁
     2   (return %₁)
 16  latestworld
@@ -513,8 +513,8 @@ end
 8   SourceLocation::1:10
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(called) slot₂/_]
-    1   (call slot₁/#self# slot₂/_ 1 2)
+    slots: [slot₁/#self#(called) slot₂/#arg1#]
+    1   (call slot₁/#self# slot₂/#arg1# 1 2)
     2   (return %₁)
 11  latestworld
 12  TestMod.f
@@ -525,8 +525,8 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(called) slot₂/_ slot₃/y]
-    1   (call slot₁/#self# slot₂/_ slot₃/y 2)
+    slots: [slot₁/#self#(called) slot₂/#arg1# slot₃/y]
+    1   (call slot₁/#self# slot₂/#arg1# slot₃/y 2)
     2   (return %₁)
 20  latestworld
 21  TestMod.f
@@ -537,7 +537,7 @@ end
 26  SourceLocation::1:10
 27  (call core.svec %₂₄ %₂₅ %₂₆)
 28  --- method core.nothing %₂₇
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/y slot₄/z]
     1   (call core.tuple slot₃/y slot₄/z)
     2   (return %₁)
 29  latestworld
@@ -560,8 +560,8 @@ end
 8   SourceLocation::1:10
 9   (call core.svec %₆ %₇ %₈)
 10  --- method core.nothing %₉
-    slots: [slot₁/#self#(called) slot₂/_]
-    1   (call slot₁/#self# slot₂/_ 1)
+    slots: [slot₁/#self#(called) slot₂/#arg1#]
+    1   (call slot₁/#self# slot₂/#arg1# 1)
     2   (return %₁)
 11  latestworld
 12  TestMod.f
@@ -572,7 +572,7 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/x]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 20  latestworld
@@ -924,6 +924,25 @@ end
 20  (return %₁₉)
 
 ########################################
+# Duplicate positional placeholders ok
+function f(_, _); end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   TestMod.f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/#arg2#(!read)]
+    1   (return core.nothing)
+10  latestworld
+11  TestMod.f
+12  (return %₁₁)
+
+########################################
 # Duplicate destructured placeholders ok
 function f((_,), (_,))
 end
@@ -1215,6 +1234,14 @@ end
 75  latestworld
 76  TestMod.f_kw_simple
 77  (return %₇₆)
+
+########################################
+# Error: Duplicate keyword placeholder name
+function f_kw_placeholders(; _=1, _=2); end
+#---------------------
+LoweringError:
+function f_kw_placeholders(; _=1, _=2); end
+#                                 ╙ ── function argument name not unique
 
 ########################################
 # Keyword slurping - simple forwarding of all kws
@@ -1532,7 +1559,7 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub TestMod.#f_only_generated@generator#0 SourceRef(SourceFile("@generated function f_only_generated(x, y)\n    generator_code(x,y)\nend", 0, nothing, 1, [1, 44, 68]), 1, (macrocall (macro_name 1-1::@-t 2-10::Identifier) 11-11::Whitespace-t (function 12-19::function-t 20-20::Whitespace-t (call 21-36::Identifier 37-37::(-t 38-38::Identifier 39-39::,-t 40-40::Whitespace-t 41-41::Identifier 42-42::)-t) (block 43-47::NewlineWs-t (call 48-61::Identifier 62-62::(-t 63-63::Identifier 64-64::,-t 65-65::Identifier 66-66::)-t) 67-67::NewlineWs-t) 68-70::end-t))) (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_only_generated@generator#0 SourceRef::1:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   (meta :generated_only)
     3   (return core.nothing)
 20  latestworld
@@ -1578,7 +1605,7 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/maybe_gen_stuff slot₅/nongen_stuff]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub TestMod.#f_partially_generated@generator#0 SourceRef(SourceFile("function f_partially_generated(x, y)\n    nongen_stuff = bothgen(x, y)\n    if @generated\n        quote\n            maybe_gen_stuff = some_gen_stuff(x, y)\n        end\n    else\n        maybe_gen_stuff = some_nongen_stuff(x, y)\n    end\n    (nongen_stuff, maybe_gen_stuff)\nend", 0, nothing, 1, [1, 38, 71, 89, 103, 154, 166, 175, 225, 233, 269]), 1, (function 1-8::function-t 9-9::Whitespace-t (call 10-30::Identifier 31-31::(-t 32-32::Identifier 33-33::,-t 34-34::Whitespace-t 35-35::Identifier 36-36::)-t) (block 37-41::NewlineWs-t (= 42-53::Identifier 54-54::Whitespace-t 55-55::=-t 56-56::Whitespace-t (call 57-63::Identifier 64-64::(-t 65-65::Identifier 66-66::,-t 67-67::Whitespace-t 68-68::Identifier 69-69::)-t)) 70-74::NewlineWs-t (if 75-76::if-t 77-77::Whitespace-t (macrocall (macro_name 78-78::@-t 79-87::Identifier)) (block 88-96::NewlineWs-t (quote (block 97-101::quote-t 102-114::NewlineWs-t (= 115-129::Identifier 130-130::Whitespace-t 131-131::=-t 132-132::Whitespace-t (call 133-146::Identifier 147-147::(-t 148-148::Identifier 149-149::,-t 150-150::Whitespace-t 151-151::Identifier 152-152::)-t)) 153-161::NewlineWs-t 162-164::end-t)) 165-169::NewlineWs-t) 170-173::else-t (block 174-182::NewlineWs-t (= 183-197::Identifier 198-198::Whitespace-t 199-199::=-t 200-200::Whitespace-t (call 201-217::Identifier 218-218::(-t 219-219::Identifier 220-220::,-t 221-221::Whitespace-t 222-222::Identifier 223-223::)-t)) 224-228::NewlineWs-t) 229-231::end-t) 232-236::NewlineWs-t (tuple-p 237-237::(-t 238-249::Identifier 250-250::,-t 251-251::Whitespace-t 252-266::Identifier 267-267::)-t) 268-268::NewlineWs-t) 269-271::end-t)) (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_partially_generated@generator#0 SourceRef::1:37 (call core.svec :#self# :x :y) (call core.svec)))
     2   TestMod.bothgen
     3   (= slot₅/nongen_stuff (call %₂ slot₂/x slot₃/y))
     4   TestMod.some_nongen_stuff

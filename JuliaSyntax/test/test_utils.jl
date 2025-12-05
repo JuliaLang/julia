@@ -210,7 +210,7 @@ function parsers_agree_on_file(text, filename; exprs_equal=exprs_equal_no_linenu
         return true
     end
     try
-        stream = ParseStream(text)
+        stream = ParseStream(text; version=v"1.13")
         parse!(stream)
         ex = build_tree(Expr, stream, filename=filename)
         return !JuliaSyntax.any_error(stream) && exprs_equal(fl_ex, ex)

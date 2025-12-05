@@ -119,7 +119,7 @@ end
 
 # Passes desugaring, but T is detected as unused and throws an error.
 # Is it clear whether this should be `f(x::T) where T` or `f(x::T where T)`?
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 let
     f = ((x::T) where T) -> x
     f(1)
@@ -471,7 +471,37 @@ end
     @test cl(x = 20) == 21
 end
 
+@testset "Write-only placeholder function arguments" begin
+    # positional arguments may be duplicate placeholders.  keyword arguments can
+    # contain placeholders, but they must be unique
+    params_req = [""
+                  "_"
+                  "::Int"
+                  "_, _"]
+    params_opt = [""
+                  "::Int=2"
+                  "_=2"]
+    params_va  = ["", "_..."]
+    params_kw  = [""
+                  "; _"
+                  "; _::Int"
+                  "; _::Int=1"
+                  "; _=1, __=2"
+                  "; _..."
+                  "; _=1, __..."]
+    local i = 0
+    for req in params_req, opt in params_opt, va in params_va, kw in params_kw
+        arg_str = join(filter(!isempty, (req, opt, va, kw)), ", ")
+        f_str = "function f_placeholders$i($arg_str); end"
+        i += 1
+        @testset "$f_str" begin
+            @test JuliaLowering.include_string(test_mod, f_str) isa Function
+        end
+    end
+end
+
 @testset "Generated functions" begin
+    for expr_compat_mode in (false, true)
     @test JuliaLowering.include_string(test_mod, raw"""
     begin
         @generated function f_gen(x::NTuple{N,T}) where {N,T}
@@ -482,7 +512,17 @@ end
 
         f_gen((1,2,3,4,5))
     end
-    """) == (NTuple{5,Int}, 5, Int)
+    """; expr_compat_mode) == (NTuple{5,Int}, 5, Int)
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        @generated function f_gen_unnamed_args(::Type{T}, y, ::Type{U}) where {T, U}
+            return (T, y, U)
+        end
+
+        f_gen_unnamed_args(Int, UInt8(3), Float64)
+    end
+    """; expr_compat_mode) == (Int, UInt8, Float64)
 
     @test JuliaLowering.include_string(test_mod, raw"""
     begin
@@ -503,8 +543,20 @@ end
 
         (f_partially_gen((1,2)), f_partially_gen((1,2,3,4,5)))
     end
-    """) == ((:shared_stuff, (:nongen, (NTuple{2,Int}, 2, Int))),
-             (:shared_stuff, (:gen, (NTuple{5,Int}, 5, Int))))
+    """; expr_compat_mode) ==
+        ((:shared_stuff, (:nongen, (NTuple{2,Int}, 2, Int))),
+         (:shared_stuff, (:gen, (NTuple{5,Int}, 5, Int))))
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    begin
+        @generated function f_gen_calls_macros(x::T) where {T}
+            s = @raw_str "foo"
+            :(@raw_str $s)
+        end
+        f_gen_calls_macros(1)
+    end
+    """; expr_compat_mode) === "foo"
+    end
 
     # Test generated function edges to bindings
     # (see also https://github.com/JuliaLang/julia/pull/57230)

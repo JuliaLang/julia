@@ -48,6 +48,7 @@ extern void jl_fin_stackwalk(void);
 jl_array_t *jl_module_init_order;
 
 JL_DLLEXPORT size_t jl_page_size;
+JL_DLLEXPORT size_t jl_hugepage_size;
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 {
@@ -715,6 +716,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     libsupport_init();
     jl_safepoint_init();
     jl_page_size = jl_getpagesize();
+    jl_hugepage_size = (size_t)jl_gethugepagesize();
     htable_new(&jl_current_modules, 0);
     init_global_mutexes();
     jl_precompile_toplevel_module = NULL;

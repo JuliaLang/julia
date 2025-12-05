@@ -181,7 +181,7 @@ X{S, T=w}
 #---------------------
 LoweringError:
 X{S, T=w}
-#   └──┘ ── misplace assignment in type parameter list
+#   └──┘ ── misplaced assignment in type parameter list
 
 ########################################
 # Simple abstract type definition

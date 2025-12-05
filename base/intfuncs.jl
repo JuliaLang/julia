@@ -190,7 +190,7 @@ end
 """
     gcdx(a, b...)
 
-Computes the greatest common (positive) divisor of `a` and `b` and their Bézout
+Compute the greatest common (positive) divisor of `a` and `b` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 ``u*a + v*b = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
 

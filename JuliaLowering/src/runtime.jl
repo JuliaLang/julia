@@ -63,9 +63,9 @@ function _interpolated_value(ctx::InterpolationContext, srcref, ex)
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
         # be used interchangeably in macros.
-        makeleaf(ctx, srcref, K"Identifier", string(ex))
+        newleaf(ctx, srcref, K"Identifier", string(ex))
     else
-        makeleaf(ctx, srcref, K"Value", ex)
+        newleaf(ctx, srcref, K"Value", ex)
     end
 end
 
@@ -290,8 +290,9 @@ end
 # An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
 # than Expr.
 struct GeneratedFunctionStub
-    gen
-    srcref
+    expr_compat_mode::Bool
+    gen::Function
+    srcref::Union{SyntaxTree,LineNumberNode,SourceRef}
     argnames::Core.SimpleVector
     spnames::Core.SimpleVector
 end
@@ -320,18 +321,20 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     __module__ = source.module
 
-    # Macro expansion. Looking at Core.GeneratedFunctionStub, it seems that
-    # macros emitted by the generator are currently expanded in the latest
-    # world, so do that for compatibility.
-    macro_world = typemax(UInt)
-    ctx1 = MacroExpansionContext(graph, __module__, false, macro_world)
+    # Macro expansion. Note that we expand in `tls_world_age()` (see
+    # Core.GeneratedFunctionStub)
+    macro_world = Base.tls_world_age()
+    ctx1 = MacroExpansionContext(graph, __module__, g.expr_compat_mode, macro_world)
 
     layer = only(ctx1.scope_layers)
 
     # Run code generator - this acts like a macro expander and like a macro
     # expander it gets a MacroContext.
-    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer, false)
+    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer, g.expr_compat_mode)
     ex0 = g.gen(mctx, args...)
+    if ex0 isa Expr
+        ex0 = expr_to_syntaxtree(ctx1, ex0, source_location(LineNumberNode, g.srcref))
+    end
     if ex0 isa SyntaxTree
         if !is_compatible_graph(ctx1, ex0)
             # If the macro has produced syntax outside the macro context, copy it over.
@@ -340,13 +343,14 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
             ex0 = copy_ast(ctx1, ex0)
         end
     else
-        ex0 = @ast ctx ex expanded::K"Value"
+        ex0 = @ast ctx1 g.srcref ex0::K"Value"
     end
     # Expand any macros emitted by the generator
     ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
     ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
                                  ctx1.bindings, ctx1.scope_layers,
-                                 ctx1.scope_layer_stack, false, macro_world)
+                                 ctx1.scope_layer_stack, g.expr_compat_mode,
+                                 macro_world)
     ex1 = reparent(ctx1, ex1)
 
     # Desugaring

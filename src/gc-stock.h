@@ -1,25 +1,41 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
-  allocation and garbage collection
-  . non-moving, precise mark and sweep collector
-  . pool-allocates small objects, keeps big objects on a simple list
-*/
+ * Julia implements a garbage collector (GC) to automate dynamic memory management.
+ * Key characteristics of Julia's stock GC:
+ *
+ * - Mark-sweep: The object graph is traced starting from a root set
+ *   (e.g., global variables and local variables on the stack) to determine live objects.
+ *
+ * - Non-moving: Objects are not relocated to a different memory address.
+ *
+ * - Parallel: Multiple threads can be used during the marking and sweeping phases.
+ *
+ * - Partially concurrent: The runtime can scavenge pool-allocated memory blocks
+ *   (e.g., via madvise on Linux) concurrently with Julia user code.
+ *
+ * - Generational: Objects are partitioned into generations based on how many collection
+ *   cycles they have survived. Younger generations are collected more often.
+ *
+ * - Mostly precise: Julia optionally supports conservative stack scanning for users
+ *   interoperating with foreign languages like C.
+ */
+
 #ifndef JL_GC_H
 #define JL_GC_H
 
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <inttypes.h>
-#include "julia.h"
-#include "julia_threads.h"
-#include "julia_internal.h"
-#include "julia_assert.h"
-#include "threading.h"
 #include "gc-common.h"
+#include "julia.h"
+#include "julia_assert.h"
+#include "julia_internal.h"
+#include "julia_threads.h"
+#include "threading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,10 +67,10 @@ typedef struct {
 } jl_gc_debug_env_t;
 
 // Array chunks (work items representing suffixes of
-// large arrays of pointers left to be marked)
+// large arrays that have not been scanned yet)
 
 typedef enum {
-    GC_empty_chunk = 0, // for sentinel representing no items left in chunk queue
+    GC_empty_chunk = 0, // sentine value representing no chunk
     GC_objary_chunk,    // for chunk of object array
     GC_ary8_chunk,      // for chunk of array with 8 bit field descriptors
     GC_ary16_chunk,     // for chunk of array with 16 bit field descriptors
@@ -62,8 +78,8 @@ typedef enum {
 } gc_chunk_id_t;
 
 typedef struct _jl_gc_chunk_t {
-    gc_chunk_id_t cid;
-    struct _jl_value_t *parent; // array owner
+    gc_chunk_id_t cid;          // chunk type identifier
+    struct _jl_value_t *parent; // array parent
     struct _jl_value_t **begin; // pointer to first element that needs scanning
     struct _jl_value_t **end;   // pointer to last element that needs scanning
     void *elem_begin;           // used to scan pointers within objects when marking `ary8` or `ary16`
@@ -80,76 +96,73 @@ typedef struct _jl_gc_chunk_t {
 
 #define GC_REMSET_PTR_TAG (0x1)             // lowest bit of `jl_value_t *` is tagged if it's in the remset
 
-// layout for big (>2k) objects
-
-extern uintptr_t gc_bigval_sentinel_tag;
-
-// pool page metadata
+// Metadata structure that is paired with each pool-allocated page
 typedef struct _jl_gc_pagemeta_t {
-    // next metadata structure in per-thread list
-    // or in one of the `jl_gc_page_stack_t`
+    // Pointer to the next metadata structure in the linked list
     struct _jl_gc_pagemeta_t *next;
-    // index of pool that owns this page
+    // Index of the size class, in the pool allocator, that this metadata structure belongs to
     uint8_t pool_n;
     // Whether any cell in the page is marked
     // This bit is set before sweeping iff there are live cells in the page.
     // Note that before marking or after sweeping there can be live
-    // (and young) cells in the page for `!has_marked`.
+    // (and young) cells in the page for `!has_marked`
     uint8_t has_marked;
     // Whether any cell was live and young **before sweeping**.
     // For a normal sweep (quick sweep that is NOT preceded by a
     // full sweep) this bit is set iff there are young or newly dead
-    // objects in the page and the page needs to be swept.
+    // objects in the page and the page needs to be swept
     //
-    // For a full sweep, this bit should be ignored.
+    // For a full sweep, this bit should be ignored
     //
     // For a quick sweep preceded by a full sweep. If this bit is set,
     // the page needs to be swept. If this bit is not set, there could
     // still be old dead objects in the page and `nold` and `prev_nold`
-    // should be used to determine if the page needs to be swept.
+    // should be used to determine if the page needs to be swept
     uint8_t has_young;
-    // number of old objects in this page
+    // Number of old objects in the page
     uint16_t nold;
-    // number of old objects in this page during the previous full sweep
+    // Number of old objects in the page at the end of the previous full sweep
     uint16_t prev_nold;
-    // number of free objects in this page.
-    // invalid if pool that owns this page is allocating objects from this page.
+    // Number of free objects in this page
+    // Invalid if pool that owns this page is allocating objects from this page
     uint16_t nfree;
-    uint16_t osize;           // size of each object in this page
-    uint16_t fl_begin_offset; // offset of first free object in this page
-    uint16_t fl_end_offset;   // offset of last free object in this page
-    uint16_t thread_n;        // thread id of the heap that owns this page
-    char *data;
+    uint16_t osize;           // Size of each object in this page
+    uint16_t fl_begin_offset; // Offset of first free object in this page
+    uint16_t fl_end_offset;   // Offset of last free object in this page
+    uint16_t thread_n;        // Thread id of the heap that owns this page
+    char *data;               // Pointer to the start of the regions where objects are allocated
 } jl_gc_pagemeta_t;
 
 extern jl_gc_page_stack_t global_page_pool_lazily_freed;
 extern jl_gc_page_stack_t global_page_pool_clean;
 extern jl_gc_page_stack_t global_page_pool_freed;
 
-// Lock-free stack implementation taken
-// from Herlihy's "The Art of Multiprocessor Programming"
-// XXX: this is not a general-purpose lock-free stack. We can
-// get away with just using a CAS and not implementing some ABA
-// prevention mechanism since once a node is popped from the
-// `jl_gc_page_stack_t`, it may only be pushed back to them
-// in the sweeping phase, which also doesn't push a node into the
-// same stack after it's popped
+/*
+ * Simple lock-free stack implementation for `jl_gc_page_stack_t`.
+ *
+ * NOTE: This is not a general-purpose lock-free stack. It does not implement
+ * any ABA-prevention mechanism. For our specific use case, this is acceptable,
+ * because we avoid the pathological concurrent push/pop sequences on the same
+ * list node that could trigger the ABA problem.
+ *
+ * Safety invariants for this simple lock-free stack:
+ *
+ * 1. If a node is popped from the stack by a mutator thread, it will never
+ *    be pushed back onto the same stack within the same GC epoch
+ *    (i.e., the time window between two consecutive GCs).
+ *
+ * 2. If a node is popped by a GC thread, it will never be pushed back onto
+ *    the same stack.
+ *
+ * These invariants ensure safe usage of this simplified lock-free stack
+ * without requiring ABA prevention.
+ */
 
 STATIC_INLINE void push_lf_back_nosync(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
 {
     jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
     elt->next = old_back;
     jl_atomic_store_relaxed(&pool->bottom, elt);
-}
-
-STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back_nosync(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
-{
-    jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
-    if (old_back == NULL) {
-        return NULL;
-    }
-    jl_atomic_store_relaxed(&pool->bottom, old_back->next);
-    return old_back;
 }
 
 STATIC_INLINE void push_lf_back(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
@@ -164,11 +177,9 @@ STATIC_INLINE void push_lf_back(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt)
     }
 }
 
-#define MAX_POP_ATTEMPTS (1 << 10)
-
 STATIC_INLINE jl_gc_pagemeta_t *try_pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
 {
-    for (int i = 0; i < MAX_POP_ATTEMPTS; i++) {
+    for (int i = 0; i < (1 << 10); i++) {
         jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
         if (old_back == NULL) {
             return NULL;
@@ -180,6 +191,17 @@ STATIC_INLINE jl_gc_pagemeta_t *try_pop_lf_back(jl_gc_page_stack_t *pool) JL_NOT
     }
     return NULL;
 }
+
+STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back_nosync(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
+{
+    jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
+    if (old_back == NULL) {
+        return NULL;
+    }
+    jl_atomic_store_relaxed(&pool->bottom, old_back->next);
+    return old_back;
+}
+
 
 STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
 {
@@ -196,7 +218,11 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFE
 }
 typedef struct {
     jl_gc_page_stack_t stack;
-    // pad to 128 bytes to avoid false-sharing
+    /*
+    * Pad to 128 bytes to avoid false sharing.
+    * 128 bytes is large enough to ensure that two consecutively allocated
+    * `jl_gc_padded_page_stack_t` instances will not share the same cache line.
+    */
 #ifdef _P64
     void *_pad[15];
 #else
@@ -209,6 +235,42 @@ typedef struct {
     _Atomic(size_t) n_freed_objs;
     _Atomic(size_t) n_pages_allocd;
 } gc_fragmentation_stat_t;
+
+typedef struct {
+    _Atomic(size_t) bytes_mapped;
+    _Atomic(size_t) bytes_resident;
+    _Atomic(size_t) heap_size;
+    _Atomic(size_t) heap_target;
+} gc_heapstatus_t;
+
+extern gc_heapstatus_t gc_heap_stats;
+
+/*
+ * GC Multi-Level Page Table Structures
+ *
+ * Julia uses a hierarchical page table to track the allocation state of
+ * pool-allocated memory pages. This design enables sparse memory representation
+ * and fast lookup of page states.
+ *
+ * - Level 0: pagetable0_t
+ *   - Lowest level of the page table.
+ *   - Each entry in `meta` represents the state of a single GC page
+ *     (GC_PAGE_UNMAPPED, GC_PAGE_ALLOCATED, etc.).
+ *   - Size is determined by REGION0_PG_COUNT, which varies by page size and
+ *     architecture.
+ *
+ * - Level 1: pagetable1_t
+ *   - Middle level of the page table.
+ *   - `meta0` points to Level 0 tables, each covering a contiguous region of pages.
+ *   - Supports sparse allocation: entries can be NULL if no pages in that region
+ *     are used.
+ *
+ * - Level 2 / Root: pagetable_t
+ *   - Top-level root of the page table.
+ *   - `meta1` points to Level 1 tables.
+ *   - Provides the first lookup level for any heap pointer and supports large
+ *     address spaces by subdividing memory into regions.
+ */
 
 #ifdef GC_SMALL_PAGE
 #ifdef _P64
@@ -244,7 +306,11 @@ typedef struct {
 #endif
 #endif
 
-// define the representation of the levels of the page-table (0 to 2)
+#define GC_PAGE_UNMAPPED        0
+#define GC_PAGE_ALLOCATED       1
+#define GC_PAGE_LAZILY_FREED    2
+#define GC_PAGE_FREED           3
+
 typedef struct {
     uint8_t meta[REGION0_PG_COUNT];
 } pagetable0_t;
@@ -256,18 +322,6 @@ typedef struct {
 typedef struct {
     pagetable1_t *meta1[REGION2_PG_COUNT];
 } pagetable_t;
-
-typedef struct {
-    _Atomic(size_t) bytes_mapped;
-    _Atomic(size_t) bytes_resident;
-    _Atomic(size_t) heap_size;
-    _Atomic(size_t) heap_target;
-} gc_heapstatus_t;
-
-#define GC_PAGE_UNMAPPED        0
-#define GC_PAGE_ALLOCATED       1
-#define GC_PAGE_LAZILY_FREED    2
-#define GC_PAGE_FREED           3
 
 extern pagetable_t alloc_map;
 
@@ -319,12 +373,47 @@ STATIC_INLINE void gc_alloc_map_maybe_create(char *_data) JL_NOTSAFEPOINT
     }
 }
 
-// Page layout:
-//  Metadata pointer: sizeof(jl_gc_pagemeta_t*)
-//  Padding: GC_PAGE_OFFSET - sizeof(jl_gc_pagemeta_t*)
-//  Blocks: osize * n
-//    Tag: sizeof(jl_taggedvalue_t)
-//    Data: <= osize - sizeof(jl_taggedvalue_t)
+/*
+ * Page Layout
+ *
+ * Each pool-allocated page is divided into three main sections:
+ *
+ * - Metadata Pointer
+ *   - Size: sizeof(jl_gc_pagemeta_t*)
+ *   - Points to the page metadata structure.
+ *
+ * - Padding
+ *   - Size: GC_PAGE_OFFSET - sizeof(jl_gc_pagemeta_t*)
+ *   - Ensures proper alignment of the blocks.
+ *
+ * - Blocks
+ *   - Size per block: osize
+ *   - Each block consists of:
+ *     - Tag: sizeof(jl_taggedvalue_t)
+ *     - Data: up to (osize - sizeof(jl_taggedvalue_t))
+ *
+ * Example layout:
+ *
+ *   +----------------------+ <- page start
+ *   | Metadata Pointer     |  sizeof(jl_gc_pagemeta_t*)
+ *   +----------------------+
+ *   | Padding              |  GC_PAGE_OFFSET - sizeof(jl_gc_pagemeta_t*)
+ *   +----------------------+ <- GC_PAGE_OFFSET
+ *   | Block 0              |  osize
+ *   |   +----------------+|
+ *   |   | Tag            || sizeof(jl_taggedvalue_t)
+ *   |   +----------------+|
+ *   |   | Data           || <= osize - sizeof(jl_taggedvalue_t)
+ *   |   +----------------+|
+ *   | Block 1              |  osize
+ *   |   +----------------+|
+ *   |   | Tag            || sizeof(jl_taggedvalue_t)
+ *   |   +----------------+|
+ *   |   | Data           || <= osize - sizeof(jl_taggedvalue_t)
+ *   |   +----------------+|
+ *   | ...                  |
+ *   +----------------------+ <- page end
+ */
 
 STATIC_INLINE char *gc_page_data(void *x) JL_NOTSAFEPOINT
 {
@@ -364,10 +453,17 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_page_metadata_back(jl_gc_pagemeta_t **ppg) J
     return v;
 }
 
-extern bigval_t *oldest_generation_of_bigvals;
-extern int64_t buffered_pages;
+STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
+{
+    return (jl_taggedvalue_t*)(p->data + p->fl_begin_offset);
+}
+
+STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
+{
+    return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
+}
+
 extern int gc_first_tid;
-extern gc_heapstatus_t gc_heap_stats;
 
 STATIC_INLINE int gc_first_parallel_collector_thread_id(void) JL_NOTSAFEPOINT
 {
@@ -427,19 +523,12 @@ STATIC_INLINE void gc_check_ptls_of_parallel_collector_thread(jl_ptls_t ptls) JL
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
 }
 
+extern uintptr_t gc_bigval_sentinel_tag;
+extern bigval_t *oldest_generation_of_bigvals;
+
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
     return container_of(o, bigval_t, header);
-}
-
-STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
-{
-    return (jl_taggedvalue_t*)(p->data + p->fl_begin_offset);
-}
-
-STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
-{
-    return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
 
 FORCE_INLINE void gc_big_object_unlink(const bigval_t *node) JL_NOTSAFEPOINT
@@ -476,39 +565,27 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
 #define FULL_SWEEP_NUM_REASONS (4)
 
 extern JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
-STATIC_INLINE void gc_count_full_sweep_reason(int reason) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_record_full_sweep_reason(int reason) JL_NOTSAFEPOINT
 {
     assert(reason >= 0 && reason < FULL_SWEEP_NUM_REASONS);
     jl_full_sweep_reasons[reason]++;
 }
 
-extern uv_mutex_t gc_perm_lock;
-extern uv_mutex_t gc_threads_lock;
-extern uv_cond_t gc_threads_cond;
-extern uv_sem_t gc_sweep_assists_needed;
-extern _Atomic(int) gc_n_threads_marking;
-extern _Atomic(int) gc_n_threads_sweeping_pools;
-extern _Atomic(int) n_threads_running;
-extern uv_barrier_t thread_init_done;
-void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_collect_neighbors(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
-void gc_mark_loop(jl_ptls_t ptls, int mark_loop_initiator) JL_NOTSAFEPOINT;
-void gc_sweep_pool_parallel(jl_ptls_t ptls);
-void gc_free_pages(void);
-void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT;
+void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void jl_gc_debug_init(void);
 
-// GC pages
+// GC permanent allocation
+extern uv_mutex_t gc_perm_lock;
 
+// GC pages
 extern uv_mutex_t gc_pages_lock;
 void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
-void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
+NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 
 // GC debug
-
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
 void gc_settime_premark_end(void);
 void gc_settime_postmark_end(void);
@@ -641,32 +718,26 @@ extern int gc_verifying;
 
 int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
 int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int offset) JL_NOTSAFEPOINT;
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
 int jl_gc_debug_check_other(void);
-int gc_debug_check_pool(void);
 void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
-static inline int jl_gc_debug_check_other(void) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_gc_debug_check_other(void) JL_NOTSAFEPOINT
 {
     return 0;
 }
-static inline int gc_debug_check_pool(void) JL_NOTSAFEPOINT
-{
-    return 0;
-}
-static inline void jl_gc_debug_print(void) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_debug_print(void) JL_NOTSAFEPOINT
 {
 }
-static inline void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
 {
     (void)ta;
 }
-static inline void gc_scrub(void) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_scrub(void) JL_NOTSAFEPOINT
 {
 }
 #endif
@@ -678,14 +749,6 @@ void gc_stats_big_obj(void);
 #define gc_stats_all_pool()
 #define gc_stats_big_obj()
 #endif
-
-// For debugging
-void gc_count_pool(void);
-
-JL_DLLEXPORT void jl_enable_gc_logging(int enable);
-JL_DLLEXPORT int jl_is_gc_logging_enabled(void);
-JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void);
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

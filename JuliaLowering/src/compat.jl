@@ -1,11 +1,14 @@
 const JS = JuliaSyntax
 
 function _insert_tree_node(graph::SyntaxGraph, k::Kind, src::SourceAttrType,
-                           flags::UInt16=0x0000; attrs...)
+                           attrs=[], flags::UInt16=0x0000)
     id = newnode!(graph)
-    sethead!(graph, id, k)
-    flags !== 0 && setflags!(graph, id, flags)
-    setattr!(graph, id; source=src, attrs...)
+    setattr!(graph, id, :kind, k)
+    flags !== 0 && setattr!(graph, id, :syntax_flags, flags)
+    setattr!(graph, id, :source, src)
+    for (k,v) in attrs
+        setattr!(graph, id, k, v)
+    end
     return id
 end
 
@@ -34,9 +37,7 @@ end
     graph = syntax_graph(ctx)
     toplevel_src = if isnothing(lnn)
         # Provenance sinkhole for all nodes until we hit a linenode
-        dummy_src = SourceRef(
-            SourceFile("No source for expression"),
-            1, JS.GreenNode(K"None", 0))
+        dummy_src = SourceRef(SourceFile("No source for expression"), 1, 0)
         _insert_tree_node(graph, K"None", dummy_src)
     else
         lnn
@@ -46,15 +47,14 @@ end
     return out
 end
 
-function _expr_replace!(@nospecialize(e), replace_pred::Function, replacer!::Function,
+function _expr_replace(@nospecialize(e), replace_pred::Function, replacer::Function,
                         recurse_pred=(@nospecialize e)->true)
     if replace_pred(e)
-        replacer!(e)
-    end
-    if e isa Expr && recurse_pred(e)
-        for a in e.args
-            _expr_replace!(a, replace_pred, replacer!, recurse_pred)
-        end
+        replacer(e)
+    elseif e isa Expr && recurse_pred(e)
+        Expr(e.head, Any[_expr_replace(a, replace_pred, replacer, recurse_pred) for a in e.args]...)
+    else
+        e
     end
 end
 
@@ -187,14 +187,14 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     #---------------------------------------------------------------------------
     # Non-expr types
     if isnothing(e)
-        st_id = _insert_tree_node(graph, K"core", src; name_val="nothing")
+        st_id = _insert_tree_node(graph, K"core", src, [:name_val=>"nothing"])
         return st_id, src
     elseif e isa LineNumberNode
         # A LineNumberNode in value position evaluates to nothing
-        st_id = _insert_tree_node(graph, K"core", src; name_val="nothing")
+        st_id = _insert_tree_node(graph, K"core", src, [:name_val=>"nothing"])
         return st_id, e
     elseif e isa Symbol
-        st_id = _insert_tree_node(graph, K"Identifier", src; name_val=String(e))
+        st_id = _insert_tree_node(graph, K"Identifier", src, [:name_val=>String(e)])
         return st_id, src
     elseif e isa QuoteNode
         if e.value isa Symbol
@@ -202,13 +202,13 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         elseif e.value isa Expr
             return _insert_convert_expr(Expr(:inert, e.value), graph, src)
         elseif e.value isa LineNumberNode
-            return _insert_tree_node(graph, K"Value", src; value=e.value), src
+            return _insert_tree_node(graph, K"Value", src, [:value=>e.value]), src
         else
             return _insert_convert_expr(e.value, graph, src)
         end
     elseif e isa String
         st_id = _insert_tree_node(graph, K"string", src)
-        id_inner = _insert_tree_node(graph, K"String", src; value=e)
+        id_inner = _insert_tree_node(graph, K"String", src, [:value=>e])
         setchildren!(graph, st_id, [id_inner])
         return st_id, src
     elseif !(e isa Expr)
@@ -217,7 +217,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         st_k = e isa Bool ? K"Bool" :
             e isa Integer ? K"Integer" :
             find_kind(string(typeof(e)))
-        st_id = _insert_tree_node(graph, isnothing(st_k) ? K"Value" : st_k, src; value=e)
+        st_id = _insert_tree_node(graph, isnothing(st_k) ? K"Value" : st_k, src, [:value=>e])
         return st_id, src
     end
 
@@ -267,14 +267,10 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             src = child_exprs[2]
         end
         deleteat!(child_exprs, 2)
-        if a1 isa Symbol
-            child_exprs[1] = a1_esc(Expr(:macro_name, a1))
-        elseif a1 isa Expr && a1.head === :(.)
-            a12,a12_esc = unwrap_esc(a1.args[2])
-            if a12 isa QuoteNode
-                child_exprs[1] = a1_esc(Expr(:(.), a1.args[1],
-                                             Expr(:macro_name, a12_esc(a12.value))))
-            end
+        if a1 isa Symbol && a1 === Symbol("@__dot__")
+            child_exprs[1] = Symbol("@.")
+        elseif a1 isa Expr && nargs === 2 && a1.args[2] === Symbol("@__dot__")
+            child_exprs[1] = Expr(a1.head, a1.args[1], Symbol("@."))
         elseif a1 isa GlobalRef && a1.mod === Core
             # Syntax-introduced macrocalls are listed here for reference.  We
             # probably don't need to convert these.
@@ -366,7 +362,8 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             lam_eqs = Any[]
             for a in a1.args
                 a isa LineNumberNode && continue
-                a isa Expr && a.head === :(=) ? push!(lam_eqs, a) : push!(lam_args, a)
+                a isa Expr && a.head === :(=) ?
+                    push!(lam_eqs, Expr(:kw, a.args...)) : push!(lam_args, a)
             end
             !isempty(lam_eqs) && push!(lam_args, Expr(:parameters, lam_eqs...))
             child_exprs[1] = a1_esc(Expr(:tuple, lam_args...))
@@ -398,26 +395,28 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             child_exprs[2] = maybe_unwrap_arg(e.args[2])
         end
     elseif e.head === :module
-        @assert nargs === 3
-        if !e.args[1]
+        @assert nargs in (3, 4)
+        has_version = !isa(e.args[1], Bool)
+        if !e.args[1+has_version]
             st_flags |= JS.BARE_MODULE_FLAG
         end
-        child_exprs = Any[e.args[2], e.args[3]]
+        child_exprs = has_version ?
+            Any[Expr(:mod_version, e.args[1]), e.args[2+has_version], e.args[3+has_version]] :
+            Any[e.args[2+has_version], e.args[3+has_version]]
     elseif e.head === :do
         # Expr:
         # (do (call f args...) (-> (tuple lam_args...) (block ...)))
         # SyntaxTree:
         # (call f args... (do (tuple lam_args...) (block ...)))
-        callargs = collect_expr_parameters(e.args[1], 2)
         if e.args[1].head === :macrocall
             st_k = K"macrocall"
+            callargs = collect_expr_parameters(e.args[1], 3)
             if callargs[2] isa LineNumberNode
                 src = callargs[2]
             end
             deleteat!(callargs, 2)
-            c1,c1_esc = unwrap_esc(callargs[1])
-            callargs[1] = c1_esc(Expr(:macro_name, c1))
         else
+            callargs = collect_expr_parameters(e.args[1], 2)
             st_k = K"call"
         end
         child_exprs = Any[callargs..., Expr(:do_lambda, e.args[2].args...)]
@@ -433,11 +432,9 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         child_exprs = child_exprs[2:end]
         # TODO handle docstrings after refactor
     elseif (e.head === :using || e.head === :import)
-        _expr_replace!(e,
-                       (e)->(e isa Expr && e.head === :.),
-                       (e)->(e.head = :importpath))
-    elseif e.head === :kw
-        st_k = K"="
+        e2 = _expr_replace(e, (e)->(e isa Expr && e.head === :.),
+                           (e)->Expr(:importpath, e.args...))
+        child_exprs = e2.args
     elseif e.head in (:local, :global) && nargs > 1
         # Possible normalization
         # child_exprs = Any[Expr(:tuple, child_exprs...)]
@@ -498,7 +495,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         @assert e.args[1] isa Symbol
         @assert e.args[2] isa LayerId
         st_id, src = _insert_convert_expr(e.args[1], graph, src)
-        setattr!(graph, st_id, scope_layer=e.args[2])
+        setattr!(graph, st_id, :scope_layer, e.args[2])
         return st_id, src
     elseif e.head === :symbolicgoto || e.head === :symboliclabel
         @assert nargs === 1
@@ -536,20 +533,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
 
     #---------------------------------------------------------------------------
     # Possibly-temporary heads introduced by us converting the parent expr
-    if e.head === :macro_name
-        @assert nargs === 1
-        # Trim `@` for a correct SyntaxTree, although we need to add it back
-        # later for finding the macro
-        if e.args[1] === :(.)
-            mac_name = string(e.args[1][2])
-            mac_name = mac_name == "@__dot__" ? "." : mac_name[2:end]
-            child_exprs[1] = Expr(:(.), e.args[1][1], Symbol(mac_name))
-        else
-            mac_name = string(e.args[1])
-            mac_name = mac_name == "@__dot__" ? "." : mac_name[2:end]
-            child_exprs[1] = Symbol(mac_name)
-        end
-    elseif e.head === :catch_var_placeholder
+    if e.head === :catch_var_placeholder
         st_k = K"Placeholder"
         st_attrs[:name_val] = ""
         child_exprs = nothing
@@ -559,6 +543,13 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         child_exprs = nothing
     elseif e.head === :do_lambda
         st_k = K"do"
+    elseif e.head === :mod_version
+        v = e.args[1]
+        @assert v isa VersionNumber
+        st_k = K"VERSION"
+        st_flags = JS.set_numeric_flags(v.minor*10)
+        st_attrs[:value] = v
+        child_exprs = nothing
     end
 
     #---------------------------------------------------------------------------
@@ -570,7 +561,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         return nothing, src
     end
 
-    st_id = _insert_tree_node(graph, st_k, src, st_flags; st_attrs...)
+    st_id = _insert_tree_node(graph, st_k, src, collect(st_attrs), st_flags)
 
     # child_exprs === nothing means we want a leaf.  Note that setchildren! with
     # an empty list makes a node non-leaf.

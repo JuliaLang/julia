@@ -247,6 +247,7 @@ register_kinds!(JuliaSyntax, 0, [
             "public"
             "type"
             "var"
+            "VERSION"
         "END_CONTEXTUAL_KEYWORDS"
     "END_KEYWORDS"
 
@@ -1026,12 +1027,14 @@ register_kinds!(JuliaSyntax, 0, [
         "char"           # A char string node (containing delims + char data)
         "macrocall"
         "parameters"     # the list after ; in f(; a=1)
+        "kw"
         "toplevel"
         "tuple"
         "ref"
         "vect"
         "parens"
         "importpath"
+        "meta"
         # Concatenation syntax
         "braces"
         "bracescat"
