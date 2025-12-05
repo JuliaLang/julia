@@ -64,7 +64,7 @@ static jl_mutex_t jl_timing_ittapi_events_lock;
 
 nvtxDomainHandle_t jl_timing_nvtx_domain;
 nvtxDomainHandle_t jl_timing_nvtx_task_domain;
- 
+
 static uint64_t jl_timing_nvtx_signature_schemaid;
 static uint64_t jl_timing_nvtx_module_schemaid;
 static uint64_t jl_timing_nvtx_location_schemaid;
