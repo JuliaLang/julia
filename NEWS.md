@@ -79,6 +79,7 @@ Standard library changes
 * History searching has been rewritten to use a new interactive modal dialogue, using a fzf-like style.
 * The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
 * Display of repeated frames and cycles in stack traces has been improved by bracketing them in the trace and treating them consistently ([#55841]).
+* The superscript character U+107A5 𐞥 (MODIFIER LETTER SMALL Q), which was already supported in the language, can now be accessed at the REPL with `\^q` ([#59544]).
 
 #### Test
 
@@ -98,6 +99,11 @@ Standard library changes
 #### Dates
 
 * `isoweekdate`, `isoyear`, `weeksinyear` are now implemented and exported for week based calendars, following [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) ([#48507]).
+
+External dependencies
+---------------------
+
+* 7-Zip updated from p7zip v17.06 to upstream 7-Zip v25.01. On Windows, the full 7z.exe/7z.dll bundle is replaced with standalone 7za.exe, which supports fewer formats but unifies cross-platform behavior ([#60025]).
 
 Deprecated or removed
 ---------------------
@@ -140,7 +146,9 @@ Deprecated or removed
 [#59295]: https://github.com/JuliaLang/julia/issues/59295
 [#59372]: https://github.com/JuliaLang/julia/issues/59372
 [#59534]: https://github.com/JuliaLang/julia/issues/59534
+[#59544]: https://github.com/JuliaLang/julia/issues/59544
 [#59551]: https://github.com/JuliaLang/julia/issues/59551
 [#59691]: https://github.com/JuliaLang/julia/issues/59691
 [#59775]: https://github.com/JuliaLang/julia/issues/59775
 [#59825]: https://github.com/JuliaLang/julia/issues/59825
+[#60025]: https://github.com/JuliaLang/julia/issues/60025
