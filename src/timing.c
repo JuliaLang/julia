@@ -645,7 +645,6 @@ JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_
     cur_block->nvtx_payload.module.root = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, jl_symbol_name(root->name));
     cur_block->nvtx_payload.flags |= JL_NVTX_PAYLOAD_FLAG_LOCATION | JL_NVTX_PAYLOAD_FLAG_MODULE;
 #endif
-#endif
 }
 
 JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block)
@@ -664,7 +663,7 @@ JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *
 {
     jl_timing_show((jl_value_t *)method, cur_block);
     #ifdef USE_NVTX
-
+    // TODO: add signature to payload
     #endif
     jl_timing_show_location(jl_symbol_name(method->file), method->line, method->module, cur_block);
 }
@@ -700,7 +699,7 @@ JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* 
 {
     jl_timing_printf(cur_block, "%s", jl_symbol_name(macro->def.method->name));
     #ifdef USE_NVTX
-    
+    // TODO: add macro to payload
     #endif
     assert(jl_typetagis(lno, jl_linenumbernode_type));
     jl_timing_show_location(jl_symbol_name((jl_sym_t*)jl_fieldref(lno, 1)),
@@ -765,6 +764,7 @@ void jl_timing_task_init(jl_task_t *t)
         snprintf(fiber_name, fiber_name_len,  "Task %d (\"%s\")",
                  task_id++, start_name);
     }
+#endif
 #ifdef USE_TRACY
     t->name = fiber_name;
 #endif
