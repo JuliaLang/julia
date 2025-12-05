@@ -2202,22 +2202,24 @@ end
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
 
 # Partial write() to File should return the actual number of bytes written
-@test let p = Pipe()
-    # Create a non-blocking pipe that will fill and return EAGAIN
-    Base.link_pipe!(p; writer_supports_async=true, reader_supports_async=true)
-    try
-        f = Base.Filesystem.File(Base._fd(p.in))
-        n_read, n_write = 0, 0
-        @sync begin
-            @async begin
-                n_write = write(f, rand(UInt8, 1000000))
-                close(p.in)
+if !Sys.iswindows()
+    @test let p = Pipe()
+        # Create a non-blocking pipe that will fill and return EAGAIN
+        Base.link_pipe!(p; writer_supports_async=true, reader_supports_async=true)
+        try
+            f = Base.Filesystem.File(Base._fd(p.in))
+            n_read, n_write = 0, 0
+            @sync begin
+                @async begin
+                    n_write = write(f, rand(UInt8, 1000000))
+                    close(p.in)
+                end
+                n_read = length(read(p))
             end
-            n_read = length(read(p))
+            n_write == n_read
+        finally
+            close(p)
         end
-        n_write == n_read
-    finally
-        close(p)
     end
 end
 
