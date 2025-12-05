@@ -1670,6 +1670,20 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
+STATIC_INLINE int jl_is_pair_type(void *t) JL_NOTSAFEPOINT
+{
+    jl_typename_t *pair_typename =
+        ((jl_datatype_t *)jl_unwrap_unionall(jl_pair_type))->name;
+    return jl_is_datatype(t) &&
+           ((jl_datatype_t*)(t))->name == pair_typename;
+}
+
+STATIC_INLINE int jl_is_pair(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_pair_type(t);
+}
+
 STATIC_INLINE int jl_is_genericmemory_type(void *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) &&

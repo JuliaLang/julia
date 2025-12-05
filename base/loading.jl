@@ -3693,14 +3693,21 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
             push!(includes, CacheHeaderIncludes(modkey, depname, fsize, hash, mtime, modpath))
         end
     end
-    prefs = String[]
+    prefs = Dict{UUID,Vector{String}}()
     while true
         n2 = read(f, Int32)
         totbytes -= 4
         if n2 == 0
             break
         end
-        push!(prefs, String(read(f, n2)))
+        uuid_hi = read(f, UInt64)
+        totbytes -= 8
+        uuid_lo = read(f, UInt64)
+        totbytes -= 8
+        uuid = UUID((uuid_hi, uuid_lo))
+        module_prefs = get!(Vector{String}, prefs, uuid)
+        preference_key = String(read(f, n2))
+        push!(module_prefs, preference_key)
         totbytes -= n2
     end
     prefs_hash = read(f, UInt64)
@@ -4037,27 +4044,35 @@ function get_preferences(uuid::Union{UUID,Nothing} = nothing)
     return merged_prefs
 end
 
-function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{String})
+function get_preferences_hash(preferences::Dict{UUID,Vector{String}})
     # Start from a predictable hash point to ensure that the same preferences always
     # hash to the same value, modulo changes in how Dictionaries are hashed.
     h = UInt(0)
-    uuid === nothing && return UInt64(h)
+    uuids = sort(collect(keys(preferences)))
+    for uuid in uuids
+        # Load the preferences
+        module_prefs = get_preferences(uuid)
 
-    # Load the preferences
-    prefs = get_preferences(uuid)
-
-    # Walk through each name that's called out as a compile-time preference
-    for name in prefs_list
-        prefs_value = get(prefs, name, nothing)
-        if prefs_value !== nothing
-            h = hash(prefs_value, h)::UInt
+        # Walk through each name that's called out as a compile-time preference
+        for pref_name in module_prefs
+            pref_value = get(module_prefs, pref_name, nothing)
+            if pref_value !== nothing
+                h = hash(pref_value, h)::UInt
+            end
         end
     end
     # We always return a `UInt64` so that our serialization format is stable
     return UInt64(h)
 end
-
-get_preferences_hash(m::Module, prefs_list::Vector{String}) = get_preferences_hash(PkgId(m).uuid, prefs_list)
+function get_preferences_hash(preferences::Vector{Any})
+    prefs = Dict{UUID,Vector{String}}()
+    for ((uuid_hi, uuid_lo), pref) in preferences
+        module_uuid = UUID((uuid_hi, uuid_lo))
+        module_prefs = get!(Vector{String}, prefs, module_uuid)
+        push!(module_prefs, pref)
+    end
+    return get_preferences_hash(prefs)
+end
 
 # This is how we keep track of who is using what preferences at compile-time
 const COMPILETIME_PREFERENCES = Dict{UUID,Set{String}}()
@@ -4070,9 +4085,17 @@ function record_compiletime_preference(uuid::UUID, key::String)
     push!(pref, key)
     return nothing
 end
-get_compiletime_preferences(uuid::UUID) = collect(get(Vector{String}, COMPILETIME_PREFERENCES, uuid))
-get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uuid)
-get_compiletime_preferences(::Nothing) = String[]
+function get_compiletime_preferences()
+    all_prefs = Any[]
+    for (uuid, prefs) in pairs(COMPILETIME_PREFERENCES)
+        for pref in prefs
+            uuid_hi = (uuid.value >> 64) % UInt64
+            uuid_lo = uuid.value % UInt64
+	    push!(all_prefs, Pair{Any,String}(Pair{Any,Any}(uuid_hi, uuid_lo), pref))
+        end
+    end
+    return all_prefs
+end
 
 function check_clone_targets(clone_targets)
     rejection_reason = ccall(:jl_check_pkgimage_clones, Any, (Ptr{Cchar},), clone_targets)
@@ -4374,7 +4397,7 @@ end
             end
         end
 
-        curr_prefs_hash = get_preferences_hash(id.uuid, prefs)
+        curr_prefs_hash = get_preferences_hash(prefs)
         if prefs_hash != curr_prefs_hash
             @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
             record_reason(reasons, "package preferences changed")

@@ -806,15 +806,15 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         get_compiletime_prefs_func = jl_eval_global_var(jl_base_module, jl_symbol("get_compiletime_preferences"), ct->world_age);
 
         if (toplevel) {
-            // call get_compiletime_prefs(__toplevel__)
-            jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
-            prefs_list = (jl_value_t*)jl_apply(args, 2);
+            // call get_compiletime_prefs()
+            jl_value_t *args[2] = {get_compiletime_prefs_func, NULL};
+            prefs_list = (jl_value_t*)jl_apply(args, 1);
             JL_TYPECHK(write_dependency_list, array, prefs_list);
 
-            // Call get_preferences_hash(__toplevel__, prefs_list)
+            // Call get_preferences_hash(prefs_list)
             args[0] = prefs_hash_func;
-            args[2] = prefs_list;
-            prefs_hash = (jl_value_t*)jl_apply(args, 3);
+            args[1] = prefs_list;
+            prefs_hash = (jl_value_t*)jl_apply(args, 2);
             JL_TYPECHK(write_dependency_list, uint64, prefs_hash);
         }
     }
@@ -824,10 +824,19 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     if (prefs_hash != NULL && prefs_list != NULL) {
         size_t i, l = jl_array_nrows(prefs_list);
         for (i = 0; i < l; i++) {
-            jl_value_t *pref_name = jl_array_ptr_ref(prefs_list, i);
+            jl_value_t *pref_pair = jl_array_ptr_ref(prefs_list, i);
+            JL_TYPECHK(write_dependency_list, pair, pref_pair);
+            jl_value_t *pref_uuid = jl_get_nth_field_noalloc(pref_pair, 0);
+            JL_TYPECHK(write_dependency_list, pair, pref_uuid);
+            uint64_t uuid_hi = jl_unbox_uint64(jl_get_nth_field_noalloc(pref_uuid, 0));
+            uint64_t uuid_lo = jl_unbox_uint64(jl_get_nth_field_noalloc(pref_uuid, 1));
+            jl_value_t *pref_name = jl_get_nth_field_noalloc(pref_pair, 1);
             JL_TYPECHK(write_dependency_list, string, pref_name);
+
             size_t slen = jl_string_len(pref_name);
             write_int32(s, slen);
+            write_uint64(s, uuid_hi);
+            write_uint64(s, uuid_lo);
             ios_write(s, jl_string_data(pref_name), slen);
         }
         write_int32(s, 0); // terminator

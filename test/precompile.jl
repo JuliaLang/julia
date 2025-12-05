@@ -643,7 +643,7 @@ precompile_test_harness(false) do dir
           """)
 
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
-    empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
+    empty_prefs_hash = Base.get_preferences_hash(nothing, Dict{UUID,Vector{String}}())
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
