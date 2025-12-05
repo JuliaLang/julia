@@ -2204,7 +2204,7 @@ end
 # Partial write() to File should return the actual number of bytes written
 @test let p = Pipe()
     # Create a non-blocking pipe that will fill and return EAGAIN
-    Base.link_pipe!(p; writer_supports_async=true)
+    Base.link_pipe!(p; writer_supports_async=true, reader_supports_async=true)
     try
         f = Base.Filesystem.File(Base._fd(p.in))
         n_read, n_write = 0, 0
