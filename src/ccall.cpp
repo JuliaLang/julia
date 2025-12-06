@@ -525,7 +525,7 @@ static const std::string make_errmsg(const char *fname, int n, const char *err)
 
 // bitcast whatever Ptr kind x might be (even if it is part of a union) into Ptr{Cvoid}
 // given that the caller already had emit_cpointercheck on this branch, so that
-// the conversion is guaranteed to be valid on this runtiem branch
+// the conversion is guaranteed to be valid on this runtime branch
 static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x)
 {
     if (x.typ == (jl_value_t*)jl_voidpointer_type)
