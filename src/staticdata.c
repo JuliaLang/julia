@@ -91,32 +91,11 @@ External links:
 #include "valgrind.h"
 #include "julia_assert.h"
 
-// Define JL_DEBUG_LOADING to enable detailed timing of pkgimage loading
-// #define JL_DEBUG_LOADING
-
-#ifdef JL_DEBUG_LOADING
-#define JL_LOAD_TIMING_PRINT(fmt, ...) \
-    jl_printf(JL_STDERR, "[pkgload] " fmt, ##__VA_ARGS__)
-
-#define JL_LOAD_TIMING_START(varname) \
-    uint64_t varname##_start = jl_hrtime()
-
-#define JL_LOAD_TIMING_END(varname, desc) \
-    do { \
-        uint64_t varname##_end = jl_hrtime(); \
-        jl_printf(JL_STDERR, "[pkgload]     %-40s %9.3f s\n", desc, (varname##_end - varname##_start) / 1e9); \
-    } while(0)
-
-#define JL_LOAD_TIMING_COUNTER(var) var
-#else
-#define JL_LOAD_TIMING_PRINT(fmt, ...) ((void)0)
-#define JL_LOAD_TIMING_START(varname) ((void)0)
-#define JL_LOAD_TIMING_END(varname, desc) ((void)0)
-#define JL_LOAD_TIMING_COUNTER(var) ((void)0)
-#endif
-
 // Define JL_DEBUG_SAVING to enable detailed timing of pkgimage generation
 // #define JL_DEBUG_SAVING
+
+// Define JL_DEBUG_LOADING to enable detailed timing of pkgimage loading
+// #define JL_DEBUG_LOADING
 
 #ifdef JL_DEBUG_SAVING
 #define JL_SAVE_TIMING_PRINT(fmt, ...) \
@@ -145,6 +124,27 @@ JL_DLLEXPORT int jl_is_debug_saving_enabled(void) JL_NOTSAFEPOINT
 {
     return jl_debug_saving_enabled;
 }
+
+#ifdef JL_DEBUG_LOADING
+#define JL_LOAD_TIMING_PRINT(fmt, ...) \
+    jl_printf(JL_STDERR, "[pkgload] " fmt, ##__VA_ARGS__)
+
+#define JL_LOAD_TIMING_START(varname) \
+    uint64_t varname##_start = jl_hrtime()
+
+#define JL_LOAD_TIMING_END(varname, desc) \
+    do { \
+        uint64_t varname##_end = jl_hrtime(); \
+        jl_printf(JL_STDERR, "[pkgload]     %-40s %9.3f s\n", desc, (varname##_end - varname##_start) / 1e9); \
+    } while(0)
+
+#define JL_LOAD_TIMING_COUNTER(var) var
+#else
+#define JL_LOAD_TIMING_PRINT(fmt, ...) ((void)0)
+#define JL_LOAD_TIMING_START(varname) ((void)0)
+#define JL_LOAD_TIMING_END(varname, desc) ((void)0)
+#define JL_LOAD_TIMING_COUNTER(var) ((void)0)
+#endif
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
