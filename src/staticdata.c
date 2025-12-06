@@ -3459,7 +3459,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
             if (suppress_precompile)
                 newly_inferred = NULL;
             *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order);
-            JL_SAVE_TIMING_END(create_native, "native code generation (LLVM)");
+            JL_SAVE_TIMING_END(create_native, "codegen (method gen & LLVM IR)");
         }
         JL_SAVE_TIMING_START(write_header);
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
@@ -3477,7 +3477,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     else if (_native_data != NULL) {
         JL_SAVE_TIMING_START(create_native_sys);
         *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order);
-        JL_SAVE_TIMING_END(create_native_sys, "native code generation (LLVM)");
+        JL_SAVE_TIMING_END(create_native_sys, "codegen (method gen & LLVM IR)");
     }
     if (_native_data != NULL)
         native_functions = *_native_data;

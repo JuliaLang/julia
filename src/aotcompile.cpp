@@ -58,6 +58,8 @@ STATISTIC(CreateNativeMethods, "Number of methods compiled for jl_create_native"
 STATISTIC(CreateNativeMax, "Max number of methods compiled at once for jl_create_native");
 STATISTIC(CreateNativeGlobals, "Number of globals compiled for jl_create_native");
 
+extern "C" JL_DLLEXPORT int jl_is_debug_saving_enabled(void) JL_NOTSAFEPOINT;
+
 static void addComdat(GlobalValue *G, Triple &T)
 {
     if (T.isOSBinFormatCOFF() && !G->isDeclaration()) {
@@ -2100,6 +2102,9 @@ void jl_dump_native_impl(void *native_code,
         jl_emission_params_t *params)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
+    uint64_t dump_native_start = 0;
+    if (jl_is_debug_saving_enabled())
+        dump_native_start = jl_hrtime();
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
         LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
@@ -2285,6 +2290,10 @@ void jl_dump_native_impl(void *native_code,
             );
             threads = compute_image_thread_count(module_info);
             LLVM_DEBUG(dbgs() << "Using " << threads << " to emit aot image\n");
+            if (jl_is_debug_saving_enabled()) {
+                jl_safe_printf("[pkgsave]     %-40s %9u\n", "LLVM threads:", threads);
+                jl_safe_printf("[pkgsave]     %-40s %9zu\n", "LLVM module functions:", module_info.funcs);
+            }
             nfvars = data->jl_sysimg_fvars.size();
             ngvars = data->jl_sysimg_gvars.size();
             emit_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
@@ -2472,6 +2481,10 @@ void jl_dump_native_impl(void *native_code,
         WRITE_ARCHIVE(obj_fname, obj, "", ".o");
         WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
 #undef WRITE_ARCHIVE
+    }
+    if (jl_is_debug_saving_enabled() && dump_native_start != 0) {
+        uint64_t dump_native_end = jl_hrtime();
+        jl_safe_printf("[pkgsave]     %-40s %9.3f s\n", "LLVM opt & emit (dump_native)", (dump_native_end - dump_native_start) / 1e9);
     }
 }
 
