@@ -1203,6 +1203,10 @@ static std::pair<AllocaInst*, SmallVector<Value*,0>> split_value(jl_codectx_t &c
     auto sizes = split_value_size(typ);
     Align align_dst(julia_alignment((jl_value_t*)typ));
     AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, sizes.first, align_dst) : nullptr;
+    if (bits)
+        setName(ctx.emission_context, bits, [&]() {
+            return "split::" + std::string(jl_symbol_name(typ->name->name));
+        });
     SmallVector<Value*,0> roots(sizes.second);
     auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
     split_value_into(ctx, x, x_alignment, bits, align_dst, stack_ai, MutableArrayRef(roots));
