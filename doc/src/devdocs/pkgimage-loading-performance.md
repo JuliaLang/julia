@@ -333,6 +333,104 @@ Attempted a two-phase approach: decode all relocation entries into a buffer, the
 
 **Lesson learned:** Same as above - the natural serialization order has good properties.
 
+## Package Cache Generation (Precompilation) Analysis
+
+In addition to loading performance, we analyzed package cache **generation** (precompilation) to identify optimization opportunities in the saving phase.
+
+### Timing Breakdown for GLMakie Precompilation
+
+| Phase | Time (s) | % of Total |
+|-------|----------|------------|
+| include (parse, lower, inference) | 24.6 | 46% |
+| codegen (method gen & LLVM IR) | 14.9 | 28% |
+| native code generation (3 threads) | 12.6 | 24% |
+| serialize incremental image | 0.4 | <1% |
+| GC collection | 0.7 | 1% |
+| other | 0.5 | <1% |
+| **TOTAL** | **53.7** | |
+
+### Redundancy Analysis
+
+We instrumented the codegen phase to detect any redundant compilation work.
+
+Input to `jl_emit_native_impl`:
+
+- 10,347 CodeInstances submitted for compilation
+- 104 duplicates skipped (1%) - from multi-world compilation, handled correctly
+- 2,530 const_return methods (no codegen needed)
+- 7,710 methods actually compiled
+
+Workqueue (call targets discovered during codegen):
+
+- 9,970 items in workqueue
+- 100% were already compiled (correct behavior - workqueue is for prototype patching, not recompilation)
+- 7,142 duplicate references (72%) - same CodeInstance called from multiple sites
+
+**Conclusion:** No significant redundant compilation work. The duplicates in the workqueue are expected - they represent multiple call sites that need their prototype declarations patched to point to the compiled function, not redundant compilation.
+
+### Parallel Codegen Exploration
+
+We explored parallelizing the codegen phase since it takes ~28% of precompilation time.
+
+#### Approach 1: Per-thread LLVM Contexts
+
+Each worker thread gets its own `LLVMContext` and `jl_codegen_params_t`:
+
+```text
+Main thread: partition work → spawn workers → collect modules → merge
+```
+
+**Result:** SEGFAULT in `ConstantPointerNull::get`
+
+**Root cause:** Modules from different LLVM contexts cannot be merged or linked. The `Linker` expects all modules to share the same context. Cross-context Value references cause assertion failures.
+
+#### Approach 2: Serialize/Deserialize Modules
+
+Worker threads compile to separate contexts, serialize modules to bitcode, main thread deserializes into shared context:
+
+```text
+Worker: codegen → BitcodeWriter → serialize
+Main: parseBitcodeFile → Linker::linkInModule
+```
+
+**Result:** Symbol not found errors on package load (`_jlplt_ijl_rethrow_38825_got`)
+
+**Root cause:** `jl_codegen_params_t` accumulates state during codegen:
+
+- `workqueue` - call targets for prototype patching
+- `global_targets` - references to Julia values
+- `external_fns` - external function references
+
+When using per-thread params, this state is lost after serialization. The workqueue contains Function pointers valid only in the source context.
+
+#### Approach 3: Shared Context with Mutex
+
+All threads share a single `jl_codegen_params_t` with mutex protection:
+
+**Result:** Deadlock
+
+**Root cause:** `jl_codegen_params_t` acquires `tsctx_lock` (the ThreadSafeContext lock) in its constructor and holds it for its entire lifetime. Worker threads cannot acquire the same lock to call `jl_emit_codeinst`.
+
+### Architectural Challenges for Parallel Codegen
+
+The current codegen architecture has deep assumptions about single-threaded execution:
+
+1. **LLVM Context Ownership:** `jl_codegen_params_t` owns a `ThreadSafeContext::Lock` that cannot be released and re-acquired
+2. **Shared Mutable State:** Many maps and vectors (`workqueue`, `global_targets`, `external_fns`, `mergedConstants`) are updated during codegen
+3. **Cross-Module References:** Generated functions reference globals and other functions that may be in different modules
+4. **GC Integration:** `temporary_roots` must be managed carefully across threads
+
+Potential future approaches:
+
+| Approach | Expected Impact | Complexity | Challenges |
+|----------|-----------------|------------|------------|
+| Refactor `jl_codegen_params_t` for explicit lock management | Enable shared context | Very High | Requires careful analysis of all shared state |
+| Pipeline parallelism (inference ‖ codegen ‖ LLVM opt) | Better utilization | High | Data dependencies, buffering |
+| Batch codegen at module granularity | Coarser parallelism | Medium | Load balancing |
+| Parallel LLVM optimization (already done) | ✅ Already parallelized | - | 3 threads used for native code gen |
+
+**Current status:** Parallel codegen disabled. The native code generation phase already uses 3 threads (visible in debug output), so some parallelism exists in the later stages.
+
 ## Performance Characteristics
 
 **Object uniquing rate:** ~5.2K objects/ms (~195ns per object average)
