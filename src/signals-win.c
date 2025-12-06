@@ -664,3 +664,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
         have_backtrace_fiber = 1;
     }
 }
+
+JL_DLLEXPORT void jl_membarrier(void) {
+    FlushProcessWriteBuffers();
+}
