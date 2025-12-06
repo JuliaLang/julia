@@ -1533,9 +1533,9 @@ end
 end
 
 @testset "`get_filecolor`" begin
-    @test get_filecolor("", @__MODULE__) == :light_black
-    @test get_filecolor(@__FILE__, @__MODULE__; modulecolordict = Dict((@__MODULE__) => :cyan), modulecolorcycler = [:red]) == :cyan
-    @test get_filecolor("REPL[1]", @__MODULE__; modulecolordict = Dict((@__MODULE__) => :cyan), modulecolorcycler = [:red]) == :cyan
-    @test get_filecolor(@__FILE__, @__MODULE__; modulecolordict = Dict(), modulecolorcycler = [:cyan]) == :cyan
-    @test get_filecolor("REPL[1]", @__MODULE__; modulecolordict = Dict(), modulecolorcycler = [:cyan]) == :cyan
+    @test Base.get_filecolor("", @__MODULE__) == :light_black
+    @test Base.get_filecolor(@__FILE__, @__MODULE__; modulecolordict = Dict((@__MODULE__) => :cyan), modulecolorcycler = [:red]) == :cyan
+    @test Base.get_filecolor("REPL[1]", @__MODULE__; modulecolordict = Dict((@__MODULE__) => :cyan), modulecolorcycler = [:red]) == :cyan
+    @test Base.get_filecolor(@__FILE__, @__MODULE__; modulecolordict = Dict(), modulecolorcycler = [:cyan]) == :cyan
+    @test Base.get_filecolor("REPL[1]", @__MODULE__; modulecolordict = Dict(), modulecolorcycler = [:cyan]) == :cyan
 end
