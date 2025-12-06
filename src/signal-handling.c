@@ -441,6 +441,29 @@ static void jl_check_profile_autostop(void)
     }
 }
 
+jl_mutex_t sigint_cond_lock;
+static uv_async_t *sigint_cond_loc;
+JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond)
+{
+    JL_LOCK_NOGC(&sigint_cond_lock);
+    sigint_cond_loc = cond;
+    JL_UNLOCK_NOGC(&sigint_cond_lock);
+}
+
+static void deliver_sigint_notification(void)
+{
+    if (JL_TRYLOCK_NOGC(&sigint_cond_lock)) {
+        if (sigint_cond_loc != NULL) {
+            uv_async_send(sigint_cond_loc);
+            // IO only runs on one thread, which may currently be busy - try
+            // to preempt it, so that the IO loop has a chance to run and deliver
+            // this notification.
+            jl_preempt_thread_task(jl_atomic_load_relaxed(&io_loop_tid));
+        }
+        JL_UNLOCK_NOGC(&sigint_cond_lock);
+    }
+}
+
 static void stack_overflow_warning(void)
 {
     jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");

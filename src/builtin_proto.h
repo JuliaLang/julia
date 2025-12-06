@@ -76,6 +76,7 @@ extern "C" {
     XX(tuple,"tuple") \
     XX(typeassert,"typeassert") \
     XX(typeof,"typeof") \
+    XX(cancellation_point,"cancellation_point!")
 
 #define DECLARE_BUILTIN(cname,jlname) \
     JL_CALLABLE(jl_f_##cname);

@@ -5,6 +5,7 @@
 #include <mach/clock.h>
 #include <mach/clock_types.h>
 #include <mach/clock_reply.h>
+#include <mach/thread_state.h>
 #include <mach/mach_traps.h>
 #include <mach/task.h>
 #include <mach/mig_errors.h>
@@ -890,4 +891,47 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     profile_running = 0;
     profile_all_tasks = 0;
     uv_mutex_unlock(&bt_data_prof_lock);
+}
+
+// The mprotect implementation in signals-unix.c does not work on macOS/aarch64, as mentioned.
+// This implementation comes from dotnet, but is similarly dependent on undocumented behavior of the OS.
+// Copyright (c) .NET Foundation and Contributors
+// MIT LICENSE
+JL_DLLEXPORT void jl_membarrier(void) {
+    uintptr_t sp;
+    uintptr_t registerValues[128];
+    kern_return_t machret;
+
+    // Iterate through each of the threads in the list.
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        thread_act_t thread = pthread_mach_thread_np(ptls2->system_id);
+        if (__builtin_available (macOS 10.14, iOS 12, tvOS 9, *))
+        {
+            // Request the threads pointer values to force the thread to emit a memory barrier
+            size_t registers = 128;
+            machret = thread_get_register_pointer_values(thread, &sp, &registers, registerValues);
+        }
+        else
+        {
+            // fallback implementation for older OS versions
+#if defined(_CPU_X86_64_)
+            x86_thread_state64_t threadState;
+            mach_msg_type_number_t count = x86_THREAD_STATE64_COUNT;
+            machret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&threadState, &count);
+#elif defined(_CPU_AARCH64_)
+            arm_thread_state64_t threadState;
+            mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+            machret = thread_get_state(thread, ARM_THREAD_STATE64, (thread_state_t)&threadState, &count);
+#else
+            #error Unexpected architecture
+#endif
+        }
+
+        if (machret == KERN_INSUFFICIENT_BUFFER_SIZE)
+        {
+            HANDLE_MACH_ERROR("thread_get_register_pointer_values()", machret);
+        }
+    }
 }
