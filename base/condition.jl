@@ -146,24 +146,10 @@ function wait(c::GenericCondition; first::Bool=false, waitee=c, expected_cancell
     ct = current_task()
     _wait2(c, ct, waitee, first)
 
-@label before_barrier
-    # Synchronize with atomic_fence_heavy in cancel!
-    Threads.atomic_fence_light()
-    # We need to check if we were cancelled and should not suspend if we were.
-    # The fencing above ensures that we either see the cancellation request
-    # or the cancelling task will call cancel_wait! to wake us again.
-    cr = cancellation_request()
+    cr = pre_sleep_cancellation_request()
     if cr !== expected_cancellation
-        if cr === CANCEL_REQUEST_YIELD
-            # We are about to yield anyway, so we can acknowledge the cancellation now.
-            # However, for the integrity of the cancellation_request syncrhonization,
-            # we must revisit the barrier above and re-check the cancellation request
-            @atomicreplace :acquire_release :monotonic ct.cancellation_request cr => nothing
-            @goto before_barrier
-        else
-            Base.list_deletefirst!(waitqueue(c), ct)
-            return invokelatest(cancel_wait!, waitee, cr)
-        end
+        Base.list_deletefirst!(waitqueue(c), ct)
+        return invokelatest(cancel_wait!, waitee, cr)
     end
     token = unlockall(c.lock)
 

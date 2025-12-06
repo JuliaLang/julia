@@ -3829,7 +3829,6 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 6);
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
-    jl_svecset(jl_task_type->types, 0, listt);
     // Set field 20 (metrics_enabled) as const
     // Set fields 8 (_state) and 24-27 (metric counters), 28 (cancellation_request) as atomic
     const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };

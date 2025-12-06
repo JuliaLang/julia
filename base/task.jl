@@ -1464,6 +1464,31 @@ function cancellation_request_or_yield()
 end
 
 """
+    cancellation_request_or_yield()
+
+Like [`cancellation_request_or_yield`](@ref), but indicates the caller is about to sleep,
+so yield requests can be ignored. Additionally, contains necessary synchronization to
+ensure that either the cancellation request is visible, or that any potential
+cancellation task will see the wait object established by the caller.
+
+Precondition: The caller must have established a wait object in `current_task().queue`.
+"""
+function pre_sleep_cancellation_request()
+    #@assert (@atomic :monotonic current_task().queue) !== nothing
+
+    # Synchronize with atomic_fence_heavy in cancel!
+    Threads.atomic_fence_light()
+
+    while true
+        _cr = cancellation_request_raw()
+        cr = conform_cancellation_request(_cr)
+        cr !== CANCEL_REQUEST_YIELD && return cr
+        @atomicreplace :sequentially_consistent :monotonic current_task().cancellation_request _cr => nothing
+        # The caller is about to sleep, so we are permitted to ignore the yield request.
+    end
+end
+
+"""
     Core.cancellation_point!()
 
 Like [`cancellation_request`](@ref), but additionally gives the optimizer license
