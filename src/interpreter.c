@@ -469,7 +469,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
 
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
-    jl_handler_t __eh;
+    jl_handler_preferred_t __eh;
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
 
@@ -506,7 +506,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             s->locals[jl_source_nslots(s->src) + id] = val;
         }
         else if (jl_is_enternode(stmt)) {
-            jl_enter_handler(ct, &__eh);
+            jl_enter_handler(ct, &__eh._handler);
             // This is a bit tricky, but supports the implementation of PhiC nodes.
             // They are conceptually slots, but the slot to store to doesn't get explicitly
             // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
@@ -545,29 +545,29 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // replaced later
                 JL_GC_PUSH1(&scope);
                 ct->scope = scope;
-                if (!jl_setjmp(__eh.eh_ctx, 0)) {
-                    ct->eh = &__eh;
+                if (!JL_EH_SETJMP(__eh)) {
+                    ct->eh = &__eh._handler;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
                 JL_GC_POP();
             }
             else {
-                if (!jl_setjmp(__eh.eh_ctx, 0)) {
-                    ct->eh = &__eh;
+                if (!JL_EH_SETJMP(__eh)) {
+                    ct->eh = &__eh._handler;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
             }
 
             if (s->continue_at) { // means we reached a :leave expression
-                jl_eh_restore_state_noexcept(ct, &__eh);
+                jl_eh_restore_state_noexcept(ct, &__eh._handler);
                 ip = s->continue_at;
                 s->continue_at = 0;
                 continue;
             }
             else { // a real exception
-                jl_eh_restore_state(ct, &__eh);
+                jl_eh_restore_state(ct, &__eh._handler);
                 ip = catch_ip;
                 assert(jl_enternode_catch_dest(stmt) != 0);
                 continue;
@@ -617,8 +617,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     // leave happens during normal control flow, but we must
                     // longjmp to pop the eval_body call for each enter.
                     s->continue_at = next_ip;
-                    asan_unpoison_task_stack(ct, &eh->eh_ctx);
-                    jl_longjmp(eh->eh_ctx, 1);
+                    asan_unpoison_eh_task_stack(ct, eh);
+                    jl_eh_longjmp(eh);
                 }
             }
             else if (head == jl_pop_exception_sym) {
