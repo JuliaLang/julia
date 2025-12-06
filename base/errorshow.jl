@@ -621,7 +621,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
 
             m = parentmodule_before_main(method)
             modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-            print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
+            filecolor = get_filecolor(string(file), m)
+            print_module_path_file(iob, m, string(file), line; modulecolor, filecolor, digit_align_width = 3)
             push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
@@ -797,18 +798,19 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
     end
 end
 
-# Print a stack frame where the module color is determined by looking up the parent module in
-# `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
-# from `modulecolorcycler`.
+# Print a stack frame where the module and (potentially) file color is determined by looking up the
+# parent module in `modulecolordict`. If the module does not have a color, yet, a new one can be
+# drawn from `modulecolorcycler`.
 function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolordict, modulecolorcycler; prefix = nothing)
     m = Base.parentmodule(frame)
-    modulecolor = if m !== nothing
+    if m !== nothing
         m = parentmodule_before_main(m)
-        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+        modulecolor = get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+        filecolor = get_filecolor(string(frame.file), m; modulecolordict, modulecolorcycler)
     else
-        :default
+        modulecolor, filecolor = :default, :light_black
     end
-    print_stackframe(io, i, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, modulecolor; prefix)
+    print_stackframe(io, i, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, modulecolor, filecolor; prefix)
 end
 
 # Gets the topmost parent module that isn't Main
@@ -822,8 +824,8 @@ function parentmodule_before_main(m::Module)
 end
 parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
-# Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor; prefix = nothing)
+# Print a stack frame where the module and file color is set manually with `modulecolor` and `filecolor`.
+function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor::Symbol, filecolor::Symbol; prefix = nothing)
     file, line = string(frame.file), frame.line
 
     # Used by the REPL to make it possible to open
@@ -857,13 +859,13 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     printstyled(io, "│" ^ nactive_cycles; color = :light_black)
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = digit_align_width - 1)
+    print_module_path_file(io, modul, file, line; modulecolor, filecolor, digit_align_width = digit_align_width - 1)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+function print_module_path_file(io, modul, file, line; modulecolor = :light_black, filecolor = :light_black, digit_align_width = 0)
     printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
@@ -878,10 +880,20 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     stacktrace_contract_userdir() && (file = contractuser(file))
     print(io, " ")
     dir = dirname(file)
-    !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
+    !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = filecolor)
 
     # filename, separator, line
-    printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    printstyled(io, basename(file), ":", line; color = filecolor, underline = true)
+end
+
+function get_filecolor(file::String, modul::Module; modulecolordict = STACKTRACE_FIXEDCOLORS, modulecolorcycler = STACKTRACE_MODULECOLORS)
+    if contains(file, pwd()) || endswith(file, r"REPL\[\d+\]")
+        # file is probably owned by current user/process
+        get!(() -> popfirst!(modulecolorcycler), modulecolordict, modul)
+    else
+        # file is probably not owned by current user/process
+        :light_black
+    end
 end
 
 #=
