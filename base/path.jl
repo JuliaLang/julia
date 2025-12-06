@@ -373,38 +373,55 @@ julia> joinpath(["/home/myuser", "example.jl"])
 joinpath
 
 """
-    normpath(path::AbstractString)::String
+    normpath(path::AbstractString; safe=false)::String
 
-Normalize a path, removing "." and ".." entries and changing "/" to the canonical path separator
-for the system.
+Normalize a path, removing "." and changing "/" to the canonical path separator for the system.
+If `safe` is false, also removes ".." entries.
+
+!!! warning
+    Normalization with `safe==false` may change the meaning of a path if the
+    directory immediately preceding a ".." entry is a symbolic link.
+    For example, if `a` is a symbolic link in `a/../b`, then this path will
+    resolve to `b` in the link target's parent directory. However,
+    `normpath("a/../b")` will return `b`, which will resolve `b` in the
+    current working directory.
+
+!!! compat "Julia 1.14"
+    The `safe` keyword argument was added in Julia 1.14.
 
 # Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
 
+julia> normpath("/home/myuser/../example.jl"; safe=true)
+"/home/myuser/../example.jl"
+
 julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
 true
 ```
 """
-function normpath(path::String)
+function normpath(path::String; safe=false)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
     parts = split(path, path_separator_re; keepempty=false)
     filter!(!=("."), parts)
-    while true
-        clean = true
-        for j = 1:length(parts)-1
-            if parts[j] != ".." && parts[j+1] == ".."
-                deleteat!(parts, j:j+1)
-                clean = false
-                break
+    if !safe
+        while true
+            clean = true
+            for j = 1:length(parts)-1
+                if parts[j] != ".." && parts[j+1] == ".."
+                    deleteat!(parts, j:j+1)
+                    clean = false
+                    break
+                end
             end
+            clean && break
         end
-        clean && break
     end
     if isabs
+        # N.B.: `..` at the beginning of a path may always be removed
         while !isempty(parts) && parts[1] == ".."
             popfirst!(parts)
         end
@@ -427,13 +444,16 @@ end
 Convert a set of paths to a normalized path by joining them together and removing
 "." and ".." entries. Equivalent to `normpath(joinpath(path, paths...))`.
 """
-normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
+normpath(a::AbstractString, b::AbstractString...; kwargs...) = normpath(joinpath(a,b...); kwargs...)
 
 """
-    abspath(path::AbstractString)::String
+    abspath(path::AbstractString; safe=false)::String
 
 Convert a path to an absolute path by adding the current directory if necessary.
-Also normalizes the path as in [`normpath`](@ref).
+
+The resulting path is normalized as in normpath. If `safe` is false, `..` entries
+are also removed, but the resulting path may not refer to the same location. See
+[`normpath`](@ref) for details.
 
 # Examples
 
@@ -444,8 +464,11 @@ If you are in a directory called `JuliaExample` and the data you are using is tw
 Which gives a path like `"/home/JuliaUser/data/"`.
 
 See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
+
+!!! compat "Julia 1.14"
+    The `safe` keyword argument was added in Julia 1.14.
 """
-function abspath(a::String)::String
+function abspath(a::String; safe=false)::String
     if !isabspath(a)
         cwd = pwd()
         a_drive, a_nodrive = splitdrive(a)
@@ -456,7 +479,7 @@ function abspath(a::String)::String
             a = joinpath(cwd, a)
         end
     end
-    return normpath(a)
+    return normpath(a; safe)
 end
 
 """
@@ -465,7 +488,7 @@ end
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
 """
-abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
+abspath(a::AbstractString, b::AbstractString...; kwargs...) = abspath(joinpath(a,b...); kwargs...)
 
 if Sys.iswindows()
 
@@ -504,6 +527,33 @@ function realpath(path::AbstractString)
         if ret < 0
             uv_fs_req_cleanup(req)
             uv_error("realpath($(repr(path)))", ret)
+        end
+        path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
+        uv_fs_req_cleanup(req)
+        return path
+    finally
+        Libc.free(req)
+    end
+end
+
+"""
+    realpath_default(path::AbstractString, default)::String
+
+Like `realpath(path)`, expect returns `default` instead of throwing an exception
+if `path` does not exist in the filesystem.
+"""
+function realpath_default(path::AbstractString, @nospecialize(default))
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_realpath, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, path, C_NULL)
+        if ret < 0
+            uv_fs_req_cleanup(req)
+            if ret == Base.UV_ENOENT
+                return default
+            end
+            uv_error("realpath_default($(repr(path)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
         uv_fs_req_cleanup(req)
