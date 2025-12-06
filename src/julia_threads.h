@@ -187,6 +187,13 @@ typedef struct _jl_tls_states_t {
     void *signal_stack;
     size_t signal_stack_size;
 #endif
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)
+    // Saved context from jl_call_in_ctx for stack unwinding
+    uintptr_t signal_ctx_pc;
+    uintptr_t signal_ctx_sp;
+    void (*signal_ctx_fptr)(void);
+    uintptr_t signal_ctx_arg;
+#endif
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
