@@ -877,12 +877,10 @@ function _green_to_ast(parent::Kind, ex::SyntaxTree; eq_to_kw=false)
         makenode(graph, ex, ex, _map_green_to_ast(k, children(ex); eq_to_kw))
     elseif k === K"parens"
         cs = _map_green_to_ast(parent, children(ex); eq_to_kw)
-        @assert length(cs) === 1
-        cs[1]
+        length(cs) === 1 ? cs[1] : makenode(graph, ex, ex, cs)
     elseif k in KSet"var char"
         cs = _map_green_to_ast(parent, children(ex))
-        @assert length(cs) === 1
-        cs[1]
+        length(cs) === 1 ? cs[1] : makenode(graph, ex, ex, cs)
     elseif k === K"=" && eq_to_kw
         setattr!(makenode(graph, ex, ex, _map_green_to_ast(k, children(ex))),
                  :kind, K"kw")
@@ -894,8 +892,11 @@ function _green_to_ast(parent::Kind, ex::SyntaxTree; eq_to_kw=false)
         # M.@x parses to (. M (macro_name x))
         # @M.x parses to (macro_name (. M x))
         # We want (. M @x) (both identifiers) in either case
-        @assert numchildren(ex) === 2 && kind(ex[1]) === K"@"
-        id = ex[2]
+        cs = _map_green_to_ast(k, children(ex))
+        if length(cs) !== 1 || !(kind(cs[1]) in KSet". Identifier")
+            return makenode(graph, ex, ex, cs)
+        end
+        id = cs[1]
         mname_raw = (kind(id) === K"." ? id[2] : id).name_val
         mac_id = setattr!(makeleaf(graph, ex, K"Identifier"), :name_val,
                           lower_identifier_name(mname_raw, K"macro_name"))
