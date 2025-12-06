@@ -16,7 +16,7 @@ $$(eval $$(call git-external,$1,$2,,,$$(BUILDDIR)))
 $$(BUILDDIR)/$$($2_SRC_DIR)/build-compiled: $$(BUILDDIR)/$$($2_SRC_DIR)/source-extracted
 	@# no build steps
 	echo 1 > $$@
-$$(eval $$(call symlink_install,$$$$(VERSDIR)/$1,$$$$($2_SRC_DIR),$$$$(build_datarootdir)/julia/stdlib))
+$$(eval $$(call symlink_install,$$$$(VERSDIR)/$1,$$$$($2_SRC_DIR),$$$$(build_private_libdir)/stdlib))
 clean-$1:
 	-rm -f $$(BUILDDIR)/$$($2_SRC_DIR)/build-compiled
 get-$1: $$($2_SRC_FILE)
