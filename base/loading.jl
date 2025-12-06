@@ -3227,16 +3227,19 @@ function _pkgsave_print(msg::AbstractString)
     ccall(:jl_safe_printf, Cvoid, (Cstring,), str)
 end
 
-function _pkgsave_timing(desc::AbstractString, elapsed_ns::UInt64)
+# level 1 = top-level phases (2 spaces), level 2 = sub-phases (4 spaces)
+function _pkgsave_timing(desc::AbstractString, elapsed_ns::UInt64; level::Int=1)
     elapsed_s = Float64(elapsed_ns) / 1e9
     # Format with 3 decimal places - manually ensure trailing zeros
     rounded = round(elapsed_s, digits=3)
     int_part = trunc(Int, rounded)
     frac_part = round(Int, (rounded - int_part) * 1000)
     time_str = string(int_part) * "." * lpad(string(frac_part), 3, '0')
-    padded_desc = rpad(string(desc), 40)
-    padded_time = lpad(time_str, 9)  # Match C's %9.3f format
-    str = "[pkgsave]     " * padded_desc * " " * padded_time * " s\n"
+    indent = level == 1 ? "  " : "    "
+    width = level == 1 ? 42 : 40
+    padded_desc = rpad(string(desc), width)
+    padded_time = lpad(time_str, 9)
+    str = "[pkgsave]" * indent * padded_desc * " " * padded_time * " s\n"
     ccall(:jl_safe_printf, Cvoid, (Cstring,), str)
 end
 
@@ -3309,7 +3312,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     # run_package_callbacks(pkg)
 
     if debug_timing
-        _pkgsave_timing("TOTAL Julia-side precompilation", time_ns() - total_start)
+        _pkgsave_timing("SUBTOTAL Julia-side precompilation", time_ns() - total_start)
     end
 end
 

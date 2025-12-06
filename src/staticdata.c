@@ -104,7 +104,15 @@ External links:
 #define JL_SAVE_TIMING_START(varname) \
     uint64_t varname##_start = jl_hrtime()
 
+// Level 1 indent (top-level phases)
 #define JL_SAVE_TIMING_END(varname, desc) \
+    do { \
+        uint64_t varname##_end = jl_hrtime(); \
+        jl_printf(JL_STDERR, "[pkgsave]   %-42s %9.3f s\n", desc, (varname##_end - varname##_start) / 1e9); \
+    } while(0)
+
+// Level 2 indent (sub-phases)
+#define JL_SAVE_TIMING_END_L2(varname, desc) \
     do { \
         uint64_t varname##_end = jl_hrtime(); \
         jl_printf(JL_STDERR, "[pkgsave]     %-40s %9.3f s\n", desc, (varname##_end - varname##_start) / 1e9); \
@@ -116,6 +124,7 @@ static const int jl_debug_saving_enabled = 1;
 #define JL_SAVE_TIMING_PRINT(fmt, ...) ((void)0)
 #define JL_SAVE_TIMING_START(varname) ((void)0)
 #define JL_SAVE_TIMING_END(varname, desc) ((void)0)
+#define JL_SAVE_TIMING_END_L2(varname, desc) ((void)0)
 #define JL_SAVE_TIMING_COUNTER(var) ((void)0)
 static const int jl_debug_saving_enabled = 0;
 #endif
@@ -2946,7 +2955,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *new_ext_cis, jl_query_cache *query_cache)
 {
     JL_SAVE_TIMING_START(total);
-    JL_SAVE_TIMING_PRINT("Serializing %s image...\n", worklist ? "incremental" : "system");
+    JL_SAVE_TIMING_PRINT("  Serializing %s image...\n", worklist ? "incremental" : "system");
     JL_SAVE_TIMING_START(init);
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
@@ -3095,7 +3104,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     }
     jl_genericmemory_t *global_roots_list = NULL;
     jl_genericmemory_t *global_roots_keyset = NULL;
-    JL_SAVE_TIMING_END(init, "initialization & setup");
+    JL_SAVE_TIMING_END_L2(init, "initialization & setup");
 
     { // step 1: record values (recursively) that need to go in the image
         JL_SAVE_TIMING_START(queue_roots);
@@ -3127,20 +3136,20 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             // Queue the new specializations
             jl_queue_for_serialization(&s, new_ext_cis);
         }
-        JL_SAVE_TIMING_END(queue_roots, "queue roots");
+        JL_SAVE_TIMING_END_L2(queue_roots, "queue roots");
         JL_SAVE_TIMING_START(serialize_reachable1);
         jl_serialize_reachable(&s);
-        JL_SAVE_TIMING_END(serialize_reachable1, "serialize reachable (1)");
+        JL_SAVE_TIMING_END_L2(serialize_reachable1, "serialize reachable (1)");
         // step 1.2: ensure all gvars are part of the sysimage too
         JL_SAVE_TIMING_START(record_gvars);
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
         if (jl_options.trim)
             record_gvars(&s, &MIs);
-        JL_SAVE_TIMING_END(record_gvars, "record gvars & external fns");
+        JL_SAVE_TIMING_END_L2(record_gvars, "record gvars & external fns");
         JL_SAVE_TIMING_START(serialize_reachable2);
         jl_serialize_reachable(&s);
-        JL_SAVE_TIMING_END(serialize_reachable2, "serialize reachable (2)");
+        JL_SAVE_TIMING_END_L2(serialize_reachable2, "serialize reachable (2)");
         // Beyond this point, all content should already have been visited, so now we can prune
         // the rest and add some internal root arrays.
         // step 1.3: include some other special roots
@@ -3149,7 +3158,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             // Queue the new roots array
             jl_queue_for_serialization(&s, s.method_roots_list);
             jl_serialize_reachable(&s);
-            JL_SAVE_TIMING_END(method_roots, "queue method roots");
+            JL_SAVE_TIMING_END_L2(method_roots, "queue method roots");
         }
         // step 1.4: prune (garbage collect) special weak references from the jl_global_roots_list
         JL_SAVE_TIMING_START(prune_roots);
@@ -3168,7 +3177,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
-        JL_SAVE_TIMING_END(prune_roots, "prune global roots");
+        JL_SAVE_TIMING_END_L2(prune_roots, "prune global roots");
         // step 1.5: prune (garbage collect) some special weak references known caches
         JL_SAVE_TIMING_START(prune_caches);
         for (i = 0; i < serialization_queue.len; i++) {
@@ -3204,7 +3213,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_prune_mt_backedges((jl_genericmemory_t*)backedges);
             }
         }
-        JL_SAVE_TIMING_END(prune_caches, "prune caches & backedges");
+        JL_SAVE_TIMING_END_L2(prune_caches, "prune caches & backedges");
     }
 
     uint32_t external_fns_begin = 0;
@@ -3212,10 +3221,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         JL_SAVE_TIMING_START(write_values);
         write_padding(&sysimg, sizeof(uintptr_t));
         jl_write_values(&s);
-        JL_SAVE_TIMING_END(write_values, "write values");
+        JL_SAVE_TIMING_END_L2(write_values, "write values");
         JL_SAVE_TIMING_START(write_gvars);
         external_fns_begin = write_gvars(&s, &gvars, &external_fns);
-        JL_SAVE_TIMING_END(write_gvars, "write gvars");
+        JL_SAVE_TIMING_END_L2(write_gvars, "write gvars");
     }
 
     // This ensures that we can use the low bit of addresses for
@@ -3281,7 +3290,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_arraylist(s.relocs, &s.fixup_types);
     }
     jl_write_arraylist(s.relocs, &s.fixup_objs);
-    JL_SAVE_TIMING_END(prepare_relocs, "prepare relocations");
+    JL_SAVE_TIMING_END_L2(prepare_relocs, "prepare relocations");
     write_uint(f, relocs.size);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&relocs, 0);
@@ -3299,7 +3308,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     ios_seek(&fptr_record, 0);
     ios_copyall(f, &fptr_record);
     ios_close(&fptr_record);
-    JL_SAVE_TIMING_END(combine_sections, "combine sections");
+    JL_SAVE_TIMING_END_L2(combine_sections, "combine sections");
 
     { // step 4: record locations of special roots
         JL_SAVE_TIMING_START(write_roots);
@@ -3350,7 +3359,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars, uint32_t), jl_array_len(s.link_ids_external_fnvars) * sizeof(uint32_t));
         write_uint32(f, external_fns_begin);
-        JL_SAVE_TIMING_END(write_roots, "write special roots & link ids");
+        JL_SAVE_TIMING_END_L2(write_roots, "write special roots & link ids");
     }
 
     JL_SAVE_TIMING_START(cleanup);
@@ -3378,8 +3387,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_free(&fptr_to_id);
     htable_free(&new_methtables);
     nsym_tag = 0;
-    JL_SAVE_TIMING_END(cleanup, "cleanup");
-    JL_SAVE_TIMING_END(total, "TOTAL save time");
+    JL_SAVE_TIMING_END_L2(cleanup, "cleanup");
+    JL_SAVE_TIMING_END_L2(total, "SUBTOTAL serialize incremental image");
     JL_SAVE_TIMING_PRINT("       image size: %zu bytes\n", (size_t)ios_pos(f));
 
     jl_gc_enable(en);
@@ -3573,7 +3582,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     *s = f;
     if (emit_split)
         *z = ff;
-    JL_SAVE_TIMING_END(create_image_total, "TOTAL image creation time");
+    JL_SAVE_TIMING_END(create_image_total, "SUBTOTAL image creation time");
     return;
 }
 
