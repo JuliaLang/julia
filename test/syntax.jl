@@ -934,8 +934,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test_broken Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
-@test_broken Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
+@test_parseerror "a.[1]"
+@test_parseerror "a.{1}"
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
