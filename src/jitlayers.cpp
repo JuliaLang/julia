@@ -1897,7 +1897,7 @@ void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
 void fixupTM(TargetMachine &TM) {
     auto TheTriple = TM.getTargetTriple();
     if (jl_options.opt_level < 2) {
-        if (!TheTriple.isARM() && !TheTriple.isPPC64() && !TheTriple.isAArch64())
+        if (!TheTriple.isARM() && !TheTriple.isPPC64())
             TM.setFastISel(true);
         else    // FastISel seems to be buggy Ref #13321
             TM.setFastISel(false);
