@@ -1173,8 +1173,7 @@ function cmp(r1::AbstractRange{T}, r2::AbstractRange{T}) where {T}
     (isempty(r1) || isempty(r2)) && return cmp(isempty(r2), isempty(r1))
     first(r1) != first(r2) && return cmp(first(r1), first(r2))
     # Assume that ranges are monotonic and use the last shared element as a high precision proxy for step.
-    n = min(lastindex(r1), lastindex(r2))
-    x1, x2 = r1[n], r2[n]
+    x1, x2 = last(zip(r1, r2))
     x1 != x2 && return cmp(x1, x2)
     cmp(length(r1), length(r2))
 end
