@@ -427,9 +427,49 @@ Potential future approaches:
 | Refactor `jl_codegen_params_t` for explicit lock management | Enable shared context | Very High | Requires careful analysis of all shared state |
 | Pipeline parallelism (inference ‖ codegen ‖ LLVM opt) | Better utilization | High | Data dependencies, buffering |
 | Batch codegen at module granularity | Coarser parallelism | Medium | Load balancing |
-| Parallel LLVM optimization (already done) | ✅ Already parallelized | - | 3 threads used for native code gen |
+| Parallel LLVM optimization (already done) | ✅ Already parallelized | - | Variable threads based on module size |
 
-**Current status:** Parallel codegen disabled. The native code generation phase already uses 3 threads (visible in debug output), so some parallelism exists in the later stages.
+**Current status:** Parallel codegen disabled. The native code generation phase uses parallel LLVM optimization (visible in debug output as "threads: N"), with thread count determined dynamically based on module complexity.
+
+### Thread Pool Coordination
+
+When multiple Julia processes run parallel precompilation (e.g., `Pkg.precompile()`), each process independently decides how many threads to use for native code generation. This can lead to thread oversubscription on the system.
+
+A thread pool mechanism allows coordination across processes:
+
+**Location:** The thread pool file is stored at `DEPOT_PATH[1]/compiled/threadpool` (derived automatically from the precompilation output path).
+
+**Environment Variables:**
+
+- `JULIA_IMAGE_THREAD_POOL`: Set to `0` to disable cross-process thread coordination. Enabled by default.
+- `JULIA_IMAGE_THREAD_POOL_SIZE`: Maximum threads in the pool (default: number of CPU threads). This limits total threads used across all concurrent precompilation workers.
+
+**Usage Example:**
+
+```bash
+# Limit thread pool to 8 threads across all workers
+export JULIA_IMAGE_THREAD_POOL_SIZE=8
+julia -e "using Pkg; Pkg.precompile()"
+
+# Disable thread pool coordination (each worker uses all available threads)
+export JULIA_IMAGE_THREAD_POOL=0
+julia -e "using Pkg; Pkg.precompile()"
+```
+
+**How it works:**
+
+1. Thread acquisition happens just before LLVM parallel optimization begins (not at precompilation start)
+2. Each worker acquires up to its desired threads from the pool, waiting if necessary
+3. Threads are released immediately after LLVM optimization completes
+4. This just-in-time approach minimizes lock contention since native code gen is only ~24% of total precompilation time
+5. The pool file is automatically located at `~/.julia/compiled/threadpool` (or equivalent depot path)
+
+**Debug output:** When `JL_DEBUG_SAVING` is enabled, thread pool operations are logged:
+
+```text
+[pkgsave]     thread pool: acquired 3 threads (2 -> 5 in use, pool size 8)
+[pkgsave]     thread pool: released 3 threads (5 -> 2 in use)
+```
 
 ## Performance Characteristics
 
