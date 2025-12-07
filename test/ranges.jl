@@ -2844,6 +2844,8 @@ const EXAMPLE_RANGES = AbstractRange[
     10:-2:1,
     LinRange(1.0, 10.0, 10),
     LinRange(10.0, 1.0, 10),
+    1e10:1.99:(1e10 + 2),
+    1e10:(1.99+eps()):(1e10 + 2),
     StepRangeLen(1, 2, 5),
     StepRangeLen(10, -2, 5),
     UInt8(1):UInt8(10),
