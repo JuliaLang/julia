@@ -85,9 +85,11 @@ mutable struct MIState
     line_modify_lock::Base.ReentrantLock
     hint_generation_lock::Base.ReentrantLock
     n_keys_pressed::Int
+    # Optional event that gets notified each time the prompt is ready for input
+    prompt_ready_event::Union{Nothing, Base.Event}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0)
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, nothing)
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -2977,6 +2979,10 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
+        # Notify that prompt is ready for input
+        if s.prompt_ready_event !== nothing
+            notify(s.prompt_ready_event)
+        end
         old_state = mode(s)
         # spawn this because the main repl task is sticky (due to use of @async and _wait2)
         # and we want to not block typing when the repl task thread is busy

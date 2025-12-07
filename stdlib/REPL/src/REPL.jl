@@ -779,14 +779,18 @@ mutable struct LineEditREPL <: AbstractREPL
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
+    # Optional event to notify when the prompt is ready (used by precompilation)
+    prompt_ready_event::Union{Nothing, Base.Event}
     function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
         if !hascolor
             opts.beep_colors = [""]
         end
-        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
+        r = new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+        r.prompt_ready_event = nothing
+        r
     end
 end
 outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
@@ -1665,6 +1669,10 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     end
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
+    # Copy prompt_ready_event from repl to mistate (used by precompilation)
+    if isdefined(repl, :prompt_ready_event) && repl.prompt_ready_event !== nothing
+        repl.mistate.prompt_ready_event = repl.prompt_ready_event
+    end
     run_interface(terminal(repl), interface, repl.mistate)
     # Terminate Backend
     put!(backend.repl_channel, (nothing, -1))

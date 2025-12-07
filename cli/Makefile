@@ -176,7 +176,7 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
 clean: | $(CLEAN_TARGETS)
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
-	rm -f $(BUILDDIR)/julia.expmap*
+	rm -f $(BUILDDIR)/julia.expmap
 	rm -f $(BUILDDIR)/Info.plist*
 
 .PHONY: clean release debug julia-release julia-debug
