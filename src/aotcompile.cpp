@@ -51,6 +51,17 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "processor.h"
 
+#include <fcntl.h>
+#ifdef _OS_WINDOWS_
+#include <io.h>
+#include <windows.h>
+#include <sys/stat.h>
+#else
+#include <unistd.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#endif
+
 #define DEBUG_TYPE "julia_aotcompile"
 
 STATISTIC(CreateNativeCalls, "Number of jl_create_native calls made");
@@ -2032,6 +2043,300 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
+// Thread pool coordination for parallel native code generation across multiple
+// precompilation workers. Workers coordinate via file locking to avoid oversubscription.
+//
+// The pool file is stored at DEPOT_PATH[1]/compiled/threadpool, derived from the
+// output path (which is DEPOT_PATH[1]/compiled/vX.Y/PkgName/...).
+//
+// The pool file format is simple: a single integer representing threads currently in use.
+// Each worker acquires an exclusive lock, reads/modifies the count, then releases.
+
+// Get the thread pool path from the output path
+// outputji is like: /path/to/depot/compiled/v1.12/PkgName/xxx.ji
+// We want: /path/to/depot/compiled/threadpool
+static std::string get_thread_pool_path() {
+    const char *outputji = jl_options.outputji;
+    if (!outputji)
+        return "";
+
+    std::string path(outputji);
+
+    // Find "/compiled/" in the path
+    size_t pos = path.find("/compiled/");
+#ifdef _OS_WINDOWS_
+    if (pos == std::string::npos)
+        pos = path.find("\\compiled\\");
+#endif
+    if (pos == std::string::npos)
+        return "";
+
+    // Construct depot/compiled/threadpool
+    return path.substr(0, pos) + "/compiled/threadpool";
+}
+
+struct ThreadPoolGuard {
+    int fd;
+    unsigned threads_acquired;
+    bool active;
+    std::string pool_path;
+
+    ThreadPoolGuard() : fd(-1), threads_acquired(0), active(false) {}
+
+    // Acquire up to `requested` threads from the pool, waiting if necessary
+    // Returns the number of threads actually acquired (may be less than requested)
+    unsigned acquire(unsigned requested, unsigned pool_size) {
+        // Check if thread pool coordination is disabled
+        const char *use_pool = getenv("JULIA_IMAGE_THREAD_POOL");
+        if (use_pool && strcmp(use_pool, "0") == 0) {
+            // Thread pool explicitly disabled
+            threads_acquired = requested;
+            return requested;
+        }
+
+        pool_path = get_thread_pool_path();
+        if (pool_path.empty()) {
+            // Could not determine pool path
+            threads_acquired = requested;
+            return requested;
+        }
+
+#ifdef _OS_WINDOWS_
+        fd = _open(pool_path.c_str(), _O_RDWR | _O_CREAT, 0644);
+#else
+        fd = open(pool_path.c_str(), O_RDWR | O_CREAT, 0644);
+#endif
+        if (fd < 0) {
+            if (jl_is_debug_saving_enabled()) {
+                jl_safe_printf("[pkgsave]     thread pool: cannot open '%s': %s\n",
+                               pool_path.c_str(), strerror(errno));
+            }
+            threads_acquired = requested;
+            return requested;
+        }
+
+        active = true;
+
+        // Acquire exclusive lock and read/modify thread count
+        unsigned acquired = 0;
+        while (acquired == 0) {
+#ifdef _OS_WINDOWS_
+            HANDLE hFile = (HANDLE)_get_osfhandle(fd);
+            OVERLAPPED ov = {0};
+            if (!LockFileEx(hFile, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &ov)) {
+                jl_safe_printf("WARNING: cannot lock thread pool file\n");
+                threads_acquired = requested;
+                return requested;
+            }
+#else
+            if (flock(fd, LOCK_EX) != 0) {
+                if (jl_is_debug_saving_enabled()) {
+                    jl_safe_printf("[pkgsave]     thread pool: cannot lock: %s\n", strerror(errno));
+                }
+                close(fd);
+                fd = -1;
+                active = false;
+                threads_acquired = requested;
+                return requested;
+            }
+#endif
+
+            // Check if pool file is stale (older than 15 minutes) and reset if so
+            // This handles crashed processes that didn't release their threads
+            struct stat st;
+            bool reset_pool = false;
+#ifdef _OS_WINDOWS_
+            if (_fstat(fd, &st) == 0) {
+                time_t now = time(NULL);
+                if (now - st.st_mtime > 15 * 60) {
+                    reset_pool = true;
+                }
+            }
+#else
+            if (fstat(fd, &st) == 0) {
+                time_t now = time(NULL);
+                if (now - st.st_mtime > 15 * 60) {
+                    reset_pool = true;
+                }
+            }
+#endif
+            if (reset_pool) {
+                if (jl_is_debug_saving_enabled()) {
+                    jl_safe_printf("[pkgsave]     thread pool: file is stale (>15 min), resetting\n");
+                }
+                // Reset by truncating and seeking to start
+#ifdef _OS_WINDOWS_
+                _chsize(fd, 0);
+                _lseek(fd, 0, SEEK_SET);
+#else
+                if (ftruncate(fd, 0) == 0) {
+                    lseek(fd, 0, SEEK_SET);
+                }
+#endif
+            }
+
+            // Read current count
+            char buf[32] = {0};
+#ifdef _OS_WINDOWS_
+            _lseek(fd, 0, SEEK_SET);
+            int n = _read(fd, buf, sizeof(buf) - 1);
+#else
+            lseek(fd, 0, SEEK_SET);
+            ssize_t n = read(fd, buf, sizeof(buf) - 1);
+#endif
+            unsigned in_use = 0;
+            if (n > 0) {
+                in_use = (unsigned)strtoul(buf, nullptr, 10);
+            }
+
+            // Allocation strategy:
+            // - Always get at least 2 threads (or requested if less), unless severely oversubscribed
+            // - If pool has availability, use what's available (up to requested), minimum 2
+            // - If pool is >= 2x oversubscribed, wait for threads to free up
+            bool severely_oversubscribed = (in_use >= pool_size * 2);
+
+            if (severely_oversubscribed) {
+                // Wait and retry
+                acquired = 0;
+            } else {
+                unsigned available = (in_use < pool_size) ? (pool_size - in_use) : 0;
+                unsigned minimum = std::min(requested, 2u);
+                acquired = std::max(minimum, std::min(requested, available));
+                if (jl_is_debug_saving_enabled() && available < acquired) {
+                    jl_safe_printf("[pkgsave]     thread pool: low availability, using minimum %u threads (available=%u, in_use=%u, pool_size=%u)\n",
+                                   acquired, available, in_use, pool_size);
+                }
+            }
+
+            if (acquired > 0) {
+                unsigned new_count = in_use + acquired;
+
+                // Write new count
+                snprintf(buf, sizeof(buf), "%u", new_count);
+#ifdef _OS_WINDOWS_
+                _lseek(fd, 0, SEEK_SET);
+                _chsize(fd, 0);
+                _write(fd, buf, (unsigned)strlen(buf));
+#else
+                lseek(fd, 0, SEEK_SET);
+                if (ftruncate(fd, 0) != 0) {
+                    // ignore error
+                }
+                ssize_t written = write(fd, buf, strlen(buf));
+                (void)written;
+#endif
+
+                if (jl_is_debug_saving_enabled()) {
+                    jl_safe_printf("[pkgsave]     thread pool: acquired %u threads (%u -> %u in use, pool size %u)\n",
+                                   acquired, in_use, new_count, pool_size);
+                }
+            }
+
+            // Release lock
+#ifdef _OS_WINDOWS_
+            UnlockFileEx(hFile, 0, MAXDWORD, MAXDWORD, &ov);
+#else
+            flock(fd, LOCK_UN);
+#endif
+
+            if (acquired == 0) {
+                // Severely oversubscribed, wait and retry
+                // Use exponential backoff with jitter
+                static thread_local unsigned backoff_ms = 10;
+                unsigned sleep_ms = backoff_ms + (rand() % backoff_ms);
+#ifdef _OS_WINDOWS_
+                Sleep(sleep_ms);
+#else
+                usleep(sleep_ms * 1000);
+#endif
+                backoff_ms = std::min(backoff_ms * 2, 1000u);
+                if (jl_is_debug_saving_enabled()) {
+                    jl_safe_printf("[pkgsave]     thread pool: severely oversubscribed (in_use=%u >= 2x pool_size=%u), waiting %ums\n",
+                                   in_use, pool_size, sleep_ms);
+                }
+            }
+        }
+
+        threads_acquired = acquired;
+        return acquired;
+    }
+
+    // Release threads back to the pool
+    void release() {
+        if (!active || fd < 0 || threads_acquired == 0)
+            return;
+
+#ifdef _OS_WINDOWS_
+        HANDLE hFile = (HANDLE)_get_osfhandle(fd);
+        OVERLAPPED ov = {0};
+        if (!LockFileEx(hFile, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &ov)) {
+            jl_safe_printf("WARNING: cannot lock thread pool file for release\n");
+            _close(fd);
+            return;
+        }
+#else
+        if (flock(fd, LOCK_EX) != 0) {
+            jl_safe_printf("WARNING: cannot lock thread pool file for release: %s\n", strerror(errno));
+            close(fd);
+            return;
+        }
+#endif
+
+        // Read current count
+        char buf[32] = {0};
+#ifdef _OS_WINDOWS_
+        _lseek(fd, 0, SEEK_SET);
+        int n = _read(fd, buf, sizeof(buf) - 1);
+#else
+        lseek(fd, 0, SEEK_SET);
+        ssize_t n = read(fd, buf, sizeof(buf) - 1);
+#endif
+        unsigned in_use = 0;
+        if (n > 0) {
+            in_use = (unsigned)strtoul(buf, nullptr, 10);
+        }
+
+        unsigned new_count = (in_use > threads_acquired) ? (in_use - threads_acquired) : 0;
+
+        // Write new count
+        snprintf(buf, sizeof(buf), "%u", new_count);
+#ifdef _OS_WINDOWS_
+        _lseek(fd, 0, SEEK_SET);
+        _chsize(fd, 0);
+        _write(fd, buf, (unsigned)strlen(buf));
+#else
+        lseek(fd, 0, SEEK_SET);
+        if (ftruncate(fd, 0) != 0) {
+            // ignore error
+        }
+        ssize_t written = write(fd, buf, strlen(buf));
+        (void)written;
+#endif
+
+        if (jl_is_debug_saving_enabled()) {
+            jl_safe_printf("[pkgsave]     thread pool: released %u threads (%u -> %u in use)\n",
+                           threads_acquired, in_use, new_count);
+        }
+
+        // Release lock
+#ifdef _OS_WINDOWS_
+        UnlockFileEx(hFile, 0, MAXDWORD, MAXDWORD, &ov);
+        _close(fd);
+#else
+        flock(fd, LOCK_UN);
+        close(fd);
+#endif
+
+        fd = -1;
+        threads_acquired = 0;
+        active = false;
+    }
+
+    ~ThreadPoolGuard() {
+        release();
+    }
+};
+
 extern int jl_is_timing_passes;
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
@@ -2048,7 +2353,7 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
         return 1;
     }
 
-    unsigned threads = std::max(jl_effective_threads() / 2, 1);
+    unsigned threads = std::max(jl_effective_threads(), 1);
 
     auto max_threads = info.globals / 100;
     if (max_threads < threads) {
@@ -2333,6 +2638,25 @@ void jl_dump_native_impl(void *native_code,
         has_veccall = !!dataM.getModuleFlag("julia.mv.veccall");
     });
 
+    // Thread pool coordination: acquire threads just before parallel LLVM work
+    ThreadPoolGuard thread_pool;
+    if (threads > 1) {
+        // Get pool size from environment or default to CPU threads + 1
+        // The +1 gives headroom for overlap during thread handoffs
+        unsigned pool_size = jl_effective_threads() + 1;
+        if (auto env = getenv("JULIA_IMAGE_THREAD_POOL_SIZE")) {
+            char *endptr;
+            unsigned long val = strtoul(env, &endptr, 10);
+            if (!*endptr && val > 0) {
+                pool_size = (unsigned)val;
+            }
+        }
+        threads = thread_pool.acquire(threads, pool_size);
+        if (jl_is_debug_saving_enabled() && thread_pool.active) {
+            jl_safe_printf("[pkgsave]     %-40s %9u (from pool)\n", "threads:", threads);
+        }
+    }
+
     {
         // Don't use withModuleDo here since we delete the TSM midway through
         auto TSCtx = data->M.getContext();
@@ -2348,6 +2672,9 @@ void jl_dump_native_impl(void *native_code,
             auto TSCtx2 = std::move(TSCtx);
         });
     }
+
+    // Release threads back to pool (also done by destructor, but be explicit)
+    thread_pool.release();
 
     if (params->emit_metadata) {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
