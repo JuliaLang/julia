@@ -2831,3 +2831,28 @@ end
     @test StepRange(r) == r
     @test StepRange(r) isa StepRange{Date,Day}
 end
+
+const EXAMPLE_RANGES = AbstractRange[
+    1:10,
+    1:5,
+    1:0,
+    1:1,
+    3:2,
+    3:0,
+    10:-1:1,
+    1:2:10,
+    10:-2:1,
+    LinRange(1.0, 10.0, 10),
+    LinRange(10.0, 1.0, 10),
+    StepRangeLen(1, 2, 5),
+    StepRangeLen(10, -2, 5),
+    UInt8(1):UInt8(10),
+    UInt8(10):-UInt8(1):UInt8(1),
+    'a':'z',
+]
+
+@testset "cmp(::AbstractRange, ::AbstractRange)" begin
+    for a in EXAMPLE_RANGES, b in EXAMPLE_RANGES
+        @test try cmp(a, b) catch e; e end == try cmp(collect(a), collect(b)) catch e; e end
+    end
+end
