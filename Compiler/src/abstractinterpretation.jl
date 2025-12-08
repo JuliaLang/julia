@@ -4275,26 +4275,26 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                         # We continue with the true branch, but process the false
                         # branch here.
                         if isa(condt, Conditional)
-                            else_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#false)
+                            else_change = conditional_change(𝕃ᵢ, currstate, condt, :else)
                             if else_change !== nothing
                                 elsestate = copy(currstate)
-                                stoverwrite1!(elsestate, else_change)
+                                strefine1!(elsestate, else_change)
                             elseif condslot isa SlotNumber
                                 elsestate = copy(currstate)
                             else
                                 elsestate = currstate
                             end
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this else branch
-                                stoverwrite1!(elsestate, condition_object_change(currstate, condt, condslot, #=then_or_else=#false))
+                                strefine1!(elsestate, condition_object_change(currstate, condt, condslot, :else))
                             end
                             else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, elsestate, currsaw_latestworld)
-                            then_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#true)
+                            then_change = conditional_change(𝕃ᵢ, currstate, condt, :then)
                             thenstate = currstate
                             if then_change !== nothing
-                                stoverwrite1!(thenstate, then_change)
+                                strefine1!(thenstate, then_change)
                             end
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this then branch
-                                stoverwrite1!(thenstate, condition_object_change(currstate, condt, condslot, #=then_or_else=#true))
+                                strefine1!(thenstate, condition_object_change(currstate, condt, condslot, :then))
                             end
                         else
                             else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, currstate, currsaw_latestworld)
@@ -4423,15 +4423,19 @@ function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecia
     oldtyp = vtype.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
-        stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef))
-        stoverwrite1!(currstate, stmtupdate)
+        refinement = StateRefinement(slot_id(slot), newtyp, vtype.undef)
+        strefine1!(currstate, refinement)
     end
 end
 
-function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Bool)
+function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Symbol)
     vtype = currstate[condt.slot]
     oldtyp = vtype.typ
-    newtyp = then_or_else ? condt.thentype : condt.elsetype
+    newtyp = if then_or_else === :then
+        condt.thentype
+    elseif then_or_else === :else
+        condt.elsetype
+    else @assert false end
     if iskindtype(newtyp)
         # this code path corresponds to the special handling for `isa(x, iskindtype)` check
         # implemented within `abstract_call_builtin`
@@ -4448,17 +4452,22 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
     end
     # if this `Conditional` is from `@isdefined condt.slot`, refine its `undef` information
-    newundef = condt.isdefined ? !then_or_else : vtype.undef
-    return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, newundef), #=conditional=#true)
+    newundef = condt.isdefined ? (then_or_else === :else) : vtype.undef
+    return StateRefinement(condt.slot, newtyp, newundef)
 end
 
 function condition_object_change(currstate::VarTable, condt::Conditional,
-                                 condslot::SlotNumber, then_or_else::Bool)
+                                 condslot::SlotNumber, then_or_else::Symbol)
     vtype = currstate[slot_id(condslot)]
-    newcondt = Conditional(condt.slot,
-        then_or_else ? condt.thentype : Union{},
-        then_or_else ? Union{} : condt.elsetype)
-    return StateUpdate(condslot, VarState(newcondt, vtype.undef))
+    if then_or_else === :then
+        thentype = condt.thentype
+        elsetype = Union{}
+    elseif then_or_else === :else
+        thentype = Union{}
+        elsetype = condt.elsetype
+    else @assert false end
+    newcondt = Conditional(condt.slot, thentype, elsetype)
+    return StateRefinement(slot_id(condslot), newcondt, vtype.undef)
 end
 
 # make as much progress on `frame` as possible (by handling cycles)

@@ -145,8 +145,20 @@ end
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
-    conditional::Bool
-    StateUpdate(var::SlotNumber, vtype::VarState, conditional::Bool=false) = new(var, vtype, conditional)
+end
+
+"""
+Similar to `StateUpdate`, except with the additional guarantee that object identity
+is preserved by the update (i.e. `x (before) === x (after)`).
+"""
+struct StateRefinement
+    slot::Int
+    # XXX: This should be an intersection of the old type with the new
+    #      (i.e. newtyp ⊑ oldtyp)
+    newtyp
+    undef::Bool
+
+    StateRefinement(slot::Int, @nospecialize(newtyp), undef::Bool) = new(slot, newtyp, undef)
 end
 
 """
@@ -724,10 +736,10 @@ end
     (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && ⊑(lattice, n.typ, o.typ))))
 
 # remove any lattice elements that wrap the reassigned slot object from the vartable
-function invalidate_slotwrapper(vt::VarState, changeid::Int, ignore_conditional::Bool)
+function invalidate_slotwrapper(vt::VarState, changeid::Int)
     newtyp = ignorelimited(vt.typ)
-    if (!ignore_conditional && isa(newtyp, Conditional) && newtyp.slot == changeid) ||
-       (isa(newtyp, MustAlias) && newtyp.slot == changeid)
+    if ((isa(newtyp, Conditional) && newtyp.slot == changeid) ||
+        (isa(newtyp, MustAlias) && newtyp.slot == changeid))
         newtyp = @noinline widenwrappedslotwrapper(vt.typ)
         return VarState(newtyp, vt.undef)
     end
@@ -757,7 +769,7 @@ end
 function stoverwrite1!(state::VarTable, change::StateUpdate)
     changeid = slot_id(change.var)
     for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid, change.conditional)
+        invalidated = invalidate_slotwrapper(state[i], changeid)
         if invalidated !== nothing
             state[i] = invalidated
         end
@@ -765,6 +777,12 @@ function stoverwrite1!(state::VarTable, change::StateUpdate)
     # and update the type of it
     newtype = change.vtype
     state[changeid] = newtype
+    return state
+end
+
+function strefine1!(state::VarTable, refinement::StateRefinement)
+    (; newtyp, undef, slot) = refinement
+    state[slot] = VarState(newtyp, undef)
     return state
 end
 
