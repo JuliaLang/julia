@@ -176,7 +176,7 @@ function newleaf(ctx, srcref, k::Kind, @nospecialize(value))
     elseif k == K"symbolic_label"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
-                     use_softscope_if_toplevel"
+                     softscope"
         # no attributes
     else
         val = k == K"Integer" ? convert(Int,     value) :

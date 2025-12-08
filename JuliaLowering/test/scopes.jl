@@ -152,7 +152,7 @@ end
         makenode(g, ex, K"scope_block", [ex._id], [:scope_type=>scope_type])
     end
     function use_soft(ex::SyntaxTree)
-        @ast ex._graph ex [K"block" (::K"use_softscope_if_toplevel") ex]
+        @ast ex._graph ex [K"block" (::K"softscope") ex]
     end
 
     assign_z_2 = parsestmt(SyntaxTree, "begin z = 2 end", filename="foo.jl")

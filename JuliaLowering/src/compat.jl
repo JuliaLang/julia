@@ -520,10 +520,6 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     elseif e.head === :islocal || e.head === :isglobal
         st_k = K"extension"
         child_exprs = [Expr(:quoted_symbol, e.head), e.args[1]]
-    elseif e.head === :softscope
-        # (block (softscope true) ex) produced with every REPL prompt.
-        st_k = K"use_softscope_if_toplevel"
-        child_exprs = nothing
     end
 
     #---------------------------------------------------------------------------

@@ -82,7 +82,7 @@ function _register_kinds()
             # all enclosed neutral scopes become soft scopes.  :hardscope exists
             # too, but is always produced inside scope-blocks, so we represent
             # it with an attribute on our scope-blocks.
-            "use_softscope_if_toplevel"
+            "softscope"
             # [K"always_defined" x] is an assertion that variable `x` is assigned before use
             # ('local-def in flisp implementation is K"local" plus K"always_defined"
             "always_defined"

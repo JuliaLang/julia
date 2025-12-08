@@ -85,7 +85,7 @@ function ScopeResolutionContext(ctx, ex)
 end
 
 function contains_softscope_marker(ex)
-    kind(ex) == K"use_softscope_if_toplevel" ||
+    kind(ex) == K"softscope" ||
         needs_resolution(ex) && any(contains_softscope_marker, children(ex))
 end
 
@@ -335,7 +335,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree, @nospecialize(scope))
     elseif k === K"BindingId"
         record_lambda_var!(ctx, scope, get_binding(ctx, ex), true)
         ex
-    elseif k == K"use_softscope_if_toplevel"
+    elseif k == K"softscope"
         makeleaf(ctx, ex, K"TOMBSTONE")
     elseif !needs_resolution(ex)
         ex

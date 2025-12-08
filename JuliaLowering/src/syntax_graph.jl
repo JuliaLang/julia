@@ -534,9 +534,6 @@ JuliaSyntax.sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 JuliaSyntax.byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
 function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
-    if kind(ex) === K"use_softscope_if_toplevel"
-        return Expr(:softscope, true)
-    end
     name = get(ex, :name_val, nothing)
     if !isnothing(name)
         n = Symbol(name)
