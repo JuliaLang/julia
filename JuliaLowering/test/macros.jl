@@ -336,7 +336,7 @@ end
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
     Caused by:
-    MethodError: no method matching var"@sig_mismatch"(::JuliaLowering.MacroContext, ::JuliaLowering.SyntaxTree""")
+    MethodError: no method matching var"@sig_mismatch"(""")
 end
 
 @testset "old macros producing exotic expr heads" begin

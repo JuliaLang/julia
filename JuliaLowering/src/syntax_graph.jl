@@ -1,4 +1,3 @@
-# TODO: This whole file should probably be moved to JuliaSyntax.
 import .JuliaSyntax: ParseStream, RedTreeCursor, reverse_toplevel_siblings,
     has_toplevel_siblings, _unsafe_wrap_substring, parse_julia_literal, is_trivia,
     is_prefix_op_call, @isexpr, SyntaxHead, COLON_QUOTE, is_syntactic_operator,
@@ -192,7 +191,12 @@ function is_compatible_graph(x, y)
     syntax_graph(x).edges === syntax_graph(y).edges
 end
 
-#-------------------------------------------------------------------------------
+"""
+    struct SyntaxTree
+
+An ECS-style AST used in JuliaLowering.  Unstable, but may eventually replace
+SyntaxNode.
+"""
 struct SyntaxTree{GraphType}
     _graph::GraphType
     _id::NodeId
@@ -793,8 +797,7 @@ end
 # end
 
 #-------------------------------------------------------------------------------
-# Conversion from the raw parsed tree
-# TODO: move to JuliaSyntax. Replace SyntaxNode?
+# RawGreenNode->SyntaxTree
 
 function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::ParseStream;
                                 filename=nothing, first_line=1)
