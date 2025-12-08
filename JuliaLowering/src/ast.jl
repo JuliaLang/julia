@@ -56,7 +56,7 @@ collected later.
 """
 current_lambda_bindings(ctx::AbstractLoweringContext) = nothing
 
-function syntax_graph(ctx::AbstractLoweringContext)
+function JuliaSyntax.syntax_graph(ctx::AbstractLoweringContext)
     ctx.graph
 end
 
@@ -90,7 +90,7 @@ Lexical scope ID
 """
 const ScopeId = Int
 
-function makeleaf(ctx::AbstractLoweringContext, srcref, proto)
+function JuliaSyntax.makeleaf(ctx::AbstractLoweringContext, srcref, proto)
     makeleaf(syntax_graph(ctx), srcref, proto)
 end
 
@@ -150,11 +150,11 @@ end
 #-------------------------------------------------------------------------------
 # @ast macro
 
-function _node_id(graph::SyntaxGraph, ex)
+function JuliaSyntax._node_id(graph::SyntaxGraph, ex)
     # Fallback to give a comprehensible error message for use with the @ast macro
     error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
 end
-function _node_id(graph::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
+function JuliaSyntax._node_id(graph::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
     # Fallback to give a comprehensible error message for use with the @ast macro
     error("Attempt to use vector as an AST node. Did you mean to splat this? (content: `$(repr(ex))`)")
 end

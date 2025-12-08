@@ -1,8 +1,3 @@
-import .JuliaSyntax: ParseStream, RedTreeCursor, reverse_toplevel_siblings,
-    has_toplevel_siblings, _unsafe_wrap_substring, parse_julia_literal, is_trivia,
-    is_prefix_op_call, @isexpr, SyntaxHead, COLON_QUOTE, is_syntactic_operator,
-    lower_identifier_name
-
 const NodeId = Int
 
 """
@@ -112,19 +107,19 @@ function setchildren!(graph::SyntaxGraph, id::NodeId,
     append!(graph.edges, children)
 end
 
-function JuliaSyntax.is_leaf(graph::SyntaxGraph, id)
+function is_leaf(graph::SyntaxGraph, id)
     first(graph.edge_ranges[id]) == 0
 end
 
-function JuliaSyntax.numchildren(graph::SyntaxGraph, id)
+function numchildren(graph::SyntaxGraph, id)
     length(graph.edge_ranges[id])
 end
 
-function JuliaSyntax.children(graph::SyntaxGraph, id)
+function children(graph::SyntaxGraph, id)
     @view graph.edges[graph.edge_ranges[id]]
 end
 
-function JuliaSyntax.children(graph::SyntaxGraph, id, r::UnitRange)
+function children(graph::SyntaxGraph, id, r::UnitRange)
     @view graph.edges[graph.edge_ranges[id][r]]
 end
 
@@ -239,6 +234,21 @@ end
 Base.firstindex(ex::SyntaxTree) = 1
 Base.lastindex(ex::SyntaxTree) = numchildren(ex)
 
+function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
+    if kind(ex1) != kind(ex2) || is_leaf(ex1) != is_leaf(ex2)
+        return false
+    end
+    if is_leaf(ex1)
+        return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
+               get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
+    else
+        if numchildren(ex1) != numchildren(ex2)
+            return false
+        end
+        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
+    end
+end
+
 function hasattr(ex::SyntaxTree, name::Symbol)
     attr = getattr(ex._graph, name, nothing)
     return !isnothing(attr) && haskey(attr, ex._id)
@@ -273,27 +283,27 @@ end
 
 # JuliaSyntax tree API
 
-function JuliaSyntax.is_leaf(ex::SyntaxTree)
+function is_leaf(ex::SyntaxTree)
     is_leaf(ex._graph, ex._id)
 end
 
-function JuliaSyntax.numchildren(ex::SyntaxTree)
+function numchildren(ex::SyntaxTree)
     numchildren(ex._graph, ex._id)
 end
 
-function JuliaSyntax.children(ex::SyntaxTree)
+function children(ex::SyntaxTree)
     SyntaxList(ex._graph, children(ex._graph, ex._id))
 end
 
-function JuliaSyntax.head(ex::SyntaxTree)
-    JuliaSyntax.SyntaxHead(kind(ex), flags(ex))
+function head(ex::SyntaxTree)
+    SyntaxHead(kind(ex), flags(ex))
 end
 
-function JuliaSyntax.kind(ex::SyntaxTree)
-    ex.kind::JuliaSyntax.Kind
+function kind(ex::SyntaxTree)
+    ex.kind::Kind
 end
 
-function JuliaSyntax.flags(ex::SyntaxTree)
+function flags(ex::SyntaxTree)
     get(ex, :syntax_flags, 0x0000)
 end
 
@@ -305,29 +315,29 @@ struct SourceRef
     last_byte::Int
 end
 
-JuliaSyntax.sourcefile(src::SourceRef) = src.file
-JuliaSyntax.byte_range(src::SourceRef) = src.first_byte:src.last_byte
+sourcefile(src::SourceRef) = src.file
+byte_range(src::SourceRef) = src.first_byte:src.last_byte
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
 # and we a proper SourceRef for @ast's @HERE form.
-JuliaSyntax.byte_range(src::LineNumberNode) = 0:0
-JuliaSyntax.source_location(src::LineNumberNode) = (src.line, 0)
-JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
-JuliaSyntax.source_line(src::LineNumberNode) = src.line
+byte_range(src::LineNumberNode) = 0:0
+source_location(src::LineNumberNode) = (src.line, 0)
+source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
+source_line(src::LineNumberNode) = src.line
 # The follow somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
-JuliaSyntax.sourcefile(src::LineNumberNode) = src
-JuliaSyntax.sourcetext(src::LineNumberNode) = SubString("")
-JuliaSyntax.source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
-JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
-JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
+sourcefile(src::LineNumberNode) = src
+sourcetext(src::LineNumberNode) = SubString("")
+source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
+source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
+filename(src::LineNumberNode) = string(src.file)
 
-function JuliaSyntax.highlight(io::IO, src::LineNumberNode; note="")
+function highlight(io::IO, src::LineNumberNode; note="")
     print(io, src, " - ", note)
 end
 
-function JuliaSyntax.highlight(io::IO, src::SourceRef; kws...)
+function highlight(io::IO, src::SourceRef; kws...)
     highlight(io, src.file, first_byte(src):last_byte(src); kws...)
 end
 
@@ -433,8 +443,8 @@ end
 
 syntax_graph(ex::SyntaxTree) = ex._graph
 
-JuliaSyntax.sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
-JuliaSyntax.byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
+sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
+byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
@@ -628,7 +638,7 @@ function copy_attrs!(dest, src, all=false)
     end
 end
 
-function copy_attrs!(dest, head::Union{Kind,JuliaSyntax.SyntaxHead}, all=false)
+function copy_attrs!(dest, head::Union{Kind,SyntaxHead}, all=false)
     if all
         setattr!(dest._graph, dest._id, :kind, kind(head))
         !(head isa Kind) && setattr!(dest._graph, dest._id, :syntax_flags, flags(head))
@@ -730,7 +740,7 @@ end
 #-------------------------------------------------------------------------------
 # RawGreenNode->SyntaxTree
 
-function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::ParseStream;
+function build_tree(::Type{SyntaxTree}, stream::ParseStream;
                                 filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()
