@@ -584,3 +584,45 @@ function _insert_child_exprs(head::Symbol, child_exprs::Vector{Any},
     end
     return st_child_ids, last_src
 end
+
+#-------------------------------------------------------------------------------
+# SyntaxTree->Expr overrides
+
+function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
+    name = get(ex, :name_val, nothing)
+    if !isnothing(name)
+        n = Symbol(name)
+        if kind(ex) === K"Symbol"
+            return QuoteNode(n)
+        elseif hasattr(ex, :scope_layer)
+            Expr(:scope_layer, n, ex.scope_layer)
+        else
+            n
+        end
+    else
+        val = get(ex, :value, nothing)
+        if kind(ex) == K"Value" && val isa Expr || val isa LineNumberNode
+            # Expr AST embedded in a SyntaxTree should be quoted rather than
+            # becoming part of the output AST.
+            QuoteNode(val)
+        else
+            val
+        end
+    end
+end
+
+function JuliaSyntax.fixup_Expr_child(::Type{<:SyntaxTree}, head::SyntaxHead,
+                                      @nospecialize(arg), first::Bool)
+    isa(arg, Expr) || return arg
+    k = kind(head)
+    coalesce_dot = k in KSet"call dotcall curly" ||
+                   (k == K"quote" && has_flags(head, COLON_QUOTE))
+    if @isexpr(arg, :., 1) && arg.args[1] isa Tuple
+        h, a = arg.args[1]::Tuple{SyntaxHead,Any}
+        arg = ((coalesce_dot && first) || is_syntactic_operator(h)) ?
+            Symbol(".", a) : Expr(:., a)
+    end
+    return arg
+end
+
+Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
