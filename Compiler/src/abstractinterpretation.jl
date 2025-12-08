@@ -30,12 +30,12 @@ function propagate_conditional(rt::InterConditional, cond::Conditional)
     new_elsetype = rt.elsetype === Const(true) ? cond.thentype : cond.elsetype
     if rt.thentype == Bottom
         @assert rt.elsetype != Bottom
-        return Conditional(cond.slot, Bottom, new_elsetype)
+        return Conditional(cond.slot, cond.ssadef, Bottom, new_elsetype)
     elseif rt.elsetype == Bottom
         @assert rt.thentype != Bottom
-        return Conditional(cond.slot, new_thentype, Bottom)
+        return Conditional(cond.slot, cond.ssadef, new_thentype, Bottom)
     end
-    return Conditional(cond.slot, new_thentype, new_elsetype)
+    return Conditional(cond.slot, cond.ssadef, new_thentype, new_elsetype)
 end
 
 mutable struct SafeBox{T}
@@ -436,10 +436,12 @@ function from_intermustalias(𝕃ᵢ::AbstractLattice, rt::InterMustAlias, argin
     if fargs !== nothing && 1 ≤ rt.slot ≤ length(fargs)
         arg = ssa_def_slot(fargs[rt.slot], sv)
         if isa(arg, SlotNumber)
+            @assert vtypes !== nothing
             argtyp = widenslotwrapper(arginfo.argtypes[rt.slot])
             ⊑ = partialorder(𝕃ᵢ)
             if rt.vartyp ⊑ argtyp
-                return MustAlias(arg, rt.vartyp, rt.fldidx, rt.fldtyp)
+                vtyp = vtypes[slot_id(arg)]
+                return MustAlias(arg, vtyp.ssadef, rt.vartyp, rt.fldidx, rt.fldtyp)
             else
                 # TODO optimize this case?
             end
@@ -531,7 +533,8 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
         if alias !== nothing
             return form_mustalias_conditional(alias, thentype, elsetype)
         end
-        return Conditional(slot, thentype, elsetype) # record a Conditional improvement to this slot
+        @assert vtypes !== nothing
+        return Conditional(slot, vtypes[slot].ssadef, thentype, elsetype) # record a Conditional improvement to this slot
     end
     return widenconditional(rt)
 end
@@ -1397,7 +1400,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                     # TODO bail out here immediately rather than just propagating Bottom ?
                     given_argtypes[i] = Bottom
                 else
-                    given_argtypes[i] = Conditional(slotid, thentype, elsetype)
+                    given_argtypes[i] = Conditional(slotid, #= ssadef =# 0, thentype, elsetype)
                 end
                 continue
             end
@@ -1987,7 +1990,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     fldidx = maybe_const_fldidx(vartyp, a3.val)
                     if fldidx !== nothing
                         # wrap this aliasable field into `MustAlias` for possible constraint propagations
-                        return MustAlias(var, vartyp, fldidx, rt)
+                        @assert vtypes !== nothing
+                        vtyp = vtypes[slot_id(var)]
+                        return MustAlias(var, vtyp.ssadef, vartyp, fldidx, rt)
                     end
                 end
             end
@@ -2002,7 +2007,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             if isa(a, SlotNumber)
                 cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting, rt)
                 if cndt !== nothing
-                    return Conditional(a, cndt.thentype, cndt.elsetype)
+                    @assert vtypes !== nothing
+                    vtyp = vtypes[slot_id(a)]
+                    return Conditional(a, vtyp.ssadef, cndt.thentype, cndt.elsetype)
                 end
             end
             if isa(a2, MustAlias)
@@ -2020,7 +2027,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     # !(x isa T) implies !(Type{a2} <: T)
                     # TODO: complete splitting, based on which portions of the Union a3 for which isa_tfunc returns Const(true) or Const(false) instead of Bool
                     elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(interp).max_union_splitting)
-                    return Conditional(b, a3, elsetype)
+                    @assert vtypes !== nothing
+                    vtyp = vtypes[slot_id(b)]
+                    return Conditional(b, vtyp.ssadef, a3, elsetype)
                 end
             end
         elseif f === (===)
@@ -2031,16 +2040,20 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
             if isa(aty, Const)
                 if isa(b, SlotNumber)
+                    @assert vtypes !== nothing
+                    vtyp = vtypes[slot_id(b)]
                     cndt = egal_condition(aty, bty, InferenceParams(interp).max_union_splitting, rt)
-                    return Conditional(b, cndt.thentype, cndt.elsetype)
+                    return Conditional(b, vtyp.ssadef, cndt.thentype, cndt.elsetype)
                 elseif isa(bty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
                     cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(bty, cndt.thentype, cndt.elsetype)
                 end
             elseif isa(bty, Const)
                 if isa(a, SlotNumber)
+                    @assert vtypes !== nothing
+                    vtyp = vtypes[slot_id(a)]
                     cndt = egal_condition(bty, aty, InferenceParams(interp).max_union_splitting, rt)
-                    return Conditional(a, cndt.thentype, cndt.elsetype)
+                    return Conditional(a, vtyp.ssadef, cndt.thentype, cndt.elsetype)
                 elseif isa(aty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
                     cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(aty, cndt.thentype, cndt.elsetype)
@@ -2071,18 +2084,24 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             if isa(b, SlotNumber)
                 thentype = rt === Const(false) ? Bottom : widenslotwrapper(bty)
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(bty)
-                return Conditional(b, thentype, elsetype)
+                @assert vtypes !== nothing
+                vtyp = vtypes[slot_id(b)]
+                return Conditional(b, vtyp.ssadef, thentype, elsetype)
             elseif isa(a, SlotNumber)
                 thentype = rt === Const(false) ? Bottom : widenslotwrapper(aty)
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(aty)
-                return Conditional(a, thentype, elsetype)
+                @assert vtypes !== nothing
+                vtyp = vtypes[slot_id(a)]
+                return Conditional(a, vtyp.ssadef, thentype, elsetype)
             end
         elseif f === Core.Intrinsics.not_int
             aty = argtypes[2]
             if isa(aty, Conditional)
                 thentype = rt === Const(false) ? Bottom : aty.elsetype
                 elsetype = rt === Const(true)  ? Bottom : aty.thentype
-                return Conditional(aty.slot, thentype, elsetype)
+                @assert vtypes !== nothing
+                vtyp = vtypes[aty.slot]
+                return Conditional(aty.slot, vtyp.ssadef, thentype, elsetype)
             end
         elseif f === isdefined
             a = ssa_def_slot(fargs[2], sv)
@@ -2105,7 +2124,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                             elsetype = elsetype ⊔ ty
                         end
                     end
-                    return Conditional(a, thentype, elsetype)
+                    @assert vtypes !== nothing
+                    vtyp = vtypes[slot_id(a)]
+                    return Conditional(a, vtyp.ssadef, thentype, elsetype)
                 else
                     thentype = form_partially_defined_struct(𝕃ᵢ, argtype2, argtypes[3])
                     if thentype !== nothing
@@ -2115,7 +2136,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                         elseif rt === Const(true)
                             elsetype = Bottom
                         end
-                        return Conditional(a, thentype, elsetype)
+                        @assert vtypes !== nothing
+                        vtyp = vtypes[slot_id(a)]
+                        return Conditional(a, vtyp.ssadef, thentype, elsetype)
                     end
                 end
             end
@@ -2337,7 +2360,7 @@ function invoke_rewrite(xs::Vector{Any})
     return newxs
 end
 
-function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, vtypes, sv::AbsIntState)
     if length(argtypes) == 3
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
         call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false, false), vtypes, sv, #=max_methods=#1)::Future
@@ -2772,7 +2795,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return Future{CallMeta}(isready(callfuture) && isready(rtfuture), interp, sv) do interp, sv
                 local rty = rtfuture[].rt
                 if isa(rty, Conditional)
-                    return CallMeta(Conditional(rty.slot, rty.elsetype, rty.thentype), Bottom, EFFECTS_TOTAL, NoCallInfo()) # swap if-else
+                    return CallMeta(Conditional(rty.slot, rty.ssadef, rty.elsetype, rty.thentype), Bottom, EFFECTS_TOTAL, NoCallInfo()) # swap if-else
                 elseif isa(rty, Const)
                     return CallMeta(Const(rty.val === false), Bottom, EFFECTS_TOTAL, MethodResultPure())
                 end
@@ -2892,6 +2915,8 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
     atype === Bottom && return Future(CallMeta(Union{}, Union{}, EFFECTS_THROWS, NoCallInfo())) # accidentally unreachable
     return abstract_call_gf_by_type(interp, nothing, arginfo, si, atype, vtypes, sv, max_methods)::Future
 end
+
+# TODO: abstract
 
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
@@ -3274,7 +3299,7 @@ function abstract_eval_isdefined_expr(::AbstractInterpreter, e::Expr, sstate::St
         elseif !vtyp.undef
             rt = Const(true) # definitely assigned previously
         else # form `Conditional` to refine `vtyp.undef` in the then branch
-            rt = Conditional(sym, widenslotwrapper(vtyp.typ), widenslotwrapper(vtyp.typ); isdefined=true)
+            rt = Conditional(sym, vtyp.ssadef, widenslotwrapper(vtyp.typ), widenslotwrapper(vtyp.typ); isdefined=true)
         end
         return RTEffects(rt, Union{}, EFFECTS_TOTAL)
     end
@@ -3804,7 +3829,7 @@ end
         @goto injectresult
     end
     if isa(stmt, NewvarNode)
-        changes = StateUpdate(stmt.slot, VarState(Bottom, true))
+        changes = StateUpdate(stmt.slot, VarState(Bottom, frame.currpc, #= undef =# true))
     elseif isa(stmt, PhiNode)
         add_curr_ssaflag!(frame, IR_FLAGS_REMOVABLE)
         # Implement convergence for PhiNodes. In particular, PhiNodes need to tmerge over
@@ -3827,7 +3852,7 @@ end
             if hd === :method
                 fname = stmt.args[1]
                 if isa(fname, SlotNumber)
-                    changes = StateUpdate(fname, VarState(Any, false))
+                    changes = StateUpdate(fname, VarState(Any, frame.currpc, #= undef =# false))
                 end
             elseif (hd === :code_coverage_effect ||
                     # :boundscheck can be narrowed to Bool
@@ -3873,7 +3898,7 @@ end
             end
         end
         if lhs !== nothing && rt !== Bottom
-            changes = StateUpdate(lhs::SlotNumber, VarState(rt, false))
+            changes = StateUpdate(lhs::SlotNumber, VarState(rt, frame.currpc, #= undef =# false))
         end
     end
     return AbstractEvalBasicStatementResult(rt, exct, effects, changes, refinements, currsaw_latestworld)
@@ -3904,7 +3929,7 @@ end
 
 @nospecializeinfer function widenreturn(𝕃ᵢ::MustAliasesLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, MustAlias)
-        if 1 ≤ rt.slot ≤ info.nargs
+        if 1 ≤ rt.slot ≤ info.nargs && rt.ssadef == 0
             rt = InterMustAlias(rt)
         else
             rt = widenmustalias(rt)
@@ -3939,13 +3964,13 @@ end
                 rt = widenconditional(rt)
             end
         end
-        if isa(rt, Conditional)
+        if isa(rt, Conditional) && rt.ssadef == 0
             rt = InterConditional(rt.slot, rt.thentype, rt.elsetype)
         elseif is_lattice_bool(𝕃ᵢ, rt)
             rt = bool_rt_to_conditional(rt, info)
         end
     end
-    if isa(rt, Conditional)
+    if isa(rt, Conditional) && rt.ssadef == 0
         rt = InterConditional(rt)
     end
     isa(rt, InterConditional) && return rt
@@ -4058,14 +4083,17 @@ function update_bbstate!(𝕃ᵢ::AbstractLattice, frame::InferenceState, bb::In
         frame.bb_vartables[bb] = copy(vartable)
         return true
     else
-        return stupdate!(𝕃ᵢ, bbtable, vartable)
+        pc = first(frame.cfg.blocks[bb].stmts)
+        # Minus sign marks this as a "virtual" PC so that it is
+        # not confused with a real assignment at this PC.
+        return stupdate!(𝕃ᵢ, bbtable, vartable, -pc)
     end
 end
 
 function init_vartable!(vartable::VarTable, frame::InferenceState)
     nargtypes = length(frame.result.argtypes)
     for i = 1:length(vartable)
-        vartable[i] = VarState(Bottom, i > nargtypes)
+        vartable[i] = VarState(Bottom, #= ssadef =# typemin(Int), i > nargtypes)
     end
     return vartable
 end
@@ -4229,9 +4257,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                     end
                     orig_condt = condt
                     if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condslot, SlotNumber)
+                        vtyp = currstate[slot_id(condslot)]
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
-                        condt = Conditional(condslot, Const(true), Const(false))
+                        condt = Conditional(condslot, vtyp.ssadef, Const(true), Const(false))
                     end
                     condval = maybe_extract_const_bool(condt)
                     nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)
@@ -4276,7 +4305,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
 
                         # We continue with the true branch, but process the false
                         # branch here.
-                        if isa(condt, Conditional)
+                        if isa(condt, Conditional) && conditional_valid(condt, currstate)
                             else_change = conditional_change(𝕃ᵢ, currstate, condt, :else)
                             if else_change !== nothing
                                 elsestate = copy(currstate)
@@ -4430,6 +4459,32 @@ function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecia
     end
 end
 
+"""
+    conditional_valid(condt::Conditional, currstate::VarTable) -> Bool
+
+Check whether a `Conditional` is still valid for refining the type of its slot.
+
+A `Conditional` becomes invalid when the slot it references has been reassigned
+since the conditional was created. This is detected by comparing the `ssadef`
+(reaching definition) stored in the `Conditional` with the current `ssadef` of
+the slot in `currstate`. If they differ, the slot now holds a different object
+and the conditional's type constraints no longer apply.
+
+For example:
+```julia
+x = foo()        # ssadef=1
+cond = x isa Int # creates Conditional(slot=x, ssadef=1, ...)
+x = bar()        # ssadef=2, x is now a different object
+if cond          # conditional_valid returns false here
+    # Cannot assume x::Int because x was reassigned
+end
+```
+"""
+function conditional_valid(condt::Conditional, currstate::VarTable)
+    @assert condt.ssadef != typemin(Int)
+    return currstate[condt.slot].ssadef == condt.ssadef
+end
+
 function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Symbol)
     vtype = currstate[condt.slot]
     oldtyp = vtype.typ
@@ -4468,7 +4523,7 @@ function condition_object_change(currstate::VarTable, condt::Conditional,
         thentype = Union{}
         elsetype = condt.elsetype
     else @assert false end
-    newcondt = Conditional(condt.slot, thentype, elsetype)
+    newcondt = Conditional(condt.slot, condt.ssadef, thentype, elsetype)
     return StateRefinement(slot_id(condslot), newcondt, vtype.undef)
 end
 
