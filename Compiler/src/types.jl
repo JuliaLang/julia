@@ -77,8 +77,7 @@ If `v.typ === Bottom` it means that the variable is strictly undefined.
 
 `v.ssadef` represents the "reaching definition" for the variable.
 If zero, then the value comes from an argument.
-If negative, this refers to a "virtual ϕ-block" preceding the given index,
-that would have been inserted as the value of this slot in a truly SSA-form IR.
+If there was a conditional assignment (on a branch), this may refer to the index of the MemSSA ϕ-node.
 If a slot has the same `ssadef` at two different points of execution,
 the slot contents are guaranteed to share identity (`x₀ === x₁`).
 """

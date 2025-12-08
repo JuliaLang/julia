@@ -496,48 +496,93 @@ end
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
-@nospecializeinfer function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecialize(typeb))
-    # type-lattice for Conditional wrapper (NOTE never be merged with InterConditional)
-    if isa(typea, Conditional) && isa(typeb, Const)
-        if typeb.val === true
-            typeb = Conditional(typea.slot, typea.ssadef, Any, Union{})
-        elseif typeb.val === false
-            typeb = Conditional(typea.slot, typea.ssadef, Union{}, Any)
-        end
-    end
-    if isa(typeb, Conditional) && isa(typea, Const)
-        if typea.val === true
-            typea = Conditional(typeb.slot, typeb.ssadef, Any, Union{})
-        elseif typea.val === false
-            typea = Conditional(typeb.slot, typeb.ssadef, Union{}, Any)
-        end
-    end
-    if isa(typea, Conditional) && isa(typeb, Conditional)
-        if is_same_conditionals(typea, typeb)
-            thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
-            elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
-            if thentype !== elsetype
-                return Conditional(typea.slot, typea.ssadef, thentype, elsetype)
+"""
+    tmerge_conditional(lattice, @nospecialize(typea), @nospecialize(typeb)) -> Union{Nothing, Conditional}
+
+Attempt to merge two types as Conditionals for the same slot. Returns a new
+`Conditional` with the merged branch types if successful, or `nothing` if
+the types cannot be merged as Conditionals.
+"""
+function tmerge_conditional(lattice::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
+    # TODO: need to handled Conditional.isdefined field
+    if isa(typea, Conditional)
+        slot = typea.slot
+        ssadef, athent, aelset = typea.ssadef, typea.thentype, typea.elsetype
+        if isa(typeb, Conditional)
+            if typeb.slot != slot || ssadef != typeb.ssadef
+                consta = maybe_extract_const_bool(typea)
+                constb = maybe_extract_const_bool(typeb)
+                if consta === nothing
+                    if constb === nothing
+                        return nothing
+                    else
+                        typeb = Const(constb)
+                    end
+                else
+                    if constb === nothing
+                        typea = Const(consta)
+                    else
+                        return nothing
+                    end
+                end
             end
         end
-        val = maybe_extract_const_bool(typea)
-        if val isa Bool && val === maybe_extract_const_bool(typeb)
-            return Const(val)
+        if isa(typeb, Conditional)
+            bthent, belset = typeb.thentype, typeb.elsetype
+        elseif typeb === Const(true)
+            bthent, belset = Any, Union{}
+        elseif typeb === Const(false)
+            bthent, belset = Union{}, Any
+        else
+            return nothing
         end
-        return Bool
-    end
-    if isa(typea, Conditional)
-        typeb === Union{} && return typea
-        typea = widenconditional(typea)
     elseif isa(typeb, Conditional)
-        typea === Union{} && return typeb
-        typeb = widenconditional(typeb)
+        slot = typeb.slot
+        bthent, belset = typeb.thentype, typeb.elsetype
+        ssadef = typeb.ssadef
+        if typea === Const(true)
+            athent, aelset = Any, Union{}
+        elseif typea === Const(false)
+            athent, aelset = Union{}, Any
+        else
+            return nothing
+        end
+    else
+        return nothing
+    end
+    thentype = tmerge(lattice, athent, bthent)
+    elsetype = tmerge(lattice, aelset, belset)
+    if thentype !== elsetype
+        return Conditional(slot, ssadef, thentype, elsetype)
+    end
+    return nothing
+end
+
+
+@nospecializeinfer function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecialize(typeb))
+    # type-lattice for Conditional wrapper (NOTE never be merged with InterConditional)
+    typea === Union{} && return typeb
+    typeb === Union{} && return typea
+    if isa(typea, Conditional) || isa(typeb, Conditional)
+        merged = tmerge_conditional(widenlattice(lattice), typea, typeb)
+        merged !== nothing && return merged
+        if isa(typea, Conditional)
+            typea = widenconditional(typea)
+        end
+        if isa(typeb, Conditional)
+            typeb = widenconditional(typeb)
+        end
+        if typea === typeb
+            return typea
+        end
     end
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
 @nospecializeinfer function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospecialize(typeb))
     # type-lattice for InterConditional wrapper (NOTE never be merged with Conditional)
+    typea === Union{} && return typeb
+    typeb === Union{} && return typea
     if isa(typea, InterConditional) && isa(typeb, Const)
         if typeb.val === true
             typeb = InterConditional(typea.slot, Any, Union{})
@@ -560,18 +605,15 @@ end
                 return InterConditional(typea.slot, thentype, elsetype)
             end
         end
-        val = maybe_extract_const_bool(typea)
-        if val isa Bool && val === maybe_extract_const_bool(typeb)
-            return Const(val)
-        end
-        return Bool
     end
     if isa(typea, InterConditional)
-        typeb === Union{} && return typea
         typea = widenconditional(typea)
-    elseif isa(typeb, InterConditional)
-        typea === Union{} && return typeb
+    end
+    if isa(typeb, InterConditional)
         typeb = widenconditional(typeb)
+    end
+    if typea === typeb
+        return typea
     end
     return tmerge(widenlattice(lattice), typea, typeb)
 end

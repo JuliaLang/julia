@@ -4084,9 +4084,7 @@ function update_bbstate!(𝕃ᵢ::AbstractLattice, frame::InferenceState, bb::In
         return true
     else
         pc = first(frame.cfg.blocks[bb].stmts)
-        # Minus sign marks this as a "virtual" PC so that it is
-        # not confused with a real assignment at this PC.
-        return stupdate!(𝕃ᵢ, bbtable, vartable, -pc)
+        return stupdate!(𝕃ᵢ, bbtable, vartable, pc)
     end
 end
 

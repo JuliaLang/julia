@@ -729,7 +729,22 @@ function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Unio
     sa === sb && return sa
     sa === NOT_FOUND && return sb
     sb === NOT_FOUND && return sa
-    return VarState(tmerge(lattice, sa.typ, sb.typ), sa.ssadef == sb.ssadef ? sa.ssadef : join_pc, sa.undef | sb.undef)
+    ta = sa.typ
+    tb = sb.typ
+    if ta === Bottom
+        ssadef = sb.ssadef
+        merged = tb
+    elseif tb === Bottom
+        ssadef = sa.ssadef
+        merged = ta
+    else
+        ssadef = sa.ssadef
+        if ssadef != sb.ssadef
+            ssadef = join_pc
+        end
+        merged = tmerge(lattice, ta, tb)
+    end
+    return VarState(merged, ssadef, sa.undef | sb.undef)
 end
 
 @nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int) =
@@ -738,18 +753,41 @@ end
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable, join_pc::Int)
     changed = false
     for i = 1:length(state)
+        oldtype = state[i]
+        if oldtype isa Conditional && !conditional_valid(oldtype, state)
+            state[i] = widenconditional(oldtype)
+        end
+    end
+    for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
+        if newtype isa Conditional && !conditional_valid(newtype, changes)
+            newtype = widenconditional(newtype)
+        end
         # In addition to computing the type, the merge here computes the "reaching definition"
         # for a slot. The provided `join_pc` is a "virtual" PC, which corresponds to the ϕ-block
         # that would exist at the beginning of the BasicBlock.
         #
         # This effectively applies the "path-convergence criterion" for SSA construction.
+        #
+        # COMBAK: after we compute the new reaching def for every slot,
+        # we can potentially recompute any Conditional newtype & oldtype to use the new reaching def after merging in type information from them from the other side
         if schanged(lattice, newtype, oldtype, join_pc)
             state[i] = smerge(lattice, oldtype, newtype, join_pc)
             changed = true
         end
     end
+    #for i = 1:length(state)
+    #    sa = state[i]
+    #    oldtype = widenconditional(changes[i])
+    #    if sa isa VarState
+    #        ta = sa.typ
+    #        if ta isa Conditional && (oldtype isa Const || newtype isa Const)
+    #            # update the relevant "reaching def" for this slot to the current def
+    #            state[i] = VarState(Conditional(ta.slot, state[ta.slot].ssadef, ta.thentype, ta.elsetype, isdefined=ta.isdefined), sa.ssadef, sa.undef)
+    #        end
+    #    end
+    #end
     return changed
 end
 
@@ -761,10 +799,11 @@ function stoverwrite!(state::VarTable, newstate::VarTable)
 end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
-    # Note: We no longer need to invalidate Conditional/MustAlias in other slots
-    # that reference this slot. The ssadef tracking handles this: when a slot is
-    # reassigned, its ssadef changes, and any Conditional/MustAlias referencing
-    # the old ssadef will be detected as stale by conditional_valid().
+    # Note: We no longer need to immediately invalidate Conditional/MustAlias
+    # in other slots that reference this slot. The ssadef tracking handles
+    # this: when a slot is reassigned, its ssadef changes, and any
+    # Conditional/MustAlias referencing the old ssadef will be detected as
+    # stale by conditional_valid().
     state[slot_id(change.var)] = change.vtype
     return state
 end

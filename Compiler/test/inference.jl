@@ -6535,4 +6535,19 @@ end
 @test Float64 <: Base.infer_return_type(issue55548, (Int,))
 @test issue55548(Int64(0)) === 1.0
 
+# JuliaLang/julia#55601: preserve Conditional precision at merge points
+# when a slot is reassigned on only one branch
+_issue55601_rand3() = @noinline rand((true, false, 1))
+function issue55601()
+    value = _issue55601_rand3()
+    is_bool = value isa Bool
+    if Base.inferencebarrier(rand(Bool))::Bool
+        value = 1.0
+        is_bool = false
+    end
+    # at this merge point, `is_bool` should still track that when true, `value isa Bool`
+    return is_bool ? value : false
+end
+@test Base.infer_return_type(issue55601, ()) === Bool
+
 end # module inference
