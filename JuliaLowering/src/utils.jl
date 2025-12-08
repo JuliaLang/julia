@@ -3,7 +3,7 @@ attrsummary(name, value::Number) = "$name=$value"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k == K"Identifier" || is_operator(k) ? ex.name_val :
+    str = k == K"Identifier" || JuliaSyntax.is_operator(k) ? ex.name_val :
           k == K"Placeholder" ? ex.name_val           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
@@ -54,7 +54,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds)
 
     std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id])
     attrstr = join([attrsummary(n, getproperty(ex, n))
-                    for n in attrnames(ex) if n ∉ std_attrs], ",")
+                    for n in JuliaSyntax.attrnames(ex) if n ∉ std_attrs], ",")
     treestr = string(rpad(treestr, 60), " │ $attrstr")
 
     println(io, treestr)
@@ -67,13 +67,13 @@ function _show_syntax_tree(io, ex, indent, show_kinds)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    anames = join(string.(attrnames(syntax_graph(ex))), ",")
+    anames = join(string.(JuliaSyntax.attrnames(syntax_graph(ex))), ",")
     println(io, "SyntaxTree with attributes $anames")
     _show_syntax_tree(io, ex, "", show_kinds)
 end
 function _show_syntax_tree_sexpr(io, ex)
     if is_leaf(ex)
-        if is_error(ex)
+        if JuliaSyntax.is_error(ex)
             print(io, "(", untokenize(head(ex)), ")")
         else
             print(io, _value_string(ex))

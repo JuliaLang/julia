@@ -160,7 +160,7 @@ function JuliaSyntax._node_id(graph::SyntaxGraph, ex::AbstractVector{<:SyntaxTre
 end
 
 function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val)
-    push!(ids, _node_id(graph, val))
+    push!(ids, JuliaSyntax._node_id(graph, val))
 end
 function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val::Nothing)
     nothing

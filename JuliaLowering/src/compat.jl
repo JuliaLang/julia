@@ -209,7 +209,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     elseif e isa String
         st_id = _insert_tree_node(graph, K"string", src)
         id_inner = _insert_tree_node(graph, K"String", src, [:value=>e])
-        setchildren!(graph, st_id, [id_inner])
+        JuliaSyntax.setchildren!(graph, st_id, [id_inner])
         return st_id, src
     elseif !(e isa Expr)
         # There are other kinds we could potentially back-convert (e.g. Float),
@@ -560,7 +560,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         return st_id, src
     else
         st_child_ids, last_src = _insert_child_exprs(e.head, child_exprs, graph, src)
-        setchildren!(graph, st_id, st_child_ids)
+        JuliaSyntax.setchildren!(graph, st_id, st_child_ids)
         return st_id, last_src
     end
 end
@@ -616,7 +616,7 @@ function JuliaSyntax.fixup_Expr_child(::Type{<:SyntaxTree}, head::SyntaxHead,
     isa(arg, Expr) || return arg
     k = kind(head)
     coalesce_dot = k in KSet"call dotcall curly" ||
-                   (k == K"quote" && has_flags(head, COLON_QUOTE))
+                   (k == K"quote" && has_flags(head, JuliaSyntax.COLON_QUOTE))
     if @isexpr(arg, :., 1) && arg.args[1] isa Tuple
         h, a = arg.args[1]::Tuple{SyntaxHead,Any}
         arg = ((coalesce_dot && first) || is_syntactic_operator(h)) ?
