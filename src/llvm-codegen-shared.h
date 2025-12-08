@@ -103,7 +103,7 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T, bool ignore_loaded=false);
 };
 
-llvm::SmallVector<llvm::Value*, 0> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder, llvm::ArrayRef<unsigned> perm_offsets={});
+llvm::SmallVector<llvm::SmallVector<unsigned, 0>, 0> TrackCompositeType(llvm::Type *T);
 
 static inline void llvm_dump(llvm::Value *v)
 {
