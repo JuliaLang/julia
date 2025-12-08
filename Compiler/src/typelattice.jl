@@ -252,13 +252,6 @@ end
     return typ
 end
 
-@nospecializeinfer function widenwrappedslotwrapper(@nospecialize typ)
-    if isa(typ, LimitedAccuracy)
-        return LimitedAccuracy(widenslotwrapper(typ.typ), typ.causes)
-    end
-    return widenslotwrapper(typ)
-end
-
 # Conditional
 # ===========
 
@@ -742,17 +735,6 @@ end
 @nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int) =
     (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && (n.ssadef === o.ssadef || o.ssadef === join_pc) && ⊑(lattice, n.typ, o.typ))))
 
-# remove any lattice elements that wrap the reassigned slot object from the vartable
-function invalidate_slotwrapper(vt::VarState, changeid::Int)
-    newtyp = ignorelimited(vt.typ)
-    if ((isa(newtyp, Conditional) && newtyp.slot == changeid) ||
-        (isa(newtyp, MustAlias) && newtyp.slot == changeid))
-        newtyp = @noinline widenwrappedslotwrapper(vt.typ)
-        return VarState(newtyp, vt.ssadef, vt.undef)
-    end
-    return nothing
-end
-
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable, join_pc::Int)
     changed = false
     for i = 1:length(state)
@@ -779,16 +761,11 @@ function stoverwrite!(state::VarTable, newstate::VarTable)
 end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
-    changeid = slot_id(change.var)
-    for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid)
-        if invalidated !== nothing
-            state[i] = invalidated
-        end
-    end
-    # and update the type of it
-    newtype = change.vtype
-    state[changeid] = newtype
+    # Note: We no longer need to invalidate Conditional/MustAlias in other slots
+    # that reference this slot. The ssadef tracking handles this: when a slot is
+    # reassigned, its ssadef changes, and any Conditional/MustAlias referencing
+    # the old ssadef will be detected as stale by conditional_valid().
+    state[slot_id(change.var)] = change.vtype
     return state
 end
 
