@@ -1364,7 +1364,7 @@ end
     return Bool
 end
 
-@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
+@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if ff === modifyfield!
         minargs = 5
         maxargs = 6
@@ -1425,7 +1425,7 @@ end
         # as well as compute the info for the method matches
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), sv, #=max_methods=#1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
         TF = Core.Box(TF)
         RT = Core.Box(RT)
         return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
@@ -3125,7 +3125,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
     end
-    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
+    # TODO: vtypes?
+    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
     tt = Core.Box(tt)
     return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)

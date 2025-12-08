@@ -108,7 +108,7 @@ end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(func),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
-                                  sv::AbsIntState, max_methods::Int)
+                                  vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int)
     𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
     ⊑ₚ, ⊔ₚ, ⊔ᵢ  = partialorder(𝕃ₚ), join(𝕃ₚ), join(𝕃ᵢ)
     argtypes = arginfo.argtypes
@@ -264,7 +264,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             if sv isa InferenceState && fargs !== nothing
                 state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
             end
-            state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals)
+            state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals, vtypes)
             if call_result_unused(si) && !(state.rettype === Bottom)
                 add_remark!(interp, sv, "Call result type was widened because the return value is unused")
                 # We're mainly only here because the optimizer might want this code,
@@ -408,15 +408,15 @@ When we deal with multiple `MethodMatch`es, it's better to precompute `maybecond
 `tmerge`ing argument signature type of each method call.
 """
 function from_interprocedural!(interp::AbstractInterpreter, @nospecialize(rt), sv::AbsIntState,
-                               arginfo::ArgInfo, @nospecialize(maybecondinfo))
+                               arginfo::ArgInfo, @nospecialize(maybecondinfo), vtypes::Union{VarTable,Nothing})
     rt = collect_limitations!(rt, sv)
     if isa(rt, InterMustAlias)
-        rt = from_intermustalias(typeinf_lattice(interp), rt, arginfo, sv)
+        rt = from_intermustalias(typeinf_lattice(interp), rt, arginfo, vtypes, sv)
     elseif is_lattice_bool(ipo_lattice(interp), rt)
         if maybecondinfo === nothing
             rt = widenconditional(rt)
         else
-            rt = from_interconditional(typeinf_lattice(interp), rt, sv, arginfo, maybecondinfo)
+            rt = from_interconditional(typeinf_lattice(interp), rt, sv, arginfo, maybecondinfo, vtypes)
         end
     end
     @assert !(rt isa InterConditional || rt isa InterMustAlias) "invalid lattice element returned from inter-procedural context"
@@ -431,7 +431,7 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function from_intermustalias(𝕃ᵢ::AbstractLattice, rt::InterMustAlias, arginfo::ArgInfo, sv::AbsIntState)
+function from_intermustalias(𝕃ᵢ::AbstractLattice, rt::InterMustAlias, arginfo::ArgInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     fargs = arginfo.fargs
     if fargs !== nothing && 1 ≤ rt.slot ≤ length(fargs)
         arg = ssa_def_slot(fargs[rt.slot], sv)
@@ -449,7 +449,7 @@ function from_intermustalias(𝕃ᵢ::AbstractLattice, rt::InterMustAlias, argin
 end
 
 function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::AbsIntState,
-                               arginfo::ArgInfo, @nospecialize(maybecondinfo))
+                               arginfo::ArgInfo, @nospecialize(maybecondinfo), vtypes::Union{VarTable,Nothing})
     has_conditional(𝕃ᵢ, sv) || return widenconditional(rt)
     (; fargs, argtypes) = arginfo
     fargs === nothing && return widenconditional(rt)
@@ -1475,7 +1475,7 @@ AbstractIterationResult(cti::Vector{Any}, info::MaybeAbstractIterationInfo) =
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types
 function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(typ),
-                                sv::AbsIntState)
+                                vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(typ, PartialStruct)
         widet = typ.typ
         if isa(widet, DataType)
@@ -1561,12 +1561,13 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
         end
         return Future(AbstractIterationResult(Any[Vararg{eltype(tti0)}], nothing))
     else
-        return abstract_iteration(interp, itft, typ, sv)
+        return abstract_iteration(interp, itft, typ, vtypes, sv)
     end
 end
 
 # simulate iteration protocol on container type up to fixpoint
-function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(itertype), sv::AbsIntState)
+function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(itertype),
+                            vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(itft, Const)
         iteratef = itft.val
     else
@@ -1575,7 +1576,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     @assert !isvarargtype(itertype)
 
     iterateresult = Future{AbstractIterationResult}()
-    call1future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true, false), sv)::Future
+    call1future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true, false), vtypes, sv)::Future
     function inferiterate(interp, sv)
         call1 = call1future[]
         stateordonet = call1.rt
@@ -1631,7 +1632,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 valtype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(1))
                 push!(ret, valtype)
                 statetype = nstatetype
-                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), sv)::Future
+                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), vtypes, sv)::Future
                 if !isready(call2future)
                     nextstate = 0x1
                     return false
@@ -1673,7 +1674,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 end
                 valtype = tmerge(valtype, nounion.parameters[1])
                 statetype = tmerge(statetype, nounion.parameters[2])
-                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), sv)::Future
+                call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), vtypes, sv)::Future
                 if !isready(call2future)
                     nextstate = 0x2
                     return false
@@ -1704,7 +1705,8 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo,
-                        sv::AbsIntState, max_methods::Int=get_max_methods(interp, sv))
+                        vtypes::Union{VarTable,Nothing}, sv::AbsIntState,
+                        max_methods::Int=get_max_methods(interp, sv))
     itft = Core.Box(argtype_by_index(argtypes, 2))
     aft = argtype_by_index(argtypes, 3)
     (itft.contents === Bottom || aft === Bottom) && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
@@ -1763,7 +1765,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                 ti = argtypesi[j]
                 j += 1
                 if !isvarargtype(ti)
-                    ctfuture = precise_container_type(interp, itft.contents, ti, sv)::Future
+                    ctfuture = precise_container_type(interp, itft.contents, ti, vtypes, sv)::Future
                     if !isready(ctfuture)
                         nextstate = 0x1
                         return false
@@ -1771,7 +1773,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     end
                     (;cti, info, ai_effects) = ctfuture[]
                 else
-                    ctfuture = precise_container_type(interp, itft.contents, unwrapva(ti), sv)::Future
+                    ctfuture = precise_container_type(interp, itft.contents, unwrapva(ti), vtypes, sv)::Future
                     if !isready(ctfuture)
                         nextstate = 0x2
                         return false
@@ -1842,7 +1844,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     break
                 end
             end
-            callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, sv, max_methods)::Future
+            callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv, max_methods)::Future
             if !isready(callfuture)
                 nextstate = 0x3
                 return false
@@ -1944,7 +1946,7 @@ end
 end
 
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs, argtypes)::ArgInfo,
-                               sv::AbsIntState)
+                               vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     @nospecialize f
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -2208,7 +2210,7 @@ function get_ci_abi(ci::CodeInstance)
     (def::MethodInstance).specTypes
 end
 
-function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState)
+function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     argtypes = arginfo.argtypes
     ft′ = argtype_by_index(argtypes, 2)
     ft = widenconst(ft′)
@@ -2318,7 +2320,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 call_result = const_result
             end
         end
-        rt = from_interprocedural!(interp, rt, sv, arginfo′, sig)
+        rt = from_interprocedural!(interp, rt, sv, arginfo′, sig, vtypes)
         info = InvokeCallInfo(edge, match, call_result, lookupsig_box.contents)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
@@ -2335,10 +2337,10 @@ function invoke_rewrite(xs::Vector{Any})
     return newxs
 end
 
-function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
+function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if length(argtypes) == 3
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
-        call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false, false), sv, #=max_methods=#1)::Future
+        call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false, false), vtypes, sv, #=max_methods=#1)::Future
         return Future{CallMeta}(call, interp, sv) do call, _, _
             return CallMeta(Nothing, Any, Effects(), FinalizerInfo(call.info, call.effects))
         end
@@ -2636,8 +2638,8 @@ end
 
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
-        arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
-        max_methods::Int = get_max_methods(interp, f, sv))
+        arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing},
+        sv::AbsIntState, max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
     argtypes::Vector{Any} = arginfo.argtypes  # declare type because the closure below captures `argtypes`
     fargs = arginfo.fargs
@@ -2645,14 +2647,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
         if f === _apply_iterate
-            return abstract_apply(interp, argtypes, si, sv, max_methods)
+            return abstract_apply(interp, argtypes, si, vtypes, sv, max_methods)
         elseif f === invoke
-            return abstract_invoke(interp, arginfo, si, sv)
+            return abstract_invoke(interp, arginfo, si, vtypes, sv)
         elseif f === modifyfield! || f === Core.modifyglobal! ||
                f === Core.memoryrefmodify! || f === atomic_pointermodify
-            return abstract_modifyop!(interp, f, argtypes, si, sv)
+            return abstract_modifyop!(interp, f, argtypes, si, vtypes, sv)
         elseif f === Core.finalizer
-            return abstract_finalizer(interp, argtypes, sv)
+            return abstract_finalizer(interp, argtypes, vtypes, sv)
         elseif f === applicable
             return abstract_applicable(interp, argtypes, sv, max_methods)
         elseif f === throw
@@ -2680,7 +2682,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === Core.get_binding_type
             return Future(abstract_eval_get_binding_type(interp, sv, argtypes))
         end
-        rt = abstract_call_builtin(interp, f, arginfo, sv)
+        rt = abstract_call_builtin(interp, f, arginfo, vtypes, sv)
         ft = popfirst!(argtypes)
         effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
         if effects.nothrow
@@ -2726,7 +2728,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             resize!(T, la)
             atype = Tuple{T...}
             T[1] = Const(TypeVar)
-            let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, sv, max_methods)::Future
+            let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, vtypes, sv, max_methods)::Future
                 return Future{CallMeta}(call, interp, sv) do call, interp, sv
                     n = argtypes[2]
                     ub_var = Const(Any)
@@ -2750,7 +2752,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             end
         end
     elseif f === UnionAll
-        let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, sv, max_methods)::Future
+        let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, vtypes, sv, max_methods)::Future
             return Future{CallMeta}(call, interp, sv) do call, interp, sv
                 return abstract_call_unionall(interp, argtypes, call)
             end
@@ -2765,8 +2767,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return return_type_tfunc(interp, argtypes, si, sv)
     elseif la == 3 && f === Core.:(!==)
         # mark !== as exactly a negated call to ===
-        let callfuture = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, sv, max_methods)::Future,
-            rtfuture = abstract_call_known(interp, (===), arginfo, si, sv, max_methods)::Future
+        let callfuture = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, vtypes, sv, max_methods)::Future,
+            rtfuture = abstract_call_known(interp, (===), arginfo, si, vtypes, sv, max_methods)::Future
             return Future{CallMeta}(isready(callfuture) && isready(rtfuture), interp, sv) do interp, sv
                 local rty = rtfuture[].rt
                 if isa(rty, Conditional)
@@ -2786,18 +2788,18 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
+        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, vtypes, sv, max_methods)
     elseif la == 2 && f === Core.typename
         return Future(CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure()))
     elseif f === Core._hasmethod
         return Future(_hasmethod_tfunc(interp, argtypes, sv))
     end
     atype = argtypes_to_type(argtypes)
-    return abstract_call_gf_by_type(interp, f, arginfo, si, atype, sv, max_methods)::Future
+    return abstract_call_gf_by_type(interp, f, arginfo, si, atype, vtypes, sv, max_methods)::Future
 end
 
-function abstract_call_opaque_closure(interp::AbstractInterpreter,
-    closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState, check::Bool=true)
+function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque,
+    arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
     tt = closure.typ
     ocargsig = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[1], tt)
@@ -2850,7 +2852,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
                 exct = exct ⊔ TypeError
             end
         end
-        rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
+        rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types, vtypes)
         info = OpaqueClosureCallInfo(edge, match, call_result)
         return CallMeta(rt, exct, effects, info)
     end
@@ -2866,13 +2868,13 @@ function most_general_argtypes(closure::PartialOpaque)
 end
 
 function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
-                               arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
-                               max_methods::Int)
+                               arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing},
+                               sv::AbsIntState, max_methods::Int)
     if isa(ft, PartialOpaque)
         newargtypes = copy(arginfo.argtypes)
         newargtypes[1] = ft.env
         return abstract_call_opaque_closure(interp,
-            ft, ArgInfo(arginfo.fargs, newargtypes), si, sv, #=check=#true)
+            ft, ArgInfo(arginfo.fargs, newargtypes), si, vtypes, sv, #=check=#true)
     end
     wft = widenconst(ft)
     if hasintersect(wft, Builtin)
@@ -2888,20 +2890,20 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
     # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
     atype = argtypes_to_type(arginfo.argtypes)
     atype === Bottom && return Future(CallMeta(Union{}, Union{}, EFFECTS_THROWS, NoCallInfo())) # accidentally unreachable
-    return abstract_call_gf_by_type(interp, nothing, arginfo, si, atype, sv, max_methods)::Future
+    return abstract_call_gf_by_type(interp, nothing, arginfo, si, atype, vtypes, sv, max_methods)::Future
 end
 
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
-                       sv::AbsIntState, max_methods::Int=typemin(Int))
+                       vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int=typemin(Int))
     ft = widenslotwrapper(arginfo.argtypes[1])
     f = singleton_type(ft)
     if f === nothing
         max_methods = max_methods == typemin(Int) ? get_max_methods(interp, sv) : max_methods
-        return abstract_call_unknown(interp, ft, arginfo, si, sv, max_methods)
+        return abstract_call_unknown(interp, ft, arginfo, si, vtypes, sv, max_methods)
     end
     max_methods = max_methods == typemin(Int) ? get_max_methods(interp, f, sv) : max_methods
-    return abstract_call_known(interp, f, arginfo, si, sv, max_methods)
+    return abstract_call_known(interp, f, arginfo, si, vtypes, sv, max_methods)
 end
 
 function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
@@ -2960,7 +2962,7 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, sstate::S
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
-    abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false, false), sv)::Future
+    abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false, false), sstate.vtypes, sv)::Future
     rt = e.args[1]
     isconcretetype(rt) || (rt = Any)
     return RTEffects(rt, Any, EFFECTS_UNKNOWN)
@@ -3054,7 +3056,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::St
         add_curr_ssaflag!(sv, IR_FLAG_UNUSED)
     end
     si = StmtInfo(!unused, sstate.saw_latestworld)
-    call = abstract_call(interp, arginfo, si, sv)::Future
+    call = abstract_call(interp, arginfo, si, sstate.vtypes, sv)::Future
     Future{Any}(call, interp, sv) do call, _, sv
         # this only is needed for the side-effect, sequenced before any task tries to consume the return value,
         # which this will do even without returning this Future
@@ -3240,7 +3242,7 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
                 argtypes = most_general_argtypes(rt)
                 pushfirst!(argtypes, rt.env)
                 callinfo = abstract_call_opaque_closure(interp, rt,
-                    ArgInfo(nothing, argtypes), StmtInfo(true, false), sv, #=check=#false)::Future
+                    ArgInfo(nothing, argtypes), StmtInfo(true, false), sstate.vtypes, sv, #=check=#false)::Future
                 Future{Any}(callinfo, interp, sv) do callinfo, _, sv
                     sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
                     nothing
