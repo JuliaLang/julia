@@ -2320,6 +2320,34 @@ static void emit_lockstate_value(jl_codectx_t &ctx, Value *strct, bool newstate)
     }
 }
 
+// Helper to create a load with TBAA and alias scope metadata
+static LoadInst *emit_aliased_load(jl_codectx_t &ctx, Type *elty, Value *ptr, Align alignment,
+                                   MDNode *tbaa, MDNode *aliasscope, AtomicOrdering Order,
+                                   bool maybe_mark_dereferenceable = false, bool maybe_null = true,
+                                   jl_value_t *jltype_for_dereferenceable = nullptr)
+{
+    LoadInst *load = ctx.builder.CreateAlignedLoad(elty, ptr, alignment, false);
+    load->setOrdering(Order);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+    ai.scope = MDNode::concatenate(aliasscope, ai.scope);
+    ai.decorateInst(load);
+    if (maybe_mark_dereferenceable && jltype_for_dereferenceable)
+        maybe_mark_load_dereferenceable(load, maybe_null, jltype_for_dereferenceable);
+    return load;
+}
+
+// Helper to create a store with TBAA and alias scope metadata
+static StoreInst *emit_aliased_store(jl_codectx_t &ctx, Value *val, Value *ptr, Align alignment,
+                                     MDNode *tbaa, MDNode *aliasscope, AtomicOrdering Order)
+{
+    StoreInst *store = ctx.builder.CreateAlignedStore(val, ptr, alignment);
+    store->setOrdering(Order);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+    ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
+    ai.decorateInst(store);
+    return store;
+}
+
 // If `nullcheck` is not NULL and a pointer NULL check is necessary
 // store the pointer to be checked in `*nullcheck` instead of checking it
 static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, jl_value_t *jltype,
@@ -2366,23 +2394,18 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     }
     Value *instr = nullptr;
     if (Order == AtomicOrdering::NotAtomic && !isboxed && jl_is_genericmemoryref_type(jltype)) {
-        //We don't specify the stronger expected memory ordering here because of fears it may interfere with vectorization and other optimizations
-        //if (Order == AtomicOrdering::NotAtomic)
-        //    Order = AtomicOrdering::Monotonic;
-        // load these FCA as individual fields, so LLVM does not need to split them later
-        // and doesn't go on the stack (which may thwart gc_loaded later)
+        // We don't specify the stronger expected memory ordering here because of fears
+        // it may interfere with vectorization and other optimizations.
+        // Load these FCA as individual fields, so LLVM does not need to split them later
+        // and doesn't go on the stack (which may thwart gc_loaded later).
         Value *fld0 = ctx.builder.CreateStructGEP(elty, ptr, 0);
-        LoadInst *load0 = ctx.builder.CreateAlignedLoad(elty->getStructElementType(0), fld0, Align(alignment), false);
-        load0->setOrdering(Order);
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-        ai.scope = MDNode::concatenate(aliasscope, ai.scope);
-        ai.decorateInst(load0);
+        LoadInst *load0 = emit_aliased_load(ctx, elty->getStructElementType(0), fld0, Align(alignment),
+                                            tbaa, aliasscope, Order);
         Value *fld1 = ctx.builder.CreateStructGEP(elty, ptr, 1);
-        LoadInst *load1 = ctx.builder.CreateAlignedLoad(elty->getStructElementType(1), fld1, Align(alignment), false);
+        LoadInst *load1 = emit_aliased_load(ctx, elty->getStructElementType(1), fld1, Align(alignment),
+                                            tbaa, aliasscope, Order);
         static_assert(offsetof(jl_genericmemoryref_t, ptr_or_offset) == 0, "wrong field order");
         maybe_mark_load_dereferenceable(load1, true, sizeof(void*)*2, alignof(void*));
-        load1->setOrdering(Order);
-        ai.decorateInst(load1);
         instr = Constant::getNullValue(elty);
         instr = ctx.builder.CreateInsertValue(instr, load0, 0);
         instr = ctx.builder.CreateInsertValue(instr, load1, 1);
@@ -2391,14 +2414,8 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return jl_cgval_t(instr, jltype, NULL);
     }
     else {
-        LoadInst *load = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment), false);
-        load->setOrdering(Order);
-        if (isboxed)
-            maybe_mark_load_dereferenceable(load, true, jltype);
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-        ai.scope = MDNode::concatenate(aliasscope, ai.scope);
-        ai.decorateInst(load);
-        instr = load;
+        instr = emit_aliased_load(ctx, elty, ptr, Align(alignment), tbaa, aliasscope, Order,
+                                  isboxed, true, jltype);
     }
     if (elty != realelty)
         instr = ctx.builder.CreateTrunc(instr, realelty);
@@ -2537,36 +2554,27 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (issetfield || (Order == AtomicOrdering::NotAtomic && isswapfield)) {
         if (isswapfield) {
-            auto *load = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
+            AtomicOrdering loadOrder = isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic;
+            auto *load = emit_aliased_load(ctx, elty, ptr, Align(alignment), tbaa, aliasscope, loadOrder);
             setName(ctx.emission_context, load, "swap_load");
-            if (isboxed)
-                load->setOrdering(AtomicOrdering::Unordered);
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-            ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-            ai.decorateInst(load);
             assert(realelty == elty);
             instr = load;
         }
         if (r) {
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-            ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
             if (false && !isboxed && Order == AtomicOrdering::NotAtomic && jl_is_genericmemoryref_type(jltype)) {
                 // if enabled, store these FCA as individual fields, so LLVM does not need to split them later and they can use release ordering
                 assert(r->getType() == ctx.types().T_jlgenericmemory);
                 Value *f1 = ctx.builder.CreateExtractValue(r, 0);
                 Value *f2 = ctx.builder.CreateExtractValue(r, 1);
                 static_assert(offsetof(jl_genericmemoryref_t, ptr_or_offset) == 0, "wrong field order");
-                StoreInst *store = ctx.builder.CreateAlignedStore(f1, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 0), Align(alignment));
-                store->setOrdering(AtomicOrdering::Release);
-                ai.decorateInst(store);
-                store = ctx.builder.CreateAlignedStore(f2, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 1), Align(alignment));
-                store->setOrdering(AtomicOrdering::Release);
-                ai.decorateInst(store);
+                emit_aliased_store(ctx, f1, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 0),
+                                   Align(alignment), tbaa, aliasscope, AtomicOrdering::Release);
+                emit_aliased_store(ctx, f2, ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, ptr, 1),
+                                   Align(alignment), tbaa, aliasscope, AtomicOrdering::Release);
             }
             else {
-                StoreInst *store = ctx.builder.CreateAlignedStore(r, ptr, Align(alignment));
-                store->setOrdering(Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order);
-                ai.decorateInst(store);
+                AtomicOrdering storeOrder = Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order;
+                emit_aliased_store(ctx, r, ptr, Align(alignment), tbaa, aliasscope, storeOrder);
             }
         }
         else {
@@ -2644,12 +2652,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "ok_xchg", ctx.f);
                     ctx.builder.CreateCondBr(SameType, BB, SkipBB);
                     ctx.builder.SetInsertPoint(SkipBB);
-                    LoadInst *load = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
-                    setName(ctx.emission_context, load, "atomic_replace_initial");
-                    load->setOrdering(FailOrder == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Monotonic : FailOrder);
-                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-                    ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-                    instr = ai.decorateInst(load);
+                    AtomicOrdering loadOrder = FailOrder == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Monotonic : FailOrder;
+                    instr = emit_aliased_load(ctx, elty, ptr, Align(alignment), tbaa, aliasscope, loadOrder);
+                    setName(ctx.emission_context, instr, "atomic_replace_initial");
                     ctx.builder.CreateBr(DoneBB);
                     ctx.builder.SetInsertPoint(DoneBB);
                     Succ = ctx.builder.CreatePHI(getInt1Ty(ctx.builder.getContext()), 2);
@@ -2686,12 +2691,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 Compare = Constant::getNullValue(elty);
         }
         else { // swap or modify
-            LoadInst *Current = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
-            Current->setOrdering(Order == AtomicOrdering::NotAtomic && !isboxed ? Order : AtomicOrdering::Monotonic);
+            AtomicOrdering loadOrder = Order == AtomicOrdering::NotAtomic && !isboxed ? Order : AtomicOrdering::Monotonic;
+            LoadInst *Current = emit_aliased_load(ctx, elty, ptr, Align(alignment), tbaa, aliasscope, loadOrder);
             setName(ctx.emission_context, Current, "atomic_initial");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-            ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-            Compare = ai.decorateInst(Current);
+            Compare = Current;
             needloop = !isswapfield || Order != AtomicOrdering::NotAtomic;
         }
         BasicBlock *BB = NULL;
@@ -2749,12 +2752,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (Order == AtomicOrdering::NotAtomic) {
             // modifyfield or replacefield or setfieldonce
             assert(elty == realelty && !intcast);
-            auto *load = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-            ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-            ai.decorateInst(load);
-            if (isboxed)
-                load->setOrdering(AtomicOrdering::Monotonic);
+            AtomicOrdering loadOrder = isboxed ? AtomicOrdering::Monotonic : AtomicOrdering::NotAtomic;
+            auto *load = emit_aliased_load(ctx, elty, ptr, Align(alignment), tbaa, aliasscope, loadOrder);
             Value *first_ptr = nullptr;
             if (maybe_null_if_boxed && !ismodifyfield)
                 first_ptr = isboxed ? load : extract_first_ptr(ctx, load);
@@ -2771,10 +2770,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ctx.builder.CreateCondBr(Success, XchgBB, needloop && ismodifyfield ? BB : DoneBB);
             ctx.builder.SetInsertPoint(XchgBB);
             if (r) {
-                auto *store = ctx.builder.CreateAlignedStore(r, ptr, Align(alignment));
-                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-                ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-                ai.decorateInst(store);
+                emit_aliased_store(ctx, r, ptr, Align(alignment), tbaa, aliasscope, AtomicOrdering::NotAtomic);
             }
             else {
                 assert(!isboxed && rhs.typ == jltype);
