@@ -2490,6 +2490,45 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false);
 
+// Helper for is_other stores (Union{singleton, datatype} stored with tindex support).
+// For is_other fields, we store NULL in the first pointer location when the value is
+// the singleton type (type a), and store the actual value when it's the datatype (type b).
+// This function:
+// 1. Emits a check: is rhs of type b (the datatype)?
+// 2. If type a (singleton): stores NULL to the first pointer offset
+// 3. If type b (datatype): calls emit_store_b to emit the normal store
+// After both branches complete, continues at the merged insertion point.
+template<typename F>
+static void emit_isother_store(jl_codectx_t &ctx,
+        Value *ptr, const jl_cgval_t &rhs, jl_value_t *loadtype, MDNode *tbaa,
+        F &&emit_store_b)
+{
+    assert(jl_is_concrete_type(loadtype) && !jl_is_pointerfree(loadtype));
+
+    Value *isb = emit_isa(ctx, rhs, loadtype, Twine()).first;
+    BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "isother_isa", ctx.f);
+    BasicBlock *isbBB = BasicBlock::Create(ctx.builder.getContext(), "isother_isb", ctx.f);
+    BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "isother_done", ctx.f);
+    ctx.builder.CreateCondBr(isb, isbBB, isaBB);
+
+    // Type a (singleton): store NULL to first_ptr
+    ctx.builder.SetInsertPoint(isaBB);
+    size_t first_ptr_offset = ((jl_datatype_t*)loadtype)->layout->first_ptr * sizeof(void*);
+    Value *first_ptr_addr = emit_ptrgep(ctx, ptr, first_ptr_offset);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+    ai.decorateInst(ctx.builder.CreateAlignedStore(
+        Constant::getNullValue(ctx.types().T_prjlvalue),
+        first_ptr_addr, Align(sizeof(void*))));
+    ctx.builder.CreateBr(doneBB);
+
+    // Type b (datatype): call the provided store function
+    ctx.builder.SetInsertPoint(isbBB);
+    emit_store_b();
+    ctx.builder.CreateBr(doneBB);
+
+    ctx.builder.SetInsertPoint(doneBB);
+}
+
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
         jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope,
@@ -2561,7 +2600,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         loadtype = ((jl_uniontype_t*)jltype)->b;
     }
     if (!is_union) {
-        assert(isboxed || jl_is_concrete_datatype(loadtype));
+        assert(isboxed || jl_is_concrete_type(loadtype));
         if (isboxed)
             alignment = sizeof(void*);
         else if (!alignment)
@@ -2619,10 +2658,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             if (isboxed) {
                 r = boxed(ctx, rhs);
             }
-            else {
-                if (is_other) {
-                    jwn;
-                }
+            else if (!is_other) {
+                // For is_other, skip r computation here - it happens in the branching store
                 assert(rhs.typ == loadtype);
                 if (intcast) {
                     emit_unbox_store(ctx, rhs, intcast, ctx.tbaa().tbaa_stack, MaybeAlign(), intcast->getAlign());
@@ -2658,17 +2695,30 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             store_union(rhs, rhs_union);
         }
         else {
-            if (is_other) {
-                jwn;
-            }
-            if (r) {
-                AtomicOrdering storeOrder = Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order;
-                emit_aliased_store(ctx, r, ptr, Align(alignment), tbaa, aliasscope, storeOrder);
-            }
-            else {
-                assert(Order == AtomicOrdering::NotAtomic && !isboxed && rhs.typ == loadtype);
-                emit_unbox_store(ctx, rhs, ptr, tbaa, MaybeAlign(), Align(alignment));
-            }
+            auto do_store = [&]() {
+                Value *r_local = r;
+                if (!r_local) {
+                    // Compute r if not already done (is_other case)
+                    if (intcast) {
+                        emit_unbox_store(ctx, rhs, intcast, ctx.tbaa().tbaa_stack, MaybeAlign(), intcast->getAlign());
+                        r_local = ctx.builder.CreateLoad(realelty, intcast);
+                    }
+                    else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
+                        r_local = emit_unbox(ctx, realelty, rhs);
+                    }
+                }
+                if (r_local) {
+                    AtomicOrdering storeOrder = Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order;
+                    emit_aliased_store(ctx, r_local, ptr, Align(alignment), tbaa, aliasscope, storeOrder);
+                }
+                else {
+                    emit_unbox_store(ctx, rhs, ptr, tbaa, MaybeAlign(), Align(alignment));
+                }
+            };
+            if (is_other)
+                emit_isother_store(ctx, ptr, rhs, loadtype, tbaa, do_store);
+            else
+                do_store();
         }
     }
     else if (op == StoreKind::Swap) {
@@ -2827,18 +2877,51 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 }
                 if (needlock)
                     emit_lockstate_value(ctx, needlock, false); // unlock
-                if (is_other || (maybe_null_if_boxed && tracked_pointers)) {
-                    Value *first_ptr = isboxed ? realCompare : extract_first_ptr(ctx, realCompare);
+                if (is_other) {
+                    // For is_other, check if first_ptr is NULL (type a) or not (type b)
+                    Value *first_ptr = extract_first_ptr(ctx, realCompare);
                     assert(first_ptr);
-                    if (is_other)
-                        jwn;
+                    Value *isNull = ctx.builder.CreateIsNull(first_ptr);
+                    BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "modify_isa", ctx.f);
+                    BasicBlock *isbBB = BasicBlock::Create(ctx.builder.getContext(), "modify_isb", ctx.f);
+                    BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "modify_merge", ctx.f);
+                    ctx.builder.CreateCondBr(isNull, isaBB, isbBB);
+
+                    // Type a: oldval is the singleton
+                    ctx.builder.SetInsertPoint(isaBB);
+                    jl_value_t *type_a = ((jl_uniontype_t*)jltype)->a;
+                    Value *boxed_a = track_pjlvalue(ctx, literal_pointer_val(ctx, ((jl_datatype_t*)type_a)->instance));
+                    ctx.builder.CreateBr(mergeBB);
+
+                    // Type b: oldval is the loaded data
+                    ctx.builder.SetInsertPoint(isbBB);
+                    jl_cgval_t tmp_b;
+                    if (intcast && !tracked_pointers)
+                        tmp_b = mark_julia_slot(intcast, loadtype, NULL, ctx.tbaa().tbaa_stack);
                     else
-                        null_load_check(ctx, first_ptr, mod, var);
+                        tmp_b = mark_julia_type(ctx, realCompare, false, loadtype);
+                    Value *boxed_b = boxed(ctx, tmp_b);
+                    BasicBlock *isbBB_end = ctx.builder.GetInsertBlock();
+                    ctx.builder.CreateBr(mergeBB);
+
+                    // Merge using PHI on boxed values
+                    ctx.builder.SetInsertPoint(mergeBB);
+                    PHINode *boxed_phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+                    boxed_phi->addIncoming(boxed_a, isaBB);
+                    boxed_phi->addIncoming(boxed_b, isbBB_end);
+                    oldval = mark_julia_type(ctx, boxed_phi, true, jltype);
                 }
-                if (intcast && !tracked_pointers)
-                    oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
-                else
-                    oldval = mark_julia_type(ctx, realCompare, isboxed, jltype);
+                else {
+                    if (maybe_null_if_boxed && tracked_pointers) {
+                        Value *first_ptr = isboxed ? realCompare : extract_first_ptr(ctx, realCompare);
+                        assert(first_ptr);
+                        null_load_check(ctx, first_ptr, mod, var);
+                    }
+                    if (intcast && !tracked_pointers)
+                        oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
+                    else
+                        oldval = mark_julia_type(ctx, realCompare, isboxed, jltype);
+                }
             }
             // Compute new value
             rhs = newval(oldval);
@@ -2852,10 +2935,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 if (isboxed) {
                     r = boxed(ctx, rhs);
                 }
-                else {
-                    if (is_other) {
-                        jwn;
-                    }
+                else if (!is_other) {
+                    // For is_other, skip r computation here - it happens in the branching store
                     if (intcast) {
                         Value *realCompare = Compare;
                         if (realelty != elty)
@@ -2869,7 +2950,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                         r = emit_unbox(ctx, realelty, rhs);
                     }
                 }
-                if (realelty != elty)
+                if (realelty != elty && r)
                     r = ctx.builder.CreateZExt(r, elty);
             }
             if (needlock)
@@ -2913,16 +2994,29 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 store_union(rhs, rhs_union);
             }
             else {
-                if (is_other) {
-                    jwn;
-                }
-                if (r) {
-                    emit_aliased_store(ctx, r, ptr, Align(alignment), tbaa, aliasscope, AtomicOrdering::NotAtomic);
-                }
-                else {
-                    assert(!isboxed && rhs.typ == jltype);
-                    emit_unbox_store(ctx, rhs, ptr, tbaa, MaybeAlign(), Align(alignment));
-                }
+                auto do_store = [&]() {
+                    Value *r_local = r;
+                    if (!r_local) {
+                        // Compute r if not already done (is_other case)
+                        if (intcast) {
+                            emit_unbox_store(ctx, rhs, intcast, ctx.tbaa().tbaa_stack, MaybeAlign(), intcast->getAlign());
+                            r_local = ctx.builder.CreateLoad(realelty, intcast);
+                        }
+                        else if (tracked_pointers && rhs.inline_roots.empty()) {
+                            r_local = emit_unbox(ctx, realelty, rhs);
+                        }
+                    }
+                    if (r_local) {
+                        emit_aliased_store(ctx, r_local, ptr, Align(alignment), tbaa, aliasscope, AtomicOrdering::NotAtomic);
+                    }
+                    else {
+                        emit_unbox_store(ctx, rhs, ptr, tbaa, MaybeAlign(), Align(alignment));
+                    }
+                };
+                if (is_other)
+                    emit_isother_store(ctx, ptr, rhs, loadtype, tbaa, do_store);
+                else
+                    do_store();
             }
             ctx.builder.CreateBr(DoneBB);
         }
@@ -3002,9 +3096,19 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ctx.builder.SetInsertPoint(BB);
         }
         if (is_other) {
-            jwn;
+            // For is_other, emit barrier only for type b (datatype with pointers)
+            Value *isb = emit_isa(ctx, rhs, loadtype, Twine()).first;
+            BasicBlock *isbBB = BasicBlock::Create(ctx.builder.getContext(), "wb_isb", ctx.f);
+            BasicBlock *wbDoneBB = BasicBlock::Create(ctx.builder.getContext(), "wb_done", ctx.f);
+            ctx.builder.CreateCondBr(isb, isbBB, wbDoneBB);
+            ctx.builder.SetInsertPoint(isbBB);
+            // Type b: emit write barrier
+            Value *r_wb = emit_unbox(ctx, intcast_eltyp ? intcast_eltyp : realelty, rhs);
+            emit_write_multibarrier(ctx, parent, r_wb, loadtype);
+            ctx.builder.CreateBr(wbDoneBB);
+            ctx.builder.SetInsertPoint(wbDoneBB);
         }
-        if (r) {
+        else if (r) {
             if (realelty != elty)
                 r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
             if (intcast) {
@@ -3054,18 +3158,51 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 if (tracked_pointers)
                     instr = ctx.builder.CreateLoad(intcast_eltyp, intcast);
             }
-            if (is_other || (maybe_null_if_boxed && tracked_pointers)) {
-                Value *first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
+            if (is_other) {
+                // For is_other, check if first_ptr is NULL (type a) or not (type b)
+                Value *first_ptr = extract_first_ptr(ctx, instr);
                 assert(first_ptr);
-                if (is_other)
-                    jwn;
+                Value *isNull = ctx.builder.CreateIsNull(first_ptr);
+                BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "swap_isa", ctx.f);
+                BasicBlock *isbBB = BasicBlock::Create(ctx.builder.getContext(), "swap_isb", ctx.f);
+                BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "swap_merge", ctx.f);
+                ctx.builder.CreateCondBr(isNull, isaBB, isbBB);
+
+                // Type a: oldval is the singleton
+                ctx.builder.SetInsertPoint(isaBB);
+                jl_value_t *type_a = ((jl_uniontype_t*)jltype)->a;
+                Value *boxed_a = track_pjlvalue(ctx, literal_pointer_val(ctx, ((jl_datatype_t*)type_a)->instance));
+                ctx.builder.CreateBr(mergeBB);
+
+                // Type b: oldval is the loaded data
+                ctx.builder.SetInsertPoint(isbBB);
+                jl_cgval_t tmp_b;
+                if (intcast && !tracked_pointers)
+                    tmp_b = mark_julia_slot(intcast, loadtype, NULL, ctx.tbaa().tbaa_stack);
                 else
-                    null_load_check(ctx, first_ptr, mod, var);
+                    tmp_b = mark_julia_type(ctx, instr, false, loadtype);
+                Value *boxed_b = boxed(ctx, tmp_b);
+                BasicBlock *isbBB_end = ctx.builder.GetInsertBlock();
+                ctx.builder.CreateBr(mergeBB);
+
+                // Merge using PHI on boxed values
+                ctx.builder.SetInsertPoint(mergeBB);
+                PHINode *boxed_phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+                boxed_phi->addIncoming(boxed_a, isaBB);
+                boxed_phi->addIncoming(boxed_b, isbBB_end);
+                oldval = mark_julia_type(ctx, boxed_phi, true, jltype);
             }
-            if (intcast && !tracked_pointers)
-                oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
-            else
-                oldval = mark_julia_type(ctx, instr, isboxed, jltype);
+            else {
+                if (maybe_null_if_boxed && tracked_pointers) {
+                    Value *first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
+                    assert(first_ptr);
+                    null_load_check(ctx, first_ptr, mod, var);
+                }
+                if (intcast && !tracked_pointers)
+                    oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
+                else
+                    oldval = mark_julia_type(ctx, instr, isboxed, jltype);
+            }
         }
         // For union, oldval is already set from load_union()
         if (op == StoreKind::Replace) {
@@ -3509,7 +3646,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         else if (kind == JL_FIELDKIND_ISOTHER) {
             maybe_null = true;
-            nullcheck = jwn;
+            nullcheck = &otherval; // isother already set this at the top, but be explicit
         }
         if (jl_field_isconst(jt, idx) && jfty != (jl_value_t*)jl_bool_type && !maybe_null) {
             // just compute the pointer and let user load it when necessary
@@ -4424,7 +4561,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     }
     return typed_store(ctx, addr, rhs, cmp, jfty, tbaa, nullptr,
         wb ? boxed(ctx, strct) : nullptr,
-        isboxed, Order, FailOrder, align,
+        kind == JL_FIELDKIND_ISPTR, Order, FailOrder, align,
         needlock, op,
         maybe_null, modifyop, fname, nullptr, nullptr,
         ptindex, strct.tbaa);
