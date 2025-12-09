@@ -43,8 +43,8 @@ const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00
     unix2datetime(x::Real; localtime::Bool=false)::DateTime
 
 Take the number of seconds since unix epoch `1970-01-01T00:00:00` (UTC) and convert to the
-corresponding `DateTime`. If `localtime` is `true`, then the output is in the local
-time zone, otherwise it is in UTC/GMT.
+corresponding `DateTime`. If `localtime` is `true`, then the output is in the host
+system's local time zone, otherwise it is in UTC/GMT.
 """
 function unix2datetime(x::Real; localtime::Bool=false)
     # Rounding should match `now` below
