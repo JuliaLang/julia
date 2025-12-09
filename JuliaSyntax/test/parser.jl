@@ -697,6 +697,31 @@ tests = [
         "try x finally y catch e z end"  =>  "(try (block x) (finally (block y)) (catch e (block z)))"
         "try x end" => "(try (block x) (error-t))"
     ],
+    JuliaSyntax.parse_match => [
+        # Basic match
+        "match x\n 1 -> :one\n 2 -> :two\n _ -> :other\n end" =>
+            "(match x (matcharm 1 (quote-: one)) (matcharm 2 (quote-: two)) (matcharm _ (quote-: other)))"
+        # Single arm
+        "match x; _ -> 0 end" => "(match x (matcharm _ 0))"
+        # Alternation with |
+        "match x\n (1, a) | (a, 1) -> a\n end" =>
+            "(match x (matcharm (call-i (tuple-p 1 a) | (tuple-p a 1)) a))"
+        # Type constraint
+        "match x\n n::Int -> n * 2\n end" =>
+            "(match x (matcharm (::-i n Int) (call-i n * 2)))"
+        # Value escaping with $
+        "match x\n \$zero -> :zero\n n -> n\n end" =>
+            "(match x (matcharm (\$ zero) (quote-: zero)) (matcharm n n))"
+        # Complex scrutinee
+        "match f(x, y)\n a -> a\n end" =>
+            "(match (call f x y) (matcharm a a))"
+        # Empty body
+        "match x\n 1 ->\n 2 -> :two\n end" =>
+            "(match x (matcharm 1 □) (matcharm 2 (quote-: two)))"
+        # Call pattern
+        "match x\n Some(y) -> y\n None() -> 0\n end" =>
+            "(match x (matcharm (call Some y) y) (matcharm (call None) 0))"
+    ],
     JuliaSyntax.parse_imports => [
         "import A as B: x" => "(import (: (error (as (importpath A) B)) (importpath x)))"
         "import A, y"      => "(import (importpath A) (importpath y))"

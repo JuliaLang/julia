@@ -21,24 +21,27 @@ struct ParseState
     whitespace_newline::Bool
     # Enable parsing `where` with high precedence
     where_enabled::Bool
+    # Parsing a match pattern - disables `->` as anonymous function syntax
+    match_pattern::Bool
 end
 
 # Normal context
 function ParseState(stream::ParseStream)
-    ParseState(stream, true, false, false, false, false, true)
+    ParseState(stream, true, false, false, false, false, true, false)
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
                     space_sensitive=nothing, for_generator=nothing,
                     end_symbol=nothing, whitespace_newline=nothing,
-                    where_enabled=nothing)
+                    where_enabled=nothing, match_pattern=nothing)
     ParseState(ps.stream,
         range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
         space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
         for_generator === nothing ? ps.for_generator : for_generator,
         end_symbol === nothing ? ps.end_symbol : end_symbol,
         whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
-        where_enabled === nothing ? ps.where_enabled : where_enabled)
+        where_enabled === nothing ? ps.where_enabled : where_enabled,
+        match_pattern === nothing ? ps.match_pattern : match_pattern)
 end
 
 # Functions to change parse state
@@ -50,7 +53,12 @@ function normal_context(ps::ParseState)
                where_enabled=true,
                for_generator=false,
                end_symbol=false,
-               whitespace_newline=false)
+               whitespace_newline=false,
+               match_pattern=false)
+end
+
+function with_match_pattern(ps::ParseState)
+    ParseState(ps, match_pattern=true)
 end
 
 function with_space_sensitive(ps::ParseState)
@@ -253,11 +261,67 @@ function is_reserved_word(k)
     is_keyword(k) && !is_contextual_keyword(k)
 end
 
+# Check if the current token is the identifier "match"
+function is_match_identifier(ps::ParseState)
+    t = peek_full_token(ps.stream)
+    kind(t) == K"Identifier" || return false
+    r = byte_range(t)
+    length(r) != 5 && return false
+    buf = unsafe_textbuf(ps.stream)
+    buf[r[1]] == UInt8('m') && buf[r[2]] == UInt8('a') &&
+    buf[r[3]] == UInt8('t') && buf[r[4]] == UInt8('c') &&
+    buf[r[5]] == UInt8('h')
+end
+
 # Return true if the next word (or word pair) is reserved, introducing a
 # syntactic structure.
 function peek_initial_reserved_words(ps::ParseState)
     k = peek(ps)
     if is_initial_reserved_word(ps, k)
+        return true
+    elseif is_match_identifier(ps)
+        # `match` is only a reserved word when followed by an expression that
+        # could be a valid scrutinee. When followed by certain tokens it's
+        # treated as an identifier for backwards compatibility:
+        #   match(x, y)  - function call (no whitespace before `(`)
+        #   match[i]     - indexing (no whitespace before `[`)
+        #   foo(match)   - match as argument
+        #   match = 1    - assignment
+        #   match::T     - type assertion
+        #   for match in x  - loop variable
+        #   match.field  - field access
+        #   match => v   - pair
+        #   match === x  - comparison (binary operators)
+        #   function match end  - function definition (match followed by end)
+        t2 = peek_token(ps, 2)
+        k2 = kind(t2)
+        # Not a match statement if followed by closing tokens, assignment, newline, etc.
+        # A newline after match means it's a standalone expression (identifier)
+        if k2 in KSet") ] } , ; end EndMarker NewlineWs"
+            return false
+        end
+        # Not a match statement if followed by `(` or `[` without whitespace
+        if k2 in KSet"( [" && !preceding_whitespace(t2)
+            return false
+        end
+        # Not a match statement if followed by operators that can only be binary
+        # (not unary). Unary operators like `+`, `-`, `!`, `~` can start an expression.
+        if is_operator(k2)
+            # These can be unary prefix operators, so they CAN start an expression
+            # <: >: + - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓ $ & :
+            # Note: `:` is for quoting symbols like `:foo`
+            # Note: `::` is NOT included - it's a type annotation operator
+            if k2 in KSet"<: >: + - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓ $ & :"
+                return true
+            end
+            # All other operators are binary-only, so match is not a keyword
+            return false
+        end
+        # Assignment, field access, pair, iteration keywords, type annotation
+        if k2 in KSet"= . => :: in ∈"
+            return false
+        end
+        # Otherwise, match is a keyword
         return true
     elseif is_contextual_keyword(k)
         k2 = peek(ps, 2, skip_newlines=false)
@@ -1411,7 +1475,8 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
         parse_where(ps, parse_call)
         emit(ps, mark, K"::", INFIX_FLAG)
     end
-    if peek(ps) == K"->"
+    # In match pattern context, -> is a delimiter, not anonymous function syntax
+    if peek(ps) == K"->" && !ps.match_pattern
         kb = peek_behind(ps).kind
         if kb == K"tuple"
             # (x,y) -> z
@@ -2046,6 +2111,8 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"primitive")
     elseif word == K"try"
         parse_try(ps)
+    elseif word == K"Identifier" && is_match_identifier(ps)
+        parse_match(ps)
     elseif word == K"return"
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
@@ -2410,6 +2477,116 @@ function parse_catch(ps::ParseState)
     end
     parse_block(ps)
     emit(ps, mark, K"catch")
+end
+
+# Parse match expression
+#
+# match x
+#     1 -> :one
+#     2 -> :two
+#     _ -> :other
+# end
+#
+# ==> (match x (matcharm 1 :one) (matcharm 2 :two) (matcharm _ :other))
+#
+# match (a, b)
+#     (1, x) | (x, 1) -> x + 1
+#     _ -> 0
+# end
+#
+# ==> (match (tuple a b) (matcharm (call-i (tuple 1 x) | (tuple x 1)) (call-i x + 1)) (matcharm _ 0))
+#
+# With if guards:
+# match val
+#     (a, b) if sin(b) == 0. -> a
+#     (a, b)                 -> b
+# end
+#
+# ==> (match val (matcharm (guard (tuple a b) (call-i sin(b) == 0.)) a) (matcharm (tuple a b) b))
+#
+# Inline match-destructuring:
+# match (a, b) = val
+#
+# ==> (match-assign (tuple a b) val)
+function parse_match(ps::ParseState)
+    mark = position(ps)
+    bump(ps, TRIVIA_FLAG)  # consume 'match'
+    # Parse the first expression (could be scrutinee or pattern for inline destructuring)
+    # Use parse_comma which doesn't include assignment, so we can detect = for match-assign
+    let ps = with_match_pattern(ps)
+        parse_comma(ps)
+    end
+    # Check for inline match-destructuring: match pattern = expr
+    if peek(ps) == K"="
+        bump(ps, TRIVIA_FLAG)  # consume '='
+        parse_eq(ps)  # parse the value expression
+        emit(ps, mark, K"match-assign")
+        return
+    end
+    # Otherwise, this is a full match statement - the first expression is the scrutinee
+    # Expect newline or semicolon after scrutinee
+    k = peek(ps)
+    if k in KSet"NewlineWs ;"
+        bump(ps, TRIVIA_FLAG)
+    elseif k != K"end"
+        recover(is_closer_or_newline, ps, TRIVIA_FLAG,
+                error="expected newline or `;` after match expression")
+    end
+    # Parse match arms until 'end'
+    n_arms = 0
+    while peek(ps) != K"end" && peek(ps) != K"EndMarker"
+        bump_trivia(ps)
+        if peek(ps) in KSet"end EndMarker"
+            break
+        end
+        arm_mark = position(ps)
+        # Parse pattern with match_pattern context (disables -> as anon function)
+        let ps = with_match_pattern(ps)
+            parse_eq(ps)
+        end
+        # Check for if guard: pattern if condition -> body
+        if peek(ps) == K"if"
+            guard_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)  # consume 'if'
+            # Parse guard condition (up to ->)
+            let ps = with_match_pattern(ps)
+                parse_cond(ps)
+            end
+            # Emit guard node wrapping pattern and condition
+            emit(ps, arm_mark, K"guard")
+        end
+        # Expect and consume ->
+        if peek(ps) == K"->"
+            bump(ps, TRIVIA_FLAG)
+        else
+            recover((ps, k) -> k in KSet"-> NewlineWs end", ps, TRIVIA_FLAG,
+                    error="expected `->` in match arm")
+            if peek(ps) == K"->"
+                bump(ps, TRIVIA_FLAG)
+            end
+        end
+        # Parse body expression
+        k = peek(ps)
+        if k in KSet"NewlineWs ;" || k == K"end"
+            # Empty body - emit nothing, body is implicitly nothing
+            bump_invisible(ps, K"Placeholder")
+        else
+            parse_eq(ps)
+        end
+        emit(ps, arm_mark, K"matcharm")
+        n_arms += 1
+        # Consume trailing newline/semicolon
+        k = peek(ps)
+        if k in KSet"NewlineWs ;"
+            bump(ps, TRIVIA_FLAG)
+        end
+    end
+    if n_arms == 0
+        bump_invisible(ps, K"error", TRIVIA_FLAG,
+                       error="match requires at least one arm")
+    end
+    bump_closing_token(ps, K"end")
+    emit(ps, mark, K"match")
 end
 
 # flisp: parse-do

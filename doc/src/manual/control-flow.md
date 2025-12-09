@@ -4,7 +4,8 @@ Julia provides a variety of control flow constructs:
 
   * [Compound Expressions](@ref man-compound-expressions): `begin` and `;`.
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
-  * [Short-Circuit Evaluation](@ref): logical operators `&&` (“and”) and `||` (“or”), and also chained comparisons.
+  * [Pattern Matching](@ref man-pattern-matching): `match` expressions for structural matching.
+  * [Short-Circuit Evaluation](@ref): logical operators `&&` ("and") and `||` ("or"), and also chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
   * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
   * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
@@ -244,6 +245,151 @@ julia> 1 > 2 ? v("yes") : v("no")
 no
 "no"
 ```
+
+## [Pattern Matching](@id man-pattern-matching)
+
+Pattern matching provides a way to match values against patterns and extract components. Julia's
+`match` expression evaluates an expression and compares it against a series of patterns, executing
+the body of the first matching pattern.
+
+```julia
+match value
+    pattern1 -> result1
+    pattern2 -> result2
+    _ -> default
+end
+```
+
+Here's a simple example:
+
+```julia
+function describe(x)
+    match x
+        0 -> "zero"
+        1 -> "one"
+        _ -> "something else"
+    end
+end
+```
+
+### Pattern Types
+
+The following patterns are supported:
+
+  * **Literals**: Numbers, strings, and other values match by equality.
+    ```julia
+    match x
+        42 -> "the answer"
+        "hello" -> "greeting"
+        _ -> "unknown"
+    end
+    ```
+
+  * **Wildcard**: The underscore `_` matches any value without binding it.
+    ```julia
+    match (a, b)
+        (1, _) -> "starts with one"
+        (_, 2) -> "ends with two"
+        _ -> "other"
+    end
+    ```
+
+  * **Variable Capture**: A plain identifier captures the matched value.
+    ```julia
+    match x
+        n -> "got $n"
+    end
+    ```
+
+  * **Type Constraints**: Use `::T` for type checking, and `name::T` for typed capture.
+    ```julia
+    match x
+        n::Int -> "integer: $n"
+        s::String -> "string: $s"
+        ::Nothing -> "nothing"
+        _ -> "other type"
+    end
+    ```
+
+  * **Tuple Destructuring**: Match and destructure tuples.
+    ```julia
+    match point
+        (0, 0) -> "origin"
+        (x, 0) -> "on x-axis at $x"
+        (0, y) -> "on y-axis at $y"
+        (x, y) -> "at ($x, $y)"
+    end
+    ```
+
+  * **Alternation**: Use `|` to match multiple patterns with the same body.
+    ```julia
+    match x
+        1 | 2 | 3 -> "small"
+        _ -> "large"
+    end
+    ```
+
+  * **Value Escaping**: Use `$expr` to match against the value of an expression rather than
+    treating it as a pattern.
+    ```julia
+    expected = 42
+    match x
+        $expected -> "matched expected"
+        _ -> "different"
+    end
+    ```
+
+  * **Constructor Patterns**: Match against struct constructors.
+    ```julia
+    match opt
+        Some(x) -> "got $x"
+        nothing -> "nothing"
+    end
+    ```
+
+### Return Behavior
+
+Using `return` inside a `match` arm exits the `match` expression, not the enclosing function:
+
+```julia
+function example(x)
+    result = match x
+        n::Int -> return n * 2    # exits match, not example()
+        _ -> return 0
+    end
+    println("result: $result")
+    result + 1
+end
+```
+
+### MatchError
+
+If no pattern matches, a [`MatchError`](@ref) is thrown:
+
+```julia
+match 5
+    1 -> "one"
+    2 -> "two"
+end
+# throws MatchError: no pattern matched value 5
+```
+
+Always include a wildcard `_` pattern as the last arm if a match failure is not desired.
+
+### The @match Macro
+
+The [`@match`](@ref) macro provides an alternative syntax using a `begin...end` block:
+
+```julia
+@match value begin
+    pattern1 -> result1
+    pattern2 -> result2
+    _ -> default
+end
+```
+
+This form is useful when you want pattern matching without the native syntax, or for
+meta-programming purposes.
 
 ## Short-Circuit Evaluation
 

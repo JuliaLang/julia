@@ -177,6 +177,7 @@ export
     EOFError,
     InvalidStateException,
     KeyError,
+    MatchError,
     MissingException,
     ProcessFailedException,
     TaskFailedException,
@@ -779,6 +780,7 @@ export
     skipmissing,
     @something,
     something,
+    @match,
     isnothing,
     nonmissingtype,
 

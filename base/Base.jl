@@ -90,6 +90,9 @@ include("reinterpretarray.jl")
 # Some type
 include("some.jl")
 
+# Pattern matching runtime support
+include("match.jl")
+
 include("dict.jl")
 include("set.jl")
 

@@ -229,6 +229,7 @@ register_kinds!(JuliaSyntax, 0, [
         "try"
         "using"
         "while"
+        "match"
         "BEGIN_BLOCK_CONTINUATION_KEYWORDS"
             "catch"
             "finally"
@@ -1055,6 +1056,10 @@ register_kinds!(JuliaSyntax, 0, [
         "macro_name"
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
+        # Pattern matching
+        "matcharm"
+        "match-assign"
+        "guard"
     "END_SYNTAX_KINDS"
 
     # Special tokens

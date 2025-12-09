@@ -4,6 +4,19 @@ Julia v1.14 Release Notes
 New language features
 ---------------------
 
+  - New `match` expression for pattern matching. The `match` statement allows matching values against
+    patterns with support for literals, wildcards (`_`), variable capture, type constraints (`::T`),
+    tuple destructuring, alternation (`|`), value escaping (`$`), and constructor patterns.
+    A `MatchError` is thrown if no pattern matches.
+    ```julia
+    match x
+        0 -> "zero"
+        n::Int -> "integer: $n"
+        (a, b) -> "tuple: $a, $b"
+        _ -> "other"
+    end
+    ```
+
   - It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
     `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
     in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
@@ -26,6 +39,9 @@ Build system changes
 
 New library functions
 ---------------------
+
+  - New `MatchError` exception type, thrown when a `match` expression fails to find a matching pattern.
+  - New `@match` macro providing pattern matching via a `begin...end` block syntax.
 
 New library features
 --------------------

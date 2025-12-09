@@ -1136,8 +1136,37 @@
   (let ((nxt (peek-token s)))
     (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
+;; Check if 'match' should be treated as a keyword based on next token context
+;; Returns #t if match should be parsed as a keyword, #f if as an identifier
+(define (match-is-keyword? s)
+  ;; Consume 'match' to look at the next token
+  (let* ((match-tok (take-token s))
+         (spc (ts:space? s))
+         (t2 (peek-token s)))
+    ;; Put match back
+    (ts:put-back! s match-tok spc)
+    (cond
+     ;; Newline after match means it's a standalone identifier (like `return match`)
+     ((newline? t2) #f)
+     ;; Closing tokens indicate match is an identifier
+     ((closing-token? t2) #f)
+     ;; Type annotation, assignment, field access, pair, iteration keywords
+     ((memq t2 '(|::| = |.| => in |∈|)) #f)
+     ;; Call or indexing without space means function call (match(x))
+     ((and (memq t2 '(#\( #\[)) (not spc)) #f)
+     ;; Operators that can't start an expression mean match is identifier
+     ((and (or (operator? t2) (memq t2 '(=== !== ≡ ≢)))
+           (not (unary-op? t2)))
+      #f)
+     ;; Otherwise, treat as keyword
+     (else #t))))
+
 (define (parse-call-with-initial-ex s ex tok)
-  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract)))
+  (if (or (and (initial-reserved-word? tok)
+               ;; Special handling for 'match' as contextual keyword
+               (or (not (eq? tok 'match))
+                   (match-is-keyword? s)))
+          (memq tok '(mutable primitive abstract)))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
@@ -1593,6 +1622,37 @@
                       finalb
                       eb)))
              (else (expect-end-error nxt 'try))))))
+
+       ((match)
+        (let ((scrutinee (parse-eq s)))
+          ;; Expect newline or semicolon after scrutinee
+          (if (not (memv (peek-token s) '(#\newline #\;)))
+              (if (not (eq? (peek-token s) 'end))
+                  (error "expected newline or semicolon after match expression")))
+          (take-lineendings s)
+          ;; Parse match arms
+          (let loop ((arms '()))
+            (let ((t (peek-token s)))
+              (cond
+               ((eq? t 'end)
+                (take-token s)
+                (if (null? arms)
+                    (error "match requires at least one arm"))
+                `(match ,scrutinee ,@(reverse arms)))
+               (else
+                ;; Parse pattern (stopping at ->)
+                (let* ((pattern (parse-match-pattern s))
+                       (arrow   (require-token s)))
+                  (if (not (eq? arrow '->))
+                      (error "expected '->' in match arm"))
+                  (take-token s)
+                  ;; Parse body
+                  (let ((body (if (memv (peek-token s) '(#\newline #\;))
+                                  '(null)
+                                  (parse-eq s))))
+                    (take-lineendings s)
+                    (loop (cons `(matcharm ,pattern ,body) arms))))))))))
+
        ((return)          (let ((t (peek-token s)))
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))

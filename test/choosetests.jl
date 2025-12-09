@@ -21,7 +21,7 @@ const TESTNAMES = [
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "client", "terminfo",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
-        "some", "meta", "stacktraces", "docs", "gc",
+        "some", "match", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",

@@ -1439,6 +1439,157 @@
           (else
            (error "invalid \"try\" form")))))
 
+;; Expand match expression
+;; (match scrutinee (matcharm pattern1 body1) (matcharm pattern2 body2) ...)
+;; Expands to nested if/else with pattern matching calls
+(define (expand-match e)
+  (let ((scrutinee-var (make-ssavalue))
+        (scrutinee-expr (cadr e))
+        (arms (cddr e)))
+    (expand-forms
+     `(block
+       (= ,scrutinee-var ,scrutinee-expr)
+       ,(expand-match-arms scrutinee-var arms)))))
+
+;; Expand the arms of a match expression
+(define (expand-match-arms scrutinee-var arms)
+  (if (null? arms)
+      ;; No match - throw MatchError
+      `(call (top throw) (call (top MatchError) ,scrutinee-var))
+      (let* ((arm (car arms))
+             (pattern (cadr arm))
+             (body (caddr arm)))
+        (expand-match-arm scrutinee-var pattern body (cdr arms)))))
+
+;; Expand a single match arm
+;; If pattern is (guard pat cond), we match pat first, then check cond
+(define (expand-match-arm scrutinee-var pattern body remaining-arms)
+  (if (and (pair? pattern) (eq? (car pattern) 'guard))
+      ;; Pattern with guard: (guard actual-pattern guard-condition)
+      (expand-match-arm-with-guard scrutinee-var (cadr pattern) (caddr pattern) body remaining-arms)
+      ;; Pattern without guard
+      (expand-match-arm-simple scrutinee-var pattern body remaining-arms)))
+
+;; Expand match arm without guard
+(define (expand-match-arm-simple scrutinee-var pattern body remaining-arms)
+  (let ((bindings-var (make-ssavalue))
+        (captures (collect-match-captures pattern)))
+    `(block
+      (= ,bindings-var (call (top match) ,(pattern-to-matcher pattern) ,scrutinee-var))
+      (if (call (core ===) ,bindings-var (null))
+          ,(expand-match-arms scrutinee-var remaining-arms)
+          ,(if (null? captures)
+               body
+               `(scope-block
+                 (block
+                  ,@(map (lambda (name)
+                           `(= ,name (call (top getindex) ,bindings-var (inert ,name))))
+                         captures)
+                  ,body)))))))
+
+;; Expand match arm with guard
+(define (expand-match-arm-with-guard scrutinee-var pattern guard-cond body remaining-arms)
+  (let ((bindings-var (make-ssavalue))
+        (captures (collect-match-captures pattern)))
+    `(block
+      (= ,bindings-var (call (top match) ,(pattern-to-matcher pattern) ,scrutinee-var))
+      (if (call (core ===) ,bindings-var (null))
+          ,(expand-match-arms scrutinee-var remaining-arms)
+          ,(if (null? captures)
+               `(if ,guard-cond
+                    ,body
+                    ,(expand-match-arms scrutinee-var remaining-arms))
+               `(scope-block
+                 (block
+                  ,@(map (lambda (name)
+                           `(= ,name (call (top getindex) ,bindings-var (inert ,name))))
+                         captures)
+                  (if ,guard-cond
+                      ,body
+                      ,(expand-match-arms scrutinee-var remaining-arms)))))))))
+
+;; Expand inline match-destructuring: (match-assign pattern value)
+(define (expand-match-assign e)
+  (let* ((pattern (cadr e))
+         (value-expr (caddr e))
+         (value-var (make-ssavalue))
+         (bindings-var (make-ssavalue))
+         (captures (collect-match-captures pattern)))
+    (expand-forms
+     `(block
+       (= ,value-var ,value-expr)
+       (= ,bindings-var (call (top match) ,(pattern-to-matcher pattern) ,value-var))
+       (if (call (core ===) ,bindings-var (null))
+           (call (top throw) (call (top MatchError) ,value-var))
+           (block
+            ,@(map (lambda (name)
+                     `(= ,name (call (top getindex) ,bindings-var (inert ,name))))
+                   captures)
+            ,value-var))))))
+
+;; Convert a pattern AST to a matcher expression
+(define (pattern-to-matcher pattern)
+  (cond
+   ;; Wildcard: _ matches anything
+   ((underscore-symbol? pattern)
+    `(call (top Wildcard)))
+   ;; Literal values
+   ((or (number? pattern) (string? pattern))
+    `(call (top Literal) ,pattern))
+   ;; Boolean literals
+   ((eq? pattern 'true)  `(call (top Literal) (true)))
+   ((eq? pattern 'false) `(call (top Literal) (false)))
+   ;; Symbol: capture variable
+   ((symbol? pattern)
+    `(call (top Capture) (inert ,pattern)))
+   ;; Quote/inert: literal symbol
+   ((and (pair? pattern) (memq (car pattern) '(quote inert)))
+    `(call (top Literal) ,pattern))
+   ;; Escaped value: $expr
+   ((and (pair? pattern) (eq? (car pattern) '$))
+    `(call (top Literal) ,(cadr pattern)))
+   ;; Type assertion: x::T or ::T
+   ((and (pair? pattern) (eq? (car pattern) '|::|))
+    (if (length= pattern 2)
+        ;; ::T - just type check
+        `(call (top TypeMatcher) ,(cadr pattern))
+        ;; x::T - capture with type check
+        `(call (top TypedCapture) (inert ,(cadr pattern)) ,(caddr pattern))))
+   ;; Tuple pattern: (tuple a b c)
+   ((and (pair? pattern) (eq? (car pattern) 'tuple))
+    `(call (top TupleMatcher) ,@(map pattern-to-matcher (cdr pattern))))
+   ;; Alternation: (call | p1 p2)
+   ((and (pair? pattern) (eq? (car pattern) 'call) (eq? (cadr pattern) '|\||))
+    `(call (top Alternation) ,@(map pattern-to-matcher (cddr pattern))))
+   ;; Call pattern: Some(x) -> (call Some x)
+   ((and (pair? pattern) (eq? (car pattern) 'call))
+    `(call (top CallMatcher) ,(cadr pattern) ,@(map pattern-to-matcher (cddr pattern))))
+   (else
+    (error (string "unsupported match pattern: " (deparse pattern))))))
+
+;; Collect capture variable names from a pattern
+(define (collect-match-captures pattern)
+  (cond
+   ((underscore-symbol? pattern) '())
+   ((symbol? pattern) (list pattern))
+   ((and (pair? pattern) (eq? (car pattern) '$)) '())
+   ((and (pair? pattern) (memq (car pattern) '(quote inert))) '())
+   ((and (pair? pattern) (eq? (car pattern) '|::|))
+    (if (length= pattern 2)
+        '()
+        (if (symbol? (cadr pattern))
+            (list (cadr pattern))
+            '())))
+   ((and (pair? pattern) (eq? (car pattern) 'tuple))
+    (delete-duplicates (apply append (map collect-match-captures (cdr pattern)))))
+   ((and (pair? pattern) (eq? (car pattern) 'call))
+    (if (eq? (cadr pattern) '|\||)
+        ;; Alternation - captures from all branches should be the same
+        (delete-duplicates (apply append (map collect-match-captures (cddr pattern))))
+        ;; Call pattern - captures from arguments
+        (delete-duplicates (apply append (map collect-match-captures (cddr pattern))))))
+   (else '())))
+
 (define (expand-unionall-def name type-ex (const? #t))
   (if (and (pair? name)
            (eq? (car name) 'curly))
@@ -2584,6 +2735,9 @@
    'macro          expand-macro-def
    'struct         expand-struct-def
    'try            expand-try
+   'match          expand-match
+   'match-assign   expand-match-assign
+   'matcharm       (lambda (e) (error "matcharm outside match"))
 
    'lambda
    (lambda (e)
