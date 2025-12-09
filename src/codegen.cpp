@@ -5223,16 +5223,13 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             else if (et->isAggregateType()) {
                 auto tracked = CountTrackedPointers(et);
                 if (tracked.count && !tracked.all) {
-                    Value *val = arg.V;
-                    SmallVector<Value*,0> roots(arg.inline_roots);
-                    if (roots.empty())
-                        std::tie(val, roots) = split_value(ctx, arg, Align(julia_alignment(jt)));
+                    auto [val, roots, result_tbaa] = split_value(ctx, arg, Align(julia_alignment(jt)), /*copy_required*/false);
                     AllocaInst *proots = emit_static_roots(ctx, roots.size());
                     for (size_t i = 0; i < roots.size(); i++)
                         ctx.builder.CreateAlignedStore(roots[i], emit_ptrgep(ctx, proots, i * sizeof(void*)), Align(sizeof(void*)));
                     assert(val);
-                    argvals[idx++] = decay_derived(ctx, val);
-                    argvals[idx] = proots;
+                    argvals[idx] = decay_derived(ctx, val);
+                    argvals[++idx] = proots;
                 }
                 else {
                     if (!arg.isboxed)

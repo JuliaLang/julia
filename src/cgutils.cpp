@@ -78,7 +78,6 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
-    // Once llvm deletes pointer element types, we won't need it here any more either.
     Type *NewT = PointerType::get(T->getContext(), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
@@ -1206,25 +1205,20 @@ static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst
 static std::pair<size_t,size_t> split_value_size(jl_datatype_t *typ)
 {
     assert(jl_is_datatype(typ));
-    size_t dst_off = 0;
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
-    // drop the data pointer if the entire structure is just pointers
-    // n.b.: eventually we could sometimes drop the slots for the pointers from inside the
-    //       types to pack it together, but this can change the alignment of the bits
-    //       in the fields inside, even if those bits have no pointers themselves. So
-    //       we would actually need to compute, for each pointer, whether any
-    //       subsequent field needed the extra alignment (for example, we can
-    //       drop space for any runs of two/four pointer). But it would also
-    //       require always copying the type, and not just extracting the
-    //       inline_roots, which can be challenging and inefficient for the type
-    //       to have multiple representations (even though more compact).
-    bool nodata = allpointers(typ);
-    if (nodata)
-        dst_off = 0;
-    else
-        dst_off = jl_datatype_size(typ);
-    return std::make_pair(dst_off, npointers);
+    // shrink wrap away trailing pointers (but not interior pointers, which
+    // would change alignment of fields containing non-pointer data)
+    size_t size = jl_datatype_size(typ);
+    for (ssize_t i = npointers - 1; i >= 0; i--) {
+        size_t ptr_end = jl_ptr_offset(typ, i) * sizeof(void*) + sizeof(void*);
+        if (ptr_end == size) {
+            size = jl_ptr_offset(typ, i) * sizeof(void*);
+        } else {
+            break;
+        }
+    }
+    return std::make_pair(size, npointers);
 }
 
 static void store_all_roots(jl_codectx_t &ctx, ArrayRef<Value*> inline_roots, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai, bool isVolatileStore)
@@ -1260,25 +1254,24 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         return;
     Value *src = data_pointer(ctx, value_to_pointer(ctx, x));
     bool isstack = isa<AllocaInst>(src->stripInBoundsOffsets()) || src_ai.tbaa == ctx.tbaa().tbaa_stack;
-    size_t dst_off = 0;
-    size_t src_off = 0;
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
-    bool nodata = allpointers(typ);
+    size_t shrunken_size = split_value_size(typ).first;
+    size_t off = 0;
     for (size_t i = 0; true; i++) {
         bool last = i == npointers;
         size_t ptr = last ? jl_datatype_size(typ) : (jl_ptr_offset(typ, i) * sizeof(void*));
-        if (ptr > src_off) {
+        if (ptr > off) {
+            assert(off < shrunken_size && ptr <= shrunken_size);
             emit_memcpy(ctx,
-                emit_ptrgep(ctx, dst, dst_off),
+                emit_ptrgep(ctx, dst, off),
                 dst_ai,
-                emit_ptrgep(ctx, src, src_off),
+                emit_ptrgep(ctx, src, off),
                 src_ai,
-                ptr - src_off,
+                ptr - off,
                 align_dst,
                 align_src,
                 isVolatileStore);
-            dst_off += ptr - src_off;
         }
         if (last)
             break;
@@ -1288,16 +1281,14 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         src_ai.decorateInst(load);
         roots_ai.decorateInst(ctx.builder.CreateAlignedStore(load, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*)), isVolatileStore));
         align_src = align_dst = Align(sizeof(void*));
-        src_off = ptr + sizeof(void*);
-        if (!nodata) {
+        off = ptr + sizeof(void*);
+        if (off < shrunken_size) {
             // store an undef pointer here, to make sure nobody looks at this
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
                 ctx.builder.getIntN(sizeof(void*) * 8, (uint64_t)-1),
-                emit_ptrgep(ctx, dst, dst_off),
-                align_src,
+                emit_ptrgep(ctx, dst, ptr),
+                Align(sizeof(void*)),
                 isVolatileStore));
-            dst_off += sizeof(void*);
-            assert(dst_off == src_off);
         }
     }
 }
@@ -1318,72 +1309,73 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     if (x.V == nullptr && x.constant == nullptr)
         return;
     Value *src = data_pointer(ctx, value_to_pointer(ctx, x));
-    size_t dst_off = 0;
-    size_t src_off = 0;
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
-    bool nodata = allpointers(typ);
+    size_t shrunken_size = split_value_size(typ).first;
+    size_t off = 0;
     for (size_t i = 0; true; i++) {
         bool last = i == npointers;
         size_t ptr = last ? jl_datatype_size(typ) : (jl_ptr_offset(typ, i) * sizeof(void*));
-        if (ptr > src_off) {
+        if (ptr > off) {
+            assert(off < shrunken_size && ptr <= shrunken_size);
             emit_memcpy(ctx,
-                emit_ptrgep(ctx, dst, dst_off),
+                emit_ptrgep(ctx, dst, off),
                 dst_ai,
-                emit_ptrgep(ctx, src, src_off),
+                emit_ptrgep(ctx, src, off),
                 src_ai,
-                ptr - src_off,
+                ptr - off,
                 align_dst,
                 align_src,
                 isVolatileStore);
-            dst_off += ptr - src_off;
         }
         if (last)
             break;
         align_src = align_dst = Align(sizeof(void*));
-        src_off = ptr + sizeof(void*);
-        if (!nodata) {
+        off = ptr + sizeof(void*);
+        if (off < shrunken_size) {
             // store an undef pointer here, to make sure nobody looks at this
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
                 ctx.builder.getIntN(sizeof(void*) * 8, (uint64_t)-1),
-                emit_ptrgep(ctx, dst, dst_off),
-                align_src,
+                emit_ptrgep(ctx, dst, ptr),
+                Align(sizeof(void*)),
                 isVolatileStore));
-            dst_off += sizeof(void*);
-            assert(dst_off == src_off);
         }
     }
 }
 
-static std::pair<AllocaInst*, SmallVector<Value*,0>> split_value(jl_codectx_t &ctx, const jl_cgval_t &x, Align x_alignment)
+static std::tuple<Value*, SmallVector<Value*,0>, MDNode*> split_value(jl_codectx_t &ctx, const jl_cgval_t &x, Align x_alignment, bool copy_required)
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     auto sizes = split_value_size(typ);
-    Align align_dst(julia_alignment((jl_value_t*)typ));
-    AllocaInst *bits = nullptr;
-    if (sizes.first) {
-        bits = emit_static_alloca(ctx, sizes.first, align_dst);
-        auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-        split_value_into(ctx, x, x_alignment, bits, align_dst, stack_ai, false);
-    }
     SmallVector<Value*,0> roots;
     if (sizes.second) {
         roots = extract_gc_roots(ctx, x, sizes.second);
         if (roots.size() < sizes.second)
             roots.resize(sizes.second, Constant::getNullValue(ctx.types().T_prjlvalue));
     }
-    return std::make_pair(bits, roots);
+    Value *bits = nullptr;
+    if (sizes.first) {
+        if (!copy_required) {
+            if (!x.inline_roots.empty())
+                return std::make_tuple(x.V, roots, x.tbaa);
+            else if (x.ispointer())
+                return std::make_tuple(data_pointer(ctx, x), roots, x.tbaa);
+        }
+        Align align_dst(julia_alignment((jl_value_t*)typ));
+        AllocaInst *alloca = emit_static_alloca(ctx, sizes.first, align_dst);
+        auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+        split_value_into(ctx, x, x_alignment, alloca, align_dst, stack_ai, false);
+        bits = alloca;
+    }
+    return std::make_tuple(bits, roots, ctx.tbaa().tbaa_stack);
 }
 
 // Return the offset values corresponding to jl_field_offset, but into the two buffers for a split value (or -1)
 static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned idx)
 {
     size_t fldoff = jl_field_offset(typ, idx);
-    size_t src_off = 0;
-    size_t dst_off = 0;
     assert(typ->layout->first_ptr >= 0);
     size_t npointers = typ->layout->npointers;
-    bool nodata = allpointers(typ);
     for (size_t i = 0; i < npointers; i++) {
         size_t ptr = jl_ptr_offset(typ, i) * sizeof(void*);
         if (ptr >= fldoff) {
@@ -1391,16 +1383,10 @@ static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned
                 break;
             jl_value_t *ft = jl_field_type(typ, idx);
             bool onlyptr = jl_field_isptr(typ, idx) || (jl_is_datatype(ft) && allpointers((jl_datatype_t*)ft));
-            return std::make_pair(onlyptr ? -1 : dst_off + fldoff - src_off, i);
-        }
-        dst_off += ptr - src_off;
-        src_off = ptr + sizeof(void*);
-        if (!nodata) {
-            assert(dst_off + sizeof(void*) == src_off);
-            dst_off = src_off;
+            return std::make_pair(onlyptr ? -1 : (ssize_t)fldoff, (ssize_t)i);
         }
     }
-    return std::make_pair(dst_off + fldoff - src_off, -1);
+    return std::make_pair((ssize_t)fldoff, (ssize_t)-1);
 }
 
 // Copy `x` to `dst`, where `x` was a split value and dst needs to have a native layout, copying any inlined roots back into their native location.
@@ -1414,25 +1400,24 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
     Align align_src(julia_alignment(x.typ));
     Value *src = x.V;
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-    size_t dst_off = 0;
-    size_t src_off = 0;
     size_t npointers = typ->layout->npointers;
-    bool nodata = allpointers(typ);
+    size_t shrunken_size = split_value_size(typ).first;
     bool isstack = isa<AllocaInst>(dst->stripInBoundsOffsets()) || dst_ai.tbaa == ctx.tbaa().tbaa_stack;
+    size_t off = 0;
     for (size_t i = 0; true; i++) {
         bool last = i == npointers;
         size_t ptr = last ? jl_datatype_size(typ) : (jl_ptr_offset(typ, i) * sizeof(void*));
-        if (ptr > dst_off) {
+        if (ptr > off && off < shrunken_size) {
+            size_t copy_end = std::min(ptr, shrunken_size);
             emit_memcpy(ctx,
-                emit_ptrgep(ctx, dst, dst_off),
+                emit_ptrgep(ctx, dst, off),
                 dst_ai,
-                emit_ptrgep(ctx, src, src_off),
+                emit_ptrgep(ctx, src, off),
                 src_ai,
-                ptr - dst_off,
+                copy_end - off,
                 align_dst,
                 align_src,
                 isVolatileStore);
-            src_off += ptr - dst_off;
         }
         if (last)
             break;
@@ -1442,11 +1427,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
             store->setOrdering(AtomicOrdering::Unordered);
         dst_ai.decorateInst(store);
         align_dst = align_src = Align(sizeof(void*));
-        dst_off = ptr + sizeof(void*);
-        if (!nodata) {
-            assert(src_off + sizeof(void*) == dst_off);
-            src_off = dst_off;
-        }
+        off = ptr + sizeof(void*);
     }
 }
 
@@ -2428,11 +2409,11 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (Order == AtomicOrdering::NotAtomic && !isboxed && !aliasscope && elty->isAggregateType() && !jl_is_genericmemoryref_type(jltype)) {
         // use split_value to do this load
         auto src = mark_julia_slot(ptr, jltype, NULL, tbaa);
-        auto copy = split_value(ctx, src, Align(alignment));
-        if (maybe_null_if_boxed && !copy.second.empty()) {
-            null_pointer_check(ctx, copy.second[0], nullcheck);
+        auto [val, roots, result_tbaa] = split_value(ctx, src, Align(alignment), /*copy_required*/true);
+        if (maybe_null_if_boxed && !roots.empty()) {
+            null_pointer_check(ctx, roots[0], nullcheck);
         }
-        return mark_julia_slot(copy.first, jltype, NULL, ctx.tbaa().tbaa_stack, copy.second);
+        return mark_julia_slot(val, jltype, NULL, result_tbaa, roots);
     }
     Type *realelty = elty;
     if (Order != AtomicOrdering::NotAtomic) {
