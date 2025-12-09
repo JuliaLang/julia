@@ -83,7 +83,7 @@ Standard library changes
 
 #### Dates
 
-* `unix2datetime` now accepts a keyword argument `localtime=true` to use the local time zone instead of UTC ([#50296]).
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
 #### InteractiveUtils
 
