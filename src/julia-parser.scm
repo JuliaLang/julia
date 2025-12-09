@@ -1136,15 +1136,52 @@
   (let ((nxt (peek-token s)))
     (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
+;; Parse a match pattern - an expression that stops at ->
+;; Patterns may include guards: `pattern if cond ->`
+;; Returns the pattern, possibly wrapped in (guard pattern cond)
+;;
+;; The challenge: -> is consumed by parse-decl-with-initial-ex which is called
+;; deep in the expression parsing chain. We need to parse expressions without
+;; going through that path. We use parse-call which handles function calls,
+;; indexing, etc. but doesn't consume ->.
+(define (parse-match-pattern s)
+  (define (parse-pattern-expr s)
+    ;; Parse an expression suitable for a match pattern, stopping at ->
+    ;; This is like parse-call but handles operators that don't include ->
+    (let ((nxt (peek-token s)))
+      (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
+
+  (let loop ((parts '()))
+    (let* ((part (parse-pattern-expr s))
+           (t (peek-token s)))
+      (cond
+       ;; Guard condition: pattern if cond -> ...
+       ((eq? t 'if)
+        (take-token s)
+        (let ((cond-expr (parse-pattern-expr s)))
+          (let ((combined (if (null? parts)
+                              part
+                              `(tuple ,@(reverse (cons part parts))))))
+            `(guard ,combined ,cond-expr))))
+       ;; Tuple continuation with comma
+       ((eqv? t #\,)
+        (take-token s)
+        (loop (cons part parts)))
+       ;; End of pattern (at ->)
+       (else
+        (if (null? parts)
+            part
+            `(tuple ,@(reverse (cons part parts)))))))))
+
 ;; Check if 'match' should be treated as a keyword based on next token context
+;; Called AFTER 'match' has already been consumed, so we just peek at what comes next.
 ;; Returns #t if match should be parsed as a keyword, #f if as an identifier
 (define (match-is-keyword? s)
-  ;; Consume 'match' to look at the next token
-  (let* ((match-tok (take-token s))
-         (spc (ts:space? s))
-         (t2 (peek-token s)))
-    ;; Put match back
-    (ts:put-back! s match-tok spc)
+  ;; IMPORTANT: Must call peek-token FIRST to ensure the next token is read
+  ;; and the space info is updated. ts:space? returns stale info if called
+  ;; before peek-token when the last token was just consumed.
+  (let* ((t2 (peek-token s))
+         (spc (ts:space? s)))
     (cond
      ;; Newline after match means it's a standalone identifier (like `return match`)
      ((newline? t2) #f)
@@ -1153,7 +1190,7 @@
      ;; Type annotation, assignment, field access, pair, iteration keywords
      ((memq t2 '(|::| = |.| => in |∈|)) #f)
      ;; Call or indexing without space means function call (match(x))
-     ((and (memq t2 '(#\( #\[)) (not spc)) #f)
+     ((and (memv t2 '(#\( #\[)) (not spc)) #f)
      ;; Special case: match? (exception-catching match) - ? without whitespace
      ;; is part of the keyword, so match IS a reserved word
      ((and (eq? t2 '?) (not spc)) #t)
@@ -1165,11 +1202,10 @@
      (else #t))))
 
 (define (parse-call-with-initial-ex s ex tok)
-  (if (or (and (initial-reserved-word? tok)
-               ;; Special handling for 'match' as contextual keyword
-               (or (not (eq? tok 'match))
-                   (match-is-keyword? s)))
-          (memq tok '(mutable primitive abstract)))
+  (if (or (initial-reserved-word? tok)
+          (memq tok '(mutable primitive abstract))
+          ;; 'match' is a contextual keyword - only a keyword if followed by expression
+          (and (eq? tok 'match) (match-is-keyword? s)))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
