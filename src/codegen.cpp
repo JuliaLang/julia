@@ -4032,6 +4032,13 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     AtomicOrdering FailOrder = (needlock || fail_order <= jl_memory_order_notatomic)
                         ? AtomicOrdering::NotAtomic
                         : get_llvm_atomic_order(fail_order);
+    Value *ptr = nullptr;
+    Value *ptindex = nullptr;
+    Value *lock = nullptr;
+    Value *data_owner = nullptr;
+    bool maybenull = true;
+    MDNode *tbaa_ptindex = nullptr;
+
     if (isunion) {
         assert(!isatomic && !needlock);
         Value *V = emit_memoryref_FCA(ctx, ref, layout);
@@ -4040,7 +4047,6 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         Value *data = emit_genericmemoryptr(ctx, mem, layout, AddressSpace::Loaded);
         Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
         // compute tindex from val
-        Value *ptindex;
         if (elsz == 0) {
             ptindex = data;
         }
@@ -4050,44 +4056,40 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
         }
         ptindex = emit_ptrgep(ctx, ptindex, idx0);
-        *ret = union_store(ctx, data, ptindex, val, cmp, ety,
-            ctx.tbaa().tbaa_arraybuf, ctx.tbaa().tbaa_arrayselbyte,
-            Order, FailOrder,
-            nullptr, op,
-            modifyop, fname);
+        ptr = data;
+        tbaa_ptindex = ctx.tbaa().tbaa_arrayselbyte;
     }
     else {
-        Value *ptr = (layout->size == 0 ? nullptr : emit_memoryref_ptr(ctx, ref, layout));
-        Value *lock = nullptr;
-        bool maybenull = true;
+        ptr = (layout->size == 0 ? nullptr : emit_memoryref_ptr(ctx, ref, layout));
         if (needlock) {
             assert(ptr);
             lock = ptr;
             // ptr += sizeof(lock);
             ptr = emit_ptrgep(ctx, ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
         }
-        Value *data_owner = NULL; // owner object against which the write barrier must check
         if (isboxed || layout->first_ptr >= 0) { // if elements are just bits, don't need a write barrier
             data_owner = emit_memoryref_mem(ctx, ref, layout);
         }
-        *ret = typed_store(ctx,
-                    ptr,
-                    val, cmp, ety,
-                    isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
-                    ctx.noalias().aliasscope.current,
-                    data_owner,
-                    isboxed,
-                    Order,
-                    FailOrder,
-                    al,
-                    lock,
-                    op,
-                    maybenull,
-                    modifyop,
-                    fname,
-                    nullptr,
-                    nullptr);
     }
+    *ret = typed_store(ctx,
+                ptr,
+                val, cmp, ety,
+                isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+                isunion ? nullptr : ctx.noalias().aliasscope.current,
+                data_owner,
+                isboxed,
+                Order,
+                FailOrder,
+                al,
+                lock,
+                op,
+                maybenull,
+                modifyop,
+                fname,
+                nullptr,
+                nullptr,
+                ptindex,
+                tbaa_ptindex);
     return true;
 }
 
