@@ -3389,3 +3389,16 @@ function show(io::IO, ei::Core.EvalInto)
         show_default(io, ei)
     end
 end
+
+# Except type display
+function show(io::IO, e::Except{T,E}) where {T,E}
+    if is_exception(e)
+        print(io, "Except{", T, ", ", E, "}(exception: ")
+        show(io, e._exception)
+        print(io, ")")
+    else
+        print(io, "Except{", T, ", ", E, "}(")
+        show(io, e._value)
+        print(io, ")")
+    end
+end

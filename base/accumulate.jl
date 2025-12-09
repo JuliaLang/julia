@@ -22,9 +22,9 @@ function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, 
     return s_
 end
 
-function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector) where Op
+function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)::Except{typeof(result), DimensionMismatch} where Op
     li = LinearIndices(v)
-    li != LinearIndices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
+    li != LinearIndices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))?
     n = length(li)
     n == 0 && return result
     i1 = first(li)
@@ -278,7 +278,7 @@ julia> accumulate(+, fill(1, 2, 5), dims=2, init=100.0)
  101.0  102.0  103.0  104.0  105.0
 ```
 """
-function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
+function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)::AnyExcept{ArgumentError}
     if dims === nothing && !(A isa AbstractVector)
         # This branch takes care of the cases not handled by `_accumulate!`.
         return collect(Iterators.accumulate(op, A; kw...))
@@ -286,7 +286,7 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
 
     nt = values(kw)
     if !(isempty(kw) || keys(nt) === (:init,))
-        throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))?
     end
 
     out = similar(A, _accumulate_promote_op(op, A; kw...))
@@ -344,19 +344,19 @@ julia> accumulate!(*, B, A, dims=2, init=10)
  40  200  1200
 ```
 """
-function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
+function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)::AnyExcept{ArgumentError}
     nt = values(kw)
     if isempty(kw)
         _accumulate!(op, B, A, dims, nothing)
     elseif keys(kw) === (:init,)
         _accumulate!(op, B, A, dims, Some(nt.init))
     else
-        throw(ArgumentError("accumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))?
     end
 end
 
-function _accumulate!(op, B, A, dims::Nothing, init::Union{Nothing, Some})
-    throw(ArgumentError("Keyword argument dims must be provided for multidimensional arrays"))
+function _accumulate!(op, B, A, dims::Nothing, init::Union{Nothing, Some})::AnyExcept{ArgumentError}
+    throw(ArgumentError("Keyword argument dims must be provided for multidimensional arrays"))?
 end
 
 function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Nothing)
@@ -371,10 +371,10 @@ function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Some)
     _accumulate1!(op, B, v1, A, 1)
 end
 
-function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
-    dims > 0 || throw(ArgumentError("dims must be a positive integer"))
+function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})::Except{typeof(B), Union{ArgumentError, DimensionMismatch}}
+    dims > 0 || throw(ArgumentError("dims must be a positive integer"))?
     inds_t = axes(A)
-    axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
+    axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))?
     dims > ndims(A) && return copyto!(B, A)
     isempty(inds_t[dims]) && return B
     if dims == 1
@@ -433,10 +433,10 @@ end
     B
 end
 
-function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
-    dim > 0 || throw(ArgumentError("dim must be a positive integer"))
+function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)::Except{typeof(B), Union{ArgumentError, DimensionMismatch}}
+    dim > 0 || throw(ArgumentError("dim must be a positive integer"))?
     inds = LinearIndices(A)
-    inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))
+    inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))?
     dim > 1 && return copyto!(B, A)
     (i1, state) = iterate(inds)::NTuple{2,Any} # We checked earlier that A isn't empty
     cur_val = v1

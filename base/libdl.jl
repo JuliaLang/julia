@@ -56,8 +56,8 @@ Look up a symbol from a shared library handle, return callable function pointer 
 If the symbol cannot be found, this method throws an error, unless the keyword argument
 `throw_error` is set to `false`, in which case this method returns `nothing`.
 """
-function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
-    hnd == C_NULL && throw(ArgumentError("NULL library handle"))
+function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)::AnyExcept{ArgumentError}
+    hnd == C_NULL && throw(ArgumentError("NULL library handle"))?
     val = Ref(Ptr{Cvoid}(0))
     symbol_found = ccall(:jl_dlsym, Cint,
         (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint, Cint),
@@ -524,7 +524,7 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
 
     return handle
 end
-dlopen(x::Any) = throw(TypeError(:dlopen, "", Union{Symbol,String,LazyLibrary}, x))
+dlopen(x::Any)::AnyExcept{TypeError} = throw(TypeError(:dlopen, "", Union{Symbol,String,LazyLibrary}, x))?
 dlsym(ll::LazyLibrary, args...; kwargs...) = dlsym(dlopen(ll), args...; kwargs...)
 dlpath(ll::LazyLibrary) = dlpath(dlopen(ll))
 end # module Libdl

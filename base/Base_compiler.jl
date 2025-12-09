@@ -311,6 +311,9 @@ include("traits.jl")
 include("range.jl")
 include("error.jl")
 
+# Declared exceptions runtime support (needed early for type annotations)
+include("except.jl")
+
 # core numeric operations & types
 ==(x, y) = x === y
 include("bool.jl")

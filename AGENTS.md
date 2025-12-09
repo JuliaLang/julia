@@ -27,6 +27,10 @@ If you made changes to the runtime (any files in `src/`), you will need to rebui
 julia. Run `make -j` to rebuild julia. This process may take up to 10 minutes
 depending on your changes.
 
+If you made changes to Scheme files (e.g. `src/julia-syntax.scm`, `src/julia-parser.scm`),
+you can test them quickly with `make -C src` which rebuilds just the flisp bootstrap.
+After that, run `make -j` to rebuild the full system with the changes.
+
 After making changes, run static analysis checks:
   - First run `make -C src install-analysis-deps` to initialize dependencies (only needed once the first time).
   - Run `make -C src analyze-<filename> --output-sync -j8` (replace `<filename>` with the basename of any C or C++ file you modified, excluding headers).

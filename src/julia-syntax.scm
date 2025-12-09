@@ -775,22 +775,60 @@
 ;; Generate two methods for Except-returning functions:
 ;; 1. Inner method with ExceptRaw first arg - returns raw Except
 ;; 2. Outer method (normal signature) - calls inner and unwraps
+;; Helper to extract arg name for calling, handling UNUSED substitution
+;; Returns (new-arg . arg-name-for-call)
+;; arg-counter-cell is a cons cell used as mutable counter: (car arg-counter-cell) is the count
+(define (except-process-arg a arg-counter-cell)
+  (define (gen-name!)
+    (let ((n (+ 1 (car arg-counter-cell))))
+      (set-car! arg-counter-cell n)
+      (symbol (string "#exc-arg" n "#"))))
+  (cond ((symbol? a)
+         (if (eq? a UNUSED)
+             ;; Generate name for bare UNUSED arg
+             (let ((gn (gen-name!)))
+               (cons gn gn))
+             (cons a a)))
+        ((and (pair? a) (eq? (car a) '|::|))
+         (cond ((length= a 2)
+                ;; Unnamed arg (:: Type) - generate a name
+                (let ((gn (gen-name!)))
+                  (cons `(|::| ,gn ,(cadr a)) gn)))
+               ((eq? (cadr a) UNUSED)
+                ;; Already-processed unnamed arg (:: #unused# Type) - generate a real name
+                (let ((gn (gen-name!)))
+                  (cons `(|::| ,gn ,(caddr a)) gn)))
+               (else
+                ;; Named arg (:: x Type) - use existing name
+                (cons a (cadr a)))))
+        ((and (pair? a) (eq? (car a) '...))
+         ;; Vararg - process inner and wrap result
+         (let* ((inner (cadr a))
+                (inner-result (except-process-arg inner arg-counter-cell))
+                (new-inner (car inner-result))
+                (inner-name (cdr inner-result)))
+           (cons `(... ,new-inner) `(... ,inner-name))))
+        (else
+         ;; Fallback - this shouldn't happen with valid arglists
+         (let ((gn (gen-name!)))
+           (cons a gn)))))
+
 (define (except-method-def-expr name sparams argl body rett)
-  (let* (;; Inner method arg list: add ExceptRaw as first positional arg after #self#
-         (raw-arg '(|::| |#except-raw#| (top ExceptRaw)))
-         ;; Get the function arg (first arg is #self#)
+  (let* (;; Get the function arg (first arg is #self#)
          (self-arg (car argl))
          (rest-args (cdr argl))
-         (inner-argl (cons self-arg (cons raw-arg rest-args)))
-         ;; For outer method: call inner with except_raw and unwrap
-         (arg-names (map (lambda (a)
-                           (cond ((symbol? a) a)
-                                 ((and (pair? a) (eq? (car a) '|::|))
-                                  (if (length= a 2) UNUSED (cadr a)))
-                                 ((and (pair? a) (eq? (car a) '...))
-                                  `(... ,(arg-name (cadr a))))
-                                 (else UNUSED)))
-                         rest-args))
+         ;; For both methods: need to handle unnamed args (those with UNUSED as name)
+         ;; fix-arglist has already converted (:: Type) to (:: #unused# Type)
+         ;; We need to generate actual names for these to use in the outer method's call
+         (arg-counter-cell (cons 0 '()))  ;; mutable counter as cons cell
+         (processed-args (map (lambda (a) (except-process-arg a arg-counter-cell)) rest-args))
+         (named-rest-args (map car processed-args))
+         (arg-names (map cdr processed-args))
+         ;; Inner method arg list: add ExceptRaw as first positional arg after #self#
+         (raw-arg '(|::| |#except-raw#| (top ExceptRaw)))
+         (inner-argl (cons self-arg (cons raw-arg named-rest-args)))
+         ;; Outer method uses the same named args
+         (outer-argl (cons self-arg named-rest-args))
          (outer-body `(block
                        (return (call (top unwrap)
                                      (call |#self#| (top except_raw) ,@arg-names))))))
@@ -799,7 +837,7 @@
       ;; Inner method (with ExceptRaw) - executes the actual body
       ,(method-def-expr- name sparams inner-argl body rett)
       ;; Outer method (normal signature) - calls inner and unwraps
-      ,(method-def-expr- name sparams argl outer-body '(core Any)))))
+      ,(method-def-expr- name sparams outer-argl outer-body '(core Any)))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -1654,7 +1692,10 @@
                 (curly (top Except) (core Any) (top Exception))
                 ,exc-expr))))
      ;; f(args...)? - call inner method with except_raw
-     ((and (pair? expr) (eq? (car expr) 'call))
+     ;; BUT: don't transform type constructor calls (where func is curly or a type)
+     ((and (pair? expr) (eq? (car expr) 'call)
+           ;; Don't transform if func is a curly expression (type constructor)
+           (not (and (pair? (cadr expr)) (eq? (car (cadr expr)) 'curly))))
       (let ((func (cadr expr))
             (args (cddr expr)))
         (expand-forms

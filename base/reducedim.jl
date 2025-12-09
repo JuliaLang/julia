@@ -5,13 +5,13 @@
 # for reductions that expand 0 dims to 1
 reduced_index(i::OneTo{T}) where {T} = OneTo(one(T))
 reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
-reduced_index(i::AbstractUnitRange) =
+reduced_index(i::AbstractUnitRange)::AnyExcept{ArgumentError} =
     throw(ArgumentError(
 """
 No method is implemented for reducing index range of type $(typeof(i)). Please implement
 reduced_index for this index type or report this as an issue.
 """
-    ))
+    ))?
 reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
@@ -27,10 +27,10 @@ function reduced_indices0(axs::Indices{N}, region) where N
     ntuple(d -> d in region && !isempty(axs[d]) ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function _check_valid_region(region)
+function _check_valid_region(region)::AnyExcept{ArgumentError}
     for d in region
-        isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
+        isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))?
+        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))?
     end
 end
 
@@ -203,7 +203,7 @@ end
 has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
 has_fast_linear_indexing(a::AbstractVector) = true
 
-function check_reducedims(R, A)
+function check_reducedims(R, A)::Except{Int, DimensionMismatch}
     # Check whether R has compatible dimensions w.r.t. A for reduction
     #
     # It returns an integer value (useful for choosing implementation)
@@ -212,7 +212,7 @@ function check_reducedims(R, A)
     #   it will be size(A, 1) or size(A, 1) * size(A, 2).
     # - Otherwise, e.g. sum(A, dims=2) or sum(A, dims=(1,3)), it returns 0.
     #
-    ndims(R) <= ndims(A) || throw(DimensionMismatch("cannot reduce $(ndims(A))-dimensional array to $(ndims(R)) dimensions"))
+    ndims(R) <= ndims(A) || throw(DimensionMismatch("cannot reduce $(ndims(A))-dimensional array to $(ndims(R)) dimensions"))?
     lsiz = 1
     had_nonreduc = false
     for i = 1:ndims(A)
@@ -227,7 +227,7 @@ function check_reducedims(R, A)
                 end
             end
         else
-            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(axes(A)) with output with indices $(axes(R))"))
+            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(axes(A)) with output with indices $(axes(R))"))?
             had_nonreduc = true
         end
     end
@@ -1016,11 +1016,11 @@ end
 ##### findmin & findmax #####
 # The initial values of Rval are not used if the corresponding indices in Rind are 0.
 #
-function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
+function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N})::AnyExcept{DimensionMismatch} where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
     for i = 1:N
-        axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
+        axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))?
     end
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
@@ -1125,11 +1125,11 @@ julia> findmin(abs2, A, dims=2)
 """
 findmin(f, A::AbstractArray; dims::D=:) where {D} = _findmin(f, A, dims)
 
-function _findmin(f, A, region::D) where {D}
+function _findmin(f, A, region::D)::AnyExcept{Union{ArgumentError, DimensionMismatch}} where {D}
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
-            throw(ArgumentError("collection slices must be non-empty"))
+            throw(ArgumentError("collection slices must be non-empty"))?
         end
         similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
@@ -1198,11 +1198,11 @@ julia> findmax(abs2, A, dims=2)
 """
 findmax(f, A::AbstractArray; dims::D=:) where {D} = _findmax(f, A, dims)
 
-function _findmax(f, A, region::D) where {D}
+function _findmax(f, A, region::D)::AnyExcept{Union{ArgumentError, DimensionMismatch}} where {D}
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
-            throw(ArgumentError("collection slices must be non-empty"))
+            throw(ArgumentError("collection slices must be non-empty"))?
         end
         similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else

@@ -93,8 +93,7 @@ include("some.jl")
 # Pattern matching runtime support
 include("match.jl")
 
-# Declared exceptions runtime support
-include("except.jl")
+# Declared exceptions runtime support is in Base_compiler.jl (except.jl)
 
 include("dict.jl")
 include("set.jl")

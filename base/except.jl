@@ -159,14 +159,4 @@ function convert(::Type{Except{T,E}}, e::Except{T2,E2}) where {T, E, T2, E2}
     end
 end
 
-function show(io::IO, e::Except{T,E}) where {T,E}
-    if is_exception(e)
-        print(io, "Except{", T, ", ", E, "}(exception: ")
-        show(io, e._exception)
-        print(io, ")")
-    else
-        print(io, "Except{", T, ", ", E, "}(")
-        show(io, e._value)
-        print(io, ")")
-    end
-end
+# show method is defined in show.jl
