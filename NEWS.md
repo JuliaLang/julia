@@ -21,7 +21,7 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
-  - New functions `Threads.atomic_fence_heavy` and `Threads.atoimc_fence_light` provide support for
+  - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
     asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
     runs significantly less often than the other ([#60311]).
 
