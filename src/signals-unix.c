@@ -1294,7 +1294,7 @@ static void jl_init_mprotect_membarrier(void)
         size_t pagesize = jl_getpagesize();
 
         mprotect_barrier_page = (_Atomic(uint64_t) *)
-                                     mmap(NULL, pagesize, PROT_NONE,
+                                     mmap(NULL, pagesize, PROT_READ | PROT_WRITE,
                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (mprotect_barrier_page == MAP_FAILED) {
             jl_safe_printf("fatal: failed to allocate barrier page.\n");
