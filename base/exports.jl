@@ -88,6 +88,9 @@ export
     Dict,
     Dims,
     Enum,
+    Except,
+    AnyExcept,
+    ExceptRaw,
     ExponentialBackOff,
     IndexCartesian,
     IndexLinear,
@@ -183,6 +186,14 @@ export
     TaskFailedException,
     SystemError,
     StringIndexError,
+
+# Declared exceptions
+    is_exception,
+    unwrap,
+    get_exception,
+    except_value,
+    except_exception,
+    except_raw,
 
 # Global constants and variables
     ARGS,

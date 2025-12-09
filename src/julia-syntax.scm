@@ -746,6 +746,20 @@
 ;; definitions without keyword arguments are passed to method-def-expr-,
 ;; which handles optional positional arguments by adding the needed small
 ;; boilerplate definitions.
+;; Check if a return type expression is Except{...} or AnyExcept{...}
+(define (except-return-type? rett)
+  (and (pair? rett)
+       (eq? (car rett) 'curly)
+       (pair? (cdr rett))
+       (let ((type-name (cadr rett)))
+         (or (eq? type-name 'Except)
+             (eq? type-name 'AnyExcept)
+             (and (pair? type-name)
+                  (or (eq? (car type-name) 'top)
+                      (eq? (car type-name) 'globalref)
+                      (eq? (car type-name) 'outerref))
+                  (memq (cadr type-name) '(Except AnyExcept)))))))
+
 (define (method-def-expr name sparams argl body rett)
   (let ((argl (throw-unassigned-kw-args (remove-empty-parameters argl))))
     (if (has-parameters? argl)
@@ -753,7 +767,39 @@
         (begin (check-kw-args (cdar argl))
                (keywords-method-def-expr name sparams argl body rett))
         ;; no keywords
-        (method-def-expr- name sparams argl body rett))))
+        (if (except-return-type? rett)
+            ;; Except return type - generate inner (raw) and outer (unwrapping) methods
+            (except-method-def-expr name sparams argl body rett)
+            (method-def-expr- name sparams argl body rett)))))
+
+;; Generate two methods for Except-returning functions:
+;; 1. Inner method with ExceptRaw first arg - returns raw Except
+;; 2. Outer method (normal signature) - calls inner and unwraps
+(define (except-method-def-expr name sparams argl body rett)
+  (let* (;; Inner method arg list: add ExceptRaw as first positional arg after #self#
+         (raw-arg '(|::| |#except-raw#| (top ExceptRaw)))
+         ;; Get the function arg (first arg is #self#)
+         (self-arg (car argl))
+         (rest-args (cdr argl))
+         (inner-argl (cons self-arg (cons raw-arg rest-args)))
+         ;; For outer method: call inner with except_raw and unwrap
+         (arg-names (map (lambda (a)
+                           (cond ((symbol? a) a)
+                                 ((and (pair? a) (eq? (car a) '|::|))
+                                  (if (length= a 2) UNUSED (cadr a)))
+                                 ((and (pair? a) (eq? (car a) '...))
+                                  `(... ,(arg-name (cadr a))))
+                                 (else UNUSED)))
+                         rest-args))
+         (outer-body `(block
+                       (return (call (top unwrap)
+                                     (call |#self#| (top except_raw) ,@arg-names))))))
+    ;; Generate both inner and outer method definitions
+    `(block
+      ;; Inner method (with ExceptRaw) - executes the actual body
+      ,(method-def-expr- name sparams inner-argl body rett)
+      ;; Outer method (normal signature) - calls inner and unwraps
+      ,(method-def-expr- name sparams argl outer-body '(core Any)))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -1589,6 +1635,104 @@
         ;; Call pattern - captures from arguments
         (delete-duplicates (apply append (map collect-match-captures (cddr pattern))))))
    (else '())))
+
+;; Expand postfix ? for exception forwarding: (postfix-? expr)
+;; - throw(ex)? transforms to except_exception wrapping
+;; - f(args...)? transforms to f(except_raw, args...) to call inner method
+;; - other expr? transforms to forward_or_unwrap(expr)
+(define (expand-postfix-question e)
+  (let ((expr (cadr e)))
+    (cond
+     ;; throw(ex)? - wrap exception in Except instead of throwing
+     ((and (pair? expr) (eq? (car expr) 'call)
+           (or (eq? (cadr expr) 'throw)
+               (and (pair? (cadr expr)) (eq? (car (cadr expr)) 'top)
+                    (eq? (cadr (cadr expr)) 'throw))))
+      (let ((exc-expr (caddr expr)))
+        (expand-forms
+         `(call (top except_exception)
+                (curly (top Except) (core Any) (top Exception))
+                ,exc-expr))))
+     ;; f(args...)? - call inner method with except_raw
+     ((and (pair? expr) (eq? (car expr) 'call))
+      (let ((func (cadr expr))
+            (args (cddr expr)))
+        (expand-forms
+         `(call (top forward_or_unwrap)
+                (call ,func (top except_raw) ,@args)))))
+     ;; Other expressions - just forward or unwrap
+     (else
+      (expand-forms
+       `(call (top forward_or_unwrap) ,expr))))))
+
+;; Expand exception-catching match: (match? scrutinee arms...)
+;; Similar to match but works on Except values
+;; If scrutinee is a function call, insert except_raw to get raw Except
+(define (expand-match-except e)
+  (let* ((scrutinee-var (make-ssavalue))
+         (scrutinee-expr (cadr e))
+         (arms (cddr e))
+         ;; Transform function calls to use except_raw
+         (raw-scrutinee (if (and (pair? scrutinee-expr) (eq? (car scrutinee-expr) 'call))
+                            (let ((func (cadr scrutinee-expr))
+                                  (args (cddr scrutinee-expr)))
+                              `(call ,func (top except_raw) ,@args))
+                            scrutinee-expr)))
+    (expand-forms
+     `(block
+       (= ,scrutinee-var ,raw-scrutinee)
+       ,(expand-match-except-check scrutinee-var arms)))))
+
+;; Check if value is an Except with exception, then match
+(define (expand-match-except-check scrutinee-var arms)
+  `(if (call (top is_exception) ,scrutinee-var)
+       ,(expand-match-except-arms scrutinee-var arms)
+       (call (top unwrap) ,scrutinee-var)))
+
+;; Expand exception match arms
+(define (expand-match-except-arms scrutinee-var arms)
+  (if (null? arms)
+      ;; No match - re-throw by unwrapping
+      `(call (top unwrap) ,scrutinee-var)
+      (let* ((arm (car arms))
+             (pattern (cadr arm))
+             (body (caddr arm)))
+        (expand-match-except-arm scrutinee-var pattern body (cdr arms)))))
+
+;; Expand a single exception match arm
+;; Pattern is typically ::ExceptionType
+(define (expand-match-except-arm scrutinee-var pattern body remaining-arms)
+  (let ((exc-var (make-ssavalue)))
+    `(block
+      (= ,exc-var (call (top get_exception) ,scrutinee-var))
+      ,(cond
+        ;; Type pattern: ::ErrorType
+        ((and (pair? pattern) (eq? (car pattern) '|::|) (length= pattern 2))
+         (let ((exc-type (cadr pattern)))
+           `(if (call (core isa) ,exc-var ,exc-type)
+                ,body
+                ,(expand-match-except-arms scrutinee-var remaining-arms))))
+        ;; Typed capture: e::ErrorType
+        ((and (pair? pattern) (eq? (car pattern) '|::|) (length= pattern 3))
+         (let ((capture-name (cadr pattern))
+               (exc-type (caddr pattern)))
+           `(if (call (core isa) ,exc-var ,exc-type)
+                (scope-block
+                 (block
+                  (= ,capture-name ,exc-var)
+                  ,body))
+                ,(expand-match-except-arms scrutinee-var remaining-arms))))
+        ;; Simple capture: e (matches any exception)
+        ((symbol? pattern)
+         `(scope-block
+           (block
+            (= ,pattern ,exc-var)
+            ,body)))
+        ;; Wildcard: _ (matches any exception)
+        ((underscore-symbol? pattern)
+         body)
+        (else
+         (error (string "unsupported exception pattern: " (deparse pattern))))))))
 
 (define (expand-unionall-def name type-ex (const? #t))
   (if (and (pair? name)
@@ -2737,7 +2881,9 @@
    'try            expand-try
    'match          expand-match
    'match-assign   expand-match-assign
+   'match?         expand-match-except
    'matcharm       (lambda (e) (error "matcharm outside match"))
+   'postfix-?      expand-postfix-question
 
    'lambda
    (lambda (e)

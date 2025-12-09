@@ -304,6 +304,11 @@ function peek_initial_reserved_words(ps::ParseState)
         if k2 in KSet"( [" && !preceding_whitespace(t2)
             return false
         end
+        # Special case: `match?` (exception-catching match) - ? without whitespace
+        # is part of the keyword, so match IS a reserved word
+        if k2 == K"?" && !preceding_whitespace(t2)
+            return true
+        end
         # Not a match statement if followed by operators that can only be binary
         # (not unary). Unary operators like `+`, `-`, `!`, `~` can start an expression.
         if is_operator(k2)
@@ -1834,6 +1839,11 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # f'ᵀ ==> (call-post f 'ᵀ)
             bump(ps, remap_kind=K"Identifier")
             emit(ps, mark, K"call", POSTFIX_OP_FLAG)
+        elseif k == K"?" && !preceding_whitespace(t)
+            # Postfix ? for declared exceptions - exception forwarding/unwrapping
+            # expr?  ==>  (postfix-? expr)
+            bump(ps, TRIVIA_FLAG)
+            emit(ps, mark, K"postfix-?")
         elseif k == K"{"
             processing_macro_name = maybe_parsed_macro_name(
                 ps, processing_macro_name, last_identifier_orig_kind, mark)
@@ -2511,6 +2521,14 @@ end
 function parse_match(ps::ParseState)
     mark = position(ps)
     bump(ps, TRIVIA_FLAG)  # consume 'match'
+
+    # Check for ? immediately after match (no whitespace) for exception-catching mode
+    is_exception_mode = false
+    if peek(ps) == K"?" && !preceding_whitespace(peek_token(ps))
+        bump(ps, TRIVIA_FLAG)  # consume '?' as trivia
+        is_exception_mode = true
+    end
+
     # Parse the first expression (could be scrutinee or pattern for inline destructuring)
     # Use parse_comma which doesn't include assignment, so we can detect = for match-assign
     let ps = with_match_pattern(ps)
@@ -2586,7 +2604,11 @@ function parse_match(ps::ParseState)
                        error="match requires at least one arm")
     end
     bump_closing_token(ps, K"end")
-    emit(ps, mark, K"match")
+    if is_exception_mode
+        emit(ps, mark, K"match", EXCEPT_FLAG)
+    else
+        emit(ps, mark, K"match")
+    end
 end
 
 # flisp: parse-do

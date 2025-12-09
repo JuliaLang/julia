@@ -58,6 +58,11 @@ Set for K"module" when it's not bare (`module`, not `baremodule`)
 """
 const BARE_MODULE_FLAG = RawFlags(1<<8)
 
+"""
+Set for K"match" when it's an exception-catching match (`match?`, not `match`)
+"""
+const EXCEPT_FLAG = RawFlags(1<<8)
+
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 # TODO: Given this is only used for nrow/ncat, we could actually use all the flags?
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)

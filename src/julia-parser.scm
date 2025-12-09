@@ -1154,6 +1154,9 @@
      ((memq t2 '(|::| = |.| => in |∈|)) #f)
      ;; Call or indexing without space means function call (match(x))
      ((and (memq t2 '(#\( #\[)) (not spc)) #f)
+     ;; Special case: match? (exception-catching match) - ? without whitespace
+     ;; is part of the keyword, so match IS a reserved word
+     ((and (eq? t2 '?) (not spc)) #t)
      ;; Operators that can't start an expression mean match is identifier
      ((and (or (operator? t2) (memq t2 '(=== !== ≡ ≢)))
            (not (unary-op? t2)))
@@ -1306,6 +1309,14 @@
                      (loop (if (eq? t '|'|)
                                (list t ex)
                                (list 'call t ex)))))
+                 ex))
+            ((?)
+             ;; Postfix ? for declared exceptions - exception forwarding/unwrapping
+             ;; expr?  ==>  (postfix-? expr)
+             (if (not (ts:space? s))
+                 (begin
+                   (take-token s)
+                   (loop (list 'postfix-? ex)))
                  ex))
             ((|.'|) (error "the \".'\" operator is discontinued"))
             ((#\{ )
@@ -1624,7 +1635,10 @@
              (else (expect-end-error nxt 'try))))))
 
        ((match)
-        (let ((scrutinee (parse-eq s)))
+        ;; Check for ? immediately after match (no whitespace) for exception-catching mode
+        (let* ((is-except (and (eq? (peek-token s) '?) (not (ts:space? s))))
+               (_ (if is-except (take-token s)))  ;; consume ? as trivia
+               (scrutinee (parse-eq s)))
           ;; Expect newline or semicolon after scrutinee
           (if (not (memv (peek-token s) '(#\newline #\;)))
               (if (not (eq? (peek-token s) 'end))
@@ -1638,7 +1652,10 @@
                 (take-token s)
                 (if (null? arms)
                     (error "match requires at least one arm"))
-                `(match ,scrutinee ,@(reverse arms)))
+                ;; Emit match or match? depending on exception mode
+                (if is-except
+                    `(match? ,scrutinee ,@(reverse arms))
+                    `(match ,scrutinee ,@(reverse arms))))
                (else
                 ;; Parse pattern (stopping at ->)
                 (let* ((pattern (parse-match-pattern s))

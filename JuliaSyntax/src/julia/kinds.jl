@@ -1060,6 +1060,8 @@ register_kinds!(JuliaSyntax, 0, [
         "matcharm"
         "match-assign"
         "guard"
+        # Declared exceptions
+        "postfix-?"
     "END_SYNTAX_KINDS"
 
     # Special tokens

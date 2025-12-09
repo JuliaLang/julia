@@ -610,6 +610,11 @@ end
     elseif k == K"juxtapose"
         retexpr.head = :call
         pushfirst!(args, :*)
+    elseif k == K"match"
+        # Change head to match? when EXCEPT_FLAG is set
+        if has_flags(nodehead, EXCEPT_FLAG)
+            retexpr.head = Symbol("match?")
+        end
     elseif k == K"struct"
         @assert args[2].head == :block
         orig_fields = args[2].args
