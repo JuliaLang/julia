@@ -26,7 +26,6 @@ STATISTIC(SkippedMemcpys, "Number of skipped memcpy instructions");
 STATISTIC(EmittedGetfieldUnknowns, "Number of unknown getfield calls emitted");
 STATISTIC(EmittedGetfieldKnowns, "Number of known getfield calls emitted");
 STATISTIC(EmittedSetfield, "Number of setfield calls emitted");
-STATISTIC(EmittedUnionLoads, "Number of union loads emitted");
 STATISTIC(EmittedVarargsLength, "Number of varargs length calls emitted");
 STATISTIC(EmittedArrayptr, "Number of array ptr calls emitted");
 STATISTIC(EmittedArrayElsize, "Number of array elsize calls emitted");
@@ -2370,11 +2369,42 @@ static StoreInst *emit_aliased_store(jl_codectx_t &ctx, Value *val, Value *ptr, 
 
 // If `nullcheck` is not NULL and a pointer NULL check is necessary
 // store the pointer to be checked in `*nullcheck` instead of checking it
+// Load union type tag from ptindex, returns tindex+1 (1-indexed)
+static Value *emit_load_tindex(jl_codectx_t &ctx, Value *ptindex, unsigned union_max, MDNode *tbaa_ptindex)
+{
+    assert(union_max > 0);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_ptindex);
+    Instruction *tindex0 = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ptindex, Align(1)));
+    tindex0->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
+        ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
+        ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), union_max)) }));
+    return ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
+}
+
 static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, jl_value_t *jltype,
                              MDNode *tbaa, MDNode *aliasscope, bool isboxed, AtomicOrdering Order,
                              bool maybe_null_if_boxed = true, unsigned alignment = 0,
-                             Value **nullcheck = nullptr)
+                             Value **nullcheck = nullptr,
+                             Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr)
 {
+    // Handle union types (when ptindex is provided)
+    if (ptindex != nullptr) {
+        assert(jl_is_uniontype(jltype));
+        size_t fsz = 0, al = 0;
+        int union_max = jl_islayout_inline(jltype, &fsz, &al);
+        Value *tindex = emit_load_tindex(ctx, ptindex, union_max, tbaa_ptindex ? tbaa_ptindex : tbaa);
+        Value *data = ptr;
+        if (fsz > 0) {
+            AllocaInst *lv = emit_static_alloca(ctx, fsz, Align(al));
+            setName(ctx.emission_context, lv, "immutable_union");
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+            emit_memcpy(ctx, lv, ai, ptr, ai, fsz, Align(al), Align(al));
+            data = lv;
+        }
+        return mark_julia_slot(fsz > 0 ? data : nullptr, jltype, tindex, tbaa);
+    }
+
+    assert(isboxed || jl_is_concrete_type(jltype));
     Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jltype);
     if (type_is_ghost(elty)) {
         if (isStrongerThanMonotonic(Order))
@@ -3135,26 +3165,14 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     return false;
 }
 
+// Wrapper for backward compatibility (calls typed_load with union parameters)
 static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
         jl_value_t *jfty, size_t fsz, size_t al, MDNode *tbaa, bool mutabl,
         unsigned union_max, MDNode *tbaa_ptindex)
 {
-    ++EmittedUnionLoads;
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_ptindex);
-    Instruction *tindex0 = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ptindex, Align(1)));
-    tindex0->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
-        ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
-        ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), union_max)) }));
-    Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
-    if (fsz > 0 && mutabl) {
-        // move value to an immutable stack slot (excluding tindex)
-        AllocaInst *lv = emit_static_alloca(ctx, fsz, Align(al));
-        setName(ctx.emission_context, lv, "immutable_union");
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-        emit_memcpy(ctx, lv, ai, addr, ai, fsz, Align(al), Align(al));
-        addr = lv;
-    }
-    return mark_julia_slot(fsz > 0 ? addr : nullptr, jfty, tindex, tbaa);
+    (void)fsz; (void)al; (void)union_max; // now computed inside typed_load
+    return typed_load(ctx, addr, NULL, jfty, tbaa, nullptr, false,
+            AtomicOrdering::NotAtomic, false, 0, nullptr, ptindex, tbaa_ptindex);
 }
 
 static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset)
@@ -3336,12 +3354,12 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             size_t fsz = 0, al = 0;
             int union_max = jl_islayout_inline(jfty, &fsz, &al);
             size_t fsz1 = jl_field_size(jt, idx) - 1;
-            bool isptr = (union_max == 0);
-            assert(!isptr && fsz < jl_field_size(jt, idx)); (void)isptr;
             Value *ptindex = emit_ptrgep(ctx, addr, fsz1);
-            return emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, false, union_max, strct.tbaa);
+            Value *tindex = emit_load_tindex(ctx, ptindex, union_max, strct.tbaa);
+            // inline_roots unions are always const - just compute the pointer
+            return mark_julia_slot(fsz > 0 ? addr : nullptr, jfty, tindex, tbaa);
         }
-        else if (jfty == (jl_value_t*)jl_bool_type) {
+        if (jfty == (jl_value_t*)jl_bool_type) {
             unsigned align = jl_field_align(jt, idx);
             return typed_load(ctx, addr, NULL, jfty, tbaa, nullptr, false,
                     AtomicOrdering::NotAtomic, maybe_null, align, nullcheck);
@@ -3367,34 +3385,26 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 null_pointer_check(ctx, fldv, nullcheck);
             return mark_julia_type(ctx, fldv, true, jfty);
         }
-        else if (jl_is_uniontype(jfty)) {
+        Value *ptindex = nullptr;
+        int union_max = 0;
+        if (jl_is_uniontype(jfty)) {
+            ptindex = emit_ptrgep(ctx, staddr, byte_offset + jl_field_size(jt, idx) - 1);
             size_t fsz = 0, al = 0;
-            int union_max = jl_islayout_inline(jfty, &fsz, &al);
-            bool isptr = (union_max == 0);
-            assert(!isptr && fsz < jl_field_size(jt, idx)); (void)isptr;
-            size_t fsz1 = jl_field_size(jt, idx) - 1;
-            Value *ptindex = emit_ptrgep(ctx, staddr, byte_offset + fsz1);
-            auto val = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, strct.tbaa);
-            if (val.V && val.V != addr) {
-                setNameWithField(ctx.emission_context, val.V, get_objname, jt, idx, Twine());
-            }
-            return val;
+            union_max = jl_islayout_inline(jfty, &fsz, &al);
         }
-        assert(jl_is_concrete_type(jfty));
-        if (jl_field_isconst(jt, idx) && !(maybe_null && (jfty == (jl_value_t*)jl_bool_type ||
-                                            ((jl_datatype_t*)jfty)->layout->npointers))) {
+        if (jl_field_isconst(jt, idx) && jfty != (jl_value_t*)jl_bool_type && !maybe_null) {
             // just compute the pointer and let user load it when necessary
-            return mark_julia_slot(addr, jfty, NULL, tbaa);
+            // TODO: insert maybe_null handling here?
+            Value *tindex = ptindex ? emit_load_tindex(ctx, ptindex, union_max, strct.tbaa) : nullptr;
+            return mark_julia_slot(addr, jfty, tindex, tbaa);
         }
-        unsigned align = jl_field_align(jt, idx);
         if (needlock)
             emit_lockstate_value(ctx, needlock, true);
         jl_cgval_t ret = typed_load(ctx, addr, NULL, jfty, tbaa, nullptr, false,
                 needlock ? AtomicOrdering::NotAtomic : get_llvm_atomic_order(order),
-                maybe_null, align, nullcheck);
-        if (ret.V) {
+                maybe_null, jl_field_align(jt, idx), nullcheck, ptindex, strct.tbaa);
+        if (ret.V && ret.V != addr)
             setNameWithField(ctx.emission_context, ret.V, get_objname, jt, idx, Twine());
-        }
         if (needlock)
             emit_lockstate_value(ctx, needlock, false);
         return ret;
