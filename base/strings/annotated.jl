@@ -248,28 +248,31 @@ function annotatedstring(xs...)
     annotations = Vector{RegionAnnotation}()
     for x in xs
         size = filesize(s.io)
-        if x isa AnnotatedString
-            for annot in x.annotations
-                push!(annotations, setindex(annot, annot.region .+ size, :region))
-            end
-            print(s, x.string)
-        elseif x isa SubString{<:AnnotatedString}
-            for annot in x.string.annotations
-                start, stop = first(annot.region), last(annot.region)
-                if start <= x.offset + x.ncodeunits && stop > x.offset
-                    rstart = size + max(0, start - x.offset - 1) + 1
-                    rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
-                    push!(annotations, setindex(annot, rstart:rstop, :region))
+        match x
+            x::AnnotatedString -> begin
+                for annot in x.annotations
+                    push!(annotations, setindex(annot, annot.region .+ size, :region))
                 end
+                print(s, x.string)
             end
-            print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
-        elseif x isa AnnotatedChar
-            for annot in x.annotations
-                push!(annotations, (region=1+size:1+size, annot...))
+            x::SubString{<:AnnotatedString} -> begin
+                for annot in x.string.annotations
+                    start, stop = first(annot.region), last(annot.region)
+                    if start <= x.offset + x.ncodeunits && stop > x.offset
+                        rstart = size + max(0, start - x.offset - 1) + 1
+                        rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
+                        push!(annotations, setindex(annot, rstart:rstop, :region))
+                    end
+                end
+                print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
             end
-            print(s, x.char)
-        else
-            print(s, x)
+            x::AnnotatedChar -> begin
+                for annot in x.annotations
+                    push!(annotations, (region=1+size:1+size, annot...))
+                end
+                print(s, x.char)
+            end
+            _ -> print(s, x)
         end
     end
     str = takestring!(buf)

@@ -371,11 +371,10 @@ end
 @inline function accept(l::Parser, f::Union{Function, Char})::Bool
     c = peek(l)
     c == EOF_CHAR && return false
-    ok = false
-    if isa(f, Function)
-        ok = f(c)
-    elseif isa(f, Char)
-        ok = c === f
+    ok = match f
+        f::Function -> f(c)
+        f::Char -> c === f
+        _ -> false
     end
     ok && eat_char(l)
     return ok

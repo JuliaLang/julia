@@ -112,20 +112,14 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
 end
 
 function _str_sizehint(x)
-    if x isa Float64
-        return 20
-    elseif x isa Float32
-        return 12
-    elseif x isa String || x isa SubString{String}
-        return sizeof(x)
-    elseif x isa Char
-        return ncodeunits(x)
-    elseif x isa UInt64 || x isa UInt32
-        return ndigits(x)
-    elseif x isa Int64 || x isa Int32
-        return ndigits(x) + (x < zero(x))
-    else
-        return 8
+    match x
+        ::Float64 -> 20
+        ::Float32 -> 12
+        x::Union{String, SubString{String}} -> sizeof(x)
+        x::Char -> ncodeunits(x)
+        x::Union{UInt64, UInt32} -> ndigits(x)
+        x::Union{Int64, Int32} -> ndigits(x) + (x < zero(x))
+        _ -> 8
     end
 end
 

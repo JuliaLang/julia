@@ -955,13 +955,12 @@ If `T` is not a type, then return `false`.
 """
 function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
-    if isa(t, DataType)
-        return datatype_ismutationfree(t)
-    elseif isa(t, Union)
-        return ismutationfree(t.a) && ismutationfree(t.b)
+    # TypeVar, etc. returns false
+    match t
+        t::DataType -> datatype_ismutationfree(t)
+        t::Union -> ismutationfree(t.a) && ismutationfree(t.b)
+        _ -> false
     end
-    # TypeVar, etc.
-    return false
 end
 
 datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
@@ -975,13 +974,12 @@ If `T` is not a type, then return `false`.
 """
 function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
-    if isa(t, DataType)
-        return datatype_isidentityfree(t)
-    elseif isa(t, Union)
-        return isidentityfree(t.a) && isidentityfree(t.b)
+    # TypeVar, etc. returns false
+    match t
+        t::DataType -> datatype_isidentityfree(t)
+        t::Union -> isidentityfree(t.a) && isidentityfree(t.b)
+        _ -> false
     end
-    # TypeVar, etc.
-    return false
 end
 
 """
@@ -1578,11 +1576,12 @@ end
 unionlen(@nospecialize(x)) = x isa Union ? unionlen(x.a) + unionlen(x.b) : 1
 
 function _uniontypes(@nospecialize(x), ts::Array{Any,1})
-    if x isa Union
-        _uniontypes(x.a, ts)
-        _uniontypes(x.b, ts)
-    else
-        push!(ts, x)
+    match x
+        x::Union -> begin
+            _uniontypes(x.a, ts)
+            _uniontypes(x.b, ts)
+        end
+        _ -> push!(ts, x)
     end
     return ts
 end

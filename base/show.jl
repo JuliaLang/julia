@@ -52,19 +52,21 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
     name = ft.name.singletonname
-    if isa(f, Core.IntrinsicFunction)
-        print(io, f)
-        id = Core.Intrinsics.bitcast(Int32, f)
-        print(io, " (intrinsic function #$id)")
-    elseif isa(f, Core.Builtin)
-        print(io, name, " (built-in function)")
-    else
-        n = length(methods(f))
-        m = n==1 ? "method" : "methods"
-        sname = string(name)
-        ns = (_isself(ft) || '#' in sname) ? sname : string("(::", ft, ")")
-        what = startswith(ns, '@') ? "macro" : "generic function"
-        print(io, ns, " (", what, " with $n $m)")
+    match f
+        f::Core.IntrinsicFunction -> begin
+            print(io, f)
+            id = Core.Intrinsics.bitcast(Int32, f)
+            print(io, " (intrinsic function #$id)")
+        end
+        ::Core.Builtin -> print(io, name, " (built-in function)")
+        _ -> begin
+            n = length(methods(f))
+            m = n==1 ? "method" : "methods"
+            sname = string(name)
+            ns = (_isself(ft) || '#' in sname) ? sname : string("(::", ft, ")")
+            what = startswith(ns, '@') ? "macro" : "generic function"
+            print(io, ns, " (", what, " with $n $m)")
+        end
     end
 end
 
@@ -277,10 +279,10 @@ function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
         v = getfield(opt, i)
-        if isa(v, Ptr{UInt8})
-            v = (v != C_NULL) ? unsafe_string(v) : ""
-        elseif isa(v, Ptr{Ptr{UInt8}})
-            v = unsafe_load_commands(v)
+        v = match v
+            v::Ptr{UInt8} -> (v != C_NULL) ? unsafe_string(v) : ""
+            v::Ptr{Ptr{UInt8}} -> unsafe_load_commands(v)
+            v -> v
         end
         println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
     end
@@ -597,11 +599,10 @@ io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
-    if x isa DataType
-        push!(s, parentmodule(x))
-    elseif x isa Union
-        modulesof!(s, x.a)
-        modulesof!(s, x.b)
+    match x
+        x::DataType -> push!(s, parentmodule(x))
+        x::Union -> (modulesof!(s, x.a); modulesof!(s, x.b))
+        _ -> nothing
     end
     s
 end
@@ -982,16 +983,22 @@ function _show_type(io::IO, @nospecialize(x::Type))
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
         return
-    elseif x isa DataType
-        show_datatype(io, x)
-        return
-    elseif x isa Union
-        if get(io, :compact, true)::Bool && show_unionaliases(io, x)
+    end
+
+    match x
+        x::DataType -> begin
+            show_datatype(io, x)
             return
         end
-        print(io, "Union")
-        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
-        return
+        x::Union -> begin
+            if get(io, :compact, true)::Bool && show_unionaliases(io, x)
+                return
+            end
+            print(io, "Union")
+            show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+            return
+        end
+        x::UnionAll -> nothing
     end
 
     x = x::UnionAll
@@ -1379,38 +1386,42 @@ show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
 function show(io::IO, codeinst::Core.CodeInstance)
     print(io, "CodeInstance for ")
     def = codeinst.def
-    if isa(def, Core.ABIOverride)
-        show_mi(io, def.def)
-        print(io, " (ABI Overridden)")
-    else
-        show_mi(io, def::MethodInstance)
+    match def
+        def::Core.ABIOverride -> begin
+            show_mi(io, def.def)
+            print(io, " (ABI Overridden)")
+        end
+        def::MethodInstance -> show_mi(io, def)
     end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
     def = mi.def
-    if isa(def, Method)
-        if isdefined(def, :generator) && mi === def.generator
-            print(io, "MethodInstance generator for ")
-            show(io, def)
-        else
-            print(io, "MethodInstance for ")
-            show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
+    match def
+        def::Method -> begin
+            if isdefined(def, :generator) && mi === def.generator
+                print(io, "MethodInstance generator for ")
+                show(io, def)
+            else
+                print(io, "MethodInstance for ")
+                show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
+            end
         end
-    else
-        print(io, "Toplevel MethodInstance thunk")
-        # `thunk` is not very much information to go on. If this
-        # MethodInstance is part of a stacktrace, it gets location info
-        # added by other means.  But if it isn't, then we should try
-        # to print a little more identifying information.
-        if !from_stackframe && isdefined(mi, :cache)
-            ci = mi.cache
-            if ci.owner === :uninferred
-                di = ci.inferred.debuginfo
-                file, line = IRShow.debuginfo_firstline(di)
-                file = string(file)
-                line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-                print(io, " from ", def, " starting at ", line)
+        _ -> begin
+            print(io, "Toplevel MethodInstance thunk")
+            # `thunk` is not very much information to go on. If this
+            # MethodInstance is part of a stacktrace, it gets location info
+            # added by other means.  But if it isn't, then we should try
+            # to print a little more identifying information.
+            if !from_stackframe && isdefined(mi, :cache)
+                ci = mi.cache
+                if ci.owner === :uninferred
+                    di = ci.inferred.debuginfo
+                    file, line = IRShow.debuginfo_firstline(di)
+                    file = string(file)
+                    line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
+                    print(io, " from ", def, " starting at ", line)
+                end
             end
         end
     end
@@ -1761,44 +1772,56 @@ end
 function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
-    if isa(slotnames, Vector{String}) && slotid ≤ length(slotnames)
-        print(io, slotnames[slotid])
-    else
-        print(io, "_", slotid)
+    match slotnames
+        slotnames::Vector{String} -> begin
+            if slotid ≤ length(slotnames)
+                print(io, slotnames[slotid])
+            else
+                print(io, "_", slotid)
+            end
+        end
+        _ -> print(io, "_", slotid)
     end
 end
 
 function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
-    if isa(ex.value, Symbol)
-        show_unquoted_quote_expr(io, ex.value, indent, prec, 0)
-    else
-        print(io, "\$(QuoteNode(")
-        # QuoteNode does not allows for interpolation, so if ex.value is an
-        # Expr it should be shown with quote_level equal to zero.
-        # Calling show(io, ex.value) like this implicitly enforce that.
-        show(io, ex.value)
-        print(io, "))")
+    match ex.value
+        value::Symbol -> show_unquoted_quote_expr(io, value, indent, prec, 0)
+        _ -> begin
+            print(io, "\$(QuoteNode(")
+            # QuoteNode does not allows for interpolation, so if ex.value is an
+            # Expr it should be shown with quote_level equal to zero.
+            # Calling show(io, ex.value) like this implicitly enforce that.
+            show(io, ex.value)
+            print(io, "))")
+        end
     end
 end
 
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
-    if isa(value, Symbol)
-        sym = value::Symbol
-        if value in quoted_syms
-            print(io, ":(", sym, ")")
-        else
-            if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
-                print(io, ":", sym)
+    match value
+        sym::Symbol -> begin
+            if value in quoted_syms
+                print(io, ":(", sym, ")")
             else
-                print(io, "Symbol(", repr(String(sym)), ")")
+                if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
+                    print(io, ":", sym)
+                else
+                    print(io, "Symbol(", repr(String(sym)), ")")
+                end
             end
         end
-    else
-        if isa(value,Expr) && value.head === :block
-            value = value::Expr
-            show_block(IOContext(io, beginsym=>false), "quote", value, indent, quote_level)
-            print(io, "end")
-        else
+        value::Expr -> begin
+            if value.head === :block
+                show_block(IOContext(io, beginsym=>false), "quote", value, indent, quote_level)
+                print(io, "end")
+            else
+                print(io, ":(")
+                show_unquoted(io, value, indent+2, -1, quote_level)  # +2 for `:(`
+                print(io, ")")
+            end
+        end
+        _ -> begin
             print(io, ":(")
             show_unquoted(io, value, indent+2, -1, quote_level)  # +2 for `:(`
             print(io, ")")
@@ -2853,10 +2876,9 @@ function dump(io::IOContext, @nospecialize(x), n::Int, indent)
         return
     end
     T = typeof(x)
-    if isa(x, Function)
-        print(io, x, " (function of type ", T, ")")
-    else
-        print(io, T)
+    match x
+        x::Function -> print(io, x, " (function of type ", T, ")")
+        _ -> print(io, T)
     end
     nf = nfields(x)
     if nf > 0

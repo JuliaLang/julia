@@ -427,18 +427,18 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
-    if isa(T, UnionAll)
-        return UnionAll(T.var, tuple_type_tail(T.body))
-    elseif isa(T, Union)
-        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-    else
-        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-        if isvatuple(T) && length(T.parameters) == 1
-            va = unwrap_unionall(T.parameters[1])::Core.TypeofVararg
-            (isdefined(va, :N) && isa(va.N, Int)) || return T
-            return Tuple{Vararg{va.T, va.N-1}}
+    match T
+        T::UnionAll -> UnionAll(T.var, tuple_type_tail(T.body))
+        T::Union -> Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+        T -> begin
+            T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+            if isvatuple(T) && length(T.parameters) == 1
+                va = unwrap_unionall(T.parameters[1])::Core.TypeofVararg
+                (isdefined(va, :N) && isa(va.N, Int)) || return T
+                return Tuple{Vararg{va.T, va.N-1}}
+            end
+            return Tuple{argtail(T.parameters...)...}
         end
-        return Tuple{argtail(T.parameters...)...}
     end
 end
 

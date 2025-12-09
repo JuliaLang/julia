@@ -834,10 +834,9 @@ information. In particular, `(@VERSION).syntax` provides the syntax version used
 function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __module__::Module)
     # This macro has special handling in the parser, which puts the current syntax
     # version into __source__.
-    if isa(__source__, LineNumberNode)
-        return :((; syntax = v"1.13", runtime = VERSION))
-    else
-        return :((; syntax = $(__source__.syntax_ver), runtime = VERSION))
+    match __source__
+        ::LineNumberNode -> :((; syntax = v"1.13", runtime = VERSION))
+        src::Core.MacroSource -> :((; syntax = $(src.syntax_ver), runtime = VERSION))
     end
 end
 

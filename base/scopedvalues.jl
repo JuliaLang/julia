@@ -224,11 +224,12 @@ function Base.getindex(val::AbstractScopedValue{T})::T where T
 end
 
 function Base.show(io::IO, val::AbstractScopedValue)
-    if isa(val, ScopedValue)
-        print(io, ScopedValue)
-        print(io, '{', eltype(val), '}')
-    else
-        print(io, typeof(val))
+    match val
+        val::ScopedValue -> begin
+            print(io, ScopedValue)
+            print(io, '{', eltype(val), '}')
+        end
+        _ -> print(io, typeof(val))
     end
     print(io, '(')
     v = get(val)

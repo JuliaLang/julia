@@ -461,68 +461,62 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                             @nospecialize(type_signature), static_param_values::Vector{Any},
                             slot_offset::Int, statement_offset::Int,
                             boundscheck::Symbol)
-    if isa(x, Core.SSAValue)
-        return Core.SSAValue(x.id + statement_offset)
-    end
-    if isa(x, Core.GotoNode)
-        return Core.GotoNode(x.label + statement_offset)
-    end
-    if isa(x, Core.SlotNumber)
-        id = x.id
-        if 1 <= id <= length(slot_replacements)
-            return slot_replacements[id]
+    match x
+        x::Core.SSAValue -> Core.SSAValue(x.id + statement_offset)
+        x::Core.GotoNode -> Core.GotoNode(x.label + statement_offset)
+        x::Core.SlotNumber -> begin
+            id = x.id
+            if 1 <= id <= length(slot_replacements)
+                return slot_replacements[id]
+            end
+            Core.SlotNumber(id + slot_offset)
         end
-        return Core.SlotNumber(id + slot_offset)
-    end
-    if isa(x, Core.NewvarNode)
-        return Core.NewvarNode(_partially_inline!(x.slot, slot_replacements, type_signature,
+        x::Core.NewvarNode -> Core.NewvarNode(_partially_inline!(x.slot, slot_replacements, type_signature,
                                                   static_param_values, slot_offset,
                                                   statement_offset, boundscheck))
-    end
-    if isa(x, Core.PhiNode)
-        partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
-                          slot_offset, statement_offset, boundscheck)
-        x.edges .+= slot_offset
-        return x
-    end
-    if isa(x, Core.UpsilonNode)
-        if !isdefined(x, :val)
-            return x
+        x::Core.PhiNode -> begin
+            partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                              slot_offset, statement_offset, boundscheck)
+            x.edges .+= slot_offset
+            x
         end
-        return Core.UpsilonNode(
-            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
-                               slot_offset, statement_offset, boundscheck),
-        )
-    end
-    if isa(x, Core.PhiCNode)
-        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
-                           slot_offset, statement_offset, boundscheck)
-    end
-    if isa(x, Core.ReturnNode)
-       # Unreachable doesn't have val defined
-       if !isdefined(x, :val)
-          return x
-       else
-        return Core.ReturnNode(
-            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
-                               slot_offset, statement_offset, boundscheck),
-        )
-       end
-    end
-    if isa(x, Core.GotoIfNot)
-        return Core.GotoIfNot(
+        x::Core.UpsilonNode -> begin
+            if !isdefined(x, :val)
+                return x
+            end
+            Core.UpsilonNode(
+                _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                                   slot_offset, statement_offset, boundscheck),
+            )
+        end
+        x::Core.PhiCNode -> begin
+            _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck)
+            x
+        end
+        x::Core.ReturnNode -> begin
+            # Unreachable doesn't have val defined
+            if !isdefined(x, :val)
+                return x
+            else
+                Core.ReturnNode(
+                    _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                                       slot_offset, statement_offset, boundscheck),
+                )
+            end
+        end
+        x::Core.GotoIfNot -> Core.GotoIfNot(
             _partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
             x.dest + statement_offset,
         )
-    end
-    if isa(x, Core.EnterNode)
-        if x.catch_dest == 0
-            return x
+        x::Core.EnterNode -> begin
+            if x.catch_dest == 0
+                return x
+            end
+            Core.EnterNode(x, x.catch_dest + statement_offset)
         end
-        return Core.EnterNode(x, x.catch_dest + statement_offset)
-    end
-    if isa(x, Expr)
+        x::Expr -> begin
         head = x.head
         if head === :static_parameter
             if isassigned(static_param_values, x.args[1])
@@ -597,8 +591,10 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
+            x
+        end
+        _ -> x
     end
-    return x
 end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)

@@ -82,12 +82,10 @@ function showerror(io::IO, ex::TypeError)
     elseif ex.func === :var"dict key"
         print(io, "$(limitrepr(ex.got)) is not a valid key for type $(ex.expected)")
     else
-        if isvarargtype(ex.got)
-            targs = (ex.got,)
-        elseif isa(ex.got, Type)
-            targs = ("Type{", ex.got, "}")
-        else
-            targs = ("a value of type $(typeof(ex.got))",)
+        targs = match ex.got
+            g if isvarargtype(g) -> (g,)
+            g::Type -> ("Type{", g, "}")
+            g -> ("a value of type $(typeof(g))",)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"

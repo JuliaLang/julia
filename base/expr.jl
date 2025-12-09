@@ -67,14 +67,12 @@ end
 # copy parts of an IR that the compiler mutates
 # (this is not a general-purpose copy for an Expr AST)
 function copy_exprs(@nospecialize(x))
-    if isa(x, Expr)
-        return copy(x)
-    elseif isa(x, PhiNode)
-        return copy(x)
-    elseif isa(x, PhiCNode)
-        return copy(x)
+    match x
+        ::Expr -> copy(x)
+        ::PhiNode -> copy(x)
+        ::PhiCNode -> copy(x)
+        _ -> x
     end
-    return x
 end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in eachindex(x)]
 
