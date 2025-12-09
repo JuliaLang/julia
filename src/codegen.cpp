@@ -3342,7 +3342,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
                                 AtomicOrdering Order, AtomicOrdering FailOrder,
-                                bool issetglobal, bool isreplaceglobal, bool isswapglobal, bool ismodifyglobal, bool issetglobalonce,
+                                StoreKind op,
                                 const jl_cgval_t *modifyop, bool alloc)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
@@ -3353,9 +3353,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
             jl_value_t *ty = bpart->restriction;
             if (ty != nullptr) {
-                const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
-                if (!ismodifyglobal) {
-                    emit_typecheck(ctx, rval, ty, fname.c_str());
+                const char *fname = store_kind_name(op, "global");
+                if (op != StoreKind::Modify) {
+                    emit_typecheck(ctx, rval, ty, fname);
                     rval = update_julia_type(ctx, rval, ty);
                     if (rval.typ == jl_bottom_type)
                         return jl_cgval_t();
@@ -3376,11 +3376,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                                 FailOrder,
                                 0,
                                 nullptr,
-                                issetglobal,
-                                isreplaceglobal,
-                                isswapglobal,
-                                ismodifyglobal,
-                                issetglobalonce,
+                                op,
                                 maybe_null,
                                 modifyop,
                                 fname,
@@ -3394,30 +3390,31 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
     ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
         { bp, m, s });
-    if (issetglobal) {
+    switch (op) {
+    case StoreKind::Set:
         ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return rval;
-    }
-    else if (isreplaceglobal) {
+    case StoreKind::Replace: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
                 { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
         return mark_julia_type(ctx, r, true, jl_any_type);
     }
-    else if (isswapglobal) {
+    case StoreKind::Swap: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return mark_julia_type(ctx, r, true, jl_any_type);
     }
-    else if (ismodifyglobal) {
+    case StoreKind::Modify: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
                 { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
         return mark_julia_type(ctx, r, true, jl_any_type);
     }
-    else if (issetglobalonce) {
+    case StoreKind::SetOnce: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return mark_julia_type(ctx, r, true, jl_bool_type);
+    }
     }
     abort(); // unreachable
 }
@@ -3706,28 +3703,38 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
 static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
-    bool issetglobal = f == BUILTIN(setglobal);
-    bool isreplaceglobal = f == BUILTIN(replaceglobal);
-    bool isswapglobal = f == BUILTIN(swapglobal);
-    bool ismodifyglobal = f == BUILTIN(modifyglobal);
-    bool issetglobalonce = f == BUILTIN(setglobalonce);
+    StoreKind op;
+    if (f == BUILTIN(setglobal))
+        op = StoreKind::Set;
+    else if (f == BUILTIN(replaceglobal))
+        op = StoreKind::Replace;
+    else if (f == BUILTIN(swapglobal))
+        op = StoreKind::Swap;
+    else if (f == BUILTIN(modifyglobal))
+        op = StoreKind::Modify;
+    else {
+        assert(f == BUILTIN(setglobalonce));
+        op = StoreKind::SetOnce;
+    }
+    bool has_cmp = op == StoreKind::Replace || op == StoreKind::Modify;
     const jl_cgval_t undefval;
     const jl_cgval_t &mod = argv[1];
     const jl_cgval_t &sym = argv[2];
-    jl_cgval_t val = argv[isreplaceglobal || ismodifyglobal ? 4 : 3];
-    const jl_cgval_t &cmp = isreplaceglobal || ismodifyglobal ? argv[3] : undefval;
+    jl_cgval_t val = argv[has_cmp ? 4 : 3];
+    const jl_cgval_t &cmp = has_cmp ? argv[3] : undefval;
     enum jl_memory_order order = jl_memory_order_release;
-    const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
-    if (nargs >= (isreplaceglobal || ismodifyglobal ? 5 : 4)) {
-        const jl_cgval_t &ord = argv[isreplaceglobal || ismodifyglobal ? 5 : 4];
+    const char *fname = store_kind_name(op, "global");
+    if (nargs >= (has_cmp ? 5u : 4u)) {
+        const jl_cgval_t &ord = argv[has_cmp ? 5 : 4];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
-        order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetglobal, true);
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     }
     enum jl_memory_order fail_order = order;
-    if ((isreplaceglobal || issetglobalonce) && nargs == (isreplaceglobal ? 6 : 5)) {
-        const jl_cgval_t &ord = argv[isreplaceglobal ? 6 : 5];
+    bool has_fail_order = op == StoreKind::Replace || op == StoreKind::SetOnce;
+    if (has_fail_order && nargs == (op == StoreKind::Replace ? 6u : 5u)) {
+        const jl_cgval_t &ord = argv[op == StoreKind::Replace ? 6 : 5];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
@@ -3740,19 +3747,16 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
     if (order == jl_memory_order_notatomic) {
-        emit_atomic_error(ctx,
-                issetglobal ? "setglobal!: module binding cannot be written non-atomically" :
-                isreplaceglobal ? "replaceglobal!: module binding cannot be written non-atomically" :
-                isswapglobal ? "swapglobal!: module binding cannot be written non-atomically" :
-                ismodifyglobal ? "modifyglobal!: module binding cannot be written non-atomically" :
-                "setglobalonce!: module binding cannot be written non-atomically");
+        std::string msg(fname);
+        msg += ": module binding cannot be written non-atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t(); // unreachable
         return true;
     }
     else if (fail_order == jl_memory_order_notatomic) {
-        emit_atomic_error(ctx,
-                isreplaceglobal ? "replaceglobal!: module binding cannot be accessed non-atomically" :
-                "setglobalonce!: module binding cannot be accessed non-atomically");
+        std::string msg(fname);
+        msg += ": module binding cannot be accessed non-atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t(); // unreachable
         return true;
     }
@@ -3761,11 +3765,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (mod.constant && jl_is_module(mod.constant)) {
             *ret = emit_globalop(ctx, (jl_module_t*)mod.constant, (jl_sym_t*)sym.constant, val, cmp,
                                  get_llvm_atomic_order(order), get_llvm_atomic_order(fail_order),
-                                 issetglobal,
-                                 isreplaceglobal,
-                                 isswapglobal,
-                                 ismodifyglobal,
-                                 issetglobalonce,
+                                 op,
                                  modifyop,
                                  false);
             return true;
@@ -3779,28 +3779,38 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                            ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
     ++EmittedOpfields;
-    bool issetfield = f == BUILTIN(setfield);
-    bool isreplacefield = f == BUILTIN(replacefield);
-    bool isswapfield = f == BUILTIN(swapfield);
-    bool ismodifyfield = f == BUILTIN(modifyfield);
-    bool issetfieldonce = f == BUILTIN(setfieldonce);
+    StoreKind op;
+    if (f == BUILTIN(setfield))
+        op = StoreKind::Set;
+    else if (f == BUILTIN(replacefield))
+        op = StoreKind::Replace;
+    else if (f == BUILTIN(swapfield))
+        op = StoreKind::Swap;
+    else if (f == BUILTIN(modifyfield))
+        op = StoreKind::Modify;
+    else {
+        assert(f == BUILTIN(setfieldonce));
+        op = StoreKind::SetOnce;
+    }
+    bool has_cmp = op == StoreKind::Replace || op == StoreKind::Modify;
     const jl_cgval_t undefval;
     const jl_cgval_t &obj = argv[1];
     const jl_cgval_t &fld = argv[2];
-    jl_cgval_t val = argv[isreplacefield || ismodifyfield ? 4 : 3];
-    const jl_cgval_t &cmp = isreplacefield || ismodifyfield ? argv[3] : undefval;
+    jl_cgval_t val = argv[has_cmp ? 4 : 3];
+    const jl_cgval_t &cmp = has_cmp ? argv[3] : undefval;
     enum jl_memory_order order = jl_memory_order_notatomic;
-    const std::string fname = issetfield ? "setfield!" : isreplacefield ? "replacefield!" : isswapfield ? "swapfield!" : ismodifyfield ? "modifyfield!" : "setfieldonce!";
-    if (nargs >= (isreplacefield || ismodifyfield ? 5 : 4)) {
-        const jl_cgval_t &ord = argv[isreplacefield || ismodifyfield ? 5 : 4];
+    const char *fname = store_kind_name(op, "field");
+    if (nargs >= (has_cmp ? 5u : 4u)) {
+        const jl_cgval_t &ord = argv[has_cmp ? 5 : 4];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
-        order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     }
     enum jl_memory_order fail_order = order;
-    if ((isreplacefield || issetfieldonce) && nargs == (isreplacefield ? 6 : 5)) {
-        const jl_cgval_t &ord = argv[isreplacefield ? 6 : 5];
+    bool has_fail_order = op == StoreKind::Replace || op == StoreKind::SetOnce;
+    if (has_fail_order && nargs == (op == StoreKind::Replace ? 6u : 5u)) {
+        const jl_cgval_t &ord = argv[op == StoreKind::Replace ? 6 : 5];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
@@ -3826,7 +3836,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
             if (!jl_has_free_typevars(ft)) {
-                if (!ismodifyfield) {
+                if (op != StoreKind::Modify) {
                     emit_typecheck(ctx, val, ft, fname);
                     val = update_julia_type(ctx, val, ft);
                     if (val.typ == jl_bottom_type)
@@ -3838,42 +3848,31 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
                 *ret = jl_cgval_t();
                 if (isatomic == (order == jl_memory_order_notatomic)) {
-                    emit_atomic_error(ctx,
-                            issetfield ?
-                            (isatomic ? "setfield!: atomic field cannot be written non-atomically"
-                                      : "setfield!: non-atomic field cannot be written atomically") :
-                            isreplacefield ?
-                            (isatomic ? "replacefield!: atomic field cannot be written non-atomically"
-                                      : "replacefield!: non-atomic field cannot be written atomically") :
-                            isswapfield ?
-                            (isatomic ? "swapfield!: atomic field cannot be written non-atomically"
-                                      : "swapfield!: non-atomic field cannot be written atomically") :
-                            ismodifyfield ?
-                            (isatomic ? "modifyfield!: atomic field cannot be written non-atomically"
-                                      : "modifyfield!: non-atomic field cannot be written atomically") :
-                            (isatomic ? "setfieldonce!: atomic field cannot be written non-atomically"
-                                      : "setfieldonce!: non-atomic field cannot be written atomically"));
+                    std::string msg(fname);
+                    msg += isatomic ? ": atomic field cannot be written non-atomically"
+                                    : ": non-atomic field cannot be written atomically";
+                    emit_atomic_error(ctx, msg.c_str());
                 }
                 else if (isatomic == (fail_order == jl_memory_order_notatomic)) {
-                    emit_atomic_error(ctx,
-                            isreplacefield ?
-                            (isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
-                                      : "replacefield!: non-atomic field cannot be accessed atomically") :
-                            (isatomic ? "setfieldonce!: atomic field cannot be accessed non-atomically"
-                                      : "setfieldonce!: non-atomic field cannot be accessed atomically"));
+                    std::string msg(fname);
+                    msg += isatomic ? ": atomic field cannot be accessed non-atomically"
+                                    : ": non-atomic field cannot be accessed atomically";
+                    emit_atomic_error(ctx, msg.c_str());
                 }
                 else if (!uty->name->mutabl) {
-                    std::string msg = fname + ": immutable struct of type "
-                        + std::string(jl_symbol_name(uty->name->name))
-                        + " cannot be changed";
+                    std::string msg(fname);
+                    msg += ": immutable struct of type ";
+                    msg += jl_symbol_name(uty->name->name);
+                    msg += " cannot be changed";
                     emit_error(ctx, msg);
                 }
                 else if (jl_field_isconst(uty, idx)) {
-                    std::string msg = fname + ": const field ."
-                        + std::string(jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(uty), idx)))
-                        + " of type "
-                        + std::string(jl_symbol_name(uty->name->name))
-                        + " cannot be changed";
+                    std::string msg(fname);
+                    msg += ": const field .";
+                    msg += jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(uty), idx));
+                    msg += " of type ";
+                    msg += jl_symbol_name(uty->name->name);
+                    msg += " cannot be changed";
                     emit_error(ctx, msg);
                 }
                 else {
@@ -3886,7 +3885,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 ? AtomicOrdering::NotAtomic
                                 : get_llvm_atomic_order(fail_order),
                             needlock ? boxed(ctx, obj) : nullptr,
-                            issetfield, isreplacefield, isswapfield, ismodifyfield, issetfieldonce,
+                            op,
                             modifyop, fname);
                 }
                 return true;
@@ -3926,15 +3925,24 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
 static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
-    bool issetmemory = f == BUILTIN(memoryrefset);
-    bool isreplacememory = f == BUILTIN(memoryrefreplace);
-    bool isswapmemory = f == BUILTIN(memoryrefswap);
-    bool ismodifymemory = f == BUILTIN(memoryrefmodify);
-    bool issetmemoryonce = f == BUILTIN(memoryrefsetonce);
+    StoreKind op;
+    if (f == BUILTIN(memoryrefset))
+        op = StoreKind::Set;
+    else if (f == BUILTIN(memoryrefreplace))
+        op = StoreKind::Replace;
+    else if (f == BUILTIN(memoryrefswap))
+        op = StoreKind::Swap;
+    else if (f == BUILTIN(memoryrefmodify))
+        op = StoreKind::Modify;
+    else {
+        assert(f == BUILTIN(memoryrefsetonce));
+        op = StoreKind::SetOnce;
+    }
+    bool has_cmp = op == StoreKind::Replace || op == StoreKind::Modify;
 
     const jl_cgval_t undefval;
     const jl_cgval_t &ref = argv[1];
-    jl_cgval_t val = argv[isreplacememory || ismodifymemory ? 3 : 2];
+    jl_cgval_t val = argv[has_cmp ? 3 : 2];
     jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
     if (!jl_is_genericmemoryref_type(mty_dt) || !jl_is_concrete_type(mty_dt))
         return false;
@@ -3946,19 +3954,20 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
         return false;
 
-    const jl_cgval_t &cmp = isreplacememory || ismodifymemory ? argv[2] : undefval;
+    const jl_cgval_t &cmp = has_cmp ? argv[2] : undefval;
     enum jl_memory_order order = jl_memory_order_notatomic;
-    const std::string fname = issetmemory ? "memoryrefset!" : isreplacememory ? "memoryrefreplace!" : isswapmemory ? "memoryrefswap!" : ismodifymemory ? "memoryrefmodify!" : "memoryrefsetonce!";
+    const char *fname = store_kind_name(op, "memory");
     {
-        const jl_cgval_t &ord = argv[isreplacememory || ismodifymemory ? 4 : 3];
+        const jl_cgval_t &ord = argv[has_cmp ? 4 : 3];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
-        order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetmemory, true);
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     }
     enum jl_memory_order fail_order = order;
-    if (isreplacememory || issetmemoryonce) {
-        const jl_cgval_t &ord = argv[isreplacememory ? 5 : 4];
+    bool has_fail_order = op == StoreKind::Replace || op == StoreKind::SetOnce;
+    if (has_fail_order) {
+        const jl_cgval_t &ord = argv[op == StoreKind::Replace ? 5 : 4];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
@@ -3982,31 +3991,18 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     if (al > JL_HEAP_ALIGNMENT)
         al = JL_HEAP_ALIGNMENT;
     if (isatomic == (order == jl_memory_order_notatomic)) {
-        emit_atomic_error(ctx,
-                issetmemory ?
-                (isatomic ? "memoryrefset!: atomic memory cannot be written non-atomically"
-                          : "memoryrefset!: non-atomic memory cannot be written atomically") :
-                isreplacememory ?
-                (isatomic ? "memoryrefreplace!: atomic memory cannot be written non-atomically"
-                          : "memoryrefreplace!: non-atomic memory cannot be written atomically") :
-                isswapmemory ?
-                (isatomic ? "memoryrefswap!: atomic memory cannot be written non-atomically"
-                          : "memoryrefswap!: non-atomic memory cannot be written atomically") :
-                ismodifymemory ?
-                (isatomic ? "memoryrefmodify!: atomic memory cannot be written non-atomically"
-                          : "memoryrefmodify!: non-atomic memory cannot be written atomically") :
-                (isatomic ? "memoryrefsetonce!: atomic memory cannot be written non-atomically"
-                          : "memoryrefsetonce!: non-atomic memory cannot be written atomically"));
+        std::string msg(fname);
+        msg += isatomic ? ": atomic memory cannot be written non-atomically"
+                        : ": non-atomic memory cannot be written atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t();
         return true;
     }
     else if (isatomic == (fail_order == jl_memory_order_notatomic)) {
-        emit_atomic_error(ctx,
-                isreplacememory ?
-                (isatomic ? "memoryrefreplace!: atomic memory cannot be accessed non-atomically"
-                          : "memoryrefreplace!: non-atomic memory cannot be accessed atomically") :
-                (isatomic ? "memoryrefsetonce!: atomic memory cannot be accessed non-atomically"
-                          : "memoryrefsetonce!: non-atomic memory cannot be accessed atomically"));
+        std::string msg(fname);
+        msg += isatomic ? ": atomic memory cannot be accessed non-atomically"
+                        : ": non-atomic memory cannot be accessed atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t();
         return true;
     }
@@ -4024,7 +4020,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         endBB->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(endBB);
     }
-    if (!ismodifymemory) {
+    if (op != StoreKind::Modify) {
         emit_typecheck(ctx, val, ety, fname);
         val = update_julia_type(ctx, val, ety);
         if (val.typ == jl_bottom_type)
@@ -4057,7 +4053,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         *ret = union_store(ctx, data, ptindex, val, cmp, ety,
             ctx.tbaa().tbaa_arraybuf, ctx.tbaa().tbaa_arrayselbyte,
             Order, FailOrder,
-            nullptr, issetmemory, isreplacememory, isswapmemory, ismodifymemory, issetmemoryonce,
+            nullptr, op,
             modifyop, fname);
     }
     else {
@@ -4085,11 +4081,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     FailOrder,
                     al,
                     lock,
-                    issetmemory,
-                    isreplacememory,
-                    isswapmemory,
-                    ismodifymemory,
-                    issetmemoryonce,
+                    op,
                     maybenull,
                     modifyop,
                     fname,
@@ -6121,7 +6113,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
         sym = jl_globalref_name(l);
     }
     emit_globalop(ctx, mod, sym, rval_info, jl_cgval_t(), AtomicOrdering::Release, AtomicOrdering::NotAtomic,
-                  true, false, false, false, false, nullptr, alloc);
+                  StoreKind::Set, nullptr, alloc);
     // Global variable. Does not need debug info because the debugger knows about
     // its memory location.
 }
