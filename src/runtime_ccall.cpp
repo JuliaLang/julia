@@ -1,7 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
-#include <map>
 #include <string>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/TargetParser/Host.h>
@@ -25,7 +24,7 @@ using namespace llvm;
 jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
 // map from user-specified lib names to handles
-static std::map<std::string, void*> libMap;
+static StringMap<void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
 void *jl_get_library_(const char *f_lib, int throw_err)
