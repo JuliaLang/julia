@@ -19,6 +19,13 @@ macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourcei
     @test :handle_message in names(Logging, all=true)  # non-exported public function
 end
 
+@testset "LogLevel compatibility with integers" begin
+    @test Logging.Debug + 1000 == Logging.Info
+    @test Logging.Warn - 1000 == Logging.Info
+    @test Logging.Info < 500
+    @test 500 < Logging.Warn
+end
+
 @testset "ConsoleLogger" begin
     # First pass log limiting
     @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == Logging.Debug
