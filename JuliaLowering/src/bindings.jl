@@ -5,7 +5,7 @@ mutable struct BindingInfo
     const id::IdTag                 # Unique integer identifying this binding
     const name::String
     const kind::Symbol              # :local :global :argument :static_parameter
-    const node_id::Int              # ID of associated K"BindingId" node in the syntax graph
+    const node_id::Int              # ID of some K"BindingId" node in the syntax graph
     const mod::Union{Nothing,Module} # Set when `kind === :global`
     type::Union{Nothing,SyntaxTree} # Type, for bindings declared like x::T = 10
     is_const::Bool            # Constant, cannot be reassigned
@@ -47,23 +47,23 @@ end
 
 function Base.show(io::IO, binfo::BindingInfo)
     print(io, "BindingInfo(", binfo.id,
-          ", name=", repr(binfo.name),
+          ", ", repr(binfo.name),
           ", ", repr(binfo.kind),
-          ", node=", binfo.node_id)
+          ", ", binfo.node_id)
     !isnothing(binfo.mod)    && print(io, ", mod=", binfo.mod)
     !isnothing(binfo.type)   && print(io, ", type=", binfo.type)
-    binfo.is_const           && print(io, ", is_const")
-    binfo.is_ssa             && print(io, ", is_ssa")
-    binfo.is_internal        && print(io, ", is_internal")
-    binfo.is_ambiguous_local && print(io, ", is_ambiguous_local")
-    binfo.is_nospecialize    && print(io, ", is_nospecialize")
-    binfo.is_read            && print(io, ", is_read")
-    binfo.is_called          && print(io, ", is_called")
-    binfo.is_assigned        && print(io, ", is_assigned")
-    binfo.is_assigned_once   && print(io, ", is_assigned_once")
-    binfo.is_captured        && print(io, ", is_captured")
-    binfo.is_always_defined  && print(io, ", is_always_defined")
-    binfo.is_used_undef      && print(io, ", is_used_undef")
+    binfo.is_const           && print(io, ", is_const=true")
+    binfo.is_ssa             && print(io, ", is_ssa=true")
+    binfo.is_internal        && print(io, ", is_internal=true")
+    binfo.is_ambiguous_local && print(io, ", is_ambiguous_local=true")
+    binfo.is_nospecialize    && print(io, ", is_nospecialize=true")
+    binfo.is_read            && print(io, ", is_read=true")
+    binfo.is_called          && print(io, ", is_called=true")
+    binfo.is_assigned        && print(io, ", is_assigned=true")
+    binfo.is_assigned_once   && print(io, ", is_assigned_once=true")
+    binfo.is_captured        && print(io, ", is_captured=true")
+    binfo.is_always_defined  && print(io, ", is_always_defined=true")
+    binfo.is_used_undef      && print(io, ", is_used_undef=true")
     print(io, ")")
 end
 
@@ -158,9 +158,7 @@ function binding_ex(ctx::AbstractLoweringContext, b::BindingInfo)
 end
 binding_ex(ctx, id::IdTag) = binding_ex(ctx, get_binding(ctx, id))
 
-# One lambda's variables.  TODO: It might be easier to use scope ID as a lambda
-# ID and give BindingInfo a field noting which lambda it belongs to.  This could
-# probably just be a Set{IdTag} of captures.
+# One lambda's variables
 struct LambdaBindings
     # Binding ID of #self#
     self::IdTag
@@ -169,6 +167,10 @@ struct LambdaBindings
     # A map from every referenced local binding ID to whether the local is
     # captured (true) or native to this lambda (false).  References in inner
     # lambdas count: `inner.locals_capt[id]` implies `haskey(locals_capt, id)`
+    # TODO: If we use scope ID as a lambda ID and give BindingInfo a field
+    # noting which lambda it belongs to, we could just make this a BitSet of
+    # vars present, where we tell if a binding is captured by comparing
+    # this.scope_id with the BindingInfo's scope_id.
     locals_capt::Dict{IdTag,Bool}
 end
 

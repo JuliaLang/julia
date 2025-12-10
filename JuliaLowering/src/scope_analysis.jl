@@ -62,10 +62,10 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     scope_stack::Vector{ScopeId}
     # Macro hygienic scopes (confusing name here)
     scope_layers::Vector{ScopeLayer}
-    # Usually, globals in the top scope are ignored.  These are globals that may
+    # Usually, globals in the top scope are ignored.  This is a subset that may
     # be assigned to without the `global` keyword in soft scopes due to being
     # assigned to at top level, or passing the defined-and-owned-global check.
-    defined_toplevel_globals::Set{NameKey}
+    soft_assignable_globals::Set{NameKey}
     enable_soft_scopes::Bool
     expr_compat_mode::Bool
 end
@@ -95,8 +95,6 @@ enclosing_lambda(ctx, scope::ScopeInfo) = ctx.scopes[scope.lambda_id]
 parent(ctx, scope::ScopeInfo) = is_top_scope(scope) ? nothing :
     ctx.scopes[scope.parent_id]
 
-enclosing_lambda(ctx, lb::LambdaBindings) = ctx.scopes[lb.scope_id]
-
 _var_str(v) = v === :local ? "local variable" :
     v === :global ? "global variable" :
     v === :argument ? "argument" :
@@ -112,7 +110,7 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if kind(ex) === K"BindingId"
         bid = ex.var_id
         @assert get_binding(ctx, bid).kind === new_k
-        record_lambda_var!(ctx, scope, get_binding(ctx, bid), false)
+        record_lambda_var!(ctx, scope, get_binding(ctx, bid), capt=false)
         return bid
     elseif kind(ex) === K"Placeholder"
         return nothing
@@ -130,7 +128,7 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     elseif old_k === new_k
         (new_k === :global || new_k === :local) && return bid
         throw(LoweringError(ex, "function $(_var_str(new_k)) name not unique"))
-    # See note in test/scopes.jl
+    # See note in test/scopes.jl: "globals may overlap args or sparams"
     # elseif new_k === :global && old_k in (:argument, :static_parameter)
     #     declare_in_scope!(ctx, scope, ex, :global)
     else
@@ -140,26 +138,27 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     end
 end
 
+# globals are added to both `scope` and the top scope
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     nk = NameKey(ex)
     if bk === :global
-        home_scope = top_scope(ctx)
+        declaration_scope = top_scope(ctx)
         mod = ctx.scope_layers[ex.scope_layer].mod
     else
-        home_scope = scope
+        declaration_scope = scope
         mod = nothing
     end
     b = _new_binding(ctx, ex, nk.name, bk; mod, kws...)
-    home_scope.vars[nk] = b.id
+    declaration_scope.vars[nk] = b.id
     scope.vars[nk] = b.id
     @assert !haskey(enclosing_lambda(ctx, scope).locals_capt, b.id)
-    record_lambda_var!(ctx, scope, b, false)
+    record_lambda_var!(ctx, scope, b, capt=false)
     return b.id
 end
 
 # If `b` is local and not yet recorded in the lambda bindings, mark it as
 # `capt`.  Also, (if `capt==true`), add it to any parent lambdas.
-function record_lambda_var!(ctx, scope::Union{ScopeInfo, LambdaBindings}, b, capt)
+function record_lambda_var!(ctx, scope::ScopeInfo, b; capt)
     if b.kind === :global || b.is_ssa
         return
     end
@@ -169,7 +168,7 @@ function record_lambda_var!(ctx, scope::Union{ScopeInfo, LambdaBindings}, b, cap
         b.is_captured = capt
         s2 = parent(ctx, lam)
         if capt && !isnothing(s2)
-            record_lambda_var!(ctx, s2, b, true)
+            record_lambda_var!(ctx, s2, b, capt=true)
         end
     end
 end
@@ -262,7 +261,9 @@ function enter_scope!(ctx, ex)
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
     for (bid, node_id) in sort!(collect(scope.binding_assignments))
-        # mutable nameless bindings may be introduced in desugaring
+        # Mutable nameless bindings may be introduced in desugaring.  These
+        # should be capturable, and may be local to the nearest lambda or
+        # global.  Desugaring should ensure these are never used undef.
         maybe_declare_in_scope!(ctx, scope, SyntaxTree(ctx.graph, node_id),
                                 get_binding(ctx, bid).kind)
     end
@@ -271,13 +272,13 @@ function enter_scope!(ctx, ex)
         b = resolve_name(ctx, ex)
         if b === nothing
             if is_toplevel_thunk && !ctx.scope_layers[vk.layer].is_macro_expansion
-                push!(ctx.defined_toplevel_globals, vk)
+                push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             elseif scope.is_permeable && is_defined_and_owned_global(
                 ctx.scope_layers[vk.layer].mod, Symbol(vk.name))
                 # special soft scope rules: existing global variables are assigned to
                 if ctx.enable_soft_scopes
-                    push!(ctx.defined_toplevel_globals, vk)
+                    push!(ctx.soft_assignable_globals, vk)
                     declare_in_scope!(ctx, top_scope(ctx), ex, :global)
                 else
                     declare_in_scope!(ctx, scope, ex, :local; is_ambiguous_local=true)
@@ -286,15 +287,14 @@ function enter_scope!(ctx, ex)
                 declare_in_scope!(ctx, scope, ex, :local)
             end
         elseif b.kind === :global
-            # This corner case ignores global decls in the top-level scope
-            if is_toplevel_thunk ||
-                !isnothing(resolve_name(ctx, ex; exclude_toplevel_globals=true)) ||
+            if is_toplevel_thunk
+                # assign-existing and make visible to soft scope
+                push!(ctx.soft_assignable_globals, vk)
+            elseif !isnothing(resolve_name(ctx, ex; exclude_toplevel_globals=true)) ||
                 (ctx.enable_soft_scopes && scope.is_permeable &&
-                vk in ctx.defined_toplevel_globals)
-                # assign-existing-global in all other scenarios: (1) at top
-                # level, (2) if this is an explicit global that isn't at top
-                # level, or (3) if the soft scope exception applies
-                push!(ctx.defined_toplevel_globals, vk)
+                vk in ctx.soft_assignable_globals)
+                # assign-existing-global if this is an explicit global that
+                # isn't at top level, or if the soft scope exception applies
             else
                 declare_in_scope!(ctx, scope, ex, :local)
             end
@@ -302,7 +302,7 @@ function enter_scope!(ctx, ex)
             throw(LoweringError(ex, "cannot overwrite a static parameter"))
         elseif b.kind === :local || b.kind === :argument
             # unambiguous assignment to existing variable
-            record_lambda_var!(ctx, scope, b, true)
+            record_lambda_var!(ctx, scope, b, capt=true)
         end
     end
 
@@ -320,8 +320,10 @@ function add_local_decls!(ctx, stmts, srcref, scope)
     end
 end
 
-function _resolve_scopes(ctx, ex::SyntaxTree, @nospecialize(scope))
+function _resolve_scopes(ctx, ex::SyntaxTree,
+                         @nospecialize(scope::Union{Nothing, ScopeInfo}))
     k = kind(ex)
+    @assert scope isa ScopeInfo || k === K"lambda"
     if k == K"Identifier"
         b = resolve_name(ctx, ex)
         # Unresolved names are assumed global
@@ -330,10 +332,10 @@ function _resolve_scopes(ctx, ex::SyntaxTree, @nospecialize(scope))
             b = get_binding(ctx, gid)
         end
         # Locals not present in the current lambda need capturing
-        record_lambda_var!(ctx, scope, b, true)
+        record_lambda_var!(ctx, scope, b, capt=true)
         newleaf(ctx, ex, K"BindingId", b.id)
     elseif k === K"BindingId"
-        record_lambda_var!(ctx, scope, get_binding(ctx, ex), true)
+        record_lambda_var!(ctx, scope, get_binding(ctx, ex), capt=true)
         ex
     elseif k == K"softscope"
         makeleaf(ctx, ex, K"TOMBSTONE")
@@ -494,6 +496,8 @@ function _resolve_scopes(ctx, ex::SyntaxTree, @nospecialize(scope))
         @assert kind(resolved[1]) === K"BindingId"
         if get_binding(ctx, resolved[1].var_id).kind === :local
             throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
+        elseif !is_top_scope(enclosing_lambda(ctx, scope))
+            throw(LoweringError(ex, "unsupported `const` inside function"))
         end
         resolved
     elseif k == K"assign_or_constdecl_if_global"
@@ -590,7 +594,8 @@ function analyze_variables!(ctx, ex)
         b.is_read = true
         # The type of typed locals is invisible in the previous pass,
         # but is filled in here.
-        record_lambda_var!(ctx, ctx.lambda_bindings, b, true)
+        scope = ctx.scopes[ctx.lambda_bindings.scope_id]
+        record_lambda_var!(ctx, scope, b, capt=true)
         @assert b.kind === :global || b.is_ssa || haskey(ctx.lambda_bindings.locals_capt, b.id)
     elseif k == K"Identifier"
         @assert false
@@ -611,7 +616,8 @@ function analyze_variables!(ctx, ex)
         if kind(lhs) != K"Placeholder"
             b = get_binding(ctx, lhs)
             add_assign!(b)
-            record_lambda_var!(ctx, ctx.lambda_bindings, b, true)
+            scope = ctx.scopes[ctx.lambda_bindings.scope_id]
+            record_lambda_var!(ctx, scope, b, capt=true)
             if !isnothing(b.type)
                 # Assignments introduce a variable's type later during closure
                 # conversion, but we must model that explicitly here.

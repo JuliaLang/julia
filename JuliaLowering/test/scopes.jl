@@ -273,6 +273,17 @@ end
         global_assigned && error("global should not be assigned. settings: $soft_mode $scope\n")
         @test !global_assigned
     end
+
+    @testset "soft scope isn't top level" begin
+        ex = quote
+            begin
+                for i in 1:1; global soft_assigned_explicit_global = 1; end
+                for i in 1:1; soft_assigned_explicit_global = 2; end
+            end
+        end
+        expr_eval(test_mod, enable_softscope(ex))
+        @test test_mod.soft_assigned_explicit_global === 1
+    end
 end
 
 # Distinct from the stateful "existing global" check (probably to get around the
