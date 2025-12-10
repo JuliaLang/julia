@@ -308,7 +308,7 @@ void jl_debugcache_t::initialize(Module *m) {
     jl_di_func_sig = dbuilder.createSubroutineType(
         dbuilder.getOrCreateTypeArray(diargs));
     jl_di_func_null_sig = dbuilder.createSubroutineType(
-        dbuilder.getOrCreateTypeArray(None));
+        dbuilder.getOrCreateTypeArray({}));
 }
 
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
@@ -580,7 +580,7 @@ static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *c
     // since the load at the new location satisfy the same condition as the original one.
     // Mark the global as constant to LLVM code using our own metadata
     // which is much less likely to be striped.
-    gv->setMetadata("julia.constgv", MDNode::get(gv->getContext(), None));
+    gv->setMetadata("julia.constgv", MDNode::get(gv->getContext(), {}));
     assert(localname == gv->getName());
     assert(!gv->hasInitializer());
     return gv;
@@ -698,7 +698,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
     if (isa<PointerType>(LI->getType())) {
         if (!can_be_null)
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
-            LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(LI->getContext(), None));
+            LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(LI->getContext(), {}));
         if (size) {
             Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), size));
             LI->setMetadata(can_be_null ? LLVMContext::MD_dereferenceable_or_null : LLVMContext::MD_dereferenceable,
@@ -1907,7 +1907,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
             Value *smallp = emit_ptrgep(ctx, prepare_global_in(M, jl_small_typeof_var), tag);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             auto small = ctx.builder.CreateAlignedLoad(typetag->getType(), smallp, M->getDataLayout().getPointerABIAlignment(0));
-            small->setMetadata(LLVMContext::MD_nonnull, MDNode::get(M->getContext(), None));
+            small->setMetadata(LLVMContext::MD_nonnull, MDNode::get(M->getContext(), {}));
             return ai.decorateInst(small);
         });
     });
@@ -2605,8 +2605,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 FunctionType::get(StructType::get(elty, elty), {ptr->getType(), ctx.builder.getPtrTy(), ctx.builder.getInt8Ty(), ctx.builder.getInt8Ty()}, true),
                 AttributeList::get(elty->getContext(),
                   Attributes(elty->getContext(), {Attribute::NoMerge}), // prevent llvm from merging calls to different functions
-                  AttributeSet(),
-                  None));
+                  AttributeSet(), {}));
         SmallVector<Value*,0> Args = {ptr, op, ctx.builder.getInt8((unsigned)Order), ctx.builder.getInt8(SyncScope::System)};
         if (rhs.V)
             Args.push_back(rhs.V);
@@ -3533,7 +3532,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     PointerType *PPT = cast<PointerType>(ctx.types().T_jlgenericmemory->getElementType(1));
     LoadInst *LI = ctx.builder.CreateAlignedLoad(PPT, addr, Align(sizeof(char*)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
-    LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
+    LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), {}));
     jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
     aliasinfo.decorateInst(LI);
     Value *ptr = LI;
@@ -3552,7 +3551,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
     Type *T_data = ctx.types().T_jlgenericmemory->getElementType(1);
     LoadInst *LI = ctx.builder.CreateAlignedLoad(T_data, addr, Align(sizeof(char*)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
-    LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
+    LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), {}));
     jl_aliasinfo_t aliasinfo_mem = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryown);
     aliasinfo_mem.decorateInst(LI);
     addr = emit_ptrgep(ctx, m, JL_SMALL_BYTE_ALIGNMENT);

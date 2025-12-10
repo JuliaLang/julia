@@ -2198,7 +2198,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 } else {
                     // remove all operand bundles
 #if JL_LLVM_VERSION >= 200000
-                    CallInst *NewCall = CallInst::Create(CI, None, CI->getIterator());
+                    CallInst *NewCall = CallInst::Create(CI, {}, CI->getIterator());
 #else
                     CallInst *NewCall = CallInst::Create(CI, None, CI);
 #endif
