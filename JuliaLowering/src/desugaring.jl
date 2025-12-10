@@ -611,10 +611,11 @@ function replace_beginend(ctx, ex, arr, n, splats, is_last)
             replace_beginend(ctx, ex[1], arr, n, splats, is_last)
             ex[2:end]...
         ]
-    # elseif k == K"kw" - keyword args - what does this mean here?
-    #   # note from flisp
-    #   # TODO: this probably should not be allowed since keyword args aren't
-    #   # positional, but in this context we have just used their positions anyway
+    elseif k == K"kw"
+        # note from flisp
+        # TODO: this probably should not be allowed since keyword args aren't
+        # positional, but in this context we have just used their positions anyway
+        @ast ctx ex [K"kw" ex[1] replace_beginend(ctx, ex[2], arr, n, splats, is_last)]
     else
         mapchildren(e->replace_beginend(ctx, e, arr, n, splats, is_last), ctx, ex)
     end
