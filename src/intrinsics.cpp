@@ -1234,15 +1234,17 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             } else if (!y.isghost && y.V != NULL) {
                 y_ptr = maybe_decay_tracked(ctx, y.V);
             }
-            auto nroots = std::max(x.inline_roots.size(), y.inline_roots.size());
+            jl_gc_roots_t x_roots = x.inline_roots;
+            jl_gc_roots_t y_roots = y.inline_roots;
+            auto nroots = std::max(x_roots.size(), y_roots.size());
             Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
             SmallVector<Value *, 0> ifelse_roots(nroots, Vnull);
             for (size_t i = 0; i < nroots; i++) {
                 Value *x_root = Vnull, *y_root = Vnull;
-                if (i < x.inline_roots.size())
-                    x_root = x.inline_roots[i];
-                if (i < y.inline_roots.size())
-                    y_root = y.inline_roots[i];
+                if (i < x_roots.size())
+                    x_root = x_roots.get(ctx, i);
+                if (i < y_roots.size())
+                    y_root = y_roots.get(ctx, i);
                 ifelse_roots[i] = ctx.builder.CreateSelect(isfalse, y_root, x_root);
             }
             MDNode *ifelse_tbaa;
@@ -1309,7 +1311,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 tindex = ret;
                 setName(ctx.emission_context, tindex, "ifelse_tindex");
             }
-            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa, ifelse_roots);
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa, jl_gc_roots_t(std::move(ifelse_roots)));
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));
