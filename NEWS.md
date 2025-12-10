@@ -8,6 +8,9 @@ New language features
     `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
     in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
     See the "Syntax Versioning" section in the code loading documentation ([#60018]).
+  - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
+    operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
+    ([#60285]).
 
 Language changes
 ----------------
