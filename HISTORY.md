@@ -1,51 +1,44 @@
 Julia v1.13 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
 
-  - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
-  - New `nth` function to access the `n`-th element of a generic iterable. ([#56580])
-  - New `@__FUNCTION__` macro to refer to the innermost enclosing function. ([#58940])
-  - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
-    is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
-    ([JuliaLang/JuliaSyntax.jl#525], [#57143])
-  - Support for Unicode 17 ([#59534]).
+* New `@__FUNCTION__` macro to refer to the innermost enclosing function ([#58940]).
+* The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
+  is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL
+  ([JuliaLang/JuliaSyntax.jl#525], [#57143]).
+* Support for Unicode 17 ([#59534]).
 
 Language changes
 ----------------
-* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and is considered a bug fix ([#47102])
 
-* The `hash` algorithm and its values have changed for certain types, most notably AbstractString. Any `hash` specializations for equal types to those that changed, such as some third-party string packages, may need to be deleted. ([#57509], [#59691])
-
-* The `hash(::AbstractString)` function is now a zero-copy / zero-cost function, based upon providing a correct implementation of the `codeunit` and `iterate` functions. Third-party string packages should migrate to the new algorithm by deleting their existing overrides of the `hash` function. ([#59691])
-
-* Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
+* The `hash` algorithm and its values have changed for certain types, most notably `AbstractString`. Any `hash` specializations for equal types to those that changed, such as some third-party string packages, may need to be deleted ([#57509], [#59691]).
+* The `hash(::AbstractString)` function is now a zero-copy / zero-cost function, based upon providing a correct implementation of the `codeunit` and `iterate` functions. Third-party string packages should migrate to the new algorithm by deleting their existing overrides of the `hash` function ([#59691]).
 
 Command-line option changes
 ---------------------------
 
 * The option `--sysimage-native-code=no` has been deprecated.
 * The `JULIA_CPU_TARGET` environment variable now supports a `sysimage` keyword to match (or extend) the CPU target used to build the current system image ([#58970]).
-* The `--code-coverage=all` option now automatically throws away sysimage caches so that code coverage can be accurately measured on methods within the sysimage. It is thrown away after startup (and after startup.jl), before any user code is executed ([#59234])
-* New `--trace-eval` command-line option to show expressions being evaluated during top-level evaluation. Supports `--trace-eval=loc` or just `--trace-eval` (show location only), `--trace-eval=full` (show full expressions), and `--trace-eval=no` (disable tracing). Also adds `Base.TRACE_EVAL` global control that takes priority over the command-line option and can be set to `:no`, `:loc`, `:full`, or `nothing` (to use command-line setting). ([#57137])
-* Julia now automatically enables verbose debugging options (`--trace-eval` and `JULIA_TEST_VERBOSE`) when CI debugging has been triggered. i.e. via the "debug logging" UI toggle is enabled on github actions re-runs. Other platforms are supported too ([#59551])
+* The `--code-coverage=all` option now automatically throws away sysimage caches so that code coverage can be accurately measured on methods within the sysimage. It is thrown away after startup (and after startup.jl), before any user code is executed ([#59234]).
+* New `--trace-eval` command-line option to show expressions being evaluated during top-level evaluation. Supports `--trace-eval=loc` or just `--trace-eval` (show location only), `--trace-eval=full` (show full expressions), and `--trace-eval=no` (disable tracing). Also adds `Base.TRACE_EVAL` global control that takes priority over the command-line option and can be set to `:no`, `:loc`, `:full`, or `nothing` (to use command-line setting) ([#57137]).
+* Julia now automatically enables verbose debugging options (`--trace-eval` and `JULIA_TEST_VERBOSE`) when CI debugging has been triggered. i.e. via the "debug logging" UI toggle is enabled on github actions re-runs. Other platforms are supported too ([#59551]).
 
 Multi-threading changes
 -----------------------
 
 * A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock` ([#55944]).
-* A new `PaddedSpinLock <: AbstractSpinLock` is defined.  It has extra padding to avoid false sharing ([#55944]).
+* A new `PaddedSpinLock <: AbstractSpinLock` is defined. It has extra padding to avoid false sharing ([#55944]).
 
 New library functions
 ---------------------
 
+* `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock` ([#56845]).
+* `nth` function to access the `n`-th element of a generic iterable ([#56580]).
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
-* The `Test` module now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
-  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
-  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
-* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
-* `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
+* The `fieldindex` function (to get the index of a struct's field) is now exported ([#58119]).
+* `Base.donotdelete` is now public. It prevents dead code elimination of its arguments ([#55774]).
 * `Sys.sysimage_target()` returns the CPU target string used to build the current system image ([#58970]).
 * `Iterators.findeach` is a lazy version of `findall` ([#54124]).
 
@@ -53,7 +46,7 @@ New library features
 --------------------
 
 * `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
-* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect; they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 * `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
 * `chopprefix` and `chopsuffix` can now also accept an `AbstractChar` as the prefix/suffix to remove.
@@ -66,22 +59,21 @@ New library features
   updating tests to expect `hygienic-scope` or `escape` markers might appear in the result.
 * `Base.ScopedValues.LazyScopedValue{T}` is introduced for scoped values that compute their default using a
   `OncePerProcess{T}` callback, allowing for lazy initialization of the default value. `AbstractScopedValue` is
-  now the abstract base type for both `ScopedValue` and `LazyScopedValue`. ([#59372])
+  now the abstract base type for both `ScopedValue` and `LazyScopedValue` ([#59372]).
 * New `Base.active_manifest()` function to return the path of the active manifest, like `Base.active_project()`.
-  Also can return the manifest that would be used for a given project file ([#57937])
+  Also can return the manifest that would be used for a given project file ([#57937]).
 
 Standard library changes
 ------------------------
 
-#### Random
-
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite). This aligns with the C standard and is considered a bug fix ([#47102]).
+* Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element ([#58814]).
 * `randperm!` and `randcycle!` now support non-`Array` `AbstractArray` inputs, assuming they are mutable and their indices are one-based ([#58596]).
-
-* `shuffle` now may take an argument of `NTuple` value ([#56906]).
+* `shuffle` now accepts `NTuple` arguments ([#56906]).
 
 #### REPL
 
-* The Julia REPL now support bracketed paste on Windows which should significantly speed up pasting large code blocks into the REPL ([#59825])
+* The Julia REPL now supports bracketed paste on Windows, which should significantly speed up pasting large code blocks into the REPL ([#59825]).
 * The REPL now provides syntax highlighting for input as you type. See the REPL docs for more info about customization.
 * The REPL now supports automatic insertion of closing brackets, parentheses, and quotes. See the REPL docs for more info about customization.
 * History searching has been rewritten to use a new interactive modal dialogue, using a fzf-like style.
@@ -91,6 +83,9 @@ Standard library changes
 
 #### Test
 
+* `Test` now supports the `JULIA_TEST_VERBOSE` environment variable. When set to `true`,
+  it enables verbose testset entry/exit messages with timing information and sets the default `verbose=true`
+  for `DefaultTestSet` to show detailed hierarchical test summaries ([#59295]).
 * Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
 * Transparent test sets (`@testset let`) now show context when tests error ([#58727]).
 * `@test_throws` now supports a three-argument form `@test_throws ExceptionType pattern expr` to test both exception type and message pattern in one call ([#59117]).
@@ -108,7 +103,7 @@ Standard library changes
 External dependencies
 ---------------------
 
-  * 7-Zip updated from p7zip v17.06 to upstream 7-Zip v25.01. On Windows, the full 7z.exe/7z.dll bundle is replaced with standalone 7za.exe, which supports fewer formats but unifies cross-platform behavior. ([#60025]).
+* 7-Zip updated from p7zip v17.06 to upstream 7-Zip v25.01. On Windows, the full 7z.exe/7z.dll bundle is replaced with standalone 7za.exe, which supports fewer formats but unifies cross-platform behavior ([#60025]).
 
 Deprecated or removed
 ---------------------
