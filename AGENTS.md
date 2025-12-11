@@ -33,6 +33,20 @@ After making changes, run static analysis checks:
   - Tests can also be rerun individually with `clang-sa-<filename>`, `clang-sagc-<filename>` or `clang-tidy-<filename>`.
   - If `clang-sagc-<filename>` fails, it may require adding `JL_GC_PUSH` statements, or `JL_GC_PROMISE_ROOTED` statements., or require fixing locks. Remember arguments are assumed rooted, so check the callers to make sure that is handled. If the value is being temporarily moved around in a struct or arraylist, `JL_GC_PROMISE_ROOTED(struct->field)` may be needed as a statement (it return void) immediately after reloading the struct before any use of struct. Put that promise as early in the code as is legal, near the definition not the use.
 
+### Lowering (Scheme) changes
+
+If you made changes to `src/julia-syntax.scm` (the lowering code), you need to rebuild
+with `make -C src`. This is faster than a full rebuild but you must ensure the flisp
+boot files are regenerated:
+- If `make -C src` doesn't recompile flisp, remove `src/julia_flisp.boot` and `src/julia_flisp.boot.inc` then run `make -C src` again.
+- Alternatively, touch the source file before running make: `touch src/julia-syntax.scm && make -C src`
+
+For debugging flisp/Scheme code:
+- Use `prn` to print debug output (not `io.princ` or `write`)
+- Look for commented debug printing near "malformed expression" errors to get flisp stack traces
+
+Note: Revise does NOT reload lowering changes - you must rebuild.
+
 ## Using Revise
 
 If you have made changes to files included in the system image (base/ or stdlib/),

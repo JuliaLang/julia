@@ -531,6 +531,124 @@ negating the condition and placing the `println` call inside the `if` block. In 
 there is more code to be evaluated after the `continue`, and often there are multiple points from
 which one calls `continue`.
 
+### [Extended Loop Control](@id man-extended-loop-control)
+
+!!! compat "Julia 1.14"
+    Extended loop control syntax requires Julia 1.14 or later.
+
+Julia 1.14 introduces extended syntax for `break` and `continue` that provides more control
+over nested loops.
+
+#### Valued `break`
+
+A `break` statement can return a value from a loop. When the loop exits via `break value`,
+that value becomes the result of the loop expression:
+
+```julia
+result = for i in 1:100
+    if is_target(i)
+        break i  # loop evaluates to i
+    end
+end
+# result is the found value, or nothing if loop completed normally
+```
+
+Without a valued `break`, loops return `nothing` when they complete. With valued `break`,
+loops can return meaningful results, similar to how `findfirst` returns both the found
+element and an indication of whether the search succeeded.
+
+#### Multi-level `break`
+
+When working with nested loops, `break` can be repeated to exit multiple levels:
+
+```julia
+for i in 1:10
+    for j in 1:10
+        if condition(i, j)
+            break break  # exits both loops
+        end
+    end
+end
+```
+
+The number of `break` keywords determines how many loop levels to exit. This can be
+combined with valued break: `break break (i, j)` exits two levels and returns the tuple.
+
+#### `break continue`
+
+The `break continue` form exits the current loop and continues the next iteration of the
+enclosing loop:
+
+```julia
+for i in 1:3
+    for j in 1:10
+        if should_skip_rest(j)
+            break continue  # skip remaining j values, go to next i
+        end
+        process(i, j)
+    end
+end
+```
+
+This can also be extended: `break break continue` exits two loops and continues the third.
+
+### [Loop `then` Clause](@id man-loop-then)
+
+!!! compat "Julia 1.14"
+    Loop `then` clauses require Julia 1.14 or later.
+
+Loops can include a `then` clause that executes only when the loop completes normally
+(i.e., without `break`):
+
+```julia
+for i in haystack
+    if i == needle
+        println("found!")
+        break
+    end
+then
+    # only runs if no break was executed
+    println("not found")
+end
+```
+
+This is similar to Python's `for`-`else` construct (though using the keyword `then` rather
+than `else` to avoid confusion with conditional `else`). The `then` clause is useful for
+search patterns where you need to handle both the "found" and "not found" cases.
+
+The `then` clause determines the loop's return value when the loop completes normally:
+- If `break` is executed, the loop returns the break value (or `nothing` for simple `break`)
+- If no `break` occurs, the loop returns the value of the `then` clause
+
+This makes it easy to write search patterns that return a found value or a default:
+
+```julia
+result = for line in file
+    if contains(line, pattern)
+        break line  # returns line
+    end
+then
+    :not_found  # returned if no break
+end
+```
+
+The `then` clause also runs when a loop body never executes (e.g., iterating over an
+empty collection), since no `break` was encountered.
+
+Both `for` and `while` loops support the `then` clause:
+
+```julia
+while has_more_data()
+    data = read_next()
+    if is_target(data)
+        process(data)
+        break
+    end
+then
+    println("target not found in data stream")
+end
+```
+
 Multiple nested `for` loops can be combined into a single outer loop, forming the cartesian product
 of its iterables:
 

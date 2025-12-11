@@ -958,6 +958,83 @@ macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 
+# Extended break syntax: labeled loops (Julia 1.14+)
+
+"""
+    @label name loop
+
+Labels a `for` or `while` loop with the symbolic name `name`, allowing targeted
+break/continue via `@goto name break` or `@goto name continue`.
+
+!!! compat "Julia 1.14"
+    Labeled loops require Julia 1.14 or later.
+
+# Example
+```julia
+@label outer for i in 1:10
+    for j in 1:10
+        if i * j > 50
+            @goto outer break (i, j)  # break outer loop with value
+        end
+    end
+end
+```
+"""
+macro label(name::Symbol, loop)
+    if !(loop isa Expr && loop.head in (:for, :while))
+        throw(ArgumentError("@label must be followed by a for or while loop"))
+    end
+    return esc(Expr(:labeled_loop, name, loop))
+end
+
+"""
+    @goto name break [value]
+    @goto name continue
+
+Break from or continue a labeled loop.
+
+!!! compat "Julia 1.14"
+    Labeled loop break/continue requires Julia 1.14 or later.
+
+# Examples
+```julia
+@goto outer break      # break from @label outer loop
+@goto outer break x    # break with value x
+@goto outer continue   # continue the @label outer loop
+```
+"""
+macro goto(name::Symbol, action::Symbol)
+    if action === :break
+        return esc(Expr(:labeled_break, name, nothing))
+    elseif action === :continue
+        return esc(Expr(:labeled_continue, name))
+    else
+        throw(ArgumentError("@goto label must be followed by break or continue"))
+    end
+end
+
+macro goto(name::Symbol, action::Symbol, value)
+    if action !== :break
+        throw(ArgumentError("@goto label continue does not accept a value"))
+    end
+    return esc(Expr(:labeled_break, name, value))
+end
+
+# Handle @goto label break value when parsed as @goto label (break value)
+macro goto(name::Symbol, break_expr::Expr)
+    if break_expr.head === :break
+        if isempty(break_expr.args)
+            return esc(Expr(:labeled_break, name, nothing))
+        else
+            return esc(Expr(:labeled_break, name, break_expr.args[1]))
+        end
+    elseif break_expr.head === :continue
+        return esc(Expr(:labeled_continue, name))
+    else
+        throw(ArgumentError("@goto label must be followed by break or continue"))
+    end
+end
+
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta

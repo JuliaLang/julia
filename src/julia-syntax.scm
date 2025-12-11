@@ -1955,7 +1955,7 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
-(define (expand-for lhss itrs body)
+(define (expand-for lhss itrs body (then-body #f))
   (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
   (let ((copied-vars  ;; variables not declared `outer` are copied in the innermost loop
          ;; TODO: maybe filter these to remove vars not assigned in the loop
@@ -1964,42 +1964,61 @@
                   (apply append
                          (map lhs-vars
                               (filter (lambda (x) (not (outer? x))) (butlast lhss))))))))
-    `(break-block
-      loop-exit
-      ,(let nest ((lhss lhss)
-                  (itrs itrs))
-         (if (null? lhss)
-             body
-             (let* ((coll  (make-ssavalue))
-                    (next  (gensy))
-                    (state (make-ssavalue))
-                    (outer (outer? (car lhss)))
-                    (lhs   (if outer (cadar lhss) (car lhss)))
-                    (body
-                     `(block
-                       ,@(if (not outer)
-                             (map (lambda (v) `(local ,v)) (lhs-vars lhs))
-                             '())
-                       ,(lower-tuple-assignment (list lhs state) next)
-                       ,(nest (cdr lhss) (cdr itrs))))
-                    (body
-                     (if (null? (cdr lhss))
-                         `(break-block
-                           loop-cont
-                           (soft-let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
-                             ,body))
-                         `(scope-block ,body))))
-               `(block (= ,coll ,(car itrs))
-                       (local ,next)
-                       (= ,next (call (top iterate) ,coll))
-                       ;; TODO avoid `local declared twice` error from this
-                       ;;,@(if outer `((local ,lhs)) '())
-                       ,@(if outer `((require-existing-local ,lhs)) '())
-                       (if (call (top not_int) (call (core ===) ,next (null)))
-                           (_do_while
-                            (block ,body
-                                   (= ,next (call (top iterate) ,coll ,state)))
-                            (call (top not_int) (call (core ===) ,next (null))))))))))))
+    (let ((loop-code
+           (let nest ((lhss lhss)
+                      (itrs itrs))
+             (if (null? lhss)
+                 body
+                 (let* ((coll  (make-ssavalue))
+                        (next  (gensy))
+                        (state (make-ssavalue))
+                        (outer (outer? (car lhss)))
+                        (lhs   (if outer (cadar lhss) (car lhss)))
+                        (body
+                         `(block
+                           ,@(if (not outer)
+                                 (map (lambda (v) `(local ,v)) (lhs-vars lhs))
+                                 '())
+                           ,(lower-tuple-assignment (list lhs state) next)
+                           ,(nest (cdr lhss) (cdr itrs))))
+                        (body
+                         (if (null? (cdr lhss))
+                             `(break-block
+                               loop-cont
+                               (soft-let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
+                                 ,body))
+                             `(scope-block ,body))))
+                   `(block (= ,coll ,(car itrs))
+                           (local ,next)
+                           (= ,next (call (top iterate) ,coll))
+                           ;; TODO avoid `local declared twice` error from this
+                           ;;,@(if outer `((local ,lhs)) '())
+                           ,@(if outer `((require-existing-local ,lhs)) '())
+                           (if (call (top not_int) (call (core ===) ,next (null)))
+                               (_do_while
+                                (block ,body
+                                       (= ,next (call (top iterate) ,coll ,state)))
+                                (call (top not_int) (call (core ===) ,next (null)))))))))))
+      (if then-body
+          ;; With then-body: use a flag to track if break was executed
+          ;; If no break, evaluate then-body for the return value
+          (let* ((then-ran (gensy))
+                 (break-result (gensy)))
+            `(scope-block
+              (block
+               (local ,then-ran)
+               (= ,then-ran (false))
+               (local ,break-result)
+               (= ,break-result
+                  (break-block
+                   loop-exit
+                   (block ,loop-code
+                          (= ,then-ran (true)))))
+               (if ,then-ran
+                   (scope-block ,then-body)
+                   ,break-result))))
+          ;; Without then-body: simple break-block
+          `(break-block loop-exit ,loop-code)))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
@@ -2266,10 +2285,164 @@
   (list* (car e) (expand-condition (cadr e)) (map expand-forms (cddr e))))
 
 (define (expand-while e)
-  `(break-block loop-exit
-                (_while ,(expand-condition (cadr e))
-                        (break-block loop-cont
-                                     (scope-block ,(blockify (expand-forms (caddr e))))))))
+  (let* ((expanded-body (expand-forms (caddr e)))
+         (then-body (if (length> e 3) (cadddr e) #f))
+         (loop-code `(_while ,(expand-condition (cadr e))
+                             (break-block loop-cont
+                                          (scope-block ,(blockify expanded-body))))))
+    (if then-body
+        ;; With then-body: use flag-based approach like expand-for
+        (let* ((then-ran (gensy))
+               (break-result (gensy)))
+          `(scope-block
+            (block
+             (local ,then-ran)
+             (= ,then-ran (false))
+             (local ,break-result)
+             (= ,break-result
+                (break-block
+                 loop-exit
+                 (block ,loop-code
+                        (= ,then-ran (true)))))
+             (if ,then-ran
+                 (scope-block ,(expand-forms then-body))
+                 ,break-result))))
+        ;; Without then-body: simple break-block
+        `(break-block loop-exit ,loop-code))))
+
+;; Expand labeled for loop
+;; (labeled_loop name (for iterspec body)) ->
+;;   (break-block name-exit (for-loop-body with name-cont for continue))
+(define (expand-labeled-for label iterspec body (then-body #f))
+  (let* ((exit-name (symbol (string label "-exit")))
+         (cont-name (symbol (string label "-cont")))
+         (ranges (if (eq? (car iterspec) 'block)
+                     (cdr iterspec)
+                     (list iterspec)))
+         (loop-code (expand-for-with-labels (map cadr ranges) (map caddr ranges) body cont-name)))
+    (if then-body
+        ;; With then-body: use flag-based approach
+        (let* ((then-ran (gensy))
+               (break-result (gensy)))
+          `(scope-block
+            (block
+             (local ,then-ran)
+             (= ,then-ran (false))
+             (local ,break-result)
+             (= ,break-result
+                (break-block
+                 ,exit-name
+                 (block ,loop-code
+                        (= ,then-ran (true)))))
+             (if ,then-ran
+                 (scope-block ,(expand-forms then-body))
+                 ,break-result))))
+        ;; Without then-body: simple break-block
+        `(break-block ,exit-name ,loop-code))))
+
+;; Expand labeled while loop
+;; (labeled_loop name (while cond body)) ->
+;;   (break-block name-exit (_while cond (break-block name-cont body)))
+(define (expand-labeled-while label cond body (then-body #f))
+  (let* ((exit-name (symbol (string label "-exit")))
+         (cont-name (symbol (string label "-cont")))
+         (loop-code `(_while ,(expand-condition cond)
+                             (break-block ,cont-name
+                                          (scope-block ,(blockify (expand-forms body)))))))
+    (if then-body
+        ;; With then-body: use flag-based approach
+        (let* ((then-ran (gensy))
+               (break-result (gensy)))
+          `(scope-block
+            (block
+             (local ,then-ran)
+             (= ,then-ran (false))
+             (local ,break-result)
+             (= ,break-result
+                (break-block
+                 ,exit-name
+                 (block ,loop-code
+                        (= ,then-ran (true)))))
+             (if ,then-ran
+                 (scope-block ,(expand-forms then-body))
+                 ,break-result))))
+        ;; Without then-body: simple break-block
+        `(break-block ,exit-name ,loop-code))))
+
+;; Like expand-for but uses a specific continue label name
+(define (expand-for-with-labels lhss itrs body cont-label)
+  (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
+  (let ((copied-vars
+         (delete-duplicates
+          (filter-not-underscore
+           (apply append
+                  (map lhs-vars
+                       (filter (lambda (x) (not (outer? x))) (butlast lhss))))))))
+    (let nest ((lhss lhss)
+               (itrs itrs))
+      (if (null? lhss)
+          body
+          (let* ((coll  (make-ssavalue))
+                 (next  (gensy))
+                 (state (make-ssavalue))
+                 (outer (outer? (car lhss)))
+                 (lhs   (if outer (cadar lhss) (car lhss)))
+                 (body
+                  `(block
+                    ,@(if (not outer)
+                          (map (lambda (v) `(local ,v)) (lhs-vars lhs))
+                          '())
+                    ,(lower-tuple-assignment (list lhs state) next)
+                    ,(nest (cdr lhss) (cdr itrs))))
+                 (body
+                  (if (null? (cdr lhss))
+                      `(break-block
+                        ,cont-label
+                        (soft-let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
+                          ,body))
+                      `(scope-block ,body))))
+            `(block (= ,coll ,(car itrs))
+                    (local ,next)
+                    (= ,next (call (top iterate) ,coll))
+                    ,@(if outer `((require-existing-local ,lhs)) '())
+                    (if (call (top not_int) (call (core ===) ,next (null)))
+                        (_do_while
+                         (block ,body
+                                (= ,next (call (top iterate) ,coll ,state)))
+                         (call (top not_int) (call (core ===) ,next (null)))))))))))
+
+;; Expand extended break syntax
+;; Input from parser:
+;;   (break)              -> (break loop-exit)
+;;   (break value)        -> (break loop-exit value)  [if value is not break/continue]
+;;   (break (break ...))  -> recurse, increment depth
+;;   (break (continue))   -> (break-cont depth)
+;; Output:
+;;   (break loop-exit)           - break innermost loop
+;;   (break loop-exit value)     - break innermost with value
+;;   (break-ext depth #f)        - break Nth loop (depth > 1)
+;;   (break-ext depth value)     - break Nth loop with value
+;;   (break-cont depth)          - continue Nth loop
+(define (expand-extended-break e depth)
+  (cond
+    ;; (break) - simple break
+    ((null? (cdr e))
+     (if (= depth 1)
+         '(break loop-exit)
+         `(break-ext ,depth #f)))
+    ;; (break (break ...)) - nested break
+    ((and (pair? (cadr e)) (eq? (caadr e) 'break))
+     (expand-extended-break (cadr e) (+ depth 1)))
+    ;; (break (continue)) - break then continue outer
+    ;; break continue means "break inner loop, continue outer" = continue at depth+1
+    ((and (pair? (cadr e)) (eq? (caadr e) 'continue))
+     `(break-cont ,(+ depth 1)))
+    ;; (break value) - break with value
+    (else
+     (let ((value (expand-forms (cadr e))))
+       (if (= depth 1)
+           `(break loop-exit ,value)
+           `(break-ext ,depth ,value))))))
 
 (define (expand-vcat e
                      (vcat '((top vcat)))
@@ -2842,20 +3015,56 @@
    'elseif expand-if
    'while expand-while
 
+   ;; Extended break syntax support (1.14+)
+   ;; Parser produces:
+   ;;   (break)              - simple break
+   ;;   (break value)        - break with value
+   ;;   (break (break ...))  - multi-level break
+   ;;   (break (continue))   - break then continue outer
    'break
    (lambda (e)
-     (if (pair? (cdr e))
-         e
-         '(break loop-exit)))
+     (expand-extended-break e 1))
 
    'continue (lambda (e) '(break loop-cont))
 
+   ;; Labeled loops (1.14+)
+   ;; (labeled_loop name loop) -> wrap loop in break-blocks with label-specific names
+   'labeled_loop
+   (lambda (e)
+     (let* ((label (cadr e))
+            (loop (caddr e))
+            (exit-name (symbol (string label "-exit")))
+            (cont-name (symbol (string label "-cont")))
+            (then-body (if (length> loop 3) (cadddr loop) #f)))
+       (if (eq? (car loop) 'for)
+           (expand-forms (expand-labeled-for label (cadr loop) (caddr loop) then-body))
+           (expand-forms (expand-labeled-while label (cadr loop) (caddr loop) then-body)))))
+
+   ;; (labeled_break name value) -> (break name-exit value)
+   'labeled_break
+   (lambda (e)
+     (let* ((label (cadr e))
+            (value (caddr e))
+            (exit-name (symbol (string label "-exit"))))
+       (if value
+           `(break ,exit-name ,(expand-forms value))
+           `(break ,exit-name))))
+
+   ;; (labeled_continue name) -> (break name-cont)
+   'labeled_continue
+   (lambda (e)
+     (let* ((label (cadr e))
+            (cont-name (symbol (string label "-cont"))))
+       `(break ,cont-name)))
+
    'for
    (lambda (e)
-     (let ((ranges (if (eq? (car (cadr e)) 'block)
-                       (cdr (cadr e))
-                       (list (cadr e)))))
-       (expand-forms (expand-for (map cadr ranges) (map caddr ranges) (caddr e)))))
+     (let* ((ranges (if (eq? (car (cadr e)) 'block)
+                        (cdr (cadr e))
+                        (list (cadr e))))
+            (body (caddr e))
+            (then-body (if (length> e 3) (cadddr e) #f)))
+       (expand-forms (expand-for (map cadr ranges) (map caddr ranges) body then-body))))
 
    '&&     (lambda (e) (expand-forms (expand-and e)))
    '|\|\|| (lambda (e) (expand-forms (expand-or  e)))
@@ -3247,6 +3456,11 @@
            (cond (val (car val))
                  ((underscore-symbol? e) e)
                  (else `(globalref (thismodule) ,e)))))
+        ;; Handle break with value BEFORE quoted? check (break is in quoted? list)
+        ;; For valued breaks, we need to resolve the value expression.
+        ((and (pair? e) (eq? (car e) 'break) (length> e 2))
+         (let ((resolved (resolve-scopes- (caddr e) scope '() loc)))
+           `(break ,(cadr e) ,resolved)))
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
          e)
         ((eq? (car e) 'isglobal)
@@ -3411,6 +3625,16 @@
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
                        ,(resolve-scopes- (caddr e) scope '() loc))) ;; body of break-block expression
+        ;; Handle break-ext with depth and optional value: (break-ext depth #f) or (break-ext depth value)
+        ((eq? (car e) 'break-ext)
+         (let ((depth (cadr e))
+               (value (caddr e)))
+           (if value
+               `(break-ext ,depth ,(resolve-scopes- value scope '() loc))
+               e)))
+        ;; Handle break-cont with depth: (break-cont depth)
+        ((eq? (car e) 'break-cont)
+         e)  ;; No values to resolve
         ((eq? (car e) 'with-static-parameters)
          `(with-static-parameters
            ,(resolve-scopes- (cadr e) scope (cddr e) loc)
@@ -3441,7 +3665,8 @@
                       (resolve-scopes- x scope '() loc))
                     (cdr e))))))
 
-(define (resolve-scopes e) (resolve-scopes- e #f))
+(define (resolve-scopes e)
+  (resolve-scopes- e #f))
 
 ;; pass 3: analyze variables
 
@@ -4641,11 +4866,30 @@ f(x) = yt(x)
                     (begin (emit `(leave ,@handler-token-stack))
                            (actually-return (or tmp x))))
                 (or tmp x)))))
-    (define (emit-break labl)
+    ;; find-nth-loop-label: find the Nth label matching target-name in break-labels
+    ;; Used for multi-level breaks: (break-ext depth value) and (break-cont depth)
+    (define (find-nth-loop-label labels target-name n)
+      (if (null? labels)
+          #f
+          (let ((label-name (caar labels)))
+            (if (eq? label-name target-name)
+                (if (= n 1)
+                    (car labels)
+                    (find-nth-loop-label (cdr labels) target-name (- n 1)))
+                (find-nth-loop-label (cdr labels) target-name n)))))
+    ;; emit-break: emit code for a break statement
+    ;; labl is (label-name end-label handler-token-stack catch-token-stack [result-var])
+    ;; value is the optional value to return from the loop (for extended break)
+    (define (emit-break labl . value-arg)
       (let ((dest-handler-tokens (caddr labl))
-            (dest-tokens (cadddr labl)))
+            (dest-tokens (cadddr labl))
+            (result-var (and (length> labl 4) (list-ref labl 4)))
+            (value (and (pair? value-arg) (car value-arg))))
+        ;; If there's a value and a result variable, assign it before jumping
+        (if (and value result-var)
+            (emit `(= ,result-var ,value)))
         (if (and finally-handler (> (length (cadddr finally-handler)) (length dest-handler-tokens)))
-            (enter-finally-block `(break ,labl))
+            (enter-finally-block `(break ,labl ,@(if value (list value) '())))
             (begin
               (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
                 (if pexc (emit pexc)))
@@ -4956,17 +5200,52 @@ f(x) = yt(x)
                (mark-label endl))
              (if value (compile '(null) break-labels value tail)))
             ((break-block)
-             (let ((endl (make-label)))
+             ;; For valued breaks, we create a result variable that break statements
+             ;; can assign to. The result variable is the 5th element in break-labels entry.
+             (let* ((endl (make-label))
+                    (result-var (if value (new-mutable-var) #f)))
+               ;; Initialize result var to null (default for normal completion/simple break)
+               (if result-var (emit `(= ,result-var (null))))
                (compile (caddr e)
-                        (cons (list (cadr e) endl handler-token-stack catch-token-stack)
+                        (cons (list (cadr e) endl handler-token-stack catch-token-stack result-var)
                               break-labels)
                         #f #f)
-               (mark-label endl))
-             (if value (compile '(null) break-labels value tail)))
+               (mark-label endl)
+               ;; Return the result var if in value context
+               (if value
+                   (if result-var
+                       (compile result-var break-labels value tail)
+                       (compile '(null) break-labels value tail)))))
             ((break)
-             (let ((labl (assq (cadr e) break-labels)))
+             ;; Handle (break label) and (break label value)
+             (let* ((label-name (cadr e))
+                    (labl (assq label-name break-labels))
+                    (break-value (and (length> e 2) (caddr e))))
                (if (not labl)
                    (error "break or continue outside loop")
+                   (if break-value
+                       (let ((compiled-value (compile break-value break-labels #t #f)))
+                         (emit-break labl compiled-value))
+                       (emit-break labl)))))
+            ((break-ext)
+             ;; Multi-level break: (break-ext depth value)
+             ;; Find the Nth loop-exit label in break-labels
+             (let* ((depth (cadr e))
+                    (break-value (caddr e))
+                    (labl (find-nth-loop-label break-labels 'loop-exit depth)))
+               (if (not labl)
+                   (error "break level exceeds loop nesting depth")
+                   (if break-value
+                       (let ((compiled-value (compile break-value break-labels #t #f)))
+                         (emit-break labl compiled-value))
+                       (emit-break labl)))))
+            ((break-cont)
+             ;; Break then continue outer: (break-cont depth)
+             ;; Find the Nth loop-cont label in break-labels
+             (let* ((depth (cadr e))
+                    (labl (find-nth-loop-label break-labels 'loop-cont depth)))
+               (if (not labl)
+                   (error "continue level exceeds loop nesting depth")
                    (emit-break labl))))
             ((label symboliclabel)
              (if (eq? (car e) 'symboliclabel)

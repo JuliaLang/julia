@@ -11,6 +11,23 @@ New language features
   - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
     operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
     ([#60285]).
+  - Extended `break` syntax for loops (requires syntax version 1.14):
+    - Valued `break`: `break value` makes the loop expression return `value` instead of `nothing`.
+    - Multi-level `break`: `break break` exits two nested loops; additional `break`s exit more levels.
+    - `break continue`: exits the current loop and continues the enclosing loop's next iteration.
+    These forms can be combined, e.g., `break break value` or `break break continue`.
+  - Loop `then` clause (requires syntax version 1.14): `for`/`while` loops can now include a `then` block
+    that executes only when the loop completes without `break`. The `then` clause's value becomes the
+    loop's return value when no `break` occurs, making it easy to express search patterns:
+    ```julia
+    result = for i in collection
+        if found(i)
+            break i  # returns i
+        end
+    then
+        default_value  # returned if no break
+    end
+    ```
 
 Language changes
 ----------------
