@@ -10,11 +10,18 @@
 #define DISABLE_FREQUENT_EVENTS
 #endif
 
-jl_module_t *jl_module_root(jl_module_t *m);
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+JL_DLLEXPORT int jl_timing_enabled(void) {
+#ifdef ENABLE_TIMINGS
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 
 #ifdef ENABLE_TIMINGS
 
@@ -185,6 +192,7 @@ void jl_init_timing(void)
     error |= jl_timing_set_enable("METHOD_LOOKUP_FAST", 0);
     error |= jl_timing_set_enable("AST_COMPRESS", 0);
     error |= jl_timing_set_enable("AST_UNCOMPRESS", 0);
+    error |= jl_timing_set_enable("TYPE_CACHE_INSERT", 0);
     if (error)
         jl_error("invalid timing subsystem encountered in jl_init_timing");
 #endif

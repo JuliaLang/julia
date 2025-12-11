@@ -265,6 +265,12 @@ end
     write(to, from)
     @test String(take!(to)) == "abcd"
     @test eof(from)
+
+    # Write to another IOBuffer when closed
+    to = IOBuffer()
+    from = IOBuffer(collect(b"abcdefghi"))
+    close(from)
+    @test_throws ArgumentError write(to, from)
 end
 
 @testset "Read/write empty IOBuffer" begin
@@ -313,6 +319,36 @@ end
     @test close(io) === nothing
     @test_throws ArgumentError write(io, UInt8[0])
     @test_throws ArgumentError seek(io, 0)
+end
+
+@testset "takestring!" begin
+    buf = IOBuffer()
+    write(buf, "abcø")
+    s = takestring!(buf)
+    @test isempty(takestring!(buf))
+    @test s == "abcø"
+    write(buf, "xyz")
+    @test takestring!(buf) == "xyz"
+    buf = IOBuffer()
+
+    # Test with a nonzero offset in the buffer
+    v = rand(UInt8, 8)
+    for i in 1:8
+        pushfirst!(v, rand(UInt8))
+    end
+    buf = IOBuffer(v)
+    s = String(copy(v))
+    @test takestring!(buf) == s
+
+    # Test with a non-writable IOBuffer
+    buf = IOBuffer(b"abcdef")
+    read(buf, UInt8)
+    @test takestring!(buf) == "abcdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcde")
+    read(buf, UInt16)
+    @test takestring!(buf) == "cde"
 end
 
 @testset "Read/write readonly IOBuffer" begin
@@ -495,6 +531,13 @@ end
         @test position(seek(io, typemin(Int128))) == 0
         @test position(seek(io, typemin(Int32))) == 0
     end
+end
+
+@testset "issue #57962" begin
+    io = IOBuffer(repeat("x", 400))
+    skip(io, 10)
+    skip(io, 400)
+    @test isempty(read(io))
 end
 
 @testset "pr #11554" begin
@@ -694,6 +737,11 @@ end
     data = 0x00:0xFF
     io = IOBuffer(data)
     @test read(io) == data
+    seekstart(io)
+    @test read(io, UInt16) === ltoh(0x0100)
+    out = IOBuffer()
+    write(out, io)
+    @test take!(out) == data[3:end]
 
     data = @view(collect(0x00:0x0f)[begin:2:end])
     io = IOBuffer(data)

@@ -119,7 +119,7 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void);
 // This function returns whether support for conservative scanning has
 // been enabled. The return values are the same as for
 // jl_gc_enable_conservative_gc_support().
-JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
+JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void) JL_NOTSAFEPOINT;
 
 // Returns the base address of a memory block, assuming it is stored in
 // a julia memory pool. Return NULL otherwise. Conservative support

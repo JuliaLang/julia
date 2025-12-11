@@ -39,61 +39,53 @@ JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 #define JULIA_DEBUG_SLEEPWAKE(x)
 
 //  Options for task switching algorithm (in order of preference):
-// JL_HAVE_ASM -- mostly setjmp
-// JL_HAVE_ASM && JL_HAVE_UNW_CONTEXT -- libunwind-based
-// JL_HAVE_UNW_CONTEXT -- libunwind-based
-// JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
+// JL_TASK_SWITCH_ASM -- mostly setjmp
+// JL_TASK_SWITCH_ASM && JL_TASK_SWITCH_LIBUNWIND -- libunwind-based
+// JL_TASK_SWITCH_LIBUNWIND -- libunwind-based
+// JL_TASK_SWITCH_WINDOWS -- implementation for Windows
 
 #ifdef _OS_WINDOWS_
-#define JL_HAVE_UCONTEXT
+#define JL_TASK_SWITCH_WINDOWS
 typedef win32_ucontext_t jl_stack_context_t;
 typedef jl_stack_context_t _jl_ucontext_t;
 
-#elif defined(_OS_OPENBSD_)
-#define JL_HAVE_UNW_CONTEXT
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
-typedef unw_context_t _jl_ucontext_t;
+#else
+
+#if defined(_OS_OPENBSD_)
+#define JL_TASK_SWITCH_LIBUNWIND
+#endif
+
 typedef struct {
     jl_jmp_buf uc_mcontext;
 } jl_stack_context_t;
 
-#else
-typedef struct {
-    jl_jmp_buf uc_mcontext;
-} jl_stack_context_t;
-#if !defined(JL_HAVE_UCONTEXT) && \
-    !defined(JL_HAVE_ASM) && \
-    !defined(JL_HAVE_UNW_CONTEXT)
+#if !defined(JL_TASK_SWITCH_ASM) && \
+    !defined(JL_TASK_SWITCH_LIBUNWIND)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
-#define JL_HAVE_ASM
+#define JL_TASK_SWITCH_ASM
 #endif
 #if 0
 // very slow, but more debugging
 //#elif defined(_OS_DARWIN_)
-//#define JL_HAVE_UNW_CONTEXT
+//#define JL_TASK_SWITCH_LIBUNWIND
 //#elif defined(_OS_LINUX_)
-//#define JL_HAVE_UNW_CONTEXT
-#elif !defined(JL_HAVE_ASM)
-#define JL_HAVE_UNW_CONTEXT // optimistically?
+//#define JL_TASK_SWITCH_LIBUNWIND
+#elif !defined(JL_TASK_SWITCH_ASM)
+#define JL_TASK_SWITCH_LIBUNWIND // optimistically?
 #endif
 #endif
 
-#if !defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)
-typedef jl_stack_context_t _jl_ucontext_t;
-#endif
+#if defined(JL_TASK_SWITCH_LIBUNWIND)
 #pragma GCC visibility push(default)
-#if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 typedef unw_context_t _jl_ucontext_t;
-#endif
-#if defined(JL_HAVE_UCONTEXT)
-#include <ucontext.h>
-typedef ucontext_t _jl_ucontext_t;
-#endif
 #pragma GCC visibility pop
+#elif defined(JL_TASK_SWITCH_ASM)
+typedef jl_stack_context_t _jl_ucontext_t;
+#endif
+
 #endif
 
 typedef struct {
@@ -195,6 +187,13 @@ typedef struct _jl_tls_states_t {
     void *signal_stack;
     size_t signal_stack_size;
 #endif
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)
+    // Saved context from jl_call_in_ctx for stack unwinding
+    uintptr_t signal_ctx_pc;
+    uintptr_t signal_ctx_sp;
+    void (*signal_ctx_fptr)(void);
+    uintptr_t signal_ctx_arg;
+#endif
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
@@ -225,9 +224,6 @@ typedef struct _jl_tls_states_t {
 
 #define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
 
-// all values are callable as Functions
-typedef jl_value_t jl_function_t;
-
 typedef struct _jl_timing_block_t jl_timing_block_t;
 typedef struct _jl_timing_event_t jl_timing_event_t;
 typedef struct _jl_excstack_t jl_excstack_t;
@@ -242,7 +238,7 @@ typedef struct _jl_task_t {
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *scope;
-    jl_function_t *start;
+    jl_value_t *start;
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint16_t priority;

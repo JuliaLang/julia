@@ -297,6 +297,20 @@ let src = code_typed((Int,Int)) do x, y...
         @test oc(1,2) === (1,(2,))
         @test_throws MethodError oc(1,2,3)
     end
+
+    # with manually constructed IRCode, without round-trip to CodeInfo
+    f59222(xs...) = length(xs)
+    ir = Base.code_ircode_by_type(Tuple{typeof(f59222), Symbol, Symbol})[1][1]
+    ir.argtypes[1] = Tuple{}
+    let oc = OpaqueClosure(ir; isva=true)
+        @test oc(:a, :b) == 2
+    end
+    ir = Base.code_ircode_by_type(Tuple{typeof(f59222), Symbol, Vararg{Symbol}})[1][1]
+    ir.argtypes[1] = Tuple{}
+    let oc = OpaqueClosure(ir; isva=true)
+        @test oc(:a) == 1
+        @test oc(:a, :b, :c) == 3
+    end
 end
 
 # Check for correct handling in case of broken return type.
@@ -407,3 +421,6 @@ let f = f54357(+, Tuple{Int,Int})
     @test g isa Core.OpaqueClosure
     @test g(32.0, 34.0) === 66.0
 end
+
+# 49659: signature-scoped typevar shouldn't fail in lowering
+@test_throws "must be a tuple type" @opaque ((x::T,y::T) where {T}) -> 123

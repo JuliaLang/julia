@@ -4,6 +4,7 @@ using Test, Distributed, Random, Logging, Libdl
 using REPL # testing the doc lookup function should be outside of the scope of this file, but is currently tested here
 
 include("precompile_utils.jl")
+include("tempdepot.jl")
 
 Foo_module = :Foo4b3a94a1a081a8cb
 foo_incl_dep = :foo4b3a94a1a081a8cb
@@ -105,6 +106,11 @@ precompile_test_harness(false) do dir
               process_state_calls = 0
               @assert process_state() === process_state()
               @assert process_state_calls === 0
+
+              const empty_state = Base.OncePerProcess{Nothing}() do
+                  return nothing
+              end
+              @assert empty_state() === nothing
           end
           """)
     write(Foo2_file,
@@ -636,7 +642,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile, _ = @test_logs (:debug, r"Precompiling FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
@@ -681,13 +687,7 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_warn r"LoadError: break me\nStacktrace:\n[ ]*\[1\] [\e01m\[]*error" try
-            Base.require(Main, :FooBar2)
-            error("the \"break me\" test failed")
-        catch exc
-            isa(exc, ErrorException) || rethrow()
-            occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
-        end
+    @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -699,11 +699,7 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
-                Base.require(Main, :FooBar3)
-            catch exc
-                isa(exc, ErrorException) || rethrow()
-            end
+        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
     end
 
     # Test transitive dependency for #21266
@@ -773,12 +769,12 @@ precompile_test_harness("code caching") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
-    M = invokelatest(getfield, @__MODULE__, Cache_module)
+    M = invokelatest(getglobal, @__MODULE__, Cache_module)
     Mid = rootid(M)
     invokelatest() do
         # Test that this cache file "owns" all the roots
         for name in (:f, :fpush, :callboth)
-            func = getfield(M, name)
+            func = getglobal(M, name)
             m = only(collect(methods(func)))
             @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
         end
@@ -951,6 +947,23 @@ precompile_test_harness("code caching") do dir
         use_stale(c) = stale(c[1]) + not_stale("hello")
         build_stale(x) = use_stale(Any[x])
 
+        # bindings
+        struct InvalidatedBinding
+            x::Int
+        end
+        struct Wrapper
+            ib::InvalidatedBinding
+        end
+        makewib(x) = Wrapper(InvalidatedBinding(x))
+        const gib = makewib(1)
+        fib() = gib.ib.x
+
+        struct LogBindingInvalidation
+            x::Int
+        end
+        const glbi = LogBindingInvalidation(1)
+        flbi() = @__MODULE__().glbi.x
+
         # force precompilation
         build_stale(37)
         stale('c')
@@ -975,11 +988,15 @@ precompile_test_harness("code caching") do dir
         useA() = $StaleA.stale("hello")
         useA2() = useA()
 
-        # force precompilation
+        useflbi() = $StaleA.flbi()
+
+        # force precompilation, force call so that inlining heuristics don't affect the result
         begin
             Base.Experimental.@force_compile
-            useA2()
+            @noinline useA2()
+            @noinline useflbi()
         end
+        precompile($StaleA.fib, ())
 
         ## Reporting tests
         call_nbits(x::Integer) = $StaleA.nbits(x)
@@ -1007,12 +1024,28 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    MA = invokelatest(getfield, @__MODULE__, StaleA)
+    MA = invokelatest(getglobal, @__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
+    Base.eval(MA, quote
+        struct InvalidatedBinding
+            x::Float64
+        end
+        struct Wrapper
+            ib::InvalidatedBinding
+        end
+        const gib = makewib(2.0)
+    end)
+    # TODO: test a "method_globalref" invalidation also
+    Base.eval(MA, quote
+        struct LogBindingInvalidation # binding invalidations can't be done during precompilation
+            x::Float64
+        end
+        const glbi = LogBindingInvalidation(2.0)
+    end)
     @eval using $StaleC
-    invalidations = Base.StaticData.debug_method_invalidation(true)
+    invalidations = Base.ReinferUtils.debug_method_invalidation(true)
     @eval using $StaleB
-    Base.StaticData.debug_method_invalidation(false)
+    Base.ReinferUtils.debug_method_invalidation(false)
     invokelatest() do
         MB = getfield(@__MODULE__, StaleB)
         MC = getfield(@__MODULE__, StaleC)
@@ -1039,6 +1072,10 @@ precompile_test_harness("code caching") do dir
         m = only(methods(MC.call_buildstale))
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
+        m = only(methods(MA.fib))
+        mi = m.specializations::Core.MethodInstance
+        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
         @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
@@ -1064,6 +1101,16 @@ precompile_test_harness("code caching") do dir
         mi = only(Base.specializations(m))
         @test !hasvalid(mi, world)
         @test any(x -> x isa Core.CodeInstance && x.def === mi, invalidations)
+
+        idxb = findfirst(x -> x isa Core.Binding, invalidations)
+        @test invalidations[idxb+1] == "insert_backedges_callee"
+        idxv = findnext(==("verify_methods"), invalidations, idxb)
+        if invalidations[idxv-1].def.def.name === :getproperty
+            idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        end
+        idxv = findnext(==(invalidations[idxv-1]), invalidations, idxv+1)
+        @test invalidations[idxv-1] == "verify_methods"
+        @test invalidations[idxv-2].def.def.name === :useflbi
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1097,7 +1144,7 @@ precompile_test_harness("precompiletools") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $PrecompileToolsModule
-    M = invokelatest(getfield, @__MODULE__, PrecompileToolsModule)
+    M = invokelatest(getglobal, @__MODULE__, PrecompileToolsModule)
     invokelatest() do
         m = which(Tuple{typeof(findfirst), Base.Fix2{typeof(==), T}, Vector{T}} where T)
         success = 0
@@ -1224,7 +1271,7 @@ precompile_test_harness("invoke") do dir
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
     @eval using $InvokeModule: $InvokeModule
-    MI = invokelatest(getfield, @__MODULE__, InvokeModule)
+    MI = invokelatest(getglobal, @__MODULE__, InvokeModule)
     @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
     invokelatest() do
@@ -1266,11 +1313,11 @@ precompile_test_harness("invoke") do dir
         end
 
         m = get_method_for_type(M.h, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = get_method_for_type(M.hnc, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callq))
-        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqnc))
         @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqi))
@@ -1372,7 +1419,7 @@ precompile_test_harness("conflicting namespaces") do dir
         try
             for i = 1:2
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test read(fname, String) == "Iterators\n"
+                @test endswith(read(fname, String), "Iterators\n")
             end
         finally
             rm(fname, force=true)
@@ -1465,11 +1512,11 @@ end
     test_workers = addprocs(1)
     push!(test_workers, myid())
     save_cwd = pwd()
-    temp_path = mktempdir()
+    temp_path = mkdepottempdir()
     try
         cd(temp_path)
         load_path = mktempdir(temp_path)
-        load_cache_path = mktempdir(temp_path)
+        load_cache_path = mkdepottempdir(temp_path)
 
         ModuleA = :Issue19960A
         ModuleB = :Issue19960B
@@ -1517,11 +1564,6 @@ end
         end
     finally
         cd(save_cwd)
-        try
-            rm(temp_path, recursive=true)
-        catch err
-            @show err
-        end
         pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
@@ -1828,8 +1870,8 @@ end
 
 @testset "Precompile external abstract interpreter" begin
     dir = @__DIR__
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint1.jl`; dir); stdout, stderr))
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint2.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr))
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -1926,12 +1968,18 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, edges, new_ext_cis, external_methods, new_method_roots, cache_sizes = sv
-    m = only(external_methods).func::Method
-    @test m.name == :repl_cmd && m.nargs < 2
-    @test new_ext_cis === nothing || any(new_ext_cis) do ci
+    modules, init_order, internal_methods, new_method_roots, cache_sizes = sv
+    for m in internal_methods::Vector{Any}
+        m isa Core.MethodInstance || continue
+        m = m.func::Method
+        if m.name !== :f
+            @test m.name == :repl_cmd && m.nargs == 1
+        end
+    end
+    @test any(internal_methods) do ci
+        ci isa Core.CodeInstance || return false
         mi = ci.def::Core.MethodInstance
-        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+        return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end
 
@@ -2080,9 +2128,6 @@ precompile_test_harness("Test flags") do load_path
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
-    id = Base.identify_package("TestFlags")
-    @test Base.isprecompiled(id, ;flags=modified_flags)
-    @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
 if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarch64)
@@ -2111,6 +2156,29 @@ precompile_test_harness("No backedge precompile") do load_path
     @eval using NoBackEdges
     invokelatest() do
         @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt)
+    end
+end
+
+precompile_test_harness("Pre-compile Core methods") do load_path
+    # Core methods should support pre-compilation as external CI's like anything else
+    # https://github.com/JuliaLang/julia/issues/58497
+    write(joinpath(load_path, "CorePrecompilation.jl"),
+          """
+          module CorePrecompilation
+          struct Foo end
+          precompile(Tuple{Type{Vector{Foo}}, UndefInitializer, Tuple{Int}})
+          end
+          """)
+    ji, ofile = Base.compilecache(Base.PkgId("CorePrecompilation"))
+    @eval using CorePrecompilation
+    invokelatest() do
+        let tt = Tuple{Type{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
+            match = first(Base._methods_by_ftype(tt, -1, Base.get_world_counter())),
+            mi = Base.specialize_method(match)
+            @test isdefined(mi, :cache)
+            @test mi.cache.max_world === typemax(UInt)
+            @test mi.cache.invoke != C_NULL
+        end
     end
 end
 
@@ -2166,7 +2234,7 @@ precompile_test_harness("Issue #52063") do load_path
         @test e isa SystemError
         @test e.prefix == "opening file or folder $(repr(fname))"
         true
-    end broken=Sys.iswindows()
+    end skip = (Sys.isunix() && Libc.geteuid() == 0)
     dir = mktempdir() do dir
         @test include_dependency(dir) === nothing
         chmod(dir, 0x000)
@@ -2176,7 +2244,7 @@ precompile_test_harness("Issue #52063") do load_path
             @test e isa SystemError
             @test e.prefix == "opening file or folder $(repr(dir))"
             true
-        end broken=Sys.iswindows()
+        end skip = (Sys.isunix() && Libc.geteuid() == 0)
         dir
     end
     @test try
@@ -2337,7 +2405,7 @@ precompile_test_harness("llvmcall validation") do load_path
         using LLVMCall
         LLVMCall.do_llvmcall2()
     """
-    @test readchomp(`$(Base.julia_cmd()) --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
     # Now the regular way
     @eval using LLVMCall
     invokelatest() do
@@ -2410,9 +2478,212 @@ precompile_test_harness("Package top-level load itself") do load_path
     end
 end
 
+precompile_test_harness("Package precompilation works without manifest") do load_path
+    pkg_dir = joinpath(load_path, "TestPkgNoManifest")
+    mkpath(pkg_dir)
+
+    # Create Project.toml with stdlib dependencies
+    write(joinpath(pkg_dir, "Project.toml"), """
+        name = "TestPkgNoManifest"
+        uuid = "f47a8e44-5f82-4c5c-9076-4b4e8b7e8e8e"
+        version = "0.1.0"
+
+        [deps]
+        Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+        Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+        """)
+
+    # Create src directory and main module file
+    src_dir = joinpath(pkg_dir, "src")
+    mkpath(src_dir)
+    write(joinpath(src_dir, "TestPkgNoManifest.jl"), """
+        module TestPkgNoManifest
+        end
+        """)
+
+    old_active_project = Base.active_project()
+    try
+        # Activate the new package environment
+        Base.set_active_project(joinpath(pkg_dir, "Project.toml"))
+
+        # Ensure there's no manifest file (this is the key to the test)
+        manifest_path = joinpath(pkg_dir, "Manifest.toml")
+        isfile(manifest_path) && rm(manifest_path)
+
+        # This should work without errors - precompiling a package with no manifest
+        @eval using TestPkgNoManifest
+    finally
+        # Restore original load path and active project
+        Base.set_active_project(old_active_project)
+    end
+end
+
 # Verify that inference / caching was not performed for any macros in the sysimage
 let m = only(methods(Base.var"@big_str"))
     @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+end
+
+# Issue #58841 - make sure we don't accidentally throw away code for inference
+let io = IOBuffer()
+    run(pipeline(`$(Base.julia_cmd()) --startup-file=no --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
+    @test isempty(String(take!(io)))
+end
+
+# Test --compiled-modules=strict in precompilepkgs
+@testset "compiled-modules=strict with dependencies" begin
+    mkdepottempdir() do depot
+        # Create three packages: one that fails to precompile, one that loads it, one that doesn't
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+
+        # Create FailPkg - a package that can't be precompiled
+        fail_pkg_path = joinpath(depot, "dev", "FailPkg")
+        mkpath(joinpath(fail_pkg_path, "src"))
+        write(joinpath(fail_pkg_path, "Project.toml"),
+              """
+              name = "FailPkg"
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+        write(joinpath(fail_pkg_path, "src", "FailPkg.jl"),
+              """
+              module FailPkg
+              print("Now FailPkg is running.\n")
+              error("expected fail")
+              end
+              """)
+
+        # Create LoadsFailPkg - depends on and loads FailPkg (should fail with strict)
+        loads_pkg_path = joinpath(depot, "dev", "LoadsFailPkg")
+        mkpath(joinpath(loads_pkg_path, "src"))
+        write(joinpath(loads_pkg_path, "Project.toml"),
+              """
+              name = "LoadsFailPkg"
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(loads_pkg_path, "src", "LoadsFailPkg.jl"),
+              """
+              module LoadsFailPkg
+              print("Now LoadsFailPkg is running.\n")
+              import FailPkg
+              print("unreachable\n")
+              end
+              """)
+
+        # Create DependsOnly - depends on FailPkg but doesn't load it (should succeed)
+        depends_pkg_path = joinpath(depot, "dev", "DependsOnly")
+        mkpath(joinpath(depends_pkg_path, "src"))
+        write(joinpath(depends_pkg_path, "Project.toml"),
+              """
+              name = "DependsOnly"
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depends_pkg_path, "src", "DependsOnly.jl"),
+              """
+              module DependsOnly
+              # Has FailPkg as a dependency but doesn't load it
+              print("Now DependsOnly is running.\n")
+              end
+              """)
+
+        # Create main project with all packages
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              LoadsFailPkg = "20000000-0000-0000-0000-000000000002"
+              DependsOnly = "30000000-0000-0000-0000-000000000003"
+              """)
+        write(joinpath(project_path, "Manifest.toml"),
+              """
+              julia_version = "1.13.0"
+              manifest_format = "2.0"
+
+              [[DependsOnly]]
+              deps = ["FailPkg"]
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [[FailPkg]]
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+
+              [[LoadsFailPkg]]
+              deps = ["FailPkg"]
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.DependsOnly]]
+              deps = ["FailPkg"]
+              path = "../dev/DependsOnly/"
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [[deps.FailPkg]]
+              path = "../dev/FailPkg/"
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+
+              [[deps.LoadsFailPkg]]
+              deps = ["FailPkg"]
+              path = "../dev/LoadsFailPkg/"
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+              """)
+
+        # Call precompilepkgs with output redirected to a file
+        LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
+        DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            precompile_capture(file, pkg) = open(file, "w") do io
+                try
+                    r = Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true)
+                    @test r isa Vector{String}
+                    r
+                catch ex
+                    ex isa Base.Precompilation.PkgPrecompileError || rethrow()
+                    ex
+                end
+            end
+            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
+            @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
+            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
+            @test length(dependsonly) == 1
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+
+        output = read(LoadsFailPkg_output, String)
+        # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
+        @test count("LoadError: expected fail", output) == 1
+        @test count("expected fail", output) == 1
+        @test count("✗ FailPkg", output) > 0
+        @test count("✗ LoadsFailPkg", output) > 0
+        @test count("Now FailPkg is running.", output) == 1
+        @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("DependsOnly precompiling.", output) == 0
+
+        # DependsOnly should succeed because it doesn't actually load FailPkg
+        output = read(DependsOnly_output, String)
+        @test count("LoadError: expected fail", output) == 0
+        @test count("expected fail", output) == 0
+        @test count("✗ FailPkg", output) > 0
+        @test count("Precompiling DependsOnly finished.", output) == 1
+        @test count("Now FailPkg is running.", output) == 0
+        @test count("Now DependsOnly is running.", output) == 1
+    end
 end
 
 finish_precompile_test!()

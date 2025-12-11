@@ -58,7 +58,7 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteS
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
-	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
+	cd $(dir $<) && $(CMAKE) -G"Unix Makefiles" . $(LIBSUITESPARSE_CMAKE_FLAGS)
 	$(MAKE) -C $(dir $<)
 	$(MAKE) -C $(dir $<) install
 	echo 1 > $@

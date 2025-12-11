@@ -12,13 +12,13 @@ Mostly used to represent files returned by [`open`](@ref).
 """
 mutable struct IOStream <: IO
     handle::Ptr{Cvoid}
-    ios::Array{UInt8,1}
+    ios::Vector{UInt8}
     name::String
     mark::Int64
     lock::ReentrantLock
     _dolock::Bool
 
-    IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1, ReentrantLock(), true)
+    IOStream(name::AbstractString, buf::Vector{UInt8}) = new(pointer(buf), buf, name, -1, ReentrantLock(), true)
 end
 
 function IOStream(name::AbstractString, finalize::Bool)
@@ -75,6 +75,16 @@ fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
 
+"""
+    isopen(s::IOStream)
+
+Check if the stream is not yet closed.
+
+A closed `IOStream` may still have data to read in its buffer,
+use [`eof`](@ref) to check for the ability to read data.
+
+Use the `FileWatching` package to be notified when a file might be writable or readable.
+"""
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios) != 0
 
 function close(s::IOStream)
@@ -111,7 +121,7 @@ julia> write(io, "JuliaLang is a GitHub organization.")
 julia> truncate(io, 15)
 IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=15, maxsize=Inf, ptr=16, mark=-1)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a "
 
 julia> io = IOBuffer();
@@ -120,7 +130,7 @@ julia> write(io, "JuliaLang is a GitHub organization.");
 
 julia> truncate(io, 40);
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization.\\0\\0\\0\\0\\0"
 ```
 """
@@ -460,7 +470,7 @@ take!(s::IOStream) =
     @_lock_ios s ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8; keep::Bool=false)
-    @_lock_ios s ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
+    @_lock_ios s ccall(:jl_readuntil, Vector{UInt8}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
 end
 
 # like readuntil, above, but returns a String without requiring a copy
@@ -469,7 +479,7 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
     isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
-    String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
+    takestring!(copyuntil(IOBuffer(sizehint=70), s, delim; keep))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)

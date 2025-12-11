@@ -169,7 +169,7 @@ copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
-sizehint!(s::Set, newsz; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
+sizehint!(s::Set, newsz::Integer; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
@@ -259,7 +259,7 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
     return out
 end
 
-unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
+unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin]:r[begin])
 
 """
     unique(f, itr)
@@ -717,7 +717,7 @@ If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace`](@ref replace(A, old_new::Pair...)).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
 4-element Vector{Int64}:
  0

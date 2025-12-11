@@ -163,14 +163,14 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = PointerType::get(InstV->getType(), allocaAddressSpace);
+            Type *NewRetTy = PointerType::get(InstV->getContext(), allocaAddressSpace);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = PointerType::get(CurrentV->getType(), allocaAddressSpace);
+        PointerType *TargetType = PointerType::get(CurrentV->getContext(), allocaAddressSpace);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -289,7 +289,11 @@ bool propagateJuliaAddrspaces(Function &F) {
     PropagateJuliaAddrspacesVisitor visitor;
     visitor.visit(F);
     for (auto it : visitor.ToInsert)
+#if JL_LLVM_VERSION >= 200000
+        it.first->insertBefore(it.second->getIterator());
+#else
         it.first->insertBefore(it.second);
+#endif
     for (Instruction *I : visitor.ToDelete)
         I->eraseFromParent();
     visitor.ToInsert.clear();

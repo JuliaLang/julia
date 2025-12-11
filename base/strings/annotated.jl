@@ -233,8 +233,8 @@ See also [`AnnotatedString`](@ref) and [`AnnotatedChar`](@ref).
 ## Examples
 
 ```jldoctest; setup=:(using Base: AnnotatedString, annotatedstring)
-julia> annotatedstring("now a AnnotatedString")
-"now a AnnotatedString"
+julia> annotatedstring("now an AnnotatedString")
+"now an AnnotatedString"
 
 julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label, 1)]), ", and unannotated")
 "annotated, and unannotated"
@@ -272,7 +272,7 @@ function annotatedstring(xs...)
             print(s, x)
         end
     end
-    str = String(take!(buf))
+    str = takestring!(buf)
     AnnotatedString(str, annotations)
 end
 
@@ -457,7 +457,7 @@ function annotated_chartransform(f::Function, str::AnnotatedString, state=nothin
         stop_offset  = last(offsets[findlast(<=(stop) ∘ first, offsets)::Int])
         push!(annots, setindex(annot, (start + start_offset):(stop + stop_offset), :region))
     end
-    AnnotatedString(String(take!(outstr)), annots)
+    AnnotatedString(takestring!(outstr), annots)
 end
 
 struct RegionIterator{S <: AbstractString}

@@ -2,7 +2,7 @@
 ## Tests that compilation in the interactive session startup are as expected
 
 using Test
-Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 
 if !Sys.iswindows()
@@ -18,7 +18,7 @@ if !Sys.iswindows()
         # start an interactive session, ensuring `TERM` is unset since it can trigger
         # different amounts of precompilation stemming from `base/terminfo.jl` depending
         # on the value, making the test here unreliable
-        cmd = addenv(`$(Base.julia_cmd()[1]) --trace-compile=$f -q --startup-file=no -i`,
+        cmd = addenv(`$(Base.julia_cmd()) --trace-compile=$f -q --startup-file=no -i`,
                      Dict("TERM" => ""))
         pts, ptm = open_fake_pty()
         p = run(cmd, pts, pts, pts; wait=false)
@@ -26,7 +26,10 @@ if !Sys.iswindows()
         std = readuntil(ptm, "julia>")
         # check for newlines instead of equality with "julia>" because color may be on
         occursin("\n", std) && @info "There was output before the julia prompt:\n$std"
-        sleep(1) # sometimes precompiles output just after prompt appears
+        @async write(ptm, "\n")  # another prompt
+        readuntil(ptm, "julia>")
+        @async write(ptm, "\n")  # another prompt
+        readuntil(ptm, "julia>")
         tracecompile_out = read(f, String)
         close(ptm) # close after reading so we don't get precompiles from error shutdown
 

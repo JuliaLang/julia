@@ -107,8 +107,8 @@ function Logging.handle_message(logger::TestLogger, level, msg, _module,
         if maxlog isa Core.BuiltinInts
             @lock logger.lock begin
                 remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+                remaining == 0 && return
                 logger.message_limits[id] = remaining - 1
-                remaining > 0 || return
             end
         end
     end

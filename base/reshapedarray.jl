@@ -36,7 +36,7 @@ length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 @noinline throw_dmrsa(dims, len) =
-    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
+    throw(DimensionMismatch(LazyString("new dimensions ", dims, " must be consistent with array length ", len)))
 
 ## reshape(::Array, ::Dims) returns a new Array (to avoid conditionally aliasing the structure, only the data)
 # reshaping to same # of dimensions
@@ -120,6 +120,9 @@ julia> reshape(1:6, 2, 3)
 reshape
 
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
+reshape(parent::AbstractArray, shp::Tuple{Union{Integer,AbstractOneTo}, Vararg{Union{Integer,AbstractOneTo}}}) = reshape(parent, to_shape(shp))
+# legacy method for packages that specialize reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo,CustomAxis}, Vararg{Union{Integer,OneTo,CustomAxis}}})
+# leaving this method in ensures that Base owns the more specific method
 reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, dims::Tuple{Integer, Vararg{Integer}}) = reshape(parent, map(Int, dims))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
@@ -222,7 +225,7 @@ function _reshape(parent::AbstractArray, dims::Dims)
 end
 
 @noinline function _throw_dmrs(n, str, dims)
-    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims"))
+    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims ($(prod(dims)) elements)"))
 end
 
 # Reshaping a ReshapedArray
@@ -231,10 +234,10 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,IndexStyle}, dims::Dims)
     parent = p[1]
-    strds = front(size_to_strides(map(length, axes(parent))..., 1))
-    strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
-    mi = map(SignedMultiplicativeInverse, strds1)
-    ReshapedArray(parent, dims, reverse(mi))
+    szs = front(size(parent))
+    szs1 = map(s -> max(1, Int(s)), szs) # for resizing empty arrays
+    mi = map(SignedMultiplicativeInverse, szs1)
+    ReshapedArray(parent, dims, mi)
 end
 
 function __reshape(p::Tuple{AbstractArray{<:Any,0},IndexCartesian}, dims::Dims)
@@ -250,6 +253,7 @@ end
 size(A::ReshapedArray) = A.dims
 length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
+similar(::Type{TA}, dims::Dims) where {T,N,P,TA<:ReshapedArray{T,N,P}} = similar(P, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))
@@ -265,11 +269,11 @@ mightalias(A::ReshapedArray, B::SubArray) = mightalias(parent(A), B)
 mightalias(A::SubArray, B::ReshapedArray) = mightalias(A, parent(B))
 
 @inline ind2sub_rs(ax, ::Tuple{}, i::Int) = (i,)
-@inline ind2sub_rs(ax, strds, i) = _ind2sub_rs(ax, strds, i - 1)
+@inline ind2sub_rs(ax, szs, i) = _ind2sub_rs(ax, szs, i - 1)
 @inline _ind2sub_rs(ax, ::Tuple{}, ind) = (ind + first(ax[end]),)
-@inline function _ind2sub_rs(ax, strds, ind)
-    d, r = divrem(ind, strds[1])
-    (_ind2sub_rs(front(ax), tail(strds), r)..., d + first(ax[end]))
+@inline function _ind2sub_rs(ax, szs, ind)
+    d, r = divrem(ind, szs[1])
+    (r + first(ax[1]), _ind2sub_rs(tail(ax), tail(szs), d)...)
 end
 offset_if_vec(i::Integer, axs::Tuple{<:AbstractUnitRange}) = i + first(axs[1]) - 1
 offset_if_vec(i::Integer, axs::Tuple) = i

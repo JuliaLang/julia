@@ -337,7 +337,7 @@ Without keyword arguments, `x` is rounded to an integer value, returning a value
 thrown if the value is not representable by `T`, similar to [`convert`](@ref).
 
 If the `digits` keyword argument is provided, it rounds to the specified number of digits
-after the decimal place (or before if negative), in base `base`.
+after the decimal place (or before if `digits` is negative), in base `base`.
 
 If the `sigdigits` keyword argument is provided, it rounds to the specified number of
 significant digits, in base `base`.
