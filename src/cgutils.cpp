@@ -1177,8 +1177,13 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // above problem won't be as serious.
 
     auto merged_ai = dst_ai.merge(src_ai);
+#if JL_LLVM_VERSION < 210000
     ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
                              merged_ai.tbaa, merged_ai.tbaa_struct, merged_ai.scope, merged_ai.noalias);
+#else
+    ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
+                             merged_ai.toAAMDNodes());
+#endif
 }
 
 template<typename T1>
