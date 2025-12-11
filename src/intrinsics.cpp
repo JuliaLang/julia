@@ -876,7 +876,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         if (!type_is_ghost(ptrty)) {
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             typed_store(ctx, thePtr, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
-                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, nullptr, true, false, false, false, false, false, nullptr, "atomic_pointerset", nullptr, nullptr);
+                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, nullptr, StoreKind::Set, false, nullptr, "atomic_pointerset", nullptr, nullptr);
         }
     }
     return e;
@@ -1005,29 +1005,37 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
 // x(e[i], y) (modify)
 static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef<jl_cgval_t> argv, int nargs, const jl_cgval_t *modifyop)
 {
-    bool issetfield = f == atomic_pointerset;
-    bool isreplacefield = f == atomic_pointerreplace;
-    bool isswapfield = f == atomic_pointerswap;
-    bool ismodifyfield = f == atomic_pointermodify;
+    StoreKind op;
+    if (f == atomic_pointerset)
+        op = StoreKind::Set;
+    else if (f == atomic_pointerreplace)
+        op = StoreKind::Replace;
+    else if (f == atomic_pointerswap)
+        op = StoreKind::Swap;
+    else {
+        assert(f == atomic_pointermodify);
+        op = StoreKind::Modify;
+    }
+    bool has_cmp = op == StoreKind::Replace || op == StoreKind::Modify;
     const jl_cgval_t undefval;
     const jl_cgval_t &e = argv[0];
-    jl_cgval_t x = isreplacefield || ismodifyfield ? argv[2] : argv[1];
-    const jl_cgval_t &y = isreplacefield || ismodifyfield ? argv[1] : undefval;
-    const jl_cgval_t &ord = isreplacefield || ismodifyfield ? argv[3] : argv[2];
-    const jl_cgval_t &failord = isreplacefield ? argv[4] : undefval;
+    jl_cgval_t x = has_cmp ? argv[2] : argv[1];
+    const jl_cgval_t &y = has_cmp ? argv[1] : undefval;
+    const jl_cgval_t &ord = has_cmp ? argv[3] : argv[2];
+    const jl_cgval_t &failord = op == StoreKind::Replace ? argv[4] : undefval;
 
     jl_value_t *aty = e.typ;
     if (!jl_is_cpointer_type(aty) || !ord.constant || !jl_is_symbol(ord.constant))
         return emit_runtime_call(ctx, f, argv, nargs);
-    if (isreplacefield) {
+    if (op == StoreKind::Replace) {
         if (!failord.constant || !jl_is_symbol(failord.constant))
             return emit_runtime_call(ctx, f, argv, nargs);
     }
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
         return emit_runtime_call(ctx, f, argv, nargs);
-    enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
-    enum jl_memory_order failorder = isreplacefield ? jl_get_atomic_order((jl_sym_t*)failord.constant, true, false) : order;
+    enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
+    enum jl_memory_order failorder = op == StoreKind::Replace ? jl_get_atomic_order((jl_sym_t*)failord.constant, true, false) : order;
     if (order == jl_memory_order_invalid || failorder == jl_memory_order_invalid || failorder > order) {
         emit_atomic_error(ctx, "invalid atomic ordering");
         return jl_cgval_t(); // unreachable
@@ -1041,8 +1049,8 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e);
         bool isboxed = true;
         jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, sizeof(jl_value_t*), nullptr, issetfield, isreplacefield, isswapfield, ismodifyfield, false, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
-        if (issetfield)
+                    llvm_order, llvm_failorder, sizeof(jl_value_t*), nullptr, op, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
+        if (op == StoreKind::Set)
             ret = e;
         return ret;
     }
@@ -1053,7 +1061,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         emit_error(ctx, msg);
         return jl_cgval_t();
     }
-    if (!ismodifyfield) {
+    if (op != StoreKind::Modify) {
         emit_typecheck(ctx, x, ety, std::string(jl_intrinsic_name((int)f)));
         x = update_julia_type(ctx, x, ety);
         if (x.typ == jl_bottom_type)
@@ -1084,8 +1092,8 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         else
             thePtr = nullptr; // could use any value here, since typed_store will not use it
         jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, nb, nullptr, issetfield, isreplacefield, isswapfield, ismodifyfield, false, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
-        if (issetfield)
+                    llvm_order, llvm_failorder, nb, nullptr, op, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
+        if (op == StoreKind::Set)
             ret = e;
         return ret;
     }

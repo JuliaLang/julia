@@ -66,7 +66,7 @@ Unique symbolic identity for a variable, constant, label, or other entity
 const IdTag = Int
 
 """
-Id for scope layers in macro expansion
+Id for hygienic scope layers in macro expansion
 """
 const LayerId = Int
 
@@ -84,6 +84,11 @@ struct ScopeLayer
     parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
     is_macro_expansion::Bool # FIXME
 end
+
+"""
+Lexical scope ID
+"""
+const ScopeId = Int
 
 #-------------------------------------------------------------------------------
 # AST creation utilities
@@ -170,7 +175,8 @@ function newleaf(ctx, srcref, k::Kind, @nospecialize(value))
         setattr!(leaf._graph, leaf._id, :id, value)
     elseif k == K"symbolic_label"
         setattr!(leaf._graph, leaf._id, :name_val, value)
-    elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel"
+    elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
+                     softscope"
         # no attributes
     else
         val = k == K"Integer" ? convert(Int,     value) :

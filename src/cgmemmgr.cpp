@@ -1013,10 +1013,19 @@ public:
             if (!FA)
                 return OnFinalized(FA.takeError());
             // Need to handle dealloc actions when we GC code
+#if JL_LLVM_VERSION >= 210000 && JL_LLVM_VERSION < 220000
+            // This change was reverted before llvm 22 is branched off
+            orc::shared::runFinalizeActions(GP->allocActions(), [&] (auto E) {
+                if (!E)
+                    return OnFinalized(E.takeError());
+                OnFinalized(std::move(FA));
+            });
+#else
             auto E = orc::shared::runFinalizeActions(GP->allocActions());
             if (!E)
                 return OnFinalized(E.takeError());
             OnFinalized(std::move(FA));
+#endif
         });
     }
 };

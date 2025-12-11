@@ -78,6 +78,11 @@ function _register_kinds()
             "break_block"
             # Like block, but introduces a lexical scope; used during scope resolution.
             "scope_block"
+            # Equivalent to Expr(:softscope).  If found in the top-level thunk,
+            # all enclosed neutral scopes become soft scopes.  :hardscope exists
+            # too, but is always produced inside scope-blocks, so we represent
+            # it with an attribute on our scope-blocks.
+            "softscope"
             # [K"always_defined" x] is an assertion that variable `x` is assigned before use
             # ('local-def in flisp implementation is K"local" plus K"always_defined"
             "always_defined"
@@ -105,6 +110,8 @@ function _register_kinds()
             "_opaque_closure"
             # The enclosed statements must be executed at top level
             "toplevel_butfirst"
+            # like v = val, except that if `v` turns out global (either
+            # implicitly or by explicit `global`), it gains an implicit `const`
             "assign_or_constdecl_if_global"
             "moved_local"
             "label"

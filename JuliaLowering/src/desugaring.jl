@@ -51,7 +51,7 @@ end
 
 function contains_ssa_binding(ctx, ex)
     contains_unquoted(ex) do e
-        kind(e) == K"BindingId" && lookup_binding(ctx, e).is_ssa
+        kind(e) == K"BindingId" && get_binding(ctx, e).is_ssa
     end
 end
 
@@ -2971,6 +2971,9 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         name
     elseif kind(name) == K"tuple"
         # Anonymous function syntax `function (x,y) ... end`
+        name = mapchildren(ctx, name) do a
+            kind(a) === K"=" ? @ast(ctx, a, [K"kw" children(a)...]) : a
+        end
         @ast ctx name [K"call"
             "#anon#"::K"Placeholder"
             children(name)...

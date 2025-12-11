@@ -520,15 +520,6 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     elseif e.head === :islocal || e.head === :isglobal
         st_k = K"extension"
         child_exprs = [Expr(:quoted_symbol, e.head), e.args[1]]
-    elseif e.head === :block && nargs >= 1 &&
-        e.args[1] isa Expr && e.args[1].head === :softscope
-        # (block (softscope true) ex) produced with every REPL prompt.
-        # :hardscope exists too, but should just be a let, and appears to be
-        # unused in the wild.
-        ensure_attributes!(graph; scope_type=Symbol)
-        st_k = K"scope_block"
-        st_attrs[:scope_type] = :soft
-        child_exprs = e.args[2:end]
     end
 
     #---------------------------------------------------------------------------
