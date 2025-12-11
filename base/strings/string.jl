@@ -11,7 +11,7 @@ struct StringIndexError <: Exception
 end
 @noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
-function Base.showerror(io::IO, exc::StringIndexError)
+function showerror(io::IO, exc::StringIndexError)
     s = exc.string
     print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
     if firstindex(s) <= exc.index <= ncodeunits(s)

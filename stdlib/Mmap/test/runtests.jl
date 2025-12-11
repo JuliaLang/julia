@@ -269,6 +269,7 @@ A2 = mmap(s, Matrix{Int}, (m,n))
 seek(s, 0)
 A3 = mmap(s, Matrix{Int}, (m,n), convert(Int64, 2*sizeof(Int)))
 @test A == A3
+seek(s, 0)
 A4 = mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
 @test A[:, 151:end] == A4
 close(s)

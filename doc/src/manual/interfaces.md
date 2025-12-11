@@ -255,10 +255,10 @@ library module, only supports two dimensions, so it just defines
 `getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for [`setindex!`](@ref).
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
-`AbstractArray{Int, 1}`:
+`AbstractVector{Int}`:
 
 ```jldoctest squarevectype
-julia> struct SquaresVector <: AbstractArray{Int, 1}
+julia> struct SquaresVector <: AbstractVector{Int}
            count::Int
        end
 

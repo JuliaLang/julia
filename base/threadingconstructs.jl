@@ -91,7 +91,7 @@ end
 """
     Threads.threadpool(tid = threadid())::Symbol
 
-Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
+Return the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -101,7 +101,7 @@ end
 """
     Threads.threadpooldescription(tid = threadid())::String
 
-Returns the specified thread's threadpool name with extended description where appropriate.
+Return the specified thread's threadpool name with extended description where appropriate.
 """
 function threadpooldescription(tid = threadid())
     threadpool_name = threadpool(tid)
@@ -119,7 +119,7 @@ end
 """
     Threads.nthreadpools()::Int
 
-Returns the number of threadpools currently configured.
+Return the number of threadpools currently configured.
 """
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
@@ -147,7 +147,7 @@ end
 """
     threadpooltids(pool::Symbol)
 
-Returns a vector of IDs of threads in the given pool.
+Return a vector of IDs of threads in the given pool.
 """
 function threadpooltids(pool::Symbol)
     ni = _nthreads_in_pool(Int8(0))
@@ -163,7 +163,7 @@ end
 """
     Threads.ngcthreads()::Int
 
-Returns the number of GC threads currently configured.
+Return the number of GC threads currently configured.
 This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1

@@ -304,12 +304,21 @@ end
 
 ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
+# N.B.: Should match definition in src/ast.c:jl_parse
+function parser_for_module(mod::Union{Module, Nothing})
+    mod === nothing && return Core._parse
+    isdefined(mod, :_internal_julia_parse) ?
+        getglobal(mod, :_internal_julia_parse) :
+        Core._parse
+end
+
 function _parse_string(text::AbstractString, filename::AbstractString,
-                       lineno::Integer, index::Integer, options)
+                       lineno::Integer, index::Integer, options,
+                       _parse=parser_for_module(nothing))
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = Core._parse(text, filename, lineno, index-1, options)
+    ex, offset::Int = _parse(text, filename, lineno, index-1, options)
     ex, offset+1
 end
 
@@ -346,8 +355,8 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 ```
 """
 function parse(str::AbstractString, pos::Integer;
-               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true)
-    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom)
+               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true, mod = nothing)
+    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom, parser_for_module(mod))
     if raise && isexpr(ex, :error)
         err = ex.args[1]
         if err isa String
@@ -386,8 +395,8 @@ julia> Meta.parse("x = ")
 ```
 """
 function parse(str::AbstractString;
-               filename="none", raise::Bool=true, depwarn::Bool=true)
-    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn)
+               filename="none", raise::Bool=true, depwarn::Bool=true, mod = nothing)
+    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, mod = mod)
     if isexpr(ex, :error)
         return ex
     end
@@ -398,12 +407,12 @@ function parse(str::AbstractString;
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1)
-    return _parse_string(text, String(filename), lineno, pos, :atom)
+function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1, mod = nothing)
+    return _parse_string(text, String(filename), lineno, pos, :atom, parser_for_module(mod))
 end
 
-function parseall(text::AbstractString; filename="none", lineno=1)
-    ex,_ = _parse_string(text, String(filename), lineno, 1, :all)
+function parseall(text::AbstractString; filename="none", lineno=1, mod = nothing)
+    ex,_ = _parse_string(text, String(filename), lineno, 1, :all, parser_for_module(mod))
     return ex
 end
 

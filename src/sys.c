@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <stdio.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -609,6 +610,41 @@ JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
     return jl_getpagesize();
 }
 #endif
+
+JL_DLLEXPORT long jl_gethugepagesize(void) JL_NOTSAFEPOINT
+{
+#if defined(_OS_LINUX_)
+    long detected = 0;
+    FILE *f = fopen("/sys/kernel/mm/transparent_hugepage/hpage_pmd_size", "r");
+    if (f) {
+        unsigned long long size = 0;
+        if (fscanf(f, "%llu", &size) == 1 && size > 0) {
+            detected = (long)size;
+        }
+        fclose(f);
+    }
+    if (detected == 0) {
+        f = fopen("/proc/meminfo", "r");
+        if (f) {
+            char line[256];
+            while (fgets(line, sizeof(line), f)) {
+                unsigned long long kb = 0;
+                if (sscanf(line, "Hugepagesize:%llu kB", &kb) == 1 && kb > 0) {
+                    detected = (long)(kb * 1024ULL);
+                    break;
+                }
+            }
+            fclose(f);
+        }
+    }
+    if (detected == 0) {
+        detected = 2 * 1024 * 1024; // 2 MiB fallback
+    }
+    return detected;
+#else
+    return 0;
+#endif
+}
 
 JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 {

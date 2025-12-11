@@ -220,36 +220,36 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
-// create a fake function that describes the variable manipulations in jl_call_in_state
-__attribute__((naked)) static void fake_stack_pop(void)
+// Create a fake function that describes the register manipulations in jl_call_in_state
+// The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
+// state to the stack (to build a real sigreturn frame).
+__attribute__((naked)) static void jl_fake_signal_return(void)
 {
-#ifdef _CPU_X86_64_
-    __asm__ volatile (
-        "  .cfi_signal_frame\n"
-        "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
-        "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
-        "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
-        "  nop\n"
-    );
+#if defined(_CPU_X86_64_)
+__asm__(
+    "  .cfi_signal_frame\n"
+    "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
+    "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
+    "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
+    "  ud2\n"
+    "  ud2\n"
+);
 #elif defined(_CPU_AARCH64_)
-    __asm__ volatile (
-        "  .cfi_signal_frame\n"
-        "  .cfi_def_cfa sp, 0\n" // use sp as fp here
-        "  .cfi_offset lr, 0\n"
-        "  .cfi_offset sp, 8\n"
-        // Anything else got smashed, since we didn't explicitly copy all of the
-        // state object to the stack (to build a real sigreturn frame).
-        // This is also not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
-        // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
-        // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
-        " nop\n"
-    );
-#else
-CFI_NORETURN
+__asm__(
+    "  .cfi_signal_frame\n"
+    "  .cfi_def_cfa sp, 0\n" // use sp as fp here
+    // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
+    // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
+    // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
+    "  .cfi_offset lr, 0\n"
+    "  .cfi_offset sp, 8\n"
+    "  brk #1\n"
+    "  brk #1\n"
+);
 #endif
 }
 
-static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void))
+static void jl_call_in_state1(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0)
 {
 #ifdef _CPU_X86_64_
     uintptr_t sp = state->__rsp;
@@ -258,30 +258,28 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void))
 #endif
     sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
     assert(sp % 16 == 0);
-    sp -= 16;
 #ifdef _CPU_X86_64_
-    // set return address to NULL
-    *(uintptr_t*)sp = 0;
-    // pushq %sp
+    // push {%rsp, %rip}
     sp -= sizeof(void*);
     *(uintptr_t*)sp = state->__rsp;
-    // pushq %rip
     sp -= sizeof(void*);
     *(uintptr_t*)sp = state->__rip;
-    // pushq .fake_stack_pop + 1; aka call from fake_stack_pop
+    // pushq .jl_fake_signal_return + 1; aka call from jl_fake_signal_return
     sp -= sizeof(void*);
-    *(uintptr_t*)sp = (uintptr_t)&fake_stack_pop + 1;
+    *(uintptr_t*)sp = (uintptr_t)&jl_fake_signal_return + 1;
     state->__rsp = sp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
+    state->__rdi = arg0;
 #elif defined(_CPU_AARCH64_)
-    // push {%sp, %pc + 4}
+    // push {%sp, %pc}
     sp -= sizeof(void*);
     *(uintptr_t*)sp = state->__sp;
     sp -= sizeof(void*);
     *(uintptr_t*)sp = (uintptr_t)state->__pc;
     state->__sp = sp; // x31
     state->__pc = (uint64_t)fptr; // pc
-    state->__lr = (uintptr_t)&fake_stack_pop + 4; // x30
+    state->__lr = (uintptr_t)&jl_fake_signal_return + 4; // x30
+    state->__x[0] = arg0;
 #else
 #error "julia: throw-in-context not supported on this platform"
 #endif
@@ -289,20 +287,30 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void))
 
 static void jl_longjmp_in_state(host_thread_state_t *state, jl_jmp_buf jmpbuf)
 {
-
     if (!jl_simulate_longjmp(jmpbuf, (bt_context_t*)state)) {
         // for sanitizer builds, fallback to calling longjmp on the original stack
         // (this will fail for stack overflow, but that is hardly sanitizer-legal anyways)
 #ifdef _CPU_X86_64_
-    state->__rdi = (uintptr_t)jmpbuf;
-    state->__rsi = 1;
+        uintptr_t sp = state->__rsp;
 #elif defined(_CPU_AARCH64_)
-    state->__x[0] = (uintptr_t)jmpbuf;
-    state->__x[1] = 1;
-#else
-#error "julia: jl_longjmp_in_state not supported on this platform"
+        uintptr_t sp = state->__sp;
 #endif
-        jl_call_in_state(state, (void (*)(void))longjmp);
+        sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
+        assert(sp % 16 == 0);
+#ifdef _CPU_X86_64_
+        state->__rdi = (uintptr_t)jmpbuf;
+        state->__rsi = 1;
+        state->__rsp = sp; // set stack pointer
+        state->__rip = (uint64_t)longjmp; // "call" the function
+#elif defined(_CPU_AARCH64_)
+        state->__x[0] = (uintptr_t)jmpbuf;
+        state->__x[1] = 1;
+        state->__sp = sp; // x31
+        state->__pc = (uint64_t)longjmp; // pc
+        state->__lr = (uintptr_t)0; // x30
+#else
+#error "julia: throw-in-context not supported on this platform"
+#endif
     }
 }
 
@@ -527,7 +535,7 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) J
     return 1;
 }
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
     host_thread_state_t state;
@@ -577,7 +585,7 @@ static void jl_try_deliver_sigint(void)
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
-static void JL_NORETURN jl_exit_thread0_cb(int signo)
+static void jl_exit_thread0_cb(int signo)
 {
     jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
@@ -602,15 +610,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
     ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
     memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
 
-#ifdef _CPU_X86_64_
-    // First integer argument. Not portable but good enough =)
-    state.__rdi = signo;
-#elif defined(_CPU_AARCH64_)
-    state.__x[0] = signo;
-#else
-#error Fill in first integer argument here
-#endif
-    jl_call_in_state(&state, (void (*)(void))&jl_exit_thread0_cb);
+    jl_call_in_state1(&state, (void (*)(void))&jl_exit_thread0_cb, signo);
     unsigned int count = MACH_THREAD_STATE_COUNT;
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
@@ -710,6 +710,14 @@ static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
     if (keymgr_locked)
         _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
     jl_unlock_profile();
+}
+
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
+{
+    int lockret = jl_lock_profile_mach(1);
+    int success = jl_thread_suspend_and_get_state(tid, 1, ctx);
+    jl_unlock_profile_mach(1, lockret);
+    return success;
 }
 
 void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)

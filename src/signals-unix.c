@@ -70,6 +70,95 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
 
 #if !defined(_OS_DARWIN_)
+extern void jl_fake_signal_return(void);
+// Create a trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state
+// The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
+// state to the stack (to build a real sigreturn frame).
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)) && defined(_CPU_X86_64_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack until frame is set up
+    "  .cfi_undefined %rip\n"
+    "  .cfi_undefined %rsp\n"
+    // rdi points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    "  pushq (%rdi)\n"        // push pc (signal_ctx_pc)
+    "  pushq 8(%rdi)\n"       // push sp (signal_ctx_sp)
+    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    "  .cfi_def_cfa %rsp, 8\n"
+    "  .cfi_offset %rip, 0\n"  // previous %rip at CFA+0 (pc slot at rsp+8)
+    "  .cfi_offset %rsp, -8\n" // previous %rsp at CFA-8 (sp slot at rsp+0)
+    "  pushq 16(%rdi)\n"      // push fptr (signal_ctx_fptr)
+    "  .cfi_def_cfa %rsp, 16\n"
+    "  movq 24(%rdi), %rdi\n" // restore original rdi from signal_ctx_arg
+    "  subq $8, %rsp\n"       // align stack to 16 bytes
+    "  .cfi_def_cfa %rsp, 24\n"
+    "  callq *8(%rsp)\n"      // call fptr
+    "  ud2\n"                 // unreachable
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+
+#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_X86_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack until frame is set up
+    "  .cfi_undefined 1\n"
+    // eax points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    "  pushl (%eax)\n"        // push pc (signal_ctx_pc)
+    "  pushl 4(%eax)\n"       // push sp (signal_ctx_sp)
+    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    "  .cfi_def_cfa %esp, 4\n"
+    "  .cfi_offset %eip, 0\n"  // previous %eip at CFA+0 (pc slot at esp+4)
+    "  .cfi_offset %esp, -4\n" // previous %esp at CFA-4 (sp slot at esp+0)
+    "  pushl 8(%eax)\n"       // push fptr (signal_ctx_fptr)
+    "  .cfi_def_cfa %esp, 8\n"
+    "  movl 12(%eax), %eax\n" // restore original eax from signal_ctx_arg
+    "  subl $4, %esp\n"       // align stack to 16 bytes
+    "  .cfi_def_cfa %esp, 12\n"
+    "  calll *4(%esp)\n"      // call fptr
+    "  ud2\n"                 // unreachable
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_AARCH64_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack until frame is set up
+    "  .cfi_undefined 1\n"
+    // x0 points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    "  ldp x1, x2, [x0]\n"      // load pc (x1) and sp (x2)
+    "  stp x2, x1, [sp, #-16]!\n" // push sp and pc (sp at lower addr, pc at higher addr)
+    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    "  .cfi_def_cfa sp, 16\n"
+    "  .cfi_offset lr, -8\n"   // previous lr (pc) at CFA-8 (pc slot at sp+8)
+    "  .cfi_offset sp, -16\n"  // previous sp at CFA-16 (sp slot at sp+0)
+    // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
+    // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
+    // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
+    "  ldp x1, x2, [x0, #16]\n" // load fptr (x1) and saved x0 (x2)
+    "  mov x0, x2\n"           // restore original x0
+    "  blr x1\n"               // call fptr
+    "  brk #1\n"               // unreachable
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+#else
+extern void JL_NORETURN jl_fake_signal_return(void)
+{
+    CFI_NORETURN
+    abort();
+}
+#endif
+
 static inline uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
 {
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
@@ -123,46 +212,79 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     // will not be part of the validation...
     uintptr_t rsp = jl_get_rsp_from_ctx(_ctx);
     rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
+    assert(rsp % 16 == 0);
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.gregs[REG_RSP] = rsp;
-    ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.gregs[REG_RIP];
+    ptls->signal_ctx_sp = ctx->uc_mcontext.gregs[REG_RSP];
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.gregs[REG_RDI];
+    ctx->uc_mcontext.gregs[REG_RSP] = rsp; // set stack pointer
+    ctx->uc_mcontext.gregs[REG_RDI] = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.mc_rsp = rsp;
-    ctx->uc_mcontext.mc_rip = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.mc_rip;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.mc_rsp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.mc_rdi;
+    ctx->uc_mcontext.mc_rsp = rsp; // set stack pointer
+    ctx->uc_mcontext.mc_rdi = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.mc_rip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.gregs[REG_ESP] = rsp;
-    ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.gregs[REG_EIP];
+    ptls->signal_ctx_sp = ctx->uc_mcontext.gregs[REG_ESP];
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.gregs[REG_EAX];
+    ctx->uc_mcontext.gregs[REG_ESP] = rsp; // set stack pointer
+    ctx->uc_mcontext.gregs[REG_EAX] = (uintptr_t)&ptls->signal_ctx_pc; // set eax to point to signal_ctx
+    ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.mc_esp = rsp;
-    ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.mc_eip;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.mc_esp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.mc_eax;
+    ctx->uc_mcontext.mc_esp = rsp; // set stack pointer
+    ctx->uc_mcontext.mc_eax = (uintptr_t)&ptls->signal_ctx_pc; // set eax to point to signal_ctx
+    ctx->uc_mcontext.mc_eip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
     struct sigcontext *ctx = (struct sigcontext *)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->sc_rsp = rsp;
-    ctx->sc_rip = fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->sc_rip;
+    ptls->signal_ctx_sp = ctx->sc_rsp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->sc_rdi;
+    ctx->sc_rsp = rsp; // set stack pointer
+    ctx->sc_rdi = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->sc_rip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    ctx->uc_mcontext.sp = rsp;
-    ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
-    ctx->uc_mcontext.pc = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = (uintptr_t)ctx->uc_mcontext.pc;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.sp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.regs[0];
+    ctx->uc_mcontext.sp = rsp; // sp
+    ctx->uc_mcontext.regs[0] = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.pc = (uint64_t)&jl_fake_signal_return; // pc
+    ctx->uc_mcontext.regs[30] = 0; // clear lr (x30)
 #elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp;
-    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear link register (x29)
-    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.mc_gpregs.gp_elr;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.mc_gpregs.gp_sp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.mc_gpregs.gp_x[0];
+    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp; // set stack pointer
+    ctx->uc_mcontext.mc_gpregs.gp_x[0] = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)&jl_fake_signal_return; // pc
+    ctx->uc_mcontext.mc_gpregs.gp_lr = 0; // clear lr (x30)
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;
@@ -303,6 +425,8 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 }
 #endif
 
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx);
+
 #if defined(HAVE_MACH)
 #include "signals-mach.c"
 #else
@@ -310,34 +434,25 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #include <sys/eventfd.h>
 #include <link.h>
 
-#ifndef _OS_FREEBSD_
 typedef struct {
-    void (*f)(void*) JL_NOTSAFEPOINT;
-    void *ctx;
-} callback_t;
+    int16_t tid;
+    bt_context_t *ctx;
+    int success;
+} callback_data_t;
 static int with_dl_iterate_phdr_lock(struct dl_phdr_info *info, size_t size, void *data)
 {
     jl_lock_profile();
-    callback_t *callback = (callback_t*)data;
-    callback->f(callback->ctx);
+    callback_data_t *cb_data = (callback_data_t*)data;
+    cb_data->success = jl_thread_suspend_and_get_state(cb_data->tid, 1, cb_data->ctx);
     jl_unlock_profile();
     return 1; // only call this once
 }
-#endif
 
-void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
-#ifndef _OS_FREEBSD_
-    callback_t callback = {f, ctx};
-    dl_iterate_phdr(with_dl_iterate_phdr_lock, &callback);
-#else
-    // FreeBSD makes the questionable decisions to use a terrible implementation of a spin
-    // lock and to block all signals while a lock is held. However, that also means it is
-    // not currently vulnerable to this libunwind bug that other platforms can encounter.
-    jl_lock_profile();
-    f(ctx);
-    jl_unlock_profile();
-#endif
+    callback_data_t cb_data = {tid, ctx, 0};
+    dl_iterate_phdr(with_dl_iterate_phdr_lock, &cb_data);
+    return cb_data.success;
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
@@ -458,7 +573,7 @@ static int exit_signal_cond = -1;
 static int signal_caught_cond = -1;
 static int signals_inflight = 0;
 
-int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     int err;
     pthread_mutex_lock(&in_signal_lock);
@@ -556,9 +671,8 @@ static void jl_try_deliver_sigint(void)
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
 static int thread0_exit_signo = 0;
-static void JL_NORETURN jl_exit_thread0_cb(void)
+static void jl_exit_thread0_cb(void)
 {
-CFI_NORETURN
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
@@ -845,7 +959,7 @@ void trigger_profile_peek(void)
 
 static jl_bt_element_t signal_bt_data[JL_MAX_BT_SIZE + 1];
 static size_t signal_bt_size = 0;
-static void do_critical_profile(void *ctx)
+static void do_critical_profile(void)
 {
     bt_context_t signal_context;
     // sample each thread, round-robin style in reverse order
@@ -853,7 +967,7 @@ static void do_critical_profile(void *ctx)
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     for (int i = nthreads; i-- > 0; ) {
         // notify thread to stop
-        if (!jl_thread_suspend_and_get_state(i, 1, &signal_context))
+        if (!jl_thread_suspend(i, &signal_context))
             continue;
 
         // do backtrace on thread contexts for critical signals
@@ -866,7 +980,7 @@ static void do_critical_profile(void *ctx)
     }
 }
 
-static void do_profile(void *ctx)
+static void do_profile(void)
 {
     bt_context_t signal_context;
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
@@ -883,7 +997,7 @@ static void do_profile(void *ctx)
             return;
         }
         // notify thread to stop
-        if (!jl_thread_suspend_and_get_state(tid, 1, &signal_context))
+        if (!jl_thread_suspend(tid, &signal_context))
             return;
         // unwinding can fail, so keep track of the current state
         // and restore from the SEGV handler if anything happens.
@@ -1062,7 +1176,7 @@ static void *signal_listener(void *arg)
         signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         if (critical) {
-            jl_with_stackwalk_lock(do_critical_profile, NULL);
+            do_critical_profile();
         }
         else if (profile) {
             if (profile_all_tasks) {
@@ -1070,7 +1184,7 @@ static void *signal_listener(void *arg)
                 jl_profile_task();
             }
             else {
-                jl_with_stackwalk_lock(do_profile, NULL);
+                do_profile();
             }
         }
 #ifndef HAVE_MACH

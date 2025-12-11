@@ -10,8 +10,6 @@
 #define DISABLE_FREQUENT_EVENTS
 #endif
 
-jl_module_t *jl_module_root(jl_module_t *m);
-
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -975,11 +975,22 @@ rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
     rsplit(str, isspace; limit, keepempty)
 
-_replace(io, repl, str, r, pattern) = print(io, repl)
+_replace(io, repl::Union{<:AbstractString, <:AbstractChar}, str, r, pattern) =
+    write(io, repl)
+function _replace(io, repl, str, r, pattern)
+    if applicable(position, io)
+        p1 = position(io)
+        print(io, repl)
+        p2 = position(io)
+        p2 - p1
+    else
+        write(io, repr(repl))
+    end
+end
 _replace(io, repl::Function, str, r, pattern) =
-    print(io, repl(SubString(str, first(r), last(r))))
+    _replace(io, repl(SubString(str, first(r), last(r))), str, r, pattern)
 _replace(io, repl::Function, str, r, pattern::Function) =
-    print(io, repl(str[first(r)]))
+    _replace(io, repl(str[first(r)]), str, r, pattern)
 
 _pat_replacer(x) = x
 _free_pat_replacer(x) = nothing
@@ -1009,43 +1020,54 @@ end
 function _replace_finish(io::IO, str, count::Int,
                          e1::Int, patterns::Tuple, replaces::Tuple, rs::Tuple)
     n = 1
-    i = a = firstindex(str)
-    while true
-        p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
-        r = rs[p]
-        j, k = first(r), last(r)
-        j > e1 && break
-        if i == a || i <= k
-            # copy out preserved portion
-            GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
-            # copy out replacement string
-            _replace(io, replaces[p], str, r, patterns[p])
-        end
-        if k < j
-            i = j
-            j == e1 && break
-            k = nextind(str, j)
-        else
-            i = k = nextind(str, k)
-        end
-        n == count && break
-        let k = k
-            rs = map(patterns, rs) do p, r
-                if first(r) < k
-                    r = findnext(p, str, k)
-                    if r === nothing || first(r) == 0
-                        return e1+1:0
-                    end
-                    r isa Int && (r = r:r) # findnext / performance fix
-                end
-                return r
-            end
-        end
+    i = start = firstindex(str)
+    while n <= count
+        rs, _, r, _, i = @inline _replace_once(
+            io, str, start, e1, patterns, replaces, rs, count, n, i)
+        first(r) >= e1 && break
         n += 1
     end
     foreach(_free_pat_replacer, patterns)
     write(io, SubString(str, i))
     return io
+end
+
+function _replace_once(io::IO, str, start::Int, e1::Int,
+                       patterns::Tuple, replaces::Tuple, rs::Tuple,
+                       count::Int, n::Int, i::Int)
+    x = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
+    r = rs[x]
+    j, k = first(r), last(r)
+    j > e1 && return rs, x, r, 0, i
+    nb = if i == start || i <= k
+        # copy out preserved portion
+        GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
+        # copy out replacement string
+        _replace(io, replaces[x], str, r, patterns[x])
+    else
+        0
+    end
+    if k < j
+        i = j
+        j == e1 && return rs, x, r, nb, i
+        k = nextind(str, j)
+    else
+        i = k = nextind(str, k)
+    end
+    n == count && return rs, x, r, nb, i
+    let k = k
+        rs = map(patterns, rs) do p, r
+            if first(r) < k
+                r = findnext(p, str, k)
+                if r === nothing || first(r) == 0
+                    return e1+1:0
+                end
+                r isa Int && (r = r:r) # findnext / performance fix
+            end
+            return r
+        end
+    end
+    return rs, x, r, nb, i
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in

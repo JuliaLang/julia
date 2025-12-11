@@ -446,7 +446,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 | function scope     | `function x()` ... `end` | `int x() {` ... `}`                          |
 | global scope       | `module MyMod` ... `end` | `namespace MyNS {` ... `}`                   |
 | software module    | A Julia "package"        | `.h`/`.hpp` files<br>+compiled `somelib.a`   |
-| assembling<br>software modules | `SomePkg.jl`: ...<br>`import("subfile1.jl")`<br>`import("subfile2.jl")`<br>... | `$(AR) *.o` &rArr; `somelib.a` |
+| assembling<br>software modules | `SomePkg.jl`: ...<br>`include("subfile1.jl")`<br>`include("subfile2.jl")`<br>... | `$(AR) *.o` ⇒ `somelib.a` |
 | import<br>software module | `import SomePkg`  | `#include <somelib>`<br>+link in `somelib.a` |
 | module library     | `LOAD_PATH[]`, \*Git repository,<br>\*\*custom package registry  | more `.h`/`.hpp` files<br>+bigger compiled `somebiglib.a` |
 

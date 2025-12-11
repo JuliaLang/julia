@@ -2376,3 +2376,16 @@ end
     show(io, m2)
     @test String(take!(io)) == "Any[#= circular reference @-1 =# 3; 2 4;;; 5 7; 6 8]"
 end
+
+@testset "size promotion in addition/subtraction" begin
+    for A in Any[ones(), ones(1), ones(1,1,1)]
+        @test +(A) == A
+        for B in Any[ones(), ones(1), ones(1,1,1)]
+            sz = ndims(A) > ndims(B) ? size(A) : size(B)
+            @test A + B == fill(2.0,sz)
+            @test A - B == zeros(sz)
+            @test A + B + zeros() == A + B
+            @test A - B - zeros() == A - B
+        end
+    end
+end

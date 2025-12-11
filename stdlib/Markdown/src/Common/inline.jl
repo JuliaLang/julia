@@ -96,7 +96,6 @@ function link(stream::IO, md::MD)
         startswith(stream, '[') || return
         text = readuntil(stream, ']', match = '[')
         text ≡ nothing && return
-        skipwhitespace(stream)
         startswith(stream, '(') || return
         url = readuntil(stream, ')', match = '(')
         url ≡ nothing && return

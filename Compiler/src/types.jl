@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-#
 
 const WorkThunk = Any
 # #@eval struct WorkThunk
@@ -7,6 +6,12 @@ const WorkThunk = Any
 #    WorkThunk(work) = new($(Expr(:opaque_closure, :(Tuple{Vector{Tasks}}), :Bool, :Bool, :((tasks) -> work(tasks))))) # @opaque Vector{Tasks}->Bool (tasks)->work(tasks)
 # end
 # (p::WorkThunk)() = p.thunk()
+
+# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
+const InlineCostType = UInt16
+const MAX_INLINE_COST = typemax(InlineCostType)
+const MIN_INLINE_COST = InlineCostType(10)
+const MaybeCompressed = Union{CodeInfo, String}
 
 """
     AbstractInterpreter
@@ -85,6 +90,10 @@ struct AnalysisResults
 end
 const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
 
+# Abstract type for call inference results that can be stored in CallInfo
+# This is defined here so that InferenceResult can inherit from it
+abstract type InferredCallResult end
+
 """
     result::InferenceResult
 
@@ -95,7 +104,7 @@ There are two constructor available:
 - `InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::BitVector)`
   for constant inference, with extended lattice information included in `result.argtypes`.
 """
-mutable struct InferenceResult
+mutable struct InferenceResult <: InferredCallResult
     #=== constant fields ===#
     const linfo::MethodInstance
     const argtypes::Vector{Any}
@@ -109,19 +118,18 @@ mutable struct InferenceResult
     ipo_effects::Effects              # if inference is finished
     effects::Effects                  # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
-    is_src_volatile::Bool             # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     tombstone::Bool
 
     #=== uninitialized fields ===#
-    ci::CodeInstance                  # CodeInstance if this result may be added to the cache
-    ci_as_edge::CodeInstance          # CodeInstance as the edge representing locally cached result
+    ci::CodeInstance                  # CodeInstance that will contain the result in full
+    ci_as_edge::CodeInstance          # CodeInstance, that is preferred just for use when representing the result as the edge
     function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
         result = exc_result = src = nothing
         valid_worlds = WorldRange()
         ipo_effects = effects = Effects()
         analysis_results = NULL_ANALYSIS_RESULTS
         return new(mi, argtypes, overridden_by_const, result, exc_result, src,
-            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false, false)
+            valid_worlds, ipo_effects, effects, analysis_results, false)
     end
 end
 function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
@@ -492,10 +500,45 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
+struct OverlayCodeCache{Cache}
+    globalcache::Cache
+    localcache::Vector{InferenceResult}
+end
+
+setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance) = (setindex!(cache.globalcache, ci, mi); cache)
+
+haskey(cache::OverlayCodeCache, mi::MethodInstance) = get(cache, mi, nothing) !== nothing
+
+function get(cache::OverlayCodeCache, mi::MethodInstance, default)
+    for cached_result in Iterators.reverse(cache.localcache)
+        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
+        cached_result.linfo === mi || continue
+        cached_result.overridden_by_const === nothing || continue
+        isdefined(cached_result, :ci) || continue
+        ci = cached_result.ci
+        isdefined(ci, :inferred) || continue
+        return cached_result
+    end
+    return get(cache.globalcache, mi, default)
+end
+
+function getindex(cache::OverlayCodeCache, mi::MethodInstance)
+    r = get(cache, mi, nothing)
+    r === nothing && throw(KeyError(mi))
+    return r
+end
+
+code_cache(interp::AbstractInterpreter, #=extended_range=#::WorldRange) = code_cache(interp)
+
 function code_cache(interp::AbstractInterpreter)
-  cache = InternalCodeCache(cache_owner(interp))
-  worlds = WorldRange(get_inference_world(interp))
-  return WorldView(cache, worlds)
+    cache = InternalCodeCache(cache_owner(interp), get_inference_world(interp))
+    return OverlayCodeCache(cache, get_inference_cache(interp))
+end
+
+function code_cache(interp::NativeInterpreter, extended_range::WorldRange)
+    @assert get_inference_world(interp) in extended_range
+    cache = InternalCodeCache(cache_owner(interp), extended_range)
+    return OverlayCodeCache(cache, get_inference_cache(interp))
 end
 
 get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)
@@ -513,7 +556,7 @@ function add_edges!(edges::Vector{Any}, info::CallInfo)
 end
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
-getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)#=::Union{Nothing,ConstResult}=#
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)#=::Union{Nothing,InferenceResult}=#
 
 add_edges_impl(::Vector{Any}, ::CallInfo) = error("""
     All `CallInfo` is required to implement `add_edges_impl(::Vector{Any}, ::CallInfo)`""")

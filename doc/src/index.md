@@ -32,18 +32,6 @@ Markdown.parse("""
 """)
 ```
 
-## [Important Links](@id man-important-links)
-
-Below is a non-exhaustive list of links that will be useful as you learn and use the Julia programming language.
-
-- [Julia Homepage](https://julialang.org)
-- [Install Julia](https://julialang.org/install/)
-- [Discussion forum](https://discourse.julialang.org)
-- [Julia YouTube](https://www.youtube.com/user/JuliaLanguage)
-- [Find Julia Packages](https://julialang.org/packages/)
-- [Learning Resources](https://julialang.org/learning/)
-- [Read and write blogs on Julia](https://forem.julialang.org)
-
 ## [Introduction](@id man-introduction)
 
 Scientific computing has traditionally required the highest performance, yet domain experts have
@@ -127,39 +115,13 @@ language. In addition to the above, some advantages of Julia over comparable sys
   * Powerful shell-like capabilities for managing other processes
   * Lisp-like macros and other metaprogramming facilities
 
-## [Julia Standard Modules and the Standard Library](@id man-standard-modules-stdlib)
+## [Important Links](@id man-important-links)
 
-The Julia runtime comes with [standard modules](@ref standard-modules),
-which are essential namespaces that are usually loaded automatically.
+A non-exhaustive list of links that will be useful as you learn and use the Julia programming language:
 
-```@docs; canonical=false
-Core
-Base
-```
-
-Julia's `Base` module contains various [useful submodules](@ref base-submodules).
-
-### [The Standard Library](@id man-stdlib)
-
-The Julia standard library contains additional, commonly used packages that are installed alongside the Julia runtime by default.
-To use a standard library package, it is first necessary to load the package with a [`using`](@ref) or [`import`](@ref) statement.
-Links to available standard library packages are provided below,
-and may also be found in the website sidebar.
-Their source code is available in the `Sys.STDLIB` directory of a Julia installation.
-
-```@eval
-import Markdown
-list = sort(filter(x -> match(r"_jll$", x) === nothing, readdir(Sys.STDLIB)))
-Markdown.parse(join("- [`" .* list .* "`](stdlib/" .* list .* ".html)", "\n"))
-```
-
-Julia also provides various standard, pre-built binary libraries
-of established software that is written in other languages.
-By convention, these packages have names that end with `_jll`.
-The [`using`](@ref) statement can load symbol names from these binary libraries:
-
-```@eval
-import Markdown
-list = sort(filter(x -> match(r"_jll$", x) !== nothing, readdir(Sys.STDLIB)))
-Markdown.parse(join("- [`" .* list .* "`](stdlib/" .* list .* ".html)", "\n"))
-```
+- [Julia Homepage](https://julialang.org)
+- [Install Julia](https://julialang.org/install/)
+- [Discussion forum](https://discourse.julialang.org)
+- [Julia YouTube](https://www.youtube.com/user/JuliaLanguage)
+- [Find Julia Packages](https://julialang.org/packages/)
+- [Learning Resources](https://julialang.org/learning/)

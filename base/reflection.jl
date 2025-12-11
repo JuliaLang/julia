@@ -170,17 +170,32 @@ struct CodegenParams
     """
     force_emit_all::Cint
 
+    """
+    When enabled, run the MemorySanitizer pass.
+    """
+    sanitize_memory::Cint
+    """
+    When enabled, run the ThreadSanitizer pass.
+    """
+    sanitize_thread::Cint
+    """
+    When enabled, run the AddressSanitizer pass.
+    """
+    sanitize_address::Cint
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false)
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
+                   sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all))
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all),
+            Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address))
     end
 end
 
@@ -196,7 +211,7 @@ end
 """
     code_typed(f, types; kw...)
 
-Returns an array of type-inferred lowered form (IR) for the methods matching the given
+Return an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature.
 
 # Keyword Arguments
@@ -308,8 +323,23 @@ function invoke_interp_compiler(interp, fname::Symbol, args...)
         T = typeof(interp)
         while true
             Tname = typename(T).name
-            Tname === :Any && error("Expected Interpreter")
+            Tname === :Any && error("Expected AbstractInterpreter")
             Tname === :AbstractInterpreter && break
+            T = supertype(T)
+        end
+        return getglobal(typename(T).module, fname)(args...)
+    end
+end
+
+function invoke_mt_compiler(mt, fname::Symbol, args...)
+    if mt === nothing
+        return invoke_default_compiler(fname, args...)
+    else
+        T = typeof(mt)
+        while true
+            Tname = typename(T).name
+            Tname === :Any && error("Expected MethodTableView")
+            Tname === :MethodTableView && break
             T = supertype(T)
         end
         return getglobal(typename(T).module, fname)(args...)
@@ -588,7 +618,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> rt::Type
 
-Returns an inferred return type of the function call specified by `f` and `types`.
+Return an inferred return type of the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -734,7 +764,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> exct::Type
 
-Returns the type of exception potentially thrown by the function call specified by `f` and `types`.
+Return the type of exception potentially thrown by the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -803,7 +833,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> effects::Effects
 
-Returns the possible computation effects of the function call specified by `f` and `types`.
+Return the possible computation effects of the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -922,7 +952,7 @@ function _which(@nospecialize(tt::Type);
     world::UInt=get_world_counter(),
     raise::Bool=true)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    match, = invoke_default_compiler(:findsup_mt, tt, world, method_table)
+    match, = invoke_mt_compiler(method_table, :findsup_mt, tt, world, method_table)
     if match === nothing
         raise && error("no unique matching method found for the specified argument types")
         return nothing
@@ -933,7 +963,7 @@ end
 """
     which(f, types)
 
-Returns the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
+Return the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 
@@ -957,7 +987,7 @@ end
 """
     which(types::Type{<:Tuple})
 
-Returns the method that would be called by the given type signature (as a tuple type).
+Return the method that would be called by the given type signature (as a tuple type).
 """
 function which(@nospecialize(tt#=::Type=#))
     return _which(tt).method
