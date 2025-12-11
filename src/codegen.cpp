@@ -1848,7 +1848,11 @@ struct jl_cgval_t {
             else if (inline_roots_count > inline_roots.size())
                 *this = jl_cgval_t(); // not enough roots to populate this value
             // drop data if all of the content is in the roots
-            if (inline_roots_count > 0 && justpointers && Vboxed == nullptr)
+            // but only if the concrete type (v.typ) is also all pointers - otherwise we'd lose inline data
+            bool v_justpointers = jl_is_concrete_type(v.typ) &&
+                                  ((jl_datatype_t*)v.typ)->layout &&
+                                  allpointers((jl_datatype_t*)v.typ);
+            if (inline_roots_count > 0 && justpointers && v_justpointers && Vboxed == nullptr)
                 V = nullptr;
         }
     }
@@ -9419,7 +9423,7 @@ static jl_llvm_functions_t
                 }
                 inline_roots = retvalinfo.inline_roots;
                 Value *tindex = retvalinfo.TIndex;
-                if (retvalinfo.isboxed || retvalinfo.V == NULL) { // includes isboxed || isconstant || isghost
+                if (retvalinfo.isboxed || (retvalinfo.V == NULL && retvalinfo.constant == NULL)) { // includes isboxed || isghost
                     sret = NULL; // skip copy
                 }
                 else if (retvalinfo.Vboxed) {

@@ -1075,3 +1075,16 @@ let io = IOBuffer()
     str = String(take!(io))
     @test occursin("julia.write_barrier", str)
 end
+
+# Test that union return values with mixed pointer/inline data are correctly copied
+function union_return_copy_test(x::Bool)
+    if x
+        return ("Q8", 1)
+    else
+        return ("Q10", Ref(5))
+    end
+end
+let r = union_return_copy_test(true)
+    @test r == ("Q8", 1)
+    @test r[2] === 1
+end
