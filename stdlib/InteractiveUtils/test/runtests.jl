@@ -1056,3 +1056,13 @@ end # module
     using .OuterModule
     @test_nowarn subtypes(Integer);
 end
+
+# PR #45399
+@test (@which [1;;;]).name === :hvncat
+@test (@which [1;;; 1]).name === :hvncat
+@test (@which [[1 2];;; 1 3]).name === :hvncat
+
+@test (@which Int[1;;;]).name === :typed_hvncat
+@test (@which Int[1;;; 1]).name === :typed_hvncat
+@test (@which Int[[1 2];;; 1 3]).name === :typed_hvncat
+
