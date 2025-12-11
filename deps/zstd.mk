@@ -7,9 +7,8 @@ $(BUILDDIR)/$(ZSTD_SRC_DIR)/source-extracted: export MSYS=$(MSYS_NONEXISTENT_SYM
 
 ZSTD_BUILD_OPTS := MOREFLAGS="-DZSTD_MULTITHREAD $(fPIC)" bindir=$(build_private_libexecdir)
 ifeq ($(OS), WINNT)
-# Zstd detects "Windows" not WINNT, ordinarily from the inherited $(OS), but it expects the
-# override to be done using TARGET_SYSTEM.
-ZSTD_BUILD_OPTS += TARGET_SYSTEM="Windows"
+# Zstd detects "Windows" not WINNT
+ZSTD_BUILD_OPTS += OS="Windows"
 endif
 
 $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-configured: $(BUILDDIR)/$(ZSTD_SRC_DIR)/source-extracted

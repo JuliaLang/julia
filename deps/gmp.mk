@@ -7,6 +7,13 @@ GMP_CONFIGURE_OPTS := $(CONFIGURE_COMMON)
 GMP_CONFIGURE_OPTS += --enable-cxx --enable-shared --disable-static
 GMP_CONFIGURE_OPTS += CC_FOR_BUILD="$(HOSTCC)"
 
+ifeq ($(OS),WINNT)
+# COFF doesn't support PIC, and so -DPIC causes assembly errors with attempted :got: relocations on Aarch64
+GMP_CONFIGURE_OPTS += --without-pic lt_cv_prog_compiler_pic=-DDLL_EXPORT lt_cv_prog_compiler_pic_CXX=-DDLL_EXPORT
+else
+GMP_CONFIGURE_OPTS += --with-pic
+endif
+
 ifeq ($(BUILD_ARCH),x86_64)
 GMP_CONFIGURE_OPTS += --enable-fat
 endif

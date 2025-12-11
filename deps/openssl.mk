@@ -10,10 +10,10 @@ else
 OPENSSL_TARGET := darwin64-x86_64-cc
 endif
 else ifeq ($(OS),WINNT)
-ifeq ($(ARCH),x86_64)
-OPENSSL_TARGET := mingw64
-else
+ifeq ($(ARCH),i686)
 OPENSSL_TARGET := mingw
+else
+OPENSSL_TARGET := mingw64
 endif
 else ifeq ($(OS),FreeBSD)
 ifeq ($(ARCH),aarch64)
@@ -58,7 +58,7 @@ checksum-openssl: $(SRCCACHE)/openssl-$(OPENSSL_VER).tar.gz
 $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-configured: $(SRCCACHE)/openssl-$(OPENSSL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-        CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLAGS)" \
+        CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLAGS)" RC="$(CROSS_COMPILE)windres" \
 	$(dir $<)/Configure shared --prefix=$(abspath $(build_prefix)) --libdir=$(abspath $(build_libdir)) $(OPENSSL_TARGET)
 	echo 1 > $@
 
@@ -89,13 +89,13 @@ $(eval $(call staged-install, \
 	OPENSSL_INSTALL,,,$(OPENSSL_POST_INSTALL)))
 
 clean-openssl:
-	-rm -f $(BUILDDIR)/-openssl-$(OPENSSL_VER)/build-configured $(BUILDDIR)/-openssl-$(OPENSSL_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/-openssl-$(OPENSSL_VER) clean
+	-rm -f $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-configured $(BUILDDIR)/openssl-$(OPENSSL_VER)/build-compiled
+	-$(MAKE) -C $(BUILDDIR)/openssl-$(OPENSSL_VER) clean
 
 distclean-openssl:
-	rm -rf $(SRCCACHE)/-openssl-$(OPENSSL_VER).tar.gz \
-		$(SRCCACHE)/-openssl-$(OPENSSL_VER) \
-		$(BUILDDIR)/-openssl-$(OPENSSL_VER)
+	rm -rf $(SRCCACHE)/openssl-$(OPENSSL_VER).tar.gz \
+		$(SRCCACHE)/openssl-$(OPENSSL_VER) \
+		$(BUILDDIR)/openssl-$(OPENSSL_VER)
 
 get-openssl: $(SRCCACHE)/openssl-$(OPENSSL_VER).tar.gz
 extract-openssl: $(SRCCACHE)/openssl-$(OPENSSL_VER)/source-extracted

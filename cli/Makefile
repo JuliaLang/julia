@@ -11,13 +11,19 @@ LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/
 LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir)
 
 ifeq ($(OS),WINNT)
-LOADER_CFLAGS += -municode -mconsole -nostdlib -fno-stack-check -fno-stack-protector -mno-stack-arg-probe
+LOADER_CFLAGS += -municode -nostdlib -fno-stack-check -fno-stack-protector -mno-stack-arg-probe
+ifneq ($(USECLANG),1)
+LOADER_CFLAGS += -mconsole
+endif
 else ifeq ($(OS),Linux)
 LOADER_CFLAGS += -DGLIBCXX_LEAST_VERSION_SYMBOL=\"$(shell echo "$(CSL_NEXT_GLIBCXX_VERSION)" | cut -d'|' -f1 | sed 's/\\//g')\"
 endif
 
 ifeq ($(OS),WINNT)
-LOADER_LDFLAGS += -municode -mconsole -nostdlib -lntdll -lkernel32 -lpsapi
+LOADER_LDFLAGS += -municode -nostdlib -lntdll -lkernel32 -lpsapi
+ifneq ($(USECLANG),1)
+LOADER_LDFLAGS += -mconsole
+endif
 else ifeq ($(OS),Linux)
 # textoff and notext are aliases to the same option which suppress the TEXTREL warning for i686
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed -Wl,-z,notext

@@ -47,7 +47,7 @@ ifneq ($(XC_HOST),)
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC) CROSS_SUFFIX=$(CROSS_COMPILE)
 endif
 ifeq ($(OS),WINNT)
-ifneq ($(ARCH),x86_64)
+ifeq ($(ARCH),i686)
 ifneq ($(USECLANG),1)
 OPENBLAS_CFLAGS += -mincoming-stack-boundary=2
 endif
