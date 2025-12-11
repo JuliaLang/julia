@@ -1823,30 +1823,43 @@ struct jl_cgval_t {
         // or drop this whole value if there are not enough roots to populate it
         if (!inline_roots.empty()) {
             size_t inline_roots_count;
+            bool allunbox;
             bool justpointers = false;
             if (tindex) {
-                bool allunbox;
                 size_t nbytes, align, min_align;
                 union_alloca_type((jl_uniontype_t*)typ, allunbox, nbytes, align, min_align, inline_roots_count);
-                justpointers = allpointers(nbytes, inline_roots_count);
+                justpointers = nbytes == 0;
                 if (inline_roots_count > inline_roots.size())
                     inline_roots_count = inline_roots.size();
             }
             else if (!deserves_stack(typ)) {
                 inline_roots_count = 0;
+                allunbox = false;
             }
             else {
                 const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
                 inline_roots_count = layout ? layout->npointers : 0;
                 justpointers = layout ? allpointers((jl_datatype_t*)typ) : 0;
+                allunbox = true;
             }
             assert(v.TIndex || inline_roots.size() == inline_roots_count);
             if (V == nullptr && constant == nullptr && !isghost && (inline_roots_count == 0 || (!tindex && !justpointers)))
                 *this = jl_cgval_t(); // no data to populate this value
             else if (inline_roots_count < inline_roots.size())
-                inline_roots.truncate(inline_roots_count);
-            else if (inline_roots_count > inline_roots.size())
-                *this = jl_cgval_t(); // not enough roots to populate this value
+                inline_roots.truncate(inline_roots_count); // drop excess roots
+            else if (inline_roots_count > inline_roots.size()) {
+                if (allunbox || Vboxed == nullptr) {
+                    *this = jl_cgval_t(); // not enough roots/boxes to populate this value
+                }
+                else {
+                    // kill unboxed elements, just keeping boxed ones
+                    V = Vboxed;
+                    inline_roots.truncate(0);
+                    if (tindex)
+                        tindex = ConstantInt::get(tindex->getType(), UNION_BOX_MARKER);
+                    isboxed = true;
+                }
+            }
             // drop data if all of the content is in the roots
             if (inline_roots_count > 0 && justpointers && Vboxed == nullptr)
                 V = nullptr;
@@ -2295,7 +2308,6 @@ static bool valid_as_globalinit(const Value *v) {
 }
 
 static Value *zext_struct(jl_codectx_t &ctx, Value *V);
-static std::pair<AllocaInst*, SmallVector<Value*,0>> split_value(jl_codectx_t &ctx, const jl_cgval_t &x, Align x_alignment);
 
 // TODO: in the future, assume all callers will handle the interior pointers separately, and have
 // have zext_struct strip them out, so we aren't saving those to the stack here causing shadow stores
@@ -2606,24 +2618,26 @@ static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_
             Value *slotv;
             MDNode *tbaa;
             if (v.V == nullptr) {
-                // v.V might be NULL if it was all constants before
-                slotv = nullptr;
-                tbaa = ctx.tbaa().tbaa_const;
+                // v.V might be NULL if it was all constants or didn't have bits data before
+                slotv = boxv;
+                tbaa = v.inline_roots.empty() ? ctx.tbaa().tbaa_const : ctx.tbaa().tbaa_immut;
             }
             else if (!v.inline_roots.empty() || v.ispointer()) {
-                Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
                 slotv = v.V;
                 tbaa = v.tbaa;
-                slotv = ctx.builder.CreateSelect(isboxv,
-                            decay_derived(ctx, boxv),
-                            decay_derived(ctx, slotv));
             }
             else {
                 jl_cgval_t oldv = value_to_pointer(ctx, v.V, v.typ, v.TIndex);
                 slotv = oldv.V;
                 tbaa = oldv.tbaa;
             }
-            // recreate ret with new representation (except boxed bit of TIndex isn't set correctly but new_tindex isn't fully computed yet either)
+            if (slotv != boxv) {
+                Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
+                slotv = ctx.builder.CreateSelect(isboxv,
+                            decay_derived(ctx, boxv),
+                            decay_derived(ctx, slotv));
+            }
+            // recreate ret with new representation (except boxed bit of TIndex isn't set correctly yet, but new_tindex isn't fully computed yet either)
             ret = jl_cgval_t(slotv, false, typ, v.TIndex, tbaa, ret.inline_roots);
             assert(boxv->getType() == ctx.types().T_prjlvalue);
             ret.Vboxed = boxv;
@@ -2896,7 +2910,7 @@ static bool uses_specsig(jl_value_t *sig, bool needsparams, jl_value_t *rettype,
         bool allunbox;
         size_t nbytes, align, min_align, return_roots;
         union_alloca_type((jl_uniontype_t*)rettype, allunbox, nbytes, align, min_align, return_roots);
-        if (nbytes > 0)
+        if (nbytes > 0 || return_roots > 0)
             return true; // some elements of the union could be returned unboxed avoiding allocation
     }
     if (jl_nparams(sig) <= 3) // few parameters == more efficient to pass directly
@@ -3342,7 +3356,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
                                 AtomicOrdering Order, AtomicOrdering FailOrder,
-                                bool issetglobal, bool isreplaceglobal, bool isswapglobal, bool ismodifyglobal, bool issetglobalonce,
+                                StoreKind op,
                                 const jl_cgval_t *modifyop, bool alloc)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
@@ -3353,9 +3367,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
             jl_value_t *ty = bpart->restriction;
             if (ty != nullptr) {
-                const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
-                if (!ismodifyglobal) {
-                    emit_typecheck(ctx, rval, ty, fname.c_str());
+                const char *fname = store_kind_name(op, "global");
+                if (op != StoreKind::Modify) {
+                    emit_typecheck(ctx, rval, ty, fname);
                     rval = update_julia_type(ctx, rval, ty);
                     if (rval.typ == jl_bottom_type)
                         return jl_cgval_t();
@@ -3376,11 +3390,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                                 FailOrder,
                                 0,
                                 nullptr,
-                                issetglobal,
-                                isreplaceglobal,
-                                isswapglobal,
-                                ismodifyglobal,
-                                issetglobalonce,
+                                op,
                                 maybe_null,
                                 modifyop,
                                 fname,
@@ -3394,30 +3404,31 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
     ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
         { bp, m, s });
-    if (issetglobal) {
+    switch (op) {
+    case StoreKind::Set:
         ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return rval;
-    }
-    else if (isreplaceglobal) {
+    case StoreKind::Replace: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
                 { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
         return mark_julia_type(ctx, r, true, jl_any_type);
     }
-    else if (isswapglobal) {
+    case StoreKind::Swap: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return mark_julia_type(ctx, r, true, jl_any_type);
     }
-    else if (ismodifyglobal) {
+    case StoreKind::Modify: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
                 { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
         return mark_julia_type(ctx, r, true, jl_any_type);
     }
-    else if (issetglobalonce) {
+    case StoreKind::SetOnce: {
         Value *r = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return mark_julia_type(ctx, r, true, jl_bool_type);
+    }
     }
     abort(); // unreachable
 }
@@ -3477,8 +3488,8 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
             BasicBlock *tempBB = BasicBlock::Create(ctx.builder.getContext(), "unionbits_is", ctx.f);
             ctx.builder.SetInsertPoint(tempBB);
             switchInst->addCase(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx), tempBB);
-            jl_cgval_t sel_arg1(arg1, (jl_value_t*)jt, NULL);
-            jl_cgval_t sel_arg2(arg2, (jl_value_t*)jt, NULL);
+            jl_cgval_t sel_arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jt);
+            jl_cgval_t sel_arg2 = update_julia_type(ctx, arg2, (jl_value_t*)jt);
             Value *cmp = emit_bits_compare(ctx, sel_arg1, sel_arg2);
             tempBB = ctx.builder.GetInsertBlock(); // could have changed
             phi->addIncoming(cmp, tempBB);
@@ -3505,6 +3516,9 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
 static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
     ++EmittedBitsCompares;
+    if (arg1.typ == jl_bottom_type || arg2.typ == jl_bottom_type)
+        return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+
     jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
     bool isboxed;
     Type *at = julia_type_to_llvm(ctx, arg1.typ, &isboxed);
@@ -3680,8 +3694,9 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
             BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_is", ctx.f);
             ctx.builder.CreateCondBr(same_type, isaBB, postBB);
             ctx.builder.SetInsertPoint(isaBB);
-            Value *bitcmp = emit_bits_compare(ctx, jl_cgval_t(arg1, (jl_value_t*)typ, NULL),
-                                              jl_cgval_t(arg2, (jl_value_t*)typ, NULL));
+            Value *bitcmp = emit_bits_compare(ctx,
+                    update_julia_type(ctx, arg1, (jl_value_t*)typ),
+                    update_julia_type(ctx, arg2, (jl_value_t*)typ));
             isaBB = ctx.builder.GetInsertBlock(); // might have changed
             ctx.builder.CreateBr(postBB);
             ctx.builder.SetInsertPoint(postBB);
@@ -3706,28 +3721,38 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
 static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
-    bool issetglobal = f == BUILTIN(setglobal);
-    bool isreplaceglobal = f == BUILTIN(replaceglobal);
-    bool isswapglobal = f == BUILTIN(swapglobal);
-    bool ismodifyglobal = f == BUILTIN(modifyglobal);
-    bool issetglobalonce = f == BUILTIN(setglobalonce);
+    StoreKind op;
+    if (f == BUILTIN(setglobal))
+        op = StoreKind::Set;
+    else if (f == BUILTIN(replaceglobal))
+        op = StoreKind::Replace;
+    else if (f == BUILTIN(swapglobal))
+        op = StoreKind::Swap;
+    else if (f == BUILTIN(modifyglobal))
+        op = StoreKind::Modify;
+    else {
+        assert(f == BUILTIN(setglobalonce));
+        op = StoreKind::SetOnce;
+    }
+    bool has_cmp = op == StoreKind::Replace || op == StoreKind::Modify;
     const jl_cgval_t undefval;
     const jl_cgval_t &mod = argv[1];
     const jl_cgval_t &sym = argv[2];
-    jl_cgval_t val = argv[isreplaceglobal || ismodifyglobal ? 4 : 3];
-    const jl_cgval_t &cmp = isreplaceglobal || ismodifyglobal ? argv[3] : undefval;
+    jl_cgval_t val = argv[has_cmp ? 4 : 3];
+    const jl_cgval_t &cmp = has_cmp ? argv[3] : undefval;
     enum jl_memory_order order = jl_memory_order_release;
-    const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
-    if (nargs >= (isreplaceglobal || ismodifyglobal ? 5 : 4)) {
-        const jl_cgval_t &ord = argv[isreplaceglobal || ismodifyglobal ? 5 : 4];
+    const char *fname = store_kind_name(op, "global");
+    if (nargs >= (has_cmp ? 5u : 4u)) {
+        const jl_cgval_t &ord = argv[has_cmp ? 5 : 4];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
-        order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetglobal, true);
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     }
     enum jl_memory_order fail_order = order;
-    if ((isreplaceglobal || issetglobalonce) && nargs == (isreplaceglobal ? 6 : 5)) {
-        const jl_cgval_t &ord = argv[isreplaceglobal ? 6 : 5];
+    bool has_fail_order = op == StoreKind::Replace || op == StoreKind::SetOnce;
+    if (has_fail_order && nargs == (op == StoreKind::Replace ? 6u : 5u)) {
+        const jl_cgval_t &ord = argv[op == StoreKind::Replace ? 6 : 5];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
@@ -3740,19 +3765,16 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
     if (order == jl_memory_order_notatomic) {
-        emit_atomic_error(ctx,
-                issetglobal ? "setglobal!: module binding cannot be written non-atomically" :
-                isreplaceglobal ? "replaceglobal!: module binding cannot be written non-atomically" :
-                isswapglobal ? "swapglobal!: module binding cannot be written non-atomically" :
-                ismodifyglobal ? "modifyglobal!: module binding cannot be written non-atomically" :
-                "setglobalonce!: module binding cannot be written non-atomically");
+        std::string msg(fname);
+        msg += ": module binding cannot be written non-atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t(); // unreachable
         return true;
     }
     else if (fail_order == jl_memory_order_notatomic) {
-        emit_atomic_error(ctx,
-                isreplaceglobal ? "replaceglobal!: module binding cannot be accessed non-atomically" :
-                "setglobalonce!: module binding cannot be accessed non-atomically");
+        std::string msg(fname);
+        msg += ": module binding cannot be accessed non-atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t(); // unreachable
         return true;
     }
@@ -3761,11 +3783,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (mod.constant && jl_is_module(mod.constant)) {
             *ret = emit_globalop(ctx, (jl_module_t*)mod.constant, (jl_sym_t*)sym.constant, val, cmp,
                                  get_llvm_atomic_order(order), get_llvm_atomic_order(fail_order),
-                                 issetglobal,
-                                 isreplaceglobal,
-                                 isswapglobal,
-                                 ismodifyglobal,
-                                 issetglobalonce,
+                                 op,
                                  modifyop,
                                  false);
             return true;
@@ -3779,28 +3797,38 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                            ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
     ++EmittedOpfields;
-    bool issetfield = f == BUILTIN(setfield);
-    bool isreplacefield = f == BUILTIN(replacefield);
-    bool isswapfield = f == BUILTIN(swapfield);
-    bool ismodifyfield = f == BUILTIN(modifyfield);
-    bool issetfieldonce = f == BUILTIN(setfieldonce);
+    StoreKind op;
+    if (f == BUILTIN(setfield))
+        op = StoreKind::Set;
+    else if (f == BUILTIN(replacefield))
+        op = StoreKind::Replace;
+    else if (f == BUILTIN(swapfield))
+        op = StoreKind::Swap;
+    else if (f == BUILTIN(modifyfield))
+        op = StoreKind::Modify;
+    else {
+        assert(f == BUILTIN(setfieldonce));
+        op = StoreKind::SetOnce;
+    }
+    bool has_cmp = op == StoreKind::Replace || op == StoreKind::Modify;
     const jl_cgval_t undefval;
     const jl_cgval_t &obj = argv[1];
     const jl_cgval_t &fld = argv[2];
-    jl_cgval_t val = argv[isreplacefield || ismodifyfield ? 4 : 3];
-    const jl_cgval_t &cmp = isreplacefield || ismodifyfield ? argv[3] : undefval;
+    jl_cgval_t val = argv[has_cmp ? 4 : 3];
+    const jl_cgval_t &cmp = has_cmp ? argv[3] : undefval;
     enum jl_memory_order order = jl_memory_order_notatomic;
-    const std::string fname = issetfield ? "setfield!" : isreplacefield ? "replacefield!" : isswapfield ? "swapfield!" : ismodifyfield ? "modifyfield!" : "setfieldonce!";
-    if (nargs >= (isreplacefield || ismodifyfield ? 5 : 4)) {
-        const jl_cgval_t &ord = argv[isreplacefield || ismodifyfield ? 5 : 4];
+    const char *fname = store_kind_name(op, "field");
+    if (nargs >= (has_cmp ? 5u : 4u)) {
+        const jl_cgval_t &ord = argv[has_cmp ? 5 : 4];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
-        order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     }
     enum jl_memory_order fail_order = order;
-    if ((isreplacefield || issetfieldonce) && nargs == (isreplacefield ? 6 : 5)) {
-        const jl_cgval_t &ord = argv[isreplacefield ? 6 : 5];
+    bool has_fail_order = op == StoreKind::Replace || op == StoreKind::SetOnce;
+    if (has_fail_order && nargs == (op == StoreKind::Replace ? 6u : 5u)) {
+        const jl_cgval_t &ord = argv[op == StoreKind::Replace ? 6 : 5];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
@@ -3826,7 +3854,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
             if (!jl_has_free_typevars(ft)) {
-                if (!ismodifyfield) {
+                if (op != StoreKind::Modify) {
                     emit_typecheck(ctx, val, ft, fname);
                     val = update_julia_type(ctx, val, ft);
                     if (val.typ == jl_bottom_type)
@@ -3838,42 +3866,31 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
                 *ret = jl_cgval_t();
                 if (isatomic == (order == jl_memory_order_notatomic)) {
-                    emit_atomic_error(ctx,
-                            issetfield ?
-                            (isatomic ? "setfield!: atomic field cannot be written non-atomically"
-                                      : "setfield!: non-atomic field cannot be written atomically") :
-                            isreplacefield ?
-                            (isatomic ? "replacefield!: atomic field cannot be written non-atomically"
-                                      : "replacefield!: non-atomic field cannot be written atomically") :
-                            isswapfield ?
-                            (isatomic ? "swapfield!: atomic field cannot be written non-atomically"
-                                      : "swapfield!: non-atomic field cannot be written atomically") :
-                            ismodifyfield ?
-                            (isatomic ? "modifyfield!: atomic field cannot be written non-atomically"
-                                      : "modifyfield!: non-atomic field cannot be written atomically") :
-                            (isatomic ? "setfieldonce!: atomic field cannot be written non-atomically"
-                                      : "setfieldonce!: non-atomic field cannot be written atomically"));
+                    std::string msg(fname);
+                    msg += isatomic ? ": atomic field cannot be written non-atomically"
+                                    : ": non-atomic field cannot be written atomically";
+                    emit_atomic_error(ctx, msg.c_str());
                 }
                 else if (isatomic == (fail_order == jl_memory_order_notatomic)) {
-                    emit_atomic_error(ctx,
-                            isreplacefield ?
-                            (isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
-                                      : "replacefield!: non-atomic field cannot be accessed atomically") :
-                            (isatomic ? "setfieldonce!: atomic field cannot be accessed non-atomically"
-                                      : "setfieldonce!: non-atomic field cannot be accessed atomically"));
+                    std::string msg(fname);
+                    msg += isatomic ? ": atomic field cannot be accessed non-atomically"
+                                    : ": non-atomic field cannot be accessed atomically";
+                    emit_atomic_error(ctx, msg.c_str());
                 }
                 else if (!uty->name->mutabl) {
-                    std::string msg = fname + ": immutable struct of type "
-                        + std::string(jl_symbol_name(uty->name->name))
-                        + " cannot be changed";
+                    std::string msg(fname);
+                    msg += ": immutable struct of type ";
+                    msg += jl_symbol_name(uty->name->name);
+                    msg += " cannot be changed";
                     emit_error(ctx, msg);
                 }
                 else if (jl_field_isconst(uty, idx)) {
-                    std::string msg = fname + ": const field ."
-                        + std::string(jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(uty), idx)))
-                        + " of type "
-                        + std::string(jl_symbol_name(uty->name->name))
-                        + " cannot be changed";
+                    std::string msg(fname);
+                    msg += ": const field .";
+                    msg += jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(uty), idx));
+                    msg += " of type ";
+                    msg += jl_symbol_name(uty->name->name);
+                    msg += " cannot be changed";
                     emit_error(ctx, msg);
                 }
                 else {
@@ -3886,7 +3903,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 ? AtomicOrdering::NotAtomic
                                 : get_llvm_atomic_order(fail_order),
                             needlock ? boxed(ctx, obj) : nullptr,
-                            issetfield, isreplacefield, isswapfield, ismodifyfield, issetfieldonce,
+                            op,
                             modifyop, fname);
                 }
                 return true;
@@ -3926,15 +3943,24 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
 static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
-    bool issetmemory = f == BUILTIN(memoryrefset);
-    bool isreplacememory = f == BUILTIN(memoryrefreplace);
-    bool isswapmemory = f == BUILTIN(memoryrefswap);
-    bool ismodifymemory = f == BUILTIN(memoryrefmodify);
-    bool issetmemoryonce = f == BUILTIN(memoryrefsetonce);
+    StoreKind op;
+    if (f == BUILTIN(memoryrefset))
+        op = StoreKind::Set;
+    else if (f == BUILTIN(memoryrefreplace))
+        op = StoreKind::Replace;
+    else if (f == BUILTIN(memoryrefswap))
+        op = StoreKind::Swap;
+    else if (f == BUILTIN(memoryrefmodify))
+        op = StoreKind::Modify;
+    else {
+        assert(f == BUILTIN(memoryrefsetonce));
+        op = StoreKind::SetOnce;
+    }
+    bool has_cmp = op == StoreKind::Replace || op == StoreKind::Modify;
 
     const jl_cgval_t undefval;
     const jl_cgval_t &ref = argv[1];
-    jl_cgval_t val = argv[isreplacememory || ismodifymemory ? 3 : 2];
+    jl_cgval_t val = argv[has_cmp ? 3 : 2];
     jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
     if (!jl_is_genericmemoryref_type(mty_dt) || !jl_is_concrete_type(mty_dt))
         return false;
@@ -3946,19 +3972,20 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
         return false;
 
-    const jl_cgval_t &cmp = isreplacememory || ismodifymemory ? argv[2] : undefval;
+    const jl_cgval_t &cmp = has_cmp ? argv[2] : undefval;
     enum jl_memory_order order = jl_memory_order_notatomic;
-    const std::string fname = issetmemory ? "memoryrefset!" : isreplacememory ? "memoryrefreplace!" : isswapmemory ? "memoryrefswap!" : ismodifymemory ? "memoryrefmodify!" : "memoryrefsetonce!";
+    const char *fname = store_kind_name(op, "memory");
     {
-        const jl_cgval_t &ord = argv[isreplacememory || ismodifymemory ? 4 : 3];
+        const jl_cgval_t &ord = argv[has_cmp ? 4 : 3];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
-        order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetmemory, true);
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
     }
     enum jl_memory_order fail_order = order;
-    if (isreplacememory || issetmemoryonce) {
-        const jl_cgval_t &ord = argv[isreplacememory ? 5 : 4];
+    bool has_fail_order = op == StoreKind::Replace || op == StoreKind::SetOnce;
+    if (has_fail_order) {
+        const jl_cgval_t &ord = argv[op == StoreKind::Replace ? 5 : 4];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
@@ -3982,31 +4009,18 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     if (al > JL_HEAP_ALIGNMENT)
         al = JL_HEAP_ALIGNMENT;
     if (isatomic == (order == jl_memory_order_notatomic)) {
-        emit_atomic_error(ctx,
-                issetmemory ?
-                (isatomic ? "memoryrefset!: atomic memory cannot be written non-atomically"
-                          : "memoryrefset!: non-atomic memory cannot be written atomically") :
-                isreplacememory ?
-                (isatomic ? "memoryrefreplace!: atomic memory cannot be written non-atomically"
-                          : "memoryrefreplace!: non-atomic memory cannot be written atomically") :
-                isswapmemory ?
-                (isatomic ? "memoryrefswap!: atomic memory cannot be written non-atomically"
-                          : "memoryrefswap!: non-atomic memory cannot be written atomically") :
-                ismodifymemory ?
-                (isatomic ? "memoryrefmodify!: atomic memory cannot be written non-atomically"
-                          : "memoryrefmodify!: non-atomic memory cannot be written atomically") :
-                (isatomic ? "memoryrefsetonce!: atomic memory cannot be written non-atomically"
-                          : "memoryrefsetonce!: non-atomic memory cannot be written atomically"));
+        std::string msg(fname);
+        msg += isatomic ? ": atomic memory cannot be written non-atomically"
+                        : ": non-atomic memory cannot be written atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t();
         return true;
     }
     else if (isatomic == (fail_order == jl_memory_order_notatomic)) {
-        emit_atomic_error(ctx,
-                isreplacememory ?
-                (isatomic ? "memoryrefreplace!: atomic memory cannot be accessed non-atomically"
-                          : "memoryrefreplace!: non-atomic memory cannot be accessed atomically") :
-                (isatomic ? "memoryrefsetonce!: atomic memory cannot be accessed non-atomically"
-                          : "memoryrefsetonce!: non-atomic memory cannot be accessed atomically"));
+        std::string msg(fname);
+        msg += isatomic ? ": atomic memory cannot be accessed non-atomically"
+                        : ": non-atomic memory cannot be accessed atomically";
+        emit_atomic_error(ctx, msg.c_str());
         *ret = jl_cgval_t();
         return true;
     }
@@ -4024,7 +4038,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         endBB->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(endBB);
     }
-    if (!ismodifymemory) {
+    if (op != StoreKind::Modify) {
         emit_typecheck(ctx, val, ety, fname);
         val = update_julia_type(ctx, val, ety);
         if (val.typ == jl_bottom_type)
@@ -4036,6 +4050,13 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     AtomicOrdering FailOrder = (needlock || fail_order <= jl_memory_order_notatomic)
                         ? AtomicOrdering::NotAtomic
                         : get_llvm_atomic_order(fail_order);
+    Value *ptr = nullptr;
+    Value *ptindex = nullptr;
+    Value *lock = nullptr;
+    Value *data_owner = nullptr;
+    bool maybenull = true;
+    MDNode *tbaa_ptindex = nullptr;
+
     if (isunion) {
         assert(!isatomic && !needlock);
         Value *V = emit_memoryref_FCA(ctx, ref, layout);
@@ -4044,7 +4065,6 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         Value *data = emit_genericmemoryptr(ctx, mem, layout, AddressSpace::Loaded);
         Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
         // compute tindex from val
-        Value *ptindex;
         if (elsz == 0) {
             ptindex = data;
         }
@@ -4054,48 +4074,40 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
         }
         ptindex = emit_ptrgep(ctx, ptindex, idx0);
-        *ret = union_store(ctx, data, ptindex, val, cmp, ety,
-            ctx.tbaa().tbaa_arraybuf, ctx.tbaa().tbaa_arrayselbyte,
-            Order, FailOrder,
-            nullptr, issetmemory, isreplacememory, isswapmemory, ismodifymemory, issetmemoryonce,
-            modifyop, fname);
+        ptr = data;
+        tbaa_ptindex = ctx.tbaa().tbaa_arrayselbyte;
     }
     else {
-        Value *ptr = (layout->size == 0 ? nullptr : emit_memoryref_ptr(ctx, ref, layout));
-        Value *lock = nullptr;
-        bool maybenull = true;
+        ptr = (layout->size == 0 ? nullptr : emit_memoryref_ptr(ctx, ref, layout));
         if (needlock) {
             assert(ptr);
             lock = ptr;
             // ptr += sizeof(lock);
             ptr = emit_ptrgep(ctx, ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
         }
-        Value *data_owner = NULL; // owner object against which the write barrier must check
         if (isboxed || layout->first_ptr >= 0) { // if elements are just bits, don't need a write barrier
             data_owner = emit_memoryref_mem(ctx, ref, layout);
         }
-        *ret = typed_store(ctx,
-                    ptr,
-                    val, cmp, ety,
-                    isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
-                    ctx.noalias().aliasscope.current,
-                    data_owner,
-                    isboxed,
-                    Order,
-                    FailOrder,
-                    al,
-                    lock,
-                    issetmemory,
-                    isreplacememory,
-                    isswapmemory,
-                    ismodifymemory,
-                    issetmemoryonce,
-                    maybenull,
-                    modifyop,
-                    fname,
-                    nullptr,
-                    nullptr);
     }
+    *ret = typed_store(ctx,
+                ptr,
+                val, cmp, ety,
+                isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+                isunion ? nullptr : ctx.noalias().aliasscope.current,
+                data_owner,
+                isboxed,
+                Order,
+                FailOrder,
+                al,
+                lock,
+                op,
+                maybenull,
+                modifyop,
+                fname,
+                nullptr,
+                nullptr,
+                ptindex,
+                tbaa_ptindex);
     return true;
 }
 
@@ -4410,10 +4422,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
                 }
                 ptindex = emit_ptrgep(ctx, ptindex, idx0);
-                size_t elsz_c = 0, al_c = 0;
-                int union_max = jl_islayout_inline(ety, &elsz_c, &al_c);
-                assert(union_max && LLT_ALIGN(elsz_c, al_c) == elsz && al_c == al);
-                *ret = emit_unionload(ctx, data, ptindex, ety, elsz_c, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
+                *ret = typed_load(ctx, data, NULL, ety, ctx.tbaa().tbaa_arraybuf, nullptr, false,
+                        AtomicOrdering::NotAtomic, false, 0, nullptr, ptindex, ctx.tbaa().tbaa_arrayselbyte);
             }
             else {
                 Value *ptr = (layout->size == 0 ? nullptr : emit_memoryref_ptr(ctx, ref, layout));
@@ -5855,7 +5865,8 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
             auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
             if (rval_info.TIndex) {
                 Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
-                emit_unionmove(ctx, vi.value.V, vi.value.typ, tbaa, rval_info, /*skip*/isboxed, vi.isVolatile);
+                if (vi.value.V)
+                    emit_unionmove(ctx, vi.value.V, vi.value.typ, tbaa, rval_info, rval_info.TIndex, /*skip*/isboxed, vi.isVolatile);
                 SmallVector<Value*,0> inline_roots(vi.inline_roots_count, Vnull);
                 for (size_t i = 0; i < std::min(rval_info.inline_roots.size(), inline_roots.size()); ++i)
                     inline_roots[i] = rval_info.inline_roots[i];
@@ -5899,44 +5910,41 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         bool allunbox;
         size_t min_align, nbytes, inline_roots;
         dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align, nbytes, inline_roots);
-        if (inline_roots) {
-            assert(dest || allunbox);
-            roots.resize(inline_roots);
-            for (size_t nr = 0; nr < inline_roots; nr++) {
-                auto root_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "root_phi");
-                root_phi->insertInto(BB, InsertPt);
-                roots[nr] = root_phi;
-            }
-        }
-        if (dest) {
-            AllocaInst *phi = cast<AllocaInst>(dest->clone());
-            phi->insertAfter(dest);
+        if (dest || allunbox || inline_roots) {
+            Value *ptr = nullptr;
+            PHINode *ptr_phi = nullptr;
+            auto tbaa = ctx.tbaa().tbaa_stack;
             PHINode *Tindex_phi = PHINode::Create(getInt8Ty(ctx.builder.getContext()), jl_array_nrows(edges), "tindex_phi");
             Tindex_phi->insertInto(BB, InsertPt);
-            PHINode *ptr_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "ptr_phi");
-            ptr_phi->insertInto(BB, InsertPt);
-            Value *isboxed = ctx.builder.CreateICmpNE(
-                    ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
-                    ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
-            ctx.builder.CreateMemCpy(phi, Align(min_align), dest, dest->getAlign(), nbytes, false);
-            ctx.builder.CreateLifetimeEnd(dest);
-            Value *ptr = ctx.builder.CreateSelect(isboxed,
-                decay_derived(ctx, ptr_phi),
-                decay_derived(ctx, phi));
-            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, best_tbaa(ctx.tbaa(), phiType),
+            if (inline_roots) {
+                roots.resize(inline_roots);
+                for (size_t nr = 0; nr < inline_roots; nr++) {
+                    auto root_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "root_phi");
+                    root_phi->insertInto(BB, InsertPt);
+                    roots[nr] = root_phi;
+                }
+            }
+            if (dest || inline_roots) {
+                ptr_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "ptr_phi");
+                ptr_phi->insertInto(BB, InsertPt);
+                if (dest) {
+                    Value *isboxed = ctx.builder.CreateICmpNE(
+                            ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
+                            ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
+                    AllocaInst *phi = cast<AllocaInst>(dest->clone());
+                    phi->insertAfter(dest);
+                    ctx.builder.CreateMemCpy(phi, Align(min_align), dest, dest->getAlign(), nbytes, false);
+                    ctx.builder.CreateLifetimeEnd(dest);
+                    ptr = ctx.builder.CreateSelect(isboxed,
+                        decay_derived(ctx, ptr_phi),
+                        decay_derived(ctx, phi));
+                }
+                tbaa = best_tbaa(ctx.tbaa(), phiType);
+            }
+            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa,
                 roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, roots, r));
-            ctx.SAvalues[idx] = val;
-            ctx.ssavalue_assigned[idx] = true;
-            return;
-        }
-        else if (allunbox) {
-            PHINode *Tindex_phi = PHINode::Create(getInt8Ty(ctx.builder.getContext()), jl_array_nrows(edges), "tindex_phi");
-            Tindex_phi->insertInto(BB, InsertPt);
-            jl_cgval_t val = mark_julia_slot(NULL, phiType, Tindex_phi, ctx.tbaa().tbaa_stack,
-                roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
-            ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, (PHINode*)nullptr, roots, r));
             ctx.SAvalues[idx] = val;
             ctx.ssavalue_assigned[idx] = true;
             return;
@@ -6121,7 +6129,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
         sym = jl_globalref_name(l);
     }
     emit_globalop(ctx, mod, sym, rval_info, jl_cgval_t(), AtomicOrdering::Release, AtomicOrdering::NotAtomic,
-                  true, false, false, false, false, nullptr, alloc);
+                  StoreKind::Set, nullptr, alloc);
     // Global variable. Does not need debug info because the debugger knows about
     // its memory location.
 }
@@ -7155,6 +7163,7 @@ static void emit_specsig_to_specsig(
         break;
     }
     case jl_returninfo_t::Ghosts: {
+        gf_retval = convert_julia_type_to_union(ctx, gf_retval, rettype, false);
         Value *retval = compute_tindex_unboxed(ctx, gf_retval, rettype);
         ctx.builder.CreateRet(retval);
         break;
@@ -8043,18 +8052,24 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     }
     else if (jl_is_uniontype(jlrettype)) {
         bool allunbox;
-        // TODO: optimize for case where sret is exactly the needed set of return_roots
         size_t return_roots;
         union_alloca_type((jl_uniontype_t*)jlrettype, allunbox, props.union_bytes, props.union_align,
                 props.union_minalign, return_roots);
+        tracked_count = return_roots;
+        if (props.union_bytes == 0 && return_roots > 0) {
+            // convert all_roots to only union_bytes
+            props.union_bytes = return_roots * sizeof(void*);
+            props.union_minalign = props.union_align = sizeof(void*);
+            //return_roots = 0;
+            //all_roots = true;
+        }
         props.return_roots = (int) return_roots;
-        if (props.union_bytes || props.return_roots) {
+        if (props.union_bytes) {
             props.cc = jl_returninfo_t::Union;
             fsig.push_back(PointerType::getUnqual(M->getContext()));
             argnames.push_back("union_bytes_return");
             Type *pair[] = { T_prjlvalue, getInt8Ty(M->getContext()) };
             rt = StructType::get(M->getContext(), ArrayRef<Type*>(pair));
-            tracked_count = props.return_roots;
         }
         else if (allunbox) {
             props.cc = jl_returninfo_t::Ghosts;
@@ -8112,6 +8127,10 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     }
     if (props.cc == jl_returninfo_t::Union) {
         AttrBuilder param(M->getContext());
+        if (all_roots) {
+            assert(!props.return_roots);
+            param.addAttribute("julia.return_roots", std::to_string(tracked_count));
+        }
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
@@ -9437,13 +9456,14 @@ static jl_llvm_functions_t
                 break;
             }
             case jl_returninfo_t::Ghosts:
+                retvalinfo = convert_julia_type_to_union(ctx, retvalinfo, jlrettype, false);
                 retval = compute_tindex_unboxed(ctx, retvalinfo, jlrettype);
                 break;
             }
             auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
             if (sret) {
                 if (returninfo.return_roots || !inline_roots.empty() || retvalinfo.ispointer()) {
-                    emit_unionmove(ctx, sret, jlrettype, ctx.tbaa().tbaa_stack, retvalinfo, /*skip*/isboxed_union);
+                    emit_unionmove(ctx, sret, jlrettype, ctx.tbaa().tbaa_stack, retvalinfo, retvalinfo.TIndex, /*skip*/isboxed_union);
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
@@ -9739,7 +9759,7 @@ static jl_llvm_functions_t
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
                     size_t tindex = get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
                     if (tindex && dest && (!VN || !val.isboxed)) {
-                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, val, nullptr);
+                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, val, RTindex, nullptr);
                     }
                 }
                 else {
@@ -9755,7 +9775,7 @@ static jl_llvm_functions_t
                                 ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
                             skip = ctx.builder.CreateOr(isboxed, skip);
                         }
-                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_arraybuf, new_union, skip);
+                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, val, tindex, skip);
                     }
                 }
                 for (size_t i = 0; i < std::min(new_union.inline_roots.size(), lroots.size()); ++i)
