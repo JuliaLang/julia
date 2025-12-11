@@ -1,0 +1,46 @@
+From 9da1a9c30e105571dc09ad7bcf756872a99027a7 Mon Sep 17 00:00:00 2001
+From: Lars Kanis <lars@greiz-reinsdorf.de>
+Date: Sat, 1 Feb 2025 18:01:43 +0100
+Subject: [PATCH] Add a target config for MINGW on ARM64
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is necessary to build OpenSSL native on Windows on Arm64 with gcc or clang.
+It also works when cross compiling on Linux for aarch64-w64-windows-gnu.
+
+This patch is used since years on MSYS2:
+  https://github.com/msys2/MINGW-packages/blob/master/mingw-w64-openssl/001-support-aarch64.patch
+
+Fixes #10533
+
+Reviewed-by: Saša Nedvědický <sashan@openssl.org>
+Reviewed-by: Tomas Mraz <tomas@openssl.org>
+(Merged from https://github.com/openssl/openssl/pull/26605)
+---
+ Configurations/10-main.conf | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Configurations/10-main.conf b/Configurations/10-main.conf
+index 947cf568ecaf7..61ee0ce338f52 100644
+--- a/Configurations/10-main.conf
++++ b/Configurations/10-main.conf
+@@ -1746,6 +1746,18 @@ my %targets = (
+         multilib         => "64",
+     },
+
++    "mingwarm64" => {
++        inherit_from     => [ "mingw-common" ],
++        cflags           => "",
++        sys_id           => "MINGWARM64",
++        bn_ops           => add("SIXTY_FOUR_BIT"),
++        asm_arch         => 'aarch64',
++        uplink_arch      => 'armv8',
++        perlasm_scheme   => "win64",
++        shared_rcflag    => "",
++        multilib         => "-arm64",
++    },
++
+ #### UEFI
+     "UEFI" => {
+         inherit_from     => [ "BASE_unix" ],

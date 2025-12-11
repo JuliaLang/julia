@@ -12,6 +12,8 @@ endif
 else ifeq ($(OS),WINNT)
 ifeq ($(ARCH),i686)
 OPENSSL_TARGET := mingw
+else ifeq ($(ARCH),aarch64)
+OPENSSL_TARGET := mingwarm64
 else
 OPENSSL_TARGET := mingw64
 endif
@@ -53,9 +55,14 @@ $(SRCCACHE)/openssl-$(OPENSSL_VER)/source-extracted: $(SRCCACHE)/openssl-$(OPENS
 checksum-openssl: $(SRCCACHE)/openssl-$(OPENSSL_VER).tar.gz
 	$(JLCHECKSUM) $<
 
+$(SRCCACHE)/openssl-$(OPENSSL_VER)/openssl-mingwarm64.patch-applied: $(SRCCACHE)/openssl-$(OPENSSL_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/openssl-mingwarm64.patch
+	echo 1 > $@
+
 # We cannot use $(CONFIGURE_COMMON) in this step, because openssl's Configure scripts is picky
 # and does not like that we pass make variables as arguments, it wants them in the environment
-$(BUILDDIR)/openssl-$(OPENSSL_VER)/build-configured: $(SRCCACHE)/openssl-$(OPENSSL_VER)/source-extracted
+$(BUILDDIR)/openssl-$(OPENSSL_VER)/build-configured: $(SRCCACHE)/openssl-$(OPENSSL_VER)/openssl-mingwarm64.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
         CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLAGS)" RC="$(CROSS_COMPILE)windres" \
