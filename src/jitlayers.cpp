@@ -456,6 +456,8 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
         auto [ci, out] = emitted_code.pop_back_val();
         lock.native.unlock();
         uint64_t start_time = jl_hrtime();
+        // may safepoint
+        jl_ExecutionEngine->optimizeDLSyms(*out.module.getModuleUnlocked());
         jl_ExecutionEngine->addOutput(std::move(out));
         jl_do_dump_compile(ci, jl_hrtime() - start_time);
         lock.native.lock();
@@ -1576,9 +1578,9 @@ struct JuliaOJIT::DLSymOptimizer {
     bool named;
 };
 
-// void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
-//     JuliaOJIT::DLSymOptimizer(true)(M);
-// }
+void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+    JuliaOJIT::DLSymOptimizer(true)(M);
+}
 
 void fixupTM(TargetMachine &TM) {
     auto TheTriple = TM.getTargetTriple();
@@ -2232,10 +2234,9 @@ void JuliaOJIT::printTimers()
     reportAndResetTimings();
 }
 
-// TODO: reintroduce this
-// void JuliaOJIT::optimizeDLSyms(Module &M) {
-//     (*DLSymOpt)(M);
-// }
+void JuliaOJIT::optimizeDLSyms(Module &M) {
+    (*DLSymOpt)(M);
+}
 
 JuliaOJIT *jl_ExecutionEngine;
 

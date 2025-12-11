@@ -2414,6 +2414,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 decl_names.invoke = decls->invoke ? decls->invoke->getName() : "";
                 decl_names.specptr = decls->specptr ? decls->specptr->getName() : "";
                 // if compilation succeeded, prepare to return the result
+                if (!jl_options.image_codegen) {
+                    optimizeDLSyms(output.get_module());
+                }
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
                     auto opts = OptimizationOptions::defaults();
