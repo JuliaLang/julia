@@ -632,3 +632,93 @@ const JL = JuliaLowering
     @test JuliaLowering.expr_to_syntaxtree(Expr(:block, Expr(:softscope, true))) ≈
         @ast_ [K"block" [K"softscope" true::K"Bool"]]
 end
+
+@testset "Expr<->EST" begin
+    # copied from JuliaSyntax/test/parse_packages.jl
+    function find_source_in_path(basedir)
+        src_list = String[]
+        for (root, dirs, files) in walkdir(basedir)
+            append!(src_list, (joinpath(root, f) for f in files
+                                   if endswith(f, ".jl") && (p = joinpath(root,f); !islink(p) && isfile(p))))
+        end
+        src_list
+    end
+
+    function find_diff(e1, e2, indices=Int[])
+        if expr_equal_forgiving(e1, e2)
+            return nothing
+        elseif !(e1 isa Expr && e2 isa Expr) ||
+            e1.head !== e2.head ||
+            length(e1.args) !== length(e2.args)
+            return (e1, e2, indices)
+        else
+            for i in 1:length(e1.args)
+                push!(indices, i)
+                d = find_diff(e1.args[i], e2.args[i], indices)
+                isnothing(d) || return d
+                pop!(indices)
+            end
+        end
+    end
+
+    function test_each_in_path(f::Function, basedir)
+        for filepath in find_source_in_path(basedir)
+            @testset "$(relpath(filepath, basedir))" begin
+                e = try
+                    JuliaSyntax.parseall(Expr, read(filepath, String))
+                catch
+                    continue
+                end
+                e2 = f(e)
+                pass = expr_equal_forgiving(e, e2)
+                @test pass
+                if !pass
+                    (parsed, roundtripped, indices) = find_diff(e, e2)
+                    @info "diff:" outpath parsed roundtripped e e2
+                end
+            end
+        end
+    end
+
+    # ignore_lnn=false is good for checking, but too noisy to use much
+    function expr_equal_forgiving(e1, e2; ignore_lnn=true)
+        !(e1 isa Expr && e2 isa Expr) && return e1 == e2
+        if ignore_lnn
+            e1, e2 = let e1b = Expr(e1.head), e2b = Expr(e2.head)
+                e1b.args = filter(x->!(x isa LineNumberNode), e1.args)
+                e2b.args = filter(x->!(x isa LineNumberNode), e2.args)
+                e1b, e2b
+            end
+        end
+
+        e1.head === e2.head && length(e1.args) === length(e2.args) &&
+            all(expr_equal_forgiving(a1, a2; ignore_lnn) for (a1, a2) in
+                    zip(e1.args, e2.args))
+    end
+
+    local roundtrip = e->JuliaLowering.est_to_expr(JuliaLowering.expr_to_est(e))
+
+    jl_dir = joinpath(@__DIR__, "..")
+    test_each_in_path(roundtrip, jl_dir)
+
+    @testset "including linenodes" begin
+        e = JuliaSyntax.parseall(Expr, """
+        module M
+        function f()
+            if x
+                j
+            elseif y
+                let
+                    y
+                end
+            end
+        end
+        begin
+            1
+        end
+        end
+        """; filename="foo")
+
+        @test e == roundtrip(e)
+    end
+end
