@@ -1065,4 +1065,3 @@ end
 @test (@which Int[1;;;]).name === :typed_hvncat
 @test (@which Int[1;;; 1]).name === :typed_hvncat
 @test (@which Int[[1 2];;; 1 3]).name === :typed_hvncat
-
