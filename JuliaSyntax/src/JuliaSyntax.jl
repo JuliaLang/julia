@@ -100,7 +100,9 @@ include("julia/literal_parsing.jl")
 include("porcelain/green_node.jl")
 include("porcelain/syntax_node.jl")
 include("integration/expr.jl")
-include("porcelain/syntax_graph.jl")
+if VERSION >= v"1.12"
+    include("porcelain/syntax_graph.jl")
+end
 
 # Hooks to integrate the parser with Base
 include("integration/hooks.jl")

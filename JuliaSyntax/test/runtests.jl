@@ -19,7 +19,9 @@ include("parse_stream.jl")
 include("parser.jl")
 include("green_node.jl")
 include("syntax_node.jl")
-include("syntax_graph.jl")
+if VERSION >= v"1.12"
+    include("syntax_graph.jl")
+end
 include("diagnostics.jl")
 include("parser_api.jl")
 include("expr.jl")
