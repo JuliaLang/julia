@@ -247,17 +247,17 @@ PV = view(P, 2:3, :)
 
 # Similar
 B = similar(A, Float32)
-@test isa(B, OffsetArray{Float32,2})
+@test isa(B, OffsetMatrix{Float32})
 @test axes(B) === axes(A)
 B = similar(A, (3,4))
-@test isa(B, Array{Int,2})
+@test isa(B, Matrix{Int})
 @test size(B) == (3,4)
 @test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
-@test isa(B, OffsetArray{Int,2})
+@test isa(B, OffsetMatrix{Int})
 @test axes(B) === (OffsetArrays.IdOffsetRange(Base.OneTo(7), -4), OffsetArrays.IdOffsetRange(Base.OneTo(4)))
 B = similar(parent(A), (-3:3,1:4))
-@test isa(B, OffsetArray{Int,2})
+@test isa(B, OffsetMatrix{Int})
 @test axes(B) === (OffsetArrays.IdOffsetRange(Base.OneTo(7), -4), OffsetArrays.IdOffsetRange(Base.OneTo(4)))
 
 # Indexing with OffsetArray indices
@@ -923,7 +923,7 @@ end
     @test axes(A) == Base.IdentityUnitRange.((2:3, 4:5))
 
     B = reshape(A0, -10:-9, 9:10)
-    @test isa(B, OffsetArray{Int,2})
+    @test isa(B, OffsetMatrix{Int})
     @test parent(B) == A0
     @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
 end

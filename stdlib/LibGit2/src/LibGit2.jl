@@ -262,15 +262,21 @@ The keyword arguments are:
   * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
     will be assumed based on the given name of `remote`.
   * `refspecs=AbstractString[]`: determines properties of the fetch.
+  * `depth::Integer=0`: limit fetching to the specified number of commits from the tip
+    of each remote branch. `0` indicates a full fetch (the default).
+    Use `Consts.FETCH_DEPTH_UNSHALLOW` to fetch all missing data from a shallow clone.
+    Note: depth is, at the time of writing, only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    (https://github.com/libgit2/libgit2/issues/6634)
   * `credentials=nothing`: provides credentials and/or settings when authenticating against
     a private `remote`.
   * `callbacks=Callbacks()`: user provided callbacks and payloads.
 
-Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
+Equivalent to `git fetch [--depth <depth>] [<remoteurl>|<repo>] [<refspecs>]`.
 """
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
+               depth::Integer=0,
                credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
@@ -290,7 +296,12 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
 
     result = try
         remote_callbacks = RemoteCallbacks(callbacks)
-        fo = FetchOptions(callbacks=remote_callbacks)
+        @static if LibGit2.VERSION >= v"1.7.0"
+            fo = FetchOptions(callbacks=remote_callbacks, depth=Cuint(depth))
+        else
+            depth != 0 && throw(ArgumentError("Depth parameter for fetch requires libgit2 >= 1.7.0"))
+            fo = FetchOptions(callbacks=remote_callbacks)
+        end
         fetch(rmt, refspecs, msg="from $(url(rmt))", options=fo)
     catch err
         if isa(err, GitError) && err.code === Error.EAUTH
@@ -539,11 +550,16 @@ The keyword arguments are:
   * `remote_cb::Ptr{Cvoid}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
+  * `depth::Integer=0`: create a shallow clone with a history truncated to the
+    specified number of commits. `0` indicates a full clone (the default).
+    Use `Consts.FETCH_DEPTH_UNSHALLOW` to fetch all missing data from a shallow clone.
+    Note: shallow clones are, at the time of writing, only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    (https://github.com/libgit2/libgit2/issues/6634)
   * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
     against a private repository.
   * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
 
-Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
+Equivalent to `git clone [-b <branch>] [--bare] [--depth <depth>] <repo_url> <repo_path>`.
 
 # Examples
 ```julia
@@ -552,12 +568,15 @@ repo1 = LibGit2.clone(repo_url, "test_path")
 repo2 = LibGit2.clone(repo_url, "test_path", isbare=true)
 julia_url = "https://github.com/JuliaLang/julia"
 julia_repo = LibGit2.clone(julia_url, "julia_path", branch="release-0.6")
+# Shallow clone with only the most recent commit
+shallow_repo = LibGit2.clone(repo_url, "shallow_path", depth=1)
 ```
 """
 function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Cvoid} = C_NULL,
+               depth::Integer = 0,
                credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
     cred_payload = reset!(CredentialPayload(credentials))
@@ -573,7 +592,12 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
     lbranch = Base.cconvert(Cstring, branch)
     GC.@preserve lbranch begin
         remote_callbacks = RemoteCallbacks(callbacks)
-        fetch_opts = FetchOptions(callbacks=remote_callbacks)
+        @static if LibGit2.VERSION >= v"1.7.0"
+            fetch_opts = FetchOptions(callbacks=remote_callbacks, depth=Cuint(depth))
+        else
+            depth != 0 && throw(ArgumentError("Shallow clone (depth parameter) requires libgit2 >= 1.7.0"))
+            fetch_opts = FetchOptions(callbacks=remote_callbacks)
+        end
         clone_opts = CloneOptions(
                     bare = Cint(isbare),
                     checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),

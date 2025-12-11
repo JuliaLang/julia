@@ -1587,10 +1587,7 @@ end
         _lock_conflicts,Threads.nthreads()
     '`, String)))
     @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
-end
 
-#TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved
-@testset "Base/timing.jl2" begin
     # Test the output of `format_bytes()`
     inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
     expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
@@ -1598,7 +1595,6 @@ end
                         "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
                         "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
                         "2000.000 PB", "1776.357 PiB"]
-
     for ((n, binary), expected) in zip(inputs, expected_output)
         @test Base.format_bytes(n; binary) == expected
     end

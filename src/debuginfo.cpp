@@ -395,7 +395,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
             objectmap.insert(std::pair{SectionLoadAddr, SectionInfo{
                 ObjectCopy,
                 (size_t)SectionSize,
-                (ptrdiff_t)(SectionAddr - SectionLoadAddr),
+                SectionAddr - SectionLoadAddr,
                 Section->getIndex()
                 }});
         });
@@ -448,7 +448,7 @@ done:
 // func_name and file_name are either NULL or malloc'd pointers
 static int lookup_pointer(
         object::SectionRef Section, DIContext *context,
-        jl_frame_t **frames, size_t pointer, int64_t slide,
+        jl_frame_t **frames, size_t pointer, uint64_t slide,
         bool demangle, bool noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables
@@ -491,7 +491,7 @@ static int lookup_pointer(
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
-        jl_frame_t *new_frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), n_frames);
+        jl_frame_t *new_frames = (jl_frame_t*)calloc(n_frames, sizeof(jl_frame_t));
         memcpy(&new_frames[n_frames - 1], *frames, sizeof(jl_frame_t));
         free(*frames);
         *frames = new_frames;
@@ -719,7 +719,7 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 }
 
 static void get_function_name_and_base(llvm::object::SectionRef Section, std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap,
-                                       size_t pointer, int64_t slide, bool inimage,
+                                       size_t pointer, uint64_t slide, bool inimage,
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
 {
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
@@ -1011,14 +1011,14 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
             }
         }
 
-        int64_t slide = 0;
+        uint64_t slide = 0;
         if (auto *OF = dyn_cast<const object::COFFObjectFile>(debugobj)) {
             if (!iswindows) // the COFF parser accepts some garbage inputs (like empty files) that the other parsers correctly reject, so we can end up here even when we should not
                 return entry;
             slide = OF->getImageBase() - fbase;
         }
         else {
-            slide = -(int64_t)fbase;
+            slide = -fbase;
         }
 
         auto context = DWARFContext::create(*debugobj).release();
@@ -1051,7 +1051,7 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
 }
 
 
-bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
+bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t *slide, llvm::DIContext **context,
     bool onlyImage, bool *isImage, uint64_t *_fbase, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
 {
     *Section = object::SectionRef();
@@ -1076,7 +1076,6 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
     uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!isvalid)
@@ -1178,7 +1177,6 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
     DWORD64 dwAddress = pointer;
     frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
@@ -1192,7 +1190,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
 #endif
     object::SectionRef Section;
     llvm::DIContext *context = NULL;
-    int64_t slide;
+    uint64_t slide;
     bool isImage;
     void *saddr;
     uint64_t fbase;
@@ -1224,7 +1222,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     return lookup_pointer(Section, context, frames, pointer, slide, isImage, noInline);
 }
 
-int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
+int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
@@ -1279,13 +1277,13 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
 
-    jl_frame_t *frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), 1);
+    jl_frame_t *frames = (jl_frame_t*)calloc(1, sizeof(jl_frame_t));
     frames[0].line = -1;
     *frames_out = frames;
 
     llvm::DIContext *context = nullptr;
     object::SectionRef Section;
-    int64_t slide;
+    uint64_t slide;
     uint64_t symsize;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
         frames[0].ci = getJITDebugRegistry().lookupCodeInstance(pointer);
