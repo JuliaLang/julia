@@ -756,7 +756,7 @@ public:
 
     // Note that this is a potential safepoint due to jl_get_library_ and jl_dlsym calls
     // but may be called from inside safe-regions due to jit compilation locks
-    void optimizeDLSyms(Module &M);
+    void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 protected:                      // Called from JLMaterializationUnit
     // Choose globally unique names for the functions defined by the given CI
@@ -842,7 +842,7 @@ inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafe
 
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
+void optimizeDLSyms(Module &M);
 
 static inline const char *jl_symbol_prefix(jl_symbol_prefix_t type,
                                            jl_invoke_api_t api) JL_NOTSAFEPOINT
