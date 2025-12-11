@@ -628,4 +628,7 @@ const JL = JuliaLowering
             @ast_ [K"call" "identity"::K"Identifier" LineNumberNode(1)::K"Value"]
 
     end
+
+    @test JuliaLowering.expr_to_syntaxtree(Expr(:block, Expr(:softscope, true))) ≈
+        @ast_ [K"block" [K"softscope" true::K"Bool"]]
 end
