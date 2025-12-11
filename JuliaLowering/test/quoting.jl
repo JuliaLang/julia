@@ -28,9 +28,11 @@ end
     (call g z)
     ├─ (call g z)
     │  └─ (call g z)
-    │     └─ @ string:3
+    │     └─ (call g ✘ z ✘)
+    │        └─ @ string:3
     └─ ($ y)
-       └─ @ string:5
+       └─ ($ $ y)
+          └─ @ string:5
     """
 @test sprint(io->showprov(io, ex[1][3])) == raw"""
     begin

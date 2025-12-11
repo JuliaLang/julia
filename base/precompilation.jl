@@ -1058,19 +1058,19 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
         cachepath_cache[pkg] = freshpaths
-        sourcepath = Base.locate_package(pkg)
+        sourcespec = Base.locate_package_load_spec(pkg)
         single_requested_pkg = length(requested_pkgs) == 1 &&
             (pkg in requested_pkgids || pkg.name in pkg_names)
         for config in configs
             pkg_config = (pkg, config)
-            if sourcepath === nothing
+            if sourcespec === nothing
                 failed_deps[pkg_config] = "Error: Missing source file for $(pkg)"
                 notify(was_processed[pkg_config])
                 continue
             end
             # Heuristic for when precompilation is disabled, which must not over-estimate however for any dependent
             # since it will also block precompilation of all dependents
-            if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
+            if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcespec.path, String))
                 @lock print_lock begin
                     Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
                 end
@@ -1088,7 +1088,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         end
                     end
                     circular = pkg in circular_deps
-                    freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
+                    freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                     is_stale = freshpath === nothing
                     if !is_stale
                         push!(freshpaths, freshpath)
@@ -1102,6 +1102,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
                         t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
 
+                        local name
                         try
                             name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                             @lock print_lock begin
@@ -1126,7 +1127,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
+                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts)
                                 end
                             else
@@ -1138,7 +1139,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                         return ErrorException("canceled")
                                     end
                                     cachepaths = Base.find_all_in_cache_path(pkg)
-                                    local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
+                                    local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                                     local is_stale = freshpath === nothing
                                     if !is_stale
                                         push!(freshpaths, freshpath)
@@ -1147,7 +1148,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     logcalls === CoreLogging.Debug && @lock print_lock begin
                                         @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
+                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts)
                                 end
                             end
@@ -1165,7 +1166,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     cachefile, _ = ret::Tuple{String, Union{Nothing, String}}
                                     push!(freshpaths, cachefile)
                                     build_id, _ = Base.parse_cache_buildid(cachefile)
-                                    stale_cache_key = (pkg, build_id, sourcepath, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
+                                    stale_cache_key = (pkg, build_id, sourcespec, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
                                     stale_cache[stale_cache_key] = false
                                 end
                             end
@@ -1193,8 +1194,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
-                    # println("Task failed $err_outer")
-                    # Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
+                    println("Task failed $err_outer")
+                    Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
                     handle_interrupt(err_outer, false)
                     rethrow()
                 end
@@ -1207,8 +1208,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         interrupted_or_done[] = true
     catch err
         # For debugging:
-        # println("Task failed $err")
-        # Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
+        println("Task failed $err")
+        Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
         handle_interrupt(err, false) || rethrow()
     finally
         try

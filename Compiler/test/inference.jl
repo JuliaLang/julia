@@ -6463,6 +6463,7 @@ end == TypeError
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
     module B58257
+        const age = Base.get_world_counter()
         using ..A58257
         # World age here is N
     end
@@ -6474,7 +6475,7 @@ end
 ## The sequence of events is critical here.
 A58257.get!      # Creates binding partition in A, N+1:∞
 A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
-Base.invoke_in_world(UInt(38678), getglobal, A58257, :get!) # Expands binding partition in A through <N
+Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
 
 function tt57873(a::Vector{String}, pref)

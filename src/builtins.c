@@ -2611,10 +2611,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("SSAValue", (jl_value_t*)jl_ssavalue_type);
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
     add_builtin("Argument", (jl_value_t*)jl_argument_type);
-    add_builtin("Const", (jl_value_t*)jl_const_type);
-    add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
-    add_builtin("PartialOpaque", (jl_value_t*)jl_partial_opaque_type);
-    add_builtin("InterConditional", (jl_value_t*)jl_interconditional_type);
     add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);

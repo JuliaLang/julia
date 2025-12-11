@@ -3304,10 +3304,25 @@ static int ci_not_internal_cache(jl_code_instance_t *ci)
     return !(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID) || jl_object_in_image(mi->def.value);
 }
 
+static uint8_t jl_get_toplevel_syntax_version(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_module_t *toplevel = (jl_module_t*)jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
+    JL_GC_PROMISE_ROOTED(toplevel);
+    jl_value_t *syntax_version = jl_get_global_value(toplevel, jl_symbol("_internal_syntax_version"), ct->world_age);
+    return jl_unbox_uint8(syntax_version);
+}
+
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
 {
     *checksumpos = write_header(f, 0);
     write_uint8(f, jl_cache_flags());
+    // write the syntax version marker. Note that unlike a VersionNumber, this is
+    // private to the serialization format and only needs to be reloaded by the
+    // same version of Julia that wrote it. As a result, we don't store the full
+    // VersionNumber, only an index of which of the supported syntax versions to
+    // select.
+    write_uint8(f, jl_get_toplevel_syntax_version());
     // write description of contents (name, uuid, buildid)
     write_worklist_for_header(f, worklist);
     // Determine unique (module, abspath, fsize, hash, mtime) dependencies for the files defining modules in the worklist
@@ -3359,6 +3374,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         if (emit_split) {
             checksumpos_ff = write_header(ff, 1);
             write_uint8(ff, jl_cache_flags());
+            write_uint8(ff, jl_get_toplevel_syntax_version());
             write_mod_list(ff, mod_array);
         }
         else {
@@ -4305,6 +4321,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
     if (pkgimage && !jl_match_cache_flags_current(flags)) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }
+    // Syntax version mismatch is not fatal to load
+    (void)read_uint8(f); // syntax_version
     if (!pkgimage) {
         // skip past the worklist
         size_t len;

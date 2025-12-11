@@ -43,7 +43,7 @@ and installing Julia, below.
 ## Resources
 
 - **Homepage:** <https://julialang.org>
-- **Install:** <https://julialang.org/install/>
+- **Install:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://julialang.org/packages/>
@@ -66,11 +66,11 @@ helpful to start contributing to the Julia codebase.
 The recommended way of installing Julia is to use `juliaup` which will install
 the latest stable `julia` for you and help keep it up to date. It can also let
 you install and run different Julia versions simultaneously. Instructions for
-this can be found [here](https://julialang.org/install/). If you want to manually
-download specific Julia binaries, you can find those on the [downloads
-page](https://julialang.org/downloads/). The downloads page also provides
+this can be found [here](https://julialang.org/downloads/). If you want to manually
+download specific Julia binaries, you can find those on the [Manual Downloads
+page](https://julialang.org/downloads/manual-downloads/). The downloads page also provides
 details on the [different tiers of
-support](https://julialang.org/downloads/#supported_platforms) for OS and
+support](https://julialang.org/downloads/support) for OS and
 platform combinations.
 
 If everything works correctly, you will get a `julia` program and when you run
@@ -97,7 +97,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.11.7
+    git checkout v1.12.2
 
 To build the `julia` executable, run `make` from within the julia directory.
 

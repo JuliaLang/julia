@@ -1488,11 +1488,21 @@ function parse_unary_prefix(ps::ParseState, has_unary_prefix=false)
     end
 end
 
-function maybe_parsed_macro_name(ps, processing_macro_name, mark)
+function maybe_parsed_macro_name(ps, processing_macro_name, last_identifier_orig_kind, mark)
     if processing_macro_name
         emit(ps, mark, K"macro_name")
+        maybe_parsed_special_macro(ps, last_identifier_orig_kind)
     end
     return false
+end
+
+function maybe_parsed_special_macro(ps, last_identifier_orig_kind)
+    is_syntax_version_macro = last_identifier_orig_kind == K"VERSION"
+    if is_syntax_version_macro && ps.stream.version >= (1, 14)
+        # Encode the current parser version into an invisible token
+        bump_invisible(ps, K"VERSION",
+            set_numeric_flags(ps.stream.version[2] * 10))
+    end
 end
 
 # Parses a chain of suffixes at function call precedence, leftmost binding
@@ -1543,7 +1553,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # @+x y       ==> (macrocall (macro_name +) x y)
             # A.@.x       ==> (macrocall (. A (macro_name .)) x)
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
                 # A.@foo a b    ==> (macrocall (. A (macro_name foo)) a b)
@@ -1577,7 +1587,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # (a=1)()  ==>  (call (parens (= a 1)))
             # f (a)    ==>  (call f (error-t) a)
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             opts = parse_call_arglist(ps, K")")
@@ -1598,7 +1608,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             end
         elseif k == K"["
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             m = position(ps)
             # a [i]  ==>  (ref a (error-t) i)
             bump_disallowed_space(ps)
@@ -1666,7 +1676,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 if is_macrocall
                     # Recover by pretending we do have the syntax
                     processing_macro_name = maybe_parsed_macro_name(
-                        ps, processing_macro_name, mark)
+                        ps, processing_macro_name, last_identifier_orig_kind, mark)
                     # @M.(x)  ==> (macrocall (dotcall (macro_name M) (error-t) x))
                     bump_invisible(ps, K"error", TRIVIA_FLAG)
                     emit_diagnostic(ps, mark,
@@ -1720,6 +1730,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 macro_atname_range = (m, position(ps))
                 is_macrocall = true
                 emit(ps, mark, K".")
+                maybe_parsed_special_macro(ps, last_identifier_orig_kind)
             elseif k == K"'"
                 # f.'  =>  (dotcall-post f (error '))
                 bump(ps, remap_kind=K"Identifier")  # bump '
@@ -1760,7 +1771,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             emit(ps, mark, K"call", POSTFIX_OP_FLAG)
         elseif k == K"{"
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             # Type parameter curlies and macro calls
             m = position(ps)
             # S {a} ==> (curly S (error-t) a)
@@ -2065,6 +2076,13 @@ function parse_resword(ps::ParseState)
             # module do \n end  ==>  (module (error do) (block))
             bump(ps, error="Invalid module name")
         else
+            if ps.stream.version >= (1, 14)
+                # Encode the parser version that parsed this module - the runtime
+                # will use this to set the same parser version for runtime `include`
+                # etc into this module.
+                bump_invisible(ps, K"VERSION",
+                    set_numeric_flags(ps.stream.version[2] * 10))
+            end
             # module $A end  ==>  (module ($ A) (block))
             parse_unary_prefix(ps)
         end

@@ -1419,7 +1419,7 @@ precompile_test_harness("conflicting namespaces") do dir
         try
             for i = 1:2
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test read(fname, String) == "Iterators\n"
+                @test endswith(read(fname, String), "Iterators\n")
             end
         finally
             rm(fname, force=true)

@@ -18,10 +18,14 @@
 function _apply_nospecialize(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
-        setmeta(ex; nospecialize=true)
-    elseif k == K"..." || k == K"::" || k == K"="
+        setmeta(ex, :nospecialize, true)
+    elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
+        # The @nospecialize macro is responsible for converting K"=" to K"kw".
+        # Desugaring uses this helper internally, so we may see K"kw" too.
         if k == K"::" && numchildren(ex) == 1
             ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
+        elseif k == K"=" && numchildren(ex) === 2
+            ex = @ast ctx ex [K"kw" ex[1] ex[2]]
         end
         mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
     else
@@ -90,10 +94,10 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
         typ = Base.CFunction
     else
         # Kinda weird semantics here - without `$`, the callable is a top level
-        # expression which will be evaluated by `jl_resolve_globals_in_ir`,
-        # implicitly within the module where the `@cfunction` is expanded into.
-        fptr = @ast __context__ callable [K"static_eval"(
-                meta=name_hint("cfunction function name"))
+        # expression evaluated within the module where the `@cfunction` is
+        # expanded into.
+        fptr = @ast __context__ callable [K"inert"(
+                meta=CompileHints(:as_Expr, true))
             callable
         ]
         typ = Ptr{Cvoid}
@@ -189,13 +193,20 @@ function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_s
             ]
         ]
     elseif kf == K"$"
-        check = @SyntaxTree quote
-            func = $(func[1])
-            if !isa(func, Ptr{Cvoid})
-                name = :($(func[1]))
-                throw(ArgumentError("interpolated function `$name` was not a `Ptr{Cvoid}`, but $(typeof(func))"))
-            end
-        end
+        fid = @ast ctx func[1] "func"::K"Identifier"
+        check = @ast ctx func [K"block"
+            [K"=" fid func[1]]
+            [K"if"
+                [K"call" (!isa)::K"Value" fid [K"curly" Ptr::K"Value" Cvoid::K"Value"]]
+                [K"block"
+                    [K"=" "name"::K"Identifier" [K"quote" func[1]]]
+                    [K"call" throw::K"Value"
+                        [K"call" ArgumentError::K"Value"
+                            [K"string"
+                                "interpolated function `"::K"String"
+                                "name"::K"Identifier"
+                                "` was not a `Ptr{Cvoid}`, but "::K"String"
+                                [K"call" typeof::K"Value" fid]]]]]]]
         push!(statements, check)
         lowered_func = check[1][1]
     else
@@ -208,9 +219,11 @@ function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_s
     for (i, (type, arg)) in enumerate(zip(types, args))
         argi = @ast ctx arg "arg$i"::K"Identifier"
         # TODO: Does it help to emit ssavar() here for the `argi`?
-        push!(statements, @SyntaxTree :(local $argi = Base.cconvert($type, $arg)))
+        push!(statements,
+              @ast ctx arg [K"local"
+                  [K"=" argi [K"call" Base.cconvert::K"Value" type arg]]])
         push!(roots, argi)
-        push!(cargs, @SyntaxTree :(Base.unsafe_convert($type, $argi)))
+        push!(cargs, @ast ctx ex [K"call" Base.unsafe_convert::K"Value" type argi])
     end
     effect_flags = UInt16(0)
     push!(statements, @ast ctx ex [K"foreigncall"
@@ -284,7 +297,7 @@ function _at_eval_code(ctx, srcref, mod, ex)
                     mod
                     [K"quote" ex]
                     [K"parameters"
-                        [K"="
+                        [K"kw"
                             "expr_compat_mode"::K"Identifier"
                             ctx.expr_compat_mode::K"Bool"
                         ]

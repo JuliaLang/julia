@@ -17,7 +17,7 @@ using .JuliaSyntax: sourcetext, set_numeric_flags
 using .JuliaLowering:
     SyntaxGraph, newnode!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
-    makenode, makeleaf, setattr!, sethead!,
+    makenode, makeleaf, setattr!,
     is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
     syntax_graph, Bindings, ScopeLayer, mapchildren
@@ -33,8 +33,8 @@ end
 
 function _source_node(graph, src)
     id = newnode!(graph)
-    sethead!(graph, id, K"None")
-    setattr!(graph, id, source=src)
+    setattr!(graph, id, :kind, K"None")
+    setattr!(graph, id, :source, src)
     SyntaxTree(graph, id)
 end
 
@@ -167,7 +167,8 @@ end
 function format_ir_for_test(mod, case)
     ex = parsestmt(SyntaxTree, case.input)
     try
-        if kind(ex) == K"macrocall" && kind(ex[1]) == K"macro_name" && ex[1][1].name_val == "ast_"
+        if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
+            ex[1].name_val == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
             ex = Base.eval(mod, Expr(ex))

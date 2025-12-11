@@ -377,6 +377,14 @@ tests = [
         "@doc x\n\ny"  =>  "(macrocall (macro_name doc) x)"
         "@doc x\nend"  =>  "(macrocall (macro_name doc) x)"
 
+        # Special 1.14 @VERSION parsing rules
+        ((v=v"1.13",), "@VERSION")        =>  "(macrocall (macro_name VERSION))"
+        ((v=v"1.13",), "@A.B.VERSION")    =>  "(macrocall (macro_name (. (. A B) VERSION)))"
+        ((v=v"1.13",), "A.B.@VERSION")     =>  "(macrocall (. (. A B) (macro_name VERSION)))"
+        ((v=v"1.14",), "@VERSION")        =>  "(macrocall (macro_name VERSION) v\"1.14.0\")"
+        ((v=v"1.14",), "@A.B.VERSION")    =>  "(macrocall (macro_name (. (. A B) VERSION)) v\"1.14.0\")"
+        ((v=v"1.14",), "A.B.@VERSION")     =>  "(macrocall (. (. A B) (macro_name VERSION)) v\"1.14.0\")"
+
         # calls with brackets
         "f(a,b)"  => "(call f a b)"
         "f(a,)"   => "(call-, f a)"

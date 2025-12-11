@@ -45,6 +45,13 @@ end
     @test Expr(parsestmt(SyntaxTree, "begin a + b ; c end", filename="none")) ==
         Meta.parse("begin a + b ; c end")
 
+    # Parsing to SyntaxTree: errors should fall through
+    @test parsestmt(SyntaxTree, "@"; ignore_errors=true) isa SyntaxTree
+    @test parsestmt(SyntaxTree, "@@@"; ignore_errors=true) isa SyntaxTree
+    @test parsestmt(SyntaxTree, "(a b c)"; ignore_errors=true) isa SyntaxTree
+    @test parsestmt(SyntaxTree, "'a b c'"; ignore_errors=true) isa SyntaxTree
+
+    # @SyntaxTree
     tree1 = JuliaLowering.@SyntaxTree :(some_unique_identifier)
     @test tree1 isa SyntaxTree
     @test kind(tree1) == K"Identifier"

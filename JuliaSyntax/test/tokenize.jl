@@ -988,6 +988,7 @@ const all_kws = Set([
     "primitive",
     "type",
     "var",
+    "VERSION",
     # Word-like operators
     "in",
     "isa",

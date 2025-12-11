@@ -1800,9 +1800,6 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 # scoping #
 ###########
 
-_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-
-
 # high-level, more convenient method lookup functions
 
 function visit(f, mt::Core.MethodTable)
