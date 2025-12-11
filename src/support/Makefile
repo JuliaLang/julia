@@ -80,7 +80,7 @@ INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
 # Compilation database generation
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
-	TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
+	@TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
 	{ \
 		CLANG_TOOLING_S_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS))"; \

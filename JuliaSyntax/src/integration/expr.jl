@@ -145,7 +145,7 @@ end
 
 # Shared fixups for Expr children in cases where the type of the parent node
 # affects the child layout.
-function fixup_Expr_child(head::SyntaxHead, @nospecialize(arg), first::Bool)
+function fixup_Expr_child(::Type, head::SyntaxHead, @nospecialize(arg), first::Bool)
     isa(arg, Expr) || return arg
     k = kind(head)
     eq_to_kw_in_call = ((k == K"call" || k == K"dotcall") &&
@@ -211,7 +211,8 @@ function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor, source, txtbuf::
         secondchildhead = firstchildhead
         firstchildhead = head(child)
         firstchildrange = byte_range(child)
-        pushfirst!(args, fixup_Expr_child(head(cursor), expr, r === nothing))
+        pushfirst!(args, fixup_Expr_child(
+            typeof(cursor), head(cursor), expr, r === nothing))
     end
     return (firstchildhead, secondchildhead, firstchildrange)
 end
@@ -285,7 +286,7 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
             expr = node_to_expr(child, source, txtbuf, txtbuf_offset)
             @assert expr !== nothing
             # K"block" does not have special first-child handling, so we do not need to keep track of that here
-            pushfirst!(args, fixup_Expr_child(head(cursor), expr, false))
+            pushfirst!(args, fixup_Expr_child(typeof(cursor), head(cursor), expr, false))
             pushfirst!(args, source_location(LineNumberNode, source, first(byte_range(child))))
         end
         isempty(args) && push!(args, loc)
@@ -673,11 +674,15 @@ function build_tree(::Type{Expr}, stream::ParseStream, source::SourceFile)
         entry = Expr(:block)
         for child in
                 Iterators.filter(should_include_node, reverse_toplevel_siblings(cursor))
-            pushfirst!(entry.args, fixup_Expr_child(wrapper_head, node_to_expr(child, source, txtbuf), false))
+            pushfirst!(entry.args, fixup_Expr_child(
+                RedTreeCursor, wrapper_head,
+                node_to_expr(child, source, txtbuf), false))
         end
         length(entry.args) == 1 && (entry = only(entry.args))
     else
-        entry = fixup_Expr_child(wrapper_head, node_to_expr(cursor, source, txtbuf), false)
+        entry = fixup_Expr_child(
+            RedTreeCursor, wrapper_head,
+            node_to_expr(cursor, source, txtbuf), false)
     end
     return entry
 end
@@ -686,7 +691,9 @@ function to_expr(node)
     source = sourcefile(node)
     txtbuf_offset, txtbuf = _unsafe_wrap_substring(sourcetext(source))
     wrapper_head = SyntaxHead(K"wrapper",EMPTY_FLAGS)
-    return fixup_Expr_child(wrapper_head, node_to_expr(node, source, txtbuf, UInt32(txtbuf_offset)), false)
+    return fixup_Expr_child(
+        typeof(node), wrapper_head,
+        node_to_expr(node, source, txtbuf, UInt32(txtbuf_offset)), false)
 end
 
 Base.Expr(node::SyntaxNode) = to_expr(node)

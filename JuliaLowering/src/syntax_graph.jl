@@ -1,3 +1,9 @@
+# TODO: This whole file should probably be moved to JuliaSyntax.
+import .JuliaSyntax: ParseStream, RedTreeCursor, reverse_toplevel_siblings,
+    has_toplevel_siblings, _unsafe_wrap_substring, parse_julia_literal, is_trivia,
+    is_prefix_op_call, @isexpr, SyntaxHead, COLON_QUOTE, is_syntactic_operator,
+    lower_identifier_name
+
 const NodeId = Int
 
 """
@@ -99,11 +105,8 @@ function newnode!(graph::SyntaxGraph)
     return length(graph.edge_ranges)
 end
 
-function setchildren!(graph::SyntaxGraph, id, children::NodeId...)
-    setchildren!(graph, id, children)
-end
-
-function setchildren!(graph::SyntaxGraph, id, children)
+function setchildren!(graph::SyntaxGraph, id::NodeId,
+                      children::AbstractVector{NodeId})
     n = length(graph.edges)
     graph.edge_ranges[id] = n+1:(n+length(children))
     # TODO: Reuse existing edges if possible
@@ -147,12 +150,11 @@ function hasattr(graph::SyntaxGraph, name::Symbol)
 end
 
 # TODO: Probably terribly non-inferable?
-function setattr!(graph::SyntaxGraph, id; attrs...)
-    for (k,v) in pairs(attrs)
-        if !isnothing(v)
-            getattr(graph, k)[id] = v
-        end
+function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
+    if !isnothing(v)
+        getattr(graph, k)[id] = v
     end
+    id
 end
 
 function deleteattr!(graph::SyntaxGraph, id::NodeId, name::Symbol)
@@ -165,41 +167,6 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     name === :edges       && return getfield(graph, :edges)
     name === :attributes  && return getfield(graph, :attributes)
     return getattr(graph, name)
-end
-
-function sethead!(graph, id::NodeId, h::JuliaSyntax.SyntaxHead)
-    sethead!(graph, id, kind(h))
-    setflags!(graph, id, flags(h))
-end
-
-function sethead!(graph, id::NodeId, k::Kind)
-    graph.kind[id] = k
-end
-
-function setflags!(graph, id::NodeId, f::UInt16)
-    graph.syntax_flags[id] = f
-end
-
-function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
-    id = newnode!(graph)
-    sethead!(graph, id, head(node))
-    if !isnothing(node.val)
-        v = node.val
-        if v isa Symbol
-            # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
-            setattr!(graph, id, name_val=string(v))
-        else
-            setattr!(graph, id, value=v)
-        end
-    end
-    setattr!(graph, id, source=SourceRef(node.source, node.position, node.raw))
-    if !is_leaf(node)
-        cs = map(children(node)) do n
-            _convert_nodes(graph, n)
-        end
-        setchildren!(graph, id, cs)
-    end
-    return id
 end
 
 """
@@ -242,8 +209,9 @@ function Base.getproperty(ex::SyntaxTree, name::Symbol)
     end
 end
 
-function Base.setproperty!(ex::SyntaxTree, name::Symbol, val)
-    return setattr!(ex._graph, ex._id; name=>val)
+function Base.setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
+    setattr!(ex._graph, ex._id, name, val)
+    val
 end
 
 function Base.propertynames(ex::SyntaxTree)
@@ -281,22 +249,19 @@ function copy_node(ex::SyntaxTree)
     graph = syntax_graph(ex)
     id = newnode!(graph)
     if !is_leaf(ex)
-        setchildren!(graph, id, _node_ids(graph, children(ex)...))
+        setchildren!(graph, id, children(ex._graph, ex._id))
     end
     ex2 = SyntaxTree(graph, id)
     copy_attrs!(ex2, ex, true)
     ex2
 end
 
-function setattr(ex::SyntaxTree; extra_attrs...)
-    ex2 = copy_node(ex)
-    setattr!(ex2; extra_attrs...)
-    ex2
+function setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
+    setattr!(ex._graph, ex._id, name, val)
+    ex
 end
-
-function setattr!(ex::SyntaxTree; attrs...)
-    setattr!(ex._graph, ex._id; attrs...)
-end
+setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
+    setattr!(copy_node(ex), name, val)
 
 function deleteattr!(ex::SyntaxTree, name::Symbol)
     deleteattr!(ex._graph, ex._id, name)
@@ -333,12 +298,11 @@ end
 struct SourceRef
     file::SourceFile
     first_byte::Int
-    # TODO: Do we need the green node, or would last_byte suffice?
-    green_tree::JuliaSyntax.GreenNode
+    last_byte::Int
 end
 
 JuliaSyntax.sourcefile(src::SourceRef) = src.file
-JuliaSyntax.byte_range(src::SourceRef) = src.first_byte:(src.first_byte + span(src.green_tree) - 1)
+JuliaSyntax.byte_range(src::SourceRef) = src.first_byte:src.last_byte
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
@@ -449,23 +413,12 @@ end
 
 const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple}
 
-function SyntaxTree(graph::SyntaxGraph, node::SyntaxNode)
-    ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                       value=Any, name_val=String)
-    id = _convert_nodes(graph, node)
-    return SyntaxTree(graph, id)
-end
-
-function SyntaxTree(node::SyntaxNode)
-    return SyntaxTree(SyntaxGraph(), node)
-end
-
 attrsummary(name, value) = string(name)
 attrsummary(name, value::Number) = "$name=$value"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k in KSet"Identifier StrMacroName CmdMacroName" || is_operator(k) ? ex.name_val :
+    str = k == K"Identifier" || is_operator(k) ? ex.name_val :
           k == K"Placeholder" ? ex.name_val           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
@@ -577,10 +530,6 @@ end
 
 syntax_graph(ex::SyntaxTree) = ex._graph
 
-function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStream; kws...)
-    SyntaxTree(JuliaSyntax.build_tree(SyntaxNode, stream; kws...))
-end
-
 JuliaSyntax.sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 JuliaSyntax.byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
@@ -607,6 +556,20 @@ function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
     end
 end
 
+function JuliaSyntax.fixup_Expr_child(::Type{<:SyntaxTree}, head::SyntaxHead,
+                                      @nospecialize(arg), first::Bool)
+    isa(arg, Expr) || return arg
+    k = kind(head)
+    coalesce_dot = k in KSet"call dotcall curly" ||
+                   (k == K"quote" && has_flags(head, COLON_QUOTE))
+    if @isexpr(arg, :., 1) && arg.args[1] isa Tuple
+        h, a = arg.args[1]::Tuple{SyntaxHead,Any}
+        arg = ((coalesce_dot && first) || is_syntactic_operator(h)) ?
+            Symbol(".", a) : Expr(:., a)
+    end
+    return arg
+end
+
 Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
 
 #--------------------------------------------------
@@ -622,17 +585,11 @@ function _find_SyntaxTree_macro(ex, line)
         # We're in the line range. Either
         if firstline == line && kind(c) == K"macrocall" && begin
                     name = c[1]
-                    if kind(name) == K"macro_name"
-                        name = name[1]
-                    end
                     if kind(name) == K"."
                         name = name[2]
-                        if kind(name) == K"macro_name"
-                            name = name[1]
-                        end
                     end
                     @assert kind(name) == K"Identifier"
-                    name.name_val == "SyntaxTree"
+                    name.name_val == "@SyntaxTree"
                 end
             # We find the node we're looking for. NB: Currently assuming a max
             # of one @SyntaxTree invocation per line. Though we could relax
@@ -728,8 +685,13 @@ end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
 SyntaxList(ctx) = SyntaxList(syntax_graph(ctx))
+SyntaxList(ctx, v::Vector{SyntaxTree}) =
+    SyntaxList(syntax_graph(ctx), NodeId[x._id for x in v])
 
 syntax_graph(lst::SyntaxList) = lst.graph
+
+setchildren!(graph::SyntaxGraph, id::NodeId, children::SyntaxList) =
+    setchildren!(graph, id, children.ids)
 
 Base.size(v::SyntaxList) = size(v.ids)
 
@@ -829,3 +791,132 @@ end
 #     end
 #     out
 # end
+
+#-------------------------------------------------------------------------------
+# Conversion from the raw parsed tree
+# TODO: move to JuliaSyntax. Replace SyntaxNode?
+
+function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::ParseStream;
+                                filename=nothing, first_line=1)
+    cursor = RedTreeCursor(stream)
+    graph = SyntaxGraph()
+    sf = SourceFile(stream; filename, first_line)
+    source = SourceRef(sf, first_byte(stream), last_byte(stream))
+    cs = SyntaxList(graph)
+    for c in reverse_toplevel_siblings(cursor)
+        is_trivia(c) && !is_error(c) && continue
+        push!(cs, SyntaxTree(graph, sf, c))
+    end
+    # There may be multiple non-trivia toplevel nodes (e.g. parse error)
+    length(cs) === 1 && return only(cs)
+    id = newnode!(graph)
+    setchildren!(graph, id, reverse(cs).ids)
+    setattr!(graph, id; source, kind=K"wrapper")
+    return SyntaxTree(graph, id)
+end
+
+function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
+    ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16,
+                       source=SourceAttrType, value=Any, name_val=String)
+    green_id = GC.@preserve sf begin
+        raw_offset, txtbuf = _unsafe_wrap_substring(sf.code)
+        offset = raw_offset - sf.byte_offset
+        _insert_green(graph, sf, txtbuf, offset, cursor)
+    end
+    out = _green_to_ast(K"None", SyntaxTree(graph, green_id))
+    @assert !isnothing(out) "SyntaxTree requires >0 nontrivia nodes"
+    return out
+end
+
+# TODO: Do we really need all trivia?  K"parens" can be good to keep, but things
+# like K"(" and whitespace might not be useful.
+function _insert_green(graph::SyntaxGraph, sf::SourceFile,
+                       txtbuf::Vector{UInt8}, offset::Int,
+                       cursor::RedTreeCursor)
+    id = newnode!(graph)
+    setattr!(graph, id, :kind, kind(cursor))
+    setattr!(graph, id, :syntax_flags, flags(cursor))
+    setattr!(graph, id, :source, SourceRef(sf, first_byte(cursor), last_byte(cursor)))
+    if !is_leaf(cursor)
+        cs = NodeId[]
+        for c in reverse(cursor)
+            push!(cs, _insert_green(graph, sf, txtbuf, offset, c))
+        end
+        setchildren!(graph, id, reverse(cs))
+    else
+        v = parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ offset)
+        if v isa Symbol
+            # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
+            setattr!(graph, id, :name_val, string(v))
+        elseif !isnothing(v)
+            setattr!(graph, id, :value, v)
+        end
+    end
+    return id
+end
+
+# Leaves are shared.  Unlike `mapchildren`, doesn't bother checking for
+# unchanged children so internal nodes can be shared, since the likelihood of
+# not deleting trivia under an internal node is practically zero.
+function _green_to_ast(parent::Kind, ex::SyntaxTree; eq_to_kw=false)
+    is_trivia(ex) && !is_error(ex) && return nothing
+    graph = syntax_graph(ex)
+    k = kind(ex)
+    if k === K"ref" ||
+        (k in KSet"call dotcall" && (
+            is_prefix_call(ex) || is_prefix_op_call(ex) && numchildren(ex) > 2))
+        cs = SyntaxList(ex)
+        for c in children(ex)
+            c2 = _green_to_ast(k, c; eq_to_kw=length(cs)>0)
+            !isnothing(c2) && push!(cs, c2)
+        end
+        makenode(graph, ex, ex, cs)
+    elseif k === K"parameters"
+        eq_to_kw = parent != K"vect"   && parent != K"curly" &&
+                   parent != K"braces" && parent != K"ref"
+        makenode(graph, ex, ex, _map_green_to_ast(k, children(ex); eq_to_kw))
+    elseif k === K"parens"
+        cs = _map_green_to_ast(parent, children(ex); eq_to_kw)
+        length(cs) === 1 ? cs[1] : makenode(graph, ex, ex, cs)
+    elseif k in KSet"var char"
+        cs = _map_green_to_ast(parent, children(ex))
+        length(cs) === 1 ? cs[1] : makenode(graph, ex, ex, cs)
+    elseif k === K"=" && eq_to_kw
+        setattr!(makenode(graph, ex, ex, _map_green_to_ast(k, children(ex))),
+                 :kind, K"kw")
+    elseif k === K"CmdMacroName" || k === K"StrMacroName"
+        name = lower_identifier_name(ex.name_val, k)
+        setattr!(makeleaf(graph, ex, K"Identifier"),
+                 :name_val, name)
+    elseif k === K"macro_name"
+        # M.@x parses to (. M (macro_name x))
+        # @M.x parses to (macro_name (. M x))
+        # We want (. M @x) (both identifiers) in either case
+        cs = _map_green_to_ast(k, children(ex))
+        if length(cs) !== 1 || !(kind(cs[1]) in KSet". Identifier")
+            return makenode(graph, ex, ex, cs)
+        end
+        id = cs[1]
+        mname_raw = (kind(id) === K"." ? id[2] : id).name_val
+        mac_id = setattr!(makeleaf(graph, ex, K"Identifier"), :name_val,
+                          lower_identifier_name(mname_raw, K"macro_name"))
+        if kind(id) === K"."
+            makenode(graph, ex, ex, NodeId[id[1]._id, mac_id._id])
+        else
+            mac_id
+        end
+    elseif is_leaf(ex)
+        return ex
+    else
+        makenode(graph, ex, ex, _map_green_to_ast(k, children(ex)))
+    end
+end
+
+function _map_green_to_ast(parent::Kind, cs::SyntaxList; eq_to_kw=false)
+    out = SyntaxList(cs)
+    for c in cs
+        c2 = _green_to_ast(parent, c; eq_to_kw)
+        !isnothing(c2) && push!(out, c2)
+    end
+    return out
+end

@@ -239,6 +239,14 @@ let
 end
 
 ########################################
+# Error: Const not supported in function scope
+function (); global g; const g = 1; end
+#---------------------
+LoweringError:
+function (); global g; const g = 1; end
+#                           └────┘ ── unsupported `const` inside function
+
+########################################
 # Type decl on function argument
 function f(x)
     x::Int = 1

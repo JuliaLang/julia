@@ -119,7 +119,7 @@ end
 
 # Passes desugaring, but T is detected as unused and throws an error.
 # Is it clear whether this should be `f(x::T) where T` or `f(x::T where T)`?
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 let
     f = ((x::T) where T) -> x
     f(1)

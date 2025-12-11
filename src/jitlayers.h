@@ -451,7 +451,7 @@ void jl_init_function(Function *F, const jl_codegen_output_t &params) JL_NOTSAFE
 jl_returninfo_t get_specsig_function(jl_codegen_output_t &ctx, Module *M, Value *fval,
                                      StringRef name, jl_value_t *sig, jl_value_t *jlrettype,
                                      bool is_opaque_closure,
-                                     ArrayRef<const char *> ArgNames = None,
+                                     ArrayRef<const char *> ArgNames = {},
                                      unsigned nreq = 0);
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;

@@ -1195,6 +1195,8 @@ int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_sc
                     tail = pg;
                 }
                 n_pages_to_scan++;
+                assert((&global_page_pool_lazily_freed != &tmp) &&
+                    "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
                 push_lf_back_nosync(&tmp, pg);
             }
             else {
@@ -1279,6 +1281,8 @@ void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
                 }
                 jl_gc_page_stack_t *dest = &allocd_scratch[ptls2->tid].stack;
                 jl_gc_pagemeta_t *pg = try_pop_lf_back(&ptls2->gc_tls.page_metadata_allocd);
+                assert((&ptls2->gc_tls.page_metadata_allocd != dest) &&
+                    "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
                 // failed steal attempt
                 if (pg == NULL) {
                     continue;
@@ -1326,6 +1330,8 @@ void gc_free_pages(void) JL_NOTSAFEPOINT
         n_pages_seen++;
         // keep the last few pages around for a while
         if (n_pages_seen * GC_PAGE_SZ <= default_collect_interval) {
+            assert((&global_page_pool_lazily_freed != &tmp) &&
+                "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
             push_lf_back(&tmp, pg);
             continue;
         }
@@ -1345,6 +1351,8 @@ void gc_free_pages(void) JL_NOTSAFEPOINT
             if (pg == NULL) {
                 break;
             }
+            assert((&global_page_pool_lazily_freed != &tmp) &&
+                "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
             push_lf_back(&global_page_pool_lazily_freed, pg);
         }
     }
@@ -3854,7 +3862,22 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    void *b = malloc_cache_align(allocsz);
+    #ifdef MADV_HUGEPAGE
+        void *b = NULL;
+        if (allocsz >= 1u<<18u) {
+            b = malloc_page_align(allocsz);
+            if (jl_hugepage_size > 0) {
+                size_t leftover = jl_hugepage_size - (allocsz % jl_hugepage_size);
+                if ((leftover <= allocsz / 4) || (leftover == jl_hugepage_size))  // limit fragmentation
+                    madvise(b, allocsz, MADV_HUGEPAGE);
+            }
+        }
+        else {
+            b = malloc_cache_align(allocsz);
+        }
+    #else
+        void *b = malloc_cache_align(allocsz);
+    #endif
     if (b == NULL)
         jl_throw(jl_memory_exception);
 

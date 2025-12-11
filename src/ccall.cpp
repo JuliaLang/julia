@@ -523,16 +523,33 @@ static const std::string make_errmsg(const char *fname, int n, const char *err)
     return msg.str();
 }
 
+// bitcast whatever Ptr kind x might be (even if it is part of a union) into Ptr{Cvoid}
+// given that the caller already had emit_cpointercheck on this branch, so that
+// the conversion is guaranteed to be valid on this runtime branch
+static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x)
+{
+    if (x.typ == (jl_value_t*)jl_voidpointer_type)
+        return x;
+    if (jl_type_intersection(x.typ, (jl_value_t*)jl_pointer_type) == jl_bottom_type)
+        return jl_cgval_t();
+    if (x.constant)
+        return mark_julia_type(ctx, julia_const_to_llvm(ctx, x.constant), false, jl_voidpointer_type);
+    if (x.V == nullptr)
+        return jl_cgval_t();
+    if (!x.inline_roots.empty() || x.ispointer())
+        return mark_julia_slot(x.V, (jl_value_t*)jl_voidpointer_type, NULL, x.tbaa);
+    return mark_julia_type(ctx, x.V, false, jl_voidpointer_type);
+}
+
 static jl_cgval_t typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_value_t *jlto, jl_unionall_t *jlto_env, int argn)
 {
     if (jlto != (jl_value_t*)jl_any_type && !jl_subtype(jvinfo.typ, jlto)) {
         if (jlto == (jl_value_t*)jl_voidpointer_type) {
             // allow a bit more flexibility for what can be passed to (void*) due to Ref{T} conversion behavior in input
-            if (!jl_is_cpointer_type(jvinfo.typ)) {
+            if (!jl_is_cpointer_type(jvinfo.typ))
                 // emit a typecheck, if not statically known to be correct
                 emit_cpointercheck(ctx, jvinfo, make_errmsg("ccall", argn + 1, ""));
-                return update_julia_type(ctx, jvinfo, (jl_value_t*)jl_pointer_type);
-            }
+            return voidpointer_update(ctx, jvinfo);
         }
         else {
             // emit a typecheck, if not statically known to be correct
@@ -581,7 +598,7 @@ static Value *julia_to_native(
 
     jvinfo = typeassert_input(ctx, jvinfo, jlto, jlto_env, argn);
     if (!byRef)
-        return emit_unbox(ctx, to, jvinfo, jlto);
+        return emit_unbox(ctx, to, jvinfo);
 
     // pass the address of an alloca'd thing, not a box
     // since those are immutable.
@@ -740,8 +757,7 @@ static void interpret_ccall_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out,
             const char *errmsg = "ccall: first argument not a pointer or valid constant expression";
             emit_cpointercheck(ctx, arg1, errmsg);
         }
-        arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
-        out.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, arg1, (jl_value_t*)jl_voidpointer_type);
+        out.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, arg1));
     }
 
     // Handle Julia internal symbol lookup for static function names
@@ -804,8 +820,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
             argv[1] = emit_expr(ctx, args[2]);
         if (!jl_is_cpointer_type(argv[0].typ))
             return emit_runtime_call(ctx, nargs == 1 ? JL_I::cglobal_auto : JL_I::cglobal, argv, nargs);
-        argv[0] = update_julia_type(ctx, argv[0], (jl_value_t*)jl_voidpointer_type);
-        sym.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], (jl_value_t*)jl_voidpointer_type);
+        sym.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, argv[0]));
         res = sym.jl_ptr;
     }
 
@@ -1668,8 +1683,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             retval = boxed(ctx, argv[0]);
             retval = emit_pointer_from_objref(ctx, retval /*T_prjlvalue*/);
         }
+        else if (tti == (jl_value_t*)jl_voidpointer_type) {
+            retval = emit_unbox(ctx, largty, voidpointer_update(ctx, argv[0]));
+        }
         else {
-            retval = emit_unbox(ctx, largty, argv[0], tti);
+            retval = emit_unbox(ctx, largty, update_julia_type(ctx, argv[0], tti));
         }
         // retval is now an untracked jl_value_t*
         if (retboxed)
@@ -1788,7 +1806,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const int rng_offset = offsetof(jl_tls_states_t, rngseed);
         Value *rng_ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptls_p, ConstantInt::get(ctx.types().T_size, rng_offset / sizeof(int8_t)));
         setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
-        Value *val64 = emit_unbox(ctx, getInt64Ty(ctx.builder.getContext()), argv[0], (jl_value_t*)jl_uint64_type);
+        Value *val64 = emit_unbox(ctx, getInt64Ty(ctx.builder.getContext()), update_julia_type(ctx, argv[0], (jl_value_t*)jl_uint64_type));
         auto store = ctx.builder.CreateAlignedStore(val64, rng_ptr, Align(sizeof(void*)));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         ai.decorateInst(store);
@@ -1962,14 +1980,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const jl_cgval_t &dst = argv[0];
         const jl_cgval_t &src = argv[1];
         const jl_cgval_t &n = argv[2];
-        Value *destp = emit_unbox(ctx, ctx.types().T_ptr, dst, (jl_value_t*)jl_voidpointer_type);
-
+        Value *destp = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, dst));
         ctx.builder.CreateMemCpy(
                 destp,
                 MaybeAlign(1),
-                emit_unbox(ctx, ctx.types().T_ptr, src, (jl_value_t*)jl_voidpointer_type),
+                emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, src)),
                 MaybeAlign(1),
-                emit_unbox(ctx, ctx.types().T_size, n, (jl_value_t*)jl_ulong_type),
+                emit_unbox(ctx, ctx.types().T_size, update_julia_type(ctx, n, (jl_value_t*)jl_ulong_type)),
                 false);
         JL_GC_POP();
         return rt == (jl_value_t*)jl_nothing_type ? ghostValue(ctx, jl_nothing_type) :
@@ -1980,13 +1997,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const jl_cgval_t &dst = argv[0];
         const jl_cgval_t &val = argv[1];
         const jl_cgval_t &n = argv[2];
-        Value *destp = emit_unbox(ctx, ctx.types().T_ptr, dst, (jl_value_t*)jl_voidpointer_type);
-        Value *val32 = emit_unbox(ctx, getInt32Ty(ctx.builder.getContext()), val, (jl_value_t*)jl_uint32_type);
+        Value *destp = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, dst));
+        Value *val32 = emit_unbox(ctx, getInt32Ty(ctx.builder.getContext()), update_julia_type(ctx, val, (jl_value_t*)jl_int32_type));
         Value *val8 = ctx.builder.CreateTrunc(val32, getInt8Ty(ctx.builder.getContext()), "memset_val");
         ctx.builder.CreateMemSet(
             destp,
             val8,
-            emit_unbox(ctx, ctx.types().T_size, n, (jl_value_t*)jl_ulong_type),
+            emit_unbox(ctx, ctx.types().T_size, update_julia_type(ctx, n, (jl_value_t*)jl_ulong_type)),
             MaybeAlign(1)
         );
         JL_GC_POP();
@@ -1998,14 +2015,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const jl_cgval_t &dst = argv[0];
         const jl_cgval_t &src = argv[1];
         const jl_cgval_t &n = argv[2];
-        Value *destp = emit_unbox(ctx, ctx.types().T_ptr, dst, (jl_value_t*)jl_voidpointer_type);
+        Value *destp = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, dst));
 
         ctx.builder.CreateMemMove(
                 destp,
                 MaybeAlign(0),
-                emit_unbox(ctx, ctx.types().T_ptr, src, (jl_value_t*)jl_voidpointer_type),
+                emit_unbox(ctx, ctx.types().T_ptr, update_julia_type(ctx, src, (jl_value_t*)jl_voidpointer_type)),
                 MaybeAlign(0),
-                emit_unbox(ctx, ctx.types().T_size, n, (jl_value_t*)jl_ulong_type),
+                emit_unbox(ctx, ctx.types().T_size, update_julia_type(ctx, n, (jl_value_t*)jl_ulong_type)),
                 false);
         JL_GC_POP();
         return rt == (jl_value_t*)jl_nothing_type ? ghostValue(ctx, jl_nothing_type) :
@@ -2099,8 +2116,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (jl_is_abstract_ref_type(jargty)) {
             if (!jl_is_cpointer_type(arg.typ)) {
                 emit_cpointercheck(ctx, arg, "ccall: argument to Ref{T} is not a pointer");
-                arg.typ = (jl_value_t*)jl_voidpointer_type;
-                arg.isboxed = false;
+                arg = voidpointer_update(ctx, arg);
             }
             jargty_in_env = (jl_value_t*)jl_voidpointer_type;
         }

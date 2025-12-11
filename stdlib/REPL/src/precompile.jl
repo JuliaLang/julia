@@ -15,23 +15,33 @@ finally
 end
 
 function repl_workload()
-    # these are intentionally triggered
+    # Capture debug output to show if something goes wrong
+    debug_output = IOBuffer()
+
+    # Errors that are intentionally triggered by the script
     allowed_errors = [
         "BoundsError: attempt to access 0-element Vector{Any} at index [1]",
         "MethodError: no method matching f(::$Int, ::$Int)",
         "Padding of type", # reinterpret docstring has ERROR examples
     ]
-    function check_errors(out)
-        str = String(out)
-        if occursin("ERROR:", str) && !any(occursin(e, str) for e in allowed_errors)
-            @error "Unexpected error (Review REPL precompilation with debug_output on):\n$str" exception=(
-                Base.PrecompilableError(), Base.backtrace())
-            exit(1)
+
+    function check_output()
+        str = String(take!(copy(debug_output)))
+        for line in eachline(IOBuffer(str))
+            if occursin("ERROR:", line) && !any(e -> occursin(e, line), allowed_errors)
+                println(stderr, """
+                ========================================================================
+                ERROR: Unexpected error during REPL precompilation
+                ========================================================================
+                Debug output:
+                ------------------------------------------------------------------------
+                """)
+                println(stderr, str)
+                println(stderr, "========================================================================")
+                error("REPL precompilation encountered unexpected error: $line")
+            end
         end
     end
-    ## Debugging options
-    # View the code sent to the repl by setting this to `stdout`
-    debug_output = devnull # or stdout
 
     CTRL_C = '\x03'
     CTRL_D = '\x04'
@@ -39,18 +49,21 @@ function repl_workload()
     UP_ARROW = "\e[A"
     DOWN_ARROW = "\e[B"
 
-    # This is notified as soon as the first prompt appears
-    repl_init_event = Base.Event()
-    repl_init_done_event = Base.Event()
+    # Event that REPL notifies each time it's ready for input (autoreset so each wait blocks until next notify)
+    prompt_ready = Base.Event(true)
+    # Event to signal that REPL.activate has been called
+    activate_done = Base.Event()
 
     atreplinit() do repl
-        # Main is closed so we can't evaluate in it, but atreplinit runs at
-        # a time that repl.mistate === nothing so REPL.activate fails. So do
-        # it async and wait for the first prompt to know its ready.
+        # Set the prompt_ready_event on the repl - run_frontend will copy it to mistate
+        if repl isa REPL.LineEditREPL
+            repl.prompt_ready_event = prompt_ready
+        end
+        # Start async task to wait for first prompt then activate the module
         t = @async begin
-            wait(repl_init_event)
+            wait(prompt_ready)
             REPL.activate(REPL.Precompile; interactive_utils=false)
-            notify(repl_init_done_event)
+            notify(activate_done)
         end
         Base.errormonitor(t)
     end
@@ -64,7 +77,7 @@ function repl_workload()
     display("a string")
     foo(x) = 1
     @time @eval foo(1)
-    ; pwd
+    ;
     $CTRL_C
     $CTRL_R$CTRL_C#
     ? reinterpret
@@ -82,14 +95,6 @@ function repl_workload()
     \x12?\x7f\e[A\e[B\t history\r
     println("done")
     """
-
-    JULIA_PROMPT = "julia> "
-    # The help text for `reinterpret` has example `julia>` prompts in it,
-    # so use the longer prompt to avoid desychronization.
-    ACTIVATED_JULIA_PROMPT = "(REPL.Precompile) julia> "
-    PKG_PROMPT = "pkg> "
-    SHELL_PROMPT = "shell> "
-    HELP_PROMPT = "help?> "
 
     tmphistfile = tempname()
     write(tmphistfile, """
@@ -120,20 +125,16 @@ function repl_workload()
             Base._fd(pts) == rawpts || Base.close_stdio(rawpts)
         end
         # Prepare a background process to copy output from `ptm` until `pts` is closed
-        output_copy = Base.BufferStream()
         tee = @async try
             while !eof(ptm)
                 l = readavailable(ptm)
                 write(debug_output, l)
-                write(output_copy, l)
             end
-            write(debug_output, "\n#### EOF ####\n")
         catch ex
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO on ptm after pts dies
             end
         finally
-            close(output_copy)
             close(ptm)
         end
         Base.errormonitor(tee)
@@ -159,46 +160,27 @@ function repl_workload()
                 redirect_stderr(isopen(orig_stderr) ? orig_stderr : devnull)
             end
             schedule(repltask)
-            # wait for the definitive prompt before start writing to the TTY
-            check_errors(readuntil(output_copy, JULIA_PROMPT, keep=true))
-
-            # Switch to the activated prompt
-            notify(repl_init_event)
-            wait(repl_init_done_event)
+            # Wait for the first prompt, then for activate to complete
+            wait(activate_done)
+            # Send a newline to get the activated prompt
             write(ptm, "\n")
-            # The prompt prints twice - once for the restatement of the input, once
-            # to indicate ready for the new prompt.
-            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
-            check_errors(readuntil(output_copy, ACTIVATED_JULIA_PROMPT, keep=true))
+            # Wait for the new prompt to be ready
+            wait(prompt_ready)
 
-            write(debug_output, "\n#### REPL STARTED ####\n")
             # Input our script
             precompile_lines = split(repl_script::String, '\n'; keepempty=false)
-            curr = 0
             for l in precompile_lines
-                sleep(0.01) # try to let a bit of output accumulate before reading again
-                curr += 1
-                # push our input
-                write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                # If the line ends with a CTRL_C, don't write an extra newline, which would
-                # cause a second empty prompt. Our code below expects one new prompt per
-                # input line and can race out of sync with the unexpected second line.
-                endswith(l, CTRL_C) ? write(ptm, l) : write(ptm, l, "\n")
-                check_errors(readuntil(output_copy, "\n"))
-                # wait for the next prompt-like to appear
-                check_errors(readuntil(output_copy, "\n"))
-                strbuf = ""
-                while !eof(output_copy)
-                    strbuf *= String(readavailable(output_copy))
-                    occursin(ACTIVATED_JULIA_PROMPT, strbuf) && break
-                    occursin(PKG_PROMPT, strbuf) && break
-                    occursin(SHELL_PROMPT, strbuf) && break
-                    occursin(HELP_PROMPT, strbuf) && break
-                    sleep(0.01) # try to let a bit of output accumulate before reading again
+                # If the line ends with a CTRL_C, don't write an extra newline
+                # CTRL_C cancels input but doesn't print a new prompt, so don't wait
+                if endswith(l, CTRL_C)
+                    write(ptm, l)
+                    sleep(0.1)  # Brief pause to let CTRL_C be processed
+                else
+                    write(ptm, l, "\n")
+                    # Wait for REPL to signal it's ready for next input
+                    wait(prompt_ready)
                 end
-                check_errors(strbuf)
             end
-            write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
             write(ptm, "$CTRL_D")
             wait(repltask)
         finally
@@ -208,7 +190,9 @@ function repl_workload()
         end
         wait(tee)
     end
-    write(debug_output, "\n#### FINISHED ####\n")
+    # Check for any unexpected errors in the output
+    check_output()
+    rm(tmphistfile, force=true)
     nothing
 end
 

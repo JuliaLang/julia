@@ -58,23 +58,292 @@ begin
 end
 """) === :outer_y
 
-# wrap expression in scope block of `scope_type`
-function wrapscope(ex, scope_type)
-    g = JuliaLowering.ensure_attributes(ex._graph, scope_type=Symbol)
-    ex = JuliaLowering.reparent(g, ex)
-    makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
+#=
+| old\new: || global     | local | arg                | sparam             |
+|----------++------------+-------+--------------------+--------------------|
+| global   || no-op      | (*)   |                    |                    |
+| local    || error (*)  | no-op |                    |                    |
+| arg      || shadow(??) | error | error (not unique) |                    |
+| sparam   || shadow(??) | error | error (sparam/arg) | error (not unique) |
+=#
+@testset "Conflicts in the same local scope" begin
+
+    # no-op cases.  It would probably be clearer (but breaking) if these were
+    # errors like the conflict cases (two of the same decl should never do
+    # anything, and the user might be expecting two variables).
+    @testset "global,global" begin
+        s = "function (); global g; global g; 1; end"
+        @test JuliaLowering.include_string(test_mod, s) isa Function
+    end
+    @testset "local,local" begin
+        s = "function (); local l; local l; end"
+        @test JuliaLowering.include_string(test_mod, s) isa Function
+    end
+
+    # locals may not overlap args/sparams/globals
+    @testset "global,local/local,global" begin
+        s = "function (); global g; local g; end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+    end
+    @testset "arg,local" begin
+        s = "function (x); local x; end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+    end
+    @testset "sparam,local" begin
+        s = "function (a::s) where {s}; local s; end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+    end
+
+    # globals may overlap args or sparams (buggy?)  TODO: decide whether it's
+    # worth replicating this behaviour.  We would likely need to copy the way
+    # flisp nests an extra scope block in every lambda.
+    @testset "arg,global" begin
+        s = "function (a); global a = 1; a; end"
+        @test_broken f = JuliaLowering.include_string(test_mod, s)
+        @test_broken f isa Function
+        @test_broken f(999) === 1
+        @test_broken isdefinedglobal(test_mod, :a)
+    end
+    @testset "sparam,global" begin
+        s = "function (a::s) where {s}; global s = 1; s; end"
+        @test_broken f = JuliaLowering.include_string(test_mod, s)
+        @test_broken f isa Function
+        @test_broken f(999) === 1
+        @test_broken isdefinedglobal(test_mod, :s)
+    end
+
+    # sp/arg conflict
+    @testset "arg,sparam" begin
+        s = "function (a) where {a}; end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+    end
+    @testset "arg,arg" begin
+        s = "function (a,a); end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+    end
+    @testset "sparam,sparam" begin
+        s = "function () where {s,s}; end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+    end
+
+    # (not in table) destructured args are handled internally like locals, but
+    # should have similar conflict rules to arguments
+    @testset "destructured-arg,destructured-arg/arg/local/sp/global" begin
+        s = "function ((x,x)); end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+        s = "function ((x,y),x); end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+        s = "function ((x,y)) where {x}; end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+        s = "function ((x,y)); global x; x; end"
+        @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
+        # quirk: flisp is OK with this
+        s = "function ((x,y)); local x; end"
+        @test JuliaLowering.include_string(test_mod, s) isa Function
+    end
+
 end
 
-assign_z_2 = parsestmt(SyntaxTree, "begin z = 2 end", filename="foo.jl")
-Base.eval(test_mod, :(z=1))
-@test test_mod.z == 1
-# neutral (eg, for loops) and hard (eg, let) scopes create a new binding for z
-JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :neutral))
-@test test_mod.z == 1
-JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :hard))
-@test test_mod.z == 1
-# but wrapping neutral scope in soft scope uses the existing binding in test_mod
-JuliaLowering.eval(test_mod, wrapscope(wrapscope(assign_z_2, :neutral), :soft))
-@test test_mod.z == 2
+@testset "basic softscope (uses internal lowering nodes, not surface syntax)" begin
+    # wrap expression in scope block of `scope_type` (:neutral or :hard)
+    function wrapscope(ex, scope_type)
+        g = JuliaLowering.ensure_attributes(ex._graph, scope_type=Symbol)
+        ex = JuliaLowering.reparent(g, ex)
+        makenode(g, ex, K"scope_block", [ex._id], [:scope_type=>scope_type])
+    end
+    function use_soft(ex::SyntaxTree)
+        @ast ex._graph ex [K"block" (::K"softscope") ex]
+    end
+
+    assign_z_2 = parsestmt(SyntaxTree, "begin z = 2 end", filename="foo.jl")
+    Base.eval(test_mod, :(z=1))
+    @test test_mod.z == 1
+    # hard scopes will always create a new binding; softscope mode is ignored
+    JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :hard))
+    @test test_mod.z == 1
+    JuliaLowering.eval(test_mod, use_soft(wrapscope(assign_z_2, :hard)))
+    @test test_mod.z == 1
+    # neutral (eg, for loops) and hard (eg, let) scopes create a new binding for z
+    JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :neutral))
+    @test test_mod.z == 1
+    # but soft scope mode makes assignment in neutral scope assign to global `z`
+    JuliaLowering.eval(test_mod, use_soft(wrapscope(assign_z_2, :neutral)))
+    @test test_mod.z == 2
+end
+
+# Switch to Core.eval for sanity-checking
+expr_eval(mod, ex) = JuliaLowering.eval(mod, ex)
+
+enable_softscope(e) = Expr(:block, Expr(:softscope, true), e)
+inner_neutral(e) = :(for _ in 1:1; $e; end)
+inner_func(e) = :((function (); $e end)(#=called=#))
+inner_hard(e) = :(let; $e end)
+
+outer_none(e) = :(begin
+                      local lname = false
+                      global gname = false
+                      $e
+                  end)
+outer_neutral(e) = :(try # use try so that a value is returned
+                         local lname = false
+                         global gname = false
+                         $e
+                     catch what
+                         rethrow(what)
+                     end)
+outer_hard(e) = :(let lname = false # takes a different code path in flisp
+                      global gname = false
+                      $e
+                  end)
+outer_func(e) = :((function (argname::spname = false) where spname
+                       local lname = false
+                       global gname = false
+                       $e
+                   end)(#=called=#))
+
+lhs_names = (:lname, :gname, :argname, :spname)
+
+# For each distinct outer and inner scope, and each kind of variable in the
+# outer scope, set the same name to true from the inner scope
+@testset "Behaviour of `=` in local scope (shadow or assign-existing)" begin
+    expected_outer_vals = Dict{Tuple{Bool, Function, Function}, Tuple}(
+        (true,  outer_none,    inner_func   ) => (true,false),
+        (true,  outer_none,    inner_hard   ) => (true,false),
+        (true,  outer_none,    inner_neutral) => (true,true),
+        (true,  outer_neutral, inner_func   ) => (true,true),
+        (true,  outer_neutral, inner_hard   ) => (true,true),
+        (true,  outer_neutral, inner_neutral) => (true,true),
+        (true,  outer_hard,    inner_func   ) => (true,true),
+        (true,  outer_hard,    inner_hard   ) => (true,true),
+        (true,  outer_hard,    inner_neutral) => (true,true),
+        (true,  outer_func,    inner_func   ) => (true,true,true),
+        (true,  outer_func,    inner_hard   ) => (true,true,true),
+        (true,  outer_func,    inner_neutral) => (true,true,true),
+        (false, outer_none,    inner_func   ) => (true,false),
+        (false, outer_none,    inner_hard   ) => (true,false),
+        (false, outer_none,    inner_neutral) => (true,false),
+        (false, outer_neutral, inner_func   ) => (true,true),
+        (false, outer_neutral, inner_hard   ) => (true,true),
+        (false, outer_neutral, inner_neutral) => (true,true),
+        (false, outer_hard,    inner_func   ) => (true,true),
+        (false, outer_hard,    inner_hard   ) => (true,true),
+        (false, outer_hard,    inner_neutral) => (true,true),
+        (false, outer_func,    inner_func   ) => (true,true,true),
+        (false, outer_func,    inner_hard   ) => (true,true,true),
+        (false, outer_func,    inner_neutral) => (true,true,true),
+    )
+    expected_s(b::Bool) = b ? "assignment to outer var" : "brand-new var"
+
+    tmp_test_mod = Module()
+    tmp_test_mod_2 = Module()
+
+    for soft_mode in (true, false),
+        outer_s in (outer_none, outer_neutral, outer_hard, outer_func),
+        inner_s in (inner_func, inner_hard, inner_neutral),
+        (lhs_i, lhs) in enumerate(lhs_names)
+
+        ex = outer_s(Expr(:block, inner_s(:($lhs = true)), lhs))
+        soft_mode && (ex = enable_softscope(ex))
+
+        if lhs in (:argname, :spname) && parent !== outer_func
+            continue
+        elseif lhs === :spname
+            @test_throws LoweringError expr_eval(tmp_test_mod, ex)
+        else
+            expected = expected_outer_vals[(soft_mode, outer_s, inner_s)][lhs_i]
+            ok = expr_eval(tmp_test_mod, ex) === expected
+            !ok && error("expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
+            @test ok
+        end
+
+        if lhs === :gname
+            Base.delete_binding(tmp_test_mod, :gname)
+            Base.delete_binding(tmp_test_mod_2, :gname)
+        end
+    end
+end
+
+@testset "global declarations at top level are ignored in assignment resolution" begin
+    suggest_global(e) = :(begin; global declared_unassigned_global; $e; end)
+    for soft_mode in (true, false), scope in (inner_func, inner_hard, inner_neutral)
+        ex = scope(:(declared_unassigned_global = true))
+        soft_mode && (ex = enable_softscope(ex))
+        expr_eval(test_mod, ex)
+        global_assigned = @invokelatest isdefined(test_mod, :declared_unassigned_global)
+        global_assigned && error("global should not be assigned. settings: $soft_mode $scope\n")
+        @test !global_assigned
+    end
+
+    @testset "soft scope isn't top level" begin
+        ex = quote
+            begin
+                for i in 1:1; global soft_assigned_explicit_global = 1; end
+                for i in 1:1; soft_assigned_explicit_global = 2; end
+            end
+        end
+        expr_eval(test_mod, enable_softscope(ex))
+        @test test_mod.soft_assigned_explicit_global === 1
+    end
+end
+
+# Distinct from the stateful "existing global" check (probably to get around the
+# case where the global only becomes existing within the expression being
+# lowered)
+@testset "assignments at top level can influence assignment resolution in soft scopes" begin
+    for soft_mode in (true, false),
+        s1 in (inner_neutral, (e)->inner_neutral(inner_neutral(e))),
+        g_assign in (:(assigned_global = false), :(global assigned_global = false))
+
+        inner_assign_islocal = s1(Expr(
+            :block,
+            :(assigned_global = true),
+            Expr(:(=), :out, Expr(:islocal, :assigned_global))))
+
+        for ex in (Expr(:block, :(local out), inner_assign_islocal, g_assign, :out),
+                   Expr(:block, :(local out), g_assign, inner_assign_islocal, :out))
+
+            if soft_mode
+                ex = enable_softscope(ex)
+                ok = expr_eval(test_mod, ex) === false
+                !ok && error("expected assignment to global\n", ex)
+                @test ok
+            else
+                # some of these produce warning in flisp
+                ok = expr_eval(test_mod, ex) === true
+                !ok && error("expected assignment to local\n", ex)
+                @test ok
+            end
+            Base.delete_binding(test_mod, :assigned_global)
+        end
+    end
+end
+
+# Note: Certain flisp (un)hygiene behaviour is yet to be implemented.
+# In flisp, with no escaping:
+# - Top-level functions are unhygienic and declared in the macro's module
+# - Top level globals are unhygienic and declared in the calling module
+#   - this includes abstract, primitive, and struct types
+# - Top-level `x=y` implicitly declares hygienic globals (but it is not breaking
+#   to make them local)
+#
+# See https://github.com/JuliaLang/julia/issues/53667 for more quirks
+@testset "unescaped macro expansions introduce a hygienic scope" begin
+    @eval test_mod module macro_mod
+        macro m(x); x; end
+        macro mesc(x); esc(x); end
+    end
+
+    JuliaLowering.include_string(test_mod, "macro_mod.@m function f_local_1(); 1; end")
+    @test !isdefined(test_mod.macro_mod, :f_local_1)
+    JuliaLowering.include_string(test_mod, "macro_mod.@mesc function f_nonlocal_2(); 1; end")
+    @test isdefined(test_mod, :f_nonlocal_2)
+    # An unescaped const is local to a macro expansion
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, "macro_mod.@m const c_local_1 = 1")
+    # The const may be escaped into test_mod
+    JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_2 = 1")
+    @test isdefined(test_mod, :c_nonlocal_2)
+    JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_3 = 1"; expr_compat_mode=true)
+    @test isdefined(test_mod, :c_nonlocal_3)
+end
 
 end

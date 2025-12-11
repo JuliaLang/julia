@@ -61,7 +61,8 @@ function captured_var_access(ctx, ex)
 end
 
 function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
-    undef_var = new_local_binding(ctx, var, lookup_binding(ctx, var.var_id).name)
+    undef_var = new_local_binding(ctx, var, get_binding(ctx, var.var_id).name;
+                                  is_used_undef=true)
     @ast ctx var [K"block"
         box := box_ex
         # Lower in an UndefVar check to a similarly named variable
@@ -149,7 +150,7 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing; ret
 end
 
 function convert_global_assignment(ctx, ex, var, rhs0)
-    binfo = lookup_binding(ctx, var)
+    binfo = get_binding(ctx, var)
     @assert binfo.kind == :global
     stmts = SyntaxList(ctx)
     decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true; ret_nothing=true)
@@ -197,7 +198,7 @@ function convert_assignment(ctx, ex)
         return @ast ctx ex [K"=" var rhs0]
     end
     @chk kind(var) == K"BindingId"
-    binfo = lookup_binding(ctx, var)
+    binfo = get_binding(ctx, var)
     if binfo.kind == :global
         convert_global_assignment(ctx, ex, var, rhs0)
     else
@@ -233,10 +234,8 @@ end
 function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     capture_ids = Vector{IdTag}()
     for lambda_bindings in closure_binds.lambdas
-        for (id, lbinfo) in lambda_bindings.bindings
-            if lbinfo.is_captured
-                push!(capture_ids, id)
-            end
+        for (id, is_capt) in lambda_bindings.locals_capt
+            is_capt && push!(capture_ids, id)
         end
     end
     # sort here to avoid depending on undefined Dict iteration order.
@@ -253,7 +252,7 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     else
         field_names = Dict{String,IdTag}()
         for id in capture_ids
-            binfo = lookup_binding(ctx, id)
+            binfo = get_binding(ctx, id)
             # We name each field of the closure after the variable which was closed
             # over, for clarity. Adding a suffix can be necessary when collisions
             # occur due to macro expansion and generated bindings
@@ -305,20 +304,19 @@ function is_boxed(binfo::BindingInfo)
     # True for
     # * :argument when it's not reassigned
     # * :static_parameter (these can't be reassigned)
-    defined_but_not_assigned = binfo.is_always_defined && binfo.n_assigned == 0
+    defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
     # For now, we box almost everything but later we'll want to do dominance
     # analysis on the untyped IR.
     return binfo.is_captured && !defined_but_not_assigned
 end
 
 function is_boxed(ctx, x)
-    is_boxed(lookup_binding(ctx, x))
+    is_boxed(get_binding(ctx, x))
 end
 
 # Is captured in the closure's `self` argument
 function is_self_captured(ctx, x)
-    lbinfo = lookup_lambda_binding(ctx, x)
-    !isnothing(lbinfo) && lbinfo.is_captured
+    get(ctx.lambda_bindings.locals_capt, _binding_id(x), false)
 end
 
 # Map the children of `ex` through _convert_closures, lifting any toplevel
@@ -359,7 +357,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"isdefined"
         # Convert isdefined expr to function for closure converted variables
         var = ex[1]
-        binfo = lookup_binding(ctx, var)
+        binfo = get_binding(ctx, var)
         if is_boxed(binfo)
             access = is_self_captured(ctx, var) ? captured_var_access(ctx, var) : var
             @ast ctx ex [K"call"
@@ -382,7 +380,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         end
     elseif k == K"decl"
         @assert kind(ex[1]) == K"BindingId"
-        binfo = lookup_binding(ctx, ex[1])
+        binfo = get_binding(ctx, ex[1])
         if binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
             # [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
@@ -393,7 +391,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"global"
         # Leftover `global` forms become weak globals.
         mod, name = if kind(ex[1]) == K"BindingId"
-            binfo = lookup_binding(ctx, ex[1])
+            binfo = get_binding(ctx, ex[1])
             @assert binfo.kind == :global
             binfo.mod, binfo.name
         else
@@ -404,7 +402,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         @ast ctx ex [K"unused_only" make_globaldecl(ctx, ex, mod, name, false)]
     elseif k == K"local"
         var = ex[1]
-        binfo = lookup_binding(ctx, var)
+        binfo = get_binding(ctx, var)
         if binfo.is_captured
             @ast ctx ex [K"=" var [K"call" "Box"::K"core"]]
         elseif !binfo.is_always_defined
@@ -482,14 +480,14 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         end
     elseif k == K"function_type"
         func_name = ex[1]
-        if kind(func_name) == K"BindingId" && lookup_binding(ctx, func_name).kind === :local
+        if kind(func_name) == K"BindingId" && get_binding(ctx, func_name).kind === :local
             ctx.closure_infos[func_name.var_id].type_name
         else
             @ast ctx ex [K"call" "Typeof"::K"core" func_name]
         end
     elseif k == K"method_defs"
         name = ex[1]
-        is_closure = kind(name) == K"BindingId" && lookup_binding(ctx, name).kind === :local
+        is_closure = kind(name) == K"BindingId" && get_binding(ctx, name).kind === :local
         cap_rewrite = is_closure ? ctx.closure_infos[name.var_id] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                     ctx.closure_bindings, cap_rewrite, ctx.lambda_bindings,
@@ -593,7 +591,7 @@ function closure_convert_lambda(ctx, ex)
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
-    lam = makenode(ctx, ex, ex, lambda_children; lambda_bindings=lambda_bindings)
+    lam = makenode(ctx, ex, ex, lambda_children, [:lambda_bindings=>lambda_bindings])
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
             replace_captured_locals!::K"Value"

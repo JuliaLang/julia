@@ -138,26 +138,6 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     end
 end
 
-function fixup_macro_name(ctx::MacroExpansionContext, ex::SyntaxTree)
-    k = kind(ex)
-    if k == K"StrMacroName" || k == K"CmdMacroName"
-        layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        newname = JuliaSyntax.lower_identifier_name(ex.name_val, k)
-        makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid, name_val=newname)
-    elseif k == K"macro_name"
-        @chk numchildren(ex) === 1
-        if kind(ex[1]) === K"."
-            @ast ctx ex [K"." ex[1][1] [K"macro_name" ex[1][2]]]
-        else
-            layerid = get(ex, :scope_layer, current_layer_id(ctx))
-            newname = JuliaSyntax.lower_identifier_name(ex[1].name_val, K"macro_name")
-            makeleaf(ctx, ex[1], ex[1], kind=kind(ex[1]), name_val=newname)
-        end
-    else
-        mapchildren(e->fixup_macro_name(ctx,e), ctx, ex)
-    end
-end
-
 function _eval_dot(world::UInt, mod, ex::SyntaxTree)
     if kind(ex) === K"."
         mod = _eval_dot(world, mod, ex[1])
@@ -174,7 +154,7 @@ end
 # isn't clear the language is meant to support this).
 function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::SyntaxTree)
     mod = current_layer(ctx).mod
-    ex = fixup_macro_name(ctx, expand_forms_1(ctx, ex0))
+    ex = expand_forms_1(ctx, ex0)
     try
         if kind(ex) === K"Value"
             !(ex.value isa GlobalRef) ? ex.value :
@@ -215,7 +195,7 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
     k = kind(ex)
     scope_layer = get(ex, :scope_layer, layer_ids[layer_idx])
     if is_leaf(ex)
-        makeleaf(ctx, ex, ex; scope_layer=scope_layer)
+        makeleaf(ctx, ex, ex, [:scope_layer=>scope_layer])
     else
         inner_layer_idx = layer_idx
         if k == K"escape"
@@ -229,8 +209,9 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
                 throw(MacroExpansionError(ex, "`escape` node in outer context"))
             end
         end
-        mapchildren(e->set_macro_arg_hygiene(ctx, e, layer_ids, inner_layer_idx),
-                    ctx, ex; scope_layer=scope_layer)
+        node = mapchildren(e->set_macro_arg_hygiene(
+            ctx, e, layer_ids, inner_layer_idx), ctx, ex)
+        setattr!(node, :scope_layer, scope_layer)
     end
 end
 
@@ -325,6 +306,13 @@ function expand_macro(ctx, ex)
         # Compat: attempt to invoke an old-style macro if there's no applicable
         # method for new-style macro arguments.
         macro_args = Any[macro_loc, ctx.scope_layers[1].mod]
+
+        if length(raw_args) >= 1 && kind(raw_args[1]) === K"VERSION"
+            # Hack: see jl_invoke_julia_macro.  We may see an extra argument
+            # depending on who parsed this macrocall.
+            macro_args[1] = Core.MacroSource(macro_loc, raw_args[1].value)
+        end
+
         for arg in raw_args
             # For hygiene in old-style macros, we omit any additional scope
             # layer information from macro arguments. Old-style macros will
@@ -335,7 +323,7 @@ function expand_macro(ctx, ex)
             # new-style macros which call old-style macros. Instead of seeing
             # `Expr(:escape)` in such situations, old-style macros will now see
             # `Expr(:scope_layer)` inside `macro_args`.
-            push!(macro_args, Expr(arg))
+            kind(arg) !== K"VERSION" && push!(macro_args, Expr(arg))
         end
         expanded = try
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
@@ -373,10 +361,10 @@ function append_sourceref(ctx, ex, secondary_prov)
     srcref = (ex, secondary_prov)
     if !is_leaf(ex)
         if kind(ex) == K"macrocall"
-            makenode(ctx, srcref, ex, children(ex)...)
+            makenode(ctx, srcref, ex, children(ex))
         else
-            makenode(ctx, srcref, ex,
-                     map(e->append_sourceref(ctx, e, secondary_prov), children(ex))...)
+            cs = map(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
+            makenode(ctx, srcref, ex, cs)
         end
     else
         makeleaf(ctx, srcref, ex)
@@ -422,12 +410,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         else
             k = all(==('_'), name_str) ? K"Placeholder" : K"Identifier"
             scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
-            makeleaf(ctx, ex, ex; kind=k, scope_layer)
+            makeleaf(ctx, ex, ex, [:kind=>k, :scope_layer=>scope_layer])
         end
-    elseif k == K"StrMacroName" || k == K"CmdMacroName" || k == K"macro_name"
-        # These can appear outside of a macrocall, e.g. in `import`
-        e2 = fixup_macro_name(ctx, ex)
-        expand_forms_1(ctx, e2)
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes
         @chk numchildren(ex) == 1
@@ -464,8 +448,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # TODO: Upstream should set a general flag for detecting parenthesized
         # expressions so we don't need to dig into `green_tree` here. Ugh!
         plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) &&
-                       kind(ex[1]) == K"Identifier" &&
-                       (sr = sourceref(ex); sr isa SourceRef && kind(sr.green_tree[2]) != K"parens")
+            kind(ex[1]) == K"Identifier" && (
+                prov = flattened_provenance(ex);
+                length(prov) >= 1 && kind(prov[end][end]) != K"parens")
         if plain_symbol
             # As a compromise for compatibility, we treat non-parenthesized
             # colon quoted identifiers like `:x` as plain Symbol literals
@@ -502,7 +487,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
     elseif k == K"cmdstring"
         @chk numchildren(ex) == 1
-        e2 = @ast ctx ex [K"macrocall" [K"macro_name" "cmd"::K"core"] ex[1]]
+        e2 = @ast ctx ex [K"macrocall" "@cmd"::K"core" ex[1]]
         expand_macro(ctx, e2)
     elseif (k == K"call" || k == K"dotcall")
         # Do some initial desugaring of call and dotcall here to simplify
@@ -559,7 +544,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # TODO: Should every form get layerid systematically? Or only the ones
         # which expand_forms_2 needs?
         layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        mapchildren(e->expand_forms_1(ctx,e), ctx, ex; scope_layer=layerid)
+        setattr(mapchildren(e->expand_forms_1(ctx,e), ctx, ex),
+                :scope_layer, layerid)
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end

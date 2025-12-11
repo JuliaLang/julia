@@ -123,6 +123,10 @@ julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
+.PHONY: julia-sysimg-JL-release julia-sysimg-JL-debug
+julia-sysimg-JL-release julia-sysimg-JL-debug : julia-sysimg-JL-% : julia-sysimg-% julia-stdlib | $(build_private_libdir)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-JL-$*
+
 # Useful for cross-bootstrapping
 .PHONY: julia-sysbase-release julia-sysbase-debug
 julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)

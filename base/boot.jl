@@ -519,18 +519,24 @@ VecElement(arg::T) where {T} = VecElement{T}(arg)
 # inference lattice element types (moved from jltypes.c)
 struct Const
     val
+    Const(@nospecialize(v)) = new(v)
 end
 
 struct PartialStruct
     typ
-    undefs
+    undefs::Array{Union{Nothing,Bool}, 1}
     fields::Array{Any, 1}
+    # N.B. The constructor for this struct is intentionally not defined here.
+    # It is defined in coreir.jl along with some validation logic.
+    global _PartialStruct
+    _PartialStruct(@nospecialize(typ), undef::Array{Union{Nothing,Bool}, 1}, fields::Array{Any, 1}) = new(typ, undef, fields)
 end
 
 struct InterConditional
     slot::Int
     thentype
     elsetype
+    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = new(slot, thentype, elsetype)
 end
 
 struct PartialOpaque
@@ -538,6 +544,7 @@ struct PartialOpaque
     env
     parent::MethodInstance
     source
+    PartialOpaque(@nospecialize(typ::Type), @nospecialize(env), parent::MethodInstance, source) = new(typ, env, parent, source)
 end
 
 eval(Core, quote
@@ -566,10 +573,6 @@ eval(Core, quote
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
-    Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    _PartialStruct(@nospecialize(typ), undef, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :undef, :fields))
-    PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
-    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
