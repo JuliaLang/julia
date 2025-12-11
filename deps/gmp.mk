@@ -52,7 +52,17 @@ $(SRCCACHE)/gmp-$(GMP_VER)/gmp-alloc_overflow.patch-applied: $(SRCCACHE)/gmp-$(G
 		patch -p1 -f < $(SRCDIR)/patches/gmp-alloc_overflow.patch
 	echo 1 > $@
 
-$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-alloc_overflow.patch-applied
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-clang_rt.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-alloc_overflow.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/gmp-clang_rt.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-clang_rt-ltmain.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-clang_rt.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/gmp-clang_rt-ltmain.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-clang_rt-ltmain.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-patched

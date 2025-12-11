@@ -1,0 +1,34 @@
+From a18473ed4e5574dab899db640b8efeff78939b54 Mon Sep 17 00:00:00 2001
+From: Manoj Gupta <manojgupta@chromium.org>
+Date: Wed, 10 Oct 2018 10:50:23 +0300
+Subject: [PATCH 2/2] Pick up clang_rt static archives compiler internal
+ libraries (ltmain.sh)
+
+Handle clang_rt static archives in ltmain.sh to prevent the
+"Warning: Trying to link with static lib archive" warning.
+Clang uses absolute paths to link its internal libraries
+(e.g. compiler_rt), so we add them to deplibs directly.
+
+https://crbug.com/749263
+https://debbugs.gnu.org/cgi/bugreport.cgi?bug=27866
+
+Adapted from msys2/MINGW-packages@95b093e888158f387183b804ab27ff2ba6cf897d
+---
+ ltmain.sh | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/ltmain.sh b/ltmain.sh
+--- a/ltmain.sh
++++ b/ltmain.sh
+@@ -7754,6 +7754,11 @@ func_mode_link ()
+ 	*.la)
+ 	  func_resolve_sysroot "$deplib"
+ 	  lib=$func_resolve_sysroot_result
++	  ;;
++	*/libclang_rt.*.a)
++	  # Clang runtime libraries are always linked statically
++	  deplibs="$deplib $deplibs"
++	  continue
+ 	  ;;
+ 	*.$libext)
+ 	  if test conv = "$pass"; then

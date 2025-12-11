@@ -1,0 +1,51 @@
+From a18473ed4e5574dab899db640b8efeff78939b54 Mon Sep 17 00:00:00 2001
+From: Manoj Gupta <manojgupta@chromium.org>
+Date: Wed, 10 Oct 2018 10:50:23 +0300
+Subject: [PATCH 1/2] Pick up clang_rt static archives compiler internal
+ libraries
+
+Libtool checks only for libraries linked as -l* when trying to
+find internal compiler libraries. Clang, however uses the absolute
+path to link its internal libraries e.g. compiler_rt. This patch
+handles clang's statically linked libraries when finding internal
+compiler libraries.
+https://crbug.com/749263
+https://debbugs.gnu.org/cgi/bugreport.cgi?bug=27866
+
+Adapted from msys2/MINGW-packages@95b093e888158f387183b804ab27ff2ba6cf897d
+(mingw-w64-libtool/0011-Pick-up-clang_rt-static-archives-compiler-internal-l.patch)
+
+Applied to configure and aclocal.m4 for GMP.
+---
+ aclocal.m4 | 2 +-
+ configure  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/aclocal.m4 b/aclocal.m4
+index b55a6e5..d9322d0 100644
+--- a/aclocal.m4
++++ b/aclocal.m4
+@@ -7541,7 +7541,7 @@ if AC_TRY_EVAL(ac_compile); then
+   for p in `eval "$output_verbose_link_cmd"`; do
+     case $prev$p in
+
+-    -L* | -R* | -l*)
++    -L* | -R* | -l* | */libclang_rt.*.a)
+        # Some compilers place space between "-{L,R}" and the path.
+        # Remove the space.
+        if test x-L = "$p" ||
+diff --git a/configure b/configure
+index b55a6e5..d9322d0 100755
+--- a/configure
++++ b/configure
+@@ -21269,7 +21269,7 @@ if AC_TRY_EVAL(ac_compile); then
+   for p in `eval "$output_verbose_link_cmd"`; do
+     case $prev$p in
+
+-    -L* | -R* | -l*)
++    -L* | -R* | -l* | */libclang_rt.*.a)
+        # Some compilers place space between "-{L,R}" and the path.
+        # Remove the space.
+        if test x-L = "$p" ||
+--
+2.7.4
