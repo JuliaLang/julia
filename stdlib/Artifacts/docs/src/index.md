@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Artifacts/docs/
 
 # Artifacts
 
+```@docs
+Artifacts
+```
+
 ```@meta
 DocTestSetup = :(using Artifacts)
 ```

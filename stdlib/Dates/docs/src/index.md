@@ -690,6 +690,8 @@ on methods exported from the `Dates` module.
 
 ```@docs
 Dates.Period
+Dates.DatePeriod
+Dates.TimePeriod
 Dates.CompoundPeriod
 Dates.Instant
 Dates.UTInstant
@@ -710,6 +712,7 @@ Dates.DateTime(::Function, ::Any...)
 Dates.DateTime(::Dates.TimeType)
 Dates.DateTime(::AbstractString, ::AbstractString)
 Dates.format(::Dates.TimeType, ::AbstractString)
+Dates.format(::IO, ::Dates.AbstractDateToken, ::TimeType, ::Any)
 Dates.DateFormat
 Dates.@dateformat_str
 Dates.DateTime(::AbstractString, ::Dates.DateFormat)
@@ -744,15 +747,28 @@ Dates.millisecond
 Dates.microsecond
 Dates.nanosecond
 Dates.Year(::Dates.TimeType)
+Dates.Year(::Any)
 Dates.Month(::Dates.TimeType)
+Dates.Month(::Any)
 Dates.Week(::Dates.TimeType)
+Dates.Week(::Any)
 Dates.Day(::Dates.TimeType)
+Dates.Day(::Any)
 Dates.Hour(::DateTime)
+Dates.Hour(::Any)
 Dates.Minute(::DateTime)
+Dates.Minute(::Any)
 Dates.Second(::DateTime)
+Dates.Second(::Any)
 Dates.Millisecond(::DateTime)
+Dates.Millisecond(::Any)
 Dates.Microsecond(::Dates.Time)
+Dates.Microsecond(::Any)
 Dates.Nanosecond(::Dates.Time)
+Dates.Nanosecond(::Any)
+Dates.Quarter(::Date)
+Dates.Quarter(::DateTime)
+Dates.Quarter(::Any)
 Dates.yearmonth
 Dates.monthday
 Dates.yearmonthday
@@ -775,6 +791,9 @@ Dates.dayofyear
 Dates.daysinyear
 Dates.quarterofyear
 Dates.dayofquarter
+Dates.isoyear(::DateTime)
+Dates.isoweekdate(::DateTime)
+Dates.weeksinyear(::Year)
 ```
 
 #### Adjuster Functions
@@ -851,7 +870,7 @@ Dates.datetime2rata
 
 ### Constants
 
-Days of the Week:
+#### Days of the Week
 
 | Variable    | Abbr. | Value (Int) |
 |:----------- |:----- |:----------- |
@@ -863,7 +882,24 @@ Days of the Week:
 | `Saturday`  | `Sat` | 6           |
 | `Sunday`    | `Sun` | 7           |
 
-Months of the Year:
+```@docs
+Dates.Monday
+Dates.Mon
+Dates.Tuesday
+Dates.Tue
+Dates.Wednesday
+Dates.Wed
+Dates.Thursday
+Dates.Thu
+Dates.Friday
+Dates.Fri
+Dates.Saturday
+Dates.Sat
+Dates.Sunday
+Dates.Sun
+```
+
+#### Months of the Year
 
 | Variable    | Abbr. | Value (Int) |
 |:----------- |:----- |:----------- |
@@ -879,6 +915,32 @@ Months of the Year:
 | `October`   | `Oct` | 10          |
 | `November`  | `Nov` | 11          |
 | `December`  | `Dec` | 12          |
+
+```@docs
+Dates.January
+Dates.Jan
+Dates.February
+Dates.Feb
+Dates.March
+Dates.Mar
+Dates.April
+Dates.Apr
+Dates.May
+Dates.June
+Dates.Jun
+Dates.July
+Dates.Jul
+Dates.August
+Dates.Aug
+Dates.September
+Dates.Sep
+Dates.October
+Dates.Oct
+Dates.November
+Dates.Nov
+Dates.December
+Dates.Dec
+```
 
 #### Common Date Formatters
 
