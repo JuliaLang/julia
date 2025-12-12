@@ -271,7 +271,16 @@ struct LoadingCache
     located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing) # n.b.: all access to and through this are protected by require_lock
-LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
+LoadingCache() = LoadingCache(
+    load_path(),
+    Dict{String, UUID}(),
+    Dict{String, Union{Bool, String}}(),
+    Dict{String, Union{Nothing, String}}(),
+    Set{String}(),
+    Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{String, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}()
+)
 
 
 struct TOMLCache{Dates}
@@ -343,25 +352,22 @@ Same as [`Base.identify_package`](@ref) except that the path to the environment 
 is also returned, except when the identity is not identified.
 """
 identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
-function identify_package_env(where::Union{PkgId, Nothing}, name::String)
+function identify_package_env(where::PkgId, name::String)
     # Special cases
-    if where !== nothing
-        if where.name === name
-            # Project tries to load itself
-            return (where, nothing)
-        elseif where.uuid === nothing
-            # Project without Project.toml - treat as toplevel load
-            where = nothing
-        end
+    if where.name === name
+        # Project tries to load itself
+        return (where, nothing)
+    elseif where.uuid === nothing
+        # Project without Project.toml - treat as toplevel load
+        return identify_package_env(nothing, name)
     end
 
     # Check if we have a cached answer for this
     assert_havelock(require_lock)
     cache = LOADING_CACHE[]
-    cache_key = where === nothing ? name : (where, name)
+    cache_key = (where, name)
     if cache !== nothing
-        env_cache = where === nothing ? cache.identified : cache.identified_where
-        pkg_env = get(env_cache, cache_key, missing)
+        pkg_env = get(cache.identified_where, cache_key, missing)
         pkg_env === missing || return pkg_env
     end
 
@@ -372,14 +378,14 @@ function identify_package_env(where::Union{PkgId, Nothing}, name::String)
         pkgid = environment_deps_get(env, where, name)
         # If we didn't find `where` at all, keep looking through the environment stack
         pkgid === nothing && continue
-        if pkgid.uuid !== nothing || where === nothing
-            pkg_env = pkgid, env
+        if pkgid.uuid !== nothing
+            pkg_env = (pkgid, env)
         end
         # If we don't have pkgid.uuid, still break here - this is a sentinel that indicates
         # that we've found `where` but it did not have the required dependency. We terminate the search.
         break
     end
-    if pkg_env === nothing && where !== nothing && is_stdlib(where)
+    if pkg_env === nothing && is_stdlib(where)
         # if not found it could be that manifests are from a different julia version/commit
         # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
         # as a fallback
@@ -388,7 +394,33 @@ function identify_package_env(where::Union{PkgId, Nothing}, name::String)
 
     # Cache the result
     if cache !== nothing
-        env_cache[cache_key] = pkg_env
+        cache.identified_where[cache_key] = pkg_env
+    end
+    return pkg_env
+end
+function identify_package_env(where::Nothing, name::String)
+    # Check if we have a cached answer for this
+    assert_havelock(require_lock)
+    cache = LOADING_CACHE[]
+    if cache !== nothing
+        pkg_env = get(cache.identified, name, missing)
+        pkg_env === missing || return pkg_env
+    end
+
+    # Main part: Search through all environments in the load path to see if we have
+    # a matching entry.
+    pkg_env = nothing
+    for env in load_path()
+        pkgid = environment_deps_get(env, nothing, name)
+        # If we didn't find `where` at all, keep looking through the environment stack
+        pkgid === nothing && continue
+        pkg_env = (pkgid, env)
+        break
+    end
+
+    # Cache the result
+    if cache !== nothing
+        cache.identified[name] = pkg_env
     end
     return pkg_env
 end
