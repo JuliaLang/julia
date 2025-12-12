@@ -1,4 +1,4 @@
 DISTRIBUTED_BRANCH = ib/worker_output_customization
-DISTRIBUTED_SHA1 = c1ceb850301327cc59be8f74540e1fc5677cd110
+DISTRIBUTED_SHA1 = d45eda66cfc632a6bbd4c82e708e6a42b127f217
 DISTRIBUTED_GIT_URL := https://github.com/JuliaLang/Distributed.jl
 DISTRIBUTED_TAR_URL = https://api.github.com/repos/JuliaLang/Distributed.jl/tarball/$1
