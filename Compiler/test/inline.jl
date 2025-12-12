@@ -2345,4 +2345,13 @@ let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, In
     @test count(iscall((src, Base.merge_fallback)), src.code) == 0
 end
 
+f60121(t) = t[1]
+let
+    interp = Compiler.NativeInterpreter(; opt_params=Compiler.OptimizationParams(; inline_cost_threshold=typemax(Int)))
+    res = Base.code_ircode(f60121, (Tuple{Tuple{Val{4}}, Tuple{Float32}},); interp)
+    @test !isempty(res)
+    ir, rt = only(res)
+    @test rt == Tuple{Val{4}}
+end
+
 end # module inline_tests
