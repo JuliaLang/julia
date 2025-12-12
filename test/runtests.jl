@@ -14,6 +14,39 @@ include("buildkitetestjson.jl")
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
 const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
 
+# Helper to run code with prefixed output (uses Pipe + background reader)
+function with_output_prefix(f, prefix::String, io::IO, lock::ReentrantLock)
+    pipe = Pipe()
+    Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
+
+    reader_task = @async begin
+        try
+            while isopen(pipe) || bytesavailable(pipe) > 0
+                line = readline(pipe; keep=true)
+                isempty(line) && break
+                @lock lock begin
+                    printstyled(io, "  ", prefix, ": ", color=:light_black)
+                    print(io, line)
+                    endswith(line, '\n') || println(io)
+                end
+            end
+        catch e
+            e isa EOFError || rethrow()
+        end
+    end
+
+    try
+        redirect_stdout(pipe) do
+            redirect_stderr(pipe) do
+                f()
+            end
+        end
+    finally
+        close(pipe.in)
+        wait(reader_task)
+    end
+end
+
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
@@ -381,8 +414,10 @@ cd(@__DIR__) do
             t == "SharedArrays" && (isolate = false)
             before = time()
             resp, duration = try
-                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
-                    r, time() - before
+                    with_output_prefix("$t (1)", stdout, print_lock) do
+                        r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                        r, time() - before
+                    end
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
