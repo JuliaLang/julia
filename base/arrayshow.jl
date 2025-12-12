@@ -469,7 +469,7 @@ end
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
-    error("_show_nonempty(::IO, ::AbstractVector, ::String) is not implemented")
+    throw(NotImplementedError(_show_nonempty, (IO, AbstractVector, String), AbstractVector))
 
 _show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
 
