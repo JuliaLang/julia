@@ -169,10 +169,11 @@ cd(@__DIR__) do
         test_name = wrkr_id === nothing ? nothing : get(worker_current_test, wrkr_id, nothing)
         @lock print_lock begin
             if test_name !== nothing
-                print("  ", test_name, " (", ident, "): ", line, "\n")
+                printstyled("  ", test_name, " (", ident, "): ", color=:light_black)
             else
-                print("  From worker ", ident, ": ", line, "\n")
+                printstyled("  From worker ", ident, ": ", color=:light_black)
             end
+            println(line)
         end
         return true
     end
