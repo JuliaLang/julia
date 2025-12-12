@@ -218,3 +218,16 @@ s = MyStruct()
 @test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0
+
+# Issue #60063: llvmcall segfault/parser error with zero-sized argument (Nothing)
+module LLVMCallTest
+    using Test
+    let
+        f(x::T) where T = Base.llvmcall("ret i8 %0", Int8, Tuple{T}, x)
+        err = try f(nothing) catch e e end
+        @test err isa ErrorException
+        #verify the error is about the LLVM assembly failure and references the undefined symbol
+        @test occursin("Failed to parse LLVM assembly", err.msg)
+        @test occursin("%0", err.msg)
+        end
+end #module LLVMCallTest

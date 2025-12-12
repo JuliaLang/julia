@@ -841,24 +841,25 @@ Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
 // converts a julia bitstype into the equivalent LLVM bitstype
 static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall = false)
 {
+    jl_safe_printf("  Inside bitstype_to_llvm: %p call=%d\n", (void*)bt, (int)llvmcall); // DEBUG
     assert(jl_is_primitivetype(bt));
-    if (bt == (jl_value_t*)jl_bool_type)
+    if (bt == (jl_value_t*)jl_bool_type) {
+        jl_safe_printf("    is Bool\n");
         return llvmcall ? getInt1Ty(ctxt) : getInt8Ty(ctxt);
-    if (bt == (jl_value_t*)jl_int32_type)
-        return getInt32Ty(ctxt);
-    if (bt == (jl_value_t*)jl_int64_type)
-        return getInt64Ty(ctxt);
-    if (bt == (jl_value_t*)jl_float16_type)
-        return getHalfTy(ctxt);
-    if (bt == (jl_value_t*)jl_float32_type)
-        return getFloatTy(ctxt);
-    if (bt == (jl_value_t*)jl_float64_type)
-        return getDoubleTy(ctxt);
-    if (bt == (jl_value_t*)jl_bfloat16_type)
-        return getBFloatTy(ctxt);
-    if (jl_is_cpointer_type(bt))
+    }
+    if (bt == (jl_value_t*)jl_int32_type) { jl_safe_printf("    ret Int32\n"); return getInt32Ty(ctxt); }
+    if (bt == (jl_value_t*)jl_int64_type) { jl_safe_printf("    ret Int64\n"); return getInt64Ty(ctxt); }
+    if (bt == (jl_value_t*)jl_float16_type) { jl_safe_printf("    ret Float16\n"); return getHalfTy(ctxt); }
+    if (bt == (jl_value_t*)jl_float32_type) { jl_safe_printf("    ret Float32\n"); return getFloatTy(ctxt); }
+    if (bt == (jl_value_t*)jl_float64_type) { jl_safe_printf("    ret Float64\n"); return getDoubleTy(ctxt); }
+    if (bt == (jl_value_t*)jl_bfloat16_type) { jl_safe_printf("    ret BFloat16\n"); return getBFloatTy(ctxt); }
+    jl_safe_printf("    checking pointer\n");
+    if (jl_is_cpointer_type(bt)) {
+        jl_safe_printf("    ret CPointer\n");
         return PointerType::get(ctxt, 0);
+    }
     if (jl_is_llvmpointer_type(bt)) {
+        jl_safe_printf("    is llvm pointer\n");
         jl_value_t *as_param = jl_tparam1(bt);
         int as;
         if (jl_is_int32(as_param))
@@ -867,9 +868,12 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
             as = jl_unbox_int64(as_param);
         else
             jl_error("invalid pointer address space");
+        jl_safe_printf("    ret LLVMPointer\n");
         return PointerType::get(ctxt, as);
     }
+    jl_safe_printf("    generic primitive size\n");
     int nb = jl_datatype_size(bt);
+    jl_safe_printf("    getting intN type: %d\n", nb);
     return Type::getIntNTy(ctxt, nb * 8);
 }
 
@@ -919,15 +923,26 @@ static StructType *get_memoryref_type(LLVMContext &ctxt, Type *T_size, const jl_
 
 static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall)
 {
-    // this function converts a Julia Type into the equivalent LLVM struct
-    // use this where C-compatible (unboxed) structs are desired
-    // use julia_type_to_llvm directly when you want to preserve Julia's type semantics
+    // Check for NULL input immediately to prevent Segfaults in jl_is_datatype.
+    if (!jt) {
+        jl_safe_printf("Entering _julia_struct_to_llvm: NULL pointer!\n");
+        if (isboxed) *isboxed = false;
+        return getVoidTy(ctxt);
+    }
+
+    if (jl_is_datatype(jt)) { jl_safe_printf("Converting struct: %p\n", (void*)jt); } // DEBUG - lightweight
     if (isboxed) *isboxed = false;
+    jl_safe_printf("  Checking bottom type\n"); // DEBUG trace
     if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
-    if (jl_is_primitivetype(jt))
+    jl_safe_printf("  Checking primitive\n"); // DEBUG trace
+    if (jl_is_primitivetype(jt)) {
+        jl_safe_printf("  Is primitive\n"); // DEBUG
         return bitstype_to_llvm(jt, ctxt, llvmcall);
+    }
+    jl_safe_printf("  Casting to datatype\n"); // DEBUG trace
     jl_datatype_t *jst = (jl_datatype_t*)jt;
+    jl_safe_printf("  Checking structtype\n"); // DEBUG trace
     if (jl_is_structtype(jt) && !(jst->layout && jl_is_layout_opaque(jst->layout)) && !jl_is_array_type(jst) && !jl_is_genericmemory_type(jst)) {
         if (jl_is_genericmemoryref_type(jst)) {
             jl_value_t *mty_dt = jl_field_type_concrete(jst, 1);
@@ -958,6 +973,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         Type *lasttype = NULL;
         bool allghost = true;
         for (i = 0; i < ntypes; i++) {
+            jl_safe_printf("  Field %d of %p\n", (int)i, (void*)jt); // DEBUG
             jl_value_t *ty = jl_svecref(ftypes, i);
             if (jlasttype != NULL && ty != jlasttype)
                 isvector = false;
@@ -1005,6 +1021,11 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
             else {
                 bool isptr;
                 lty = _julia_struct_to_llvm(ctx, ctxt, ty, &isptr, llvmcall);
+                if (!lty) {
+                     // If we cannot map the type, treat it as ghost (VoidTy) to prevent crashes
+                     // downstream (e.g. type_is_ghost(NULL)).
+                     lty = getVoidTy(ctxt);
+                }
                 assert(lty && !isptr);
             }
             if (lasttype != NULL && lasttype != lty)
