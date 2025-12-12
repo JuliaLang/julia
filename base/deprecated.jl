@@ -279,8 +279,8 @@ end
         end,
         _file=String(caller.file),
         _line=caller.line,
-        _id=(frame,funcsym),
         _group=:depwarn,
+        frame=frame,
         caller=caller,
         maxlog=funcsym === nothing ? nothing : 1
     )
