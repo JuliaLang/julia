@@ -209,7 +209,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
     elseif e isa String
         st_id = _insert_tree_node(graph, K"string", src)
         id_inner = _insert_tree_node(graph, K"String", src, [:value=>e])
-        setchildren!(graph, st_id, [id_inner])
+        JuliaSyntax.setchildren!(graph, st_id, [id_inner])
         return st_id, src
     elseif !(e isa Expr)
         # There are other kinds we could potentially back-convert (e.g. Float),
@@ -560,7 +560,7 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         return st_id, src
     else
         st_child_ids, last_src = _insert_child_exprs(e.head, child_exprs, graph, src)
-        setchildren!(graph, st_id, st_child_ids)
+        JuliaSyntax.setchildren!(graph, st_id, st_child_ids)
         return st_id, last_src
     end
 end
@@ -584,3 +584,45 @@ function _insert_child_exprs(head::Symbol, child_exprs::Vector{Any},
     end
     return st_child_ids, last_src
 end
+
+#-------------------------------------------------------------------------------
+# SyntaxTree->Expr overrides
+
+function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
+    name = get(ex, :name_val, nothing)
+    if !isnothing(name)
+        n = Symbol(name)
+        if kind(ex) === K"Symbol"
+            return QuoteNode(n)
+        elseif hasattr(ex, :scope_layer)
+            Expr(:scope_layer, n, ex.scope_layer)
+        else
+            n
+        end
+    else
+        val = get(ex, :value, nothing)
+        if kind(ex) == K"Value" && val isa Expr || val isa LineNumberNode
+            # Expr AST embedded in a SyntaxTree should be quoted rather than
+            # becoming part of the output AST.
+            QuoteNode(val)
+        else
+            val
+        end
+    end
+end
+
+function JuliaSyntax.fixup_Expr_child(::Type{<:SyntaxTree}, head::SyntaxHead,
+                                      @nospecialize(arg), first::Bool)
+    isa(arg, Expr) || return arg
+    k = kind(head)
+    coalesce_dot = k in KSet"call dotcall curly" ||
+                   (k == K"quote" && has_flags(head, JuliaSyntax.COLON_QUOTE))
+    if @isexpr(arg, :., 1) && arg.args[1] isa Tuple
+        h, a = arg.args[1]::Tuple{SyntaxHead,Any}
+        arg = ((coalesce_dot && first) || is_syntactic_operator(h)) ?
+            Symbol(".", a) : Expr(:., a)
+    end
+    return arg
+end
+
+Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)

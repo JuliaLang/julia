@@ -377,7 +377,7 @@ function remove_scope_layer!(ex)
             remove_scope_layer!(c)
         end
     end
-    deleteattr!(ex, :scope_layer)
+    JuliaSyntax.deleteattr!(ex, :scope_layer)
     ex
 end
 

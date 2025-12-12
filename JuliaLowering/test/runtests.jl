@@ -1,7 +1,7 @@
 include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
-    include("syntax_graph.jl")
+    include("ast.jl")
 
     include("ir_tests.jl")
 

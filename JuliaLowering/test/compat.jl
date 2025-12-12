@@ -89,37 +89,37 @@ const JL = JuliaLowering
 
         if JS.is_infix_op_call(st) && (k === K"call" || k === K"dotcall")
             # Infix calls are not preserved in Expr; we need to re-order the children
-            pre_st_args = JL.NodeId[st[2]._id, st[1]._id]
+            pre_st_args = JS.NodeId[st[2]._id, st[1]._id]
             for c in st[3:end]
                 push!(pre_st_args, c._id)
             end
             pre_st_flags = (JS.flags(st) & ~JS.INFIX_FLAG) | JS.PREFIX_CALL_FLAG
-            JL.setchildren!(st._graph, st._id, pre_st_args)
-            JL.setattr!(st._graph, st._id, :syntax_flags, pre_st_flags)
+            JS.setchildren!(st._graph, st._id, pre_st_args)
+            JS.setattr!(st._graph, st._id, :syntax_flags, pre_st_flags)
         elseif JS.is_postfix_op_call(st) && (k === K"call" || k === K"dotcall")
-            pre_st_args = JL.NodeId[st[end]._id]
+            pre_st_args = JS.NodeId[st[end]._id]
             for c in st[1:end-1]
                 push!(pre_st_args, c._id)
             end
             pre_st_flags = (JS.flags(st) & ~JS.POSTFIX_OP_FLAG) | JS.PREFIX_CALL_FLAG
-            JL.setchildren!(st._graph, st._id, pre_st_args)
-            JL.setattr!(st._graph, st._id, :syntax_flags, pre_st_flags)
+            JS.setchildren!(st._graph, st._id, pre_st_args)
+            JS.setattr!(st._graph, st._id, :syntax_flags, pre_st_flags)
         elseif k in JS.KSet"tuple block macrocall"
-            JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.PARENS_FLAG)
+            JS.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.PARENS_FLAG)
         elseif k === K"toplevel"
-            JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.TOPLEVEL_SEMICOLONS_FLAG)
+            JS.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.TOPLEVEL_SEMICOLONS_FLAG)
         end
 
         if k in JS.KSet"tuple call dotcall macrocall vect curly braces <: >:"
-            JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.TRAILING_COMMA_FLAG)
+            JS.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.TRAILING_COMMA_FLAG)
         end
 
-        k === K"quote" && JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.COLON_QUOTE)
-        k === K"wrapper" && JL.setattr!(st._graph, st._id, :kind, K"block")
+        k === K"quote" && JS.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) & ~JS.COLON_QUOTE)
+        k === K"wrapper" && JS.setattr!(st._graph, st._id, :kind, K"block")
 
         # All ops are prefix ops in an expr.
         # Ignore trivia (shows up on some K"error"s)
-        JL.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) &
+        JS.setattr!(st._graph, st._id, :syntax_flags, JS.flags(st) &
             ~JS.PREFIX_OP_FLAG & ~JS.INFIX_FLAG & ~JS.TRIVIA_FLAG & ~JS.NON_TERMINAL_FLAG)
 
         for c in JS.children(st)
@@ -311,7 +311,7 @@ const JL = JuliaLowering
 
         for p in programs
             @testset "`$(repr(p))`" begin
-                st_good = JS.parsestmt(JL.SyntaxTree, p; ignore_errors=true)
+                st_good = JS.parsestmt(JS.SyntaxTree, p; ignore_errors=true)
                 st_test = JL.expr_to_syntaxtree(Expr(st_good))
                 @test st_roughly_equal(;st_good, st_test)
             end
@@ -324,7 +324,7 @@ const JL = JuliaLowering
         ]
         for p in toplevel_programs
             @testset "`$(repr(p))`" begin
-                st_good = JS.parseall(JL.SyntaxTree, p; ignore_errors=true)
+                st_good = JS.parseall(JS.SyntaxTree, p; ignore_errors=true)
                 st_test = JL.expr_to_syntaxtree(Expr(st_good))
                 @test st_roughly_equal(;st_good, st_test)
             end

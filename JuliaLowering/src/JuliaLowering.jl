@@ -13,15 +13,18 @@ else
 end
 
 using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
-    head, kind, flags, has_flags, numeric_flags, filename, first_byte,
-    last_byte, byte_range, sourcefile, source_location, span, sourcetext,
-    is_literal, is_number, is_operator, is_prec_assignment, is_prefix_call,
-    is_infix_op_call, is_postfix_op_call, is_error
+    head, kind, flags, has_flags, filename, first_byte, last_byte, byte_range,
+    sourcefile, source_location, span, sourcetext, is_literal, is_infix_op_call,
+    is_postfix_op_call, @isexpr, SyntaxHead, is_syntactic_operator,
+    SyntaxGraph, SyntaxTree, SyntaxList, NodeId, SourceRef, SourceAttrType,
+    ensure_attributes, ensure_attributes!, delete_attributes, newnode!, hasattr,
+    setattr, setattr!, syntax_graph, is_compatible_graph,
+    check_compatible_graph, copy_node, copy_ast, provenance, sourceref,
+    reparent, makeleaf, makenode, mapchildren, mapleaf, flattened_provenance
 
 _include("kinds.jl")
 _register_kinds()
 
-_include("syntax_graph.jl")
 _include("ast.jl")
 _include("bindings.jl")
 _include("utils.jl")

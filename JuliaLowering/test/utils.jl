@@ -47,22 +47,6 @@ macro ast_(tree)
     end
 end
 
-function ≈(ex1, ex2)
-    if kind(ex1) != kind(ex2) || is_leaf(ex1) != is_leaf(ex2)
-        return false
-    end
-    if is_leaf(ex1)
-        return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
-               get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
-    else
-        if numchildren(ex1) != numchildren(ex2)
-            return false
-        end
-        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
-    end
-end
-
-
 #-------------------------------------------------------------------------------
 function _format_as_ast_macro(io, ex, indent)
     k = kind(ex)

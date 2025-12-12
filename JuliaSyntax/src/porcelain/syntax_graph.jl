@@ -1,9 +1,3 @@
-# TODO: This whole file should probably be moved to JuliaSyntax.
-import .JuliaSyntax: ParseStream, RedTreeCursor, reverse_toplevel_siblings,
-    has_toplevel_siblings, _unsafe_wrap_substring, parse_julia_literal, is_trivia,
-    is_prefix_op_call, @isexpr, SyntaxHead, COLON_QUOTE, is_syntactic_operator,
-    lower_identifier_name
-
 const NodeId = Int
 
 """
@@ -113,19 +107,19 @@ function setchildren!(graph::SyntaxGraph, id::NodeId,
     append!(graph.edges, children)
 end
 
-function JuliaSyntax.is_leaf(graph::SyntaxGraph, id)
+function is_leaf(graph::SyntaxGraph, id)
     first(graph.edge_ranges[id]) == 0
 end
 
-function JuliaSyntax.numchildren(graph::SyntaxGraph, id)
+function numchildren(graph::SyntaxGraph, id)
     length(graph.edge_ranges[id])
 end
 
-function JuliaSyntax.children(graph::SyntaxGraph, id)
+function children(graph::SyntaxGraph, id)
     @view graph.edges[graph.edge_ranges[id]]
 end
 
-function JuliaSyntax.children(graph::SyntaxGraph, id, r::UnitRange)
+function children(graph::SyntaxGraph, id, r::UnitRange)
     @view graph.edges[graph.edge_ranges[id][r]]
 end
 
@@ -192,7 +186,12 @@ function is_compatible_graph(x, y)
     syntax_graph(x).edges === syntax_graph(y).edges
 end
 
-#-------------------------------------------------------------------------------
+"""
+    struct SyntaxTree
+
+An ECS-style AST used in JuliaLowering.  Unstable, but may eventually replace
+SyntaxNode.
+"""
 struct SyntaxTree{GraphType}
     _graph::GraphType
     _id::NodeId
@@ -235,6 +234,21 @@ end
 Base.firstindex(ex::SyntaxTree) = 1
 Base.lastindex(ex::SyntaxTree) = numchildren(ex)
 
+function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
+    if kind(ex1) != kind(ex2) || is_leaf(ex1) != is_leaf(ex2)
+        return false
+    end
+    if is_leaf(ex1)
+        return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
+               get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
+    else
+        if numchildren(ex1) != numchildren(ex2)
+            return false
+        end
+        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
+    end
+end
+
 function hasattr(ex::SyntaxTree, name::Symbol)
     attr = getattr(ex._graph, name, nothing)
     return !isnothing(attr) && haskey(attr, ex._id)
@@ -269,27 +283,27 @@ end
 
 # JuliaSyntax tree API
 
-function JuliaSyntax.is_leaf(ex::SyntaxTree)
+function is_leaf(ex::SyntaxTree)
     is_leaf(ex._graph, ex._id)
 end
 
-function JuliaSyntax.numchildren(ex::SyntaxTree)
+function numchildren(ex::SyntaxTree)
     numchildren(ex._graph, ex._id)
 end
 
-function JuliaSyntax.children(ex::SyntaxTree)
+function children(ex::SyntaxTree)
     SyntaxList(ex._graph, children(ex._graph, ex._id))
 end
 
-function JuliaSyntax.head(ex::SyntaxTree)
-    JuliaSyntax.SyntaxHead(kind(ex), flags(ex))
+function head(ex::SyntaxTree)
+    SyntaxHead(kind(ex), flags(ex))
 end
 
-function JuliaSyntax.kind(ex::SyntaxTree)
-    ex.kind::JuliaSyntax.Kind
+function kind(ex::SyntaxTree)
+    ex.kind::Kind
 end
 
-function JuliaSyntax.flags(ex::SyntaxTree)
+function flags(ex::SyntaxTree)
     get(ex, :syntax_flags, 0x0000)
 end
 
@@ -301,29 +315,29 @@ struct SourceRef
     last_byte::Int
 end
 
-JuliaSyntax.sourcefile(src::SourceRef) = src.file
-JuliaSyntax.byte_range(src::SourceRef) = src.first_byte:src.last_byte
+sourcefile(src::SourceRef) = src.file
+byte_range(src::SourceRef) = src.first_byte:src.last_byte
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
 # and we a proper SourceRef for @ast's @HERE form.
-JuliaSyntax.byte_range(src::LineNumberNode) = 0:0
-JuliaSyntax.source_location(src::LineNumberNode) = (src.line, 0)
-JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
-JuliaSyntax.source_line(src::LineNumberNode) = src.line
+byte_range(src::LineNumberNode) = 0:0
+source_location(src::LineNumberNode) = (src.line, 0)
+source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
+source_line(src::LineNumberNode) = src.line
 # The follow somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
-JuliaSyntax.sourcefile(src::LineNumberNode) = src
-JuliaSyntax.sourcetext(src::LineNumberNode) = SubString("")
-JuliaSyntax.source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
-JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
-JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
+sourcefile(src::LineNumberNode) = src
+sourcetext(src::LineNumberNode) = SubString("")
+source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
+source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
+filename(src::LineNumberNode) = string(src.file)
 
-function JuliaSyntax.highlight(io::IO, src::LineNumberNode; note="")
+function highlight(io::IO, src::LineNumberNode; note="")
     print(io, src, " - ", note)
 end
 
-function JuliaSyntax.highlight(io::IO, src::SourceRef; kws...)
+function highlight(io::IO, src::SourceRef; kws...)
     highlight(io, src.file, first_byte(src):last_byte(src); kws...)
 end
 
@@ -413,107 +427,6 @@ end
 
 const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple}
 
-attrsummary(name, value) = string(name)
-attrsummary(name, value::Number) = "$name=$value"
-
-function _value_string(ex)
-    k = kind(ex)
-    str = k == K"Identifier" || is_operator(k) ? ex.name_val :
-          k == K"Placeholder" ? ex.name_val           :
-          k == K"SSAValue"    ? "%"                   :
-          k == K"BindingId"   ? "#"                   :
-          k == K"label"       ? "label"               :
-          k == K"core"        ? "core.$(ex.name_val)" :
-          k == K"top"         ? "top.$(ex.name_val)"  :
-          k == K"Symbol"      ? ":$(ex.name_val)" :
-          k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
-          k == K"slot"        ? "slot" :
-          k == K"latestworld" ? "latestworld" :
-          k == K"static_parameter" ? "static_parameter" :
-          k == K"symbolic_label" ? "label:$(ex.name_val)" :
-          k == K"symbolic_goto" ? "goto:$(ex.name_val)" :
-          k == K"SourceLocation" ?
-              "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-          k == K"Value" && ex.value isa SourceRef ?
-              "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-          repr(get(ex, :value, nothing))
-    id = get(ex, :var_id, nothing)
-    if isnothing(id)
-        id = get(ex, :id, nothing)
-    end
-    if !isnothing(id)
-        idstr = subscript_str(id)
-        str = "$(str)$idstr"
-    end
-    if k == K"slot" || k == K"BindingId"
-        p = provenance(ex)[1]
-        while p isa SyntaxTree
-            if kind(p) == K"Identifier"
-                str = "$(str)/$(p.name_val)"
-                break
-            end
-            p = provenance(p)[1]
-        end
-    end
-    return str
-end
-
-function _show_syntax_tree(io, ex, indent, show_kinds)
-    val = get(ex, :value, nothing)
-    nodestr = !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
-
-    treestr = rpad(string(indent, nodestr), 40)
-    if show_kinds && is_leaf(ex)
-        treestr = treestr*" :: "*string(kind(ex))
-    end
-
-    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id])
-    attrstr = join([attrsummary(n, getproperty(ex, n))
-                    for n in attrnames(ex) if n ∉ std_attrs], ",")
-    treestr = string(rpad(treestr, 60), " │ $attrstr")
-
-    println(io, treestr)
-    if !is_leaf(ex)
-        new_indent = indent*"  "
-        for n in children(ex)
-            _show_syntax_tree(io, n, new_indent, show_kinds)
-        end
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    anames = join(string.(attrnames(syntax_graph(ex))), ",")
-    println(io, "SyntaxTree with attributes $anames")
-    _show_syntax_tree(io, ex, "", show_kinds)
-end
-
-function _show_syntax_tree_sexpr(io, ex)
-    if is_leaf(ex)
-        if is_error(ex)
-            print(io, "(", untokenize(head(ex)), ")")
-        else
-            print(io, _value_string(ex))
-        end
-    else
-        print(io, "(", untokenize(head(ex)))
-        first = true
-        for n in children(ex)
-            print(io, ' ')
-            _show_syntax_tree_sexpr(io, n)
-            first = false
-        end
-        print(io, ')')
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxTree)
-    _show_syntax_tree_sexpr(io, node)
-end
-
-function Base.show(io::IO, node::SyntaxTree)
-    _show_syntax_tree_sexpr(io, node)
-end
-
 function reparent(ctx, ex::SyntaxTree)
     # Ensure `ex` has the same parent graph, in a somewhat loose sense.
     # Could relax by copying if necessary?
@@ -530,147 +443,8 @@ end
 
 syntax_graph(ex::SyntaxTree) = ex._graph
 
-JuliaSyntax.sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
-JuliaSyntax.byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
-
-function JuliaSyntax._expr_leaf_val(ex::SyntaxTree, _...)
-    name = get(ex, :name_val, nothing)
-    if !isnothing(name)
-        n = Symbol(name)
-        if kind(ex) === K"Symbol"
-            return QuoteNode(n)
-        elseif hasattr(ex, :scope_layer)
-            Expr(:scope_layer, n, ex.scope_layer)
-        else
-            n
-        end
-    else
-        val = get(ex, :value, nothing)
-        if kind(ex) == K"Value" && val isa Expr || val isa LineNumberNode
-            # Expr AST embedded in a SyntaxTree should be quoted rather than
-            # becoming part of the output AST.
-            QuoteNode(val)
-        else
-            val
-        end
-    end
-end
-
-function JuliaSyntax.fixup_Expr_child(::Type{<:SyntaxTree}, head::SyntaxHead,
-                                      @nospecialize(arg), first::Bool)
-    isa(arg, Expr) || return arg
-    k = kind(head)
-    coalesce_dot = k in KSet"call dotcall curly" ||
-                   (k == K"quote" && has_flags(head, COLON_QUOTE))
-    if @isexpr(arg, :., 1) && arg.args[1] isa Tuple
-        h, a = arg.args[1]::Tuple{SyntaxHead,Any}
-        arg = ((coalesce_dot && first) || is_syntactic_operator(h)) ?
-            Symbol(".", a) : Expr(:., a)
-    end
-    return arg
-end
-
-Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
-
-#--------------------------------------------------
-function _find_SyntaxTree_macro(ex, line)
-    @assert !is_leaf(ex)
-    for c in children(ex)
-        rng = byte_range(c)
-        firstline = JuliaSyntax.source_line(sourcefile(c), first(rng))
-        lastline = JuliaSyntax.source_line(sourcefile(c), last(rng))
-        if line < firstline || lastline < line
-            continue
-        end
-        # We're in the line range. Either
-        if firstline == line && kind(c) == K"macrocall" && begin
-                    name = c[1]
-                    if kind(name) == K"."
-                        name = name[2]
-                    end
-                    @assert kind(name) == K"Identifier"
-                    name.name_val == "@SyntaxTree"
-                end
-            # We find the node we're looking for. NB: Currently assuming a max
-            # of one @SyntaxTree invocation per line. Though we could relax
-            # this with more heuristic matching of the Expr-AST...
-            @assert numchildren(c) == 2
-            return c[2]
-        elseif !is_leaf(c)
-            # Recurse
-            ex1 = _find_SyntaxTree_macro(c, line)
-            if !isnothing(ex1)
-                return ex1
-            end
-        end
-    end
-    return nothing # Will get here if multiple children are on the same line.
-end
-
-# Translate JuliaLowering hygiene to esc() for use in @SyntaxTree
-function _scope_layer_1_to_esc!(ex)
-    if ex isa Expr
-        if ex.head == :scope_layer
-            @assert ex.args[2] === 1
-            return esc(_scope_layer_1_to_esc!(ex.args[1]))
-        else
-            map!(_scope_layer_1_to_esc!, ex.args, ex.args)
-            return ex
-        end
-    else
-        return ex
-    end
-end
-
-"""
-Macro to construct quoted SyntaxTree literals (instead of quoted Expr literals)
-in normal Julia source code.
-
-Example:
-
-```julia
-tree1 = @SyntaxTree :(some_unique_identifier)
-tree2 = @SyntaxTree quote
-    x = 1
-    \$tree1 = x
-end
-```
-"""
-macro SyntaxTree(ex_old)
-    # The implementation here is hilarious and arguably very janky: we
-    # 1. Briefly check but throw away the Expr-AST
-    if !(Meta.isexpr(ex_old, :quote) || ex_old isa QuoteNode)
-        throw(ArgumentError("@SyntaxTree expects a `quote` block or `:`-quoted expression"))
-    end
-    # 2. Re-parse the current source file as SyntaxTree instead
-    fname = isnothing(__source__.file) ? error("No current file") : String(__source__.file)
-    if occursin(r"REPL\[\d+\]", fname)
-        # Assume we should look at last history entry in REPL
-        try
-            # Wow digging in like this is an awful hack but `@SyntaxTree` is
-            # already a hack so let's go for it I guess 😆
-            text = Base.active_repl.mistate.interface.modes[1].hist.history[end]
-            if !occursin("@SyntaxTree", text)
-                error("Text not found in last REPL history line")
-            end
-        catch
-            error("Text not found in REPL history")
-        end
-    else
-        text = read(fname, String)
-    end
-    full_ex = parseall(SyntaxTree, text)
-    # 3. Using the current file and line number, dig into the re-parsed tree and
-    # discover the piece of AST which should be returned.
-    ex = _find_SyntaxTree_macro(full_ex, __source__.line)
-    isnothing(ex) && error("_find_SyntaxTree_macro failed")
-    # 4. Do the first step of JuliaLowering's syntax lowering to get
-    # syntax interpolations to work
-    _, ex1 = expand_forms_1(__module__, ex, false, Base.tls_world_age())
-    @assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast
-    Expr(:call, :interpolate_ast, SyntaxTree, ex1[3][1],
-         map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[4:end])...)
-end
+sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
+byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
@@ -792,11 +566,181 @@ end
 #     out
 # end
 
-#-------------------------------------------------------------------------------
-# Conversion from the raw parsed tree
-# TODO: move to JuliaSyntax. Replace SyntaxNode?
 
-function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::ParseStream;
+#-------------------------------------------------------------------------------
+# AST creation utilities
+
+# TODO: "proto", if SyntaxTree, is rarely different from srcref. reorganize to:
+# newnode/newleaf(ctx, srcref, k::Kind[, attrs])
+# makenode/makeleaf(ctx, old::SyntaxTree[, attrs])
+
+_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
+
+_node_ids(graph::SyntaxGraph) = ()
+_node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
+_node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
+_node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
+function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
+    check_compatible_graph(graph, cs)
+    cs.ids
+end
+
+_unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
+_unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
+_unpack_srcref(graph, srcref)             = srcref
+
+function makeleaf(graph::SyntaxGraph, srcref, proto::Union{Kind, SyntaxTree})
+    id = newnode!(graph)
+    ex = SyntaxTree(graph, id)
+    copy_attrs!(ex, proto, true)
+    ex.source = _unpack_srcref(graph, srcref)
+    return ex
+end
+
+function makeleaf(ctx, srcref, proto, @nospecialize(attrs::AbstractVector))
+    graph = syntax_graph(ctx)
+    ex = makeleaf(graph, srcref, proto)
+    for (k, v) in attrs
+        setattr!(graph, ex._id, k, v)
+    end
+    return ex
+end
+
+function makenode(ctx, srcref, proto, children, attrs=nothing)
+    graph = syntax_graph(ctx)
+    ex = isnothing(attrs) ? makeleaf(graph, srcref, proto) :
+        makeleaf(graph, srcref, proto, attrs)
+    setchildren!(graph, ex._id, children isa SyntaxList ? children.ids : children)
+    return ex
+end
+
+# TODO: Replace this with makeleaf variant?
+function mapleaf(ctx, src, kind)
+    ex = makeleaf(syntax_graph(ctx), src, kind)
+    # TODO: Value coercion might be broken here due to use of `name_val` vs
+    # `value` vs ... ?
+    copy_attrs!(ex, src)
+    ex
+end
+
+#-------------------------------------------------------------------------------
+# Mapping and copying of AST nodes
+function copy_attrs!(dest, src, all=false)
+    # TODO: Make this faster?
+    for (name, attr) in pairs(src._graph.attributes)
+        if (all || (name !== :source && name !== :kind && name !== :syntax_flags)) &&
+                haskey(attr, src._id)
+            dest_attr = getattr(dest._graph, name, nothing)
+            if !isnothing(dest_attr)
+                dest_attr[dest._id] = attr[src._id]
+            end
+        end
+    end
+end
+
+function copy_attrs!(dest, head::Union{Kind,SyntaxHead}, all=false)
+    if all
+        setattr!(dest._graph, dest._id, :kind, kind(head))
+        !(head isa Kind) && setattr!(dest._graph, dest._id, :syntax_flags, flags(head))
+    end
+end
+
+function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function)
+    if is_leaf(ex)
+        return ex
+    end
+    orig_children = children(ex)
+    cs = nothing
+    for (i,e) in enumerate(orig_children)
+        newchild = do_map_child(i) ? f(e) : e
+        if isnothing(cs)
+            if newchild == e
+                continue
+            else
+                cs = SyntaxList(ctx)
+                append!(cs, orig_children[1:i-1])
+            end
+        end
+        push!(cs::SyntaxList, newchild)
+    end
+    if isnothing(cs)
+        # This function should be allocation-free if no children were changed
+        # by the mapping and there's no extra_attrs
+        return ex
+    end
+    cs::SyntaxList
+    ex2 = makenode(ctx, ex, ex, cs)
+    return ex2
+end
+
+function mapchildren(f::Function, ctx, ex::SyntaxTree,
+                     mapped_children::AbstractVector{<:Integer})
+    j = Ref(firstindex(mapped_children))
+    function do_map_child(i)
+        ind = j[]
+        if ind <= lastindex(mapped_children) && mapped_children[ind] == i
+            j[] += 1
+            true
+        else
+            false
+        end
+    end
+    mapchildren(f, ctx, ex, do_map_child)
+end
+
+function mapchildren(f::Function, ctx, ex::SyntaxTree)
+    mapchildren(f, ctx, ex, i->true)
+end
+
+
+"""
+Recursively copy AST `ex` into `ctx`.
+
+Special provenance handling: If `copy_source` is true, treat the `.source`
+attribute as a reference and recurse on its contents.  Otherwise, treat it like
+any other attribute.
+"""
+function copy_ast(ctx, ex::SyntaxTree; copy_source=true)
+    graph1 = syntax_graph(ex)
+    graph2 = syntax_graph(ctx)
+    !copy_source && check_same_graph(graph1, graph2)
+    id2 = _copy_ast(graph2, graph1, ex._id, Dict{NodeId, NodeId}(), copy_source)
+    return SyntaxTree(graph2, id2)
+end
+
+function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
+                   id1::NodeId, seen, copy_source)
+    let copied = get(seen, id1, nothing)
+        isnothing(copied) || return copied
+    end
+    id2 = newnode!(graph2)
+    seen[id1] = id2
+    src1 = get(SyntaxTree(graph1, id1), :source, nothing)
+    src2 = if !copy_source
+        src1
+    elseif src1 isa NodeId
+        _copy_ast(graph2, graph1, src1, seen, copy_source)
+    elseif src1 isa Tuple
+        map(i->_copy_ast(graph2, graph1, i, seen, copy_source), src1)
+    else
+        src1
+    end
+    copy_attrs!(SyntaxTree(graph2, id2), SyntaxTree(graph1, id1), true)
+    setattr!(graph2, id2, :source, src2)
+    if !is_leaf(graph1, id1)
+        cs = NodeId[]
+        for cid in children(graph1, id1)
+            push!(cs, _copy_ast(graph2, graph1, cid, seen, copy_source))
+        end
+        setchildren!(graph2, id2, cs)
+    end
+    return id2
+end
+
+#-------------------------------------------------------------------------------
+# RawGreenNode->SyntaxTree
+
+function build_tree(::Type{SyntaxTree}, stream::ParseStream;
                                 filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()

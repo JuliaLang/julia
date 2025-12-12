@@ -1113,7 +1113,7 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
         layout_dim = 1
         @chk parent_layout_dim != 1 (ex,"Badly nested rows in `ncat`")
     elseif k == K"nrow"
-        dim = numeric_flags(ex)
+        dim = JuliaSyntax.numeric_flags(ex)
         @chk dim > 0                (ex,"Unsupported dimension $dim in ncat")
         @chk !row_major || dim != 2 (ex,"2D `nrow` cannot be mixed with `row` in `ncat`")
         layout_dim = nrow_flipdim(row_major, dim)
@@ -1146,7 +1146,7 @@ end
 # - ragged column first or row first
 function expand_ncat(ctx, ex)
     is_typed = kind(ex) == K"typed_ncat"
-    outer_dim = numeric_flags(ex)
+    outer_dim = JuliaSyntax.numeric_flags(ex)
     @chk outer_dim > 0 (ex,"Unsupported dimension in ncat")
     eltype      = is_typed ? ex[1]     : nothing
     elements    = is_typed ? ex[2:end] : ex[1:end]
@@ -2208,7 +2208,7 @@ function expand_decls(ctx, ex)
     bindings = children(ex)
     stmts = SyntaxList(ctx)
     for binding in bindings
-        if is_prec_assignment(kind(binding))
+        if JuliaSyntax.is_prec_assignment(kind(binding))
             @chk numchildren(binding) == 2
             # expand_assignment will create the type decls
             make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
