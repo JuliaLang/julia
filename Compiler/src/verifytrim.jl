@@ -18,7 +18,7 @@ using ..Compiler:
      unsafe_pointer_to_objref, widenconst, isconcretetype,
      # misc
      @nospecialize, @assert, C_NULL
-using ..IRShow: LineInfoNode, print, show, println, append_scopes!, IOContext, IO, normalize_method_name
+using ..IRShow: LineInfoNode, print, show, println, append_scopes!, IOContext, IO, normalize_method_name, is_expected_union
 using ..Base: Base, sourceinfo_slotnames, printstyled
 using ..Base.StackTraces: StackFrame
 
