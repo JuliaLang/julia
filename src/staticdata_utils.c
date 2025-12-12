@@ -760,20 +760,22 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
         JL_TYPECHK(write_dependency_list, deptuple, deptuple);
-        jl_value_t *deppath = jl_fieldref_noalloc(deptuple, 1);
+        jl_value_t *deppath_or_uuid = jl_fieldref_noalloc(deptuple, 1);
+        const char *deppathstr = jl_string_data(deppath_or_uuid);
 
-        if (replace_depot_func) {
+        if (replace_depot_func && deppathstr[0]) {
+            // deppathstr[0] == '\0' indicates a binpack'ed uuid, not a path
             jl_value_t *replace_depot_args[3];
             replace_depot_args[0] = replace_depot_func;
-            replace_depot_args[1] = deppath;
+            replace_depot_args[1] = deppath_or_uuid;
             replace_depot_args[2] = depots;
-            deppath = (jl_value_t*)jl_apply(replace_depot_args, 3);
-            JL_TYPECHK(write_dependency_list, string, deppath);
+            deppath_or_uuid = (jl_value_t*)jl_apply(replace_depot_args, 3);
+            JL_TYPECHK(write_dependency_list, string, deppath_or_uuid);
         }
 
-        size_t slen = jl_string_len(deppath);
+        size_t slen = jl_string_len(deppath_or_uuid);
         write_int32(s, slen);
-        ios_write(s, jl_string_data(deppath), slen);
+        ios_write(s, jl_string_data(deppath_or_uuid), slen);
         write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 2)));    // fsize
         write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 3)));    // hash
         write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 4)));  // mtime

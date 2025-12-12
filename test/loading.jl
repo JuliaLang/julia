@@ -274,7 +274,7 @@ end
         n = map(String, split(names, '.'))
         pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
-        @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
+        @test samefile(joinpath(@__DIR__, path), locate_package(pkg))
         @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
     end
     @test identify_package("Baz") === nothing
@@ -350,19 +350,19 @@ module NotPkgModule; end
     @test Foo.which == "path"
 
     @testset "pathof" begin
-        @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
+        @test samefile(pathof(Foo), joinpath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
         @test pathof(NotPkgModule) === nothing
     end
 
     @testset "pkgdir" begin
-        @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
-        @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
-        @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test samefile(pkgdir(Foo), joinpath(@__DIR__, "project/deps/Foo1"))
+        @test samefile(pkgdir(Foo.SubFoo1), joinpath(@__DIR__, "project/deps/Foo1"))
+        @test samefile(pkgdir(Foo.SubFoo2), joinpath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(NotPkgModule) === nothing
 
-        @test pkgdir(Foo, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
-        @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
-        @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test samefile(pkgdir(Foo, "src"), joinpath(@__DIR__, "project/deps/Foo1/src"))
+        @test samefile(pkgdir(Foo.SubFoo1, "src"), joinpath(@__DIR__, "project/deps/Foo1/src"))
+        @test samefile(pkgdir(Foo.SubFoo2, "src"), joinpath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(NotPkgModule, "src") === nothing
     end
 
@@ -1146,7 +1146,7 @@ end
         _ext = Base.get_extension(parent, ext)
         _ext isa Module || error("expected extension \$ext to be loaded")
         _pkgdir = pkgdir(_ext)
-        _pkgdir == pkgdir(parent) != nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
+        samefile(_pkgdir, pkgdir(parent)) || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
         _pkgversion = pkgversion(_ext)
         _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
     end
@@ -1915,5 +1915,49 @@ module M58272_to end
     finally
         Base.ACTIVE_PROJECT[] = old_active_project
         copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+# Test loading when project or depot paths contain the symlink/.. pattern
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    @testset "symlink/.. in project or depot paths" begin
+        mktempdir() do dir
+            old_load_path = copy(LOAD_PATH)
+            old_active_project = Base.ACTIVE_PROJECT[]
+
+            # Create a symlinked subdirectory
+            symlink_dir = joinpath(dir, "project_symlink")
+            target_dir = joinpath(@__DIR__, "project", "deps", "Foo1", "src")
+            mkpath(target_dir)
+            symlink(target_dir, symlink_dir)
+            symlink_parent = joinpath(symlink_dir, "..")
+            try
+                # test symlink'd project path
+                Base.set_active_project(symlink_parent)
+                push!(empty!(LOAD_PATH), "@")
+
+                Foo1_uuid = Base.UUID("1a6589dc-c33c-4d54-9a54-f7fc4b3ff616")
+                id = Base.identify_package("Foo")
+                @test id.uuid == Foo1_uuid
+                located = Base.locate_package(id)
+                @test located !== nothing
+                @test samefile(located, joinpath(target_dir, "Foo.jl"))
+
+                # Test symlink'd depot path
+                symlink_depot = joinpath(dir, "depot_symlink")
+                target_dir = joinpath(@__DIR__, "depot", "packages")
+                symlink(target_dir, symlink_depot)
+                push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
+                push!(empty!(DEPOT_PATH), joinpath(symlink_depot, ".."))
+                pkg = Base.identify_package(
+                    Base.PkgId(Base.UUID("2a550a13-6bab-4a91-a4ee-dff34d6b99d0"), "Bar"), "Baz")
+                @test pkg !== nothing
+                @test samefile(Base.locate_package(pkg), joinpath(target_dir, "Baz", "81oLe", "src", "Baz.jl"))
+            finally
+                Base.ACTIVE_PROJECT[] = old_active_project
+                copy!(LOAD_PATH, old_load_path)
+                copy!(DEPOT_PATH, original_depot_path)
+            end
+        end
     end
 end

@@ -59,10 +59,12 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
             // because these may not be Julia code (and could be huge)
             JL_TYPECHK(write_srctext, deptuple, deptuple);
             if (depmod != (jl_value_t*)jl_main_module) {
-                jl_value_t *abspath = jl_fieldref_noalloc(deptuple, 1);  // file abspath
-                const char *abspathstr = jl_string_data(abspath);
-                if (!abspathstr[0])
+                jl_value_t *abspath_or_uuid = jl_fieldref_noalloc(deptuple, 1);  // file abspath
+                const char *abspathstr = jl_string_data(abspath_or_uuid);
+                if (!abspathstr[0]) {
+                    // UUID or empty string
                     continue;
+                }
                 ios_t *srctp = ios_file(&srctext, abspathstr, 1, 0, 0, 0);
                 if (!srctp) {
                     jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
@@ -72,7 +74,7 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
 
                 jl_value_t *replace_depot_args[3];
                 replace_depot_args[0] = replace_depot_func;
-                replace_depot_args[1] = abspath;
+                replace_depot_args[1] = abspath_or_uuid;
                 replace_depot_args[2] = depots;
                 jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 3);
 
