@@ -97,6 +97,8 @@ include("REPLCompletions.jl")
 using .REPLCompletions
 
 include("TerminalMenus/TerminalMenus.jl")
+using ..TerminalMenus
+
 include("docview.jl")
 
 include("History/History.jl")
@@ -1391,6 +1393,7 @@ function setup_interface(
     repl_keymap = AnyDict(
         ';' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
+                shell_mode.sticky = false
                 buf = copy(LineEdit.buffer(s))
                 transition(s, shell_mode) do
                     LineEdit.state(s, shell_mode).input_buffer = buf
@@ -1402,6 +1405,7 @@ function setup_interface(
         end,
         '?' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
+                help_mode.sticky = false
                 buf = copy(LineEdit.buffer(s))
                 transition(s, help_mode) do
                     LineEdit.state(s, help_mode).input_buffer = buf
@@ -1459,6 +1463,9 @@ function setup_interface(
                 LineEdit.check_show_hint(s)
             end
         end,
+        ',' => (s,o...) -> position(LineEdit.buffer(s)) == 0 ?
+                               switch_REPL_mode(s) :
+                               edit_insert(s, ','),
 
         # Bracketed Paste Mode
         "\e[200~" => (s::MIState,o...)->begin
@@ -1655,6 +1662,35 @@ function setup_interface(
 
     allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, prefix_prompt]
     return ModalInterface(allprompts)
+end
+
+function switch_REPL_mode(s::MIState)
+    mode_mapping = s.current_mode.hist.mode_mapping # e.g. :julia => julia_prompt
+    # mapping is like mode_mapping but with sorted, colored, keys (as strings)
+    # we use ImmutableDict here only because we want to preserve insertion order
+    mapping = foldl(sort!(collect(keys(mode_mapping)), rev=true),
+                    init=Base.ImmutableDict{String,Any}()) do d, k
+                  v = mode_mapping[k]
+                  Base.ImmutableDict(d, v.prompt_prefix * Base.text_colors[:bold] * String(k) * Base.text_colors[:normal] => v)
+              end
+    options = collect(keys(mapping))
+    menu = RadioMenu(options)
+    res = request("choose a mode:", menu)
+    Terminals.raw!(terminal(s), true) # request deactivates raw mode
+    write(terminal(s), "\n")
+    if res != -1
+        next = mapping[options[res]]
+        if isdefined(next, :sticky)
+            next.sticky = true
+        end
+        buf = copy(LineEdit.buffer(s))
+        transition(s, next) do
+            LineEdit.state(s, next).input_buffer = buf
+        end
+    else
+        LineEdit.refresh_line(s)
+    end
+    nothing
 end
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
