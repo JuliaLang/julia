@@ -677,14 +677,14 @@ JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
 }
 
 JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
-                             uv_write_t *uvw, uv_write_cb writecb)
+                             uv_write_t *uvw, uv_write3_cb writecb)
 {
     uv_buf_t buf[1];
     buf[0].base = (char*)data;
     buf[0].len = n;
     JL_UV_LOCK();
     JL_SIGATOMIC_BEGIN();
-    int err = uv_write(uvw, stream, buf, 1, writecb);
+    int err = uv_write3(uvw, stream, buf, 1, NULL, 0, writecb);
     JL_UV_UNLOCK();
     JL_SIGATOMIC_END();
     return err;

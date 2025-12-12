@@ -10,7 +10,7 @@ export
     atomic_add!, atomic_sub!,
     atomic_and!, atomic_nand!, atomic_or!, atomic_xor!,
     atomic_max!, atomic_min!,
-    atomic_fence
+    atomic_fence, atomic_fence_light, atomic_fence_heavy
 
 """
     Threads.Atomic{T}
@@ -329,4 +329,28 @@ fences should not be necessary in most cases.
 
 For further details, see LLVM's `fence` instruction.
 """
-atomic_fence() = Core.Intrinsics.atomic_fence(:sequentially_consistent)
+atomic_fence() = Core.Intrinsics.atomic_fence(:sequentially_consistent, :system)
+
+"""
+    Threads.atomic_fence_light()
+
+Insert the light side of an asymmetric sequential-consistency memory fence.
+Asymmetric memory fences are useful in scenarios where one side of the
+synchronization runs significantly less often than the other side. Use this
+function on the side that runs often and [`atomic_fence_heavy`](@ref) on the
+side that runs rarely.
+
+On supported operating systems and architectures this fence is cheaper than
+`Threads.atomic_fence()`, but synchronizes only with [`atomic_fence_heavy`](@ref)
+calls from other threads.
+"""
+atomic_fence_light() = Core.Intrinsics.atomic_fence(:sequentially_consistent, :singlethread)
+
+"""
+    Threads.atomic_fence_heavy()
+
+Insert the heavy side of an asymmetric sequential-consistency memory fence.
+Use this function on the side that runs rarely.
+See [`atomic_fence_light`](@ref) for more details.
+"""
+atomic_fence_heavy() = ccall(:jl_membarrier, Cvoid, ())

@@ -540,7 +540,6 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
         }
         return;
     }
@@ -668,6 +667,26 @@ static void jl_try_deliver_sigint(void)
     pthread_mutex_unlock(&in_signal_lock);
 }
 
+// Send a signal to the specified thread to longjmp to its reset_ctx if available.
+// This is used for task cancellation to interrupt a running task at a safe point.
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid)
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct == NULL)
+        return;
+    // Only send if the task has a reset_ctx set (i.e., is at a cancellation point)
+    if (ct->reset_ctx == NULL)
+        return;
+    pthread_mutex_lock(&in_signal_lock);
+    signals_inflight++;
+    jl_atomic_store_release(&ptls2->signal_request, 5);
+    pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_mutex_unlock(&in_signal_lock);
+}
+
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
 static int thread0_exit_signo = 0;
@@ -705,6 +724,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 //     is reached
 //  3: raise `thread0_exit_signo` and try to exit
 //  4: no-op
+//  5: longjmp to reset_ctx if available (for task cancellation)
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
@@ -761,6 +781,15 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     }
     else if (request == 3) {
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
+    }
+    else if (request == 5) {
+        // Longjmp to reset_ctx for task cancellation
+        volatile _jl_ucontext_t *reset_ctx = ct->reset_ctx;
+        if (reset_ctx != NULL) {
+            // Clear reset_ctx before longjmp to prevent double-longjmp
+            ct->reset_ctx = NULL;
+            jl_longjmp_in_ctx(sig, ctx, reset_ctx->uc_mcontext);
+        }
     }
     errno = errno_save;
 }
@@ -1110,14 +1139,20 @@ static void *signal_listener(void *arg)
 #endif
 
         if (sig == SIGINT) {
-            if (jl_ignore_sigint()) {
-                continue;
-            }
-            else if (exit_on_sigint) {
+            if (exit_on_sigint) {
                 critical = 1;
             }
             else {
-                jl_try_deliver_sigint();
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                // Set the cancellation request, then notify the sigint listener
+                // that we want to cancel - if the task is not currently running,
+                // the sigint listener will take care of safely moving us through
+                // the cancellation state machine.
+                // TODO: If there is only one thread, we may need to ask the currently
+                // running task to yield, so that the sigint listener can run.
+                jl_atomic_store_release(&ptls2->root_task->cancellation_request,
+                    jl_box_uint8(0x00));
+                deliver_sigint_notification();
                 continue;
             }
         }
@@ -1395,3 +1430,129 @@ JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
 }
+
+#if !defined(_OS_DARWIN_)
+// Implementation of the `mprotect` based membarrier fallback.
+// This is a common fallback based on the observation that `mprotect` happens to
+// issue the necessary memory barriers. However, there is no spec that
+// guarantees this behavior, and indeed AArch64 Darwin does not (so we don't use it
+// there). However, we only use it as a fallback here for older versions of
+// Linux and FreeBSD where we know that it happens to work. We also use it as a
+// fallback for unknown Unix systems under the assumption that it will work,
+// but this is not guaranteed.
+static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
+static void jl_init_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    if (mprotect_barrier_page == NULL) {
+        size_t pagesize = jl_getpagesize();
+
+        mprotect_barrier_page = (_Atomic(uint64_t) *)
+                                     mmap(NULL, pagesize, PROT_NONE,
+                                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (mprotect_barrier_page == MAP_FAILED) {
+            jl_safe_printf("fatal: failed to allocate barrier page.\n");
+            abort();
+        }
+        result = mlock(mprotect_barrier_page, pagesize);
+        if (result != 0) {
+            jl_safe_printf("fatal: failed to mlock barrier page (try increasing RLIMIT_MEMLOCK with `ulimit -l`).\n");
+            abort();
+        }
+    }
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+}
+
+static void jl_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    size_t pagesize = jl_getpagesize();
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_READ | PROT_WRITE);
+    jl_atomic_fetch_add_relaxed(mprotect_barrier_page, 1);
+    assert(result == 0);
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_NONE);
+    assert(result == 0);
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+}
+#endif
+
+// Linux and FreeBSD have compatible membarrier support
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+#if defined(_OS_LINUX_)
+#   include <sys/syscall.h>
+#   if defined(__NR_membarrier)
+enum membarrier_cmd {
+    MEMBARRIER_CMD_QUERY                        = 0,
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
+};
+#    define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
+#  else
+#    warning "Missing linux kernel headers for membarrier syscall, support disabled"
+#    define membarrier(...) (errno = ENOSYS, -1)
+#  endif
+#elif defined(_OS_FREEBSD_)
+#  include <sys/param.h>
+#  if __FreeBSD_version >= 1401500
+#    include <sys/membarrier.h>
+#  else
+#    define MEMBARRIER_CMD_QUERY                         0x00
+#    define MEMBARRIER_CMD_PRIVATE_EXPEDITED             0x08
+#    define MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED    0x10
+#    define membarrier(...) (errno = ENOSYS, -1)
+#  endif
+#endif
+
+// Implementation of `jl_membarrier`
+enum membarrier_implementation {
+    MEMBARRIER_IMPLEMENTATION_UNKNOWN        = 0,
+    MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER = 1,
+    MEMBARRIER_IMPLEMENTATION_MPROTECT       = 2
+};
+
+static _Atomic(enum membarrier_implementation) membarrier_impl = MEMBARRIER_IMPLEMENTATION_UNKNOWN;
+
+static enum membarrier_implementation jl_init_membarrier(void) {
+    int ret = membarrier(MEMBARRIER_CMD_QUERY, 0);
+    int needed = MEMBARRIER_CMD_PRIVATE_EXPEDITED | MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
+    if (ret > 0 && ((ret & needed) == needed)) {
+        // supported
+        if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0) == 0) {
+            // working
+            jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER);
+            return MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER;
+        }
+    }
+    jl_init_mprotect_membarrier();
+    jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_MPROTECT);
+    return MEMBARRIER_IMPLEMENTATION_MPROTECT;
+}
+
+JL_DLLEXPORT void jl_membarrier(void) {
+    enum membarrier_implementation impl = jl_atomic_load_relaxed(&membarrier_impl);
+    if (impl == MEMBARRIER_IMPLEMENTATION_UNKNOWN) {
+        impl = jl_init_membarrier();
+    }
+    if (impl == MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER) {
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0);
+        assert(ret == 0);
+        (void)ret;
+    } else {
+        assert(impl == MEMBARRIER_IMPLEMENTATION_MPROTECT);
+        jl_mprotect_membarrier();
+    }
+}
+#elif !defined(_OS_DARWIN_)
+JL_DLLEXPORT void jl_membarrier(void) {
+    if (!mprotect_barrier_page)
+        jl_init_mprotect_membarrier();
+    jl_mprotect_membarrier();
+}
+#endif

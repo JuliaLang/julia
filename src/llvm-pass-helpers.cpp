@@ -32,7 +32,7 @@ JuliaPassContext::JuliaPassContext()
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr), pop_handler_noexcept_func(nullptr),
-        call_func(nullptr), call2_func(nullptr), call3_func(nullptr), module(nullptr)
+        call_func(nullptr), call2_func(nullptr), call3_func(nullptr), cancel_point_func(nullptr), module(nullptr)
 {
 }
 
@@ -61,6 +61,7 @@ void JuliaPassContext::initFunctions(Module &M)
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
     call3_func = M.getFunction("julia.call3");
+    cancel_point_func = M.getFunction("julia.cancellation_point");
 }
 
 void JuliaPassContext::initAll(Module &M)

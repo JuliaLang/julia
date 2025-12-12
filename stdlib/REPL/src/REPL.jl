@@ -451,6 +451,10 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
+        # TODO: Support cancellation scopes for non-root tasks
+        if current_task() === Base.roottask
+            Base.reset_cancellation!()
+        end
         ast_or_func, show_value = take!(backend.repl_channel)
         if show_value == -1
             # exit flag

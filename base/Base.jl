@@ -371,6 +371,35 @@ function start_profile_listener()
     ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
+function sigint_listener(cond::AsyncCondition)
+    while _trywait(cond)
+        # The SIGINT handler should have set a cancellation request on the roottask
+        cr = @atomic :acquire roottask.cancellation_request
+        cr === nothing && continue
+        cancel!(roottask, cr)
+    end
+    nothing
+end
+
+function start_sigint_listener()
+    cond = AsyncCondition()
+    uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(sigint_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        t === current_task() || _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -394,6 +423,7 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         start_profile_listener()
     end
+    start_sigint_listener()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")

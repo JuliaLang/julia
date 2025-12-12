@@ -1061,28 +1061,51 @@ end
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
 
 # caller must have acquired the iolock
-function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    uvw = uv_write_async(s, p, n)
+function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    # Establish the wait object early so that if we get cancelled, we don't
+    # have to go to libuv in first place.
     ct = current_task()
+    ct.queue = s
+
+    cr = pre_sleep_cancellation_request()
+    if cr !== nothing
+        cr.queue = nothing
+        return 0
+    end
+
+    uvw = uv_write_async(s, p, n)
+    # TODO: If the request was split above, this is wrong
+    ct.next = uvw
+
     preserve_handle(ct)
     sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
-    local status
+    local nwritten
     try
         sigatomic_end()
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        status = wait()::Cint
+        nwritten = wait()::Csize_t
         sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        if ct.queue === s
+            # Only happens in unexpected error cases. Cancellation queues a proper
+            # callback, which unsets this.
+            ct.next = nothing
+            ct.queue = nothing
+        end
         if uv_req_data(uvw) != C_NULL
-            # uvw is still alive,
+            # uvw is still alive - likely because we got some unexpected throwto
+            # exception. We try to cancel the request to avoid spamming if this
+            # is something the user is looking at. Note that cancellation does
+            # not go through this path and instead returns the number of written
+            # bytes to the caller.
+            ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # Ignore errors
             # so make sure we won't get spurious notifications later
             uv_req_set_data(uvw, C_NULL)
         else
@@ -1092,10 +1115,27 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         iolock_end()
         unpreserve_handle(ct)
     end
-    if status < 0
-        throw(_UVError("write", status))
+    return Int(nwritten)
+end
+
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    nb = uv_write_noncancel(s, p, n)
+    @cancel_check
+    @assert nb == n
+    return nb
+end
+
+function cancel_wait!(s::LibuvStream, t::Task, @nospecialize(creq))
+    iolock_begin()
+    if t.queue !== s
+        iolock_end()
+        return false
     end
-    return Int(n)
+    uvw = t.next
+    @assert uvw !== nothing && uvw != C_NULL
+    ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # Ignore errors
+    iolock_end()
+    return true
 end
 
 # helper function for uv_write that returns the uv_write_t struct for the write
@@ -1111,7 +1151,7 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
                     Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, UInt, Ptr{Cvoid}, Ptr{Cvoid}),
                     s, p, nwrite, uvw,
-                    @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)))
+                    @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint, Csize_t)))
         if err < 0
             Libc.free(uvw)
             uv_error("write", err)
@@ -1188,12 +1228,18 @@ function write(s::LibuvStream, b::UInt8)
     return write(s, Ref{UInt8}(b))
 end
 
-function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
+function uv_writecb_task(req::Ptr{Cvoid}, status::Cint, nwritten::Csize_t)
     d = uv_req_data(req)
     if d != C_NULL
         uv_req_set_data(req, C_NULL) # let the Task know we got the writecb
         t = unsafe_pointer_to_objref(d)::Task
-        schedule(t, status)
+        t.next = nothing
+        t.queue = nothing
+        if status != 0 && status != UV_ECANCELED
+            schedule(t, _UVError("write", status); error=true)
+        else
+            schedule(t, nwritten)
+        end
     else
         # no owner for this req, safe to just free it
         Libc.free(req)
