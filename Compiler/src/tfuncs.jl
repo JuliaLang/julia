@@ -716,7 +716,7 @@ end
 @nospecs function pointerset_tfunc(𝕃::AbstractLattice, a, v, i, align)
     return a
 end
-@nospecs function atomic_fence_tfunc(𝕃::AbstractLattice, order)
+@nospecs function atomic_fence_tfunc(𝕃::AbstractLattice, order, syncscope)
     return Nothing
 end
 @nospecs function atomic_pointerref_tfunc(𝕃::AbstractLattice, a, order)
@@ -757,7 +757,7 @@ add_tfunc(add_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(sub_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(pointerref, 3, 3, pointerref_tfunc, 4)
 add_tfunc(pointerset, 4, 4, pointerset_tfunc, 5)
-add_tfunc(atomic_fence, 1, 1, atomic_fence_tfunc, 4)
+add_tfunc(atomic_fence, 2, 2, atomic_fence_tfunc, 4)
 add_tfunc(atomic_pointerref, 2, 2, atomic_pointerref_tfunc, 4)
 add_tfunc(atomic_pointerset, 3, 3, atomic_pointerset_tfunc, 5)
 add_tfunc(atomic_pointerswap, 3, 3, atomic_pointerswap_tfunc, 5)
