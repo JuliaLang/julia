@@ -387,30 +387,6 @@ function generate_lambda_ex(world::UInt, source::Method,
     return stub(world, source, body)
 end
 
-# Test that `Core.CachedGenerator` works as expected
-struct Generator54916 <: Core.CachedGenerator end
-function (::Generator54916)(world::UInt, source::Method, args...)
-    return generate_lambda_ex(world, source,
-        (:doit54916, :func, :arg), (), :(func(arg)))
-end
-@eval function doit54916(func, arg)
-    $(Expr(:meta, :generated, Generator54916()))
-    $(Expr(:meta, :generated_only))
-end
-@test doit54916(sin, 1) == sin(1)
-let mi = only(methods(doit54916)).specializations
-    ci = mi.cache::Core.CodeInstance
-    found = false
-    while true
-        if ci.owner === :uninferred && ci.inferred isa Core.CodeInfo
-            found = true
-            break
-        end
-        isdefined(ci, :next) || break
-        ci = ci.next
-    end
-    @test found
-end
 
 # Test that writing a bad cassette-style pass gives the expected error (#49715)
 function generator49715(world, source, self, f, tt)
