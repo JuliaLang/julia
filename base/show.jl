@@ -1210,7 +1210,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         return
     elseif isnamedtuple
         syms, types = parameters
-        if syms isa Tuple && types isa DataType
+        if syms isa Tuple && types isa DataType && length(types.parameters) == length(syms) && !isvatuple(types)
             print(io, "@NamedTuple{")
             show_at_namedtuple(io, syms, types)
             print(io, "}")
