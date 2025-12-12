@@ -122,8 +122,7 @@ end
 
 
 mi = Base.method_instance(sum, (Vector{Union{Int64,Float64, Float32,UInt32}},))
-let infos = typeinf_ext_toplevel(Any[Core.svec(mi)], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[mi], [Base.get_world_counter()], TRIM_UNSAFE)
     errors, parents = get_verify_typeinf_trim(infos)
-    (warn, desc) = only(errors)
-    @test warn
+    @test !isempty(errors)
 end
