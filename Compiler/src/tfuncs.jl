@@ -2652,6 +2652,10 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_getglobal
         return generic_getglobal_effects
+    elseif f === Core.finalizer
+        if length(argtypes) == 2
+            return Effects(EFFECTS_TOTAL; effect_free = ALWAYS_FALSE, inaccessiblememonly = ALWAYS_FALSE)
+        end
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_get_binding_type
