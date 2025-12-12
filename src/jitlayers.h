@@ -265,7 +265,7 @@ public:
         raw_string_ostream s{name};
         (s << ... << args);
         unsigned n = counter[name]++;
-        s << "_" << n;
+        s << n;
         return name;
     }
 

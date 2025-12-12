@@ -230,15 +230,15 @@ static std::string make_name_unique(Ts... args) JL_NOTSAFEPOINT
     std::string name;
     raw_string_ostream s{name};
     (s << ... << args);
-    s << "_" << global_name_counter.fetch_add(1, memory_order_relaxed);
+    s << global_name_counter.fetch_add(1, memory_order_relaxed);
     return name;
 }
 
 std::string jl_codegen_output_t::make_name(StringRef prefix, StringRef orig_name)
 {
     if (params->unique_names)
-        return make_name_unique(prefix, strip_linux(orig_name));
-    return names(prefix, strip_linux(orig_name));
+        return make_name_unique(prefix, strip_linux(orig_name), "_");
+    return names(prefix, strip_linux(orig_name), "_");
 }
 
 std::string jl_codegen_output_t::make_name(StringRef orig_name)
@@ -2030,7 +2030,7 @@ CISymbolPtr JuliaOJIT::makeUniqueCIName(jl_code_instance_t *CI, const CISymbolPt
     std::lock_guard Lock{LinkerMutex};
     orc::SymbolStringPtr wrapper, specialized;
     if (Funcs.invoke)
-        wrapper = ES.intern(Names(*Funcs.invoke));
+        wrapper = ES.intern(Names(*Funcs.invoke, "#"));
     if (Funcs.specptr)
         specialized = ES.intern(Names(*Funcs.specptr));
     CISymbolPtr Ret{Funcs.invoke_api, wrapper, specialized};
@@ -2090,7 +2090,7 @@ void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     size_t i = 0;
     orc::SymbolMap GlobalSyms;
     for (auto &[Addr, Orig] : Info->global_targets) {
-        auto Sym = ES.intern(Names(*Orig));
+        auto Sym = ES.intern(Names(*Orig, "#"));
         auto It = Syms.find(Orig);
         if (It == Syms.end())
             continue;
@@ -2186,10 +2186,10 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     SymbolMap Symbols;
     const char *Name = jl_symbol_name(jl_get_ci_mi(CI)->def.method->name);
 
-    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), Name));
+    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), "#", Name));
     Symbols[SpecSym] = {ExecutorAddr::fromPtr(SpecPtr), JITSymbolFlags::Exported};
     if (API == JL_INVOKE_SPECSIG) {
-        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), Name));
+        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), "#", Name));
         Symbols[InvokeSym] = {ExecutorAddr::fromPtr(Invoke), JITSymbolFlags::Exported};
     }
     cantFail(JD.define(orc::absoluteSymbols(Symbols)));
