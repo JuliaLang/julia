@@ -618,7 +618,7 @@ static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tl
     return offset;
 }
 #  elif JL_ELF_TLS_VARIANT == 2
-// In Variant 2, the static TLS buffer comes before a unknown size TCB.
+// In Variant 2, the static TLS buffer comes before an unknown size TCB.
 // The alignment needs to be applied to the new size.
 static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align)
 {
@@ -738,7 +738,7 @@ void jl_init_threading(void)
             if (errno != 0 || endptr == cp || nthreads <= 0)
                 nthreads = 1;
             cp = endptr;
-            if (nthreads == 1) // User asked for 1 thread so lets assume they dont want an interactive thread
+            if (nthreads == 1) // User asked for 1 thread so let's assume they don't want an interactive thread
                 nthreadsi = 0;
         }
         if (*cp == ',') {
