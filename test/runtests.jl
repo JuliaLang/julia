@@ -123,6 +123,9 @@ cd(@__DIR__) do
     end
     skipped = 0
 
+    # Track which test is running on each worker (worker_id => test_name)
+    worker_current_test = Dict{Int, String}()
+
     @everywhere include("testdefs.jl")
 
     if use_revise
@@ -158,6 +161,20 @@ cd(@__DIR__) do
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
         stderr.lock = print_lock
+    end
+
+    # Set up hook to display test name with worker output
+    Distributed.worker_output_hook[] = (ident, line) -> begin
+        wrkr_id = tryparse(Int, ident)
+        test_name = wrkr_id === nothing ? nothing : get(worker_current_test, wrkr_id, nothing)
+        @lock print_lock begin
+            if test_name !== nothing
+                print("  ", test_name, " (", ident, "): ", line, "\n")
+            else
+                print("  From worker ", ident, ": ", line, "\n")
+            end
+        end
+        return true
     end
 
     function print_testworker_stats(test, wrkr, resp)
@@ -268,6 +285,7 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
+                        worker_current_test[wrkr] = test
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -304,6 +322,7 @@ cd(@__DIR__) do
                                 Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
+                        delete!(worker_current_test, wrkr)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
@@ -395,6 +414,7 @@ cd(@__DIR__) do
         if @isdefined test_timers
             foreach(close, values(test_timers))
         end
+        Distributed.worker_output_hook[] = nothing
     end
 
     #=
