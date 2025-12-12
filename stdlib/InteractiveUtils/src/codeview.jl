@@ -54,7 +54,7 @@ function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_typ
     str = "::$type"
     if !highlighting[:warntype]
         print(io, str)
-    elseif type isa Union && is_expected_union(type)
+    elseif type isa Union && Base.Compiler.is_expected_union(type)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
     elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
         Base.emphasize(io, str)
