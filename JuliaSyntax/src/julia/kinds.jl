@@ -235,6 +235,7 @@ register_kinds!(JuliaSyntax, 0, [
             "else"
             "elseif"
             "end"
+            "then"
         "END_BLOCK_CONTINUATION_KEYWORDS"
         "BEGIN_CONTEXTUAL_KEYWORDS"
             # contextual keywords

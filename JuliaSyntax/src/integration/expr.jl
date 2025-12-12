@@ -427,9 +427,23 @@ end
         # Add extra line number node for the `end` of the block. This may seem
         # useless but it affects code coverage.
         push!(args[2].args, endloc)
+        # Handle then clause: (for iter body (then then_body)) -> (for iter body then_body)
+        if length(args) >= 3
+            then_clause = args[3]
+            if @isexpr(then_clause, :then)
+                args[3] = then_clause.args[1]  # Extract the block from the then clause
+            end
+        end
     elseif k == K"while"
         # Line number node for the `end` of the block as in `for` loops.
         push!(args[2].args, endloc)
+        # Handle then clause: (while cond body (then then_body)) -> (while cond body then_body)
+        if length(args) >= 3
+            then_clause = args[3]
+            if @isexpr(then_clause, :then)
+                args[3] = then_clause.args[1]  # Extract the block from the then clause
+            end
+        end
     elseif k in KSet"tuple vect braces"
         # Move parameters blocks to args[1]
         _reorder_parameters!(args, 1)

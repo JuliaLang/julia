@@ -551,6 +551,19 @@ tests = [
         # break/continue
         "break"    => "(break)"
         "continue" => "(continue)"
+        # Extended break syntax (1.14+)
+        ((v=v"1.14",), "break x")          => "(break x)"
+        ((v=v"1.14",), "break 42")         => "(break 42)"
+        ((v=v"1.14",), "break f(x)")       => "(break (call f x))"
+        ((v=v"1.14",), "break break")      => "(break (break))"
+        ((v=v"1.14",), "break break x")    => "(break (break x))"
+        ((v=v"1.14",), "break break break")=> "(break (break (break)))"
+        ((v=v"1.14",), "break continue")   => "(break (continue))"
+        ((v=v"1.14",), "break break continue") => "(break (break (continue)))"
+        # Extended break should error on older versions
+        ((v=v"1.13",), "break x")          => "(break (error) x)"
+        ((v=v"1.13",), "break break")      => "(break (error) (break))"
+        ((v=v"1.13",), "break continue")   => "(break (error) (continue))"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"

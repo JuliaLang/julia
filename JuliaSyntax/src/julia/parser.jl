@@ -460,7 +460,7 @@ end
 
 # Parse a block, but leave emitting the block up to the caller.
 function parse_block_inner(ps::ParseState, down::F) where {F <: Function}
-    parse_Nary(ps, down, KSet"NewlineWs ;", KSet"end else elseif catch finally")
+    parse_Nary(ps, down, KSet"NewlineWs ;", KSet"end else elseif catch finally then")
 end
 
 # ";" at the top level produces a sequence of top level expressions
@@ -1889,17 +1889,33 @@ function parse_resword(ps::ParseState)
     elseif word == K"while"
         # while cond body end  ==>  (while cond (block body))
         # while x < y \n a \n b \n end ==> (while (call-i x < y) (block a b))
+        # while cond body then else_body end ==> (while cond (block body) (then (block else_body)))
         bump(ps, TRIVIA_FLAG)
         parse_cond(ps)
         parse_block(ps)
+        if peek(ps) == K"then"
+            min_supported_version(v"1.14", ps, mark, "loop then clause")
+            then_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)  # consume 'then'
+            parse_block(ps)
+            emit(ps, then_mark, K"then")
+        end
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"while")
     elseif word == K"for"
         # for x in xs end  ==>  (for (iteration (in x xs)) (block))
         # for x in xs, y in ys \n a \n end ==> (for (iteration (in x xs) (in y ys)) (block a))
+        # for x in xs body then else_body end ==> (for (iteration ...) (block body) (then (block else_body)))
         bump(ps, TRIVIA_FLAG)
         parse_iteration_specs(ps)
         parse_block(ps)
+        if peek(ps) == K"then"
+            min_supported_version(v"1.14", ps, mark, "loop then clause")
+            then_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)  # consume 'then'
+            parse_block(ps)
+            emit(ps, then_mark, K"then")
+        end
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"for")
     elseif word == K"let"
@@ -2058,15 +2074,44 @@ function parse_resword(ps::ParseState)
             parse_eq(ps)
         end
         emit(ps, mark, K"return")
-    elseif word in KSet"break continue"
-        # break     ==>  (break)
+    elseif word == K"break"
+        # Extended break syntax (1.14+):
+        # break           ==>  (break)
+        # break x         ==>  (break x)
+        # break break     ==>  (break (break))
+        # break break x   ==>  (break (break x))
+        # break continue  ==>  (break (continue))
+        bump(ps, TRIVIA_FLAG)
+        k = peek(ps)
+        if k == K"NewlineWs" || is_closing_token(ps, k)
+            # break\n  ==>  (break)
+            emit(ps, mark, K"break")
+        elseif k == K"break"
+            # break break ... ==> (break (break ...))
+            min_supported_version(v"1.14", ps, mark, "multi-level break")
+            parse_resword(ps)  # Recursive parse of inner break
+            emit(ps, mark, K"break")
+        elseif k == K"continue"
+            # break continue ==> (break (continue))
+            min_supported_version(v"1.14", ps, mark, "break continue")
+            inner_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)
+            emit(ps, inner_mark, K"continue")
+            emit(ps, mark, K"break")
+        else
+            # break x  ==>  (break x)
+            min_supported_version(v"1.14", ps, mark, "break with value")
+            parse_eq(ps)
+            emit(ps, mark, K"break")
+        end
+    elseif word == K"continue"
         # continue  ==>  (continue)
         bump(ps, TRIVIA_FLAG)
-        emit(ps, mark, word)
+        emit(ps, mark, K"continue")
         k = peek(ps)
         if !(k in KSet"NewlineWs ; ) : EndMarker" || (k == K"end" && !ps.end_symbol))
             recover(is_closer_or_newline, ps, TRIVIA_FLAG,
-                    error="unexpected token after $(untokenize(word))")
+                    error="unexpected token after continue")
         end
     elseif word in KSet"module baremodule"
         # module A end  ==> (module A (block))
