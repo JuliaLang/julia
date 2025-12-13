@@ -314,6 +314,8 @@ JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str)
 {
+    if (str == NULL)
+        jl_exceptionf(jl_argumenterror_type, "cannot convert NULL to string");
     return jl_pchar_to_string(str, strlen(str));
 }
 
