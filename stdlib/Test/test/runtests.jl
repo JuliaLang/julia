@@ -981,11 +981,11 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
         end'`), stderr=devnull), String)
     @test occursin(r"""
         Test Summary: \| Pass  Fail  Total +Time
-        Foo Tests     \|    2     2      4  \s*\d*\.\ds
-          Animals     \|    1     1      2  \s*\d*\.\ds
-            Felines   \|    1            1  \s*\d*\.\ds
-            Canines   \|          1      1  \s*\d*\.\ds
-          Arrays      \|    1     1      2  \s*\d*\.\ds
+        Foo Tests     \|    2     2      4  \s*(\d+m)?\d*\.\ds
+          Animals     \|    1     1      2  \s*(\d+m)?\d*\.\ds
+            Felines   \|    1            1  \s*(\d+m)?\d*\.\ds
+            Canines   \|          1      1  \s*(\d+m)?\d*\.\ds
+          Arrays      \|    1     1      2  \s*(\d+m)?\d*\.\ds
         """, msg)
 end
 
@@ -1364,16 +1364,16 @@ end
 @testset "verbose option" begin
     expected = r"""
     Test Summary:             \| Pass  Total +Time
-    Parent                    \|    9      9  \s*\d*\.\ds
-      Child 1                 \|    3      3  \s*\d*\.\ds
-        Child 1\.1 \(long name\) \|    1      1  \s*\d*\.\ds
-        Child 1\.2             \|    1      1  \s*\d*\.\ds
-        Child 1\.3             \|    1      1  \s*\d*\.\ds
-      Child 2                 \|    3      3  \s*\d*\.\ds
-      Child 3                 \|    3      3  \s*\d*\.\ds
-        Child 3\.1             \|    1      1  \s*\d*\.\ds
-        Child 3\.2             \|    1      1  \s*\d*\.\ds
-        Child 3\.3             \|    1      1  \s*\d*\.\ds
+    Parent                    \|    9      9  \s*(\d+m)?\d*\.\ds
+      Child 1                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 1\.1 \(long name\) \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
+      Child 2                 \|    3      3  \s*(\d+m)?\d*\.\ds
+      Child 3                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 3\.1             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
     """
 
     mktemp() do f, _
@@ -1435,8 +1435,8 @@ end
     @testset "non failfast (default)" begin
         expected = r"""
         Test Summary: \| Pass  Fail  Error  Total +Time
-        Foo           \|    1     2      1      4  \s*\d*\.\ds
-          Bar         \|    1     1             2  \s*\d*\.\ds
+        Foo           \|    1     2      1      4  \s*(\d+m)?\d*\.\ds
+          Bar         \|    1     1             2  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1461,7 +1461,7 @@ end
     @testset "failfast begin-end" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1486,8 +1486,8 @@ end
     @testset "failfast for-loop" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
-          1           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
         mktemp() do f, _
             write(f,
@@ -1512,8 +1512,8 @@ end
     @testset "failfast passes to child testsets" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
-          1           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1538,7 +1538,7 @@ end
     @testset "failfast via env var" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
