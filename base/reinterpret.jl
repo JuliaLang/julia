@@ -12,15 +12,15 @@ end
     # Special-case for zero-sized types, which for some reason don't get compiled away:
     if Base.packedsize(T) == 0
         return @_new(T)
-    # Fast path for primitive types (no fields): use LLVM's builtin reinterpret
-    # which compiles to a no-op for same-size primitives
-    elseif fieldcount(T) == 0 && fieldcount(typeof(x)) == 0
-        return @inline reinterpret(T, x)
-    # For types with many fields (>32), avoid the recursive unrolling overhead
-    # by falling back to reinterpret. This prevents allocation explosion for
-    # large tuples like Tuple{UInt8, Int64, Vararg{UInt8, 100}}.
-    elseif fieldcount(typeof(x)) > 32 || fieldcount(T) > 32
-        return @inline reinterpret(T, x)
+    # # Fast path for primitive types (no fields): use LLVM's builtin reinterpret
+    # # which compiles to a no-op for same-size primitives
+    # elseif fieldcount(T) == 0 && fieldcount(typeof(x)) == 0
+    #     return @inline reinterpret(T, x)
+    # # For types with many fields (>32), avoid the recursive unrolling overhead
+    # # by falling back to reinterpret. This prevents allocation explosion for
+    # # large tuples like Tuple{UInt8, Int64, Vararg{UInt8, 100}}.
+    # elseif fieldcount(typeof(x)) > 32 || fieldcount(T) > 32
+    #     return @inline reinterpret(T, x)
     # For packed structs, our bytecast is slightly faster:
     elseif Base.packedsize(typeof(x)) == sizeof(x) && sizeof(T) == sizeof(x)
         return byte_cast(T, x)
