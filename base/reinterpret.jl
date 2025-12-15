@@ -86,10 +86,51 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) 
     ))
 end
 
+Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_regions)
+    @assert !isempty(SRC_regions) && !isempty(DST_regions)
+    # Rough guess for the sizehint
+    out_regions = sizehint!(Tuple{Int,Int,Int}[],
+        max(length(SRC_regions), length(DST_regions)))
+    src_index, dst_index = 1, 1
+    (src_offset, src_size) = @inbounds SRC_regions[1]
+    (dst_offset, dst_size) = @inbounds DST_regions[1]
+    while src_index <= length(SRC_regions) && dst_index <= length(DST_regions)
+        bytes_to_copy = min(src_size, dst_size)
+        push!(out_regions, (src_offset, dst_offset, bytes_to_copy))
+        if src_size == dst_size
+            src_index += 1
+            dst_index += 1
+            if src_index > length(SRC_regions) || dst_index > length(DST_regions)
+                break
+            end
+            (src_offset, src_size) = @inbounds SRC_regions[src_index]
+            (dst_offset, dst_size) = @inbounds DST_regions[dst_index]
+        elseif bytes_to_copy == src_size
+            src_index += 1
+            if src_index > length(SRC_regions)
+                break
+            end
+            (src_offset, src_size) = @inbounds SRC_regions[src_index]
+            dst_offset += bytes_to_copy
+            dst_size -= bytes_to_copy
+        else
+            dst_index += 1
+            if dst_index > length(DST_regions)
+                break
+            end
+            (dst_offset, dst_size) = @inbounds DST_regions[dst_index]
+            src_offset += bytes_to_copy
+            src_size -= bytes_to_copy
+        end
+    end
+    return Tuple(out_regions)
+end
 
 @inline function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
     SRC_regions = packed_regions(SRC)
     DST_regions = packed_regions(DST)
+    offsets_to_copy = match_packed_regions(SRC_regions, DST_regions)
+    # @show offsets_to_copy
 
     src_ref = Ref{SRC}(x)
     dest_ref = Ref{DST}()
@@ -101,51 +142,28 @@ end
         _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            SRC_regions,
-            DST_regions,
+            offsets_to_copy,
         )
     end
     return dest_ref[]
 end
-@inline _fast_reinterpret_padded_src_to_dst(::Ptr, ::Ptr, ::Tuple{}, ::Tuple{}) = nothing
+@inline _fast_reinterpret_padded_src_to_dst(::Ptr, ::Ptr, ::Tuple{}) = nothing
 @inline function _fast_reinterpret_padded_src_to_dst(
     dst_ptr::Ptr,
     src_ptr::Ptr,
-    SRC_regions::Tuple,
-    DST_regions::Tuple,
+    offsets_to_copy::Tuple,
 )::Nothing
-    (src_offset, src_size) = @inbounds Base.first(SRC_regions)
-    (dst_offset, dst_size) = @inbounds Base.first(DST_regions)
-    SRC_regions_tail = Base.tail(SRC_regions)
-    DST_regions_tail = Base.tail(DST_regions)
-    bytes_to_copy = min(src_size, dst_size)
+    (src_offset, dst_offset, bytes_to_copy) = @inbounds Base.first(offsets_to_copy)
     unsafe_copyto!(
         dst_ptr + dst_offset,
         src_ptr + src_offset,
         bytes_to_copy,
     )
-    if src_size == dst_size
-        return _fast_reinterpret_padded_src_to_dst(
-            dst_ptr,
-            src_ptr,
-            SRC_regions_tail,
-            DST_regions_tail,
-        )
-    elseif bytes_to_copy >= src_size
-        return _fast_reinterpret_padded_src_to_dst(
-            dst_ptr,
-            src_ptr,
-            SRC_regions_tail,
-            ((dst_offset + bytes_to_copy, dst_size - bytes_to_copy), DST_regions_tail...,),
-        )
-    else
-        return _fast_reinterpret_padded_src_to_dst(
-            dst_ptr,
-            src_ptr,
-            ((src_offset + bytes_to_copy, src_size - bytes_to_copy), SRC_regions_tail...,),
-            DST_regions_tail,
-        )
-    end
+    return _fast_reinterpret_padded_src_to_dst(
+        dst_ptr,
+        src_ptr,
+        Base.tail(offsets_to_copy),
+    )
     return nothing
 end
 
@@ -235,3 +253,41 @@ end
     end
     return nothing
 end
+
+
+function padded_N(N, type)
+    InnerT = Tuple{UInt8, type, UInt8}
+    T = InnerT
+    for _ in 1:N
+        T = Tuple{UInt8, T, UInt8}
+    end
+    return T
+end
+function type1(N)
+    padded_N(N, Int64)
+end
+function type2(N)
+    padded_N(N, Float64)
+end
+using BenchmarkTools
+brt(::Type{T}, x) where {T} = reinterpret(T, x)
+make_v(N) = reinterpret(type1(N), ntuple(i->i%UInt8, Base.packedsize(type1(N))))
+function run_exp(N, rtf)
+    @show N
+    T2 = gensym(:T2)
+    T1 = gensym(:T1)
+    v = gensym(:v)
+    @eval begin
+        const $T2 = $(type2(N))
+        const $T1 = $(type1(N))
+        @show $T1
+        @show $T2
+        const $v = $(make_v(N))
+        @btime $rtf($T2, x) setup=(x = $v)
+    end
+end
+exp_brt(N) = run_exp(N, reinterpret)
+exp_frt(N) = run_exp(N, fast_reinterpret)
+
+# brt_times = [exp_brt(N) for N in 1:7]
+# frt_times = [exp_frt(N) for N in 1:7]
