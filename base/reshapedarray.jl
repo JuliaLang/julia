@@ -121,7 +121,7 @@ reshape
 
 reshape(parent::AbstractArray, dims::Union{Integer,Colon,AbstractUnitRange}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Integer,Vararg{Integer}}) = reshape(parent, map(Int, dims))
-reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, map(_to_shape_or_colon, shp))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
@@ -129,12 +129,11 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 # We add a level of indirection to avoid method ambiguities in reshape
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}}) = _reshape_maybecolon(parent, dims)
 _reshape_maybecolon(parent::AbstractVector, ::Tuple{Colon}) = parent
-# helper function analogous to to_shape, but this doesn't cast Integers to Int
-# this allows dispatching to a specialized reshape(M::MyArray, dims::Tuple{Vararg{Integer}})
-_to_shape(i::AbstractOneTo) = length(i)
-_to_shape(i::Union{Integer, Colon}) = i
-_to_shape(t::Tuple) = map(_to_shape, t)
-_reshape_maybecolon(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}}) = reshape(parent, _reshape_uncolon(parent, _to_shape(dims)))
+# Helper function analogous to to_shape, but this preserves colons and doesn't cast Integers to Int
+# This allows dispatching to a specialized reshape(M::MyArray, dims::Tuple{Vararg{Integer}})
+_to_shape_or_colon(i::AbstractOneTo) = length(i)
+_to_shape_or_colon(i::Union{Integer, Colon}) = i
+_reshape_maybecolon(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}}) = reshape(parent, _reshape_uncolon(parent, map(_to_shape_or_colon, dims)))
 
 @noinline _reshape_throwcolon(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
         " may have at most one omitted dimension specified by `Colon()`")))
