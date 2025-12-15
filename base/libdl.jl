@@ -506,6 +506,9 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
                 if ll.on_load_callback !== nothing
                     ll.on_load_callback()
                 end
+            else
+                # Another thread loaded the library while we were waiting
+                handle = @atomic :acquire ll.handle
             end
         end
     else
