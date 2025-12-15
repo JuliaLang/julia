@@ -6798,4 +6798,10 @@ end
     jetls618(1,2,3), jetls618(1,2,3,4)
 end == Tuple{Int,Int}
 
+# issue #60252
+f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
+@inferred f60252(identity, (a=1, b=2))
+f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
+@test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+
 end # module inference
