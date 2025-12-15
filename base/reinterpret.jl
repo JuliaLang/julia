@@ -86,16 +86,10 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) 
     ))
 end
 
+
 @inline function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
     SRC_regions = packed_regions(SRC)
     DST_regions = packed_regions(DST)
-
-    # SPECIAL CASE: If the packed regions are the same, we can do a direct byte copy
-    # BUT at some threshold of the padding to real bytes ratio, it's actually faster to
-    # copy only the valid bytes. Emperically, that threshold seems to be around 50% padding.
-    # if SRC_regions == DST_regions
-    #     return byte_cast(DST, x)
-    # end
 
     src_ref = Ref{SRC}(x)
     dest_ref = Ref{DST}()
@@ -107,62 +101,53 @@ end
         _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            Base.first(SRC_regions),
-            Base.first(DST_regions),
-            Base.tail(SRC_regions),
-            Base.tail(DST_regions),
+            SRC_regions,
+            DST_regions,
         )
     end
     return dest_ref[]
 end
+@inline _fast_reinterpret_padded_src_to_dst(::Ptr, ::Ptr, ::Tuple{}, ::Tuple{}) = nothing
 @inline function _fast_reinterpret_padded_src_to_dst(
     dst_ptr::Ptr,
     src_ptr::Ptr,
-    (src_offset, src_size)::Tuple{Int,Int},
-    (dst_offset, dst_size)::Tuple{Int,Int},
-    SRC_regions_tail::Tuple,
-    DST_regions_tail::Tuple,
+    SRC_regions::Tuple,
+    DST_regions::Tuple,
 )::Nothing
+    (src_offset, src_size) = @inbounds Base.first(SRC_regions)
+    (dst_offset, dst_size) = @inbounds Base.first(DST_regions)
+    SRC_regions_tail = Base.tail(SRC_regions)
+    DST_regions_tail = Base.tail(DST_regions)
     bytes_to_copy = min(src_size, dst_size)
     unsafe_copyto!(
         dst_ptr + dst_offset,
         src_ptr + src_offset,
         bytes_to_copy,
     )
-    if SRC_regions_tail === () && DST_regions_tail === ()
-        return nothing
-    end
     if src_size == dst_size
         return _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            Base.first(SRC_regions_tail),
-            Base.first(DST_regions_tail),
-            Base.tail(SRC_regions_tail),
-            Base.tail(DST_regions_tail),
+            SRC_regions_tail,
+            DST_regions_tail,
         )
     elseif bytes_to_copy >= src_size
         return _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            Base.first(SRC_regions_tail),
-            (dst_offset + bytes_to_copy, dst_size - bytes_to_copy),
-            Base.tail(SRC_regions_tail),
-            DST_regions_tail,
+            SRC_regions_tail,
+            ((dst_offset + bytes_to_copy, dst_size - bytes_to_copy), DST_regions_tail...,),
         )
     else
         return _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            (src_offset + bytes_to_copy, src_size - bytes_to_copy),
-            Base.first(DST_regions_tail),
-            SRC_regions_tail,
-            Base.tail(DST_regions_tail),
+            ((src_offset + bytes_to_copy, src_size - bytes_to_copy), SRC_regions_tail...,),
+            DST_regions_tail,
         )
     end
     return nothing
 end
-
 
 
 
@@ -250,55 +235,3 @@ end
     end
     return nothing
 end
-
-function padded_N(N, type)
-    InnerT = Tuple{UInt8, type, UInt8}
-    T = InnerT
-    for _ in 1:N
-        T = Tuple{UInt8, T, UInt8}
-    end
-    return T
-end
-function type1(N)
-    padded_N(N, Int64)
-end
-function type2(N)
-    padded_N(N, Float64)
-end
-using BenchmarkTools
-brt(::Type{T}, x) where {T} = reinterpret(T, x)
-make_v(N) = reinterpret(type1(N), ntuple(_->0x0, Base.packedsize(type1(N))))
-function run_exp(N, rtf)
-    @show N
-    T2 = gensym(:T2)
-    T1 = gensym(:T1)
-    v = gensym(:v)
-    @eval begin
-        const $T2 = $(type2(N))
-        const $T1 = $(type1(N))
-        @show $T1
-        @show $T2
-        const $v = $(make_v(N))
-        @btime $rtf($T2, x) setup=(x = $v)
-    end
-end
-exp_brt(N) = run_exp(N, reinterpret)
-exp_frt(N) = run_exp(N, fast_reinterpret)
-
-# brt_times = [exp_brt(N) for N in 1:7]
-# frt_times = [exp_frt(N) for N in 1:7]
-
-
-BT1 = Tuple{UInt8, Tuple{UInt8, Tuple{UInt8, Tuple{UInt8, Int64, UInt8}, UInt8}, UInt8}, UInt8}
-BT2 = Tuple{UInt8, Tuple{UInt8, Tuple{UInt8, Tuple{UInt8, Float64, UInt8}, UInt8}, UInt8}, UInt8}
-@eval function bench1(x)
-    T1 = $(BT1)
-    T2 = $(BT2)
-    @assert x isa T1
-
-    SRC_regions = $(packed_regions(BT1))
-    DST_regions = $(packed_regions(BT2))
-
-    return fast_reinterpret_padded_src_to_dst(T2, x, SRC_regions, DST_regions)
-end
-
