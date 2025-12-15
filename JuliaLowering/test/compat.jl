@@ -638,24 +638,52 @@ end
     local roundtrip = e->JuliaLowering.est_to_expr(JuliaLowering.expr_to_est(e))
     local roundtrip_eq = x->x==roundtrip(x)
 
+    local expr_syntax = Any[
+        LineNumberNode(1)
+        :foo
+        Expr(:foo, 1)
+        GlobalRef(Core, :nothing)
+        nothing
+    ]
+
+    local expr_wrappers = Function[
+        identity
+        x->QuoteNode(x)
+        x->Expr(:function, x)
+        x->Expr(:dummy, x)
+    ]
+
+    local st_wrappers = Function[
+        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() (x::K"Value"))
+        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() [K"inert" x::K"Value"])
+        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() [K"function" x::K"Value"])
+    ]
+
     @testset "every basic case" begin
-        @test roundtrip_eq(LineNumberNode(1))
-        @test roundtrip_eq(:foo)
-        @test roundtrip_eq(Expr(:foo, 1))
-        @test roundtrip_eq(GlobalRef(Core, :nothing))
-        @test roundtrip_eq(nothing)
+        for e in expr_syntax, w1 in expr_wrappers, w2 in expr_wrappers
+            e_wrapped = w2(w1(e))
+            @test roundtrip(e_wrapped) == e_wrapped
+        end
 
-        @test roundtrip_eq(QuoteNode(LineNumberNode(1)))
-        @test roundtrip_eq(QuoteNode(:foo))
-        @test roundtrip_eq(QuoteNode(Expr(:foo, 1)))
-        @test roundtrip_eq(QuoteNode(GlobalRef(Core, :nothing)))
-        @test roundtrip_eq(QuoteNode(nothing))
+        for e in expr_syntax, st_w in st_wrappers, e_w in expr_wrappers
+            isnothing(e) && continue
+            e_wrapped = st_w(e_w(e))
+            @test roundtrip(e_wrapped) == e_wrapped
+            e_wrapped = e_w(st_w(e))
+            @test roundtrip(e_wrapped) == e_wrapped
+        end
+    end
 
-        @test roundtrip_eq(QuoteNode(QuoteNode(LineNumberNode(1))))
-        @test roundtrip_eq(QuoteNode(QuoteNode(:foo)))
-        @test roundtrip_eq(QuoteNode(QuoteNode(Expr(:foo, 1))))
-        @test roundtrip_eq(QuoteNode(QuoteNode(GlobalRef(Core, :nothing))))
-        @test roundtrip_eq(QuoteNode(QuoteNode(nothing)))
+    @testset "special cases: Value implicitly quotes AST nodes" begin
+        @test JL.est_to_expr(@ast_ :foo::K"Value") ==
+            JL.est_to_expr(@ast_ [K"inert" "foo"::K"Identifier"]) ==
+            QuoteNode(:foo)
+        @test JL.est_to_expr(@ast_ Expr(:call, 1)::K"Value") ==
+            JL.est_to_expr(@ast_ [K"inert" [K"call" 1::K"Value"]]) ==
+            QuoteNode(Expr(:call, 1))
+        @test JL.est_to_expr(@ast_ QuoteNode(Expr(:call, 1))::K"Value") ==
+            JL.est_to_expr(@ast_ [K"inert" [K"inert" [K"call" 1::K"Value"]]]) ==
+            QuoteNode(QuoteNode(Expr(:call, 1)))
     end
 
     # copied from JuliaSyntax/test/parse_packages.jl
@@ -720,8 +748,10 @@ end
                     zip(e1.args, e2.args))
     end
 
-    jl_dir = joinpath(@__DIR__, "..")
-    test_each_in_path(roundtrip, jl_dir)
+    @testset "bulk parsed code, no linenodes" begin
+        jl_dir = joinpath(@__DIR__, "..")
+        test_each_in_path(roundtrip, jl_dir)
+    end
 
     @testset "linenodes equal (modules and functions have extra)" begin
         e = JuliaSyntax.parseall(Expr, """

@@ -650,6 +650,12 @@ function _get_inner_lnn(e::Expr, default::LineNumberNode)
     return b.args[1]
 end
 
+# List of Expr-AST forms that are always converted to some SyntaxTree form and
+# never inserted as an opaque `K"Value"`. Note no LineNumberNode, which appears
+# unwrapped in a macrocall (possibly generated functions too, TODO check)
+isa_lowering_ast_node(@nospecialize(e)) =
+    e isa Symbol || e isa QuoteNode || e isa Expr # || e isa GlobalRef
+
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     st = if e === Core.nothing
         # e.value can't be nothing in `K"Value"`, so represent with K"core"
@@ -658,7 +664,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         setattr!(makeleaf(graph, src, K"Identifier"), :name_val, String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
-        makenode(graph, src, K"inert_expr", NodeId[cid])
+        makenode(graph, src, K"inert", NodeId[cid])
     elseif e isa Expr && e.head === :scope_layer
         @assert length(e.args) === 2 && e.args[1] isa Symbol
         ident = makeleaf(graph, src, K"Identifier")
@@ -686,8 +692,10 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     # elseif e isa GlobalRef
         # TODO: Better-behaved as K"globalref", but lowering doesn't know this
     else
+        @assert !isa_lowering_ast_node(e)
         # We may want additional special cases for other types where
-        # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most
+        # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
+        # most are produced in or after lowering
         if e isa LineNumberNode
             # linenode oustside of block or toplevel
             src = e
@@ -704,10 +712,17 @@ function est_to_expr(st::SyntaxTree)
         n = Symbol(st.name_val)
         hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
     elseif k === K"Value"
-        st.value
+        v = st.value
+        # Let `kind(st) === K"Value"` with `st.value isa Symbol` (or other AST
+        # node).  Since we enforce that this is never produced by the reverse
+        # Expr->SyntaxTree transformation, there is no lonely Expr for which
+        # `st` is the only SyntaxTree representation.  This means we can pick
+        # some other expr this represents, namely Expr(`(inert ,st.value))
+        # rather than Expr(st.value).
+        isa_lowering_ast_node(v) ? QuoteNode(v) : v
     elseif k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
         nothing
-    elseif k === K"inert_expr"
+    elseif k === K"inert"
         QuoteNode(est_to_expr(st[1]))
     else
         @assert !is_leaf(st)
