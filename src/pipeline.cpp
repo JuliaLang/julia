@@ -568,6 +568,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
         {
             FunctionPassManager FPM;
+            JULIA_PASS(FPM.addPass(CancellationLoweringPass())); // Lower cancellation points to setjmp (before GC lowering)
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
             JULIA_PASS(FPM.addPass(FinalLowerGCPass()));
             JULIA_PASS(FPM.addPass(ExpandAtomicModifyPass())); // after LateLowerGCPass so that all IPO is valid

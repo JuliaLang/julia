@@ -69,6 +69,8 @@ struct GenericCondition{L<:AbstractLock}
     GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
 end
 
+waitqueue(c::GenericCondition) = ILLRef(c.waitq, c)
+
 show(io::IO, c::GenericCondition) = print(io, GenericCondition, "(", c.lock, ")")
 
 assert_havelock(c::GenericCondition) = assert_havelock(c.lock)
@@ -80,13 +82,13 @@ islocked(c::GenericCondition) = islocked(c.lock)
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
 # have waiter wait for c
-function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
+function _wait2(c::GenericCondition, waiter::Task, waitee=c, first::Bool=false)
     ct = current_task()
     assert_havelock(c)
     if first
-        pushfirst!(c.waitq, waiter)
+        pushfirst!(ILLRef(waitqueue(c), waitee), waiter)
     else
-        push!(c.waitq, waiter)
+        push!(ILLRef(waitqueue(c), waitee), waiter)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
@@ -125,6 +127,13 @@ proceeding.
 """
 function wait end
 
+macro cancel_check()
+    quote
+        local req = Core.cancellation_point!()
+        req !== nothing && handle_cancellation!(req)
+    end
+end
+
 """
     wait(c::GenericCondition; first::Bool=false)
 
@@ -133,18 +142,57 @@ Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notif
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
 """
-function wait(c::GenericCondition; first::Bool=false)
+function wait(c::GenericCondition; first::Bool=false, waitee=c, expected_cancellation=nothing)
     ct = current_task()
-    _wait2(c, ct, first)
-    token = unlockall(c.lock)
-    try
-        return wait()
-    catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
-        rethrow()
-    finally
-        relockall(c.lock, token)
+    _wait2(c, ct, waitee, first)
+
+    cr = pre_sleep_cancellation_request()
+    if cr !== expected_cancellation
+        Base.list_deletefirst!(waitqueue(c), ct)
+        return invokelatest(cancel_wait!, waitee, cr)
     end
+    token = unlockall(c.lock)
+
+    ret = try
+        wait()
+    catch
+        relockall(c.lock, token)
+        # This cleans up our entry in the waitqueue if we were resumes from an
+        # unexpected `throwto`. Modern code should generally avoid this pattern.
+        q = ct.queue; q === waitee && Base.list_deletefirst!(waitqueue(c), ct)
+        rethrow()
+    end
+
+    relockall(c.lock, token)
+    return ret
+end
+
+function cancel_wait!(c::GenericCondition, creq; waitee = c)
+    throw(creq)
+end
+
+function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(creq); waitee = c)
+    lock(c)
+    if t.queue !== waitee
+        unlock(c)
+        return false
+    end
+    Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
+    schedule(t, conform_cancellation_request(creq), error=true)
+    unlock(c)
+    return true
+end
+
+function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(creq), @nospecialize(val); waitee=c)
+    lock(c)
+    if t.queue !== waitee
+        unlock(c)
+        return false
+    end
+    Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
+    schedule(t, val)
+    unlock(c)
+    return true
 end
 
 """
@@ -160,8 +208,8 @@ Return the count of tasks woken up. Return 0 if no tasks are waiting on `conditi
 function notify(c::GenericCondition, @nospecialize(arg), all, error)
     assert_havelock(c)
     cnt = 0
-    while !isempty(c.waitq)
-        t = popfirst!(c.waitq)
+    while !isempty(waitqueue(c))
+        t = popfirst!(waitqueue(c))
         schedule(t, arg, error=error)
         cnt += 1
         all || break
