@@ -117,7 +117,7 @@ $(BUILDDIR)/host/Makefile:
 	@printf "%s\n" 'include $(SRCDIR)/Makefile' >> $@
 
 $(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile | ${BUILDDIR}/host/flisp.boot
-	$(MAKE) -C $(BUILDDIR)/host $(EXENAME)
+	make -C $(BUILDDIR)/host $(EXENAME)
 
 
 $(BUILDDIR)/host/flisp.boot: $(SRCDIR)/flisp.boot | $(BUILDDIR)/host/Makefile
