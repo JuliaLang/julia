@@ -2403,13 +2403,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             }
             else if (how == 1) {
                 if (update_meta || foreign_alloc) {
-                size_t nb = jl_genericmemory_nbytes(m);
-                gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, nb, 0);
-                if (bits == GC_OLD_MARKED) {
-                    ptls->gc_tls.gc_cache.perm_scanned_bytes += nb;
-                }
-                else {
-                    ptls->gc_tls.gc_cache.scanned_bytes += nb;
+                    size_t nb = jl_genericmemory_nbytes(m);
+                    gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, nb, 0);
+                    if (bits == GC_OLD_MARKED) {
+                        ptls->gc_tls.gc_cache.perm_scanned_bytes += nb;
+                    }
+                    else {
+                        ptls->gc_tls.gc_cache.scanned_bytes += nb;
                     }
                 }
             }
