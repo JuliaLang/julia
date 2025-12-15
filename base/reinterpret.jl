@@ -88,41 +88,41 @@ end
 
 Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_regions)
     @assert !isempty(SRC_regions) && !isempty(DST_regions)
-    # Rough guess for the sizehint
     out_regions = sizehint!(Tuple{Int,Int,Int}[],
         max(length(SRC_regions), length(DST_regions)))
-    src_index, dst_index = 1, 1
-    (src_offset, src_size) = @inbounds SRC_regions[1]
-    (dst_offset, dst_size) = @inbounds DST_regions[1]
-    while src_index <= length(SRC_regions) && dst_index <= length(DST_regions)
-        bytes_to_copy = min(src_size, dst_size)
-        push!(out_regions, (src_offset, dst_offset, bytes_to_copy))
-        if src_size == dst_size
-            src_index += 1
-            dst_index += 1
-            if src_index > length(SRC_regions) || dst_index > length(DST_regions)
-                break
+
+    src_idx, dst_idx = 1, 1
+    src_off, src_rem = @inbounds SRC_regions[src_idx]
+    dst_off, dst_rem = @inbounds DST_regions[dst_idx]
+
+    while src_idx <= length(SRC_regions) && dst_idx <= length(DST_regions)
+        # Copy the minimum of what's remaining in current src and dst regions
+        n = min(src_rem, dst_rem)
+        push!(out_regions, (src_off, dst_off, n))
+
+        # Advance offsets and reduce remaining bytes
+        src_off += n
+        dst_off += n
+        src_rem -= n
+        dst_rem -= n
+
+        # Move to next source region if current one is exhausted
+        if src_rem == 0
+            src_idx += 1
+            if src_idx <= length(SRC_regions)
+                src_off, src_rem = @inbounds SRC_regions[src_idx]
             end
-            (src_offset, src_size) = @inbounds SRC_regions[src_index]
-            (dst_offset, dst_size) = @inbounds DST_regions[dst_index]
-        elseif bytes_to_copy == src_size
-            src_index += 1
-            if src_index > length(SRC_regions)
-                break
+        end
+
+        # Move to next destination region if current one is exhausted
+        if dst_rem == 0
+            dst_idx += 1
+            if dst_idx <= length(DST_regions)
+                dst_off, dst_rem = @inbounds DST_regions[dst_idx]
             end
-            (src_offset, src_size) = @inbounds SRC_regions[src_index]
-            dst_offset += bytes_to_copy
-            dst_size -= bytes_to_copy
-        else
-            dst_index += 1
-            if dst_index > length(DST_regions)
-                break
-            end
-            (dst_offset, dst_size) = @inbounds DST_regions[dst_index]
-            src_offset += bytes_to_copy
-            src_size -= bytes_to_copy
         end
     end
+
     return Tuple(out_regions)
 end
 
@@ -283,7 +283,7 @@ function run_exp(N, rtf)
         @show $T1
         @show $T2
         const $v = $(make_v(N))
-        @btime $rtf($T2, x) setup=(x = $v)
+        @btimed($rtf($T2, x), setup=(x = $v)).time
     end
 end
 exp_brt(N) = run_exp(N, reinterpret)
