@@ -3339,7 +3339,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     // For this we use the overallocation function to see what a reasonable rate of growth is,
     // or if there is too much memory that has not seen a full GC after being promoted to old.
     double old_ratio = (double)promoted_bytes/(double)heap_size;
-    double last_full_gc_heap_ratio = (double)heap_size/(double)overallocation(heap_size_after_last_full_gc, 0, UINT64_MAX);
+    double expected_heap_size = overallocation(heap_size_after_last_full_gc, 0, UINT64_MAX) + heap_size_after_last_full_gc;
+    double last_full_gc_heap_ratio = (double)heap_size/expected_heap_size;
     if (heap_size > user_max) {
         next_sweep_full = 1;
         gc_record_full_sweep_reason(FULL_SWEEP_REASON_USER_MAX_EXCEEDED);
