@@ -30,12 +30,7 @@ end
     elseif Base.ispacked(typeof(x))
         return fast_reinterpret_packed_src(T, x)
     else
-        # Our fast_reinterpret currently doesn't handle padded => padded reinterpret.
-        # This is still slow.
-        @assert Base.ispacked(T) && Base.ispacked(typeof(x)) """
-            Padded => Padded is not currently supported in fast_reinterpret.
-              Unexpected types: `!(ispacked($(T)) && ispacked($(typeof(x))))`"""
-        return reinterpret(T, x)
+        return fast_reinterpret_padded_src_to_dst(T, x)
     end
 end
 
@@ -92,7 +87,7 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) 
 end
 
 
-function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
+@inline function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
     SRC_regions = packed_regions(SRC)
     DST_regions = packed_regions(DST)
 
@@ -108,59 +103,47 @@ function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC
             src_ptr,
             SRC_regions,
             DST_regions,
-            Val(1), Val(0),
-            Val(1), Val(0),
         )
     end
     return dest_ref[]
 end
+@inline _fast_reinterpret_padded_src_to_dst(::Ptr, ::Ptr, ::Tuple{}, ::Tuple{}) = nothing
 @inline function _fast_reinterpret_padded_src_to_dst(
     dst_ptr::Ptr,
     src_ptr::Ptr,
     SRC_regions::Tuple,
     DST_regions::Tuple,
-    ::Val{src_region_idx}, ::Val{src_region_offset},
-    ::Val{dst_region_idx}, ::Val{dst_region_offset},
-)::Nothing where {src_region_idx, src_region_offset, dst_region_idx, dst_region_offset}
-    if src_region_idx > length(SRC_regions) || dst_region_idx > length(DST_regions)
-        return nothing
-    end
-    (src_offset, src_size) = @inbounds SRC_regions[src_region_idx]
-    (dst_offset, dst_size) = @inbounds DST_regions[dst_region_idx]
-    src_remaining = src_size - src_region_offset
-    dst_remaining = dst_size - dst_region_offset
-    bytes_to_copy = min(src_remaining, dst_remaining)
+)::Nothing
+    (src_offset, src_size) = @inbounds Base.first(SRC_regions)
+    (dst_offset, dst_size) = @inbounds Base.first(DST_regions)
+    SRC_regions_tail = Base.tail(SRC_regions)
+    DST_regions_tail = Base.tail(DST_regions)
+    bytes_to_copy = min(src_size, dst_size)
     unsafe_copyto!(
-        dst_ptr + dst_offset + dst_region_offset,
-        src_ptr + src_offset + src_region_offset,
+        dst_ptr + dst_offset,
+        src_ptr + src_offset,
         bytes_to_copy,
     )
-    if src_remaining == dst_remaining
+    if src_size == dst_size
         return _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            SRC_regions,
-            DST_regions,
-            Val(src_region_idx + 1), Val(0),
-            Val(dst_region_idx + 1), Val(0),
+            SRC_regions_tail,
+            DST_regions_tail,
         )
-    elseif bytes_to_copy >= src_remaining
+    elseif bytes_to_copy >= src_size
         return _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            SRC_regions,
-            DST_regions,
-            Val(src_region_idx + 1), Val(0),
-            Val(dst_region_idx), Val(dst_region_offset + bytes_to_copy),
+            SRC_regions_tail,
+            ((dst_offset + bytes_to_copy, dst_size - bytes_to_copy), DST_regions_tail...,),
         )
     else
         return _fast_reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
-            SRC_regions,
-            DST_regions,
-            Val(src_region_idx), Val(src_region_offset + bytes_to_copy),
-            Val(dst_region_idx + 1), Val(0),
+            ((src_offset + bytes_to_copy, src_size - bytes_to_copy), SRC_regions_tail...,),
+            DST_regions_tail,
         )
     end
     return nothing
