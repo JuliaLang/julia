@@ -57,7 +57,7 @@ Base.@assume_effects :foldable function packed_regions(::Type{T}) where {T}
     # Merge adjacent regions
     return _compress_packed_regions(field_regions)
 end
-Base.@assume_effects :foldable function _compress_packed_regions(field_regions::Vector{Tuple{Int,Int}})
+Base.@assume_effects :foldable function _compress_packed_regions(field_regions)
     merged_regions = Tuple{Int,Int}[]
     for region in field_regions
         if !isempty(merged_regions)
@@ -70,7 +70,7 @@ Base.@assume_effects :foldable function _compress_packed_regions(field_regions::
         end
         push!(merged_regions, region)
     end
-    return Tuple(merged_regions)
+    return (merged_regions)
 end
 Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) where {T}
     if Base.packedsize(T) == 0
@@ -80,10 +80,41 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) 
         return [(offset, Base.sizeof(T)),]
     end
 
-    return collect(Iterators.flatten(
-        _packed_regions(ft, Int(offset + fieldoffset(T, i)))
-        for (i,ft) in enumerate(fieldtypes(T))
-    ))
+    ### COMPILATION PERFORMANCE OPTIMIZATION:
+    # Depth-first traversal of T to find all packed regions.
+    # This is equivalent to a recursive function, but iteration is *so much faster* in the
+    # compiler.
+    regions = Tuple{Int,Int}[]
+    # Stack contains (type, offset, field_index) tuples
+    stack = [(T, offset, 1)]
+
+    while !isempty(stack)
+        current_type, current_offset, field_idx = pop!(stack)
+
+        if field_idx > fieldcount(current_type)
+            continue
+        end
+
+        # Push next field of current type onto stack (processed later)
+        if field_idx < fieldcount(current_type)
+            push!(stack, (current_type, current_offset, field_idx + 1))
+        end
+
+        # Process current field
+        ft = fieldtype(current_type, field_idx)
+        field_off = current_offset + Int(fieldoffset(current_type, field_idx))
+
+        if Base.packedsize(ft) == 0
+            continue
+        elseif isprimitivetype(ft) || fieldcount(ft) == 0
+            push!(regions, (field_off, Base.sizeof(ft)))
+        else
+            # Push first field of nested type onto stack (processed next)
+            push!(stack, (ft, field_off, 1))
+        end
+    end
+
+    return regions
 end
 
 Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_regions)
