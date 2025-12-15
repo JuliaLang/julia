@@ -54,6 +54,127 @@ end
     end
 end
 
+
+# Recursively compute the packed regions of each field of T, and then for T itself,
+# combine them into a list of (offset, size) tuples.
+Base.@assume_effects :foldable function packed_regions(::Type{T}) where {T}
+    field_regions = _packed_regions(T, 0)
+    # Merge adjacent regions
+    return _compress_packed_regions(field_regions)
+end
+Base.@assume_effects :foldable function _compress_packed_regions(field_regions::Vector{Tuple{Int,Int}})
+    merged_regions = Tuple{Int,Int}[]
+    for region in field_regions
+        if !isempty(merged_regions)
+            last_region = merged_regions[end]
+            if last_region[1] + last_region[2] == region[1]
+                # Merge with last region
+                merged_regions[end] = (last_region[1], last_region[2] + region[2])
+                continue
+            end
+        end
+        push!(merged_regions, region)
+    end
+    return Tuple(merged_regions)
+end
+Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) where {T}
+    if Base.packedsize(T) == 0
+        return []
+    end
+    if isprimitivetype(T) || fieldcount(T) == 0
+        return [(offset, Base.sizeof(T)),]
+    end
+
+    return collect(Iterators.flatten(
+        _packed_regions(ft, Int(offset + fieldoffset(T, i)))
+        for (i,ft) in enumerate(fieldtypes(T))
+    ))
+end
+
+
+function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
+    SRC_regions = packed_regions(SRC)
+    DST_regions = packed_regions(DST)
+
+    src_ref = Ref{SRC}(x)
+    dest_ref = Ref{DST}()
+    GC.@preserve src_ref dest_ref begin
+        # Cast to "bytes pointers" since all our operations are in bytes
+        src_ptr = reinterpret(Ptr{UInt8}, pointer_from_objref(src_ref))
+        dst_ptr = reinterpret(Ptr{UInt8}, pointer_from_objref(dest_ref))
+
+        _fast_reinterpret_padded_src_to_dst(
+            dst_ptr,
+            src_ptr,
+            SRC_regions,
+            DST_regions,
+            Val(1), Val(0),
+            Val(1), Val(0),
+        )
+    end
+    return dest_ref[]
+end
+@inline function _fast_reinterpret_padded_src_to_dst(
+    dst_ptr::Ptr,
+    src_ptr::Ptr,
+    SRC_regions::Tuple,
+    DST_regions::Tuple,
+    ::Val{src_region_idx}, ::Val{src_region_offset},
+    ::Val{dst_region_idx}, ::Val{dst_region_offset},
+)::Nothing where {src_region_idx, src_region_offset, dst_region_idx, dst_region_offset}
+    if src_region_idx > length(SRC_regions) || dst_region_idx > length(DST_regions)
+        return nothing
+    end
+    (src_offset, src_size) = @inbounds SRC_regions[src_region_idx]
+    (dst_offset, dst_size) = @inbounds DST_regions[dst_region_idx]
+    src_remaining = src_size - src_region_offset
+    dst_remaining = dst_size - dst_region_offset
+    bytes_to_copy = min(src_remaining, dst_remaining)
+    unsafe_copyto!(
+        dst_ptr + dst_offset + dst_region_offset,
+        src_ptr + src_offset + src_region_offset,
+        bytes_to_copy,
+    )
+    if src_remaining == dst_remaining
+        return _fast_reinterpret_padded_src_to_dst(
+            dst_ptr,
+            src_ptr,
+            SRC_regions,
+            DST_regions,
+            Val(src_region_idx + 1), Val(0),
+            Val(dst_region_idx + 1), Val(0),
+        )
+    elseif bytes_to_copy >= src_remaining
+        return _fast_reinterpret_padded_src_to_dst(
+            dst_ptr,
+            src_ptr,
+            SRC_regions,
+            DST_regions,
+            Val(src_region_idx + 1), Val(0),
+            Val(dst_region_idx), Val(dst_region_offset + bytes_to_copy),
+        )
+    else
+        return _fast_reinterpret_padded_src_to_dst(
+            dst_ptr,
+            src_ptr,
+            SRC_regions,
+            DST_regions,
+            Val(src_region_idx), Val(src_region_offset + bytes_to_copy),
+            Val(dst_region_idx + 1), Val(0),
+        )
+    end
+    return nothing
+end
+
+
+
+
+
+
+
+
+
+
 @inline function fast_reinterpret_packed_dest(::Type{DEST}, value::T) where {DEST, T}
     dest = Ref{DEST}()
     GC.@preserve dest begin
