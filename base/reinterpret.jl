@@ -39,7 +39,6 @@ end
 # For now, we'll use this instead as a faster reinterpret.
 # REQUIRES `T` and `V` to be the same size and have no padding.
 @inline function byte_cast(::Type{T}, x::V) where {T,V}
-    @assert Base.packedsize(V) == sizeof(x) == sizeof(T)
     r = Ref{T}()
     @assert sizeof(T) == sizeof(V)
     GC.@preserve r begin
@@ -53,24 +52,24 @@ end
 # Recursively compute the packed regions of each field of T, and then for T itself,
 # combine them into a list of (offset, size) tuples.
 Base.@assume_effects :foldable function packed_regions(::Type{T}) where {T}
-    field_regions = _packed_regions(T, 0)
+    field_regions = Base.padding(T)
     # Merge adjacent regions
     return _compress_packed_regions(field_regions)
 end
 Base.@assume_effects :foldable function _compress_packed_regions(field_regions)
-    merged_regions = Tuple{Int,Int}[]
+    merged_regions = Base.Padding[]
     for region in field_regions
         if !isempty(merged_regions)
             last_region = merged_regions[end]
-            if last_region[1] + last_region[2] == region[1]
+            if last_region.offset + last_region.size == region.offset
                 # Merge with last region
-                merged_regions[end] = (last_region[1], last_region[2] + region[2])
+                merged_regions[end] = (last_region.offset, last_region.size + region.size)
                 continue
             end
         end
         push!(merged_regions, region)
     end
-    return (merged_regions)
+    return Core.svec(merged_regions...)
 end
 Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) where {T}
     if Base.packedsize(T) == 0
@@ -123,10 +122,12 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
         max(length(SRC_regions), length(DST_regions)))
 
     src_idx, dst_idx = 1, 1
-    src_off, src_rem = @inbounds SRC_regions[src_idx]
-    dst_off, dst_rem = @inbounds DST_regions[dst_idx]
+    src_padding = @inbounds SRC_regions[src_idx]
+    dst_padding = @inbounds DST_regions[dst_idx]
 
     while src_idx <= length(SRC_regions) && dst_idx <= length(DST_regions)
+        src_off, src_rem = src_padding.offset, src_padding.size
+        dst_off, dst_rem = dst_padding.offset, dst_padding.size
         # Copy the minimum of what's remaining in current src and dst regions
         n = min(src_rem, dst_rem)
         push!(out_regions, (src_off, dst_off, n))
@@ -141,7 +142,7 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
         if src_rem == 0
             src_idx += 1
             if src_idx <= length(SRC_regions)
-                src_off, src_rem = @inbounds SRC_regions[src_idx]
+                src_padding = @inbounds SRC_regions[src_idx]
             end
         end
 
@@ -149,7 +150,7 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
         if dst_rem == 0
             dst_idx += 1
             if dst_idx <= length(DST_regions)
-                dst_off, dst_rem = @inbounds DST_regions[dst_idx]
+                dst_padding = @inbounds DST_regions[dst_idx]
             end
         end
     end
@@ -160,6 +161,7 @@ end
 @inline function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
     SRC_regions = packed_regions(SRC)
     DST_regions = packed_regions(DST)
+
     offsets_to_copy = match_packed_regions(SRC_regions, DST_regions)
     # @show offsets_to_copy
 
