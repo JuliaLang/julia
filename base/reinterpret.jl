@@ -1,9 +1,9 @@
-# Used in fast_reinterpret below for size-0 structs
+# Used in _reinterpret below for size-0 structs
 macro _new(T)
     return Expr(:new, esc(T))
 end
 
-@inline function fast_reinterpret(::Type{T}, x) where {T}
+@inline function _reinterpret(::Type{T}, x) where {T}
     @assert isconcretetype(T) && isbitstype(T) && isbitstype(typeof(x))
     x isa T && return x
     if Base.packedsize(T) != Base.packedsize(typeof(x))
@@ -17,7 +17,7 @@ end
     elseif Base.packedsize(typeof(x)) == sizeof(x) && sizeof(T) == sizeof(x)
         return byte_cast(T, x)
     else
-        return fast_reinterpret_padded_src_to_dst(T, x)
+        return _reinterpret_padded_src_to_dst(T, x)
     end
 end
 
@@ -77,6 +77,7 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::I
     while !isempty(stack)
         current_type, current_offset = pop!(stack)
 
+        # TODO: This is out of order, so we're not going to merge correctly.
         for i = 1:fieldcount(current_type)
             offset = current_offset + Int(fieldoffset(current_type, i))
             fT = fieldtype(current_type, i)::Type
@@ -139,7 +140,7 @@ Base.@assume_effects :foldable function packing_equal(SRC_regions, DST_regions)
     return SRC_regions == DST_regions
 end
 
-@inline function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
+@inline function _reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
     SRC_regions = packed_regions(SRC)
     DST_regions = packed_regions(DST)
 
@@ -161,7 +162,7 @@ end
         src_ptr = reinterpret(Ptr{UInt8}, pointer_from_objref(src_ref))
         dst_ptr = reinterpret(Ptr{UInt8}, pointer_from_objref(dest_ref))
 
-        _fast_reinterpret_padded_src_to_dst(
+        _reinterpret_padded_src_to_dst(
             dst_ptr,
             src_ptr,
             offsets_to_copy,
@@ -169,8 +170,8 @@ end
     end
     return dest_ref[]
 end
-@inline _fast_reinterpret_padded_src_to_dst(::Ptr, ::Ptr, ::Tuple{}) = nothing
-@inline function _fast_reinterpret_padded_src_to_dst(
+@inline _reinterpret_padded_src_to_dst(::Ptr, ::Ptr, ::Tuple{}) = nothing
+@inline function _reinterpret_padded_src_to_dst(
     dst_ptr::Ptr,
     src_ptr::Ptr,
     offsets_to_copy::Tuple,
@@ -181,7 +182,7 @@ end
         src_ptr + src_offset,
         bytes_to_copy,
     )
-    return _fast_reinterpret_padded_src_to_dst(
+    return _reinterpret_padded_src_to_dst(
         dst_ptr,
         src_ptr,
         Base.tail(offsets_to_copy),
