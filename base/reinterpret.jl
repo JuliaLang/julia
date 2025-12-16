@@ -48,22 +48,26 @@ end
     end
 end
 
+struct PackedRegion
+    offset::Int
+    size::Int
+end
 
 # Recursively compute the packed regions of each field of T, and then for T itself,
 # combine them into a list of (offset, size) tuples.
 Base.@assume_effects :foldable function packed_regions(::Type{T}) where {T}
-    field_regions = Base.padding(T)
+    field_regions = _packed_regions(T, 0)
     # Merge adjacent regions
     return _compress_packed_regions(field_regions)
 end
 Base.@assume_effects :foldable function _compress_packed_regions(field_regions)
-    merged_regions = Base.Padding[]
+    merged_regions = PackedRegion[]
     for region in field_regions
         if !isempty(merged_regions)
             last_region = merged_regions[end]
             if last_region.offset + last_region.size == region.offset
                 # Merge with last region
-                merged_regions[end] = (last_region.offset, last_region.size + region.size)
+                merged_regions[end] = PackedRegion(last_region.offset, last_region.size + region.size)
                 continue
             end
         end
@@ -71,49 +75,25 @@ Base.@assume_effects :foldable function _compress_packed_regions(field_regions)
     end
     return Core.svec(merged_regions...)
 end
-Base.@assume_effects :foldable function _packed_regions(::Type{T}, offset::Int) where {T}
+Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::Int) where {T}
     if Base.packedsize(T) == 0
-        return []
+        return PackedRegion[]
     end
     if isprimitivetype(T) || fieldcount(T) == 0
-        return [(offset, Base.sizeof(T)),]
+        return [PackedRegion(baseoffset, Base.sizeof(T))]
     end
 
-    ### COMPILATION PERFORMANCE OPTIMIZATION:
-    # Depth-first traversal of T to find all packed regions.
-    # This is equivalent to a recursive function, but iteration is *so much faster* in the
-    # compiler.
-    regions = Tuple{Int,Int}[]
-    # Stack contains (type, offset, field_index) tuples
-    stack = [(T, offset, 1)]
-
-    while !isempty(stack)
-        current_type, current_offset, field_idx = pop!(stack)
-
-        if field_idx > fieldcount(current_type)
-            continue
-        end
-
-        # Push next field of current type onto stack (processed later)
-        if field_idx < fieldcount(current_type)
-            push!(stack, (current_type, current_offset, field_idx + 1))
-        end
-
-        # Process current field
-        ft = fieldtype(current_type, field_idx)
-        field_off = current_offset + Int(fieldoffset(current_type, field_idx))
-
-        if Base.packedsize(ft) == 0
-            continue
-        elseif isprimitivetype(ft) || fieldcount(ft) == 0
-            push!(regions, (field_off, Base.sizeof(ft)))
+    regions = PackedRegion[]
+    for i = 1:fieldcount(T)
+        offset = baseoffset + Int(fieldoffset(T, i))
+        fT = fieldtype(T, i)
+        if isprimitivetype(fT) || fieldcount(fT) == 0
+            push!(regions, PackedRegion(offset, Base.sizeof(fT)))
         else
-            # Push first field of nested type onto stack (processed next)
-            push!(stack, (ft, field_off, 1))
+            append!(regions, _packed_regions(fT, offset))
         end
     end
-
-    return regions
+    return Core.svec(regions...)
 end
 
 Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_regions)
@@ -124,10 +104,10 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
     src_idx, dst_idx = 1, 1
     src_padding = @inbounds SRC_regions[src_idx]
     dst_padding = @inbounds DST_regions[dst_idx]
+    src_off, src_rem = src_padding.offset, src_padding.size
+    dst_off, dst_rem = dst_padding.offset, dst_padding.size
 
     while src_idx <= length(SRC_regions) && dst_idx <= length(DST_regions)
-        src_off, src_rem = src_padding.offset, src_padding.size
-        dst_off, dst_rem = dst_padding.offset, dst_padding.size
         # Copy the minimum of what's remaining in current src and dst regions
         n = min(src_rem, dst_rem)
         push!(out_regions, (src_off, dst_off, n))
@@ -143,6 +123,7 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
             src_idx += 1
             if src_idx <= length(SRC_regions)
                 src_padding = @inbounds SRC_regions[src_idx]
+                src_off, src_rem = src_padding.offset, src_padding.size
             end
         end
 
@@ -151,6 +132,7 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
             dst_idx += 1
             if dst_idx <= length(DST_regions)
                 dst_padding = @inbounds DST_regions[dst_idx]
+                dst_off, dst_rem = dst_padding.offset, dst_padding.size
             end
         end
     end
