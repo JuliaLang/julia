@@ -740,7 +740,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     rethrow()
                 end
             end
-            ast = Base.parse_input_line(line; mod=Base.active_module(repl))
+            ast = parse_repl_input_line(line, repl)
             (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
@@ -1121,8 +1121,17 @@ function history_reset_state(hist::REPLHistoryProvider)
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
+function parse_repl_input_line(line::String, repl; kwargs...)
+    # N.B.: This re-latches the syntax version for `Main`. If `Base.active_module` is not `Main`,
+    # then this does not affect the parser used for that module. We could probably skip this step
+    # in that case, but let's just be consistent on the off chance that the active module tries
+    # to `include(Main, ...)` or similar.
+    @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
+        mod=Base.active_module(repl), kwargs...)
+end
+
 function return_callback(s)
-    ast = Base.parse_input_line(takestring!(copy(LineEdit.buffer(s))); mod=Base.active_module(s), depwarn=false)
+    ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
     return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 
@@ -1376,7 +1385,7 @@ function setup_interface(
     help_mode.hist = hp
     dummy_pkg_mode.hist = hp
 
-    julia_prompt.on_done = respond(x->Base.parse_input_line(x; filename=repl_filename(repl,hp), mod=Base.active_module(repl)), repl, julia_prompt)
+    julia_prompt.on_done = respond(x->parse_repl_input_line(x, repl; filename=repl_filename(repl,hp)), repl, julia_prompt)
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
@@ -1800,7 +1809,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         end
         line = readline(repl.stream, keep=true)
         if !isempty(line)
-            ast = Base.parse_input_line(line; mod=Base.active_module(repl))
+            ast = parse_repl_input_line(line, repl)
             if have_color
                 print(repl.stream, Base.color_normal)
             end

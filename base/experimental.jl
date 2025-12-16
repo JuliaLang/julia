@@ -746,20 +746,6 @@ macro reexport(ex)
     return esc(calls)
 end
 
-struct VersionedParse
-    ver::VersionNumber
-end
-
-function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    if !isdefined(Base, :JuliaSyntax)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
-    end
-    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
-end
-
 struct VersionedLower
     ver::VersionNumber
 end
@@ -776,7 +762,7 @@ function (vp::VersionedLower)(@nospecialize(code), mod::Module,
 end
 
 function Base.set_syntax_version(m::Module, ver::VersionNumber)
-    parser = VersionedParse(ver)
+    parser = Base.VersionedParse(ver)
     Core.declare_const(m, :_internal_julia_parse, parser)
     #lowerer = VersionedLower(ver)
     #Core.declare_const(m, :_internal_julia_lower, lowerer)

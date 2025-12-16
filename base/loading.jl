@@ -988,6 +988,33 @@ function workspace_manifest(project_file)
     return nothing
 end
 
+struct VersionedParse
+    ver::VersionNumber
+end
+
+function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    if !isdefined(Base, :JuliaSyntax)
+        if vp.ver === VERSION
+            return Core._parse
+        end
+        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
+    end
+    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+end
+
+function parser_for_active_project()
+    project = active_project()
+    sv = VERSION
+    if project !== nothing && isfile(project)
+        try
+            sv = project_get_syntax_version(parsed_toml(project))
+        catch e
+            @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
+        end
+    end
+    VersionedParse(sv)
+end
+
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
@@ -2860,7 +2887,6 @@ function __require_prelocked(pkg::PkgId, env)
 
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
-            project = active_project()
             # spawn off a new incremental pre-compile task for recursive `require` calls
             loaded = let spec = spec, reasons = reasons
                 maybe_cachefile_lock(pkg, spec.path) do
@@ -2940,7 +2966,7 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__._internal_julia_parse = Experimental.VersionedParse(spec.julia_syntax_version)
+    __toplevel__._internal_julia_parse = VersionedParse(spec.julia_syntax_version)
     unlock(require_lock)
     try
         include(__toplevel__, path)
@@ -3275,7 +3301,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     # This one changes the parser behavior
-    __toplevel__._internal_julia_parse = Experimental.VersionedParse(syntax_version)
+    __toplevel__._internal_julia_parse = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
     try
