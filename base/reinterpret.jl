@@ -85,16 +85,23 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::I
         return [PackedRegion(baseoffset, Base.sizeof(T))]
     end
 
-    regions = PackedRegion[]
-    for i = 1:fieldcount(T)
-        offset = baseoffset + Int(fieldoffset(T, i))
-        fT = fieldtype(T, i)
-        if isprimitivetype(fT) || fieldcount(fT) == 0
-            push!(regions, PackedRegion(offset, Base.sizeof(fT)))
-        else
-            append!(regions, _packed_regions(fT, offset))
+    regions = sizehint!(PackedRegion[], fieldcount(T)) # Rough guess: at least one per field
+    stack = Tuple{Type, Int}[(T, baseoffset)]
+
+    while !isempty(stack)
+        current_type, current_offset = pop!(stack)
+
+        for i = 1:fieldcount(current_type)
+            offset = current_offset + Int(fieldoffset(current_type, i))
+            fT = fieldtype(current_type, i)::Type
+            if isprimitivetype(fT) || fieldcount(fT) == 0
+                push!(regions, PackedRegion(offset, Base.sizeof(fT)))
+            else
+                push!(stack, (fT, offset))
+            end
         end
     end
+    # TODO: Why is it better to return Core.svec here and below instead of an Array?
     return Core.svec(regions...)
 end
 
