@@ -844,7 +844,8 @@ end
     return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+# PERF: Read the field right off the struct, rather than computing it from scratch
+@assume_effects :foldable ispacked(::Type{T}) where T = !Base.datatype_haspadding(T)
 
 # Reductions with IndexSCartesian2
 
