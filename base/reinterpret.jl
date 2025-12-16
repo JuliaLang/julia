@@ -149,21 +149,24 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
     return Tuple(out_regions)
 end
 
+Base.@assume_effects :foldable function packing_equal(SRC_regions, DST_regions)
+    return SRC_regions == DST_regions
+end
+
 @inline function fast_reinterpret_padded_src_to_dst(::Type{DST}, x::SRC) where {DST, SRC}
+    SRC_regions = packed_regions(SRC)
+    DST_regions = packed_regions(DST)
+
     # OPTIMIZATION: If the packed regions match exactly, we can do a single memcpy.
     # Apparently this is *always* faster, even if the padding ratio is >80%. (I might have
     # expected that at very high padding ratios, it's cheaper to copy only the real bytes,
     # but the number of generated instructions outweighs the savings from skipping padding
     # for very large structs.)
-    if Base.struct_subpadding(SRC, DST)  # Checks for exact match
+    if packing_equal(SRC_regions, DST_regions)
         return byte_cast(DST, x)
     end
 
-    SRC_regions = packed_regions(SRC)
-    DST_regions = packed_regions(DST)
-
     offsets_to_copy = match_packed_regions(SRC_regions, DST_regions)
-    # @show offsets_to_copy
 
     src_ref = Ref{SRC}(x)
     dest_ref = Ref{DST}()
