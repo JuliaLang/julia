@@ -507,7 +507,7 @@ function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
         warn, desc = desc
         severity = warn ? 2 : 1
         no = (counts[severity] += 1)
-        printstyled(io, "Problem #", no, ": "; color=Base.warn_color(), bold=true)     # TODO: should we coalesce any of these stacktraces to minimize spew?
+        printstyled(io, "Error #", no, ": "; color=Base.error_color(), bold=true)     # TODO: should we coalesce any of these stacktraces to minimize spew?
         verify_print_error(io, desc, parents, warn)
     end
 
