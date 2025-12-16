@@ -68,6 +68,7 @@ false
 ```
 """
 function isopen end
+typeof(isopen).name.max_methods = UInt8(1)
 
 """
     close(io::IO)
@@ -85,6 +86,7 @@ closed IO does not cause undefined behaviour.
 See also: [`isopen`](@ref)
 """
 function close end
+typeof(close).name.max_methods = UInt8(1)
 
 """
     closewrite(stream)
@@ -112,6 +114,7 @@ julia> read(io, String)
 ```
 """
 function closewrite end
+typeof(closewrite).name.max_methods = UInt8(1)
 
 """
     flush(io::IO)
@@ -121,6 +124,7 @@ This has a default implementation `flush(::IO) = nothing`, so may be called
 in generic IO code.
 """
 function flush end
+typeof(flush).name.max_methods = UInt8(1)
 
 """
     bytesavailable(io)
@@ -136,6 +140,7 @@ julia> bytesavailable(io)
 ```
 """
 function bytesavailable end
+typeof(bytesavailable).name.max_methods = UInt8(1)
 
 """
     readavailable(stream)
@@ -149,8 +154,11 @@ data has already been buffered. The result is a `Vector{UInt8}`.
     should generally be used instead.
 """
 function readavailable end
+typeof(readavailable).name.max_methods = UInt8(1)
 
 function isexecutable end
+typeof(isexecutable).name.max_methods = UInt8(1)
+
 
 """
     isreadable(io)::Bool
@@ -221,6 +229,7 @@ true
 ```
 """
 function eof end
+typeof(eof).name.max_methods = UInt8(1)
 
 function copy end
 function wait_readnb end
@@ -320,6 +329,7 @@ Base.RefValue{MyStruct}(MyStruct(42.0))
 ```
 """
 function write end
+typeof(write).name.max_methods = UInt8(1)
 
 read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
@@ -532,6 +542,7 @@ read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), conv
 Read binary data from an I/O stream or file, filling in `array`.
 """
 function read! end
+typeof(read!).name.max_methods = UInt8(1)
 
 read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, filename)::String)
 
