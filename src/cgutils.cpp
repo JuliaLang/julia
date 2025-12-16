@@ -869,10 +869,10 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
             jl_error("invalid pointer address space");
         return PointerType::get(ctxt, as);
     }
+
     int nb = jl_datatype_size(bt);
     return Type::getIntNTy(ctxt, nb * 8);
 }
-
 static bool jl_type_hasptr(jl_value_t* typ)
 { // assumes that jl_stored_inline(typ) is true (and therefore that layout is defined)
     return jl_is_datatype(typ) && ((jl_datatype_t*)typ)->layout->npointers > 0;
@@ -919,14 +919,18 @@ static StructType *get_memoryref_type(LLVMContext &ctxt, Type *T_size, const jl_
 
 static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall)
 {
-    // this function converts a Julia Type into the equivalent LLVM struct
-    // use this where C-compatible (unboxed) structs are desired
-    // use julia_type_to_llvm directly when you want to preserve Julia's type semantics
+    // Check for NULL input immediately to prevent Segfaults in jl_is_datatype.
+    if (!jt) {
+        if (isboxed) *isboxed = false;
+        return getVoidTy(ctxt);
+    }
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
-    if (jl_is_primitivetype(jt))
+    if (jl_is_primitivetype(jt)) {
+
         return bitstype_to_llvm(jt, ctxt, llvmcall);
+    }
     jl_datatype_t *jst = (jl_datatype_t*)jt;
     if (jl_is_structtype(jt) && !(jst->layout && jl_is_layout_opaque(jst->layout)) && !jl_is_array_type(jst) && !jl_is_genericmemory_type(jst)) {
         if (jl_is_genericmemoryref_type(jst)) {
@@ -937,20 +941,23 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         }
         bool isTuple = jl_is_tuple_type(jt);
         jl_svec_t *ftypes = jl_get_fieldtypes(jst);
+        JL_GC_PUSH1(&ftypes);
         size_t i, ntypes = jl_svec_len(ftypes);
         if (!jl_struct_try_layout(jst)) {
             assert(0 && "caller should have checked jl_type_mappable_to_c already");
             abort();
         }
-        if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
+        if (ntypes == 0 || jl_datatype_nbits(jst) == 0) {
+            JL_GC_POP();
             return getVoidTy(ctxt);
+        }
         Type *_struct_decl = NULL;
-        if (ctx)
-            jl_temporary_root(*ctx, jt);
         // don't use pre-filled struct_decl for llvmcall (f16, etc. may be different)
         Type *&struct_decl = (ctx && !llvmcall ? ctx->llvmtypes[jst] : _struct_decl);
-        if (struct_decl)
+        if (struct_decl){
+            JL_GC_POP();
             return struct_decl;
+        }
         SmallVector<Type*, 0> latypes(0);
         bool isarray = true;
         bool isvector = true;
@@ -1005,6 +1012,11 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
             else {
                 bool isptr;
                 lty = _julia_struct_to_llvm(ctx, ctxt, ty, &isptr, llvmcall);
+                if (!lty) {
+                     // If we cannot map the type, treat it as ghost (VoidTy) to prevent crashes
+                     // downstream (e.g. type_is_ghost(NULL)).
+                     lty = getVoidTy(ctxt);
+                }
                 assert(lty && !isptr);
             }
             if (lasttype != NULL && lasttype != lty)
@@ -1041,6 +1053,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
 #endif
             struct_decl = StructType::get(ctxt, latypes);
         }
+        JL_GC_POP();
         return struct_decl;
     }
     // TODO: enable this (with tests) to change ccall calling convention for Union:
