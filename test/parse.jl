@@ -3,7 +3,6 @@
 @testset "integer parsing" begin
     @test parse(Int32,"0", base = 36) === Int32(0)
     @test parse(Int32,"1", base = 36) === Int32(1)
-    @test parse(Int32,'8') == 8
     @test parse(Int32,"9", base = 36) === Int32(9)
     @test parse(Int32,"A", base = 36) === Int32(10)
     @test parse(Int32,"a", base = 36) === Int32(10)
@@ -14,9 +13,6 @@
     @test parse(Int32,"Z", base = 36) === Int32(35)
     @test parse(Int32,"z", base = 36) === Int32(35)
 
-    @test parse(Int32,'1',base=2)==1
-    @test parse(Int32,'c',base=58) == 38
-    @test parse(Int32,'d',base=62)==39
     @test parse(Int,"0") == 0
     @test parse(Int,"-0") == 0
     @test parse(Int,"1") == 1
@@ -28,6 +24,10 @@
     @test parse(Int64,"3830974272") == 3830974272
     @test parse(Int64,"-3830974272") == -3830974272
 
+    @test parse(Int32,'1',base=2)==1
+    @test parse(Int32,'c',base=58) == 38
+    @test parse(Int32,'d',base=62)==39
+    @test parse(Int32,'8') == 8
     @test parse(Int,'3') == 3
     @test parse(Int,'3', base = 8) == 3
     @test parse(Int, 'a', base=16) == 10
