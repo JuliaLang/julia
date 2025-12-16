@@ -6,9 +6,11 @@ end
 @inline function fast_reinterpret(::Type{T}, x) where {T}
     @assert isconcretetype(T) && isbitstype(T) && isbitstype(typeof(x))
     x isa T && return x
-    @assert Base.packedsize(T) == Base.packedsize(typeof(x)) """
-        Expected matching packed sizes: `$(Base.packedsize(T)) != $(Base.packedsize(typeof(x)))`
-    """
+    if Base.packedsize(T) != Base.packedsize(typeof(x))
+        throw(ArgumentError("""
+            Expected matching packed sizes: `$(Base.packedsize(T)) != $(Base.packedsize(typeof(x)))`
+        """))
+    end
     # Special-case for zero-sized types, which for some reason don't get compiled away:
     if Base.packedsize(T) == 0
         return @_new(T)
