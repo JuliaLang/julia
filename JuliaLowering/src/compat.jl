@@ -626,3 +626,121 @@ function JuliaSyntax.fixup_Expr_child(::Type{<:SyntaxTree}, head::SyntaxHead,
 end
 
 Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
+
+#-------------------------------------------------------------------------------
+# WIP: Expr<->EST
+
+function expr_to_est(@nospecialize(e), lnn::LineNumberNode=LineNumberNode(0, :none))
+    graph = ensure_attributes!(
+        SyntaxGraph(),
+        kind=Kind, syntax_flags=UInt16,
+        source=SourceAttrType, var_id=Int, value=Any,
+        name_val=String, is_toplevel_thunk=Bool,
+        scope_layer=LayerId, meta=CompileHints,
+        toplevel_pure=Bool)
+    SyntaxTree(graph, _expr_to_est(graph, e, lnn)[1])
+end
+
+function _get_inner_lnn(e::Expr, default::LineNumberNode)
+    e.head in (:function, :macro, :module) || return default
+    length(e.args) >= 2 || return default
+    b = e.args[end]
+    b isa Expr && b.head === :block || return default
+    length(b.args) >= 1 && b.args[1] isa LineNumberNode || return default
+    return b.args[1]
+end
+
+# List of Expr-AST forms that are always converted to some SyntaxTree form and
+# never inserted as an opaque `K"Value"`. Note no LineNumberNode, which appears
+# unwrapped in a macrocall (possibly generated functions too, TODO check)
+isa_lowering_ast_node(@nospecialize(e)) =
+    e isa Symbol || e isa QuoteNode || e isa Expr # || e isa GlobalRef
+
+function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
+    st = if e === Core.nothing
+        # e.value can't be nothing in `K"Value"`, so represent with K"core"
+        setattr!(makeleaf(graph, src, K"core"), :name_val, "nothing")
+    elseif e isa Symbol
+        setattr!(makeleaf(graph, src, K"Identifier"), :name_val, String(e))
+    elseif e isa QuoteNode
+        cid, _ = _expr_to_est(graph, e.value, src)
+        makenode(graph, src, K"inert", NodeId[cid])
+    elseif e isa Expr && e.head === :scope_layer
+        @assert length(e.args) === 2 && e.args[1] isa Symbol
+        ident = makeleaf(graph, src, K"Identifier")
+        setattr!(ident, :name_val, String(e.args[1]))
+        setattr!(ident, :scope_layer, e.args[2])
+    elseif e isa Expr
+        head_s = string(e.head)
+        st_k = find_kind(head_s)
+        old_src = _get_inner_lnn(e, src)
+        cs = NodeId[]
+        rm_linenodes = e.head in (:block, :toplevel)
+        for arg in e.args
+            if rm_linenodes && arg isa LineNumberNode
+                src = arg
+            else
+                cid, src = _expr_to_est(graph, arg, src)
+                push!(cs, cid)
+            end
+        end
+        if isnothing(st_k)
+            setattr!(makenode(graph, src, K"unknown_head", cs), :name_val, head_s)
+        else
+            makenode(graph, old_src, st_k, cs)
+        end
+    # elseif e isa GlobalRef
+        # TODO: Better-behaved as K"globalref", but lowering doesn't know this
+    else
+        @assert !isa_lowering_ast_node(e)
+        # We may want additional special cases for other types where
+        # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
+        # most are produced in or after lowering
+        if e isa LineNumberNode
+            # linenode oustside of block or toplevel
+            src = e
+        end
+        setattr!(makeleaf(graph, src, K"Value"), :value, e)
+    end
+
+    return st._id, src
+end
+
+function est_to_expr(st::SyntaxTree)
+    k = kind(st)
+    return if k === K"Identifier"
+        n = Symbol(st.name_val)
+        hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
+    elseif k === K"Value"
+        v = st.value
+        # Let `kind(st) === K"Value"` with `st.value isa Symbol` (or other AST
+        # node).  Since we enforce that this is never produced by the reverse
+        # Expr->SyntaxTree transformation, there is no lonely Expr for which
+        # `st` is the only SyntaxTree representation.  This means we can pick
+        # some other expr this represents, namely Expr(`(inert ,st.value))
+        # rather than Expr(st.value).
+        isa_lowering_ast_node(v) ? QuoteNode(v) : v
+    elseif k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
+        nothing
+    elseif k === K"inert"
+        QuoteNode(est_to_expr(st[1]))
+    else
+        @assert !is_leaf(st)
+        # In a partially-expanded or quoted AST, there may be heads with no
+        # corresponding kind
+        head = Symbol(k === K"unknown_head" ? st.name_val : untokenize(k))
+        need_lnns = head in (:block, :toplevel)
+        out = Expr(head)
+        for c in children(st)
+            need_lnns && push!(out.args, source_location(LineNumberNode, c))
+            push!(out.args, est_to_expr(c))
+        end
+        # extra linenodes
+        n = length(out.args)
+        if (k === K"module" && 3 <= n <= 4 && kind(st[end]) === K"block") ||
+            (k in KSet"function macro" && n === 2 && kind(st[end]) === K"block")
+            pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
+        end
+        out
+    end
+end
