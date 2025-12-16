@@ -597,8 +597,12 @@ static Value *julia_to_native(
     assert(jl_is_datatype(jlto) && jl_struct_try_layout((jl_datatype_t*)jlto));
 
     jvinfo = typeassert_input(ctx, jvinfo, jlto, jlto_env, argn);
-    if (!byRef)
+    if (!byRef) {
+        if (jvinfo.isghost) {
+            return Constant::getNullValue(to);
+        }
         return emit_unbox(ctx, to, jvinfo);
+    }
 
     // pass the address of an alloca'd thing, not a box
     // since those are immutable.
@@ -919,7 +923,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     jl_svec_t *tt = ((jl_datatype_t *)at)->parameters;
     size_t nargt = jl_svec_len(tt);
     SmallVector<llvm::Type*, 0> argtypes;
-    SmallVector<Value *, 8> argvals(nargt);
+    SmallVector<Value *, 8> argvals; //do not presize argvals, we will push_back only non-void arguments
+    argvals.reserve(nargt);
     for (size_t i = 0; i < nargt; ++i) {
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
@@ -933,9 +938,16 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *argi = args[4 + i];
         jl_cgval_t arg = emit_expr(ctx, argi);
 
-        Value *v = julia_to_native(ctx, t, toboxed, tti, NULL, arg, false, i);
-        bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type);
-        argvals[i] = llvm_type_rewrite(ctx, v, t, issigned);
+        Value *v = julia_to_native(ctx, t, toboxed, tti, NULL, arg, false, i); //1. If Void -> SKIP (do not push to argvals) 2. If empty struct -> push UndefValue 3. Normal case -> push value
+        if (t->isVoidTy()) {
+            continue;
+        }
+        if (v == NULL){
+            argvals.push_back(UndefValue::get(t));
+        } else{
+            bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type);
+            argvals.push_back(llvm_type_rewrite(ctx, v, t, issigned));
+        }
     }
 
     // Determine return type
@@ -963,11 +975,11 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         // stringify arguments
         std::string arguments;
         raw_string_ostream argstream(arguments);
+        int printed_args = 0;
         for (SmallVector<Type *, 0>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
-            if (it != argtypes.begin())
-                argstream << ",";
+            if ((*it)-> isVoidTy()) continue;
+            if (printed_args++ > 0) argstream << ", ";
             (*it)->print(argstream);
-            argstream << " ";
         }
 
         // stringify return type
@@ -991,17 +1003,13 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         if (!Mod) {
             std::string compat_arguments;
             raw_string_ostream compat_argstream(compat_arguments);
+            int printed_args = 0;
             for (size_t i = 0; i < nargt; ++i) {
-                if (i > 0)
-                    compat_argstream << ",";
                 jl_value_t *tti = jl_svecref(tt, i);
-                Type *t;
-                if (jl_is_cpointer_type(tti))
-                    t = ctx.types().T_size;
-                else
-                    t = argtypes[i];
+                Type *t = (jl_is_cpointer_type(tti)) ? ctx.types().T_size : argtypes[i];
+                if (t->isVoidTy()) continue;
+                if (printed_args++ > 0) compat_argstream << ", ";
                 t->print(compat_argstream);
-                compat_argstream << " ";
             }
 
             std::string compat_rstring;
@@ -1084,13 +1092,18 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
     // backwards compatibility: support for IR with integer pointers
     bool mismatched_pointers = false;
+    int arg_idx = 0;
     for (size_t i = 0; i < nargt; ++i) {
         jl_value_t *tti = jl_svecref(tt, i);
+        Type *t = argtypes[i];
+        if (t->isVoidTy())
+            continue;
         if (jl_is_cpointer_type(tti) &&
-            !f->getFunctionType()->getParamType(i)->isPointerTy()) {
+            !f->getFunctionType()->getParamType(arg_idx)->isPointerTy()) {
             mismatched_pointers = true;
             break;
         }
+        arg_idx++;
     }
     if (mismatched_pointers) {
         if (jl_options.depwarn) {
@@ -1118,7 +1131,12 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         Function *inner = f;
         inner->setName(ir_name + ".inner");
 
-        FunctionType *wrapper_ft = FunctionType::get(rettype, argtypes, false);
+        std::vector<Type *> wrapper_argtypes;
+        for (auto t : argtypes) {
+            if (!t->isVoidTy())
+                wrapper_argtypes.push_back(t);
+        }
+        FunctionType *wrapper_ft = FunctionType::get(rettype, wrapper_argtypes, false);
         Function *wrapper =
             Function::Create(wrapper_ft, inner->getLinkage(), ir_name, *Mod);
 
@@ -1128,9 +1146,13 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         BasicBlock *entry = BasicBlock::Create(ctx.builder.getContext(), "", wrapper);
         IRBuilder<> irbuilder(entry);
         SmallVector<Value *, 0> wrapper_args;
+        arg_idx = 0;
         for (size_t i = 0; i < nargt; ++i) {
             jl_value_t *tti = jl_svecref(tt, i);
-            Value *v = wrapper->getArg(i);
+            Type *t = argtypes[i];
+            if (t->isVoidTy())
+                continue;
+            Value *v = wrapper->getArg(arg_idx++);
             if (jl_is_cpointer_type(tti))
                 v = irbuilder.CreatePtrToInt(v, ctx.types().T_size);
             wrapper_args.push_back(v);
@@ -1150,18 +1172,21 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
     // verify the function type
     assert(f->getReturnType() == rettype);
-    int i = 0;
+    arg_idx = 0;
     for (SmallVector<Type *, 0>::iterator it = argtypes.begin(); it != argtypes.end();
-         ++it, ++i) {
-        if (*it != f->getFunctionType()->getParamType(i)) {
+         ++it) {
+        if ((*it)->isVoidTy())
+            continue;
+        if (*it != f->getFunctionType()->getParamType(arg_idx)) {
             std::string message;
             raw_string_ostream stream(message);
-            stream << "Malformed llvmcall: argument " << i + 1 << " type "
-                   << *f->getFunctionType()->getParamType(i)
+            stream << "Malformed llvmcall: argument " << arg_idx + 1 << " type "
+                   << *f->getFunctionType()->getParamType(arg_idx)
                    << " does not match expected argument type " << **it;
             emit_error(ctx, stream.str());
             return jl_cgval_t();
         }
+        arg_idx++;
     }
 
     // copy module properties that should always match
@@ -1183,7 +1208,12 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     def->setLinkage(GlobalVariable::LinkOnceODRLinkage);
 
     // generate a call
-    FunctionType *decl_typ = FunctionType::get(rettype, argtypes, def->isVarArg());
+    SmallVector<Type *, 0> filtered_argtypes;
+    for (auto t : argtypes) {
+        if (!t->isVoidTy())
+            filtered_argtypes.push_back(t);
+    }
+    FunctionType *decl_typ = FunctionType::get(rettype, filtered_argtypes, def->isVarArg());
     Function *decl = Function::Create(decl_typ, def->getLinkage(), def->getAddressSpace(),
                                       def->getName(), jl_Module);
     decl->setAttributes(def->getAttributes());
@@ -1243,6 +1273,7 @@ public:
     SmallVector<Type*, 0> fargt_sig; // vector of ABI coercion types for call signature
     SmallVector<bool, 0> fargt_isboxed; // vector of whether the llvm output type is a Julia-box for each argument
     SmallVector<bool, 0> byRefList; // vector of "byref" parameters
+    SmallVector<bool, 0> args_skipped; // vector of which args were skipped (ZSTs)
     AttributeList attributes; // vector of function call site attributes
     Type *lrt; // input parameter of the llvm return type (from julia_struct_to_llvm)
     bool retboxed; // input parameter indicating whether lrt is jl_value_t*
@@ -1266,6 +1297,7 @@ public:
         nccallargs(jl_svec_len(at)), nreqargs(nreqargs),
         ctx(ctx)
     {
+        if (ctx) jl_temporary_root(*ctx, (jl_value_t*)at); // Fix: root at to prevent GC during recursive calls
         err_msg = generate_func_sig(fname);
     }
 
@@ -1342,9 +1374,8 @@ std::string generate_func_sig(const char *fname)
         }
         else {
             t = _julia_struct_to_llvm(ctx, LLVMCtx, tti, &isboxed, llvmcall);
-            if (t == getVoidTy(LLVMCtx)) {
-                return make_errmsg(fname, i + 1, " type doesn't correspond to a C type");
-            }
+
+            // if (t == getVoidTy(LLVMCtx)) continue; // ZST support: keep void types in fargt (dense)
             if (jl_is_primitivetype(tti) && t->isIntegerTy()) {
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
@@ -1364,8 +1395,12 @@ std::string generate_func_sig(const char *fname)
             tti = (jl_value_t*)jl_voidpointer_type; // passed as pointer
         }
 
-        // Whether or not LLVM wants us to emit a pointer to the data
-        assert(t && "LLVM type should not be null");
+        // Whether or not LLVM wants us to verify the type
+        if (!t) {
+            jl_safe_printf("WARNING: failed to map argument type to LLVM (fallback to VoidTy)\n");
+            // jl_static_show(JL_STDERR, tti); // Commented out to avoid potential crash
+            t = getVoidTy(LLVMCtx);
+        }
         bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, LLVMCtx, t);
 
         if (jl_is_cpointer_type(tti)) {
@@ -1397,8 +1432,14 @@ std::string generate_func_sig(const char *fname)
         byRefList.push_back(byRef);
         fargt.push_back(t);
         fargt_isboxed.push_back(isboxed);
-        fargt_sig.push_back(pat);
-        paramattrs.push_back(AttributeSet::get(LLVMCtx, ab));
+        if (!pat->isVoidTy()) {
+            fargt_sig.push_back(pat);
+            paramattrs.push_back(AttributeSet::get(LLVMCtx, ab));
+            args_skipped.push_back(false);
+        }
+        else {
+            args_skipped.push_back(true);
+        }
     }
 
     AttributeSet FnAttrs;
@@ -2089,15 +2130,21 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     FunctionType *functype = this->functype(ctx.builder.getContext());
 
-    SmallVector<Value *, 8> argvals(nccallargs + sret);
+    SmallVector<Value *, 8> argvals;
+    argvals.reserve(nccallargs + sret);
+    if (sret) argvals.resize(sret);
+    size_t arg_sig_idx = 0;
     for (size_t ai = 0; ai < nccallargs; ai++) {
         // Current C function parameter
-        jl_cgval_t &arg = argv[ai];
+        bool byRef = byRefList[ai]; // Argument attributes
         jl_value_t *jargty = jl_svecref(at, ai); // Julia type of the current parameter
         Type *largty = fargt[ai]; // LLVM type of the current parameter
+        if (args_skipped[ai])
+             continue;
         bool toboxed = fargt_isboxed[ai];
-        Type *pargty = fargt_sig[ai + sret]; // LLVM coercion type
-        bool byRef = byRefList[ai]; // Argument attributes
+        Type *pargty = fargt_sig[arg_sig_idx + sret]; // LLVM coercion type
+        arg_sig_idx++;
+        jl_cgval_t &arg = argv[ai];
 
         // if we know the function sparams, try to fill those in now
         // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
@@ -2121,10 +2168,23 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             jargty_in_env = (jl_value_t*)jl_voidpointer_type;
         }
 
-        v = julia_to_native(ctx, largty, toboxed, jargty_in_env, unionall_env, arg, byRef, ai);
+        if (largty->isVoidTy()) {
+            if (byRef) {
+                // Pass a pointer to a dummy byte for ZST passed by reference
+                v = emit_static_alloca(ctx, 1, Align(1));
+            } else {
+                emit_error(ctx, "internal error: void argument not skipped in ccall");
+                return jl_cgval_t();
+            }
+        }
+        else {
+            v = julia_to_native(ctx, largty, toboxed, jargty_in_env, unionall_env, arg, byRef, ai);
+        }
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type);
         if (byRef) {
-            v = decay_derived(ctx, v);
+            if (!largty->isVoidTy()) {
+                v = decay_derived(ctx, v);
+            }
             // julia_to_native should already have done the alloca and store
             assert(v->getType() == pargty);
         }
@@ -2136,7 +2196,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             return jl_cgval_t();
         }
         assert(v->getType() == pargty);
-        argvals[ai + sret] = v;
+        argvals.push_back(v);
     }
 
     Value *result = NULL;
