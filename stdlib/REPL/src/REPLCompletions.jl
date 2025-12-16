@@ -288,13 +288,17 @@ function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vec
     return suggestions
 end
 
-const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export",
-    "finally", "for", "function", "global", "if", "import",
-    "let", "local", "macro", "module", "mutable struct",
-    "primitive type", "quote", "return", "struct",
-    "try", "using", "while"]
+const sorted_keywords = let
+    keywords = map(string, Base.JuliaSyntax.Tokenize.kws)
+    excluded = ("type", "doc", "var", "VERSION")
+    filter!(∉(excluded), keywords)
+    compound = ("abstract", "mutable", "primitive")
+    filter!(∉(compound), keywords)
+    push!(keywords, "abstract type", "mutable struct", "primitive type")
+    # Register additional keywords, not in JuliaSyntax keywords
+    push!(keywords, "ccall")
+    sort!(keywords)
+end
 
 complete_keyword!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeywordCompletion, sorted_keywords, s)
