@@ -78,7 +78,8 @@ function write(io::AbstractPipe, c::AnnotatedChar)
 end
 
 function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{T}}) where {T <: AbstractString}
-    if (start = position(io)) == 0
+    start = position(io)
+    if start == 0
         AnnotatedString(read(io.io, T), copy(io.annotations))
     else
         annots = [@inline(setindex(annot, UnitRange{Int}(max(1, first(annot.region) - start), last(annot.region)-start), :region))
