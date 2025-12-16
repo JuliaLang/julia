@@ -143,7 +143,7 @@ Manual = [
     "manual/methods.md",
     "manual/constructors.md",
     "manual/conversion-and-promotion.md",
-    "manual/interfaces.md",
+    # "manual/interfaces.md",
     "manual/modules.md",
     "manual/documentation.md",
     "manual/metaprogramming.md",
