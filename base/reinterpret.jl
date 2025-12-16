@@ -14,12 +14,6 @@ end
     # Special-case for zero-sized types, which for some reason don't get compiled away:
     if Base.packedsize(T) == 0
         return @_new(T)
-    # # For types with many fields (>32), avoid the recursive unrolling overhead
-    # # by falling back to reinterpret. This prevents allocation explosion for
-    # # large tuples like Tuple{UInt8, Int64, Vararg{UInt8, 100}}.
-    # elseif fieldcount(typeof(x)) > 32 || fieldcount(T) > 32
-    #     return @inline reinterpret(T, x)
-    # For packed structs, our bytecast is slightly faster:
     elseif Base.packedsize(typeof(x)) == sizeof(x) && sizeof(T) == sizeof(x)
         return byte_cast(T, x)
     else
@@ -27,10 +21,7 @@ end
     end
 end
 
-# I'm not sure why reinterpret doesn't produce as good of code as this for same-size
-# bit-types, but it doesn't. We need to investigate that with the Julia compiler team.
-# For now, we'll use this instead as a faster reinterpret.
-# REQUIRES `T` and `V` to be the same size and have no padding.
+# Simple memcopy between two types of the same size.
 @inline function byte_cast(::Type{T}, x::V) where {T,V}
     r = Ref{T}()
     @assert sizeof(T) == sizeof(V)
@@ -76,6 +67,10 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::I
         return [PackedRegion(baseoffset, Base.sizeof(T))]
     end
 
+    # PERFORMANCE OPTIMIZATION: Use depthfirst traversal with an explicit stack rather than
+    # implementing the traversal with recursion. This avoids the overhead from recursive
+    # calls inside the compiler, where we need to create a MethodInstance for each call.
+    # The outcome is equivalent to recursively calling _packed_regions for each field.
     regions = sizehint!(PackedRegion[], fieldcount(T)) # Rough guess: at least one per field
     stack = Tuple{Type, Int}[(T, baseoffset)]
 
