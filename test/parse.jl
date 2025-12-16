@@ -329,3 +329,16 @@ end
         @test isequal(parse(Float64, s), sign(v))
     end
 end
+
+@testset "parse chars" begin
+    @test_throws ArgumentError parse(Int8,'A',base=64)
+    @test_throws ArgumentError parse(Int8,'B',base=1)
+    @test_throws ArgumentError parse(Int8,'φ',base=20)
+    @test_throws ArgumentError parse(Int32,'A',base=10)
+    @test parse(Int32,'8') == 8
+    @test parse(Int32,'A',base=32) == 10
+    @test parse(Int32,'a',base=32) == 10
+    @test parse(Int32,'c',base=58) == 38
+    @test parse(Int32,'d',base=62)==39
+    @test parse(Int32,'1',base=2)==1
+end
