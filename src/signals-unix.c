@@ -1519,11 +1519,11 @@ enum membarrier_cmd {
 
 static enum membarrier_implementation jl_init_membarrier(void) {
 #ifdef HAVE_MEMBARRIER_SYSCALL
-    int ret = membarrier(MEMBARRIER_CMD_QUERY, 0);
+    int ret = membarrier(MEMBARRIER_CMD_QUERY, 0, 0);
     int needed = MEMBARRIER_CMD_PRIVATE_EXPEDITED | MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
     if (ret > 0 && ((ret & needed) == needed)) {
         // supported
-        if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0) == 0) {
+        if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0) == 0) {
             // working
             jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER);
             return MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER;
@@ -1550,7 +1550,7 @@ JL_DLLEXPORT void jl_membarrier(void) {
     switch (impl) {
 #ifdef HAVE_MEMBARRIER_SYSCALL
     case MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER: {
-        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0);
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
         assert(ret == 0);
         (void)ret;
         break;
