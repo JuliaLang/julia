@@ -6,15 +6,15 @@ end
 @inline function _reinterpret(::Type{T}, x) where {T}
     @assert isconcretetype(T) && isbitstype(T) && isbitstype(typeof(x))
     x isa T && return x
-    if Base.packedsize(T) != Base.packedsize(typeof(x))
+    if _packedsize(T) != _packedsize(typeof(x))
         throw(ArgumentError("""
-            Expected matching packed sizes: `$(Base.packedsize(T)) != $(Base.packedsize(typeof(x)))`
+            Expected matching packed sizes: `$(_packedsize(T)) != $(_packedsize(typeof(x)))`
         """))
     end
     # Special-case for zero-sized types, which for some reason don't get compiled away:
-    if Base.packedsize(T) == 0
+    if sizeof(T) == 0
         return @_new(T)
-    elseif Base.packedsize(typeof(x)) == sizeof(x) && sizeof(T) == sizeof(x)
+    elseif _packedsize(typeof(x)) == sizeof(x) && sizeof(T) == sizeof(x)
         return byte_cast(T, x)
     else
         return _reinterpret_padded_src_to_dst(T, x)
@@ -32,6 +32,13 @@ end
     end
 end
 
+Base.@assume_effects :foldable function _packedsize(::Type{T}) where {T}
+    out = 0
+    for p in _packed_regions(T, 0)
+        out += p.size
+    end
+    return out
+end
 struct PackedRegion
     offset::Int
     size::Int
@@ -60,7 +67,7 @@ Base.@assume_effects :foldable function _compress_packed_regions(field_regions)
     return Core.svec(merged_regions...)
 end
 Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::Int) where {T}
-    if Base.packedsize(T) == 0
+    if Base.sizeof(T) == 0
         return PackedRegion[]
     end
     if isprimitivetype(T) || fieldcount(T) == 0
