@@ -521,7 +521,7 @@ function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):
     pos = first(events).pos
     if pos > first(subregion)
         push!(regions, thisind(s, first(subregion)):prevind(s, pos))
-        push!(annots, [])
+        push!(annots, Annotation[])
     end
     activelist = Int[]
     for event in events
@@ -538,7 +538,7 @@ function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):
     end
     if last(events).pos < nextind(s, last(subregion))
         push!(regions, last(events).pos:thisind(s, last(subregion)))
-        push!(annots, [])
+        push!(annots, Annotation[])
     end
     RegionIterator(s.string, regions, annots)
 end
