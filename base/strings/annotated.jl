@@ -250,7 +250,7 @@ function annotatedstring(xs...)
         size = filesize(s.io)
         if x isa AnnotatedString
             for annot in x.annotations
-                push!(annotations, setindex(annot, annot.region .+ size, :region))
+                push!(annotations, @inline(setindex(annot, annot.region .+ size, :region)))
             end
             print(s, x.string)
         elseif x isa SubString{<:AnnotatedString}
@@ -259,7 +259,7 @@ function annotatedstring(xs...)
                 if start <= x.offset + x.ncodeunits && stop > x.offset
                     rstart = size + max(0, start - x.offset - 1) + 1
                     rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
-                    push!(annotations, setindex(annot, rstart:rstop, :region))
+                    push!(annotations, @inline(setindex(annot, rstart:rstop, :region)))
                 end
             end
             print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
@@ -293,12 +293,12 @@ function repeat(str::AnnotatedString, r::Integer)
     elseif allequal(a -> a.region, str.annotations) && first(str.annotations).region == fullregion
         newfullregion = firstindex(unannot):lastindex(unannot)
         for annot in str.annotations
-            push!(annotations, setindex(annot, newfullregion, :region))
+            push!(annotations, @inline(setindex(annot, newfullregion, :region)))
         end
     else
         for offset in 0:len:(r-1)*len
             for annot in str.annotations
-                push!(annotations, setindex(annot, annot.region .+ offset, :region))
+                push!(annotations, @inline(setindex(annot, annot.region .+ offset, :region)))
             end
         end
     end
@@ -318,10 +318,10 @@ function reverse(s::AnnotatedString)
     lastind = lastindex(s)
     AnnotatedString(
         reverse(s.string),
-        [setindex(annot,
+        [@inline(setindex(annot,
                   UnitRange(1 + lastind - last(annot.region),
                             1 + lastind - first(annot.region)),
-                  :region)
+                  :region))
          for annot in s.annotations])
 end
 
@@ -389,16 +389,28 @@ See also: [`annotate!`](@ref).
 annotations(s::AnnotatedString) = s.annotations
 
 function annotations(s::SubString{<:AnnotatedString})
-    RegionAnnotation[
-        setindex(ann, first(ann.region)-s.offset:last(ann.region)-s.offset, :region)
-        for ann in annotations(s.string, s.offset+1:s.offset+s.ncodeunits)]
+    substr_range = s.offset+1:s.offset+s.ncodeunits
+    result = RegionAnnotation[]
+    for ann in annotations(s.string, substr_range)
+        # Shift the region to be relative to the substring start
+        shifted_region = first(ann.region)-s.offset:last(ann.region)-s.offset
+        # @inline setindex makes :region const knowable (#60365)
+        push!(result, @inline(setindex(ann, shifted_region, :region)))
+    end
+    return result
 end
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    RegionAnnotation[
-        setindex(ann, max(first(pos), first(ann.region)):min(last(pos), last(ann.region)), :region)
-        for ann in s.annotations if !isempty(intersect(pos, ann.region))]
+    result = RegionAnnotation[]
+    for ann in s.annotations
+        if !isempty(intersect(pos, ann.region))
+            clamped_region = max(first(pos), first(ann.region)):min(last(pos), last(ann.region))
+            # @inline setindex makes :region const knowable (#60365)
+            push!(result, @inline(setindex(ann, clamped_region, :region)))
+        end
+    end
+    return result
 end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
@@ -455,7 +467,7 @@ function annotated_chartransform(f::Function, str::AnnotatedString, state=nothin
         start, stop = first(annot.region), last(annot.region)
         start_offset = last(offsets[findlast(<=(start) ∘ first, offsets)::Int])
         stop_offset  = last(offsets[findlast(<=(stop) ∘ first, offsets)::Int])
-        push!(annots, setindex(annot, (start + start_offset):(stop + stop_offset), :region))
+        push!(annots, @inline(setindex(annot, (start + start_offset):(stop + stop_offset), :region)))
     end
     AnnotatedString(takestring!(outstr), annots)
 end
@@ -509,7 +521,7 @@ function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):
     pos = first(events).pos
     if pos > first(subregion)
         push!(regions, thisind(s, first(subregion)):prevind(s, pos))
-        push!(annots, [])
+        push!(annots, Annotation[])
     end
     activelist = Int[]
     for event in events
@@ -526,7 +538,7 @@ function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):
     end
     if last(events).pos < nextind(s, last(subregion))
         push!(regions, last(events).pos:thisind(s, last(subregion)))
-        push!(annots, [])
+        push!(annots, Annotation[])
     end
     RegionIterator(s.string, regions, annots)
 end

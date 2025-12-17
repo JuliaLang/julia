@@ -568,15 +568,15 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          _from_loading::Bool,
                          configs::Vector{Config},
                          io::IOContext{IO},
-                         fancyprint::Bool,
+                         fancyprint′::Bool,
                          manifest::Bool,
                          ignore_loaded::Bool)
     requested_pkgs = copy(pkgs) # for understanding user intent
     pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
     if pkgs isa Vector{PkgId}
-        requested_pkgids = copy(pkgs)
+        requested_pkgids′ = copy(pkgs)
     else
-        requested_pkgids = PkgId[]
+        requested_pkgids′ = PkgId[]
         for name in pkgs
             pkgid = Base.identify_package(name)
             if pkgid === nothing
@@ -586,9 +586,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     throw(PkgPrecompileError("Unknown package: $name"))
                 end
             end
-            push!(requested_pkgids, pkgid)
+            push!(requested_pkgids′, pkgid)
         end
     end
+    requested_pkgids = requested_pkgids′
 
     time_start = time_ns()
 
@@ -605,17 +606,20 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # suppress precompilation progress messages when precompiling for loading packages, except during interactive sessions
     # or when specified by logging heuristics that explicitly require it
     # since the complicated IO implemented here can have somewhat disastrous consequences when happening in the background (e.g. #59599)
-    logio = io
-    logcalls = nothing
+    logio′ = io
+    logcalls′ = nothing
     if _from_loading
         if isinteractive()
-            logcalls = CoreLogging.Info # sync with Base.compilecache
+            logcalls′ = CoreLogging.Info # sync with Base.compilecache
         else
-            logio = IOContext{IO}(devnull)
-            fancyprint = false
-            logcalls = CoreLogging.Debug # sync with Base.compilecache
+            logio′ = IOContext{IO}(devnull)
+            fancyprint′ = false
+            logcalls′ = CoreLogging.Debug # sync with Base.compilecache
         end
     end
+    fancyprint = fancyprint′
+    logio = logio′
+    logcalls = logcalls′
 
     nconfigs = length(configs)
     hascolor = get(logio, :color, false)::Bool
@@ -992,7 +996,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
                             loaded = warn_loaded && haskey(Base.loaded_modules, dep)
-                            flags, cacheflags = config
+                            local flags, cacheflags = config
                             name = describe_pkg(dep, dep in project_deps, dep in serial_deps, flags, cacheflags)
                             line = if pkg_config in precomperr_deps
                                 string(color_string("  ? ", Base.warn_color()), name)
@@ -1077,7 +1081,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 notify(was_processed[pkg_config])
                 continue
             end
-            flags, cacheflags = config
+            local flags, cacheflags = config
             task = @async begin
                 try
                     loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
@@ -1118,17 +1122,21 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             end
                             # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
                             loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
-                            if !isempty(deps)
+
+                            flags_ =if !isempty(deps)
                                 # if deps is empty, either it doesn't have any (so compiled-modules is
                                 # irrelevant) or we couldn't compute them (so we actually should attempt
                                 # serial compile, as the dependencies are not in the parallel list)
-                                flags = `$flags --compiled-modules=strict`
+                                `$flags --compiled-modules=strict`
+                            else
+                                flags
                             end
+
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
                                     Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags, cacheflags, loadable_exts)
+                                                      flags=flags_, cacheflags, loadable_exts)
                                 end
                             else
                                 # allows processes to wait if another process is precompiling a given package to
@@ -1138,7 +1146,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     if interrupted_or_done[]
                                         return ErrorException("canceled")
                                     end
-                                    cachepaths = Base.find_all_in_cache_path(pkg)
+                                    local cachepaths = Base.find_all_in_cache_path(pkg)
                                     local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                                     local is_stale = freshpath === nothing
                                     if !is_stale
@@ -1149,7 +1157,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                         @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
                                     Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags, cacheflags, loadable_exts)
+                                                      flags=flags_, cacheflags, loadable_exts)
                                 end
                             end
                             if ret isa Exception
