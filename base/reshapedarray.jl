@@ -126,7 +126,7 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 # Allow missing dimensions with Colon():
 # Replace `OneTo`s by their lengths, and convert colons to sizes using _reshape_uncolon
 # We add a level of indirection to avoid method ambiguities in reshape
-function reshape(parent::AbstractArray, dims::Tuple{Union{Integer,Colon,AbstractOneTo}, Vararg{Union{Integer,Colon,AbstractOneTo}}})
+function reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}})
     _reshape_maybecolon(parent, dims)
 end
 _reshape_maybecolon(parent::AbstractVector, ::Tuple{Colon}) = parent
