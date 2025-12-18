@@ -26,12 +26,13 @@ end
     r = Ref{T}()
     @assert sizeof(T) == sizeof(V)
     GC.@preserve r begin
-        # lint-disable-next-line: An `unsafe_` function should be called only from an `unsafe_` function.
         unsafe_store!(reinterpret(Ptr{V}, pointer_from_objref(r)), x)
         return r[]
     end
 end
 
+# Our own copy of packedsize, so that we don't need to compile both padding() and
+# _packed_regions(); instead we can reuse just _packed_regions().
 Base.@assume_effects :foldable function _packedsize(::Type{T}) where {T}
     out = 0
     for p in _packed_regions(T, 0)
