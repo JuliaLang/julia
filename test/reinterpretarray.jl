@@ -762,7 +762,7 @@ struct ByteString0 end
 primitive type ByteString7 7*8 end
 primitive type ByteString8 8*8 end
 @testset "reinterpret: packed to packed" begin
-    @test(bitstring(reinterpret(ByteString7, ntuple(_->0x1, 7))) == 
+    @test(bitstring(reinterpret(ByteString7, ntuple(_->0x1, 7))) ==
           "00000001000000010000000100000001000000010000000100000001")
 
     # Errors
@@ -815,5 +815,3 @@ end
     @test_throws Exception reinterpret(TupType, 0x0002)
     @test_throws Exception reinterpret(UInt32, (0x01, (0x02, 0x03)))
 end
-
-
