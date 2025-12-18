@@ -2345,4 +2345,21 @@ let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, In
     @test count(iscall((src, Base.merge_fallback)), src.code) == 0
 end
 
+# @nospecialize annotation on uunamed arguments
+# https://github.com/JuliaLang/julia/issues/44428
+@noinline _issue44428_1(@nospecialize _::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_2(@nospecialize ::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_3(@nospecialize _) = println(Base.inferencebarrier(0))
+function issue44428(x)
+    _issue44428_1(x)
+    _issue44428_2(x)
+    _issue44428_3(x)
+end
+let src = code_typed1(issue44428, (Any,))
+    @test count(isinvoke(:_issue44428_1), src.code) == 1
+    @test count(isinvoke(:_issue44428_2), src.code) == 1
+    @test count(isinvoke(:_issue44428_3), src.code) == 1
+    @test count(x->Meta.isexpr(x,:call), src.code) == 0
+end
+
 end # module inline_tests
