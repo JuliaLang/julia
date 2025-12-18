@@ -487,6 +487,37 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 endif
 endif
 
+ifeq ($(OS), Darwin)
+ifneq ($(DARWIN_FRAMEWORK),1)
+	for j in $(JL_PRIVATE_TOOLS) ; do \
+		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
+		install_name_tool -rpath @loader_path/$(build_libdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+	done
+endif
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+	for j in $(JL_PRIVATE_TOOLS) ; do \
+		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_private_libexecdir_rel)' $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+	done
+endif
+
+ifneq ($(reverse_private_libexecdir_rel),$(reverse_build_private_libexecdir_rel))
+ifeq ($(OS), Darwin)
+ifneq ($(DARWIN_FRAMEWORK),1)
+	for j in $(JL_PRIVATE_EXES) ; do \
+		[ $$j = 7z ] && continue; \
+		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
+		install_name_tool -rpath @executable_path/$(reverse_build_private_libexecdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+	done
+endif
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+	for j in $(JL_PRIVATE_EXES) ; do \
+		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_private_libexecdir_rel)' $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
+	done
+endif
+endif
+
 	# Fix rpaths for dependencies. This should be fixed in BinaryBuilder later.
 ifeq ($(OS), Linux)
 	-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
