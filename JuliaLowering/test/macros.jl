@@ -560,4 +560,57 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
         test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=false) === 123
 end
 
+@testset "SIMD loopinfo" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval let
+        n = 10
+        x = zeros(n)
+        i = 1
+        while i ≤ n
+            x[i] += 1
+            i += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), nothing))  # Mark loop as SIMD loop
+        end
+        sum(x)
+    end
+    """; expr_compat_mode=true) == 10.0
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval let
+        n = 10
+        x = zeros(n)
+        i = 1
+        while i ≤ n
+            x[i] += 1
+            i += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), Symbol("julia.ivdep")))  # Mark loop as SIMD loop
+        end
+        sum(x)
+    end
+    """; expr_compat_mode=true) == 10.0
+
+    JuliaLowering.include_string(test_mod, """
+    @noinline function inner(x, y)
+        s = zero(eltype(x))
+        for i in eachindex(x, y)
+            @inbounds s += x[i]*y[i]
+        end
+        return s
+    end
+    """)
+
+    JuliaLowering.include_string(test_mod, """
+    @noinline function innersimd(x, y)
+        s = zero(eltype(x))
+        @simd for i in eachindex(x, y)
+            @inbounds s += x[i] * y[i]
+        end
+        return s
+    end
+    """)
+
+    @test test_mod.inner([1,2,3], [1,2,3]) == 14
+    @test test_mod.innersimd([1,2,3], [1,2,3]) == 14
+end
+
 end
