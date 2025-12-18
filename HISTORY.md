@@ -164,7 +164,7 @@ New language features
   entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). Not all
   code is expected to work with this option, and since it is experimental you may encounter problems.
 * Redefinition of constants is now well defined and follows world age semantics ([#57253]). Additional redefinitions
-  (e.g. of types) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
+  (e.g. of types) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1/manual/worldage/).
 * A new keyword argument `usings::Bool` has been added to `names`, returning all names visible
   via `using` ([#54609]).
 * The `@atomic` macro family now supports reference assignment syntax, e.g. `@atomic :monotonic v[3] += 4`,
