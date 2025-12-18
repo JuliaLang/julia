@@ -3,21 +3,22 @@ macro _new(T)
     return Expr(:new, esc(T))
 end
 
-@inline function _reinterpret(::Type{T}, x) where {T}
-    @assert isconcretetype(T) && isbitstype(T) && isbitstype(typeof(x))
-    x isa T && return x
-    if _packedsize(T) != _packedsize(typeof(x))
-        throw(ArgumentError("""
-            Expected matching packed sizes: `$(_packedsize(T)) != $(_packedsize(typeof(x)))`
-        """))
-    end
+@inline function _reinterpret(::Type{Out}, x::In) where {Out, In}
+    # handle non-primitive types
+    isbitstype(Out) || throw(ArgumentError(LazyString("Target type for `reinterpret` must be isbits. Got ", Out)))
+    isbitstype(In) || throw(ArgumentError(LazyString("Source type for `reinterpret` must be isbits. Got ", In)))
+    inpackedsize = _packedsize(In)
+    outpackedsize = _packedsize(Out)
+    inpackedsize == outpackedsize ||
+        throw(ArgumentError(LazyString("Packed sizes of types ", Out, " and ", In,
+            " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
     # Special-case for zero-sized types, which for some reason don't get compiled away:
-    if sizeof(T) == 0
-        return @_new(T)
-    elseif _packedsize(typeof(x)) == sizeof(x) && sizeof(T) == sizeof(x)
-        return byte_cast(T, x)
+    if sizeof(Out) == 0
+        return @_new(Out)
+    elseif _packedsize(typeof(x)) == sizeof(x) && sizeof(Out) == sizeof(x)
+        return byte_cast(Out, x)
     else
-        return _reinterpret_padded_src_to_dst(T, x)
+        return _reinterpret_padded_src_to_dst(Out, x)
     end
 end
 
