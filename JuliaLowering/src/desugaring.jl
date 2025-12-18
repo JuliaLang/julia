@@ -1251,7 +1251,7 @@ function expand_unionall_def(ctx, srcref, lhs, rhs, is_const=true)
     expand_forms_2(
         ctx,
         @ast ctx srcref [K"block"
-            rr := [K"where" rhs lhs[2:end]...]
+            rr := [K"where" rhs [K"braces" lhs[2:end]...]]
             [is_const ? K"constdecl" : K"assign_or_constdecl_if_global" name rr]
             [K"removable" rr]
         ]
@@ -4185,6 +4185,7 @@ function expand_where(ctx, srcref, lhs, rhs)
 end
 
 function expand_wheres(ctx, ex)
+    @chk numchildren(ex) == 2
     body = ex[1]
     rhs = ex[2]
     if kind(rhs) == K"braces"

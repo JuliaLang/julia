@@ -613,4 +613,25 @@ end
     @test test_mod.innersimd([1,2,3], [1,2,3]) == 14
 end
 
+@testset "@boundscheck / @inbounds" begin
+    JuliaLowering.include_string(test_mod, """
+    function sum_inbounds(A::AbstractArray)
+        r = zero(eltype(A))
+        for i in eachindex(A)
+            @inbounds r += A[i]
+        end
+        return r
+    end
+    """; expr_compat_mode=true)
+    @test test_mod.sum_inbounds([1,2,3]) == 6
+
+    JuliaLowering.include_string(test_mod, """
+    @inline function g_boundscheck(A, i)
+        @boundscheck checkbounds(A, i)
+        return A[i]
+    end
+    """; expr_compat_mode=true)
+    @test test_mod.g_boundscheck(1:2, 2) == 2
+end
+
 end
