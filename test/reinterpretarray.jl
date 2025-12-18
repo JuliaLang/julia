@@ -813,8 +813,8 @@ end
     # TODO(PR): Just discovered these are broken. I think it's in the order of the
     # depth-first proposal.
     @test reinterpret(Tuple{Int64, Int8}, (0x01, 2)) == (513, 0)
-    @test_broken reinterpret(Tuple{Int64, Int8}, ((0x01,), 2)) == (513, 0)
-    @test_broken(reinterpret(NTuple{9, UInt8}, ((0x01,), -1)) ==
+    @test reinterpret(Tuple{Int64, Int8}, ((0x01,), 2)) == (513, 0)
+    @test(reinterpret(NTuple{9, UInt8}, ((0x01,), -1)) ==
         (0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff))
 
     # Errors

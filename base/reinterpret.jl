@@ -82,16 +82,16 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::I
     regions = sizehint!(PackedRegion[], fieldcount(T)) # Rough guess: at least one per field
     stack = Tuple{Type, Int}[(T, baseoffset)]
 
+    # For each type: if it's packed, add its region; else, push its fields on the stack.
     while !isempty(stack)
         current_type, current_offset = pop!(stack)
-
-        # TODO: This is out of order, so we're not going to merge correctly.
-        for i = 1:fieldcount(current_type)
-            offset = current_offset + Int(fieldoffset(current_type, i))
-            fT = fieldtype(current_type, i)::Type
-            if isprimitivetype(fT) || fieldcount(fT) == 0
-                push!(regions, PackedRegion(offset, Base.sizeof(fT)))
-            else
+        if isprimitivetype(current_type) || fieldcount(current_type) == 0
+            push!(regions, PackedRegion(current_offset, Base.sizeof(current_type)))
+        else
+            # Push the fields in reverse order so that we process them in the original order
+            for i = fieldcount(current_type):-1:1
+                offset = current_offset + Int(fieldoffset(current_type, i))
+                fT = fieldtype(current_type, i)::Type
                 push!(stack, (fT, offset))
             end
         end
