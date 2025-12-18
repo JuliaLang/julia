@@ -8,8 +8,8 @@
         throw(ArgumentError(LazyString("Packed sizes of types ", Out, " and ", In,
             " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
     # Special-case for zero-sized types, which for some reason don't get compiled away:
-    if sizeof(T) == 0
-        return _new_empty(T)
+    if sizeof(Out) == 0
+        return _new_empty(Out)
     elseif _packedsize(typeof(x)) == sizeof(x) && sizeof(Out) == sizeof(x)
         return byte_cast(Out, x)
     else
