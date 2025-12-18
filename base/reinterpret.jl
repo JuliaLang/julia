@@ -1,8 +1,3 @@
-# Used in _reinterpret below for size-0 structs
-macro _new(T)
-    return Expr(:new, esc(T))
-end
-
 @inline function _reinterpret(::Type{Out}, x::In) where {Out, In}
     # handle non-primitive types
     isbitstype(Out) || throw(ArgumentError(LazyString("Target type for `reinterpret` must be isbits. Got ", Out)))
@@ -13,13 +8,17 @@ end
         throw(ArgumentError(LazyString("Packed sizes of types ", Out, " and ", In,
             " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
     # Special-case for zero-sized types, which for some reason don't get compiled away:
-    if sizeof(Out) == 0
-        return @_new(Out)
+    if sizeof(T) == 0
+        return _new_empty(T)
     elseif _packedsize(typeof(x)) == sizeof(x) && sizeof(Out) == sizeof(x)
         return byte_cast(Out, x)
     else
         return _reinterpret_padded_src_to_dst(Out, x)
     end
+end
+
+@eval @inline function _new_empty(T)
+    return $(Expr(:new, :(T)))
 end
 
 # Simple memcopy between two types of the same size.
