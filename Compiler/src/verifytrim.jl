@@ -78,8 +78,10 @@ function print_type_colored(io::IO, @nospecialize(typ))
 end
 
 # Print with light_black if stable, normal otherwise
+# Use repr for strings/chars to show quotes
 function print_nontype(io::IO, @nospecialize(x), stable::Bool)
-    stable ? printstyled(io, x; color=:light_black) : print(io, x)
+    txt = x isa Union{AbstractString, AbstractChar} ? Base.repr(x) : x
+    stable ? printstyled(io, txt; color=:light_black) : print(io, txt)
 end
 
 # Check if we should elide the type annotation for a statement
@@ -145,7 +147,7 @@ function mapssavalues(codeinfo::CodeInfo, sptypes::Vector{VarState}, @nospeciali
     return stmt
 end
 
-const MAX_NESTING_DEPTH = 2
+const MAX_NESTING_DEPTH = 1
 
 # Check if any argument in a call is type-unstable
 function has_unstable_arg(codeinfo::CodeInfo, sptypes::Vector{VarState}, args, startidx::Int)
@@ -204,7 +206,7 @@ function print_stmt_colored(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState
                 end
                 # Fold deeply nested stable args
                 if arg_stable && depth >= MAX_NESTING_DEPTH
-                    printstyled(io, "…"; color=:light_black)
+                    printstyled(io, "(…)"; color=:light_black)
                 else
                     print_stmt_colored(io, codeinfo, sptypes, arg; depth=depth+1, stable=arg_stable, indent=indent+1)
                 end
@@ -256,6 +258,7 @@ function verify_create_stackframes(codeinst::CodeInstance, stmtidx::Int, parents
     scopes = LineInfoNode[]
     frames = StackFrame[]
     parent = (codeinst, stmtidx)
+    visited = IdSet{Tuple{CodeInstance,Int}}()
     while parent !== nothing
         codeinst, stmtidx = parent
         di = codeinst.debuginfo
@@ -269,7 +272,13 @@ function verify_create_stackframes(codeinst::CodeInstance, stmtidx::Int, parents
             push!(frames, sf)
         end
         empty!(scopes)
-        parent = get(parents, codeinst, nothing)
+
+        new_parent = get(parents, codeinst, nothing)
+        if haskey(visited, new_parent)
+            break
+        end
+        push!(visited, new_parent)
+        parent = new_parent
     end
     return frames
 end
