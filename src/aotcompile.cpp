@@ -677,7 +677,6 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     F->setCallingConv(CallSite->getCallingConv());
     AttrBuilder Attrs{Ctx};
     Attrs.addAttribute(Attribute::NoInline);
-    Attrs.addAttribute(Attribute::NoUnwind);
     Attrs.addAttribute("frame-pointer", "none");
     Attrs.addAttribute("thunk");
 

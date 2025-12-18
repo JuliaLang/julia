@@ -2831,7 +2831,6 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
 {
     ++ModulesCreated;
     auto m = std::make_unique<Module>(name, context);
-    m->setUwtable(UWTableKind::None); // TODO remove, testing
     // According to clang darwin above 10.10 supports dwarfv4
     if (!m->getModuleFlag("Dwarf Version")) {
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
