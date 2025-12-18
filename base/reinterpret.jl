@@ -67,6 +67,12 @@ Base.@assume_effects :foldable function _compress_packed_regions(field_regions)
     end
     return Core.svec(merged_regions...)
 end
+# PERF: For some reason this quite dramatically outperforms Tuple{DataType, Int} in the
+# stack, and i'm not sure why. When it's a tuple, each tuple was being heap-allocated.
+struct PackedRegionStackEntry
+    T::DataType
+    offset::Int
+end
 Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::Int) where {T}
     if Base.sizeof(T) == 0
         return PackedRegion[]
@@ -80,19 +86,20 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::I
     # calls inside the compiler, where we need to create a MethodInstance for each call.
     # The outcome is equivalent to recursively calling _packed_regions for each field.
     regions = sizehint!(PackedRegion[], fieldcount(T)) # Rough guess: at least one per field
-    stack = Tuple{Type, Int}[(T, baseoffset)]
+    stack = PackedRegionStackEntry[PackedRegionStackEntry(T, baseoffset)]
 
     # For each type: if it's packed, add its region; else, push its fields on the stack.
     while !isempty(stack)
-        current_type, current_offset = pop!(stack)
+        entry = pop!(stack)
+        current_type, current_offset = entry.T, entry.offset
         if isprimitivetype(current_type) || fieldcount(current_type) == 0
             push!(regions, PackedRegion(current_offset, Base.sizeof(current_type)))
         else
             # Push the fields in reverse order so that we process them in the original order
             for i = fieldcount(current_type):-1:1
                 offset = current_offset + Int(fieldoffset(current_type, i))
-                fT = fieldtype(current_type, i)::Type
-                push!(stack, (fT, offset))
+                fT = fieldtype(current_type, i)::DataType
+                push!(stack, PackedRegionStackEntry(fT, offset))
             end
         end
     end
