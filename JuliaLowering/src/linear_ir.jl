@@ -792,7 +792,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"gc_preserve_begin"
         makenode(ctx, ex, k, compile_args(ctx, children(ex)))
-    elseif k == K"gc_preserve_end"
+    elseif k == K"gc_preserve_end" || k == K"loopinfo"
         if needs_value
             throw(LoweringError(ex, "misplaced kind $k in value position"))
         end
