@@ -3189,8 +3189,8 @@ end
 # (a,b=1; c,d=2; e,f=3)  ==>  (tuple-p a (= b 1) (parameters c (= d 2)) (parameters e (= f 3)))
 #
 # flisp: parts of parse-paren- and parse-arglist
-function parse_brackets(after_parse::Function,
-                        ps::ParseState, closing_kind, generator_is_last=true)
+function parse_brackets(after_parse::F,
+                        ps::ParseState, closing_kind, generator_is_last=true) where {F}
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,

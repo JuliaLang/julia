@@ -371,7 +371,7 @@ function metadata(__source__, __module__, expr, ismodule)
             if isa(eachex, Symbol) || isexpr(eachex, :(::))
                 # a field declaration
                 if last_docstr !== nothing
-                    push!(fields, P(namify(eachex), last_docstr))
+                    push!(fields, P(namify(eachex)::Symbol, last_docstr))
                     last_docstr = nothing
                 end
             elseif isexpr(eachex, :function) || isexpr(eachex, :(=))
