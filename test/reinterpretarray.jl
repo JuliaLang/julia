@@ -692,3 +692,128 @@ end
     @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
     @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
 end
+
+
+struct Padded1
+    a::UInt32
+    b::UInt64
+    c::UInt32
+end
+struct Padded2
+    a::UInt32
+    b::UInt64
+    c::UInt32
+end
+struct Padded3
+    a::UInt16
+    b::UInt64
+    c::UInt16
+    d::UInt16
+    e::UInt16
+end
+struct PaddedSmall
+    a::UInt8
+    b::UInt16
+    c::UInt8
+end
+const p1 = Padded1(1, 2, 3)
+const p3 = Padded3(1, 2, 3, 4, 5)
+const tup = (UInt32(1), 2, UInt32(3))
+const TT = typeof(tup)
+@testset "reinterpret: padded to padded" begin
+    @test reinterpret(Padded2, p1) == Padded2(1, 2, 3)
+    @test reinterpret(Padded1, tup) == p1
+    @test reinterpret(TT, p1) == tup
+    @test reinterpret(Padded2, p3) == Padded2(0x00020001, 0x0003000000000000, 0x00050004)
+
+    # Errors
+    @test_throws Exception reinterpret(PaddedSmall, Padded2(1, 2, 3))
+    @test_throws Exception reinterpret(Padded2, PaddedSmall(1, 2, 3))
+    @test_throws Exception reinterpret(Padded1, (UInt32(1), 2))
+
+    @test reinterpret(Padded2, p1) == Padded2(1, 2, 3)
+    @test reinterpret(Padded1, tup) == p1
+    @test reinterpret(TT, p1) == tup
+    @test reinterpret(Padded2, p3) == Padded2(0x00020001, 0x0003000000000000, 0x00050004)
+    @test_throws ArgumentError reinterpret(PaddedSmall, Padded2(1, 2, 3))
+    @test_throws ArgumentError reinterpret(Padded2, PaddedSmall(1, 2, 3))
+    @test_throws ArgumentError reinterpret(Padded1, (UInt32(1), 2))
+end
+
+@testset "reinterpret: padded to packed" begin
+    @test reinterpret(UInt32, PaddedSmall(1, 2, 3)) == 0x03000201
+    @test reinterpret(UInt32, (0x01, 0x0002, 0x03)) == 0x03000201
+
+    # Errors
+    @test_throws Exception reinterpret(Int, PaddedSmall(1, 2, 3))
+    @test_throws Exception reinterpret(Int, (0x01, 0x0002))
+end
+
+@testset "reinterpret: packed to padded" begin
+    @test reinterpret(PaddedSmall, 0x03000201) == PaddedSmall(1, 2, 3)
+    @test reinterpret(Tuple{UInt8,UInt16,UInt8}, 0x03000201) == (0x01, 0x0002, 0x03)
+
+    # Errors
+    @test_throws Exception reinterpret(PaddedSmall, 0)
+    @test_throws Exception reinterpret(Tuple{UInt8,UInt16,UInt8}, 0)
+end
+
+struct ByteString0 end
+primitive type ByteString7 7*8 end
+primitive type ByteString8 8*8 end
+@testset "reinterpret: packed to packed" begin
+    @test(bitstring(reinterpret(ByteString7, ntuple(_->0x1, 7))) == 
+          "00000001000000010000000100000001000000010000000100000001")
+
+    # Errors
+    @test_throws Exception reinterpret(ByteString7, ByteString8)
+    @test_throws Exception reinterpret(ByteString0, ByteString8)
+end
+
+make_padded_struct(n) = let N = gensym()
+    @eval struct $(N)
+        $(
+            (:($(Symbol("f$i"))::$(iseven(i) ? :Int64 : :Int32))
+            for i in 1:n)...
+        )
+    end;
+    eval(N)
+end
+const Padded20 = make_padded_struct(20)
+primitive type ByteString120 120*8 end
+@testset "reinterpret: big structs" begin
+    @assert sizeof(Padded20) == 160
+    @assert Base.packedsize(Padded20) == 120
+
+    p = reinterpret(Padded20, ntuple(_->0x1, 120))
+    bs120 = reinterpret(ByteString120, ntuple(_->0x1, 120))
+    @test reinterpret(ByteString120, p) == bs120
+    @test reinterpret(Padded20, bs120) == p
+
+end
+
+primitive type ByteString3 3*8 end
+@testset "nested packed tuples" begin
+    TupType = Tuple{UInt8, Tuple{UInt8, UInt8}}
+    bs = reinterpret(ByteString3, (0x01, (0x02, 0x03)))
+    @test bitstring(bs) == "000000110000001000000001"
+    @test reinterpret(TupType, bs) == (0x01, (0x02, 0x03))
+
+    # Errors
+    @test_throws Exception reinterpret(TupType, (0x01, 0x02))
+    @test_throws Exception reinterpret(TupType, 0x00000002)
+    @test_throws Exception reinterpret(UInt32, (0x01, (0x02, 0x03)))
+end
+
+@testset "nested padded tuples" begin
+    TupType = Tuple{UInt8, Tuple{UInt8, UInt16}}
+    @test reinterpret(UInt32, (0x01, (0x02, 0x0003))) == 0x00030201
+    @test reinterpret(TupType, 0x00030201) == (0x01, (0x02, 0x0003))
+
+    # Errors
+    @test_throws Exception reinterpret(TupType, (0x01, 0x0002))
+    @test_throws Exception reinterpret(TupType, 0x0002)
+    @test_throws Exception reinterpret(UInt32, (0x01, (0x02, 0x03)))
+end
+
+
