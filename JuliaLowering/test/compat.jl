@@ -2,6 +2,8 @@ using Test
 const JS = JuliaSyntax
 const JL = JuliaLowering
 
+test_mod = Module()
+
 @testset "expr->syntaxtree" begin
     @testset "semantics only" begin
         # Test that `s` evaluates to the same thing both under normal parsing
@@ -631,6 +633,13 @@ const JL = JuliaLowering
 
     @test JuliaLowering.expr_to_syntaxtree(Expr(:block, Expr(:softscope, true))) ≈
         @ast_ [K"block" [K"softscope" true::K"Bool"]]
+end
+
+@testset "non-ASCII operator handling" begin
+    # regression test for invalid string index
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @noinline (x = 0xF; x ⊻= 1; x)
+    """; expr_compat_mode=true) == 0xE
 end
 
 @testset "Expr<->EST" begin

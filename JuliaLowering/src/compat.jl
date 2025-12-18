@@ -244,10 +244,10 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
         @assert s[end] === '=' && nargs === 2
         if s[1] === '.'
             st_k = K".op="
-            op = s[2:end-1]
+            op = s[nextind(s,1):prevind(s,end)]
         else
             st_k = K"op="
-            op = s[1:end-1]
+            op = s[1:prevind(s,end)]
         end
         child_exprs = Any[e.args[1], Symbol(op), e.args[2]]
     elseif e.head === :comparison
