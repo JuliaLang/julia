@@ -2738,14 +2738,12 @@ function parse_iteration_spec(ps::ParseState)
          # Check if we're followed by a closing bracket (array context)
         next_token = peek_skip_newline_in_gen(ps)
         in_array_literal = next_token == K"]"
-        
         # Recovery heuristic with context-specific error message
         error_msg = if in_array_literal
             "invalid iteration spec: Generators in array literals should be parenthesized: [(x for x in ...), ...]"
         else
             "invalid iteration spec: expected one of `=` `in` or `∈`"
         end
-        
         recover(ps, error=error_msg) do ps, k
             k in KSet", NewlineWs" || is_closing_token(ps, k)
         end
