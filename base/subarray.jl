@@ -455,13 +455,14 @@ iscontiguous(::Type{<:FastContiguousSubArray}) = true
 
 first_index(V::FastSubArray) = V.offset1 + V.stride1 * firstindex(V) # cached for fast linear SubArrays
 first_index(V::SubArray) = compute_linindex(parent(V), V.indices)
+_signed_sub(a, b) = signed(a) - signed(b)
 
 # Computing the first index simply steps through the indices, accumulating the
 # sum of index each multiplied by the parent's stride.
 # The running sum is `f`; the cumulative stride product is `s`.
 # If the parent is a vector, then we offset the parent's own indices with parameters of I
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
-    (@inline; first(I[1]) - stride1*first(axes1(I[1])))
+    (@inline; _signed_sub(first(I[1]), stride1*first(axes1(I[1]))))
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension.
 # If the result is one-dimensional and it's a range, then linear
@@ -470,11 +471,11 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@inline; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
-    (@inline; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
+    (@inline; _signed_sub(compute_linindex(parent, I), stride1*first(axes(parent, dims[1]))))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds::Tuple{AbstractRange}, I::Tuple) =
-    (@inline; compute_linindex(parent, I) - stride1*first(axes1(inds[1]))) # potentially index-offsetting case
+    (@inline; _signed_sub(compute_linindex(parent, I), stride1*first(axes1(inds[1])))) # potentially index-offsetting case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
-    (@inline; compute_linindex(parent, I) - stride1)
+    (@inline; _signed_sub(compute_linindex(parent, I), stride1))
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @inline
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
@@ -482,7 +483,7 @@ function compute_linindex(parent, I::NTuple{N,Any}) where N
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
     @inline
-    Δi = first(I[1])-first(IP[1])
+    Δi = _signed_sub(first(I[1]), first(IP[1]))
     compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
