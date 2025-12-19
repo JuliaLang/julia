@@ -122,8 +122,7 @@ end
 
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
-    nameref = makeleaf(ctx, srcref, K"Identifier")
-    nameref.name_val = name
+    nameref = newleaf(ctx, srcref, K"Identifier", name)
     binding_ex(ctx, _new_binding(ctx, nameref, name, :local;
                                  is_ssa=true, is_internal=true))
 end
@@ -132,8 +131,7 @@ end
 function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
     @assert kind === :local || kind === :argument
-    nameref = makeleaf(ctx, srcref, K"Identifier")
-    nameref.name_val = name
+    nameref = newleaf(ctx, srcref, K"Identifier", name)
     b = _new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
     if !isnothing(lbindings)
@@ -143,8 +141,7 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
 end
 
 function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws...)
-    nameref = makeleaf(ctx, srcref, K"Identifier")
-    nameref.name_val = name
+    nameref = newleaf(ctx, srcref, K"Identifier", name)
     binding_ex(ctx, _new_binding(
         ctx, nameref, name, :global; is_internal=true, mod=mod, kws...))
 end

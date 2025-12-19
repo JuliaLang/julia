@@ -94,7 +94,7 @@ function delete_attributes(graph::SyntaxGraph{<:NamedTuple}, attr_names::Symbol.
     freeze_attrs(g)
 end
 
-function newnode!(graph::SyntaxGraph)
+function new_id!(graph::SyntaxGraph)
     push!(graph.edge_ranges, 0:-1) # Invalid range start => leaf node
     return length(graph.edge_ranges)
 end
@@ -261,7 +261,7 @@ end
 
 function copy_node(ex::SyntaxTree)
     graph = syntax_graph(ex)
-    id = newnode!(graph)
+    id = new_id!(graph)
     if !is_leaf(ex)
         setchildren!(graph, id, children(ex._graph, ex._id))
     end
@@ -460,6 +460,8 @@ end
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
 SyntaxList(ctx) = SyntaxList(syntax_graph(ctx))
 
+tree_ids(sts::SyntaxTree...) = NodeId[st._id for st in sts]
+
 syntax_graph(lst::SyntaxList) = lst.graph
 
 setchildren!(graph::SyntaxGraph, id::NodeId, children::SyntaxList) =
@@ -523,6 +525,10 @@ function Base.pop!(v::SyntaxList)
     SyntaxTree(v.graph, pop!(v.ids))
 end
 
+function Base.popat!(v::SyntaxList, i::Integer)
+    SyntaxTree(v.graph, popat!(v.ids, i))
+end
+
 function Base.resize!(v::SyntaxList, n)
     resize!(v.ids, n)
     v
@@ -568,57 +574,45 @@ end
 #-------------------------------------------------------------------------------
 # AST creation utilities
 
-# TODO: "proto", if SyntaxTree, is rarely different from srcref. reorganize to:
-# newnode/newleaf(ctx, srcref, k::Kind[, attrs])
-# makenode/makeleaf(ctx, old::SyntaxTree[, attrs])
+"""
+    newnode(graph::SyntaxGraph, prov::SourceAttrType, k::Kind, children)
 
-_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
-
-_node_ids(graph::SyntaxGraph) = ()
-_node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
-_node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
-_node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
-function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
-    check_compatible_graph(graph, cs)
-    cs.ids
+Add a new node to `graph` with reference to parsed source text `prov`.
+"""
+function newnode(graph::SyntaxGraph, prov::SourceAttrType, k::Kind, children)
+    st = newleaf(graph, prov, k)
+    setchildren!(graph, st._id, children)
+    return st
+end
+function newleaf(graph::SyntaxGraph, prov::SourceAttrType, k::Kind)
+    st = SyntaxTree(graph, new_id!(graph))
+    setattr!(st, :kind, k)
+    setattr!(st, :source, prov)
 end
 
-_unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
-_unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
-_unpack_srcref(graph, srcref)             = srcref
+newnode(graph::SyntaxGraph, prov::SyntaxTree, k::Kind, children) =
+    newnode(graph, prov._id, k, children)
 
-function makeleaf(graph::SyntaxGraph, srcref, proto::Union{Kind, SyntaxTree})
-    id = newnode!(graph)
-    ex = SyntaxTree(graph, id)
-    copy_attrs!(ex, proto, true)
-    ex.source = _unpack_srcref(graph, srcref)
-    return ex
+newleaf(graph::SyntaxGraph, prov::SyntaxTree, k::Kind) =
+    newleaf(graph, prov._id, k)
+
+"""
+    mknode(old::SyntaxTree, children)
+
+Create a node in `old`'s graph that is an immutable update of `old`, but setting
+`old` as its provenance.  This is the main operation used by syntax
+transformations such as lowering.
+"""
+function mknode(old::SyntaxTree, children)
+    st = mkleaf(old)
+    setchildren!(st._graph, st._id, children)
+    return st
 end
-
-function makeleaf(ctx, srcref, proto, @nospecialize(attrs::AbstractVector))
-    graph = syntax_graph(ctx)
-    ex = makeleaf(graph, srcref, proto)
-    for (k, v) in attrs
-        setattr!(graph, ex._id, k, v)
-    end
-    return ex
-end
-
-function makenode(ctx, srcref, proto, children, attrs=nothing)
-    graph = syntax_graph(ctx)
-    ex = isnothing(attrs) ? makeleaf(graph, srcref, proto) :
-        makeleaf(graph, srcref, proto, attrs)
-    setchildren!(graph, ex._id, children isa SyntaxList ? children.ids : children)
-    return ex
-end
-
-# TODO: Replace this with makeleaf variant?
-function mapleaf(ctx, src, kind)
-    ex = makeleaf(syntax_graph(ctx), src, kind)
-    # TODO: Value coercion might be broken here due to use of `name_val` vs
-    # `value` vs ... ?
-    copy_attrs!(ex, src)
-    ex
+function mkleaf(old::SyntaxTree)
+    graph = syntax_graph(old)
+    st = SyntaxTree(graph, new_id!(graph))
+    copy_attrs!(st, old, true)
+    setattr!(st, :source, old._id)
 end
 
 #-------------------------------------------------------------------------------
@@ -667,7 +661,7 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function)
         return ex
     end
     cs::SyntaxList
-    ex2 = makenode(ctx, ex, ex, cs)
+    ex2 = mknode(ex, cs)
     return ex2
 end
 
@@ -711,7 +705,7 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
     let copied = get(seen, id1, nothing)
         isnothing(copied) || return copied
     end
-    id2 = newnode!(graph2)
+    id2 = new_id!(graph2)
     seen[id1] = id2
     src1 = get(SyntaxTree(graph1, id1), :source, nothing)
     src2 = if !copy_source
@@ -751,9 +745,10 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
-    id = newnode!(graph)
+    id = new_id!(graph)
     setchildren!(graph, id, reverse(cs).ids)
-    setattr!(graph, id; source, kind=K"wrapper")
+    setattr!(graph, id, :source, source)
+    setattr!(graph, id, :kind, K"wrapper")
     return SyntaxTree(graph, id)
 end
 
@@ -775,7 +770,7 @@ end
 function _insert_green(graph::SyntaxGraph, sf::SourceFile,
                        txtbuf::Vector{UInt8}, offset::Int,
                        cursor::RedTreeCursor)
-    id = newnode!(graph)
+    id = new_id!(graph)
     setattr!(graph, id, :kind, kind(cursor))
     setattr!(graph, id, :syntax_flags, flags(cursor))
     setattr!(graph, id, :source, SourceRef(sf, first_byte(cursor), last_byte(cursor)))
@@ -812,23 +807,23 @@ function _green_to_ast(parent::Kind, ex::SyntaxTree; eq_to_kw=false)
             c2 = _green_to_ast(k, c; eq_to_kw=length(cs)>0)
             !isnothing(c2) && push!(cs, c2)
         end
-        makenode(graph, ex, ex, cs)
+        mknode(ex, cs)
     elseif k === K"parameters"
         eq_to_kw = parent != K"vect"   && parent != K"curly" &&
                    parent != K"braces" && parent != K"ref"
-        makenode(graph, ex, ex, _map_green_to_ast(k, children(ex); eq_to_kw))
+        mknode(ex, _map_green_to_ast(k, children(ex); eq_to_kw))
     elseif k === K"parens"
         cs = _map_green_to_ast(parent, children(ex); eq_to_kw)
-        length(cs) === 1 ? cs[1] : makenode(graph, ex, ex, cs)
+        length(cs) === 1 ? cs[1] : mknode(ex, cs)
     elseif k in KSet"var char"
         cs = _map_green_to_ast(parent, children(ex))
-        length(cs) === 1 ? cs[1] : makenode(graph, ex, ex, cs)
+        length(cs) === 1 ? cs[1] : mknode(ex, cs)
     elseif k === K"=" && eq_to_kw
-        setattr!(makenode(graph, ex, ex, _map_green_to_ast(k, children(ex))),
+        setattr!(mknode(ex, _map_green_to_ast(k, children(ex))),
                  :kind, K"kw")
     elseif k === K"CmdMacroName" || k === K"StrMacroName"
         name = lower_identifier_name(ex.name_val, k)
-        setattr!(makeleaf(graph, ex, K"Identifier"),
+        setattr!(newleaf(graph, ex, K"Identifier"),
                  :name_val, name)
     elseif k === K"macro_name"
         # M.@x parses to (. M (macro_name x))
@@ -836,21 +831,21 @@ function _green_to_ast(parent::Kind, ex::SyntaxTree; eq_to_kw=false)
         # We want (. M @x) (both identifiers) in either case
         cs = _map_green_to_ast(k, children(ex))
         if length(cs) !== 1 || !(kind(cs[1]) in KSet". Identifier")
-            return makenode(graph, ex, ex, cs)
+            return mknode(ex, cs)
         end
         id = cs[1]
         mname_raw = (kind(id) === K"." ? id[2] : id).name_val
-        mac_id = setattr!(makeleaf(graph, ex, K"Identifier"), :name_val,
+        mac_id = setattr!(newleaf(graph, ex, K"Identifier"), :name_val,
                           lower_identifier_name(mname_raw, K"macro_name"))
         if kind(id) === K"."
-            makenode(graph, ex, ex, NodeId[id[1]._id, mac_id._id])
+            mknode(ex, tree_ids(id[1], mac_id))
         else
             mac_id
         end
     elseif is_leaf(ex)
         return ex
     else
-        makenode(graph, ex, ex, _map_green_to_ast(k, children(ex)))
+        mknode(ex, _map_green_to_ast(k, children(ex)))
     end
 end
 
