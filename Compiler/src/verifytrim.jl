@@ -111,7 +111,7 @@ end
 function argument_name(codeinfo::CodeInfo, arg::Core.Argument)
     slotnames = codeinfo.slotnames
     if slotnames !== nothing && arg.n <= length(slotnames)
-    return slotnames[arg.n]
+        return slotnames[arg.n]
     end
     return arg
 end
