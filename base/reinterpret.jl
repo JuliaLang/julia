@@ -34,6 +34,7 @@ end
 # Our own copy of packedsize, so that we don't need to compile both padding() and
 # _packed_regions(); instead we can reuse just _packed_regions().
 Base.@assume_effects :foldable function _packedsize(::Type{T}) where {T}
+    @assert isconcretetype(T)
     out = 0
     for p in _packed_regions(T, 0)
         out += p.size
@@ -48,11 +49,12 @@ end
 # Recursively compute the packed regions of each field of T, and then for T itself,
 # combine them into a list of (offset, size) tuples.
 Base.@assume_effects :foldable function packed_regions(::Type{T}) where {T}
+    @assert isconcretetype(T)
     field_regions = _packed_regions(T, 0)
     # Merge adjacent regions
     return _compress_packed_regions(field_regions)
 end
-Base.@assume_effects :foldable function _compress_packed_regions(field_regions)
+@inline function _compress_packed_regions(field_regions)
     merged_regions = PackedRegion[]
     for region in field_regions
         if !isempty(merged_regions)
@@ -73,7 +75,7 @@ struct PackedRegionStackEntry
     T::DataType
     offset::Int
 end
-Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::Int) where {T}
+@inline function _packed_regions(T::DataType, baseoffset::Int)
     if Base.sizeof(T) == 0
         return PackedRegion[]
     end
@@ -107,7 +109,10 @@ Base.@assume_effects :foldable function _packed_regions(::Type{T}, baseoffset::I
     return Core.svec(regions...)
 end
 
-Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_regions)
+Base.@assume_effects :foldable function match_packed_regions(
+    SRC_regions::Core.SimpleVector,
+    DST_regions::Core.SimpleVector,
+)
     @assert !isempty(SRC_regions) && !isempty(DST_regions)
     out_regions = sizehint!(Tuple{Int,Int,Int}[],
         max(length(SRC_regions), length(DST_regions)))
@@ -151,7 +156,10 @@ Base.@assume_effects :foldable function match_packed_regions(SRC_regions, DST_re
     return Tuple(out_regions)
 end
 
-Base.@assume_effects :foldable function packing_equal(SRC_regions, DST_regions)
+Base.@assume_effects :foldable function _packing_equal(
+    SRC_regions::Core.SimpleVector,
+    DST_regions::Core.SimpleVector
+)
     return SRC_regions == DST_regions
 end
 
@@ -162,7 +170,7 @@ end
     # OPTIMIZATION: If the packed regions match exactly, we can do a single memcpy.
     # This is always faster than the region-matching logic - computers are very fast at
     # copying bytes, and this can possibly be entirely compiled away to only a type-cast.
-    if packing_equal(SRC_regions, DST_regions)
+    if _packing_equal(SRC_regions, DST_regions)
         return byte_cast(DST, x)
     end
 
