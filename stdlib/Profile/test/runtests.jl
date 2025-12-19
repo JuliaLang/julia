@@ -247,9 +247,11 @@ end
 end
 
 function run_with_watchdog(cmd, timeout=120)
+    timed_out = false
     p = open(cmd)
     t = Timer(timeout) do t
         # should be under 10 seconds, so give it 2 minutes then report failure
+        timed_out = true
         println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
         kill(p, Base.SIGQUIT)
         sleep(30)
@@ -260,7 +262,8 @@ function run_with_watchdog(cmd, timeout=120)
     s = read(p, String)
     close(t)
     close(p)
-    success(p) ? s : ""
+    timed_out && return "", true
+    return success(p) ? s : "", false
 end
 
 # Profile deadlocking in compilation (debuginfo registration)
@@ -276,10 +279,13 @@ let cmd = Base.julia_cmd()
         print(Profile.len_data())
         """
     # use multiple threads here to ensure that profiling works with threading
-    s = run_with_watchdog(`$cmd -t2 -e $script`)
-    @test !isempty(s)
-    @test occursin("done", s)
-    @test parse(Int, split(s, '\n')[end]) > 100
+    s, timed_out = run_with_watchdog(`$cmd -t2 -e $script`)
+    @test !timed_out
+    if !timed_out
+        @test !isempty(s)
+        @test occursin("done", s)
+        @test parse(Int, split(s, '\n')[end]) > 100
+    end
 end
 
 # Thread suspend deadlock - run many times (#60042)
@@ -290,8 +296,12 @@ end
         """
     good = true
     for i=1:100
-        s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
-        good &= occursin("done", s)
+        s, timed_out = run_with_watchdog(`$cmd -t2 -e $script`, 5)
+        if timed_out || !occursin("done", s)
+            timed_out && @warn "Thread suspend deadlock test timed out"
+            good = false
+            break
+        end
     end
     good
 end
