@@ -381,7 +381,7 @@ $(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),
 # Save a special one: reverse_private_libdir_rel: usually just `../`, but good to be general:
 reverse_private_libdir_rel_eval = $(call rel_path,$(private_libdir),$(libdir))
 reverse_private_libdir_rel = $(call hit_cache,reverse_private_libdir_rel_eval)
-reverse_private_libexecdir_rel_eval = $(call rel_path,$(private_libexecdir),$(libdir))
+reverse_private_libexecdir_rel_eval = $(call rel_path,$(private_libexecdir),$(private_libdir))
 reverse_private_libexecdir_rel = $(call hit_cache,reverse_private_libexecdir_rel_eval)
 reverse_build_private_libexecdir_rel_eval = $(call rel_path,$(build_private_libexecdir),$(build_libdir))
 reverse_build_private_libexecdir_rel = $(call hit_cache,reverse_build_private_libexecdir_rel_eval)
