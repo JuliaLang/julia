@@ -474,7 +474,13 @@ void jl_thread_resume(int tid)
 int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
     jl_lock_profile(); // prevent concurrent mutation
-    uv_mutex_lock(&jl_in_stackwalk); // prevent multi-threaded dbghelp calls
+    // Use trylock to avoid deadlock if the target thread holds this lock.
+    // If we can't get the lock, skip this thread - it's better to miss a
+    // sample than to deadlock.
+    if (uv_mutex_trylock(&jl_in_stackwalk) != 0) {
+        jl_unlock_profile();
+        return 0;
+    }
     int success = jl_thread_suspend_and_get_state(tid, 0, ctx);
     uv_mutex_unlock(&jl_in_stackwalk);
     jl_unlock_profile();
