@@ -176,8 +176,8 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #endif
 #endif
 
-#if defined(HAVE_SSP) && defined(_OS_DARWIN_)
-// On Darwin, this is provided by libSystem and imported
+#if defined(HAVE_SSP) && (defined(_OS_DARWIN_) || defined(_OS_FREEBSD_))
+// This is provided by libSystem on Darwin and libc on FreeBSD, and imported
 extern JL_DLLIMPORT uintptr_t __stack_chk_guard;
 #elif defined(HAVE_SSP)
 // Added by compiler runtime in final link - not DLLIMPORT
