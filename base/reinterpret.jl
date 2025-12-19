@@ -160,10 +160,8 @@ end
     DST_regions = packed_regions(DST)
 
     # OPTIMIZATION: If the packed regions match exactly, we can do a single memcpy.
-    # Apparently this is *always* faster, even if the padding ratio is >80%. (I might have
-    # expected that at very high padding ratios, it's cheaper to copy only the real bytes,
-    # but the number of generated instructions outweighs the savings from skipping padding
-    # for very large structs.)
+    # This is always faster than the region-matching logic - computers are very fast at
+    # copying bytes, and this can possibly be entirely compiled away to only a type-cast.
     if packing_equal(SRC_regions, DST_regions)
         return byte_cast(DST, x)
     end
