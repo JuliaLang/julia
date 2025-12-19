@@ -50,12 +50,12 @@ viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@inline; viewindexing(tail(I
 # Slices may begin a section which may be followed by any number of Slices
 viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@inline; viewindexing(tail(I)))
 # A UnitRange can follow Slices, but only if all other indices are scalar
-viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{Slice, AbstractUnitRange{Int}, Vararg{ScalarIndex}}) = IndexLinear()
 viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
 # In general, scalar ranges are only fast if all other indices are scalar
 # Other ranges, such as those of `CartesianIndex`es, are not fast even if these
 # are followed by `ScalarIndex`es
-viewindexing(I::Tuple{AbstractRange{<:ScalarIndex}, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{AbstractRange{Int}, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
