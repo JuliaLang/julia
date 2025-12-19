@@ -810,8 +810,6 @@ end
     @test reinterpret(UInt32, (0x01, (0x02, 0x0003))) == 0x00030201
     @test reinterpret(TupType, 0x00030201) == (0x01, (0x02, 0x0003))
 
-    # TODO(PR): Just discovered these are broken. I think it's in the order of the
-    # depth-first proposal.
     @test reinterpret(Tuple{Int64, Int8}, (0x01, 2)) == (513, 0)
     @test reinterpret(Tuple{Int64, Int8}, ((0x01,), 2)) == (513, 0)
     @test(reinterpret(NTuple{9, UInt8}, ((0x01,), -1)) ==
