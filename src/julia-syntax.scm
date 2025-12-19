@@ -3176,7 +3176,10 @@
 (define (push-var! tab var val) (put! tab var (cons val (get tab var #f))))
 (define (pop-var! tab var) (put! tab var (cdr (get tab var))))
 
-(define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f)
+(define-mutable-struct scope
+  (lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars table))
+
+(define (init-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f)
                     (soft? #f) (hard? #f) (implicit-globals '()) (warn-vars #f))
   (let ((tab (if prev (scope:table prev) (table))))
     (for-each (lambda (v) (push-var! tab v v)) sp)
@@ -3184,7 +3187,7 @@
     (for-each (lambda (pair) (push-var! tab (car pair) (cdr pair))) renames)
     (for-each (lambda (v) (push-var! tab v `(globalref (thismodule) ,v))) globals)
     (for-each (lambda (v) (push-var! tab v v)) args)
-    (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars tab)))
+    (make-scope lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars tab)))
 
 (define (pop-scope! scope)
   (let ((tab (scope:table scope)))
@@ -3193,19 +3196,6 @@
     (for-each (lambda (pair) (pop-var! tab (car pair))) (scope:renames scope))
     (for-each (lambda (v) (pop-var! tab v)) (scope:globals scope))
     (for-each (lambda (v) (pop-var! tab v)) (scope:args scope))))
-
-(define (scope:lam s)     (aref s 0))
-(define (scope:args s)    (aref s 1))
-(define (scope:locals s)  (aref s 2))
-(define (scope:globals s) (aref s 3))
-(define (scope:sp s)      (aref s 4))
-(define (scope:renames s) (aref s 5))
-(define (scope:prev s)    (aref s 6))
-(define (scope:soft? s)   (aref s 7))
-(define (scope:hard? s)   (aref s 8))
-(define (scope:implicit-globals s) (aref s 9))
-(define (scope:warn-vars s) (aref s 10))
-(define (scope:table s)   (aref s 11))
 
 (define (var-kind var scope (exclude-top-level-globals #f))
   (if scope
@@ -3304,7 +3294,7 @@
              '(true)))
         ((eq? (car e) 'lambda)
          (let* ((args (lam:argnames e))
-                (new-scope (make-scope e args '() '() sp '() scope))
+                (new-scope (init-scope e args '() '() sp '() scope))
                 (body (resolve-scopes- (lam:body e) new-scope)))
            (pop-scope! new-scope)
            `(lambda ,(cadr e) ,(caddr e) ,body)))
@@ -3386,7 +3376,7 @@
                          (append (caddr lam) newnames newnames-def)))
            (insert-after-meta ;; return the new, expanded scope-block
             (blockify
-             (let ((new-scope (make-scope lam
+             (let ((new-scope (init-scope lam
                                           '()
                                           (append locals-nondef locals-def)
                                           globals
