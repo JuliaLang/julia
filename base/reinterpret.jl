@@ -208,5 +208,4 @@ end
         src_ptr,
         Base.tail(offsets_to_copy),
     )
-    return nothing
 end
