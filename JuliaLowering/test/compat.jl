@@ -2,6 +2,8 @@ using Test
 const JS = JuliaSyntax
 const JL = JuliaLowering
 
+test_mod = Module()
+
 @testset "expr->syntaxtree" begin
     @testset "semantics only" begin
         # Test that `s` evaluates to the same thing both under normal parsing
@@ -631,4 +633,153 @@ const JL = JuliaLowering
 
     @test JuliaLowering.expr_to_syntaxtree(Expr(:block, Expr(:softscope, true))) ≈
         @ast_ [K"block" [K"softscope" true::K"Bool"]]
+end
+
+@testset "non-ASCII operator handling" begin
+    # regression test for invalid string index
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @noinline (x = 0xF; x ⊻= 1; x)
+    """; expr_compat_mode=true) == 0xE
+end
+
+@testset "Expr<->EST" begin
+
+    local roundtrip = e->JuliaLowering.est_to_expr(JuliaLowering.expr_to_est(e))
+    local roundtrip_eq = x->x==roundtrip(x)
+
+    local expr_syntax = Any[
+        LineNumberNode(1)
+        :foo
+        Expr(:foo, 1)
+        GlobalRef(Core, :nothing)
+        nothing
+    ]
+
+    local expr_wrappers = Function[
+        identity
+        x->QuoteNode(x)
+        x->Expr(:function, x)
+        x->Expr(:dummy, x)
+    ]
+
+    local st_wrappers = Function[
+        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() (x::K"Value"))
+        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() [K"inert" x::K"Value"])
+        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() [K"function" x::K"Value"])
+    ]
+
+    @testset "every basic case" begin
+        for e in expr_syntax, w1 in expr_wrappers, w2 in expr_wrappers
+            e_wrapped = w2(w1(e))
+            @test roundtrip(e_wrapped) == e_wrapped
+        end
+
+        for e in expr_syntax, st_w in st_wrappers, e_w in expr_wrappers
+            isnothing(e) && continue
+            e_wrapped = st_w(e_w(e))
+            @test roundtrip(e_wrapped) == e_wrapped
+            e_wrapped = e_w(st_w(e))
+            @test roundtrip(e_wrapped) == e_wrapped
+        end
+    end
+
+    @testset "special cases: Value implicitly quotes AST nodes" begin
+        @test JL.est_to_expr(@ast_ :foo::K"Value") ==
+            JL.est_to_expr(@ast_ [K"inert" "foo"::K"Identifier"]) ==
+            QuoteNode(:foo)
+        @test JL.est_to_expr(@ast_ Expr(:call, 1)::K"Value") ==
+            JL.est_to_expr(@ast_ [K"inert" [K"call" 1::K"Value"]]) ==
+            QuoteNode(Expr(:call, 1))
+        @test JL.est_to_expr(@ast_ QuoteNode(Expr(:call, 1))::K"Value") ==
+            JL.est_to_expr(@ast_ [K"inert" [K"inert" [K"call" 1::K"Value"]]]) ==
+            QuoteNode(QuoteNode(Expr(:call, 1)))
+    end
+
+    # copied from JuliaSyntax/test/parse_packages.jl
+    function find_source_in_path(basedir)
+        src_list = String[]
+        for (root, dirs, files) in walkdir(basedir)
+            append!(src_list, (joinpath(root, f) for f in files
+                                   if endswith(f, ".jl") && (p = joinpath(root,f); !islink(p) && isfile(p))))
+        end
+        src_list
+    end
+
+    function find_diff(e1, e2, indices=Int[])
+        if expr_equal_forgiving(e1, e2)
+            return nothing
+        elseif !(e1 isa Expr && e2 isa Expr) ||
+            e1.head !== e2.head ||
+            length(e1.args) !== length(e2.args)
+            return (e1, e2, indices)
+        else
+            for i in 1:length(e1.args)
+                push!(indices, i)
+                d = find_diff(e1.args[i], e2.args[i], indices)
+                isnothing(d) || return d
+                pop!(indices)
+            end
+        end
+    end
+
+    function test_each_in_path(f::Function, basedir)
+        for filepath in find_source_in_path(basedir)
+            @testset "$(relpath(filepath, basedir))" begin
+                e = try
+                    JuliaSyntax.parseall(Expr, read(filepath, String))
+                catch
+                    continue
+                end
+                e2 = f(e)
+                pass = expr_equal_forgiving(e, e2)
+                @test pass
+                if !pass
+                    (parsed, roundtripped, indices) = find_diff(e, e2)
+                    @info "diff:" outpath parsed roundtripped e e2
+                end
+            end
+        end
+    end
+
+    # ignore_linenums=false is good for checking, but too noisy to use much
+    function expr_equal_forgiving(e1, e2; ignore_linenums=true)
+        !(e1 isa Expr && e2 isa Expr) && return e1 == e2
+        if ignore_linenums
+            e1, e2 = let e1b = Expr(e1.head), e2b = Expr(e2.head)
+                e1b.args = filter(x->!(x isa LineNumberNode), e1.args)
+                e2b.args = filter(x->!(x isa LineNumberNode), e2.args)
+                e1b, e2b
+            end
+        end
+
+        e1.head === e2.head && length(e1.args) === length(e2.args) &&
+            all(expr_equal_forgiving(a1, a2; ignore_linenums) for (a1, a2) in
+                    zip(e1.args, e2.args))
+    end
+
+    @testset "bulk parsed code, no linenodes" begin
+        jl_dir = joinpath(@__DIR__, "..")
+        test_each_in_path(roundtrip, jl_dir)
+    end
+
+    @testset "linenodes equal (modules and functions have extra)" begin
+        e = JuliaSyntax.parseall(Expr, """
+        module M
+        function f()
+            if x
+                j
+            elseif y
+                let
+                    y
+                end
+            end
+        end
+        begin
+            1
+        end
+        end
+        """; filename="foo")
+
+        @test e == roundtrip(e)
+    end
 end

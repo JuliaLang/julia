@@ -2218,10 +2218,23 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
                 _parsed_call = was_eventually_call(ps)
                 _maybe_grouping_parens = !had_commas && !had_splat && num_semis == 0 && num_subexprs == 1
-                # Skip intervening newlines only when the parentheses hold a single
-                # expression, which is the ambiguous case between a name like (::T)
-                # and an anonymous function parameter list.
-                next_kind = peek(ps, 2, skip_newlines=_maybe_grouping_parens)
+                # Check if there's a newline between `)` and the next `(` or `.`.
+                # We need to find where `)` is and check what immediately follows it.
+                # If peek(1, skip_newlines=false) is `)`, we're directly before it.
+                # Otherwise there's whitespace/newline before `)`.
+                next_token_pos = if peek(ps, 1, skip_newlines=false) == K")"
+                    # Directly before ), token after ) is at 2
+                    2
+                else
+                    # There's whitespace before ), so ) is at 2
+                    # and what follows ) is at 3
+                    3
+                end
+                token_after_paren = peek(ps, next_token_pos, skip_newlines=false)
+                # If token_after_paren is a newline, this is an anonymous function
+                has_newline_after_paren = _maybe_grouping_parens && token_after_paren == K"NewlineWs"
+                # Get the next significant token to determine if we need to parse a call
+                next_kind = peek(ps, 2, skip_newlines=_maybe_grouping_parens && !has_newline_after_paren)
                 _needs_parse_call = next_kind ∈ KSet"( ."
                 _is_anon_func = (!_needs_parse_call && !_parsed_call) || had_commas
                 return (needs_parameters      = _is_anon_func,
@@ -3189,8 +3202,8 @@ end
 # (a,b=1; c,d=2; e,f=3)  ==>  (tuple-p a (= b 1) (parameters c (= d 2)) (parameters e (= f 3)))
 #
 # flisp: parts of parse-paren- and parse-arglist
-function parse_brackets(after_parse::Function,
-                        ps::ParseState, closing_kind, generator_is_last=true)
+function parse_brackets(after_parse::F,
+                        ps::ParseState, closing_kind, generator_is_last=true) where {F}
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
