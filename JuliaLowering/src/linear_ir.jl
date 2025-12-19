@@ -25,36 +25,36 @@ end
 
 # Target to jump to, including info on try handler nesting and catch block
 # nesting
-struct JumpTarget{GraphType}
-    label::SyntaxTree{GraphType}
-    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+struct JumpTarget{Attrs}
+    label::SyntaxTree{Attrs}
+    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
 end
 
-function JumpTarget(label::SyntaxTree{GraphType}, ctx) where {GraphType}
-    JumpTarget{GraphType}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpTarget(label::SyntaxTree{Attrs}, ctx) where {Attrs}
+    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
 end
 
-struct JumpOrigin{GraphType}
-    goto::SyntaxTree{GraphType}
+struct JumpOrigin{Attrs}
+    goto::SyntaxTree{Attrs}
     index::Int
-    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
 end
 
-function JumpOrigin(goto::SyntaxTree{GraphType}, index, ctx) where {GraphType}
-    JumpOrigin{GraphType}(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpOrigin(goto::SyntaxTree{Attrs}, index, ctx) where {Attrs}
+    JumpOrigin{Attrs}(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
 end
 
-struct FinallyHandler{GraphType}
-    tagvar::SyntaxTree{GraphType}
-    target::JumpTarget{GraphType}
-    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree{GraphType}}}}
+struct FinallyHandler{Attrs}
+    tagvar::SyntaxTree{Attrs}
+    target::JumpTarget{Attrs}
+    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree{Attrs}}}}
 end
 
-function FinallyHandler(tagvar::SyntaxTree{GraphType}, target::JumpTarget) where {GraphType}
-    FinallyHandler{GraphType}(tagvar, target,
-        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree{GraphType}}}}())
+function FinallyHandler(tagvar::SyntaxTree{Attrs}, target::JumpTarget) where {Attrs}
+    FinallyHandler{Attrs}(tagvar, target,
+        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree{Attrs}}}}())
 end
 
 
@@ -64,20 +64,20 @@ Context for creating linear IR.
 One of these is created per lambda expression to flatten the body down to
 a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
-struct LinearIRContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
-    code::SyntaxList{GraphType, Vector{NodeId}}
+struct LinearIRContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
+    code::SyntaxList{Attrs, Vector{NodeId}}
     bindings::Bindings
     next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
     lambda_bindings::LambdaBindings
-    return_type::Union{Nothing, SyntaxTree{GraphType}}
-    break_targets::Dict{String, JumpTarget{GraphType}}
-    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    finally_handlers::Vector{FinallyHandler{GraphType}}
-    symbolic_jump_targets::Dict{String,JumpTarget{GraphType}}
-    symbolic_jump_origins::Vector{JumpOrigin{GraphType}}
+    return_type::Union{Nothing, SyntaxTree{Attrs}}
+    break_targets::Dict{String, JumpTarget{Attrs}}
+    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    finally_handlers::Vector{FinallyHandler{Attrs}}
+    symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
+    symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
     meta::Dict{Symbol, Any}
     mod::Module
 end
@@ -85,12 +85,12 @@ end
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
     graph = syntax_graph(ctx)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
-    GraphType = typeof(graph)
+    Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, rett,
-                    Dict{String,JumpTarget{GraphType}}(), SyntaxList(ctx), SyntaxList(ctx),
-                    Vector{FinallyHandler{GraphType}}(), Dict{String,JumpTarget{GraphType}}(),
-                    Vector{JumpOrigin{GraphType}}(), Dict{Symbol, Any}(), ctx.mod)
+                    Dict{String,JumpTarget{Attrs}}(), SyntaxList(ctx), SyntaxList(ctx),
+                    Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
+                    Vector{JumpOrigin{Attrs}}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -1125,14 +1125,14 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
                               id=Int)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
-    GraphType = typeof(graph)
+    Attrs = typeof(graph.attributes)
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
                            Ref(0), false, LambdaBindings(), nothing,
-                           Dict{String,JumpTarget{typeof(graph)}}(),
+                           Dict{String,JumpTarget{Attrs}}(),
                            SyntaxList(graph), SyntaxList(graph),
-                           Vector{FinallyHandler{GraphType}}(),
-                           Dict{String, JumpTarget{GraphType}}(),
-                           Vector{JumpOrigin{GraphType}}(),
+                           Vector{FinallyHandler{Attrs}}(),
+                           Dict{String, JumpTarget{Attrs}}(),
+                           Vector{JumpOrigin{Attrs}}(),
                            Dict{Symbol, Any}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     _ctx, res

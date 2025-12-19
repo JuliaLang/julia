@@ -1,7 +1,7 @@
 # Lowering pass 1: Macro expansion, simple normalizations and quote expansion
 
-struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct MacroExpansionContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     scope_layer_stack::Vector{LayerId}

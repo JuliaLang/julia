@@ -1,19 +1,20 @@
-struct ClosureInfo{GraphType}
+struct ClosureInfo{Attrs}
     # Global name of the type of the closure
-    type_name::SyntaxTree{GraphType}
+    type_name::SyntaxTree{Attrs}
     # Names of fields for use with getfield, in order
-    field_names::SyntaxList{GraphType}
+    field_names::SyntaxList{Attrs, Vector{NodeId}}
     # Map from the original BindingId of closed-over vars to the index of the
     # associated field in the closure type.
     field_inds::Dict{IdTag,Int}
 end
 
-struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     mod::Module
     closure_bindings::Dict{IdTag,ClosureBindings}
-    capture_rewriting::Union{Nothing,ClosureInfo{GraphType},SyntaxList{GraphType}}
+    capture_rewriting::Union{Nothing,ClosureInfo{Attrs},
+                             SyntaxList{Attrs, Vector{NodeId}}}
     lambda_bindings::LambdaBindings
     # True if we're in a section of code which preserves top-level sequencing
     # such that closure types can be emitted inline with other code.
@@ -23,17 +24,17 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     # functions to refer to globals that have already been declared, without
     # triggering the "function body AST not pure" error.
     toplevel_pure::Bool
-    toplevel_stmts::SyntaxList{GraphType}
-    closure_infos::Dict{IdTag,ClosureInfo{GraphType}}
+    toplevel_stmts::SyntaxList{Attrs, Vector{NodeId}}
+    closure_infos::Dict{IdTag,ClosureInfo{Attrs}}
 end
 
-function ClosureConversionCtx(graph::GraphType, bindings::Bindings,
+function ClosureConversionCtx(graph::SyntaxGraph{Attrs}, bindings::Bindings,
                               mod::Module, closure_bindings::Dict{IdTag,ClosureBindings},
-                              lambda_bindings::LambdaBindings) where {GraphType}
-    ClosureConversionCtx{GraphType}(
+                              lambda_bindings::LambdaBindings) where {Attrs}
+    ClosureConversionCtx{Attrs}(
         graph, bindings, mod, closure_bindings, nothing,
         lambda_bindings, false, true, SyntaxList(graph),
-        Dict{IdTag,ClosureInfo{GraphType}}())
+        Dict{IdTag,ClosureInfo{Attrs}}())
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
