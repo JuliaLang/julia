@@ -2735,7 +2735,7 @@ function parse_iteration_spec(ps::ParseState)
         bump(ps, TRIVIA_FLAG)
         parse_pipe_lt(ps)
     else
-         # Check if we're followed by a closing bracket (array context)
+        # Check if we're followed by a closing bracket (array context)
         next_token = peek_skip_newline_in_gen(ps)
         in_array_literal = next_token == K"]"
         # Recovery heuristic with context-specific error message
