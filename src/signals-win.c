@@ -471,12 +471,28 @@ void jl_thread_resume(int tid)
     }
 }
 
+// Try to acquire the profile lock without blocking.
+// Returns 1 on success, 0 if the lock could not be acquired.
+static int jl_trylock_profile(void)
+{
+    uintptr_t held = jl_lock_profile_rd_held();
+    if (held == -1)
+        return 0;
+    if (held == 0) {
+        if (uv_rwlock_tryrdlock(&debuginfo_asyncsafe) != 0)
+            return 0;
+    }
+    held++;
+    TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+    return 1;
+}
+
 int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
-    jl_lock_profile(); // prevent concurrent mutation
-    // Use trylock to avoid deadlock if the target thread holds this lock.
-    // If we can't get the lock, skip this thread - it's better to miss a
-    // sample than to deadlock.
+    // Use trylock to avoid deadlock - if we can't get the locks, skip this
+    // thread. It's better to miss a sample than to deadlock.
+    if (!jl_trylock_profile())
+        return 0;
     if (uv_mutex_trylock(&jl_in_stackwalk) != 0) {
         jl_unlock_profile();
         return 0;
