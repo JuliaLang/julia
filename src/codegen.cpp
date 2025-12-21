@@ -4291,8 +4291,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
 	else if (f == BUILTIN(invoke) && nargs >= 2) {
+	    const jl_cgval_t &func = argv[1];
         const jl_cgval_t &argtypes = argv[2];
-        if (argtypes.constant && jl_is_code_instance(argtypes.constant)) {
+        if (func.constant && argtypes.constant && jl_is_code_instance(argtypes.constant)) {
             jl_code_instance_t *codeinst = (jl_code_instance_t*)argtypes.constant;
             jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
 
