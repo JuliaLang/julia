@@ -753,6 +753,10 @@ end
     @test reinterpret(PaddedSmall, 0x03000201) == PaddedSmall(1, 2, 3)
     @test reinterpret(Tuple{UInt8,UInt16,UInt8}, 0x03000201) == (0x01, 0x0002, 0x03)
 
+    # Test trailing padding only
+    @test_broken(reinterpret(Tuple{Int64, Int64, Int8}, ntuple(_->0x1, 17))
+        == (72340172838076673, 72340172838076673, 1))
+
     # Errors
     @test_throws Exception reinterpret(PaddedSmall, 0)
     @test_throws Exception reinterpret(Tuple{UInt8,UInt16,UInt8}, 0)
