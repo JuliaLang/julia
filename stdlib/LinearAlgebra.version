@@ -1,4 +1,4 @@
 LINEARALGEBRA_BRANCH = release-1.12
-LINEARALGEBRA_SHA1 = dd3ea72ec654706060220118f4a65a708733b84c
+LINEARALGEBRA_SHA1 = 7249e662d66b53da6c9335ea748eac2750c2924f
 LINEARALGEBRA_GIT_URL := https://github.com/JuliaLang/LinearAlgebra.jl.git
 LINEARALGEBRA_TAR_URL = https://api.github.com/repos/JuliaLang/LinearAlgebra.jl/tarball/$1
