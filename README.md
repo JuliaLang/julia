@@ -59,8 +59,7 @@ and installing Julia, below.
 We welcome contributions from developers of all experience levels, including bug fixes,
 documentation improvements, tests, and performance enhancements.
 
-New contributors are encouraged to start by reading:
-- CONTRIBUTING.md: https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md
+New contributors are encouraged to start by reading [CONTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
 
 ### Learning Julia
