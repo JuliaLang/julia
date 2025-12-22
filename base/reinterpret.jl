@@ -24,7 +24,7 @@ end
 # Simple memcopy between two types of the same size.
 @inline function byte_cast(::Type{T}, x::V) where {T,V}
     r = Ref{T}()
-    @assert sizeof(T) == sizeof(V)
+    @assert sizeof(T) == sizeof(V) "Cannot byte_cast($(T), $(V)). Sizes don't match: $(sizeof(T)) != $(sizeof(V))"
     GC.@preserve r begin
         unsafe_store!(reinterpret(Ptr{V}, pointer_from_objref(r)), x)
         return r[]
