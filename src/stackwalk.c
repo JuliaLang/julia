@@ -548,14 +548,6 @@ void jl_fin_stackwalk(void)
     }
 }
 
-// Set the abort_profile_ptr in TLS
-#ifdef _CPU_X86_64_
-JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT
-{
-    abort_profile_ptr = abort_ptr;
-}
-#endif
-
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
     int result;
