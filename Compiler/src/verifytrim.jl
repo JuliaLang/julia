@@ -164,8 +164,6 @@ function print_stmt_colored(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState
     if !is_call_expr(codeinfo, stmt)
         return print_value(io, codeinfo, stmt, stable)
     end
-    is_nested = depth > 0
-    is_nested && print(io, "(")
 
     if stmt.head === :foreigncall
         print_value(io, "ccall", stable)
@@ -205,8 +203,6 @@ function print_stmt_colored(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState
         use_multiline && nargs > 0 && (println(io); print(io, "  " ^ indent))
         print(io, ")")
     end
-
-    is_nested && print(io, ")")
 end
 
 function verify_print_stmt(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState}, stmtidx::Int)
