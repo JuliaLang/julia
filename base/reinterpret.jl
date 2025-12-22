@@ -24,9 +24,28 @@ end
 # Simple memcopy between two types of the same size.
 @inline function byte_cast(::Type{T}, x::V) where {T,V}
     r = Ref{T}()
-    @assert sizeof(T) == sizeof(V) "Cannot byte_cast($(T), $(V)). Sizes don't match: $(sizeof(T)) != $(sizeof(V))"
+    @assert sizeof(T) == sizeof(V) "Cannot byte_cast($(T), $(V)). Expected: $(sizeof(T)) == $(sizeof(V))"
     GC.@preserve r begin
         unsafe_store!(reinterpret(Ptr{V}, pointer_from_objref(r)), x)
+        return r[]
+    end
+end
+
+@inline function _byte_cast_smaller_src(::Type{T}, x::V) where {T,V}
+    r = Ref{T}()
+    @assert sizeof(T) >= sizeof(V) "Cannot _byte_cast_smaller_src($(T), $(V)). Expected: $(sizeof(T)) >= $(sizeof(V))"
+    GC.@preserve r begin
+        unsafe_store!(reinterpret(Ptr{V}, pointer_from_objref(r)), x)
+        return r[]
+    end
+end
+@inline function _byte_cast_smaller_dst(::Type{T}, x::V) where {T,V}
+    r = Ref{T}()
+    xr = Ref{V}(x)
+    @assert sizeof(T) <= sizeof(V) "Cannot _byte_cast_smaller_dst($(T), $(V)). Expected: $(sizeof(T)) <= $(sizeof(V))"
+    GC.@preserve r xr begin
+        unsafe_store!(reinterpret(Ptr{T}, pointer_from_objref(r)),
+            unsafe_load(reinterpret(Ptr{T}, pointer_from_objref(xr))))
         return r[]
     end
 end
@@ -171,7 +190,13 @@ end
     # This is always faster than the region-matching logic - computers are very fast at
     # copying bytes, and this can possibly be entirely compiled away to only a type-cast.
     if _packing_equal(SRC_regions, DST_regions)
-        return byte_cast(DST, x)
+        if sizeof(DST) < sizeof(SRC)
+            return _byte_cast_smaller_dst(DST, x)
+        elseif sizeof(DST) > sizeof(SRC)
+            return _byte_cast_smaller_src(DST, x)
+        else  # Sizes are equal
+            return byte_cast(DST, x)
+        end
     end
 
     offsets_to_copy = match_packed_regions(SRC_regions, DST_regions)
@@ -208,4 +233,5 @@ end
         src_ptr,
         Base.tail(offsets_to_copy),
     )
+    return nothing
 end
