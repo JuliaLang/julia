@@ -31,7 +31,7 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer),
     @test occursin("finalizer", desc.desc)
     repr = sprint(verify_print_error, desc, parents, warn)
     # New format uses multiline for unstable types
-    @test occursin(r"^unresolved finalizer registered from statement finalizer\("s, repr)
+    @test occursin(r"^unresolved finalizer registered from statement (Core\.)?finalizer\("s, repr)
     @test occursin(r"f::Any"s, repr)
     @test occursin(r"o::Any"s, repr)
     @test occursin(r"::Nothing\nStacktrace:"s, repr)
