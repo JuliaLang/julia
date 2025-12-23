@@ -896,6 +896,14 @@ end
     @test CartesianIndices(A) == CartesianIndices(B)
 end
 
+# issue #38660
+@testset "`findmin/max` for OffsetArray" begin
+    ov = OffsetVector([-1, 1], 0:1)
+    @test @inferred(findmin(ov; dims = 1)) .|> first == (-1, 0)
+    ov = OffsetVector([-1, 1], -1:0)
+    @test @inferred(findmax(ov; dims = 1)) .|> first == (1, 0)
+end
+
 @testset "overflowing show" begin
     A = OffsetArray(repeat([1], 1), typemax(Int)-1)
     b = IOBuffer(maxsize=10)
