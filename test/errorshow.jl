@@ -1512,22 +1512,23 @@ end
     @test occursin("This other hint caught my abstract exception supertype", exc_print)
 end
 
-@testset "GenericMemoryRef BoundsError summary" begin
+@testset "MemoryRef BoundsError summary" begin
     mem = Memory{Int}(undef, 10)
     ref = memoryref(mem, 9)
     err_str = @except_str memoryref(ref, 3) BoundsError
-    @test occursin("GenericMemoryRef", err_str)
+    @test occursin("MemoryRef", err_str)
     @test occursin("2-element", err_str)
     @test occursin(" at index [3]", err_str)
 
     ref2 = memoryref(mem, 10)
     err_str2 = @except_str memoryref(ref2, 2) BoundsError
-    @test occursin("GenericMemoryRef", err_str2)
-    @test occursin("empty", err_str2)
+    @test occursin("MemoryRef", err_str2)
+    @test occursin("1-element", err_str2)
 
     memA = AtomicMemory{Int}(undef, 4)
     refA = memoryref(memA, 4)
     err_strA = @except_str memoryref(refA, 2) BoundsError
-    @test occursin("GenericMemoryRef", err_strA)
-    @test occursin("empty", err_strA)
+    @test occursin("AtomicMemoryRef", err_strA)
+    @test occursin("1-element", err_strA)
 end
+
