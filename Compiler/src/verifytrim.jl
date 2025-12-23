@@ -221,6 +221,7 @@ function verify_print_error(io::IO, desc::CallMissing, parents::ParentMap, warn:
     printstyled(io, desc; color=color, bold=true)
     print(io, " from statement ")
     verify_print_stmt(io, codeinfo, sptypes, stmtidx)
+    print(io, "\n")
     Base.show_backtrace(io, frames)
     print(io, "\n\n")
     nothing
