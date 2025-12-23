@@ -1253,7 +1253,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         if !quick_exit
             logstr = sprint(context=logio) do iostr
                 if fancyprint # replace the progress bar
-                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((p.name for p in requested_pkgids), ", ", " and ")) finished."
+                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((full_name(ext_to_parent, p) for p in requested_pkgids), ", ", " and ")) finished."
                     printpkgstyle(iostr, :Precompiling, what)
                 end
                 plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
