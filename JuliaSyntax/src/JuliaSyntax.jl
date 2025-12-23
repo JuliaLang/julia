@@ -16,7 +16,9 @@ export parseall, parseatom, parsestmt
 
 @_public parse!,
     ParseStream,
-    build_tree
+    build_tree,
+    all_trivia,
+    any_error
 
 # Tokenization
 export Token, tokenize, untokenize
