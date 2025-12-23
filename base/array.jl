@@ -672,7 +672,7 @@ julia> collect(Float64, 1:2:5)
 collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
 _collect(::Type{T}, itr, isz::Union{HasLength,HasShape}) where {T} =
-    copyto!(_array_for(T, isz, _similar_shape(itr, isz)), itr)
+    copyto!(_array_for_inner(T, isz, _similar_shape(itr, isz)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
@@ -696,12 +696,12 @@ _similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape, axs) where {T} =
     similar(c, T, axs)
 
 # make a collection appropriate for collecting `itr::Generator`
-_array_for(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
-_array_for(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
-_array_for(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
+_array_for_inner(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
+_array_for_inner(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
+_array_for_inner(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 # used by syntax lowering for simple typed comprehensions
-_array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(itr, isz))
+_array_for(::Type{T}, itr, isz) where {T} = _array_for_inner(T, isz, _similar_shape(itr, isz))
 
 
 """
@@ -827,10 +827,10 @@ function collect(itr::Generator)
         shp = _similar_shape(itr, isz)
         y = iterate(itr)
         if y === nothing
-            return _array_for(et, isz, shp)
+            return _array_for_inner(et, isz, shp)
         end
         v1, st = y
-        dest = _array_for(typeof(v1), isz, shp)
+        dest = _array_for_inner(typeof(v1), isz, shp)
         # The typeassert gives inference a helping hand on the element type and dimensionality
         # (work-around for #28382)
         et′ = et <: Type ? Type : et
