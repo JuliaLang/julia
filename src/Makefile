@@ -3,9 +3,6 @@ JULIAHOME := $(abspath $(SRCDIR)/..)
 BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
-
-# Use archspec_cpp for processor detection (set USE_ARCHSPEC=0 to use legacy)
-USE_ARCHSPEC ?= 1
 ifeq ($(USE_ARCHSPEC),1)
 ARCHSPEC_LIB := $(build_libdir)/libarchspec.a
 endif
