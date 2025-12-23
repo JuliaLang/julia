@@ -933,7 +933,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     if occursin("Waiting for background task / IO / timer", str)
                         thistaskwaiting = true
                         !liveprinting && !fancyprint && @lock print_lock begin
-                            println(io, pkg.name, color_string(str, Base.warn_color()))
+                            println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
                         end
                         push!(taskwaiting, pkg_config)
                     end
@@ -1326,7 +1326,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         err_str = IOBuffer()
         for ((dep, config), err) in failed_deps
             write(err_str, "\n")
-            print(err_str, "\n", dep.name, " ")
+            print(err_str, "\n", full_name(ext_to_parent, dep), " ")
             join(err_str, config[1], " ")
             print(err_str, "\n", err)
         end
