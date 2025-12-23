@@ -2641,6 +2641,7 @@ end
         # Call precompilepkgs with output redirected to a file
         LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
         DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        loadfail_err = nothing
         original_depot_path = copy(Base.DEPOT_PATH)
         old_proj = Base.active_project()
         try
@@ -2658,6 +2659,7 @@ end
             end
             loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
             @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
+            loadfail_err = loadsfailpkg.msg
             dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
             @test length(dependsonly) == 1
         finally
@@ -2667,12 +2669,12 @@ end
 
         output = read(LoadsFailPkg_output, String)
         # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
-        @test count("LoadError: expected fail", output) == 1
-        @test count("expected fail", output) == 1
+        @test count("LoadError: expected fail", loadfail_err) == 1
+        @test count("expected fail", loadfail_err) == 1
         @test count("✗ FailPkg", output) > 0
         @test count("✗ LoadsFailPkg", output) > 0
-        @test count("Now FailPkg is running.", output) == 1
-        @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("Now FailPkg is running.", loadfail_err) == 1
+        @test count("Now LoadsFailPkg is running.", loadfail_err) == 1
         @test count("DependsOnly precompiling.", output) == 0
 
         # DependsOnly should succeed because it doesn't actually load FailPkg

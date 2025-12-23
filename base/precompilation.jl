@@ -912,14 +912,17 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     pkgspidlocked = Dict{PkgConfig,String}()
     pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
 
-    function monitor_std(pkg_config, pipe; single_requested_pkg=false)
+    function monitor_std(pkg_config, pipe; single_requested_pkg=false, suppress_output::Bool=fancyprint)
         local pkg, config = pkg_config
         try
             local liveprinting = false
             local thistaskwaiting = false
             while !eof(pipe)
                 local str = readline(pipe, keep=true)
-                if single_requested_pkg && (liveprinting || !isempty(str))
+                # Always buffer the output
+                write(get!(IOBuffer, std_outputs, pkg_config), str)
+                # Only print if output is not suppressed (suppress when called from loading)
+                if !suppress_output && single_requested_pkg && (liveprinting || !isempty(str))
                     @lock print_lock begin
                         if !liveprinting
                             liveprinting = true
@@ -928,18 +931,17 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         print(io, ansi_cleartoendofline, str)
                     end
                 end
-                write(get!(IOBuffer, std_outputs, pkg_config), str)
                 if thistaskwaiting
                     if occursin("Waiting for background task / IO / timer", str)
                         thistaskwaiting = true
-                        !liveprinting && !fancyprint && @lock print_lock begin
+                        !suppress_output && !liveprinting && @lock print_lock begin
                             println(io, pkg.name, color_string(str, Base.warn_color()))
                         end
                         push!(taskwaiting, pkg_config)
                     end
                 else
                     # XXX: don't just re-enable IO for random packages without printing the context for them first
-                    !liveprinting && !fancyprint && @lock print_lock begin
+                    !suppress_output && !liveprinting && @lock print_lock begin
                         print(io, ansi_cleartoendofline, str)
                     end
                 end
@@ -1058,6 +1060,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     @debug "precompile: starting precompilation loop" direct_deps project_deps
     ## precompilation loop
 
+    should_suppress_live_output = fancyprint || _from_loading
+
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
@@ -1104,7 +1108,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
 
                         # std monitoring
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                        t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
+                        t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg, suppress_output=should_suppress_live_output)
 
                         local name
                         try
@@ -1289,27 +1293,26 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             end
         end
     end
-    if !isempty(std_outputs)
+    # Extract std_outputs into a list
+    std_outputs_list = Tuple{PkgConfig,String}[(pkg_config, strip(String(take!(buf)))) for (pkg_config, buf) in std_outputs]
+    filter!(!isempty∘last, std_outputs_list)
+
+    outputs_to_show = filter(((pkg_config, _),) -> !haskey(failed_deps, pkg_config), std_outputs_list)
+    if should_suppress_live_output && !isempty(outputs_to_show)
         str = sprint(context=io) do iostr
             # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
             # interrupting a hanging precompile job with stderr output.
-            let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
-                filter!(!isempty∘last, std_outputs)
-                if !isempty(std_outputs)
-                    local plural1 = length(std_outputs) == 1 ? "y" : "ies"
-                    local plural2 = length(std_outputs) == 1 ? "" : "s"
-                    print(iostr, "\n  ", color_string("$(length(std_outputs))", Base.warn_color()), " dependenc$(plural1) had output during precompilation:")
-                    for (pkg_config, err) in std_outputs
-                        pkg, config = pkg_config
-                        err = if pkg == pkg_liveprinted[]
-                            "[Output was shown above]"
-                        else
-                            join(split(err, "\n"), color_string("\n│  ", Base.warn_color()))
-                        end
-                        name = full_name(ext_to_parent, pkg)
-                        print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
-                    end
+            local plural1 = length(outputs_to_show) == 1 ? "y" : "ies"
+            print(iostr, "\n  ", color_string("$(length(outputs_to_show))", Base.warn_color()), " dependenc$(plural1) had output during precompilation:")
+            for (pkg_config, output) in outputs_to_show
+                pkg, config = pkg_config
+                output = if pkg == pkg_liveprinted[]
+                    "[Output was shown above]"
+                else
+                    join(split(output, "\n"), color_string("\n│  ", Base.warn_color()))
                 end
+                name = full_name(ext_to_parent, pkg)
+                print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), output, color_string("\n└  ", Base.warn_color()))
             end
         end
         isempty(str) || @lock print_lock begin
@@ -1322,13 +1325,25 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
     # Fail noisily now with failed_deps if any.
     # Include all messages from compilecache since any might be relevant in the failure.
+    # When _from_loading, also include stderr output in the error message (since it wasn't shown above).
     if !isempty(failed_deps)
+        # Build a lookup for stderr output from failed packages (only needed when _from_loading)
+        failed_outputs = Dict{PkgConfig,String}(pkg_config => output for (pkg_config, output) in std_outputs_list if haskey(failed_deps, pkg_config))
+
         err_str = IOBuffer()
         for ((dep, config), err) in failed_deps
             write(err_str, "\n")
             print(err_str, "\n", dep.name, " ")
             join(err_str, config[1], " ")
             print(err_str, "\n", err)
+            # Include stderr output if available (only when _from_loading, since otherwise it was already shown)
+            pkg_config = (dep, config)
+            if haskey(failed_outputs, pkg_config)
+                output = failed_outputs[pkg_config]
+                if !isempty(output)
+                    print(err_str, "\n", output)
+                end
+            end
         end
         n_errs = length(failed_deps)
         pluraled = n_errs == 1 ? "" : "s"
