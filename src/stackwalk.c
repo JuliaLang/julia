@@ -407,8 +407,7 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 
 // XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
-static __thread UNWIND_HISTORY_TABLE HistoryTable;
-static __thread _Atomic(int) *abort_profile_ptr = NULL;
+static UNWIND_HISTORY_TABLE HistoryTable;
 
 static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
@@ -437,7 +436,7 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     return fbase;
 }
 #else
-static __thread struct {
+static struct {
     DWORD64 dwAddr;
     DWORD64 ImageBase;
 } HistoryTable;
@@ -616,22 +615,9 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->Rip != 0;
     }
 
-    // Set can-abort flag
-    _Atomic(int) *abort_ptr = abort_profile_ptr;
-    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 1) != 0) {
-        jl_atomic_store_relaxed(abort_ptr, 3);
-        return 0; // aborted
-    }
-
     DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     PRUNTIME_FUNCTION FunctionEntry = ImageBase ? (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
         GetCurrentProcess(), cursor->Rip - !from_signal_handler) : NULL;
-
-    // Check if can-abort flag was removed, or remove it
-    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 0) != 1) {
-        jl_atomic_store_relaxed(abort_ptr, 3);
-        return 0; // abort
-    }
 
     if (!FunctionEntry) {
         // Not code or bad unwind?
