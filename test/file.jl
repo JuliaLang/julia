@@ -863,10 +863,10 @@ end
         touch(dst)
 
         # Case 1: dst exists, force=false
-        @test_throws ArgumentError checkfor_mv_cp_cptree(dst, dst, "test"; force=false)
+        @test_throws ArgumentError Base.Filesystem.checkfor_mv_cp_cptree(dst, dst, "test"; force=false)
 
         # Case 2: dst exists, force=true, src == dst
-        @test_throws ArgumentError checkfor_mv_cp_cptree(dst, dst, "test"; force=true)
+        @test_throws ArgumentError Base.Filesystem.checkfor_mv_cp_cptree(dst, dst, "test"; force=true)
     end
 end
 
