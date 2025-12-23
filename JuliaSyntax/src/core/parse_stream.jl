@@ -967,7 +967,20 @@ unsafe_textbuf(stream) = stream.textbuf
 
 first_byte(stream::ParseStream) = first(stream.output).byte_span + 1 # After sentinel
 last_byte(stream::ParseStream) = stream.next_byte - 1
+
+"""
+    any_error(stream)
+
+Return true if the stream encountered an error during parsing.
+"""
 any_error(stream::ParseStream) = any_error(stream.diagnostics)
+
+"""
+    all_trivia(stream)
+
+Return true if the parse stream contains only syntax trivia (or is empty)
+"""
+all_trivia(stream::ParseStream) = all(n->is_trivia(n) || kind(n) == K"TOMBSTONE", stream.output)
 
 # Return last non-whitespace byte which was parsed
 function last_non_whitespace_byte(stream::ParseStream)
