@@ -162,7 +162,58 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.13")
+# fl_parse has several peculiarities in the exact for which error expressions take.
+function build_base_compat_expr(stream, rule; filename="none", first_line=1)
+    if !any_error(stream)
+        return build_tree(Expr, stream; filename=filename, first_line=first_line)
+    end
+    pos_before_comments = last_non_whitespace_byte(stream)
+    errspec = first_tree_error(stream)
+    tag = _incomplete_tag(errspec, pos_before_comments)
+    if _has_v1_10_hooks
+        exc = ParseError(stream, filename=filename, first_line=first_line,
+                         incomplete_tag=tag)
+        msg = sprint(showerror, exc)
+        error_ex = Expr(tag === :none ? :error : :incomplete,
+                        Meta.ParseError(msg, exc))
+    elseif tag !== :none
+        # Hack: For older Julia versions, replicate the messages which
+        # Base.incomplete_tag() will match
+        msg =
+            tag === :string  ? "incomplete: invalid string syntax"     :
+            tag === :comment ? "incomplete: unterminated multi-line comment #= ... =#" :
+            tag === :block   ? "incomplete: construct requires end"    :
+            tag === :cmd     ? "incomplete: invalid \"`\" syntax"      :
+            tag === :char    ? "incomplete: invalid character literal" :
+                               "incomplete: premature end of input"
+        error_ex = Expr(:incomplete, msg)
+    else
+        # In the flisp parser errors are normally `Expr(:error, msg)` where
+        # `msg` is a String. By using a JuliaSyntax.ParseError for msg
+        # we can do fancy error reporting instead.
+        error_ex = Expr(:error, ParseError(stream, filename=filename, first_line=first_line))
+    end
+    if rule != :all
+        return error_ex
+    end
+    # When encountering a toplevel error, the reference parser
+    # * truncates the top level expression arg list before that error
+    # * includes the last line number
+    # * appends the error message
+    source = SourceFile(stream, filename=filename, first_line=first_line)
+    topex = build_tree(Expr, stream, source)
+    @assert topex.head == :toplevel
+    i = findfirst(_has_nested_error, topex.args)
+    if i > 1 && topex.args[i-1] isa LineNumberNode
+        i -= 1
+    end
+    resize!(topex.args, i-1)
+    push!(topex.args, LineNumberNode(source_line(source, first_byte(errspec.node)), filename))
+    push!(topex.args, error_ex)
+    return topex
+end
+
+function core_parser_hook(code, filename::String, first_line::Int, offset::Int, rule::Symbol; syntax_version = v"1.13")
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -178,90 +229,17 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
         if !isnothing(_debug_log[])
             print(_debug_log[], """
                   #-#-#-------------------------------
-                  # ENTER filename=$filename, lineno=$lineno, offset=$offset, options=$options"
+                  # ENTER filename=$filename, first_line=$first_line, offset=$offset, rule=$rule"
                   #-#-#-------------------------------
                   """)
             write(_debug_log[], code)
         end
 
         stream = ParseStream(code, offset+1; version = syntax_version)
-        if options === :statement || options === :atom
-            # To copy the flisp parser driver:
-            # * Parsing atoms      consumes leading trivia
-            # * Parsing statements consumes leading+trailing trivia
-            bump_trivia(stream)
-            if peek(stream) == K"EndMarker"
-                # If we're at the end of stream after skipping whitespace, just
-                # return `nothing` to indicate this rather than attempting to
-                # parse a statement or atom and failing.
-                return Core.svec(nothing, last_byte(stream))
-            end
-        end
-        parse!(stream; rule=options)
-        if options === :statement
-            bump_trivia(stream; skip_newlines=false)
-            if peek(stream) == K"NewlineWs"
-                bump(stream)
-            end
-        end
+        parse!(stream; rule=rule, incremental=true)
 
-        if any_error(stream)
-            pos_before_comments = last_non_whitespace_byte(stream)
-            errspec = first_tree_error(stream)
-            tag = _incomplete_tag(errspec, pos_before_comments)
-            if _has_v1_10_hooks
-                exc = ParseError(stream, filename=filename, first_line=lineno,
-                                 incomplete_tag=tag)
-                msg = sprint(showerror, exc)
-                error_ex = Expr(tag === :none ? :error : :incomplete,
-                                Meta.ParseError(msg, exc))
-            elseif tag !== :none
-                # Hack: For older Julia versions, replicate the messages which
-                # Base.incomplete_tag() will match
-                msg =
-                    tag === :string  ? "incomplete: invalid string syntax"     :
-                    tag === :comment ? "incomplete: unterminated multi-line comment #= ... =#" :
-                    tag === :block   ? "incomplete: construct requires end"    :
-                    tag === :cmd     ? "incomplete: invalid \"`\" syntax"      :
-                    tag === :char    ? "incomplete: invalid character literal" :
-                                       "incomplete: premature end of input"
-                error_ex = Expr(:incomplete, msg)
-            else
-                # In the flisp parser errors are normally `Expr(:error, msg)` where
-                # `msg` is a String. By using a JuliaSyntax.ParseError for msg
-                # we can do fancy error reporting instead.
-                error_ex = Expr(:error, ParseError(stream, filename=filename, first_line=lineno))
-            end
-            ex = if options === :all
-                # When encountering a toplevel error, the reference parser
-                # * truncates the top level expression arg list before that error
-                # * includes the last line number
-                # * appends the error message
-                source = SourceFile(stream, filename=filename, first_line=lineno)
-                topex = build_tree(Expr, stream, source)
-                @assert topex.head == :toplevel
-                i = findfirst(_has_nested_error, topex.args)
-                if i > 1 && topex.args[i-1] isa LineNumberNode
-                    i -= 1
-                end
-                resize!(topex.args, i-1)
-                push!(topex.args, LineNumberNode(source_line(source, first_byte(errspec.node)), filename))
-                push!(topex.args, error_ex)
-                topex
-            else
-                error_ex
-            end
-        else
-            # TODO: Figure out a way to show warnings. Meta.parse() has no API
-            # to communicate this, and we also can't show them to stdout as
-            # this is too side-effectful and can result in double-reporting in
-            # the REPL.
-            #
-            # show_diagnostics(stdout, stream.diagnostics, code)
-            #
-            ex = build_tree(Expr, stream; filename=filename, first_line=lineno)
-        end
-
+        ex = all_trivia(stream) ? nothing :
+             build_base_compat_expr(stream, rule; filename=filename, first_line=first_line)
         # Note the next byte in 1-based indexing is `last_byte(stream) + 1` but
         # the Core hook must return an offset (ie, it's 0-based) so the factors
         # of one cancel here.
@@ -294,15 +272,15 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
                offset=offset,
                code=code)
 
-        _fl_parse_hook(code, filename, lineno, offset, options)
+        _fl_parse_hook(code, filename, first_line, offset, rule)
     end
 end
 
 # Core._parse gained a `lineno` argument in
 # https://github.com/JuliaLang/julia/pull/43876
 # Prior to this, the following signature was needed:
-function core_parser_hook(code, filename, offset, options)
-    core_parser_hook(code, filename, 1, offset, options)
+function core_parser_hook(code, filename, offset, rule)
+    core_parser_hook(code, filename, 1, offset, rule)
 end
 
 if _has_v1_10_hooks
