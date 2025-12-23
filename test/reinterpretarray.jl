@@ -729,7 +729,7 @@ const TT = typeof(tup)
     # Errors
     @test_throws Exception reinterpret(PaddedSmall, Padded2(1, 2, 3))
     @test_throws Exception reinterpret(Padded2, PaddedSmall(1, 2, 3))
-    @test_throws Exception reinterpret(Padded1, (UInt32(1), 2))
+    @test_throws Exception reinterpret(Padded1, (UInt32(1), Int64(2)))
 
     @test reinterpret(Padded2, p1) == Padded2(1, 2, 3)
     @test reinterpret(Padded1, tup) == p1
@@ -737,7 +737,7 @@ const TT = typeof(tup)
     @test reinterpret(Padded2, p3) == Padded2(0x00020001, 0x0003000000000000, 0x00050004)
     @test_throws ArgumentError reinterpret(PaddedSmall, Padded2(1, 2, 3))
     @test_throws ArgumentError reinterpret(Padded2, PaddedSmall(1, 2, 3))
-    @test_throws ArgumentError reinterpret(Padded1, (UInt32(1), 2))
+    @test_throws ArgumentError reinterpret(Padded1, (UInt32(1), Int64(2)))
 end
 
 @testset "reinterpret: padded to packed" begin
@@ -745,8 +745,8 @@ end
     @test reinterpret(UInt32, (0x01, 0x0002, 0x03)) == 0x03000201
 
     # Errors
-    @test_throws Exception reinterpret(Int, PaddedSmall(1, 2, 3))
-    @test_throws Exception reinterpret(Int, (0x01, 0x0002))
+    @test_throws Exception reinterpret(Int64, PaddedSmall(1, 2, 3))
+    @test_throws Exception reinterpret(Int64, (0x01, 0x0002))
 end
 
 @testset "reinterpret: packed to padded" begin
@@ -755,11 +755,11 @@ end
 
     # Test trailing padding only
     @test(reinterpret(Tuple{Int64, Int64, Int8}, ntuple(_->0x1, 17))
-        == (72340172838076673, 72340172838076673, 1))
+        == (Int64(72340172838076673), Int64(72340172838076673), Int64(1)))
 
     # Errors
-    @test_throws Exception reinterpret(PaddedSmall, 0)
-    @test_throws Exception reinterpret(Tuple{UInt8,UInt16,UInt8}, 0)
+    @test_throws Exception reinterpret(PaddedSmall, Int64(0))
+    @test_throws Exception reinterpret(Tuple{UInt8,UInt16,UInt8}, Int64(0))
 end
 
 struct ByteString0 end
@@ -814,9 +814,9 @@ end
     @test reinterpret(UInt32, (0x01, (0x02, 0x0003))) == 0x00030201
     @test reinterpret(TupType, 0x00030201) == (0x01, (0x02, 0x0003))
 
-    @test reinterpret(Tuple{Int64, Int8}, (0x01, 2)) == (513, 0)
-    @test reinterpret(Tuple{Int64, Int8}, ((0x01,), 2)) == (513, 0)
-    @test(reinterpret(NTuple{9, UInt8}, ((0x01,), -1)) ==
+    @test reinterpret(Tuple{Int64, Int8}, (0x01, Int64(2))) == (Int64(513), Int64(0))
+    @test reinterpret(Tuple{Int64, Int8}, ((0x01,), Int64(2))) == (Int64(513), Int64(0))
+    @test(reinterpret(NTuple{9, UInt8}, ((0x01,), Int64(-1))) ==
         (0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff))
 
     # Errors
