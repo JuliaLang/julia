@@ -37,6 +37,9 @@ New library functions
 New library features
 --------------------
 
+* `IOContext` supports a new boolean `hexunsigned` option that allows for
+  printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+
 Standard library changes
 ------------------------
 

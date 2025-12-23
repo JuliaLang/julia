@@ -2330,10 +2330,12 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
         # Lowering should be able to use placeholder args as rvalues internally,
         # e.g. for kw method dispatch.  Duplicate positional placeholder names
         # should be allowed.
+        is_nospecialize = getmeta(ex, :nospecialize, false)
         name = if is_kw
             @ast ctx ex ex=>K"Identifier"
         else
-            new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument)
+            new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument,
+                              is_nospecialize=is_nospecialize)
         end
     elseif k == K"Identifier"
         name = ex

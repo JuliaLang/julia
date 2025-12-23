@@ -146,16 +146,14 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Int, src::Vector{UInt64}, pos
     delta_ks = ks1 - ks0
 
     u = _msk64
+    msk_d0 = ~(u << ld0)
+    msk_d1 = (u << (ld1+1))
     if delta_kd == 0
-        msk_d0 = ~(u << ld0) | (u << (ld1+1))
-    else
-        msk_d0 = ~(u << ld0)
-        msk_d1 = (u << (ld1+1))
+        msk_d0 |= msk_d1
     end
+    msk_s0 = (u << ls0)
     if delta_ks == 0
-        msk_s0 = (u << ls0) & ~(u << (ls1+1))
-    else
-        msk_s0 = (u << ls0)
+        msk_s0 &= ~(u << (ls1+1))
     end
 
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
@@ -206,16 +204,14 @@ function copy_chunks_rtol!(chunks::Vector{UInt64}, pos_d::Int, pos_s::Int, numbi
         delta_kd = kd1 - kd0
         delta_ks = ks1 - ks0
 
+        msk_d0 = ~(u << ld0)
+        msk_d1 = (u << (ld1+1))
         if delta_kd == 0
-            msk_d0 = ~(u << ld0) | (u << (ld1+1))
-        else
-            msk_d0 = ~(u << ld0)
-            msk_d1 = (u << (ld1+1))
+            msk_d0 |= msk_d1
         end
+        msk_s0 = (u << ls0)
         if delta_ks == 0
-            msk_s0 = (u << ls0) & ~(u << (ls1+1))
-        else
-            msk_s0 = (u << ls0)
+            msk_s0 &= ~(u << (ls1+1))
         end
 
         chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & ~(u << s)
@@ -241,11 +237,10 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Int, numbits::Int)
     k1, l1 = get_chunks_id(pos+numbits-1)
 
     u = _msk64
+    msk0 = (u << l0)
+    msk1 = ~(u << (l1+1))
     if k1 == k0
-        msk0 = (u << l0) & ~(u << (l1+1))
-    else
-        msk0 = (u << l0)
-        msk1 = ~(u << (l1+1))
+        msk0 &= msk1
     end
     @inbounds if x
         Bc[k0] |= msk0

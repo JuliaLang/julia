@@ -12,7 +12,7 @@ A structured representation of a terminfo file, without any knowledge of
 particular capabilities, solely based on `term(5)`.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
@@ -44,7 +44,7 @@ end
 A parsed terminfo paired with capability information.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
