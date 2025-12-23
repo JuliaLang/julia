@@ -1,0 +1,3 @@
+[submodule "deps/archspec_cpp"]
+	path = deps/archspec_cpp
+	url = git@github.com:gbaraldi/archspec_cpp.git
