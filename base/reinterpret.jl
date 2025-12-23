@@ -124,7 +124,8 @@ end
             end
         end
     end
-    # TODO: Why is it better to return Core.svec here and below instead of an Array?
+    # We return an svec here, since functions marked `:foldable` must return egal outputs for
+    # egal inputs, which means they shouldn't return a mutable type.
     return Core.svec(regions...)
 end
 
