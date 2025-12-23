@@ -1531,4 +1531,3 @@ end
     @test occursin("AtomicMemoryRef", err_strA)
     @test occursin("1-element", err_strA)
 end
-
