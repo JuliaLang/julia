@@ -869,6 +869,7 @@ end
         @test_throws ArgumentError Base.Filesystem.checkfor_mv_cp_cptree(dst, dst, "test"; force=true)
     end
 end
+#------------------------------------------------------
 
 
 @testset "rename" begin
