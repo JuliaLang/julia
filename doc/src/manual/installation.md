@@ -75,7 +75,12 @@ If the Windows Store is blocked on a system, we have an alternative
 [MSIX App Installer](https://learn.microsoft.com/en-us/windows/msix/app-installer/app-installer-file-overview)
 based setup. To use the App Installer version, download
 [this](https://install.julialang.org/Julia.appinstaller) file and open it by
-double clicking on it.
+double clicking on it. One can also install exactly the same version by executing
+the PowerShell command
+
+```
+Add-AppxPackage -AppInstallerFile https://install.julialang.org/Julia.appinstaller
+```
 
 ### MSI Installer (Windows)
 
