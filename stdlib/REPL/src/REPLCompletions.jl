@@ -1095,8 +1095,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
         elseif kind(cur) == K"Identifier"
-            r = char_range(cur)
-            s = string[intersect(r, 1:pos)]
+            r = intersect(char_range(cur), 1:pos)
+            s = string[r]
             # Return without adding more suggestions if kwargs only
             complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true

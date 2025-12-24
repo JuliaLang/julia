@@ -1794,6 +1794,13 @@ end
     @test hasnokwsuggestions("CompletionFoo.kwtest5('a', 3, 5, unknownsplat...; xy")
     @test hasnokwsuggestions("CompletionFoo.kwtest5(3; somek")
     =#
+
+    # Issue #60444: completing keyword arguments should not overwrite input after cursor
+    let s = "CompletionFoo.kwtest3(a; foob|true)"
+        c, r = test_complete_pos(s)
+        @test c == ["foobar="]
+        @test r == 26:29
+    end
 end
 
 # Test completion in context
