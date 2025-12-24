@@ -741,6 +741,241 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
 end
 
 #-------------------------------------------------------------------------------
+# AST destruction utilities
+
+raw"""
+Simple `SyntaxTree` pattern matching
+
+Returns the first result where its corresponding pattern matches `syntax_tree`
+and each extra `cond` is true.  Throws an error if no match is found.
+
+## Patterns
+
+A pattern is used as both a conditional (does this syntax tree have a certain
+structure?) and a `let` (bind trees to these names if so).  Each pattern uses a
+limited version of the @ast syntax:
+
+```
+<pattern> = <tree_identifier>
+          | [K"<kind>" <pattern>*]
+          | [K"<kind>" <pattern>* <list_identifier>... <pattern>*]
+
+# note "*" is the meta-operator meaning one or more, and "..." is literal
+```
+
+where a `[K"k" p1 p2 ps...]` form matches any tree with kind `k` and >=2
+children (bound to `p1` and `p2`), and `ps` is bound to the possibly-empty
+SyntaxList of children `3:end`.  Identifiers (except `_`) can't be re-used, but
+may check for some form of tree equivalence in a future implementation.
+
+## Extra conditions: `when`, `run`
+
+Like an escape hatch to the structure-matching mechanism.  `when=cond` requires
+`cond`'s value be `true` for this pattern to match.  `run=code` simply evaluates
+`code`, usually to bind variables or debug the matching process.
+
+`when` and `run` clauses may appear multiple times in any order after the
+pattern.  They are executed in order, stopping if any `when=cond` evaluates to
+false.  These may not mutate the object being matched.
+
+## Scope of variables
+
+Every `(pattern, extras...) -> result` introduces a local scope.  Identifiers in
+the pattern are let-bound when evaluating `extras` and `result`. Any `extra` can
+introduce variables for use in later `extras` and `result`.  User code in
+`extras` and `result` can refer to outer variables.
+
+## Example
+
+```
+julia> st = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "function foo(x,y,z); x; end")
+
+julia> JuliaSyntax.@stm st begin
+    [K"function" [K"call" fname [K"parameters" kws...]] body] ->
+        "no positional args, only kwargs: $(kws)"
+    [K"function" fname] ->
+        "zero-method function $fname"
+    [K"function" [K"call" fname args...] body] ->
+        "normal function $fname"
+    ([K"=" [K"call" _...] _...], when=(args=if_valid_get_args(st[1]); !isnothing(args))) ->
+        "deprecated call-equals form with args $args"
+    (_, run=show("printf debugging is great")) -> "something else"
+    _ -> "something else"
+end
+"normal function foo"
+```
+
+See [Racket `match`](https://docs.racket-lang.org/reference/match.html) for the
+inspiration for this macro and an example of a much more featureful pattern
+language.
+"""
+macro stm(st, pats)
+    _stm(__source__, st, pats; debug=false)
+end
+
+"Like `@stm`, but prints a trace during matching."
+macro stm_debug(st, pats)
+    _stm(__source__, st, pats; debug=true)
+end
+
+# TODO: forgot to support vcat (i.e. newlines in patterns currently require a
+# double-semicolon continuation)
+
+# TODO: SyntaxList pattern matching could take similar syntax and use most of
+# the same machinery
+
+function _stm(line::LineNumberNode, st, pats; debug=false)
+    _stm_check_usage(pats)
+    # We leave most code untouched, so the user probably wants esc(output)
+    st_gs, result_gs = gensym("st"), gensym("result")
+    out_blk = Expr(:let,
+                   Expr(:block, :($st_gs = $st::SyntaxTree),
+                        :($result_gs = nothing)),
+                   Expr(:if, false, nothing))
+    needs_else = out_blk.args[2].args
+    for per in pats.args
+        per isa LineNumberNode && (line = per; continue)
+        p, extras, result = _stm_destruct_pat(per)
+        # We need to let-bind patvars in both extras and the result, so result
+        # needs to live in the first argument of :if with the extra conditions.
+        e_check = Expr(:&&)
+        for e::Expr in extras
+            (ek, ev) = e.args[1:2]
+            push!(e_check.args, ek === :when ? ev : Expr(:block, ev, true))
+        end
+        # final arg to e_check: successful match
+        push!(e_check.args, Expr(:block, line, :($result_gs = $result), true))
+        case = Expr(:elseif,
+            Expr(:&&, :(JuliaSyntax._stm_matches($(Expr(:quote, p)), $st_gs, $debug)),
+                 Expr(:let, _stm_assigns(p, st_gs), e_check)),
+            result_gs)
+        push!(needs_else, case)
+        needs_else = needs_else[3].args
+    end
+    push!(needs_else,
+          :(throw(ErrorException(string(
+              "No match found for `", $st_gs, "` at ", $(string(line)))))))
+    return esc(out_blk)
+end
+
+function _stm_destruct_pat(per::Expr)
+    pe, r = per.args[1:2]
+    Base.remove_linenums!(pe)
+    return Meta.isexpr(pe, :tuple) ? (pe.args[1], pe.args[2:end], r) :
+        (pe, Expr[], r)
+end
+
+function _stm_matches(p::Union{Symbol, Expr}, st, debug=false, indent="")
+    if p isa Symbol
+        debug && printstyled(string(indent, p, "=", st, "\n"); color=:yellow)
+        return true
+    elseif Meta.isexpr(p, (:vect, :hcat))
+        p_kind = Kind(p.args[1].args[3])
+        kind_ok = p_kind === kind(st)
+        if !kind_ok
+            debug && printstyled(
+                string(indent, "[kind]: ", kind(st), "!=", p_kind, "\n"); color=:red)
+            return false
+        end
+        p_args = filter(e->!(e isa LineNumberNode), p.args)[2:end]
+        dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
+        dots_start = something(dots_i, length(p_args) + 1)
+        n_after_dots = length(p_args) - dots_start # -1 if no dots
+        npats = dots_start + n_after_dots
+        n_ok = isnothing(dots_i) ? numchildren(st) === npats :
+            numchildren(st) >= npats - 1
+        if !n_ok
+            debug && printstyled(string(
+                indent, "[numc]: ", numchildren(st), "!=", npats, "\n"); color=:red)
+            return false
+        end
+        all_ok = true
+        for i in 1:dots_start-1
+            if !_stm_matches(p_args[i], st[i], debug, indent*"  ")
+                all_ok = false; break
+            end
+        end
+        all_ok && for i in n_after_dots-1:-1:0
+            if !_stm_matches(p_args[end-i], st[end-i], debug, indent*"  ")
+                all_ok = false; break
+            end
+        end
+        debug && printstyled(string(
+            indent, all_ok ? "matched " : "nomatch ", st, "\n");
+                             color=(all_ok ? :green : :red))
+        return all_ok
+    end
+    @assert false
+end
+
+# Assuming _stm_matches, construct an Expr that assigns syms to SyntaxTrees.
+# Note st_rhs_expr is a ref-expr with a SyntaxTree/List value (in context).
+function _stm_assigns(p, st_rhs_expr; assigns=Expr(:block))
+    if p isa Symbol && p != :_
+        push!(assigns.args, Expr(:(=), p, st_rhs_expr))
+    elseif p isa Expr
+        p_args = filter(e->!(e isa LineNumberNode), p.args)[2:end]
+        dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
+        dots_start = something(dots_i, length(p_args) + 1)
+        n_after = length(p_args) - dots_start
+        for i in 1:dots_start-1
+            _stm_assigns(p_args[i], :($st_rhs_expr[$i]); assigns)
+        end
+        if !isnothing(dots_i)
+            _stm_assigns(p_args[dots_i].args[1],
+                         :($st_rhs_expr[$dots_i:end-$n_after]); assigns)
+            for i in n_after-1:-1:0
+                _stm_assigns(p_args[end-i], :($st_rhs_expr[end-$i]); assigns)
+            end
+        end
+    end
+    return assigns
+    @assert false
+end
+
+# Check for correct pattern syntax.  Not needed outside of development.
+function _stm_check_usage(pats::Expr)
+    function _stm_check_pattern(p; syms=Set{Symbol}())
+        if Meta.isexpr(p, :(...), 1)
+            p = p.args[1]
+            @assert(p isa Symbol, "Expected symbol before `...` in $p")
+        end
+        if p isa Symbol
+            # No support for duplicate syms for now (user is either looking for
+            # some form of equality we don't implement, or they made a mistake)
+            dup = p in syms && p !== :_
+            push!(syms, p)
+            return !dup || @assert(false, "invalid duplicate non-underscore identifier $p")
+        end
+        return (Meta.isexpr(p, :vect, 1) ||
+            (Meta.isexpr(p, :hcat) && length(p.args) >= 1 &&
+            isnothing(@assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
+                              "Multiple `...` in a pattern is ambiguous")) &&
+            all(x->_stm_check_pattern(x; syms), p.args[2:end])) &&
+            # This exact syntax is not necessary since the kind can't be
+            # provided by a variable, but requiring [K"kinds"] is consistent.
+            Meta.isexpr(p.args[1], :macrocall, 3) &&
+            p.args[1].args[1] === Symbol("@K_str") && p.args[1].args[3] isa String)
+    end
+
+    @assert Meta.isexpr(pats, :block) "Usage: @st_match st begin; ...; end"
+    for per in filter(e->!isa(e, LineNumberNode), pats.args)
+        @assert(Meta.isexpr(per, :(->), 2), "Expected pat -> res, got malformed pair: $per")
+        if Meta.isexpr(per.args[1], :tuple)
+            @assert length(per.args[1].args) >= 2 "Unnecessary tuple in $(per.args[1])"
+            for e in per.args[1].args[2:end]
+                @assert(Meta.isexpr(e, :(=), 2) && e.args[1] in (:when, :run),
+                        "Expected `when=<cond>` or `run=<stmts>`, got $e")
+            end
+            p = per.args[1].args[1]
+        else
+            p = per.args[1]
+        end
+        @assert _stm_check_pattern(p) "Malformed pattern: $p"
+    end
+end
+
+#-------------------------------------------------------------------------------
 # RawGreenNode->SyntaxTree
 # WIP: expr_structure param will be deleted
 
