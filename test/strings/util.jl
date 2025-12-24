@@ -8,6 +8,8 @@ SubStr(s) = SubString("abc$(s)de", firstindex(s) + 3, lastindex(s) + 3)
         @test textwidth(c^3) == w*3
         @test w == @invoke textwidth(c::AbstractChar)
     end
+    @test textwidth('\xc0\xa0') == 1 # overlong
+    @test textwidth('\xf0\x80\x80') == 1 # malformed
     for i in 0x00:0x7f # test all ASCII chars (which have fast path)
         w = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
         c = Char(i)
@@ -65,6 +67,13 @@ end
     @test rpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
     @test lpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
+    for pad in (rpad, lpad), p in ('\0', "\0", "\0\0", "\u302")
+        if ncodeunits(p) == 1
+            @test_throws r".*has zero textwidth.*maybe you want.*bytes.*" pad("foo", 10, p)
+        else
+            @test_throws r".*has zero textwidth$" pad("foo", 10, p)
+        end
+    end
 end
 
 @testset "string truncation (ltruncate, rtruncate, ctruncate)" begin
@@ -700,6 +709,11 @@ end
 
         @test isa(chopprefix(S("foo"), "fo"), SubString)
         @test isa(chopsuffix(S("foo"), "oo"), SubString)
+
+        @test chopprefix(S(""), 'z') == chopsuffix(S(""), 'z') == ""
+        @test chopprefix(S("吃齋"), '🍖') == chopsuffix(S("吃齋"), '🍖') == "吃齋"
+        @test chopprefix(S("äwesome"), 'ä') == "wesome"
+        @test chopsuffix(S("äwesome"), 'e') == "äwesom"
     end
 end
 

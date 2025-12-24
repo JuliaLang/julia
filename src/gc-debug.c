@@ -193,7 +193,7 @@ static void gc_verify_track(jl_ptls_t ptls)
             gc_mark_finlist(&mq, &ptls2->finalizers, 0);
         }
         gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-        gc_mark_loop_serial_(ptls, &mq);
+        gc_collect_neighbors(ptls, &mq);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -255,7 +255,7 @@ void gc_verify(jl_ptls_t ptls)
         gc_mark_finlist(&mq, &ptls2->finalizers, 0);
     }
     gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-    gc_mark_loop_serial_(ptls, &mq);
+    gc_collect_neighbors(ptls, &mq);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
@@ -276,8 +276,8 @@ void gc_verify(jl_ptls_t ptls)
     }
     restore();
     gc_verify_track(ptls);
-    jl_gc_debug_print_status();
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_status(ios_safe_stderr);
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 #endif
@@ -465,21 +465,21 @@ int jl_gc_debug_check_other(void)
     return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
-    jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-                   pool_count + other_count, pool_count, other_count, gc_num.pause);
+    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
+                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
+                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
-void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
 {
-    jl_gc_debug_print_status();
+    jl_gc_debug_fprint_status(s);
     if (!jl_gc_debug_env.wait_for_debugger)
         return;
-    jl_safe_printf("Waiting for debugger to attach\n");
+    jl_safe_fprintf(s, "Waiting for debugger to attach\n");
     while (1) {
         sleep(1000);
     }
@@ -489,7 +489,7 @@ void jl_gc_debug_print(void)
 {
     if (!gc_debug_alloc_check(&jl_gc_debug_env.print))
         return;
-    jl_gc_debug_print_status();
+    jl_gc_debug_fprint_status(ios_safe_stderr);
 }
 
 // a list of tasks for conservative stack scan during gc_scrub
@@ -562,18 +562,18 @@ void gc_scrub(void)
     jl_gc_debug_tasks.len = 0;
 }
 #else
-void jl_gc_debug_critical_error(void)
+void jl_gc_debug_fprint_critical_error(ios_t *s)
 {
 }
 
-void jl_gc_debug_print_status(void)
+void jl_gc_debug_fprint_status(ios_t *s)
 {
     // May not be accurate but should be helpful enough
     uint64_t pool_count = gc_num.poolalloc;
     uint64_t big_count = gc_num.bigalloc;
-    jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, gc_num.pause);
+    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
+                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
+                    pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
 #endif
 
@@ -892,10 +892,7 @@ void gc_heuristics_summary(
 void jl_gc_debug_init(void)
 {
 #ifdef GC_DEBUG_ENV
-    char *env = getenv("JULIA_GC_NO_GENERATIONAL");
-    if (env && strcmp(env, "0") != 0)
-        jl_gc_debug_env.always_full = 1;
-    env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
+    char *env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
     jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
     gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
     gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
@@ -1025,12 +1022,11 @@ void gc_stats_big_obj(void)
             v = v->next;
         }
 
-        mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
-        while (ma != NULL) {
-            uint8_t bits =jl_astaggedvalue(ma->a)->bits.gc;
+        void **lst = ptls2->gc_tls.heap.mallocarrays.items;
+        for (size_t i = 0, l = ptls2->gc_tls.heap.mallocarrays.len; i < l; i++) {
+            jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[i] & ~(uintptr_t)1);
+            uint8_t bits = jl_astaggedvalue(m)->bits.gc;
             if (gc_marked(bits)) {
-                jl_genericmemory_t *m = (jl_genericmemory_t*)ma->a;
-                m = (jl_genericmemory_t*)((uintptr_t)m & ~(uintptr_t)1);
                 size_t sz = jl_genericmemory_nbytes(m);
                 if (gc_old(bits)) {
                     assert(bits == GC_OLD_MARKED);
@@ -1042,7 +1038,6 @@ void gc_stats_big_obj(void)
                     stat.nbytes_used += sz;
                 }
             }
-            ma = ma->next;
         }
     }
     jl_safe_printf("%lld kB (%lld%% old) in %lld large objects (%lld%% old)\n",
@@ -1103,68 +1098,6 @@ void gc_count_pool(void)
     // also GC_CLEAN
     jl_safe_printf("free pages: % "  PRId64 "\n", empty_pages);
     jl_safe_printf("************************\n");
-}
-
-int gc_slot_to_fieldidx(void *obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT
-{
-    int nf = (int)jl_datatype_nfields(vt);
-    for (int i = 1; i < nf; i++) {
-        if (slot < (void*)((char*)obj + jl_field_offset(vt, i)))
-            return i - 1;
-    }
-    return nf - 1;
-}
-
-int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
-{
-    char *slot = (char*)_slot;
-    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
-    char *start = NULL;
-    size_t len = 0;
-    size_t elsize = sizeof(void*);
-    if (vt == jl_module_type) {
-        jl_module_t *m = (jl_module_t*)obj;
-        start = (char*)m->usings.items;
-        len = m->usings.len;
-    }
-    else if (vt == jl_simplevector_type) {
-        start = (char*)jl_svec_data(obj);
-        len = jl_svec_len(obj);
-    }
-    if (slot < start || slot >= start + elsize * len)
-        return -1;
-    return (slot - start) / elsize;
-}
-
-static int gc_logging_enabled = 0;
-
-JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
-    gc_logging_enabled = enable;
-}
-
-JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
-    return gc_logging_enabled;
-}
-
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
-    if (!gc_logging_enabled) {
-        return;
-    }
-    jl_safe_printf("\nGC: pause %.2fms. collected %fMB. %s %s\n",
-        pause/1e6, freed/(double)(1<<20),
-        full ? "full" : "incr",
-        recollect ? "recollect" : ""
-    );
-
-    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
-        jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
-        jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
-        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
-        (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
-    );
-    // Should fragmentation use bytes_resident instead of heap_size?
 }
 
 #ifdef __cplusplus

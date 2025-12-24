@@ -25,7 +25,7 @@ julia> io = IOBuffer();
 
 julia> print(io, "Hello", ' ', :World!)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello World!"
 ```
 """
@@ -68,12 +68,11 @@ julia> io = IOBuffer();
 
 julia> println(io, "Hello", ',', " world.")
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello, world.\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
-
 ## conversion of general objects to strings ##
 
 """
@@ -81,10 +80,6 @@ println(io::IO, xs...) = print(io, xs..., "\n")
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
-specifying a property and its value, or a tuple of `Pair` specifying multiple
-properties and their values. `sizehint` suggests the capacity of the buffer (in
-bytes).
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
@@ -113,7 +108,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 function _str_sizehint(x)
@@ -147,7 +142,7 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 function string_with_env(env, xs...)
@@ -164,7 +159,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 """
@@ -210,35 +205,29 @@ function show(
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)
     end
+    limit = max(0, limit-2) # quote chars
 
     # early out for short strings
-    len = ncodeunits(str)
-    len ≤ limit - 2 && # quote chars
-        return show(io, str)
+    check_textwidth(str, limit) && return show(io, str)
 
     # these don't depend on string data
     units = codeunit(str) == UInt8 ? "bytes" : "code units"
     skip_text(skip) = " ⋯ $skip $units ⋯ "
-    short = length(skip_text("")) + 4 # quote chars
-    chars = max(limit, short + 1) - short # at least 1 digit
 
-    # figure out how many characters to print in elided case
-    chars -= d = ndigits(len - chars) # first adjustment
-    chars += d - ndigits(len - chars) # second if needed
-    chars = max(0, chars)
+    # longest possible replacement string for omitted chars
+    max_replacement = skip_text(ncodeunits(str) * 100) # *100 for 2 inner quote chars
 
-    # find head & tail, avoiding O(length(str)) computation
-    head = nextind(str, 0, 1 + (chars + 1) ÷ 2)
-    tail = prevind(str, len + 1, chars ÷ 2)
+    head, tail = string_truncate_boundaries(str, limit, max_replacement, Val(:center))
 
     # threshold: min chars skipped to make elision worthwhile
-    t = short + ndigits(len - chars) - 1
-    n = tail - head # skipped code units
-    if 4t ≤ n || t ≤ n && t ≤ length(str, head, tail-1)
-        skip = skip_text(n)
-        show(io, SubString(str, 1:prevind(str, head)))
-        printstyled(io, skip; color=:light_yellow, bold=true)
-        show(io, SubString(str, tail))
+    afterhead = nextind(str, head)
+    n = tail - afterhead # skipped code units
+    replacement = skip_text(n)
+    t = ncodeunits(replacement) # length of replacement (textwidth == ncodeunits here)
+    @views if 4t ≤ n || t ≤ n && t ≤ textwidth(str[afterhead:prevind(str,tail)])
+        show(io, str[begin:head])
+        printstyled(io, replacement; color=:light_yellow, bold=true)
+        show(io, str[tail:end])
     else
         show(io, str)
     end
@@ -252,7 +241,9 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string from any value using the 2-argument `show(io, x)` function.
+Create a string representation of any value using the 2-argument `show(io, x)` function,
+which aims to produce a string that is parseable Julia code, where possible.
+i.e. `eval(Meta.parse(repr(x))) == x` should hold true.
 You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
@@ -298,10 +289,10 @@ Create a read-only `IOBuffer` on the data underlying the given string.
 ```jldoctest
 julia> io = IOBuffer("Haho");
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 ```
 """
@@ -365,7 +356,8 @@ function _join_preserve_annotations(iterator, args...)
         # in nature, we extract an `AnnotatedString`, otherwise we just extract
         # a plain `String` from `io`.
         if isconcretetype(et) || !isempty(io.annotations)
-            read(seekstart(io), AnnotatedString{String})
+            seekstart(io)
+            read(io, AnnotatedString{String})
         else
             String(take!(io.io))
         end
@@ -588,7 +580,7 @@ julia> v[2]
 0x32
 ```
 """
-macro b_str(s)
+macro b_str(s::String)
     v = codeunits(unescape_string(s))
     QuoteNode(v)
 end
@@ -621,7 +613,7 @@ julia> println(raw"\\\\x \\\\\\"")
 macro raw_str(s); s; end
 
 """
-    escape_raw_string(s::AbstractString, delim='"') -> AbstractString
+    escape_raw_string(s::AbstractString, delim='"')::AbstractString
     escape_raw_string(io, s::AbstractString, delim='"')
 
 Escape a string in the manner used for parsing raw string literals.
@@ -677,7 +669,7 @@ end
 ## multiline strings ##
 
 """
-    indentation(str::AbstractString; tabwidth=8) -> (Int, Bool)
+    indentation(str::AbstractString; tabwidth=8) -> (width::Int, empty::Bool)
 
 Calculate the width of leading white space. Return the width and a flag to indicate
 if the string is empty.
@@ -777,7 +769,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             print(buf, ' ')
         end
     end
-    String(take!(buf))
+    takestring!(buf)
 end
 
 function String(a::AbstractVector{Char})
@@ -811,12 +803,12 @@ function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
             end
         end
     end
-    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    annots = RegionAnnotation[]
     point = 1
     for c in chars
         if c isa AnnotatedChar
             for annot in c.annotations
-                push!(annots, (point:point, annot))
+                push!(annots, (point:point, annot...))
             end
         end
         point += ncodeunits(c)

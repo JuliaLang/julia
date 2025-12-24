@@ -50,6 +50,8 @@ Base.Threads.atomic_xor!
 Base.Threads.atomic_max!
 Base.Threads.atomic_min!
 Base.Threads.atomic_fence
+Base.Threads.atomic_fence_heavy
+Base.Threads.atomic_fence_light
 ```
 
 ## ccall using a libuv threadpool (Experimental)
@@ -63,5 +65,15 @@ Base.@threadcall
 These building blocks are used to create the regular synchronization objects.
 
 ```@docs
+Base.Threads.AbstractSpinLock
 Base.Threads.SpinLock
+Base.Threads.PaddedSpinLock
+```
+
+## Task metrics (Experimental)
+
+```@docs
+Base.Experimental.task_metrics
+Base.Experimental.task_running_time_ns
+Base.Experimental.task_wall_time_ns
 ```

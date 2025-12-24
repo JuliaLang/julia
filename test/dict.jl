@@ -294,6 +294,14 @@ end
     @test eq(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
 end
 
+@testset "sizehint!" begin
+    d = Dict()
+    sizehint!(d, UInt(3))
+    @test d == Dict()
+    sizehint!(d, 5)
+    @test isempty(d)
+end
+
 @testset "equality special cases" begin
     @test Dict(1=>0.0) == Dict(1=>-0.0)
     @test !isequal(Dict(1=>0.0), Dict(1=>-0.0))
@@ -787,6 +795,13 @@ end
           [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
 end
 
+@testset "consistency of dict iteration order (issue #56841)" begin
+    dict = Dict(randn() => randn() for _ = 1:100)
+    @test all(zip(dict, keys(dict), values(dict), pairs(dict))) do (d, k, v, p)
+        d == p && first(d) == first(p) == k && last(d) == last(p) == v
+    end
+end
+
 @testset "generators, similar" begin
     d = Dict(:a=>"a")
     # TODO: restore when 0.7 deprecation is removed
@@ -1049,7 +1064,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # issue #26939
     d26939 = WeakKeyDict()
-    (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
+    (@noinline d -> d[big"1" + 1] = 1)(d26939)
     GC.gc() # primarily to make sure this doesn't segfault
     @test count(d26939) == 0
     @test length(d26939.ht) == 1
@@ -1274,8 +1289,6 @@ struct NonFunctionCallable end
     @test @inferred mergewith(NonFunctionCallable(), d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
     @test foldl(mergewith(+), [d1, d2]; init=Dict{Union{},Union{}}()) ==
         Dict("A" => 1, "B" => 5, "C" => 4)
-    # backward compatibility
-    @test @inferred merge(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
 end
 
 @testset "Dict merge!" begin

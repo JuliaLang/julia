@@ -96,7 +96,6 @@ function link(stream::IO, md::MD)
         startswith(stream, '[') || return
         text = readuntil(stream, ']', match = '[')
         text ≡ nothing && return
-        skipwhitespace(stream)
         startswith(stream, '(') || return
         url = readuntil(stream, ')', match = '(')
         url ≡ nothing && return
@@ -166,7 +165,10 @@ function linebreak(stream::IO, md::MD)
 end
 
 @trigger '-' ->
-function en_dash(stream::IO, md::MD)
+function en_or_em_dash(stream::IO, md::MD)
+    if startswith(stream, "---")
+        return "—"
+    end
     if startswith(stream, "--")
         return "–"
     end
