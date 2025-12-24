@@ -692,7 +692,6 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     # elseif e isa GlobalRef
         # TODO: Better-behaved as K"globalref", but lowering doesn't know this
     else
-        @assert !isa_lowering_ast_node(e)
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
         # most are produced in or after lowering
@@ -702,26 +701,27 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         end
         setattr!(newleaf(graph, src, K"Value"), :value, e)
     end
+    @assert !isa_lowering_ast_node(e) || !hasattr(st, :value)
 
     return st._id, src
 end
 
 function est_to_expr(st::SyntaxTree)
     k = kind(st)
-    return if k === K"Identifier"
+    return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
+        nothing
+    elseif is_leaf(st) && hasattr(st, :name_val)
         n = Symbol(st.name_val)
         hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
-    elseif k === K"Value"
+    elseif is_leaf(st) && hasattr(st, :value)
         v = st.value
-        # Let `kind(st) === K"Value"` with `st.value isa Symbol` (or other AST
-        # node).  Since we enforce that this is never produced by the reverse
-        # Expr->SyntaxTree transformation, there is no lonely Expr for which
-        # `st` is the only SyntaxTree representation.  This means we can pick
-        # some other expr this represents, namely Expr(`(inert ,st.value))
-        # rather than Expr(st.value).
+        # Let `st.value isa Symbol` (or other AST node).  Since we enforce that
+        # this is never produced by the reverse Expr->SyntaxTree transformation,
+        # there is no lonely Expr for which `st` is the only SyntaxTree
+        # representation.  This means we can pick some other expr this
+        # represents, namely Expr(`(inert ,st.value)) rather than
+        # Expr(st.value).
         isa_lowering_ast_node(v) ? QuoteNode(v) : v
-    elseif k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
-        nothing
     elseif k === K"inert"
         QuoteNode(est_to_expr(st[1]))
     else
