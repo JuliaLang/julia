@@ -151,9 +151,13 @@ function readavailable end
 function isexecutable end
 
 """
-    isreadable(io)::Bool
+    isreadable(io::IO)::Bool
 
-Return `false` if the specified IO object is not readable.
+Check if `io` is not readable.
+A readable IO may be EOF, but reading from it will not throw errors during normal
+operation.
+Closing an IO may render it unreadable, depending on the IO.
+
 
 # Examples
 ```jldoctest
@@ -170,6 +174,8 @@ true
 
 julia> rm("myfile.txt")
 ```
+
+See also: [`iswritable`](@ref), [`close`](@ref)
 """
 isreadable(io::IO) = isopen(io)
 
@@ -193,6 +199,8 @@ false
 
 julia> rm("myfile.txt")
 ```
+
+See also: [`isreadable`](@ref)
 """
 iswritable(io::IO) = isopen(io)
 
