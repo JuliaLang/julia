@@ -300,6 +300,37 @@ let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
     @test eval(Meta.parse(repr(ex1))) == ex1
 end
 
+
+# Test associativity of operators
+kind_int(x) = Base.JuliaSyntax._kind_str_to_int[string(x)]
+kind_sym(x) = Symbol(Base.JuliaSyntax._kind_int_to_str[x])
+# Omit :. because it is parsed differently and does not need to be excluded from testing
+iscolonoperator(op) = kind_int(":") < kind_int(op) <= kind_int("END_COLON")
+isconditionaloperator(op) = kind_int("BEGIN_CONDITIONAL") <= kind_int(op) <= kind_int("END_CONDITIONAL")
+iswordoperator(op) = op |> string |> Base.JuliaSyntax.Kind |> Base.JuliaSyntax.is_word_operator
+isclosedbinaryoperator(op) = !Base.isunaryoperator(op) && !iscolonoperator(op) &&
+                             !isconditionaloperator(op) && string(op) ∉ ("op=", "'", ".'")
+space(op) = iswordoperator(op) || op == :🢲 ? Symbol(" $op ") : op
+
+function test_associativity(op)
+    assoc = Base.operator_associativity(op)
+    # :. does not allow space around the operator, but some operators need it.
+    # Therefore, add space here for those needing it and omit it the line after.
+    op = space(op)
+    left, none, right = ("(x$(op)y)$(op)z", "x$(op)y$(op)z", "x$(op)(y$(op)z)") .|> Meta.parse
+
+    assoc == :left  && @test left == none != right
+    assoc == :none  && @test left != none != right
+    assoc == :right && @test left != none == right
+end
+
+@testset "associativity" begin
+    ops = (kind_sym(i) for i in kind_int("BEGIN_ASSIGNMENTS") : kind_int("END_OPS"))
+    [test_associativity(op) for op in ops if isclosedbinaryoperator(op)]
+    return nothing
+end
+
+
 # Complex
 
 # Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
