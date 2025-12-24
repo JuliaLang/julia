@@ -1281,9 +1281,9 @@ function bytes2hex(itr)
     str = Base._string_n(2*length(itr))
     GC.@preserve str begin
         p = pointer(str)
-        @inbounds for (i, x) in enumerate(itr)
-            unsafe_store!(p, hex_chars[1 + x >> 4], 2i - 1)
-            unsafe_store!(p, hex_chars[1 + x & 0xf], 2i)
+        for (i, x) in enumerate(itr)
+            unsafe_store!(p, @inbounds(hex_chars[1 + x >> 4]), 2i - 1)
+            unsafe_store!(p, @inbounds(hex_chars[1 + x & 0xf]), 2i)
         end
     end
     return str

@@ -980,14 +980,14 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     GC.@preserve str begin
         p = pointer(str)
         i = n
-        @inbounds while i > 9 && x > typemax(UInt)
+        while i > 9 && x > typemax(UInt)
             d, r = divrem(x, 0x3b9aca00) # 10^9
             x = oftype(x, d)
             r32 = r % UInt32
             for j in 0:3
                 q, s = divrem(r32, 0x64)
                 r32 = q
-                v = _dec_d100[1 + (s % Int)]
+                v = @inbounds _dec_d100[1 + (s % Int)]
                 unsafe_store!(p, (v >> 8) % UInt8, i - 2*j)
                 unsafe_store!(p, v % UInt8, i - 2*j - 1)
             end
@@ -995,10 +995,10 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
             i -= 9
         end
         y = x % UInt
-        @inbounds while i >= 2
+        while i >= 2
             d, r = divrem(y, 0x64)
             y = d
-            v = _dec_d100[1 + (r % Int)]
+            v = @inbounds _dec_d100[1 + (r % Int)]
             unsafe_store!(p, (v >> 8) % UInt8, i)
             unsafe_store!(p, v % UInt8, i - 1)
             i -= 2
@@ -1048,12 +1048,12 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     GC.@preserve str begin
         p = pointer(str)
         i = n
-        @inbounds while i > neg
+        while i > neg
             if b > 0
-                unsafe_store!(p, digits[1 + (rem(x, b) % Int)::Int], i)
+                unsafe_store!(p, @inbounds(digits[1 + (rem(x, b) % Int)::Int]), i)
                 x = div(x,b)
             else
-                unsafe_store!(p, digits[1 + (mod(x, -b) % Int)::Int], i)
+                unsafe_store!(p, @inbounds(digits[1 + (mod(x, -b) % Int)::Int]), i)
                 x = cld(x,b)
             end
             i -= 1

@@ -96,7 +96,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         GC.@preserve str begin
             p = pointer(str)
             for i in groupings
-                @inbounds unsafe_store!(p, hex_chars[1 + u & 0xf], i)
+                unsafe_store!(p, @inbounds(hex_chars[1 + u & 0xf]), i)
                 u >>= 4
             end
             unsafe_store!(p, UInt8('-'), 9)
