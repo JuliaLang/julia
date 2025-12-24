@@ -873,24 +873,24 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     n = neg + max(pad, m)
     str = _string_n(n)
     GC.@preserve str begin
-        buf = StringBuffer(pointer(str))
+        p = pointer(str)
         i = n
         @inbounds while i >= 4
             b = UInt32((x % UInt8)::UInt8)
             d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
-            buf[i-3] = (d >> 0x00) % UInt8
-            buf[i-2] = (d >> 0x08) % UInt8
-            buf[i-1] = (d >> 0x10) % UInt8
-            buf[i]   = (d >> 0x18) % UInt8
+            unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
+            unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
+            unsafe_store!(p, (d >> 0x10) % UInt8, i-1)
+            unsafe_store!(p, (d >> 0x18) % UInt8, i)
             x >>= 0x4
             i -= 4
         end
         while i > neg
-            @inbounds buf[i] = 0x30 + ((x % UInt8)::UInt8 & 0x1)
+            @inbounds unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x1), i)
             x >>= 0x1
             i -= 1
         end
-        neg && (@inbounds buf[1] = 0x2d) # UInt8('-')
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
     return str
 end
@@ -900,14 +900,14 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     n = neg + max(pad, m)
     str = _string_n(n)
     GC.@preserve str begin
-        buf = StringBuffer(pointer(str))
+        p = pointer(str)
         i = n
         while i > neg
-            @inbounds buf[i] = 0x30 + ((x % UInt8)::UInt8 & 0x7)
+            @inbounds unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x7), i)
             x >>= 0x3
             i -= 1
         end
-        neg && (@inbounds buf[1] = 0x2d) # UInt8('-')
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
     return str
 end
@@ -974,7 +974,7 @@ function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
 end
 
 
-@inline function dec_buf!(buf::StringBuffer, x::Unsigned, n::Int, neg::Bool)
+@inline function dec_ptr(p::Ptr{UInt8}, x::Unsigned, n::Int, neg::Bool)
     i = n
     @inbounds while i > 9 && x > typemax(UInt)
         d, r = divrem(x, 0x3b9aca00) # 10^9
@@ -985,10 +985,10 @@ end
             q, s = divrem(r32, 0x64)
             r32 = q
             v = _dec_d100[1 + (s % Int)]
-            buf[i - 2*j] = (v >> 8) % UInt8
-            buf[i - 2*j - 1] = v % UInt8
+            unsafe_store!(p, (v >> 8) % UInt8, i - 2*j)
+            unsafe_store!(p, v % UInt8, i - 2*j - 1)
         end
-        buf[i - 8] = 0x30 + (r32 % UInt8)
+        unsafe_store!(p, 0x30 + (r32 % UInt8), i - 8)
         i -= 9
     end
 
@@ -997,14 +997,14 @@ end
         d, r = divrem(y, 0x64)
         y = d
         v = _dec_d100[1 + (r % Int)]
-        buf[i] = (v >> 8) % UInt8
-        buf[i-1] = v % UInt8
+        unsafe_store!(p, (v >> 8) % UInt8, i)
+        unsafe_store!(p, v % UInt8, i-1)
         i -= 2
     end
     if i > neg
-        buf[i] = 0x30 + (rem(y, 0xa) % UInt8)
+        unsafe_store!(p, 0x30 + (rem(y, 0xa) % UInt8), i)
     end
-    neg && (buf[1] = 0x2d) # '-'
+    neg && unsafe_store!(p, 0x2d, 1) # '-'
     nothing
 end
 
@@ -1012,7 +1012,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
     str = _string_n(n)
     GC.@preserve str begin
-        dec_buf!(StringBuffer(pointer(str)), x, n, neg)
+        dec_ptr(pointer(str), x, n, neg)
     end
     return str
 end
@@ -1022,21 +1022,21 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     n = neg + max(pad, m)
     str = _string_n(n)
     GC.@preserve str begin
-        buf = StringBuffer(pointer(str))
+        p = pointer(str)
         i = n
         while i >= 2
             b = (x % UInt8)::UInt8
             d1, d2 = b >> 0x4, b & 0xf
-            @inbounds buf[i-1] = d1 + ifelse(d1 > 0x9, 0x57, 0x30)
-            @inbounds buf[i]   = d2 + ifelse(d2 > 0x9, 0x57, 0x30)
+            @inbounds unsafe_store!(p, d1 + ifelse(d1 > 0x9, 0x57, 0x30), i-1)
+            @inbounds unsafe_store!(p, d2 + ifelse(d2 > 0x9, 0x57, 0x30), i)
             x >>= 0x8
             i -= 2
         end
         if i > neg
             d = (x % UInt8)::UInt8 & 0xf
-            @inbounds buf[i] = d + ifelse(d > 0x9, 0x57, 0x30)
+            @inbounds unsafe_store!(p, d + ifelse(d > 0x9, 0x57, 0x30), i)
         end
-        neg && (@inbounds buf[1] = 0x2d) # UInt8('-')
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
     return str
 end
@@ -1052,19 +1052,19 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     n = neg + ndigits(x, base=b, pad=pad)
     str = _string_n(n)
     GC.@preserve str begin
-        buf = StringBuffer(pointer(str))
+        p = pointer(str)
         i = n
         @inbounds while i > neg
             if b > 0
-                buf[i] = digits[1 + (rem(x, b) % Int)::Int]
+                unsafe_store!(p, digits[1 + (rem(x, b) % Int)::Int], i)
                 x = div(x,b)
             else
-                buf[i] = digits[1 + (mod(x, -b) % Int)::Int]
+                unsafe_store!(p, digits[1 + (mod(x, -b) % Int)::Int], i)
                 x = cld(x,b)
             end
             i -= 1
         end
-        neg && (buf[1] = 0x2d) # UInt8('-')
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
     return str
 end
@@ -1139,22 +1139,19 @@ julia> bitstring(2.2)
 function bitstring(x::T) where {T}
     isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
     sz = sizeof(T) * 8
-    str = _string_n(sz)
-    GC.@preserve str begin
-        buf = StringBuffer(pointer(str))
-        i = sz
-        @inbounds while i >= 4
-            b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
-            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
-            buf[i-3] = (d >> 0x00) % UInt8
-            buf[i-2] = (d >> 0x08) % UInt8
-            buf[i-1] = (d >> 0x10) % UInt8
-            buf[i]   = (d >> 0x18) % UInt8
-            x = lshr_int(x, 4)
-            i -= 4
-        end
+    str = StringMemory(sz)
+    i = sz
+    @inbounds while i >= 4
+        b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
+        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+        str[i-3] = (d >> 0x00) % UInt8
+        str[i-2] = (d >> 0x08) % UInt8
+        str[i-1] = (d >> 0x10) % UInt8
+        str[i]   = (d >> 0x18) % UInt8
+        x = lshr_int(x, 4)
+        i -= 4
     end
-    return str
+    return unsafe_takestring(str)
 end
 
 """

@@ -770,11 +770,11 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     GC.@preserve str begin
         p = pointer(str)
         MPZ.get_str!(p + nd - nd1, base, n)
-        buf = Base.StringBuffer(p)
-        @inbounds for i = (1:nd-nd1) .+ isnegative(n)
-            buf[i] = '0' % UInt8
+        pad_len = nd - nd1
+        if pad_len > 0
+            memset(p + isnegative(n), UInt8('0'), pad_len)
         end
-        isnegative(n) && (buf[1] = '-' % UInt8)
+        isnegative(n) && unsafe_store!(p, UInt8('-'))
     end
     return str
 end

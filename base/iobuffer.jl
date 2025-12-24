@@ -167,20 +167,6 @@ get_compacted(io::GenericIOBuffer) = max(0, -io.offset_or_compacted)
 StringMemory(n::Integer) = unsafe_wrap(Memory{UInt8}, _string_n(n))
 StringVector(n::Integer) = wrap(Array, StringMemory(n))
 
-# lightweight non-allocating buffer for writing into a freshly-allocated String
-struct StringBuffer
-    ptr::Ptr{UInt8}
-end
-@inline Base.@propagate_inbounds function setindex!(b::StringBuffer, v::UInt8, i::Int)
-    @boundscheck i > 0 || throw(BoundsError(b, i))
-    unsafe_store!(b.ptr, v, i)
-    return b
-end
-@inline Base.@propagate_inbounds function getindex(b::StringBuffer, i::Int)
-    @boundscheck i > 0 || throw(BoundsError(b, i))
-    unsafe_load(b.ptr, i)
-end
-
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
 """
