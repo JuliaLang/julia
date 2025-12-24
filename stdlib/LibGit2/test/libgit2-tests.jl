@@ -7,114 +7,12 @@ using LibGit2_jll
 using Test
 using Random, Serialization, Sockets
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
-import .Main.FakePTYs: with_fake_pty
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
+isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
+using .Main.ChallengePrompts: challenge_prompt as basic_challenge_prompt
 
-const timeout = 60
-
-function challenge_prompt(code::Expr, challenges)
-    input_code = tempname()
-    open(input_code, "w") do fp
-        serialize(fp, code)
-    end
-    output_file = tempname()
-    torun = """
-        import LibGit2
-        using Serialization
-        result = open($(repr(input_code))) do fp
-            eval(deserialize(fp))
-        end
-        open($(repr(output_file)), "w") do fp
-            serialize(fp, result)
-        end"""
-    cmd = `$(Base.julia_cmd()) --startup-file=no -e $torun`
-    try
-        challenge_prompt(cmd, challenges)
-        return open(output_file, "r") do fp
-            deserialize(fp)
-        end
-    finally
-        isfile(output_file) && rm(output_file)
-        isfile(input_code) && rm(input_code)
-    end
-    return nothing
-end
-
-function challenge_prompt(cmd::Cmd, challenges)
-    function format_output(output)
-        str = read(seekstart(output), String)
-        isempty(str) && return ""
-        return "Process output found:\n\"\"\"\n$str\n\"\"\""
-    end
-    out = IOBuffer()
-    with_fake_pty() do pts, ptm
-        p = run(detach(cmd), pts, pts, pts, wait=false) # getpass uses stderr by default
-        Base.close_stdio(pts)
-
-        # Kill the process if it takes too long. Typically occurs when process is waiting
-        # for input.
-        timer = Channel{Symbol}(1)
-        watcher = @async begin
-            waited = 0
-            while waited < timeout && process_running(p)
-                sleep(1)
-                waited += 1
-            end
-
-            if process_running(p)
-                kill(p)
-                put!(timer, :timeout)
-            elseif success(p)
-                put!(timer, :success)
-            else
-                put!(timer, :failure)
-            end
-
-            # SIGKILL stubborn processes
-            if process_running(p)
-                sleep(3)
-                process_running(p) && kill(p, Base.SIGKILL)
-            end
-            wait(p)
-        end
-
-        wroteall = false
-        try
-            for (challenge, response) in challenges
-                write(out, readuntil(ptm, challenge, keep=true))
-                if !isopen(ptm)
-                    error("Could not locate challenge: \"$challenge\". ",
-                          format_output(out))
-                end
-                write(ptm, response)
-            end
-            wroteall = true
-
-            # Capture output from process until `pts` is closed
-            write(out, ptm)
-        catch ex
-            if !(wroteall && ex isa Base.IOError && ex.code == Base.UV_EIO)
-                # ignore EIO from `ptm` after `pts` dies
-                error("Process failed possibly waiting for a response. ",
-                      format_output(out))
-            end
-        end
-
-        status = fetch(timer)
-        close(ptm)
-        if status !== :success
-            if status === :timeout
-                error("Process timed out possibly waiting for a response. ",
-                      format_output(out))
-            else
-                error("Failed process. ", format_output(out), "\n", p)
-            end
-        end
-        wait(watcher)
-    end
-    nothing
-end
+challenge_prompt(code::Expr, challenges) = basic_challenge_prompt(code, challenges; pkgs=["LibGit2"])
+challenge_prompt(cmd::Cmd, challenges) = basic_challenge_prompt(cmd, challenges)
 
 const LIBGIT2_MIN_VER = v"1.0.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
@@ -197,7 +95,7 @@ end
     p = ["XXX","YYY"]
     a = Base.cconvert(Ptr{LibGit2.StrArrayStruct}, p)
     b = Base.unsafe_convert(Ptr{LibGit2.StrArrayStruct}, a)
-    @test p == convert(Vector{String}, unsafe_load(b))
+    @test p == collect(unsafe_load(b))
     @noinline gcuse(a) = a
     gcuse(a)
 end
@@ -846,6 +744,23 @@ mktempdir() do dir
             cred_payload = LibGit2.CredentialPayload()
             @test_throws ArgumentError LibGit2.clone(cache_repo, test_repo, callbacks=callbacks, credentials=cred_payload)
         end
+        @testset "shallow clone" begin
+            @static if LibGit2.VERSION >= v"1.7.0"
+                # Note: Shallow clones are not supported with local file:// transport
+                # This is a limitation in libgit2 - shallow clones only work with
+                # network protocols (http, https, git, ssh)
+                # See online-tests.jl for tests with remote repositories
+
+                # Test normal clone is not shallow
+                normal_path = joinpath(dir, "Example.NotShallow")
+                LibGit2.with(LibGit2.clone(cache_repo, normal_path)) do repo
+                    @test !LibGit2.isshallow(repo)
+                end
+            else
+                # Test that depth parameter throws error on older libgit2
+                @test_throws ArgumentError LibGit2.clone(cache_repo, joinpath(dir, "Example.Shallow"), depth=1)
+            end
+        end
     end
 
     @testset "Update cache repository" begin
@@ -1172,7 +1087,7 @@ mktempdir() do dir
 
                 # test workaround for git_tree_walk issue
                 # https://github.com/libgit2/libgit2/issues/4693
-                ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring),
+                ccall((:git_error_set_str, libgit2), Cvoid, (Cint, Cstring),
                       Cint(LibGit2.Error.Invalid), "previous error")
                 try
                     # file needs to exist in tree in order to trigger the stop walk condition
@@ -1184,6 +1099,14 @@ mktempdir() do dir
                         rethrow()
                     end
                 end
+
+                # Test GitTree constructor with GitHash
+                tree1 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                tree_hash = LibGit2.GitHash(tree1)
+                tree2 = LibGit2.GitTree(repo, tree_hash)
+                @test isa(tree2, LibGit2.GitTree)
+                @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
+                @test LibGit2.count(tree1) == LibGit2.count(tree2)
             end
         end
 
@@ -1249,11 +1172,26 @@ mktempdir() do dir
                 @test !LibGit2.isdirty(repo, cached=true)
                 @test !LibGit2.isdiff(repo, "HEAD", cached=true)
             end
+
+            LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+                diff_str = "diff --git a/test.txt b/test.txt\nindex 0000000..1111111 100644\n"
+                @test_throws LibGit2.GitError LibGit2.GitDiff(diff_str)
+
+                tree1 = LibGit2.GitTree(repo, "HEAD~1^{tree}")
+                tree2 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                diff = LibGit2.diff_tree(repo, tree1, tree2)
+                idx = LibGit2.apply_to_tree(repo, tree1, diff)
+                @test idx isa LibGit2.GitIndex
+                oid = LibGit2.write_tree_to!(repo, idx)
+                @test oid isa LibGit2.GitHash
+                close(idx)
+            end
         end
     end
 
     function setup_clone_repo(cache_repo::AbstractString, path::AbstractString; name="AAAA", email="BBBB@BBBB.COM")
         repo = LibGit2.clone(cache_repo, path)
+        LibGit2.fetch(repo)
         # need to set this for merges to succeed
         cfg = LibGit2.GitConfig(repo)
         LibGit2.set!(cfg, "user.name", name)
@@ -3155,16 +3093,35 @@ mktempdir() do dir
                 key = joinpath(root, common_name * ".key")
                 cert = joinpath(root, common_name * ".crt")
                 pem = joinpath(root, common_name * ".pem")
+                conf = joinpath(root, common_name * ".conf")
+
+                # Make sure test doesn't depend on system OpenSSL config (which may be broken)
+                open(conf, "w") do io
+                    write(io, """
+                        [req]
+                        distinguished_name = req_distinguished_name
+
+                        [req_distinguished_name]
+                        CN = $common_name
+                        """)
+                end
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
+                err = IOBuffer()
+                p = run(pipeline(addenv(
+                    `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,
+                    "OPENSSL_CONF" => conf), stderr=err); wait=false)
+                wait(p)
+                @testset let err = String(take!(err))
+                    @test success(p)
+                end
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 local pobj, port
                 for attempt in 1:10
                     # Find an available port by listening, but there's a race condition where
                     # another process could grab this port, so retry on failure
-                    port, server = listenany(49152)
+                    port, server = listenany(49052 + rand(1:100) + attempt*10)
                     close(server)
 
                     # Make a fake Julia package and minimal HTTPS server with our generated

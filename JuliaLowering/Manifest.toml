@@ -1,0 +1,16 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.14.0-DEV"
+manifest_format = "2.1"
+project_hash = "16f6f8d58c46fe20d68a941bfaddb4590471548a"
+
+[[deps.JuliaLowering]]
+deps = ["JuliaSyntax"]
+path = "."
+uuid = "f3c80556-a63f-4383-b822-37d64f81a311"
+version = "1.0.0-DEV"
+
+[[deps.JuliaSyntax]]
+path = "../JuliaSyntax"
+uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
+version = "2.0.0-DEV"

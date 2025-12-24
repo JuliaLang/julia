@@ -19,7 +19,7 @@ include("testenv.jl")
 
 @test length(methods(ambig, (Int, Int))) == 1
 @test length(methods(ambig, (UInt8, Int))) == 0
-@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 3
+@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 2
 
 @test ambig("hi", "there") == 1
 @test ambig(3.1, 3.2) == 5
@@ -42,7 +42,6 @@ let err = try
     errstr = String(take!(io))
     @test occursin("  ambig(x, y::Integer)\n    @ $curmod_str", errstr)
     @test occursin("  ambig(x::Integer, y)\n    @ $curmod_str", errstr)
-    @test occursin("  ambig(x::Number, y)\n    @ $curmod_str", errstr)
     @test occursin("Possible fix, define\n  ambig(::Integer, ::Integer)", errstr)
 end
 
@@ -97,10 +96,7 @@ ambig(x::Union{Char, Int16}) = 's'
 
 # Automatic detection of ambiguities
 
-const allowed_undefineds = Set([
-    GlobalRef(Base, :active_repl),
-    GlobalRef(Base, :active_repl_backend),
-])
+const allowed_undefineds = Set([GlobalRef(Base, :active_repl)])
 
 let Distributed = get(Base.loaded_modules,
                       Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
@@ -163,7 +159,19 @@ ambig(::Signed, ::Int) = 3
 ambig(::Int, ::Signed) = 4
 end
 ambs = detect_ambiguities(Ambig48312)
-@test length(ambs) == 4
+@test length(ambs) == 1 # only ambiguous over (Int, Int), which is 3 or 4
+
+module UnboundAmbig55868
+    module B
+        struct C end
+        export C
+        Base.@deprecate_binding D C
+    end
+    using .B
+    export C, D
+end
+@test isempty(detect_unbound_args(UnboundAmbig55868))
+@test isempty(detect_ambiguities(UnboundAmbig55868))
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
@@ -179,8 +187,7 @@ ambs = detect_ambiguities(Ambig48312)
 
     # some ambiguities involving Union{} type parameters may be expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
-        @test !isempty(ambig)
-        @test length(ambig) < 30
+        @test isempty(ambig)
     end
 
     STDLIB_DIR = Sys.STDLIB
@@ -279,7 +286,7 @@ end
 @test isempty(methods(Ambig8.f, (Int,)))
 @test isempty(methods(Ambig8.g, (Int,)))
 for f in (Ambig8.f, Ambig8.g)
-    @test length(methods(f, (Integer,))) == 2 # 1 is also acceptable
+    @test length(methods(f, (Integer,))) == 2 # 3 is also acceptable
     @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
     @test length(Base.methods_including_ambiguous(f, (Signed,))) == 2
     @test f(0x00) == 1
@@ -336,26 +343,17 @@ end
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
-        @test_broken isempty(need_to_handle_undef_sparam)
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
-        pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
+        pop!(need_to_handle_undef_sparam, which(Base._eltype_ntuple, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
         @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
-        pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.complex, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
         @test isempty(need_to_handle_undef_sparam)
     end
 end
@@ -409,7 +407,7 @@ let has_ambig = Ref(Int32(0))
     ms = Base._methods_by_ftype(Tuple{typeof(fnoambig), Any, Any}, nothing, 4, Base.get_world_counter(), false, Ref(typemin(UInt)), Ref(typemax(UInt)), has_ambig)
     @test ms isa Vector
     @test length(ms) == 4
-    @test has_ambig[] == 0
+    @test has_ambig[] == 1 # 0 is better, but expensive and probably unnecessary to compute
 end
 
 # issue #11407
@@ -449,5 +447,44 @@ cc46601(::Type{T}, x::Number) where {T<:Number} = 6
 cc46601(::Type{T}, x::Int) where {T<:AbstractString} = 7
 @test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
 @test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 7
+
+# Issue #55231
+struct U55231{P} end
+struct V55231{P} end
+U55231(::V55231) = nothing
+(::Type{T})(::V55231) where {T<:U55231} = nothing
+@test length(methods(U55231)) == 1
+U55231(a, b) = nothing
+@test length(methods(U55231)) == 2
+struct S55231{P} end
+struct T55231{P} end
+(::Type{T})(::T55231) where {T<:S55231} = nothing
+S55231(::T55231) = nothing
+@test length(methods(S55231)) == 1
+S55231(a, b) = nothing
+@test length(methods(S55231)) == 2
+
+ambig10() = 1
+ambig10(a::Vararg{Any}) = 2
+ambig10(a::Vararg{Union{Int32,Int64}}) = 6
+ambig10(a::Vararg{Matrix}) = 4
+ambig10(a::Vararg{Number}) = 7
+ambig10(a::Vararg{N}) where {N<:Number} = 5
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(ambig10), Vararg}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
+    @test length(ms) == 6
+    @test_broken ambig[] == 0
+end
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(ambig10), Vararg{Number}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
+    @test length(ms) == 4
+    @test_broken ambig[] == 0
+    @test ms[1].method === which(ambig10, ())
+    @test ms[2].method === which(ambig10, (Vararg{Union{Int32, Int64}},))
+    @test ms[3].method === which(ambig10, Tuple{Vararg{N}} where N<:Number,)
+    @test ms[4].method === which(ambig10, (Vararg{Number},))
+end
 
 nothing

@@ -208,7 +208,9 @@ end
     @test iterate(t, y3[2]) === nothing
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
-    @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+    @test_throws DimensionMismatch eachindex((2,5,"foo"), (1,2,5,7))
+
+    @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
 
 
@@ -367,9 +369,9 @@ end
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
 
-    @test hash(()) === Base.tuplehash_seed
-    @test hash((1,)) === hash(1, Base.tuplehash_seed)
-    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
+    @test hash(()) === Base.tuplehash_seed ⊻ Base.HASH_SEED
+    @test hash((1,)) === hash(1, Base.tuplehash_seed ⊻ Base.HASH_SEED)
+    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed ⊻ Base.HASH_SEED))
 
     # Test Any32 methods
     t = ntuple(identity, 32)
@@ -391,7 +393,7 @@ end
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
 
-    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
+    @test hash(t) === foldr(hash, vcat(1:32, (), Base.HASH_SEED))
 end
 
 @testset "functions" begin
@@ -530,6 +532,21 @@ end
     for n = 0:15
         @test ntuple(identity, Val(n)) == ntuple(identity, n)
     end
+
+    @test Base.infer_return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+
+    # issue #55790
+    for n in 1:32
+        @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
+    end
+
+    @test Tuple == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Any})
+    @test Tuple{Vararg{Int}} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Any})
+
+    for n in 0:15
+        @test NTuple{n, Any} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Val{n}})
+        @test NTuple{n, Int} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Val{n}})
+    end
 end
 
 struct A_15703{N}
@@ -652,6 +669,8 @@ end
 
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
+
+    @test Base.return_types(Base.setindex, Tuple{Tuple,Nothing,Int}) == [Tuple]
 end
 
 @testset "inferable range indexing with constant values" begin
@@ -796,6 +815,29 @@ namedtup = (;a=1, b=2, c=3)
         NamedTuple{(:c,), Tuple{Int}},
     }
 
+@testset "`Base.split_rest(::Tuple, ::Vararg)` return type inference" begin
+    let f(t) = Base.split_rest(t, 3)
+        tuple_types_of_length(n::Int) = (NTuple{n, Any}, NTuple{n}, NTuple{n, Float32})
+        @testset "inferred return type must subtype `NTuple{2, Tuple}`" begin
+            for T in (
+                Tuple, Tuple{Vararg{Float32}},  # any length
+                Tuple{Any, Vararg{Any}}, (Tuple{T, Vararg{T}} where {T}), Tuple{Float32, Vararg{Float32}},  # length greater than one
+                tuple_types_of_length(5)...,  # length five
+            )
+                @test Base.infer_return_type(f, Tuple{T}) <: NTuple{2, Tuple}
+                for S in (Tuple{T, Any, Any}, Tuple{T, Any}, Tuple{T, Int, Any}, Tuple{T, Int}, Tuple{T, Int, Int})
+                    @test Base.infer_return_type(Base.split_rest, S) <: NTuple{2, Tuple}
+                end
+            end
+        end
+        @testset "with exactly-known length: `5 == 2 + 3`" begin
+            for T in tuple_types_of_length(5)
+                @test Base.infer_return_type(f, Tuple{T}) <: Tuple{Tuple{Any, Any}, Tuple{Any, Any, Any}}
+            end
+        end
+    end
+end
+
 # Make sure that tuple iteration is foldable
 @test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
 @test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))
@@ -829,4 +871,16 @@ end
     @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
     @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
     @test_throws MethodError circshift(t1, 'a')
+    @test Base.infer_return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
+    @test Base.infer_return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
+    for len ∈ 0:5
+        v = 1:len
+        t = Tuple(v)
+        for shift ∈ -6:6
+            @test circshift(v, shift) == collect(circshift(t, shift))
+        end
+    end
 end
+
+@test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})
+@test Tuple{Vararg{Int}} == Base.infer_return_type(reverse, Tuple{Tuple{Vararg{Int}}})
