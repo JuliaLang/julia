@@ -99,10 +99,10 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
                 @inbounds unsafe_store!(p, hex_chars[1 + u & 0xf], i)
                 u >>= 4
             end
-            @inbounds unsafe_store!(p, UInt8('-'), 9)
-            @inbounds unsafe_store!(p, UInt8('-'), 14)
-            @inbounds unsafe_store!(p, UInt8('-'), 19)
-            @inbounds unsafe_store!(p, UInt8('-'), 24)
+            unsafe_store!(p, UInt8('-'), 9)
+            unsafe_store!(p, UInt8('-'), 14)
+            unsafe_store!(p, UInt8('-'), 19)
+            unsafe_store!(p, UInt8('-'), 24)
         end
         return str
     end

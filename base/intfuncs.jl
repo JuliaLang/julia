@@ -875,7 +875,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     GC.@preserve str begin
         p = pointer(str)
         i = n
-        @inbounds while i >= 4
+        while i >= 4
             b = UInt32((x % UInt8)::UInt8)
             d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
             unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
@@ -886,7 +886,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
             i -= 4
         end
         while i > neg
-            @inbounds unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x1), i)
+            unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x1), i)
             x >>= 0x1
             i -= 1
         end
@@ -903,7 +903,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         p = pointer(str)
         i = n
         while i > neg
-            @inbounds unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x7), i)
+            unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x7), i)
             x >>= 0x3
             i -= 1
         end
@@ -1021,14 +1021,14 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         while i >= 2
             b = (x % UInt8)::UInt8
             d1, d2 = b >> 0x4, b & 0xf
-            @inbounds unsafe_store!(p, d1 + ifelse(d1 > 0x9, 0x57, 0x30), i-1)
-            @inbounds unsafe_store!(p, d2 + ifelse(d2 > 0x9, 0x57, 0x30), i)
+            unsafe_store!(p, d1 + ifelse(d1 > 0x9, 0x57, 0x30), i-1)
+            unsafe_store!(p, d2 + ifelse(d2 > 0x9, 0x57, 0x30), i)
             x >>= 0x8
             i -= 2
         end
         if i > neg
             d = (x % UInt8)::UInt8 & 0xf
-            @inbounds unsafe_store!(p, d + ifelse(d > 0x9, 0x57, 0x30), i)
+            unsafe_store!(p, d + ifelse(d > 0x9, 0x57, 0x30), i)
         end
         neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
@@ -1137,7 +1137,7 @@ function bitstring(x::T) where {T}
     GC.@preserve str begin
         p = pointer(str)
         i = sz
-        @inbounds while i >= 4
+        while i >= 4
             b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
             d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
             unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
