@@ -1139,19 +1139,22 @@ julia> bitstring(2.2)
 function bitstring(x::T) where {T}
     isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
     sz = sizeof(T) * 8
-    str = StringMemory(sz)
-    i = sz
-    @inbounds while i >= 4
-        b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
-        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
-        str[i-3] = (d >> 0x00) % UInt8
-        str[i-2] = (d >> 0x08) % UInt8
-        str[i-1] = (d >> 0x10) % UInt8
-        str[i]   = (d >> 0x18) % UInt8
-        x = lshr_int(x, 4)
-        i -= 4
+    str = _string_n(sz)
+    GC.@preserve str begin
+        p = pointer(str)
+        i = sz
+        @inbounds while i >= 4
+            b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
+            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+            unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
+            unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
+            unsafe_store!(p, (d >> 0x10) % UInt8, i-1)
+            unsafe_store!(p, (d >> 0x18) % UInt8, i)
+            x = lshr_int(x, 4)
+            i -= 4
+        end
     end
-    return unsafe_takestring(str)
+    return str
 end
 
 """
