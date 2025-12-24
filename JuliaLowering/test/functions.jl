@@ -325,6 +325,14 @@ end
     # flagged as nospecialize.
     @test only(methods(test_mod.f_nospecialize)).nospecialize == 0b10100
 
+    # @nospecialize on unnamed arguments (issue #44428)
+    JuliaLowering.include_string(test_mod, """
+    function f_nospecialize_unnamed(@nospecialize(::Any), @nospecialize(x::Any))
+        x
+    end
+    """)
+    @test only(methods(test_mod.f_nospecialize_unnamed)).nospecialize == 0b11
+
     JuliaLowering.include_string(test_mod, """
     function f_slotflags(x, y, f, z)
         f() + x + y

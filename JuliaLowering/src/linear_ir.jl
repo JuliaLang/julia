@@ -1065,7 +1065,8 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(arg.name_val, :argument, false, false, false, false, false))
+            push!(slots, Slot(arg.name_val, :argument, getmeta(arg, :nospecialize, false),
+                              false, false, false, false))
         else
             @assert kind(arg) == K"BindingId"
             id = arg.var_id

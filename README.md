@@ -53,9 +53,14 @@ and installing Julia, below.
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-New developers may find the notes in
-[CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
-helpful to start contributing to the Julia codebase.
+
+## Contributing to Julia
+
+We welcome contributions from developers of all experience levels, including bug fixes,
+documentation improvements, tests, and performance enhancements.
+
+New contributors are encouraged to start by reading [CONTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
+
 
 ### Learning Julia
 

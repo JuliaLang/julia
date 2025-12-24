@@ -179,7 +179,7 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
       CXX=/mingw64/bin/clang++
       ```
 !!! warning "UCRT Unsupported"
-   Do not try to use any other clang that MSYS2 may install (which may not have the correct default target) or the "Clang" environment(which defaults to the currently unsupported ucrt).
+    Do not try to use any other clang that MSYS2 may install (which may not have the correct default target) or the "Clang" environment(which defaults to the currently unsupported ucrt).
 
     4. Start the build
 

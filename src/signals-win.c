@@ -484,10 +484,9 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
-    // Dummy event for RegisterWaitForSingleObject (to use timeout callback)
-    HANDLE hProfileEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    if (hProfileEvent == NULL) {
-        jl_safe_fprintf(ios_safe_stderr, "failed to create profile event.\n");
+    HANDLE hTimerQueue = CreateTimerQueue();
+    if (hTimerQueue == NULL) {
+        jl_safe_fprintf(ios_safe_stderr, "failed to create profile watchdog timer queue.\n");
         abort();
     }
     while (1) {
@@ -531,13 +530,15 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 timeout_data.abort_ptr = &abort_profiling;
                 timeout_data.tid = tid;
                 jl_set_profile_abort_ptr(&abort_profiling);
-                HANDLE hWaitHandle = NULL;
-                if (!RegisterWaitForSingleObject(&hWaitHandle, hProfileEvent, profile_timeout_cb,
-                                                 &timeout_data, 100, WT_EXECUTEONLYONCE | WT_EXECUTEINWAITTHREAD)) {
+                HANDLE hTimer = NULL;
+                if (!CreateTimerQueueTimer(&hTimer, hTimerQueue, profile_timeout_cb,
+                                           &timeout_data, 1000 /* milliseconds */, 0,
+                                           WT_EXECUTEONLYONCE | WT_EXECUTEINWAITTHREAD)) {
                     // Failed to register wait, proceed without timeout protection
-                    hWaitHandle = NULL;
+                    hTimer = NULL;
                 }
 #endif
+
                 // Get backtrace data
                 profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
                         profile_bt_size_max - profile_bt_size_cur - 1, &c, NULL);
@@ -545,11 +546,13 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
                 // Wait for callback to complete or cancel before continuing
-                if (hWaitHandle != NULL)
-                    UnregisterWaitEx(hWaitHandle, INVALID_HANDLE_VALUE);
+                if (hTimer != NULL)
+                    DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
                 if (timeout_data.tid != -1)
-#endif
                     jl_thread_resume(tid);
+#else
+                jl_thread_resume(tid);
+#endif
 
                 // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = tid + 1;
@@ -575,7 +578,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = NULL;
     uv_mutex_unlock(&bt_data_prof_lock);
     jl_profile_stop_timer();
-    CloseHandle(hProfileEvent);
+    DeleteTimerQueue(hTimerQueue);
     return 0;
 }
 
