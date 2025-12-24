@@ -933,7 +933,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     if occursin("Waiting for background task / IO / timer", str)
                         thistaskwaiting = true
                         !liveprinting && !fancyprint && @lock print_lock begin
-                            println(io, pkg.name, color_string(str, Base.warn_color()))
+                            println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
                         end
                         push!(taskwaiting, pkg_config)
                     end
@@ -1141,7 +1141,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             else
                                 # allows processes to wait if another process is precompiling a given package to
                                 # a functionally identical package cache (except for preferences, which may differ)
-                                t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter) do
+                                fullname = full_name(ext_to_parent, pkg)
+                                t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, fullname) do
                                     # refresh and double-check the search now that we have global lock
                                     if interrupted_or_done[]
                                         return ErrorException("canceled")
@@ -1253,7 +1254,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         if !quick_exit
             logstr = sprint(context=logio) do iostr
                 if fancyprint # replace the progress bar
-                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((p.name for p in requested_pkgids), ", ", " and ")) finished."
+                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((full_name(ext_to_parent, p) for p in requested_pkgids), ", ", " and ")) finished."
                     printpkgstyle(iostr, :Precompiling, what)
                 end
                 plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
@@ -1326,7 +1327,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         err_str = IOBuffer()
         for ((dep, config), err) in failed_deps
             write(err_str, "\n")
-            print(err_str, "\n", dep.name, " ")
+            print(err_str, "\n", full_name(ext_to_parent, dep), " ")
             join(err_str, config[1], " ")
             print(err_str, "\n", err)
         end
@@ -1356,7 +1357,7 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
-function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore)
+function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, fullname)
     if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
         return f()
     end
@@ -1377,7 +1378,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
         !fancyprint && @lock print_lock begin
-            println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
+            println(io, "    ", fullname, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         Base.release(parallel_limiter) # release so other work can be done while waiting
         try
