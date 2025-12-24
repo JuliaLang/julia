@@ -230,7 +230,7 @@ end
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
             @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
             @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
-            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits+1) # extra bit because division is hard
             y = rand(T)
             yw = widen(widen(y))
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
@@ -699,6 +699,18 @@ end
         @test Duck(4) ∈ Duck(1):Duck(5)
         @test Duck(0) ∉ Duck(1):Duck(5)
     end
+    @testset "unique" begin
+        struct MyStepRangeLen{T,R} <: AbstractRange{T}
+           x :: R
+        end
+        MyStepRangeLen(s::StepRangeLen{T}) where {T} = MyStepRangeLen{T,typeof(s)}(s)
+        Base.first(s::MyStepRangeLen) = first(s.x)
+        Base.last(s::MyStepRangeLen) = last(s.x)
+        Base.length(s::MyStepRangeLen) = length(s.x)
+        Base.step(s::MyStepRangeLen) = step(s.x)
+        sr = StepRangeLen(1,0,4)
+        @test unique(MyStepRangeLen(sr)) == unique(sr)
+    end
 end
 @testset "indexing range with empty range (#4309)" begin
     @test (@inferred (3:6)[5:4]) === 7:6
@@ -743,6 +755,8 @@ end
         @test length(typemin(T):typemax(T)) == T(0)
         @test length(zero(T):one(T):typemax(T)) == typemin(T)
         @test length(typemin(T):one(T):typemax(T)) == T(0)
+        @test length(StepRange{T,BigInt}(zero(T), 1, typemax(T))) == typemin(T)
+        @test length(StepRange{T,BigInt}(typemin(T), 1, typemax(T))) == T(0)
         @test_throws OverflowError checked_length(zero(T):typemax(T))
         @test_throws OverflowError checked_length(typemin(T):typemax(T))
         @test_throws OverflowError checked_length(zero(T):one(T):typemax(T))

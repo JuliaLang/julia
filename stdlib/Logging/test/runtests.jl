@@ -19,6 +19,13 @@ macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourcei
     @test :handle_message in names(Logging, all=true)  # non-exported public function
 end
 
+@testset "LogLevel compatibility with integers" begin
+    @test Logging.Debug + 1000 == Logging.Info
+    @test Logging.Warn - 1000 == Logging.Info
+    @test Logging.Info < 500
+    @test 500 < Logging.Warn
+end
+
 @testset "ConsoleLogger" begin
     # First pass log limiting
     @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == Logging.Debug
@@ -334,7 +341,7 @@ end
             end
 
             ends = count(entry_end, line)
-            starts == 1 && ends == 1 && error("Interleaved logs: Log entry started and and another ended on one line")
+            starts == 1 && ends == 1 && error("Interleaved logs: Log entry started and another ended on one line")
             ends > 1 && error("Interleaved logs: Multiple log entries ended on one line")
             if ends == 1
                 startswith(line, entry_end) || error("Interleaved logs: Log entry ended in the middle of a line")

@@ -22,14 +22,16 @@ const TESTNAMES = [
         "euler", "show", "client", "terminfo",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs", "gc",
-        "misc", "threads", "stress", "binaryplatforms", "atexit",
+        "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
-        "scopedvalues", "compileall", "rebinding"
+        "scopedvalues", "compileall", "rebinding",
+        "faulty_constructor_method_should_not_cause_stack_overflows",
+        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs",
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -45,6 +47,12 @@ const INTERNET_REQUIRED_LIST = [
 
 const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
 
+const TOP_LEVEL_PKGS = [
+    "Compiler",
+    "JuliaSyntax",
+    "JuliaLowering",
+]
+
 function test_path(test)
     t = split(test, '/')
     if t[1] in STDLIBS
@@ -59,6 +67,12 @@ function test_path(test)
         return joinpath(@__DIR__, "..", t[1], t[2], t[3], "test", testpath...)
     elseif t[1] == "Compiler"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    elseif t[1] == "JuliaSyntax"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    elseif t[1] == "JuliaLowering"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
         return joinpath(@__DIR__, "..", t[1], "test", testpath...)
     else
         return joinpath(@__DIR__, test)
@@ -100,6 +114,7 @@ function choosetests(choices = [])
     seed = rand(RandomDevice(), UInt128)
     ci_option_passed = false
     dryrun = false
+    buildroot = joinpath(@__DIR__, "..")
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
@@ -109,6 +124,8 @@ function choosetests(choices = [])
             exit_on_error = true
         elseif t == "--revise"
             use_revise = true
+        elseif startswith(t, "--buildroot=")
+            buildroot = t[(length("--buildroot=") + 1):end]
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[(length("--seed=") + 1):end])
         elseif t == "--ci"
@@ -124,6 +141,7 @@ function choosetests(choices = [])
                   --help-list          : prints the options computed without running them
                   --revise             : load Revise
                   --seed=<SEED>        : set the initial seed for all testgroups (parsed as a UInt128)
+                  --buildroot=<PATH>   : set the build root directory (default: in-tree)
                   --skip <NAMES>...    : skip test or collection tagged with <NAMES>
                 TESTS:
                   Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib \
@@ -220,9 +238,11 @@ function choosetests(choices = [])
     filter!(!in(tests), unhandled)
     filter!(!in(skip_tests), tests)
 
+    is_package_test(testname) = testname in STDLIBS || testname in TOP_LEVEL_PKGS
+
     new_tests = String[]
     for test in tests
-        if test in STDLIBS || test == "Compiler"
+        if is_package_test(test)
             testfile = test_path("$test/testgroups")
             if isfile(testfile)
                 testgroups = readlines(testfile)
@@ -233,7 +253,7 @@ function choosetests(choices = [])
             end
         end
     end
-    filter!(x -> (x != "stdlib" && !(x in STDLIBS) && x != "Compiler") , tests)
+    filter!(x -> (x != "stdlib" && !is_package_test(x)) , tests)
     append!(tests, new_tests)
 
     requested_all || explicit_pkg            || filter!(x -> x != "Pkg",            tests)
@@ -261,5 +281,5 @@ function choosetests(choices = [])
         empty!(tests)
     end
 
-    return (; tests, net_on, exit_on_error, use_revise, seed)
+    return (; tests, net_on, exit_on_error, use_revise, buildroot, seed)
 end

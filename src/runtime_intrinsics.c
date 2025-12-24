@@ -622,10 +622,17 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
     return result;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
+JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *syncscope_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
+    JL_TYPECHK(fence, symbol, syncscope_sym);
     enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 1, 1);
+    if ((jl_sym_t*)syncscope_sym == jl_singlethread_sym) {
+        asm volatile ("" : : : "memory");
+        return jl_nothing;
+    } else if ((jl_sym_t*)syncscope_sym != jl_system_sym) {
+        jl_error("atomic_fence: invalid syncscope");
+    }
     if (order > jl_memory_order_monotonic)
         jl_fence();
     return jl_nothing;
@@ -634,7 +641,6 @@ JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
     JL_TYPECHK(cglobal, type, ty);
-    JL_GC_PUSH1(&v);
     jl_value_t *rt =
         ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
@@ -643,43 +649,22 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     if (!jl_is_concrete_type(rt))
         jl_error("cglobal: type argument not concrete");
 
+    if (jl_is_pointer(v))
+        return jl_bitcast(rt, v);
+
     if (jl_is_tuple(v) && jl_nfields(v) == 1)
         v = jl_fieldref(v, 0);
 
-    if (jl_is_pointer(v)) {
-        v = jl_bitcast(rt, v);
-        JL_GC_POP();
-        return v;
-    }
-
-    char *f_lib = NULL;
+    jl_value_t *f_lib = NULL;
+    JL_GC_PUSH2(&v, &f_lib);
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
-        jl_value_t *t1 = jl_fieldref(v, 1);
-        if (jl_is_symbol(t1))
-            f_lib = jl_symbol_name((jl_sym_t*)t1);
-        else if (jl_is_string(t1))
-            f_lib = jl_string_data(t1);
-        else
-            JL_TYPECHK(cglobal, symbol, t1)
+        f_lib = jl_fieldref(v, 1);
         v = jl_fieldref(v, 0);
     }
-
-    char *f_name = NULL;
-    if (jl_is_symbol(v))
-        f_name = jl_symbol_name((jl_sym_t*)v);
-    else if (jl_is_string(v))
-        f_name = jl_string_data(v);
-    else
-        JL_TYPECHK(cglobal, symbol, v)
-
-    if (!f_lib)
-        f_lib = (char*)jl_dlfind(f_name);
-
-    void *ptr;
-    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
+    void *ptr = jl_lazy_load_and_lookup(f_lib, v);
+    JL_GC_POP();
     jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), rt);
     *(void**)jl_data_ptr(jv) = ptr;
-    JL_GC_POP();
     return jv;
 }
 

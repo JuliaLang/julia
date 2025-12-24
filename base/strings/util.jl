@@ -3,7 +3,7 @@
 """
     Base.Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
 
-An alias type for a either single character or a tuple/vector/set of characters, used to describe arguments
+An alias type for either a single character or a tuple/vector/set of characters, used to describe arguments
 of several string-matching functions such as [`startswith`](@ref) and [`strip`](@ref).
 
 !!! compat "Julia 1.11"
@@ -96,7 +96,7 @@ function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
     reset(io)
     return s == codeunits(prefix)
 end
-Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
+Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
@@ -232,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -240,6 +240,9 @@ See also [`chopsuffix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` prefix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -272,8 +275,16 @@ function chopprefix(s::Union{String, SubString{String}},
     end
 end
 
+function chopprefix(s::AbstractString, prefix::AbstractChar)
+    if !isempty(s) && first(s) == prefix
+        return SubString(s, nextind(s, firstindex(s)))
+    else
+        return SubString(s)
+    end
+end
+
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex,AbstractChar})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -281,6 +292,9 @@ See also [`chopprefix`](@ref).
 
 !!! compat "Julia 1.8"
     This function is available as of Julia 1.8.
+
+!!! compat "Julia 1.13"
+    The method which accepts an `AbstractChar` suffix is available as of Julia 1.13.
 
 # Examples
 ```jldoctest
@@ -315,6 +329,13 @@ function chopsuffix(s::Union{String, SubString{String}},
     end
 end
 
+function chopsuffix(s::AbstractString, suffix::AbstractChar)
+    if !isempty(s) && last(s) == suffix
+        return SubString(s, firstindex(s), prevind(s, lastindex(s)))
+    else
+        return SubString(s)
+    end
+end
 
 """
     chomp(s::AbstractString)::SubString
@@ -954,11 +975,22 @@ rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
     rsplit(str, isspace; limit, keepempty)
 
-_replace(io, repl, str, r, pattern) = print(io, repl)
+_replace(io, repl::Union{<:AbstractString, <:AbstractChar}, str, r, pattern) =
+    write(io, repl)
+function _replace(io, repl, str, r, pattern)
+    if applicable(position, io)
+        p1 = position(io)
+        print(io, repl)
+        p2 = position(io)
+        p2 - p1
+    else
+        write(io, repr(repl))
+    end
+end
 _replace(io, repl::Function, str, r, pattern) =
-    print(io, repl(SubString(str, first(r), last(r))))
+    _replace(io, repl(SubString(str, first(r), last(r))), str, r, pattern)
 _replace(io, repl::Function, str, r, pattern::Function) =
-    print(io, repl(str[first(r)]))
+    _replace(io, repl(str[first(r)]), str, r, pattern)
 
 _pat_replacer(x) = x
 _free_pat_replacer(x) = nothing
@@ -988,43 +1020,54 @@ end
 function _replace_finish(io::IO, str, count::Int,
                          e1::Int, patterns::Tuple, replaces::Tuple, rs::Tuple)
     n = 1
-    i = a = firstindex(str)
-    while true
-        p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
-        r = rs[p]
-        j, k = first(r), last(r)
-        j > e1 && break
-        if i == a || i <= k
-            # copy out preserved portion
-            GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
-            # copy out replacement string
-            _replace(io, replaces[p], str, r, patterns[p])
-        end
-        if k < j
-            i = j
-            j == e1 && break
-            k = nextind(str, j)
-        else
-            i = k = nextind(str, k)
-        end
-        n == count && break
-        let k = k
-            rs = map(patterns, rs) do p, r
-                if first(r) < k
-                    r = findnext(p, str, k)
-                    if r === nothing || first(r) == 0
-                        return e1+1:0
-                    end
-                    r isa Int && (r = r:r) # findnext / performance fix
-                end
-                return r
-            end
-        end
+    i = start = firstindex(str)
+    while n <= count
+        rs, _, r, _, i = @inline _replace_once(
+            io, str, start, e1, patterns, replaces, rs, count, n, i)
+        first(r) >= e1 && break
         n += 1
     end
     foreach(_free_pat_replacer, patterns)
     write(io, SubString(str, i))
     return io
+end
+
+function _replace_once(io::IO, str, start::Int, e1::Int,
+                       patterns::Tuple, replaces::Tuple, rs::Tuple,
+                       count::Int, n::Int, i::Int)
+    x = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
+    r = rs[x]
+    j, k = first(r), last(r)
+    j > e1 && return rs, x, r, 0, i
+    nb = if i == start || i <= k
+        # copy out preserved portion
+        GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
+        # copy out replacement string
+        _replace(io, replaces[x], str, r, patterns[x])
+    else
+        0
+    end
+    if k < j
+        i = j
+        j == e1 && return rs, x, r, nb, i
+        k = nextind(str, j)
+    else
+        i = k = nextind(str, k)
+    end
+    n == count && return rs, x, r, nb, i
+    let k = k
+        rs = map(patterns, rs) do p, r
+            if first(r) < k
+                r = findnext(p, str, k)
+                if r === nothing || first(r) == 0
+                    return e1+1:0
+                end
+                r isa Int && (r = r:r) # findnext / performance fix
+            end
+            return r
+        end
+    end
+    return rs, x, r, nb, i
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
@@ -1051,7 +1094,7 @@ function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
         return String(str)
     end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
-    return String(take!(_replace_finish(out, str, count, e1, patterns, replaces, rs)))
+    return takestring!(_replace_finish(out, str, count, e1, patterns, replaces, rs))
 end
 
 """
@@ -1195,7 +1238,7 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     return dest
 end
 
-@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c))
+@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c)::Char)
 @inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
 @inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
@@ -1278,7 +1321,7 @@ julia> ascii("abcdefgh")
 "abcdefgh"
 ```
 """
-ascii(x::AbstractString) = ascii(String(x))
+ascii(x::AbstractString) = ascii(String(x)::String)
 
 Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
 function Base.rest(s::AbstractString, st...)
@@ -1286,5 +1329,5 @@ function Base.rest(s::AbstractString, st...)
     for c in Iterators.rest(s, st...)
         print(io, c)
     end
-    return String(take!(io))
+    return takestring!(io)
 end
