@@ -26,7 +26,7 @@ Atomic objects can be accessed using the `[]` notation:
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> x[] = 1
 1
@@ -73,17 +73,17 @@ time.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> Threads.atomic_cas!(x, 4, 2);
 
 julia> x
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> Threads.atomic_cas!(x, 3, 2);
 
 julia> x
-Base.Threads.Atomic{Int64}(2)
+Threads.Atomic{Int64}(2)
 ```
 """
 function atomic_cas! end
@@ -101,7 +101,7 @@ For further details, see LLVM's `atomicrmw xchg` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> Threads.atomic_xchg!(x, 2)
 3
@@ -125,7 +125,7 @@ For further details, see LLVM's `atomicrmw add` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> Threads.atomic_add!(x, 2)
 3
@@ -149,7 +149,7 @@ For further details, see LLVM's `atomicrmw sub` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> Threads.atomic_sub!(x, 2)
 3
@@ -172,7 +172,7 @@ For further details, see LLVM's `atomicrmw and` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> Threads.atomic_and!(x, 2)
 3
@@ -195,7 +195,7 @@ For further details, see LLVM's `atomicrmw nand` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
-Base.Threads.Atomic{Int64}(3)
+Threads.Atomic{Int64}(3)
 
 julia> Threads.atomic_nand!(x, 2)
 3
@@ -218,7 +218,7 @@ For further details, see LLVM's `atomicrmw or` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
-Base.Threads.Atomic{Int64}(5)
+Threads.Atomic{Int64}(5)
 
 julia> Threads.atomic_or!(x, 7)
 5
@@ -241,7 +241,7 @@ For further details, see LLVM's `atomicrmw xor` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
-Base.Threads.Atomic{Int64}(5)
+Threads.Atomic{Int64}(5)
 
 julia> Threads.atomic_xor!(x, 7)
 5
@@ -264,7 +264,7 @@ For further details, see LLVM's `atomicrmw max` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
-Base.Threads.Atomic{Int64}(5)
+Threads.Atomic{Int64}(5)
 
 julia> Threads.atomic_max!(x, 7)
 5
@@ -287,7 +287,7 @@ For further details, see LLVM's `atomicrmw min` instruction.
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(7)
-Base.Threads.Atomic{Int64}(7)
+Threads.Atomic{Int64}(7)
 
 julia> Threads.atomic_min!(x, 5)
 7

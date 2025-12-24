@@ -263,7 +263,7 @@ end
 
 const curmod = @__MODULE__
 const curmod_name = fullname(curmod)
-const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
+const curmod_str = curmod === Main ? "Main" : join(curmod_name[2:end], ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
