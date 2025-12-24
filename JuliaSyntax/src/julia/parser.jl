@@ -2735,16 +2735,12 @@ function parse_iteration_spec(ps::ParseState)
         bump(ps, TRIVIA_FLAG)
         parse_pipe_lt(ps)
     else
-        # Check if we're followed by a closing bracket (array context)
-        next_token = peek_skip_newline_in_gen(ps)
-        in_array_literal = next_token == K"]"
-        # Recovery heuristic with context-specific error message
-        error_msg = if in_array_literal
-            "invalid iteration spec: Comprehensions within argument lists require delimiting: [(x for x in ...), ...]"
-        else
-            "invalid iteration spec: expected one of `=` `in` or `∈`"
-        end
-        recover(ps, error=error_msg) do ps, k
+        # Recovery heuristic
+        recover(ps, error="invalid iteration spec: expected `=` `in` or `∈`
+note: a comma after a comprehension introduces another iteration spec;
+      wrap the comprehension in parentheses if you intended it
+      as an array element
+") do ps, k
             k in KSet", NewlineWs" || is_closing_token(ps, k)
         end
         # Or try parse_pipe_lt ???
