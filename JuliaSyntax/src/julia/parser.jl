@@ -1738,6 +1738,14 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, emark, K"error",
                      error="the .' operator for transpose is discontinued")
                 emit(ps, mark, K"dotcall", POSTFIX_OP_FLAG)
+            elseif k == K"[" || k == K"{"
+                # f.[x]  ==>  (error f x)
+                # f.{x}  ==>  (error f x)
+                # Parse as broadcasted brackets, then wrap in error
+                close = k == K"[" ? K"]" : K"}"
+                bump(ps, TRIVIA_FLAG)
+                parse_cat(ParseState(ps, end_symbol=true), close, ps.end_symbol)
+                emit(ps, mark, K"error", error="brackets are not allowed after `.`")
             else
                 if saw_misplaced_atsym
                     # If we saw a misplaced `@` earlier, this might be the place
