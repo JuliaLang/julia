@@ -1267,22 +1267,19 @@ function rename(oldpath::AbstractString, newpath::AbstractString)
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)
-    src_open = false
-    dst_open = false
-    local src_file, dst_file
+    src_file = nothing
+    dst_file = nothing
     try
         src_file = open(src, JL_O_RDONLY)
-        src_open = true
         dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, filemode(src_file))
-        dst_open = true
 
         bytes = filesize(stat(src_file))
         sendfile(dst_file, src_file, Int64(0), Int(bytes))
     finally
-        if src_open && isopen(src_file)
+        if src_file !== nothing && isopen(src_file)
             close(src_file)
         end
-        if dst_open && isopen(dst_file)
+        if dst_file !== nothing && isopen(dst_file)
             close(dst_file)
         end
     end

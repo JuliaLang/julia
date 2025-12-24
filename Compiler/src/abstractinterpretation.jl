@@ -2244,7 +2244,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 return Future(CallMeta(Bottom, ErrorException, EFFECTS_THROWS, NoCallInfo()))
             end
             # TODO: When we add curing, we may want to assume this is nothrow
-            if (method_or_ci.owner === Nothing && method_ir_ci.def.def isa Method)
+            if (method_or_ci.owner === Nothing && method_or_ci.def.def isa Method)
                 exct = Union{exct, ErrorException}
             end
             update_valid_age!(sv, callee_valid_range)
