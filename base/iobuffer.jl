@@ -523,8 +523,8 @@ function seek(io::GenericIOBuffer, n::Int)
     return io
 end
 
-function seekend(io::GenericIOBuffer)
-    io.ptr = io.size+1
+function seekend(io::GenericIOBuffer, n::Integer=0)
+    io.ptr = io.size+1+n
     return io
 end
 
