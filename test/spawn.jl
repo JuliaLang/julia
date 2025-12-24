@@ -587,6 +587,18 @@ end
 @test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
 @test Cmd(`foo`, env=nothing).env         === nothing
 
+# uid/gid - exercise code path with current effective ids (doesn't test privilege change)
+if !Sys.iswindows()
+    @test success(setuid(setgid(`$(Base.julia_cmd()) -e "exit(0)"`, Libc.getegid()), Libc.geteuid()))
+    # test show method for uid/gid
+    cmd_gid = setgid(`echo test`, 1000)
+    @test string(cmd_gid) == "setgid(`echo test`, 1000)"
+    cmd_uid = setuid(`echo test`, 1001)
+    @test string(cmd_uid) == "setuid(`echo test`, 1001)"
+    cmd_both = setuid(setgid(`echo test`, 1000), 1001)
+    @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
+end
+
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)
     @test (`$c a`).env == String["A=true"]
@@ -1052,4 +1064,40 @@ end
     args = split("-l /tmp")
     @assert eltype(args) != String
     @test Cmd(["ls", args...]) == `ls -l /tmp`
+end
+
+let buf = IOBuffer()
+    run(pipeline(`$(Base.julia_cmd()) -e 'println(Base.PipeEndpoint(RawFD(3)), "Hello")'`, 3=>buf))
+    @test String(take!(buf)) == "Hello\n"
+end
+
+# Test passing a pipe server as an addition fd
+@testset "Pipe server as additional fd" begin
+    if !Sys.iswindows()
+        # Windows CRT does not support passing server sockets as stdio fds
+        mktempdir() do dir
+            path = joinpath(dir, "test.sock")
+            server = Sockets.PipeServer()
+            bind(server, path)
+            Base.errormonitor(@async begin
+                local client
+                while true
+                    try
+                        client = Sockets.connect(path)
+                        break
+                    catch e
+                        isa(e, Base.IOError) || rethrow(e)
+                    end
+                    sleep(1)
+                end
+                println(client, "Hello Socket!")
+                closewrite(client)
+            end)
+            buf = IOBuffer()
+            proc = run(`$(Base.julia_cmd()) -e 'using Sockets; s = listen(Sockets.PipeServer(RawFD(3))); c = accept(s); print(read(c, String))'`, devnull, buf, stderr, server)
+            close(server)
+            @test success(proc)
+            @test String(take!(buf)) == "Hello Socket!\n"
+        end
+    end
 end

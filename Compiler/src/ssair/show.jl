@@ -301,7 +301,7 @@ function compute_ir_line_annotations(code::Union{IRCode,CodeInfo})
             x = min(length(last_stack), length(stack))
             depth = length(stack) - 1
             # Compute the last depth that was in common
-            first_mismatch = let last_stack=last_stack
+            first_mismatch = let last_stack=last_stack, stack=stack
                 findfirst(i->last_stack[i] != stack[i], 1:x)
             end
             # If the first mismatch is the last stack frame, that might just
@@ -1154,7 +1154,7 @@ function Base.show(io::IO, mi_info::Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        di = mi.cache.inferred.debuginfo
+        di = mi.cache.debuginfo
         file, line = debuginfo_firstline(di)
         file = string(file)
         line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"

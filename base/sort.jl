@@ -62,7 +62,7 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    issorted(itr, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Test whether a collection is in sorted order. The keywords modify what
 order is considered sorted, as described in the [`sort!`](@ref) documentation.
@@ -113,7 +113,7 @@ maybeview(v, k) = view(v, k)
 maybeview(v, k::Integer) = v[k]
 
 """
-    partialsort!(v, k; by=identity, lt=isless, rev=false)
+    partialsort!(v, k; by=identity, lt=isless, rev=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Mutate the vector `v` so that the value at index `k` (or
 range of adjacent values if `k` is a range) occurs
@@ -170,7 +170,7 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order); kws...)
 
 """
-    partialsort(v, k, by=identity, lt=isless, rev=false)
+    partialsort(v, k, by=identity, lt=isless, rev=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Variant of [`partialsort!`](@ref) that copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
@@ -496,7 +496,7 @@ end
 """
     make_scratch(scratch::Union{Nothing, Vector}, T::Type, len::Integer)
 
-Returns `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
+Return `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
 that is backed by the `Vector` `s`. If `scratch !== nothing`, then `s === scratch`.
 
 This function will allocate a new vector if `scratch === nothing`, `resize!` `scratch` if it
@@ -563,12 +563,15 @@ function _sort!(v::UnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw
     @getkw lo hi
     # @assert v.stride1 == 1
     parent = v.parent
-    if parent isa Array && !(parent isa Vector) && hi - lo < 100
+    if parent isa Array && !(parent isa Vector) && hi - lo < 100 || !iszero(v.offset1)
         # vec(::Array{T, ≠1}) allocates and is therefore somewhat expensive.
         # We don't want that for small inputs.
+
+        # Additionally, if offset1 is non-zero, then this optimization is incompatible with
+        # algorithms that track absolute first and last indices (e.g. ScratchQuickSort)
         _sort!(v, a.next, o, kw)
     else
-        _sort!(vec(parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
+        _sort!(vec(parent), a.next, o, kw)
     end
 end
 
@@ -760,7 +763,7 @@ end
 """
     IsUIntMappable(yes, no) isa Base.Sort.Algorithm
 
-Determines if the elements of a vector can be mapped to unsigned integers while preserving
+Determine if the elements of a vector can be mapped to unsigned integers while preserving
 their order under the specified ordering.
 
 If they can be, dispatch to the `yes` algorithm and record the unsigned integer type that

@@ -114,6 +114,19 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
+static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache);
+
+JL_DLLEXPORT jl_array_t* jl_compute_new_ext_cis(void)
+{
+    if (newly_inferred == NULL)
+        return jl_alloc_vec_any(0);
+    jl_query_cache query_cache;
+    init_query_cache(&query_cache);
+    jl_array_t *new_ext_cis = queue_external_cis(newly_inferred, &query_cache);
+    destroy_query_cache(&query_cache);
+    return new_ext_cis;
+}
+
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
     if (!newly_inferred)
@@ -486,11 +499,14 @@ static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_ca
         assert(jl_is_code_instance(ci));
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
         jl_method_t *m = mi->def.method;
+        int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
+        if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
+            continue; // ignore replaced methods
         if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
             int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
-            if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
+            if (found == 1) {
                 jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
             }
         }
@@ -518,7 +534,6 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
     if (!jl_object_in_image((jl_value_t*)m->module)) {
-        jl_array_ptr_1d_push(internal_methods, (jl_value_t*)m);
         if (s)
             jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
     }
@@ -539,40 +554,6 @@ static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array)
 {
     jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
-}
-
-static void jl_record_edges(jl_method_instance_t *caller, jl_array_t *edges)
-{
-    jl_code_instance_t *ci = jl_atomic_load_relaxed(&caller->cache);
-    while (ci != NULL) {
-        if (jl_atomic_load_relaxed(&ci->edges) &&
-            jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec &&
-            jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0)
-            jl_array_ptr_1d_push(edges, (jl_value_t*)ci);
-        ci = jl_atomic_load_relaxed(&ci->next);
-    }
-}
-
-// Extract `edges` and `ext_targets` from `edges_map`
-// `edges` = [caller1, ...], the list of codeinstances internal to methods
-static void jl_collect_internal_cis(jl_array_t *edges, size_t world)
-{
-    for (size_t i = 0; i < jl_array_nrows(internal_methods); i++) {
-        jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(internal_methods, i);
-        jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
-        if (!jl_is_svec(specializations)) {
-            jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
-            jl_record_edges(mi, edges);
-        }
-        else {
-            size_t j, l = jl_svec_len(specializations);
-            for (j = 0; j < l; j++) {
-                jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, j);
-                if ((jl_value_t*)mi != jl_nothing)
-                    jl_record_edges(mi, edges);
-            }
-        }
-    }
 }
 
 // Headers
@@ -671,7 +652,7 @@ static const char *jl_git_commit(void)
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 12;
+static const int JI_FORMAT_VERSION = 13;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static int64_t write_header(ios_t *s, uint8_t pkgimage)

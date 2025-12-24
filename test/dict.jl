@@ -1289,8 +1289,6 @@ struct NonFunctionCallable end
     @test @inferred mergewith(NonFunctionCallable(), d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
     @test foldl(mergewith(+), [d1, d2]; init=Dict{Union{},Union{}}()) ==
         Dict("A" => 1, "B" => 5, "C" => 4)
-    # backward compatibility
-    @test @inferred merge(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
 end
 
 @testset "Dict merge!" begin

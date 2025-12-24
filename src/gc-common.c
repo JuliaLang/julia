@@ -367,10 +367,11 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_task_t *ct, int on)
         JL_CATCH {
             jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: GC finalizers already enabled on this thread.\n");
             // Only print the backtrace once, to avoid spamming the logs
-            static int backtrace_printed = 0;
-            if (backtrace_printed == 0) {
-                backtrace_printed = 1;
-                jlbacktrace(); // written to STDERR_FILENO
+            static _Atomic(int) backtrace_printed = 0;
+            if (jl_atomic_load_relaxed(&backtrace_printed) == 0) {
+              if (jl_atomic_exchange_relaxed(&backtrace_printed, 1) == 0) {
+                  jlbacktrace(); // written to STDERR_FILENO
+              }
             }
         }
         return;

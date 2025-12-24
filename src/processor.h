@@ -240,9 +240,8 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void);
  * libjulia-* and the sysimage together (see null_sysimage.c), in which
  * case they allow accessing the local copy of the sysimage.
  **/
-extern char jl_system_image_data;
-extern size_t jl_system_image_size;
-extern jl_image_pointers_t jl_image_pointers;
+typedef void jl_image_unpack_func_t(void *handle, jl_image_buf_t *image);
+extern jl_image_unpack_func_t *jl_image_unpack;
 
 #ifdef __cplusplus
 }

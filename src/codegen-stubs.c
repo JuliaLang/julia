@@ -13,10 +13,10 @@
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, ios_t *s) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvm_gv_inits_fallback(void *native_code, arraylist_t *inits) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvm_mis_fallback(void *native_code, arraylist_t* MIs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, size_t *num, void **gvs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_gv_inits_fallback(void *native_code, size_t *num, void **inits) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, size_t *num, void **gvs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_cis_fallback(void *native_code, size_t *num, void **CIs) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
@@ -88,7 +88,7 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, int _trim, int _external_linkage, size_t _world) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(LLVMOrcThreadSafeModuleRef llvmmod, int _trim, int _external_linkage, size_t _world, jl_array_t *_mod_array, jl_array_t *_worklist, int _all, jl_array_t *_module_init_order) UNAVAILABLE
 JL_DLLEXPORT void *jl_emit_native_fallback(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)

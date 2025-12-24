@@ -3,11 +3,9 @@
 using Test
 using Distributed
 using Dates
-if !Sys.iswindows() && isa(stdin, Base.TTY)
-    import REPL
-end
 using Printf: @sprintf
 using Base: Experimental
+using Base.ScopedValues
 
 include("choosetests.jl")
 include("testenv.jl")
@@ -30,6 +28,7 @@ end
 
 const rmwait_timeout = running_under_rr() ? 300 : 30
 
+ENV["JULIA_TEST_BUILDROOT"] = buildroot
 if use_revise
     # First put this at the top of the DEPOT PATH to install revise if necessary.
     # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
@@ -118,7 +117,7 @@ cd(@__DIR__) do
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.
     if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
-        n = min(Sys.CPU_THREADS, length(tests))
+        n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
@@ -238,9 +237,9 @@ cd(@__DIR__) do
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
-                term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
+                term = Base.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
-                    REPL.Terminals.raw!(term, true)
+                    Base.Terminals.raw!(term, true)
                     while true
                         c = read(term, Char)
                         if c == '\x3'
@@ -257,7 +256,7 @@ cd(@__DIR__) do
                 catch e
                     isa(e, InterruptException) || rethrow()
                 finally
-                    REPL.Terminals.raw!(term, false)
+                    Base.Terminals.raw!(term, false)
                 end
             end
         end
@@ -420,64 +419,65 @@ cd(@__DIR__) do
     Errored, and execution continues until the summary at the end of the test
     run, where the test file is printed out as the "failed expression".
     =#
-    Test.TESTSET_PRINT_ENABLE[] = false
-    o_ts = Test.DefaultTestSet("Overall")
-    o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
-    BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
-    Test.push_testset(o_ts)
-    completed_tests = Set{String}()
-    for (testname, (resp,), duration) in results
-        push!(completed_tests, testname)
-        if isa(resp, Test.DefaultTestSet)
-            resp.time_end = resp.time_start + duration
-            Test.push_testset(resp)
-            Test.record(o_ts, resp)
-            Test.pop_testset()
-        elseif isa(resp, Test.TestSetException)
-            fake = Test.DefaultTestSet(testname)
-            fake.time_end = fake.time_start + duration
-            for i in 1:resp.pass
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
+    @with Test.TESTSET_PRINT_ENABLE=>false begin
+        o_ts = Test.DefaultTestSet("Overall")
+        @atomic o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
+        BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
+        Test.@with_testset o_ts begin
+            completed_tests = Set{String}()
+            for (testname, (resp,), duration) in results
+                push!(completed_tests, testname)
+                if isa(resp, Test.DefaultTestSet)
+                    @atomic resp.time_end = resp.time_start + duration
+                    Test.@with_testset resp begin
+                        Test.record(o_ts, resp)
+                    end
+                elseif isa(resp, Test.TestSetException)
+                    fake = Test.DefaultTestSet(testname)
+                    @atomic fake.time_end = fake.time_start + duration
+                    for i in 1:resp.pass
+                        Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
+                    end
+                    for i in 1:resp.broken
+                        Test.record(fake, Test.Broken(:test, nothing))
+                    end
+                    for t in resp.errors_and_fails
+                        Test.record(fake, t)
+                    end
+                    Test.@with_testset fake begin
+                        Test.record(o_ts, fake)
+                    end
+                else
+                    if !isa(resp, Exception)
+                        resp = ErrorException(string("Unknown result type : ", typeof(resp)))
+                    end
+                    # If this test raised an exception that is not a remote testset exception,
+                    # i.e. not a RemoteException capturing a TestSetException that means
+                    # the test runner itself had some problem, so we may have hit a segfault,
+                    # deserialization errors or something similar.  Record this testset as Errored.
+                    fake = Test.DefaultTestSet(testname)
+                    @atomic fake.time_end = fake.time_start + duration
+                    Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
+                    Test.@with_testset fake begin
+                        Test.record(o_ts, fake)
+                    end
+                end
             end
-            for i in 1:resp.broken
-                Test.record(fake, Test.Broken(:test, nothing))
+            for test in all_tests
+                (test in completed_tests) && continue
+                fake = Test.DefaultTestSet(test)
+                Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = [])]), LineNumberNode(1), nothing))
+                Test.@with_testset fake begin
+                    Test.record(o_ts, fake)
+                end
             end
-            for t in resp.errors_and_fails
-                Test.record(fake, t)
-            end
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
-        else
-            if !isa(resp, Exception)
-                resp = ErrorException(string("Unknown result type : ", typeof(resp)))
-            end
-            # If this test raised an exception that is not a remote testset exception,
-            # i.e. not a RemoteException capturing a TestSetException that means
-            # the test runner itself had some problem, so we may have hit a segfault,
-            # deserialization errors or something similar.  Record this testset as Errored.
-            fake = Test.DefaultTestSet(testname)
-            fake.time_end = fake.time_start + duration
-            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
         end
     end
-    for test in all_tests
-        (test in completed_tests) && continue
-        fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = [])]), LineNumberNode(1), nothing))
-        Test.push_testset(fake)
-        Test.record(o_ts, fake)
-        Test.pop_testset()
-    end
 
-    Test.TESTSET_PRINT_ENABLE[] = true
     println()
     # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
-    if !o_ts.anynonpass
+    if !Test.anynonpass(o_ts)
         printstyled("    SUCCESS\n"; bold=true, color=:green)
     else
         printstyled("    FAILURE\n\n"; bold=true, color=:red)

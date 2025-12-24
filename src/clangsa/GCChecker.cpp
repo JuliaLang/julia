@@ -919,7 +919,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
         // A pseudo-destructor is an expression that looks like a member
         // access to a destructor of a scalar type. A pseudo-destructor
         // expression has no run-time semantics beyond evaluating the base
-        // expression (which would have it's own CallEvent, if applicable).
+        // expression (which would have its own CallEvent, if applicable).
         isCalleeSafepoint = false;
       }
     } else if (FD) {
@@ -1717,7 +1717,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
       }
     }
   }
-  // If it's just the symbol by itself, let it be. We allow dead pointer to be
+  // If it's just the symbol by itself, let it be. We allow dead pointers to be
   // passed around, so long as they're not accessed. However, we do want to
   // start tracking any globals that may have been accessed.
   if (rootRegionIfGlobal(SLoc.getAsRegion(), State, C)) {

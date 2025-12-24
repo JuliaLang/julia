@@ -24,6 +24,10 @@ import Logging: Debug, Info, Warn, with_logger
     @test isapprox(1, 1; [(:atol, 0)]...)
     @test isapprox(1, 2; atol)
     @test isapprox(1, 3; a.atol)
+    # Test custom .. operator (not a broadcast operator)
+    ..(x, y) = x == y
+    @test 'a' .. 'a'
+    @test !('a' .. 'b')
 end
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
@@ -584,7 +588,7 @@ end
         @test total_error  == 6
         @test total_broken == 0
     end
-    ts.anynonpass = false
+    @atomic ts.anynonpass = 0x00
     deleteat!(Test.get_testset().results, 1)
 end
 
@@ -977,11 +981,11 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
         end'`), stderr=devnull), String)
     @test occursin(r"""
         Test Summary: \| Pass  Fail  Total +Time
-        Foo Tests     \|    2     2      4  \s*\d*\.\ds
-          Animals     \|    1     1      2  \s*\d*\.\ds
-            Felines   \|    1            1  \s*\d*\.\ds
-            Canines   \|          1      1  \s*\d*\.\ds
-          Arrays      \|    1     1      2  \s*\d*\.\ds
+        Foo Tests     \|    2     2      4  \s*(\d+m)?\d*\.\ds
+          Animals     \|    1     1      2  \s*(\d+m)?\d*\.\ds
+            Felines   \|    1            1  \s*(\d+m)?\d*\.\ds
+            Canines   \|          1      1  \s*(\d+m)?\d*\.\ds
+          Arrays      \|    1     1      2  \s*(\d+m)?\d*\.\ds
         """, msg)
 end
 
@@ -1360,16 +1364,16 @@ end
 @testset "verbose option" begin
     expected = r"""
     Test Summary:             \| Pass  Total +Time
-    Parent                    \|    9      9  \s*\d*\.\ds
-      Child 1                 \|    3      3  \s*\d*\.\ds
-        Child 1\.1 \(long name\) \|    1      1  \s*\d*\.\ds
-        Child 1\.2             \|    1      1  \s*\d*\.\ds
-        Child 1\.3             \|    1      1  \s*\d*\.\ds
-      Child 2                 \|    3      3  \s*\d*\.\ds
-      Child 3                 \|    3      3  \s*\d*\.\ds
-        Child 3\.1             \|    1      1  \s*\d*\.\ds
-        Child 3\.2             \|    1      1  \s*\d*\.\ds
-        Child 3\.3             \|    1      1  \s*\d*\.\ds
+    Parent                    \|    9      9  \s*(\d+m)?\d*\.\ds
+      Child 1                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 1\.1 \(long name\) \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
+      Child 2                 \|    3      3  \s*(\d+m)?\d*\.\ds
+      Child 3                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 3\.1             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
     """
 
     mktemp() do f, _
@@ -1431,8 +1435,8 @@ end
     @testset "non failfast (default)" begin
         expected = r"""
         Test Summary: \| Pass  Fail  Error  Total +Time
-        Foo           \|    1     2      1      4  \s*\d*\.\ds
-          Bar         \|    1     1             2  \s*\d*\.\ds
+        Foo           \|    1     2      1      4  \s*(\d+m)?\d*\.\ds
+          Bar         \|    1     1             2  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1457,7 +1461,7 @@ end
     @testset "failfast begin-end" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1482,8 +1486,8 @@ end
     @testset "failfast for-loop" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
-          1           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
         mktemp() do f, _
             write(f,
@@ -1508,8 +1512,8 @@ end
     @testset "failfast passes to child testsets" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
-          1           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1534,14 +1538,14 @@ end
     @testset "failfast via env var" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
             write(f,
             """
             using Test
-            ENV["JULIA_TEST_FAILFAST"] = true
+
             @testset "Foo" begin
                 @test false
                 @test error()
@@ -1551,7 +1555,7 @@ end
                 end
             end
             """)
-            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            cmd    = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no $f`, "JULIA_TEST_FAILFAST"=>"true")
             result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
             @test occursin(expected, result)
         end
@@ -1950,6 +1954,8 @@ end
         @test _escape_call(:(Main.f.(x, y))) == (; func=:(Broadcast.BroadcastFunction($(esc(:(Main.f))))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(Main.f))))
         @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
+        # Test that .. operator is not treated as a broadcast operator
+        @test _escape_call(:(x .. y)) == (; func=esc(:(..)), args, kwargs, quoted_func=:(:..))
     end
 end
 
@@ -2006,5 +2012,87 @@ end
         @test recorded_error2 isa Test.Error
         @test recorded_error2.context !== nothing
         @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
+    end
+end
+
+@testset "io argument for Test output functions" begin
+    # Test print_test_results and print_test_errors with io redirection
+    io = IOBuffer()
+
+    # Create a testset with passing and failing tests
+    ts = Test.DefaultTestSet("IO Test"; time_start=1.36071654e9)
+    Test.record(ts, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(1), false))
+    fail = Test.Fail(:test, "1 == 2", nothing, nothing, LineNumberNode(2, Symbol("test.jl")))
+    push!(ts.results, fail)
+
+    # Test print_test_results with io
+    Test.print_test_results(io, ts)
+    output = String(take!(io))
+    @test occursin("Test Summary:", output)
+    @test occursin("IO Test", output)
+    @test occursin("Pass", output)
+    @test occursin("Fail", output)
+
+    # Test print_test_errors with io
+    Test.print_test_errors(io, ts)
+    output = String(take!(io))
+    @test occursin("Error in testset", output)
+    @test occursin("1 == 2", output)
+end
+
+@testset "JULIA_TEST_VERBOSE" begin
+    # Test the verbose testset entry/exit functionality
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => true begin
+        # Capture output
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Verbose Test" begin
+                    @test true
+                    @testset "Nested Verbose Test" begin
+                        sleep(0.01)  # Add some duration
+                        @test 1 + 1 == 2
+                    end
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Check that verbose messages are present
+        @test occursin("Starting testset: Verbose Test", output)
+        @test occursin("Finished testset: Verbose Test", output)
+        @test occursin("Starting testset: Nested Verbose Test", output)
+        @test occursin("Finished testset: Nested Verbose Test", output)
+
+        # Check that timing information is included in exit messages
+        @test occursin(r"Finished testset: Nested Verbose Test \([0-9\.]+s\)", output)
+
+        # Check indentation for nested testsets
+        lines = split(output, '\n')
+        entering_nested = findfirst(line -> occursin("Starting testset: Nested Verbose Test", line), lines)
+        exiting_nested = findfirst(line -> occursin("Finished testset: Nested Verbose Test", line), lines)
+
+        if entering_nested !== nothing && exiting_nested !== nothing
+            # Both nested messages should have more indentation than outer messages
+            @test startswith(lines[entering_nested], "  ")
+            @test startswith(lines[exiting_nested], "  ")
+        end
+    end
+
+    # Test that verbose output is disabled by default
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => false begin
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Non-Verbose Test" begin
+                    @test true
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Should not contain verbose messages
+        @test !occursin("Starting testset:", output)
+        @test !occursin("Finished testset:", output)
     end
 end

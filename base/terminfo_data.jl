@@ -16,7 +16,7 @@ awk '/^#=run/{flag=1;next}/=#/{flag=0}flag{gsub(/__FILE__/,"\"'"$0"'\"");print}'
 Specification of a single terminal capability.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 

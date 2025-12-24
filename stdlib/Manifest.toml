@@ -93,7 +93,7 @@ version = "0.6.4"
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.14.1+1"
+version = "8.16.0+0"
 
 [[deps.LibGit2]]
 deps = ["LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
@@ -113,7 +113,7 @@ version = "1.11.3+1"
 [[deps.LibUV_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+20"
+version = "2.0.1+21"
 
 [[deps.LibUnwind_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "Zlib_jll"]
@@ -195,7 +195,7 @@ uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 version = "1.11.0"
 
 [[deps.REPL]]
-deps = ["FileWatching", "InteractiveUtils", "JuliaSyntaxHighlighting", "Markdown", "Sockets", "StyledStrings", "Unicode"]
+deps = ["Dates", "FileWatching", "InteractiveUtils", "JuliaSyntaxHighlighting", "Markdown", "Sockets", "StyledStrings", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 version = "1.11.0"
 
@@ -239,6 +239,11 @@ weakdeps = ["SparseArrays"]
 [[deps.StyledStrings]]
 uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
 version = "1.11.0"
+
+[[deps.SuiteSparse]]
+deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
+uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
+version = "1.12.0"
 
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "libblastrampoline_jll"]
@@ -300,6 +305,6 @@ uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
 version = "1.66.0+0"
 
 [[deps.p7zip_jll]]
-deps = ["Artifacts", "Libdl"]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.6.0+0"
+version = "17.7.0+0"

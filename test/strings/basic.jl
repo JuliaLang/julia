@@ -402,7 +402,7 @@ end
 end
 # test AbstractString functions at beginning of string.jl
 struct tstStringType <: AbstractString
-    data::Array{UInt8,1}
+    data::Vector{UInt8}
 end
 @testset "AbstractString functions" begin
     tstr = tstStringType(unsafe_wrap(Vector{UInt8},"12"))
@@ -1193,12 +1193,10 @@ end
     apple_uint8 = Vector{UInt8}("Apple")
     @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
 
-    apple_uint8 = Array{UInt8}("Apple")
-    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
-
-    Base.String(::tstStringType) = "Test"
+    Base.codeunit(::tstStringType) = UInt8
+    Base.codeunits(t::tstStringType) = t.data
     abstract_apple = tstStringType(apple_uint8)
-    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+    @test hash(abstract_apple, UInt(1)) == hash("Apple", UInt(1))
 
     @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
 

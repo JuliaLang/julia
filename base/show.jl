@@ -385,6 +385,11 @@ The following properties are in common use:
  - `:color`: Boolean specifying whether ANSI color/escape codes are supported/expected.
    By default, this is determined by whether `io` is a compatible terminal and by any
    `--color` command-line flag when `julia` was launched.
+ - `:hexunsigned`: Boolean specifying whether to print unsigned integers in
+   hexadecimal. Defaults to `true`, otherwise they will be printed in decimal.
+
+!!! compat "Julia 1.14"
+    The `:hexunsigned` option requires Julia 1.14 or later.
 
 # Examples
 
@@ -1210,7 +1215,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         return
     elseif isnamedtuple
         syms, types = parameters
-        if syms isa Tuple && types isa DataType
+        if syms isa Tuple && types isa DataType && length(types.parameters) == length(syms) && !isvatuple(types)
             print(io, "@NamedTuple{")
             show_at_namedtuple(io, syms, types)
             print(io, "}")
@@ -1293,7 +1298,17 @@ nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :
 show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
-show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+function show(io::IO, n::Unsigned)
+    if get(io, :hexunsigned, true)::Bool
+        print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+    else
+        if get(io, :typeinfo, Nothing)::Type == typeof(n)
+            print(io, n)
+        else
+            print(io, typeof(n), "($(n))")
+        end
+    end
+end
 print(io::IO, n::Unsigned) = print(io, string(n))
 
 has_tight_type(p::Pair) =
@@ -1551,9 +1566,12 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 """
     operator_precedence(s::Symbol)
 
-Return an integer representing the precedence of operator `s`, relative to
+Return an integer representing the precedence of a binary operator `s`, relative to
 other operators. Higher-numbered operators take precedence over lower-numbered
-operators. Return `0` if `s` is not a valid operator.
+operators. Return `0` if `s` is not a valid binary operator.
+
+(The precedence of *unary* operators is handled differently, including cases like `+`
+where an operator can be either unary or binary.)
 
 # Examples
 ```jldoctest
@@ -3114,17 +3132,23 @@ end
 summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
 
 """
-    showarg(io::IO, x, toplevel)
+    Base.showarg(io::IO, x, toplevel)
 
-Show `x` as if it were an argument to a function. This function is
-used by [`summary`](@ref) to display type information in terms of sequences of
-function calls on objects. `toplevel` is `true` if this is
-the direct call from `summary` and `false` for nested (recursive) calls.
+Show the quasi-type of `x` where quasi-type is the type of `x` or an expression (possibly
+containing quasi-types) that would generate an object of the same type as `x`. The shorter
+of these two options is typically used.
 
-The fallback definition is to print `x` as "::\\\$(typeof(x))",
-representing argument `x` in terms of its type. (The double-colon is
-omitted if `toplevel=true`.) However, you can
-specialize this function for specific types to customize printing.
+This function is used by `summary` to display type information in terms of sequences of
+function calls on objects.
+
+Show a leading `::` if `toplevel` is `false` and showing a type. `toplevel` is `true` if
+this is the direct call from `summary` and `false` for nested (recursive) calls.
+
+The fallback definition is to print `x` as "::\\\$(typeof(x))" or "\\\$(typeof(x))",
+representing argument `x` in terms of its type. However, you can specialize
+this function for specific types to customize printing. This customization is useful for
+types that have simple, public constructors and verbose and/or internal types and type
+parameters such as `reinterpret`ed arrays or `SubArray`s.
 
 # Examples
 
@@ -3153,13 +3177,13 @@ type, indicating that any recursed calls are not at the top level.
 Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
 behavior, because no specialized method for `Array` has been defined.
 """
-function showarg(io::IO, T::Type, toplevel)
-    toplevel || print(io, "::")
-    print(io, "Type{", T, "}")
-end
 function showarg(io::IO, @nospecialize(x), toplevel)
     toplevel || print(io, "::")
     print(io, typeof(x))
+end
+function showarg(io::IO, T::Type, toplevel)
+    toplevel || print(io, "::")
+    print(io, "Type{", T, "}")
 end
 # This method resolves an ambiguity for packages that specialize on eltype
 function showarg(io::IO, a::Array{Union{}}, toplevel)
@@ -3287,6 +3311,10 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, " [")
         if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
             print(io, "exported")
+        end
+        if (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "re-exported")
         end
         if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
             first ? (first = false) : print(io, ",")

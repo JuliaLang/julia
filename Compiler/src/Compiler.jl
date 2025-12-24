@@ -41,9 +41,8 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
-    typename, unsafe_write, write
+    typename, unsafe_write, write, stdout, stderr
 
-using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
     PARTITION_FLAG_DEPWARN,
@@ -53,7 +52,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     _array_for, _bits_findnext, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
     argument_datatype, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
-    datatype_pointerfree, decode_effects_override, diff_names, fieldindex,
+    datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars,
     hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
     is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
@@ -68,8 +67,10 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
     get_ci_mi, get_methodtable, morespecific, specializations, has_image_globalref,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
-    BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions
+    BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions,
+    devnull, devnull as stdin
 
+using Base
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
@@ -187,6 +188,7 @@ include("typeinfer.jl")
 include("optimize.jl")
 
 include("bootstrap.jl")
+include("precompile.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
 
