@@ -313,6 +313,8 @@ end
 
 ```@docs
 Base.ScopedValues.ScopedValue
+Base.ScopedValues.LazyScopedValue
+Base.ScopedValues.ScopedThunk
 Base.ScopedValues.with
 Base.ScopedValues.@with
 Base.isassigned(::Base.ScopedValues.ScopedValue)

@@ -34,10 +34,13 @@ Main.include
 Base.include_string
 Base.include_dependency
 __init__
+Base.@main
 Base.OncePerProcess
 Base.OncePerTask
 Base.OncePerThread
 Base.which(::Any, ::Any)
+Base.which(::Any)
+Base.which(::Module, ::Symbol)
 Base.methods
 Base.@show
 ans
@@ -172,6 +175,11 @@ Core.setfieldonce!
 Core.isdefined
 Core.isdefinedglobal
 Base.@isdefined
+Base.@__FILE__
+Base.@__DIR__
+Base.@__LINE__
+Base.@__MODULE__
+Base.@__FUNCTION__
 Base.convert
 Base.promote
 Base.oftype
@@ -358,7 +366,9 @@ Base.Sys.get_process_title
 Base.ignorestatus
 Base.detach
 Base.Cmd
+Core.@cmd(::String)
 Base.setenv
+```
 Base.addenv
 Base.withenv
 Base.shell_escape
@@ -370,6 +380,7 @@ Base.escape_microsoft_c_args
 Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
+Base.pipeline(::Base.AbstractCmd, ::Any)
 Base.Libc.gethostname
 Base.Libc.getpid
 Base.Libc.time()
@@ -409,6 +420,12 @@ Base.Sys.isreadable
 Base.Sys.iswritable
 Base.Sys.which
 Base.Sys.username
+Base.Sys.cpu_info
+Base.Sys.cpu_summary()
+Base.Sys.cpu_summary(::IO)
+Base.Sys.cpu_summary(::IO, ::AbstractVector{Base.Sys.CPUinfo})
+Base.Sys.CPUinfo
+Base.Sys.detectwsl
 Base.@static
 ```
 
@@ -420,6 +437,10 @@ Base.@v_str
 ```
 
 ## Errors
+
+```@docs
+Base.Experimental
+```
 
 ```@docs
 Base.error
@@ -442,6 +463,7 @@ Base.EOFError
 Core.ErrorException
 Core.FieldError
 Core.InexactError
+Core.InitError
 Core.InterruptException
 Base.KeyError
 Base.LoadError
@@ -561,4 +583,10 @@ Meta.isoperator
 Meta.isunaryoperator
 Meta.isbinaryoperator
 Meta.show_sexpr
+Meta.parse(::AbstractString, ::Integer)
+Meta.replace_sourceloc!
+Meta.ispostfixoperator
+Base.operator_precedence
+Base.operator_associativity
+Base.remove_linenums!
 ```
