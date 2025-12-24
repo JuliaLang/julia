@@ -716,8 +716,8 @@ function parse_array(l::Parser{Dates})::Err{Vector} where Dates
         copyto_typed!(new, array)
     elseif T === Union{}
         new = Any[]
-    elseif (T === TOMLDict) || (T == BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
-        (T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)
+    elseif (T === TOMLDict) || (T === BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
+        (Dates !== nothing && ((T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)))
         # do nothing, leave as Vector{Any}
         new = array
     else @assert false end
