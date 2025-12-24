@@ -192,8 +192,8 @@ end
 An ECS-style AST used in JuliaLowering.  Unstable, but may eventually replace
 SyntaxNode.
 """
-struct SyntaxTree{GraphType}
-    _graph::GraphType
+struct SyntaxTree{Attrs}
+    _graph::SyntaxGraph{Attrs}
     _id::NodeId
 end
 
@@ -448,19 +448,17 @@ byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
-mutable struct SyntaxList{GraphType, NodeIdVecType} <: AbstractVector{SyntaxTree}
-    graph::GraphType
+mutable struct SyntaxList{Attrs, NodeIdVecType} <: AbstractVector{SyntaxTree}
+    graph::SyntaxGraph{Attrs}
     ids::NodeIdVecType
 end
 
-function SyntaxList(graph::SyntaxGraph, ids::AbstractVector{NodeId})
-    SyntaxList{typeof(graph), typeof(ids)}(graph, ids)
+function SyntaxList(graph::SyntaxGraph{T}, ids::AbstractVector{NodeId}) where {T}
+    SyntaxList{T, typeof(ids)}(graph, ids)
 end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
 SyntaxList(ctx) = SyntaxList(syntax_graph(ctx))
-SyntaxList(ctx, v::Vector{SyntaxTree}) =
-    SyntaxList(syntax_graph(ctx), NodeId[x._id for x in v])
 
 syntax_graph(lst::SyntaxList) = lst.graph
 

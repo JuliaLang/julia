@@ -52,8 +52,8 @@ function ScopeInfo(ctx, parent_id, node_id, is_lambda, is_permeable)
     return s
 end
 
-struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     mod::Module
     # Every lexical scope, indexed by ScopeId
@@ -529,14 +529,14 @@ end
 
 ClosureBindings(name_stack) = ClosureBindings(name_stack, Vector{LambdaBindings}())
 
-struct VariableAnalysisContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     mod::Module
     scopes::Vector{ScopeInfo}
     lambda_bindings::LambdaBindings
     # Stack of method definitions for closure naming
-    method_def_stack::SyntaxList{GraphType}
+    method_def_stack::SyntaxList{Attrs, Vector{NodeId}}
     # Collection of information about each closure, principally which methods
     # are part of the closure (and hence captures).
     closure_bindings::Dict{IdTag,ClosureBindings}

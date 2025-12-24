@@ -1,7 +1,7 @@
 # Lowering Pass 2 - syntax desugaring
 
-struct DesugaringContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct DesugaringContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     mod::Module
