@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Annotation = NamedTuple{(:label, :value), Tuple{Symbol, Any}}
-const RegionAnnotation = NamedTuple{(:region, :label, :value), Tuple{UnitRange{Int}, Symbol, Any}}
+const Annotation{V} = NamedTuple{(:label, :value), Tuple{Symbol, V}}
+const RegionAnnotation{V} = NamedTuple{(:region, :label, :value), Tuple{UnitRange{Int}, Symbol, V}}
 
 """
-    AnnotatedString{S <: AbstractString} <: AbstractString
+    AnnotatedString{S <: AbstractString, V} <: AbstractString
 
 A string with metadata, in the form of annotated regions.
 
@@ -23,8 +23,8 @@ annotated with labeled values.
 
 The above diagram represents a `AnnotatedString` where three ranges have been
 annotated (labeled `A`, `B`, and `C`). Each annotation holds a label (`Symbol`)
-and a value (`Any`). These three pieces of information are held as a
-`$RegionAnnotation`.
+and a value (`V`). These three pieces of information are held as a
+`$(RegionAnnotation{TypeVar(:V)})`.
 
 Labels do not need to be unique, the same region can hold multiple annotations
 with the same label.
@@ -46,9 +46,12 @@ See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 # Constructors
 
 ```julia
-AnnotatedString(s::S<:AbstractString) -> AnnotatedString{S}
-AnnotatedString(s::S<:AbstractString, annotations::Vector{$RegionAnnotation})
+AnnotatedString(s::S<:AbstractString) -> AnnotatedString{S, Any}
+AnnotatedString(s::S<:AbstractString, annotations::Vector{$(RegionAnnotation{TypeVar(:V)})}) -> AnnotatedString{S, V}
+AnnotatedString{S, V}(s::S, annotations) -> AnnotatedString{S, V}
 ```
+
+Constructing from an existing `AnnotatedString` copies its annotations.
 
 An AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
@@ -61,13 +64,13 @@ julia> AnnotatedString("this is an example annotated string",
 "this is an example annotated string"
 ```
 """
-struct AnnotatedString{S <: AbstractString} <: AbstractString
+struct AnnotatedString{S <: AbstractString, V} <: AbstractString
     string::S
-    annotations::Vector{RegionAnnotation}
+    annotations::Vector{RegionAnnotation{V}}
 end
 
 """
-    AnnotatedChar{S <: AbstractChar} <: AbstractChar
+    AnnotatedChar{C <: AbstractChar, V} <: AbstractChar
 
 A Char with annotations.
 
@@ -81,9 +84,12 @@ See also [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
 # Constructors
 
 ```julia
-AnnotatedChar(s::S) -> AnnotatedChar{S}
-AnnotatedChar(s::S, annotations::Vector{$Annotation})
+AnnotatedChar(c::C<:AbstractChar) -> AnnotatedChar{C, Any}
+AnnotatedChar(c::C<:AbstractChar, annotations::Vector{$(Annotation{TypeVar(:V)})}) -> AnnotatedChar{C, V}
+AnnotatedChar{C, V}(c::C, annotations) -> AnnotatedChar{C, V}
 ```
+
+Constructing from an existing `AnnotatedChar` copies its annotations.
 
 # Examples
 
@@ -92,34 +98,54 @@ julia> AnnotatedChar('j', [(:label, 1)])
 'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
 ```
 """
-struct AnnotatedChar{C <: AbstractChar} <: AbstractChar
+struct AnnotatedChar{C <: AbstractChar, V} <: AbstractChar
     char::C
-    annotations::Vector{Annotation}
+    annotations::Vector{Annotation{V}}
 end
 
 ## Constructors ##
 
-# When called with overly-specialised arguments
+function AnnotatedString{S}(s::S, annots) where {S <: AbstractString}
+    valtype(::Vector{RegionAnnotation{V}}) where {V} = V
+    valtype(::Vector) = Any
+    vannots = [(region = UnitRange{Int}(r), label = Symbol(l), value = v) for (r, l, v) in annots]
+    AnnotatedString{S, valtype(vannots)}(s, vannots)
+end
 
-AnnotatedString(s::AbstractString, annots::Vector) =
-    AnnotatedString(s, Vector{RegionAnnotation}(annots))
+AnnotatedString(s::AbstractString, annots) = AnnotatedString{typeof(s)}(s, annots)
 
-AnnotatedString(s::AbstractString, annots) =
-    AnnotatedString(s, collect(RegionAnnotation, annots))
+AnnotatedString{S, V}(s::S) where {S, V} = AnnotatedString{S, V}(s, RegionAnnotation{V}[])
 
-AnnotatedChar(c::AbstractChar, annots::Vector) =
-    AnnotatedChar(c, Vector{Annotation}(annots))
+function AnnotatedChar{C}(c::C, annots) where {C <: AbstractChar}
+    valtype(::Vector{Annotation{V}}) where {V} = V
+    valtype(::Vector) = Any
+    vannots = [(label = Symbol(l), value = v) for (l, v) in annots]
+    AnnotatedChar{C, valtype(vannots)}(c, vannots)
+end
 
-AnnotatedChar(c::AbstractChar, annots) =
-    AnnotatedChar(c, collect(Annotation, annots))
+AnnotatedChar(c::AbstractChar, annots) = AnnotatedChar{typeof(c)}(c, annots)
 
-# Constructors to avoid recursive wrapping
+# Copy, as the annotations are mutable
 
-AnnotatedString(s::AnnotatedString, annots::Vector{RegionAnnotation}) =
-    AnnotatedString(s.string, vcat(s.annotations, annots))
+AnnotatedString{S, V}(s::AnnotatedString{S}) where {S, V} =
+    AnnotatedString{S, V}(s.string, Vector{RegionAnnotation{V}}(s.annotations))
+AnnotatedString(s::AnnotatedString{S, V}) where {S, V} = AnnotatedString{S, V}(s)
 
-AnnotatedChar(c::AnnotatedChar, annots::Vector{Annotation}) =
-    AnnotatedChar(c.char, vcat(c.annotations, Vector{Annotation}(annots)))
+AnnotatedChar{C, V}(c::AnnotatedChar{C}) where {C, V} =
+    AnnotatedChar{C, V}(c.char, Vector{Annotation{V}}(c.annotations))
+AnnotatedChar(c::AnnotatedChar{C, V}) where {C, V} = AnnotatedChar{C, V}(c)
+
+# Constructors to avoid recursive wrapping, which widen the value type as `vcat` does
+
+AnnotatedString(s::AnnotatedString{S, V}, annots::Vector{RegionAnnotation{T}}) where {S <: AbstractString, V, T} =
+    AnnotatedString(s.string, typed_vcat(RegionAnnotation{annot_promote_valtype(s, annots)}, s.annotations, annots))
+
+AnnotatedString(s::AnnotatedString, annots) = AnnotatedString(s, AnnotatedString(s.string, annots).annotations)
+
+AnnotatedChar(c::AnnotatedChar, annots::Vector{Annotation{T}}) where {T} =
+    AnnotatedChar(c.char, typed_vcat(Annotation{annot_promote_valtype(c, annots)}, c.annotations, annots))
+
+AnnotatedChar(c::AnnotatedChar, annots) = AnnotatedChar(c, AnnotatedChar(c.char, annots).annotations)
 
 # To avoid pointless overhead
 String(s::AnnotatedString{String}) = s.string
@@ -127,21 +153,25 @@ String(s::AnnotatedString{String}) = s.string
 ## Conversion/promotion ##
 
 convert(::Type{AnnotatedString}, s::AnnotatedString) = s
-convert(::Type{AnnotatedString{S}}, s::S) where {S <: AbstractString} =
-    AnnotatedString(s, Vector{RegionAnnotation}())
 convert(::Type{AnnotatedString}, s::S) where {S <: AbstractString} =
     convert(AnnotatedString{S}, s)
+convert(::Type{AnnotatedString{S}}, s::S) where {S <: AbstractString} =
+    convert(AnnotatedString{S, Any}, s)
+convert(::Type{AnnotatedString{S, V}}, s::S) where {S <: AbstractString, V} =
+    AnnotatedString{S, V}(s)
+
 AnnotatedString(s::S) where {S <: AbstractString} = convert(AnnotatedString{S}, s)
 
 convert(::Type{AnnotatedChar}, c::AnnotatedChar) = c
-convert(::Type{AnnotatedChar{C}}, c::C) where { C <: AbstractChar } =
-    AnnotatedChar{C}(c, Vector{Annotation}())
+convert(::Type{AnnotatedChar{C, V}}, c::C) where { C <: AbstractChar, V } =
+    AnnotatedChar{C, V}(c, Vector{Annotation{V}}())
 convert(::Type{AnnotatedChar}, c::C) where { C <: AbstractChar } =
-    convert(AnnotatedChar{C}, c)
+    convert(AnnotatedChar{C, Any}, c)
 
 AnnotatedChar(c::AbstractChar) = convert(AnnotatedChar, c)
 AnnotatedChar(c::UInt32) = convert(AnnotatedChar, Char(c))
 AnnotatedChar{C}(c::UInt32) where {C <: AbstractChar} = convert(AnnotatedChar, C(c))
+AnnotatedChar{C, V}(c::UInt32) where {C <: AbstractChar, V} = convert(AnnotatedChar{C, V}, C(c))
 
 promote_rule(::Type{<:AnnotatedString}, ::Type{<:AbstractString}) = AnnotatedString
 
@@ -154,6 +184,7 @@ codeunit(s::AnnotatedString, i::Integer) = codeunit(s.string, i)
 isvalid(s::AnnotatedString, i::Integer) = isvalid(s.string, i)::Bool
 @propagate_inbounds iterate(s::AnnotatedString, i::Integer=firstindex(s)) =
     if i <= lastindex(s.string); (s[i], nextind(s, i)) end
+eltype(::Type{<:AnnotatedString{S, V}}) where {S, V} = AnnotatedChar{eltype(S), V}
 eltype(::Type{<:AnnotatedString{S}}) where {S} = AnnotatedChar{eltype(S)}
 firstindex(s::AnnotatedString) = firstindex(s.string)
 lastindex(s::AnnotatedString) = lastindex(s.string)
@@ -189,10 +220,10 @@ function unannotate(s::SubString{<:AnnotatedString})
 end
 
 
-function getindex(s::AnnotatedString, i::Integer)
+function getindex(s::AnnotatedString{S, V}, i::Integer) where {S, V}
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], Annotation[(; label, value) for (; label, value) in annotations(s, i)])
+        AnnotatedChar(s.string[i], Annotation{V}[Annotation{V}((a.label, a.value)) for a in annotations(s, i)])
     else
         string_index_err(s, i)
     end
@@ -274,7 +305,8 @@ function annotatedstring(xs...)
     size = mapreduce(_str_sizehint, +, xs)
     buf = IOBuffer(sizehint=size)
     s = IOContext(buf, :color => true)
-    annotations = Vector{RegionAnnotation}()
+    V = annot_promote_valtype(xs...)
+    annotations = Vector{RegionAnnotation{if V == Union{} Any else V end}}() # FIXME: `Any` is a hack to make `styled"$x"` not `AnnotatedString{String, Nothing}`
     for x in xs
         size = filesize(s.io)
         if x isa AnnotatedString
@@ -305,20 +337,45 @@ function annotatedstring(xs...)
     AnnotatedString(str, annotations)
 end
 
+annot_valtype(::Type{AnnotatedString{S, V}}) where {S, V} = V
+annot_valtype(::Type{AnnotatedChar{C, V}}) where {C, V} = V
+annot_valtype(::Type{SubString{S}}) where {S} = annot_valtype(S)
+annot_valtype(::Type{Vector{RegionAnnotation{V}}}) where {V} = V
+annot_valtype(::Type{Vector{Annotation{V}}}) where {V} = V
+annot_valtype(::Type{Pair{P, V}}) where {P, V} = annot_valtype(V)
+# An abstract type that may hold annotated values, such as the eltype of a mixed vector, gives
+# `Any`. This uses subtyping because `typeintersect` does not fold at compile time.
+annot_valtype(::Type{T}) where {T} =
+    if T === Union{} Union{}
+    elseif T isa Union Union{annot_valtype(T.a), annot_valtype(T.b)}
+    elseif T <: Union{AnnotatedString, AnnotatedChar, SubString{<:AnnotatedString}} ||
+           AnnotatedString <: T || AnnotatedChar <: T || SubString{<:AnnotatedString} <: T Any
+    else Union{} end
+annot_valtype(x) = annot_valtype(typeof(x))
+
+# The union of the arguments' value types, or `Any` once there are more than three
+annot_promote_valtype() = Union{}
+annot_promote_valtype(x) = annot_valtype(x)
+function annot_promote_valtype(a, b, xs...)
+    @inline
+    union = Union{annot_valtype(a), annot_valtype(b), map(annot_valtype, xs)...}
+    if unionlen(union) <= 3 union else Any end
+end
+
 annotatedstring(s::AnnotatedString) = s
 annotatedstring(c::AnnotatedChar) =
     AnnotatedString(string(c.char), [(region=1:ncodeunits(c), annot...) for annot in c.annotations])
 
 AnnotatedString(s::SubString{<:AnnotatedString}) = annotatedstring(s)
+AnnotatedString{S, V}(s::SubString{<:AnnotatedString{S}}) where {S, V} =
+    AnnotatedString{S, V}(annotatedstring(s))
 
-function repeat(str::AnnotatedString, r::Integer)
-    r == 0 && return one(AnnotatedString)
-    r == 1 && return str
+function repeat(str::AnnotatedString{S, V}, r::Integer) where {S, V}
     unannot = repeat(str.string, r)
-    annotations = Vector{RegionAnnotation}()
+    annotations = Vector{RegionAnnotation{V}}()
     len = ncodeunits(str)
     fullregion = firstindex(str):lastindex(str)
-    if isempty(str.annotations)
+    if r == 0 || isempty(str.annotations)
     elseif allequal(a -> a.region, str.annotations) && first(str.annotations).region == fullregion
         newfullregion = firstindex(unannot):lastindex(unannot)
         for annot in str.annotations
@@ -361,48 +418,56 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 
 ## End AbstractString interface ##
 
-function _annotate!(annlist::Vector{RegionAnnotation}, region::UnitRange{Int}, label::Symbol, @nospecialize(value::Any))
-    if value === nothing
+function _annotate!(annlist::Vector{RegionAnnotation{V}}, region::UnitRange{Int}, label::Symbol, value::Union{V, Nothing}) where {V}
+    if isnothing(value)
         deleteat!(annlist, findall(ann -> ann.region == region && ann.label === label, annlist))
     else
-        push!(annlist, RegionAnnotation((; region, label, value)))
+        push!(annlist, RegionAnnotation{V}((; region, label, value)))
     end
 end
+_annotate!(annlist::Vector{RegionAnnotation{V}}, region::UnitRange{Int}, label::Symbol, @nospecialize(value)) where {V} =
+    throw(ArgumentError(LazyString("cannot annotate with a ", typeof(value), " value, as the value type is ", V,
+                                   "; construct the string or buffer with a wider value type, such as Any")))
 
 """
     annotate!(str::AnnotatedString, [range::UnitRange{Int}], label::Symbol, value)
     annotate!(str::SubString{AnnotatedString}, [range::UnitRange{Int}], label::Symbol, value)
 
 Annotate a `range` of `str` (or the entire string) with a labeled value `(label, value)`.
-To remove existing `label` annotations, use a value of `nothing`.
+To remove existing `label` annotations, use a value of `nothing`. A `value` outside the
+value type `V` of `str` raises an `ArgumentError`.
 
 The order in which annotations are applied to `str` is semantically meaningful,
 as described in [`AnnotatedString`](@ref).
 """
-annotate!(s::AnnotatedString, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
+annotate!(s::AnnotatedString, range::UnitRange{Int}, label::Symbol, val) =
     (_annotate!(s.annotations, range, label, val); s)
 
-annotate!(ss::AnnotatedString, label::Symbol, @nospecialize(val::Any)) =
+annotate!(ss::AnnotatedString, label::Symbol, val) =
     annotate!(ss, firstindex(ss):lastindex(ss), label, val)
 
-annotate!(s::SubString{<:AnnotatedString}, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
+annotate!(s::SubString{<:AnnotatedString}, range::UnitRange{Int}, label::Symbol, val) =
     (annotate!(s.string, s.offset .+ (range), label, val); s)
 
-annotate!(s::SubString{<:AnnotatedString}, label::Symbol, @nospecialize(val::Any)) =
+annotate!(s::SubString{<:AnnotatedString}, label::Symbol, val) =
     (annotate!(s.string, s.offset .+ (1:s.ncodeunits), label, val); s)
 
 """
     annotate!(char::AnnotatedChar, label::Symbol, value::Any)
 
-Annotate `char` with the labeled value `(label, value)`.
+Annotate `char` with the labeled value `(label, value)`. A `value` outside the value
+type `V` of `char` raises an `ArgumentError`.
 """
-annotate!(c::AnnotatedChar, label::Symbol, @nospecialize(value::Any)) =
-    (push!(c.annotations, Annotation((; label, value))); c)
+annotate!(c::AnnotatedChar{C, V}, label::Symbol, value::V) where {C, V} =
+    (push!(c.annotations, Annotation{V}((; label, value))); c)
+annotate!(::AnnotatedChar{C, V}, ::Symbol, @nospecialize(value)) where {C, V} =
+    throw(ArgumentError(LazyString("cannot annotate with a ", typeof(value), " value, as the value type is ", V,
+                                   "; construct the char with a wider value type, such as Any")))
 
 """
     annotations(str::Union{AnnotatedString, SubString{AnnotatedString}},
                 [position::Union{Integer, UnitRange}]) ->
-        Vector{$RegionAnnotation}
+        Vector{$(RegionAnnotation{TypeVar(:V)})}
 
 Get all annotations that apply to `str`. Should `position` be provided, only
 annotations that overlap with `position` will be returned.
@@ -417,9 +482,9 @@ See also [`annotate!`](@ref).
 """
 annotations(s::AnnotatedString) = s.annotations
 
-function annotations(s::SubString{<:AnnotatedString})
+function annotations(s::SubString{AnnotatedString{S, V}}) where {S, V}
     substr_range = s.offset+1:s.offset+s.ncodeunits
-    result = RegionAnnotation[]
+    result = RegionAnnotation{V}[]
     for ann in annotations(s.string, substr_range)
         # Shift the region to be relative to the substring start
         shifted_region = first(ann.region)-s.offset:last(ann.region)-s.offset
@@ -429,9 +494,9 @@ function annotations(s::SubString{<:AnnotatedString})
     return result
 end
 
-function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
+function annotations(s::AnnotatedString{S, V}, pos::UnitRange{<:Integer}) where {S, V}
     # TODO optimise
-    result = RegionAnnotation[]
+    result = RegionAnnotation{V}[]
     for ann in s.annotations
         if !isempty(intersect(pos, ann.region))
             clamped_region = max(first(pos), first(ann.region)):min(last(pos), last(ann.region))
@@ -451,7 +516,7 @@ annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
     annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    annotations(chr::AnnotatedChar)::Vector{$Annotation}
+    annotations(chr::AnnotatedChar)::Vector{$(Annotation{TypeVar(:V)})}
 
 Get all annotations of `chr`, in the form of a vector of annotation pairs.
 """
@@ -471,12 +536,12 @@ This works by comparing the number of code units of each character before and
 after transforming with `f`, recording and aggregating any differences, then
 applying them to the annotation regions.
 
-Returns an `AnnotatedString{String}` (regardless of the original underlying
-string type of `str`).
+Returns an `AnnotatedString{String, V}` (regardless of the original underlying
+string type of `str`), where `V` is the value type of `str`.
 """
-function annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)
+function annotated_chartransform(f::Function, str::AnnotatedString{S, V}, state=nothing) where {S, V}
     outstr = IOBuffer()
-    annots = RegionAnnotation[]
+    annots = RegionAnnotation{V}[]
     bytepos = firstindex(str) - 1
     offsets = [bytepos => 0]
     for c in str.string
@@ -498,13 +563,13 @@ function annotated_chartransform(f::Function, str::AnnotatedString, state=nothin
         stop_offset  = last(offsets[findlast(<=(stop) ∘ first, offsets)::Int])
         push!(annots, @inline(setindex(annot, (start + start_offset):(stop + stop_offset), :region)))
     end
-    AnnotatedString(takestring!(outstr), annots)
+    AnnotatedString{String, V}(takestring!(outstr), annots)
 end
 
-struct RegionIterator{S <: AbstractString}
+struct RegionIterator{S <: AbstractString, V}
     str::S
     regions::Vector{UnitRange{Int}}
-    annotations::Vector{Vector{Annotation}}
+    annotations::Vector{Vector{Annotation{V}}}
 end
 
 Base.length(si::RegionIterator) = length(si.regions)
@@ -515,8 +580,8 @@ Base.@propagate_inbounds function Base.iterate(si::RegionIterator, i::Integer=1)
     end
 end
 
-Base.eltype(::RegionIterator{S}) where { S <: AbstractString} =
-    Tuple{SubString{S}, Vector{Annotation}}
+Base.eltype(::RegionIterator{S, V}) where { S <: AbstractString, V} =
+    Tuple{SubString{S}, Vector{Annotation{V}}}
 
 """
     eachregion(s::AnnotatedString{S})
@@ -538,15 +603,15 @@ julia> collect(eachregion(AnnotatedString(
  ("there", [$Annotation((:face, :italic))])
 ```
 """
-function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):lastindex(s))
+function eachregion(s::AnnotatedString{S, V}, subregion::UnitRange{Int}=firstindex(s):lastindex(s)) where {S, V}
     isempty(s) || isempty(subregion) &&
-        return RegionIterator(s.string, UnitRange{Int}[], Vector{Annotation}[])
+        return RegionIterator(s.string, UnitRange{Int}[], Vector{Annotation{V}}[])
     events = annotation_events(s, subregion)
-    isempty(events) && return RegionIterator(s.string, [subregion], [Annotation[]])
-    annotvals = Annotation[
+    isempty(events) && return RegionIterator(s.string, [subregion], [Annotation{V}[]])
+    annotvals = Annotation{V}[
         (; label, value) for (; label, value) in annotations(s)]
     regions = Vector{UnitRange{Int}}()
-    annots = Vector{Vector{Annotation}}()
+    annots = Vector{Vector{Annotation{V}}}()
     pos = first(events).pos
     if pos > first(subregion)
         push!(regions, thisind(s, first(subregion)):prevind(s, pos))
@@ -572,9 +637,9 @@ function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):
     RegionIterator(s.string, regions, annots)
 end
 
-function eachregion(s::SubString{<:AnnotatedString}, pos::UnitRange{Int}=firstindex(s):lastindex(s))
+function eachregion(s::SubString{AnnotatedString{S, V}}, pos::UnitRange{Int}=firstindex(s):lastindex(s)) where {S, V}
     if isempty(s)
-        RegionIterator(s.string, Vector{UnitRange{Int}}(), Vector{Vector{Annotation}}())
+        RegionIterator(s.string, Vector{UnitRange{Int}}(), Vector{Vector{Annotation{V}}}())
     else
         eachregion(s.string, first(pos)+s.offset:last(pos)+s.offset)
     end
@@ -592,8 +657,9 @@ index::Int}` where `pos` is the position of the event, `active` is a boolean
 indicating whether the annotation is being activated or deactivated, and `index`
 is the index of the annotation in question.
 """
-function annotation_events(s::AbstractString, annots::Vector{RegionAnnotation}, subregion::UnitRange{Int})
+function annotation_events(s::AbstractString, annots::Vector{<:RegionAnnotation}, subregion::UnitRange{Int})
     events = Vector{NamedTuple{(:pos, :active, :index), Tuple{Int, Bool, Int}}}() # Position, Active?, Annotation index
+    sizehint!(events, 2 * length(annots))
     for (i, (; region)) in enumerate(annots)
         if !isempty(intersect(subregion, region))
             start, stop = max(first(subregion), first(region)), min(last(subregion), last(region))
@@ -602,7 +668,7 @@ function annotation_events(s::AbstractString, annots::Vector{RegionAnnotation}, 
             push!(events, (pos=nextind(s, stop), active=false, index=i))
         end
     end
-    sort(events, by=e -> e.pos)
+    sort!(events, by=e -> e.pos)
 end
 
 annotation_events(s::AnnotatedString, subregion::UnitRange{Int}) =

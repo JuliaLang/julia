@@ -2,15 +2,15 @@
 
 @testset "AnnotatedString" begin
     str = Base.AnnotatedString("some string")
-    @test str == Base.AnnotatedString(str.string, Base.RegionAnnotation[])
     @test length(str) == 11
     @test ncodeunits(str) == 11
     @test codeunits(str) == codeunits("some string")
     @test codeunit(str) == UInt8
     @test codeunit(str, 1) == codeunit("some string", 1)
     @test firstindex(str) == firstindex("some string")
-    @test convert(Base.AnnotatedString, str) === str
-    @test eltype(str) == Base.AnnotatedChar{eltype(str.string)}
+    @test eltype(str) == Base.AnnotatedChar{eltype(str.string), Any}
+    @test eltype(Base.AnnotatedString{String}) == Base.AnnotatedChar{Char}
+    @test collect(Base.AnnotatedString("ab", [(1:1, :x, 1)])) isa Vector{Base.AnnotatedChar{Char, Int}}
     @test first(str) == Base.AnnotatedChar(first(str.string), Pair{Symbol, Any}[])
     @test str[1:4] isa SubString{typeof(str)}
     @test str[1:4] == Base.AnnotatedString("some")
@@ -46,8 +46,6 @@
     @test str != Base.AnnotatedString("some string", [(1:1, :thing, 0x01), (1:11, :all, 0x03), (6:6, :other, 0x02)])
     @test str != Base.AnnotatedString("some string", [(1:4, :thing, 0x11), (1:11, :all, 0x13), (6:11, :other, 0x12)])
     @test str != Base.AnnotatedString("some thingg", [(1:4, :thing, 0x01), (1:11, :all, 0x03), (6:11, :other, 0x02)])
-    @test Base.AnnotatedString([Base.AnnotatedChar('a', [(:a, 1)]), Base.AnnotatedChar('b', [(:b, 2)])]) ==
-        Base.AnnotatedString("ab", [(1:1, :a, 1), (2:2, :b, 2)])
     let allstrings =
         ['a', Base.AnnotatedChar('a'), Base.AnnotatedChar('a', [(:aaa, 0x04)]),
          "a string", Base.AnnotatedString("a string"),
@@ -64,11 +62,46 @@
             end
         end
     end
+    # Values of different types are kept as they are, under the union of their types
+    valued(v) = Base.AnnotatedString("x", [(1:1, :n, v)])
+    mixed = Base.annotatedstring(valued(1), valued(2.5))
+    @test mixed isa Base.AnnotatedString{String, Union{Int, Float64}}
+    @test Base.annotations(mixed) == [(region = 1:1, label = :n, value = 1), (region = 2:2, label = :n, value = 2.5)]
+    @test valued(true) * valued(1) isa Base.AnnotatedString{String, Union{Bool, Int}}
+    @test Base.annotatedstring(valued(1), "y", valued('c'), valued("s")) isa Base.AnnotatedString{String, Union{Int, Char, String}}
+    @test Base.annotatedstring(valued(1), valued('c'), valued("s"), valued(1.0)) isa Base.AnnotatedString{String, Any}
+    @test join([valued(1), valued(2)], valued('c')) isa Base.AnnotatedString{String, Union{Int, Char}}
+    @test join([valued(1), valued(2.5)], valued('c')) isa Base.AnnotatedString{String, Any} # The eltype no longer says
+    @test replace(valued(1), "x" => valued(2.5)) isa Base.AnnotatedString{String, Union{Int, Float64}}
+    # The value type is settled at compile time, also from an eltype that only may be annotated
+    @test (@inferred Base.annotatedstring("y", valued(1))) isa Base.AnnotatedString{String, Int}
+    @test (@inferred String join(AbstractString["y", valued(1)])) isa Base.AnnotatedString{String, Any}
+    @test (@inferred String join(Union{Missing, Base.AnnotatedString{String, Int}}[valued(1), valued(2)])) isa Base.AnnotatedString{String, Int}
+    # An empty iterator, whose eltype is `Union{}`, joins to a plain `String`
+    @test join(()) === ""
+    @test join(x for x in ()) === ""
+    let sub = Base.AnnotatedString(SubString("abcd", 1, 3), [(1:1, :n, 1)]) # Typed as `repeat` of the wrapped string
+        @test repeat(sub, 0) == Base.AnnotatedString("")
+        @test (@inferred repeat(sub, 1)) == sub
+        @test repeat(sub, 1) isa Base.AnnotatedString{String, Int}
+        @test repeat(sub, 1) !== sub # A copy, as an annotated string is mutable
+    end
+    @test uppercase(Base.AnnotatedString(SubString("abcd", 1, 3), [(1:1, :n, 1)])) isa Base.AnnotatedString{String, Int}
+    # A value outside the value type is refused with a clear error
+    @test_throws ArgumentError Base.annotate!(valued(1), 1:1, :m, "s")
+    @test_throws ArgumentError Base.annotate!(Base.AnnotatedIOBuffer{Int}(), 1:1, :m, "s")
+    @test_throws ArgumentError Base.annotate!(Base.AnnotatedChar('c', [(:m, 1)]), :m, "s")
+    # Annotating with `nothing` removes the label, even where the value type admits `nothing`
+    let s = Base.AnnotatedString{String, Any}("abc")
+        Base.annotate!(s, 1:3, :face, :red)
+        Base.annotate!(s, 1:3, :face, nothing)
+        @test isempty(Base.annotations(s))
+    end
     # @test collect(Base.eachstyle(str)) ==
     #     [("some", [:thing, 0x01, :all, 0x03]),
     #     (" string", [:all, 0x03, :other, 0x02])]
     @test chopprefix(sprint(show, str), "Base.") ==
-        "AnnotatedString{String}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
+        "AnnotatedString{String, Any}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
     @test eval(Meta.parse(repr(str))) == str
     @test sprint(show, MIME("text/plain"), str) == "\"some string\""
 
@@ -92,9 +125,6 @@ end
 
 @testset "AnnotatedChar" begin
     chr = Base.AnnotatedChar('c')
-    @test Base.AnnotatedChar(UInt32('c')) == chr
-    @test convert(Base.AnnotatedChar, chr) === chr
-    @test chr == Base.AnnotatedChar(chr.char, Pair{Symbol, Any}[])
     @test uppercase(chr) == Base.AnnotatedChar('C')
     @test titlecase(chr) == Base.AnnotatedChar('C')
     @test lowercase(Base.AnnotatedChar('C')) == chr
@@ -107,6 +137,46 @@ end
     chr = Base.annotate!(Base.AnnotatedChar('m'), :attr, "h0m1")
     @test chr == Base.AnnotatedChar('m', [(:attr, "h0m1")])
     @test Base.annotate!(chr, :attr, "m1m2") == Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m1m2")])
+end
+
+@testset "Construction" begin
+    # Strings and chars follow the same rules; char annotations just lack a region
+    for (Annotated, plain, Ann, region) in ((Base.AnnotatedString, "ab", Base.RegionAnnotation, (1:1,)),
+                                            (Base.AnnotatedChar, 'a', Base.Annotation, ()))
+        Plain, Abstract = typeof(plain), supertype(typeof(plain))
+        tuples = [(region..., :x, 1)]
+        ints = Ann{Int}[Ann{Int}(only(tuples))]
+        for T in (Annotated, Annotated{Plain}, Annotated{Abstract}, Annotated{Plain, Int}, Annotated{Abstract, Int}),
+            annots in (ints, tuples)
+            @test T(plain, annots) isa T
+            @test T(plain, annots) isa Annotated{<:Any, Int}
+        end
+        @test Annotated{Abstract, Int}(plain) isa Annotated{Abstract, Int}
+        @test Annotated{Plain}(plain, [(region..., :x, 1), (region..., :y, 'c')]) isa Annotated{Plain, Any}
+        @test Annotated(plain, ints).annotations === ints
+        @test Annotated{Plain, Int}(plain, ints).annotations === ints
+        @test Annotated{Plain, Any}(plain, ints).annotations !== ints
+        annotated = Annotated(plain, ints)
+        for copied in (Annotated(annotated), typeof(annotated)(annotated), Annotated{Plain, Any}(annotated))
+            @test copied == annotated
+            @test copied.annotations !== annotated.annotations
+        end
+        @test typeof(Annotated(annotated)) == typeof(annotated)
+        @test convert(Annotated, annotated) === annotated
+        @test convert(typeof(annotated), annotated) === annotated
+        # Adding annotations widens the value type, as `vcat` does
+        for added in ([(region..., :y, :s)], Ann{Symbol}[Ann{Symbol}((region..., :y, :s))])
+            @test Annotated(annotated, added) isa Annotated{Plain, Union{Int, Symbol}}
+        end
+    end
+    @test Base.AnnotatedString("ab") == Base.AnnotatedString("ab", Base.RegionAnnotation[])
+    @test Base.AnnotatedChar(UInt32('c')) == Base.AnnotatedChar('c') == Base.AnnotatedChar('c', Pair{Symbol, Any}[])
+    @test Base.AnnotatedString([Base.AnnotatedChar('a', [(:a, 1)]), Base.AnnotatedChar('b', [(:b, 2)])]) ==
+        Base.AnnotatedString("ab", [(1:1, :a, 1), (2:2, :b, 2)])
+    @test (@inferred Base.AnnotatedString(Base.AnnotatedString("x", [(1:1, :n, 1)]), [(1:1, :m, 2)])) isa Base.AnnotatedString{String, Int}
+    @test (@inferred Base.AnnotatedChar(Base.AnnotatedChar('x', [(:n, 1)]), [(:m, 2)])) isa Base.AnnotatedChar{Char, Int}
+    @test Base.AnnotatedChar(Base.AnnotatedChar('m', [(:attr, "h0m1")]), [(label = :attr, value = "m2m3")]) ==
+        Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m2m3")])
 end
 
 @testset "Styling preservation" begin
@@ -177,7 +247,7 @@ end
 
 @testset "AnnotatedIOBuffer" begin
     aio = Base.AnnotatedIOBuffer()
-    vec2ann(v::Vector{<:Tuple}) = collect(Base.RegionAnnotation, v)
+    vec2ann(v::Vector{Tuple{UnitRange{Int}, Symbol, V}}) where {V} = collect(Base.RegionAnnotation{V}, v)
     # Append-only writing
     @test write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)])) == 5
     @test write(aio, ' ') == 1
@@ -260,6 +330,30 @@ end
         @test read(seekstart(aio2), Base.AnnotatedString) ==
             Base.AnnotatedString("ab", [(1:1, :b, 1), (2:2, :a, 1), (2:2, :b, 1)])
     end
+    let aio2 = Base.AnnotatedIOBuffer() # Equal but distinct values are not merged
+        write(aio2, Base.AnnotatedString("a", [(1:1, :x, [1])]))
+        write(aio2, Base.AnnotatedString("b", [(1:1, :x, [1])]))
+        @test length(Base.annotations(aio2)) == 2
+    end
+    let ints = Base.AnnotatedIOBuffer{Int}() # Between value types
+        write(ints, Base.AnnotatedString("ab", [(1:1, :x, 1)]))
+        anys = Base.AnnotatedIOBuffer()
+        write(anys, seekstart(ints))
+        @test Base.annotations(anys) == vec2ann([(1:1, :x, 1)])
+        @test read(seekstart(anys), Base.AnnotatedString{String, Int}) isa Base.AnnotatedString{String, Int}
+        write(anys, Base.AnnotatedString("c", [(1:1, :y, "c")]))
+        @test_throws MethodError read(seekstart(anys), Base.AnnotatedString{String, Int})
+    end
+    let ints = Base.AnnotatedIOBuffer{Int}() # Chars are read with the buffer's value type, or a given one
+        write(ints, Base.AnnotatedString("ab", [(1:1, :x, 1)]))
+        @test read(seekstart(ints), Base.AnnotatedChar) isa Base.AnnotatedChar{Char, Int}
+        @test read(seekstart(ints), Base.AnnotatedChar{Char, Any}) == Base.AnnotatedChar{Char, Any}('a', [(:x, 1)])
+    end
+    let nested = Base.AnnotatedString(SubString("hello", 1, 3), [(1:1, :x, 1)]) # Over a `SubString`
+        aio2 = Base.AnnotatedIOBuffer()
+        @test write(aio2, nested[1:2]) == 2
+        @test read(seekstart(aio2), Base.AnnotatedString) == Base.AnnotatedString("he", [(1:1, :x, 1)])
+    end
     # Working through an IOContext
     aio = Base.AnnotatedIOBuffer()
     wrapio = IOContext(aio)
@@ -270,7 +364,13 @@ end
     # show-ing an AnnotatedIOBuffer
     aio = Base.AnnotatedIOBuffer()
     write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)]))
-    @test sprint(show, aio) == "Base.AnnotatedIOBuffer(5 bytes, 1 annotation)"
+    @test chopprefix(sprint(show, aio), "Base.") == "AnnotatedIOBuffer(5 bytes, 1 annotation)"
+    # A value that doesn't fit the destination throws before any text is written
+    let src = Base.AnnotatedIOBuffer(), dest = Base.AnnotatedIOBuffer{Int}()
+        write(src, Base.AnnotatedString("ab", [(1:1, :x, "s")]))
+        @test_throws MethodError write(dest, seekstart(src))
+        @test position(dest) == 0
+    end
 end
 
 @testset "Eachregion" begin
@@ -823,6 +923,16 @@ end
             # Check that green annotation is offset correctly
             green_annots = filter(a -> a.value == :green, Base.annotations(result3))
             @test all(a -> first(a.region) >= pos + 1, green_annots)
+        end
+
+        @testset "Typed buffers" begin
+            wide = Base.AnnotatedString{String, Any}("Q", [(1:1, :n, 1)])
+            anybuf = Base.AnnotatedIOBuffer()
+            replace(anybuf, astr("apple", (1:5, :red)), "p" => wide)
+            typedbuf = Base.AnnotatedIOBuffer{Union{Symbol, Int}}()
+            replace(typedbuf, astr("apple", (1:5, :red)), "p" => wide)
+            @test read(seekstart(typedbuf), Base.AnnotatedString) == read(seekstart(anybuf), Base.AnnotatedString)
+            @test_throws MethodError replace(Base.AnnotatedIOBuffer{Symbol}(), astr("apple", (1:5, :red)), "p" => wide)
         end
     end
 end
