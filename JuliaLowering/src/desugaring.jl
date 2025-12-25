@@ -4393,6 +4393,56 @@ end
 # Desugaring's "big switch": expansion of some simple forms; dispatch to other
 # expansion functions for the rest.
 
+# Helper function to rename loop labels in a symbolicblock body
+# Renames loop_exit -> name and loop_cont -> name_cont
+function rename_loop_labels(ctx, ex, name::AbstractString, cont_name::AbstractString)
+    k = kind(ex)
+    if k == K"break_block"
+        label = ex[1]
+        if kind(label) == K"symbolic_label"
+            label_name = label.name_val
+            if label_name == "loop_exit"
+                # Rename to the symbolicblock name
+                return @ast ctx ex [K"break_block"
+                    name::K"symbolic_label"
+                    rename_loop_labels(ctx, ex[2], name, cont_name)
+                ]
+            elseif label_name == "loop_cont"
+                # Rename to name-cont
+                return @ast ctx ex [K"break_block"
+                    cont_name::K"symbolic_label"
+                    rename_loop_labels(ctx, ex[2], name, cont_name)
+                ]
+            end
+        end
+        # Other break_block - recurse into body
+        return @ast ctx ex [K"break_block" ex[1] rename_loop_labels(ctx, ex[2], name, cont_name)]
+    elseif k == K"break"
+        if numchildren(ex) >= 1
+            label = ex[1]
+            if kind(label) == K"symbolic_label"
+                label_name = label.name_val
+                if label_name == "loop_exit"
+                    if numchildren(ex) >= 2
+                        return @ast ctx ex [K"break" name::K"symbolic_label" ex[2]]
+                    else
+                        return @ast ctx ex [K"break" name::K"symbolic_label"]
+                    end
+                elseif label_name == "loop_cont"
+                    return @ast ctx ex [K"break" cont_name::K"symbolic_label"]
+                end
+            end
+        end
+        return ex
+    elseif is_leaf(ex)
+        return ex
+    else
+        # Recurse into children
+        new_children = [rename_loop_labels(ctx, child, name, cont_name) for child in children(ex)]
+        return makenode(ctx, ex, k, new_children)
+    end
+end
+
 """
 Lowering pass 2 - desugaring
 
@@ -4447,10 +4497,58 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"
-        numchildren(ex) > 0 ? ex :
+        nc = numchildren(ex)
+        if nc == 0
+            # break -> break loop_exit
             @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
+        else
+            # break label [val] -> validate label and expand
+            @chk nc <= 2 (ex, "Too many arguments to break")
+            label = ex[1]
+            label_kind = kind(label)
+            # Label must be _ or :symbol (quote expression)
+            if label_kind == K"Identifier" && label.name_val === :_
+                # break _ [val] - anonymous break
+                if nc == 2
+                    @ast ctx ex [K"break" label expand_forms_2(ctx, ex[2])]
+                else
+                    ex
+                end
+            elseif label_kind == K"quote" && numchildren(label) == 1 && kind(label[1]) == K"Identifier"
+                # break :name [val] - named break, extract symbol from quote
+                label_name = label[1]
+                if nc == 2
+                    @ast ctx ex [K"break" label_name expand_forms_2(ctx, ex[2])]
+                else
+                    @ast ctx ex [K"break" label_name]
+                end
+            else
+                throw(LoweringError(label, "Invalid break label: expected _ or :symbol"))
+            end
+        end
     elseif k == K"continue"
-        @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+        nc = numchildren(ex)
+        if nc == 0
+            # continue -> break loop_cont
+            @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+        else
+            # continue label -> validate and convert to break label-cont
+            @chk nc == 1 (ex, "Too many arguments to continue")
+            label = ex[1]
+            label_kind = kind(label)
+            # Label must be _ or :symbol (quote expression)
+            if label_kind == K"Identifier" && label.name_val === :_
+                # continue _ - anonymous continue
+                @ast ctx ex [K"break" label]
+            elseif label_kind == K"quote" && numchildren(label) == 1 && kind(label[1]) == K"Identifier"
+                # continue :name -> break name-cont
+                name = label[1]
+                cont_name = string(name.name_val, "-cont")
+                @ast ctx ex [K"break" cont_name::K"symbolic_label"]
+            else
+                throw(LoweringError(label, "Invalid continue label: expected _ or :symbol"))
+            end
+        end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
     elseif k == K"doc"
@@ -4611,6 +4709,16 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert"
         ex
+    elseif k == K"symbolic_block"
+        # @label name body -> (symbolic_block name expanded_body)
+        # Also rename loop_exit/loop_cont to name/name-cont if body is a loop
+        @chk numchildren(ex) == 2
+        name = ex[1]
+        body = expand_forms_2(ctx, ex[2])
+        # Rename loop labels in the body
+        cont_name = string(name.name_val, "-cont")
+        renamed_body = rename_loop_labels(ctx, body, name.name_val, cont_name)
+        @ast ctx ex [K"symbolic_block" name renamed_body]
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
         r = ssavar(ctx, ex)

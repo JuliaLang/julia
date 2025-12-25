@@ -49,6 +49,11 @@ function Base.var"@label"(__context__::MacroContext, ex)
     @ast __context__ ex ex=>K"symbolic_label"
 end
 
+function Base.var"@label"(__context__::MacroContext, name, body)
+    @chk kind(name) == K"Identifier"
+    @ast __context__ __context__.macrocall [K"symbolic_block" name body]
+end
+
 function Base.var"@goto"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
     @ast __context__ ex ex=>K"symbolic_goto"
