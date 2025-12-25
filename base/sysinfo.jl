@@ -128,8 +128,6 @@ const WORD_SIZE = Core.sizeof(Int) * 8
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
-
-CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
 """
 global SC_CLK_TCK::Clong
 
@@ -224,8 +222,7 @@ The `CPUinfo` type is a mutable struct with the following fields:
 - `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
 - `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
 
-The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
-unknown units.
+The times are in units of milliseconds.
 
 Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
