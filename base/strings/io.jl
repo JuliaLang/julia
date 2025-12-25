@@ -358,17 +358,15 @@ function _join_preserve_annotations(iterator, args...)
     if isconcretetype(et) && !_isannotated(et) && !any(_isannotated, args)
         sprint(join, iterator, args...)
     else
-        io = AnnotatedIOBuffer()
+        V = annot_promote_valtype(et, args...)
+        io = AnnotatedIOBuffer{V}()
         join(io, iterator, args...)
-        # If we know (from compile time information, or dynamically in the case
-        # of iterators with a non-concrete eltype), that the result is annotated
-        # in nature, we extract an `AnnotatedString`, otherwise we just extract
-        # a plain `String` from `io`.
-        if isconcretetype(et) || !isempty(io.annotations)
-            seekstart(io)
-            read(io, AnnotatedString{String})
-        else
+        # `@default_eltype` widens the `UnionAll` `AnnotatedString{String}` to `Any`, so `join` of a
+        # `Vector{AnnotatedString{String}}` infers as `Union{AnnotatedString{String, Any}, String}`.
+        if !isconcretetype(et) && !_isannotated(et) && isempty(io.annotations)
             String(take!(io.io))
+        else
+            read(seekstart(io), AnnotatedString{String, V})
         end
     end
 end
@@ -379,10 +377,10 @@ function _join_preserve_annotations(iterator::Tuple, args...)
     if !any(_isannotated, iterator) && !any(_isannotated, args)
         sprint(join, iterator, args...)
     else
-        io = AnnotatedIOBuffer()
+        V = annot_promote_valtype(iterator..., args...)
+        io = AnnotatedIOBuffer{V}()
         join(io, iterator, args...)
-        seekstart(io)
-        read(io, AnnotatedString{String})
+        read(seekstart(io), AnnotatedString{String, V})
     end
 end
 
@@ -833,7 +831,7 @@ function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
             end
         end
     end
-    annots = RegionAnnotation[]
+    annots = RegionAnnotation{annot_promote_valtype(C)}[]
     point = 1
     for c in chars
         if c isa AnnotatedChar
