@@ -39,7 +39,7 @@ public clear,
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 import Base: AnnotatedString
-using StyledStrings: @styled_str
+using StyledStrings: @styled_str, StyledValue
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
@@ -89,7 +89,7 @@ end
 
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
-    iob = Base.AnnotatedIOBuffer()
+    iob = Base.AnnotatedIOBuffer{StyledValue}()
     ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
     Base.print(stderr, read(seekstart(iob), AnnotatedString))
@@ -1090,7 +1090,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    strs = Vector{AnnotatedString{String}}(undef, length(frames))
+    strs = Vector{AnnotatedString{String, StyledValue}}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -1317,7 +1317,7 @@ end
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
     filenamemap = FileNameMap()
-    worklist = [(bt, 0, 0, AnnotatedString(""))]
+    worklist = [(bt, 0, 0, AnnotatedString{String, StyledValue}(""))]
     if !is_subsection
         Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
         Base.print(io, "=========================================================\n")
