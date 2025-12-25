@@ -1243,7 +1243,7 @@ julia> lpad(str, 14)
 "   hello there"
 
 julia> typeof(lpad(str, 7))
-Base.AnnotatedString{String}
+Base.AnnotatedString{String, Any}
 
 julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face, :magenta)])
 " julia"

@@ -6,8 +6,12 @@ const INCOMPATIBLE_STDLIBS = String[
     "LibGit2", # op isa Symbol (JuliaLang/JuliaLowering.jl#126)
     "SparseArrays", # type-alias bug (JuliaLang/JuliaLowering.jl#123)
     "TOML", # @invokelatest / QuoteNode bug
+    "StyledStrings", # bug with global inner Faces constructor calling new()
+    "JuliaSyntaxHighlighting", # depends on StyledStrings
+    "Markdown", # depends on StyledStrings
+    "Profile", # depends on StyledStrings
     "Test", # depends on InteractiveUtils
-    "REPL", # depends on InteractiveUtils
+    "REPL", # depends on InteractiveUtils and StyledStrings
     "Pkg", # depends on TOML
     "SuiteSparse", # depends on SparseArrays
     "LazyArtifacts", # depends on Pkg

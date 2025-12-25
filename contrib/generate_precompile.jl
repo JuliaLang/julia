@@ -41,7 +41,7 @@ precompile(Tuple{typeof(Base.Terminals.enable_bracketed_paste), Base.Terminals.T
 precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
-precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}}
+precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String, Any}}
 
 # loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))
@@ -251,6 +251,15 @@ Libdl = get(Base.loaded_modules,
 if Libdl !== nothing
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Libc.Libdl.dlopen), String})
+    """
+end
+
+StyledStrings = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("f489334b-da3d-4c2e-b8f0-e476e12c162b"), "StyledStrings"),
+          nothing)
+if StyledStrings !== nothing
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String, StyledStrings.Face}})
     """
 end
 

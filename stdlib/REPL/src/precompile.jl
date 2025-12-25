@@ -208,6 +208,7 @@ let
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
             precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
             precompile(Tuple{typeof(Base.:(==)), Char, String})
+            precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String, REPL.StyledStrings.Face}})
         finally
             ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
         end
