@@ -462,6 +462,16 @@
 
 (define (keywords-method-def-expr name sparams argl body rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
+         ;; fill in missing argnames for nospecialize-wrapped args first,
+         ;; so that annotations reference the correct generated names
+         (kargl (map (lambda (a)
+                       (if (nospecialize-meta? a)
+                           (let ((inner (caddr a)))  ;; the (kw ...) expression
+                             `(meta ,(cadr a) (,(car inner)
+                                               ,(fill-missing-argname (cadr inner) #f)
+                                               ,@(cddr inner))))
+                           a))
+                     kargl))
          (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (cadr (caddr a)))))
                            (filter nospecialize-meta? kargl)))
          (kargl (map (lambda (a)
@@ -1204,6 +1214,13 @@
            (let* ((raw-typevars (or where '()))
                   (sparams (map analyze-typevar raw-typevars))
                   (argl    (cdr name))
+                  ;; fill in missing argnames for nospecialize-wrapped args first,
+                  ;; so that annotations reference the correct generated names
+                  (argl    (map (lambda (a)
+                                  (if (nospecialize-meta? a)
+                                      `(meta ,(cadr a) ,(fill-missing-argname (caddr a) #f))
+                                      a))
+                                argl))
                   ;; strip @nospecialize
                   (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (caddr a))))
                                     (filter nospecialize-meta? argl)))
