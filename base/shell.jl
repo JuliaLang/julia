@@ -28,8 +28,11 @@ function rstrip_shell(s::AbstractString)
     SubString(s, 1, 0)
 end)
 
-function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="", filename="none")
+shell_parse(str::AbstractString, interpolate::Bool=true;
+            special::AbstractString="", filename="none") =
+    __repl_entry_shell_parse(str, interpolate, special, filename)
+
+function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, special::AbstractString, filename)
     last_arg = firstindex(str) # N.B.: This is used by REPLCompletions
     s = SubString(str, last_arg)
     s = rstrip_shell(lstrip(s))
