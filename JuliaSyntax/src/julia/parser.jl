@@ -2058,15 +2058,70 @@ function parse_resword(ps::ParseState)
             parse_eq(ps)
         end
         emit(ps, mark, K"return")
-    elseif word in KSet"break continue"
-        # break     ==>  (break)
-        # continue  ==>  (continue)
+    elseif word == K"continue"
+        # continue         ==>  (continue)
+        # continue _       ==>  (continue _)
+        # continue :label  ==>  (continue (quote label))
         bump(ps, TRIVIA_FLAG)
-        emit(ps, mark, word)
         k = peek(ps)
-        if !(k in KSet"NewlineWs ; ) : EndMarker" || (k == K"end" && !ps.end_symbol))
-            recover(is_closer_or_newline, ps, TRIVIA_FLAG,
-                    error="unexpected token after $(untokenize(word))")
+        if k in KSet"NewlineWs ; ) EndMarker" || (k == K"end" && !ps.end_symbol)
+            # continue with no arguments
+            emit(ps, mark, K"continue")
+        elseif ps.range_colon_enabled && k == K":"
+            # Could be :label or ternary. Peek ahead to check whitespace after :
+            t2 = peek_token(ps, 2)
+            k2 = kind(t2)
+            if preceding_whitespace(t2) || k2 in KSet"NewlineWs ) EndMarker"
+                # Space after : or closer - this is ternary (cond ? continue : x)
+                emit(ps, mark, K"continue")
+            else
+                # No space after :, parse as atom (label validated in lowering)
+                parse_atom(ps, false)
+                emit(ps, mark, K"continue")
+            end
+        else
+            # Parse label as atom (validated in lowering)
+            parse_atom(ps, false)
+            emit(ps, mark, K"continue")
+        end
+    elseif word == K"break"
+        # break            ==>  (break)
+        # break _          ==>  (break _)
+        # break _ val      ==>  (break _ val)
+        # break :label     ==>  (break (quote label))
+        # break :label val ==>  (break (quote label) val)
+        bump(ps, TRIVIA_FLAG)
+        function parse_break_value(ps, mark)
+            k2 = peek(ps)
+            if k2 in KSet"NewlineWs ; ) : EndMarker" || (k2 == K"end" && !ps.end_symbol)
+                # break label
+                emit(ps, mark, K"break")
+            else
+                # break label value
+                parse_eq(ps)
+                emit(ps, mark, K"break")
+            end
+        end
+        k = peek(ps)
+        if k in KSet"NewlineWs ; ) EndMarker" || (k == K"end" && !ps.end_symbol)
+            # break with no arguments
+            emit(ps, mark, K"break")
+        elseif ps.range_colon_enabled && k == K":"
+            # Could be :label or ternary. Peek ahead to check whitespace after :
+            t2 = peek_token(ps, 2)
+            k2 = kind(t2)
+            if preceding_whitespace(t2) || k2 in KSet"NewlineWs ) EndMarker"
+                # Space after : or closer - this is ternary (cond ? break : x)
+                emit(ps, mark, K"break")
+            else
+                # No space after :, parse as atom (label validated in lowering)
+                parse_atom(ps, false)
+                parse_break_value(ps, mark)
+            end
+        else
+            # Parse label as atom (validated in lowering)
+            parse_atom(ps, false)
+            parse_break_value(ps, mark)
         end
     elseif word in KSet"module baremodule"
         # module A end  ==> (module A (block))

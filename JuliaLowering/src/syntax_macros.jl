@@ -49,6 +49,18 @@ function Base.var"@label"(__context__::MacroContext, ex)
     @ast __context__ ex ex=>K"symbolic_label"
 end
 
+function Base.var"@label"(__context__::MacroContext, name, body)
+    # Handle `@label foo` (Identifier), `@label :foo` (K"quote"), and K"Symbol" from Expr conversion
+    if kind(name) == K"quote" && numchildren(name) == 1 && kind(name[1]) == K"Identifier"
+        name = name[1]
+    elseif kind(name) == K"Symbol"
+        # K"Symbol" comes from QuoteNode(:symbol) in Expr conversion
+        name = @ast __context__ name name.name_val::K"Identifier"
+    end
+    @chk kind(name) == K"Identifier"
+    @ast __context__ __context__.macrocall [K"symbolic_block" name body]
+end
+
 function Base.var"@goto"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
     @ast __context__ ex ex=>K"symbolic_goto"
