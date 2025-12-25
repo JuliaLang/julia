@@ -68,7 +68,7 @@
     #     [("some", [:thing, 0x01, :all, 0x03]),
     #     (" string", [:all, 0x03, :other, 0x02])]
     @test chopprefix(sprint(show, str), "Base.") ==
-        "AnnotatedString{String}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
+        "AnnotatedString{String, Any}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
     @test eval(Meta.parse(repr(str))) == str
     @test sprint(show, MIME("text/plain"), str) == "\"some string\""
 
@@ -166,7 +166,7 @@ end
 
 @testset "AnnotatedIOBuffer" begin
     aio = Base.AnnotatedIOBuffer()
-    vec2ann(v::Vector{<:Tuple}) = collect(Base.RegionAnnotation, v)
+    vec2ann(v::Vector{Tuple{UnitRange{Int}, Symbol, V}}) where {V} = collect(Base.RegionAnnotation{V}, v)
     # Append-only writing
     @test write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)])) == 5
     @test write(aio, ' ') == 1
@@ -259,7 +259,7 @@ end
     # show-ing an AnnotatedIOBuffer
     aio = Base.AnnotatedIOBuffer()
     write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)]))
-    @test sprint(show, aio) == "Base.AnnotatedIOBuffer(5 bytes, 1 annotation)"
+    @test chopprefix(sprint(show, aio), "Base.") == "AnnotatedIOBuffer(5 bytes, 1 annotation)"
 end
 
 @testset "Eachregion" begin

@@ -139,7 +139,7 @@ function savedest(term::Base.Terminals.TTYTerminal)
     clipsave = true
     try
         print(out, get(Base.current_terminfo(), :cursor_invisible, ""))
-        fclip, ffile = [:emphasis, :bold], [:grey]
+        fclip, ffile = Face(weight = :bold, inherit = face"emphasis"), face"grey"
         char = '\0'
         while true
             print(out, S"\e[1G\e[2K{bold,grey:history>} {bold,emphasis:save to} {$fclip,inverse: Clipboard } {$ffile,inverse: File }   {shadow:Tab to toggle ⋅ ⏎ to select}")
