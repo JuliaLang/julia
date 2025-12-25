@@ -45,6 +45,7 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
     if len != length(a)
         throw_dmrsa(dims, length(a))
     end
+    size(a) == dims && return a
     ref = a.ref
     # or we could use `a = Array{T,N}(undef, ntuple(i->0, Val(N))); a.ref = ref; a.size = dims; return a` here to avoid the eval
     return $(Expr(:new, :(Array{T,N}), :ref, :dims))
