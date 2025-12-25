@@ -1320,7 +1320,7 @@ function setup_interface(
         # special)
         on_done = respond(repl, julia_prompt) do line
             Expr(:call, :(Base.repl_cmd),
-                :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
+                :(Base.cmd_gen($(__repl_entry_shell_parse(line::String)[1]))),
                 outstream(repl))
         end,
         sticky = true)
@@ -1665,6 +1665,8 @@ function setup_interface(
     allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, prefix_prompt]
     return ModalInterface(allprompts)
 end
+
+__repl_entry_shell_parse(line::String) = Base.shell_parse(line)
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     repl.frontend_task = current_task()
