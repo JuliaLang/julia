@@ -18,7 +18,7 @@ const EMPTY_STATE = SelectorState((0, 0), "", FilterSpec(), [], 0, (active = Int
 const LABELS = (
     gatherdivider = S"{italic:carried over}",
     preview_suggestion = S"Ctrl+S to save",
-    help_prompt = S"{REPL_History_search_hint,shadow:try {REPL_History_search_hint,(slant=normal):?} for help} ",
+    help_prompt = S"{search_hint,shadow:try {search_hint,(slant=normal):?} for help} ",
 )
 
 const SYNC_UPDATE_BEGIN = "\eP=1s\e\\"
@@ -185,20 +185,15 @@ function redisplay_prompt(io::IO, oldstate::SelectorState, newstate::SelectorSta
         for substr in substrs
             start, len = substr.offset, substr.ncodeunits
             patend = max(patend, start + len)
-            if start > 1
+            # Only a one-byte prefix or separator can sit just before a condition
+            if start > 0 && isvalid(query, start)
                 if query[start] == FILTER_SEPARATOR
-                    face!(styquery[start:start], :REPL_History_search_separator)
+                    face!(styquery[start:start], face"search_separator")
                 else
-                    face!(styquery[start:start], :REPL_History_search_prefix)
-                    face!(styquery[start-1:start-1], :REPL_History_search_separator)
+                    face!(styquery[start:start], face"search_prefix")
+                    start > 1 && isvalid(query, start - 1) &&
+                        face!(styquery[start-1:start-1], face"search_separator")
                 end
-            elseif start > 0
-                face!(styquery[start:start],
-                      if query[start] == FILTER_SEPARATOR
-                          :REPL_History_search_separator
-                      else
-                          :REPL_History_search_prefix
-                      end)
             end
             isempty(kindname) || continue
             if start <= qpos <= start + len
@@ -209,30 +204,30 @@ function redisplay_prompt(io::IO, oldstate::SelectorState, newstate::SelectorSta
     end
     if patend < ncodeunits(query)
         if query[patend+1] == FILTER_SEPARATOR
-            face!(styquery[patend+1:patend+1], :REPL_History_search_separator)
+            face!(styquery[patend+1:patend+1], face"search_separator")
             if patend + 1 < ncodeunits(query) && query[patend+2] ∈ FILTER_PREFIXES
-                face!(styquery[patend+2:patend+2], :REPL_History_search_prefix)
+                face!(styquery[patend+2:patend+2], face"search_prefix")
             elseif isempty(kindname)
                 kindname = "separator"
             end
         elseif ncodeunits(query) == 1 && query[1] ∈ FILTER_PREFIXES
-            face!(styquery[1:1], :REPL_History_search_prefix)
+            face!(styquery[1:1], face"search_prefix")
         end
     end
     prefix = S"{bold:▪:} "
     ncand = length(newstate.candidates)
     resultnum = if newstate.hover > 0
-        S"{REPL_History_search_results:[$(ncand - newstate.hover + 1)/$ncand]}"
+        S"{search_results:[$(ncand - newstate.hover + 1)/$ncand]}"
     else # Carried-over entries are unnumbered
-        S"{REPL_History_search_results:[•/$ncand]}"
+        S"{search_results:[•/$ncand]}"
     end
     padspaces = newstate.area.width - sum(textwidth, (prefix, styquery, resultnum))
     suffix = if isempty(styquery)
         LABELS.help_prompt
     elseif newstate.query ∈ (FILTER_SHORTHELP_QUERY, FILTER_LONGHELP_QUERY)
-        S"{REPL_History_search_hint:help} "
+        S"{search_hint:help} "
     elseif kindname != ""
-        S"{REPL_History_search_hint:$kindname} "
+        S"{search_hint:$kindname} "
     else
         S""
     end
@@ -254,17 +249,17 @@ end
 
 const LIST_MARKERS = if Sys.isapple()
     # '🞇' is not available by default, and '⬤' is oversized, so we must compromise.
-    (selected = AnnotatedChar('⏺', [(:face, :REPL_History_search_selected)]),
-     hover = AnnotatedChar('⦿', [(:face, :REPL_History_search_selected)]),
-     unselected = AnnotatedChar('◦', [(:face, :REPL_History_search_unselected)]),
-     pending = AnnotatedChar('·', [(:face, :shadow)]))
+    (selected = AnnotatedChar('⏺', [(:face, face"search_selected")]),
+     hover = AnnotatedChar('⦿', [(:face, face"search_selected")]),
+     unselected = AnnotatedChar('◦', [(:face, face"search_unselected")]),
+     pending = AnnotatedChar('·', [(:face, face"shadow")]))
 else
     # Linux tends to have pretty fantastic OOTB Unicode support, with fonts
     # like Symbola installed by default, so we can go for the best symbols.
-    (selected = AnnotatedChar('⬤', [(:face, :REPL_History_search_selected)]),
-     hover = AnnotatedChar('🞇', [(:face, :REPL_History_search_selected)]),
-     unselected = AnnotatedChar('◦', [(:face, :REPL_History_search_unselected)]),
-     pending = AnnotatedChar('🞄', [(:face, :shadow)]))
+    (selected = AnnotatedChar('⬤', [(:face, face"search_selected")]),
+     hover = AnnotatedChar('🞇', [(:face, face"search_selected")]),
+     unselected = AnnotatedChar('◦', [(:face, face"search_unselected")]),
+     pending = AnnotatedChar('🞄', [(:face, face"shadow")]))
 end
 
 const NEWLINE_MARKER = S"{shadow:↩ }"
@@ -487,8 +482,8 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
     flatcand = replace(highlightcand(cand), r"\r?\n\s*" => NEWLINE_MARKER)
     candstr = focus_matches(search, flatcand, width - decorationlen)
     if hover
-        face!(candstr, :region)
-        face!(agedec, :region)
+        face!(candstr, face"region")
+        face!(agedec, face"region")
     end
     println(io, candstr, modehint, agedec, ' ')
 end
@@ -525,7 +520,7 @@ To best display matches, this function operates in multiple stages:
 5. Expand the window rightwards similarly, inserting a trailing ellipsis if
    there is remaining text.
 6. Slice out the computed substring from `content`, preserving existing annotations.
-7. Re-apply the match highlight face (`:REPL_History_search_match`) to any
+7. Re-apply the match highlight face (`search_match`) to any
    regions within the window.
 8. Pad the result with spaces if its width is less than `targetwidth`.
 
@@ -595,7 +590,7 @@ function focus_matches(search::FilterSpec, content::AnnotatedString{String}, tar
     for region in mregions
         (last(region) < left || first(region) > right) && continue
         adjregion = (max(left, first(region)) - left + 1):(min(right, last(region)) - left + 1)
-        face!(regstr, adjregion, :REPL_History_search_match)
+        face!(regstr, adjregion, face"search_match")
     end
     # Add ellipses
     ellipstr = if left > firstindex(cstr) && right < lastindex(cstr)
@@ -661,7 +656,7 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
             if !isnothing(hovcand)
                 hovcontent = highlightcand(hovcand)
                 for region in matchregions(newstate.filter, String(hovcontent))
-                    face!(hovcontent[region], :REPL_History_search_match)
+                    face!(hovcontent[region], face"search_match")
                 end
                 if hovcand.mode !== BASE_MODE
                     mcolor = get(MODE_FACES, hovcand.mode, :grey)
@@ -684,7 +679,7 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
         for idx in getselidxs(newstate)
             entry = getcand(newstate, idx)
             content = highlightcand(entry)
-            ishover(newstate, idx) && face!(content, :region)
+            ishover(newstate, idx) && face!(content, face"region")
             push!(seltexts, content)
         end
         linecount = sum(t -> 1 + count('\n', String(t)), seltexts, init=0)

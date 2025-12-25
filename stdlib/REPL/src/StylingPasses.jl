@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Each pass takes the input string and returns an AnnotatedString with styling annotations
+# Each pass takes the input string and returns an `AnnotatedString{String, Face}` with styling annotations
 
 module StylingPasses
 
@@ -24,7 +24,7 @@ StylingContext(cursor_pos::Int) = StylingContext(cursor_pos, 0, 0)
 abstract type StylingPass end
 
 function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
-    isempty(annotated_strings) && return AnnotatedString("")
+    isempty(annotated_strings) && return AnnotatedString{String, Face}("")
 
     result = AnnotatedString(annotated_strings[1])
 
@@ -38,12 +38,12 @@ function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
 end
 
 function apply_style(pass::StylingPass, input::String, ast, context::StylingContext)
-    return pass(input, ast, context)::AnnotatedString{String}
+    return pass(input, ast, context)::AnnotatedString{String, Face}
 end
 
 function apply_styling_passes(input::String, passes::Vector{StylingPass}, context::StylingContext)
     if isempty(passes)
-        return AnnotatedString(input)
+        return AnnotatedString{String, Face}(input)
     end
 
     # Parse once and share AST across all passes
@@ -61,7 +61,7 @@ function (::SyntaxHighlightPass)(input::String, ast, ::StylingContext)
         return JuliaSyntaxHighlighting.highlight(input, ast)
     catch e
         @error "Error in SyntaxHighlightPass" exception=(e, catch_backtrace()) maxlog=1
-        return AnnotatedString(input)
+        return AnnotatedString{String, Face}(input)
     end
 end
 
@@ -69,7 +69,7 @@ end
 struct RegionHighlightPass <: StylingPass end
 
 function (::RegionHighlightPass)(input::String, ::Any, context::StylingContext)
-    result = AnnotatedString(input)
+    result = AnnotatedString{String, Face}(input)
 
     if context.region_start > 0 && context.region_stop >= context.region_start
         # Add inverse face to the region
@@ -89,7 +89,7 @@ end
 EnclosingParenHighlightPass() = EnclosingParenHighlightPass(Face(weight=:bold, underline=true))
 
 function (pass::EnclosingParenHighlightPass)(input::String, ast, context::StylingContext)
-    result = AnnotatedString(input)
+    result = AnnotatedString{String, Face}(input)
 
     if isempty(input)
         return result
