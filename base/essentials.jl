@@ -941,9 +941,39 @@ end
 
 Labels a statement with the symbolic label `name`. The label marks the end-point
 of an unconditional jump with [`@goto name`](@ref).
+
+    @label _ expr
+    @label :name expr
+
+Creates a labeled block that can be exited early with `break _ value` or `break :name value`.
+The block evaluates to `value` if a `break` statement is executed, otherwise it evaluates to
+the result of `expr`. Use `@label _ expr` for anonymous blocks (break with `break _`) or
+`@label :name expr` for named blocks (break with `break :name`).
+
+# Example
+```julia
+result = @label :myblock begin
+    for i in 1:10
+        if i > 5
+            break :myblock i * 2  # exits with value 12
+        end
+    end
+    0  # default value if no break
+end
+```
 """
 macro label(name::Symbol)
     return esc(Expr(:symboliclabel, name))
+end
+
+macro label(name::Symbol, body)
+    name === :_ || throw(ArgumentError("@label with body requires _ for anonymous blocks or :name for named blocks, got $name"))
+    return esc(Expr(:symbolicblock, :_, body))
+end
+
+macro label(name::QuoteNode, body)
+    name.value isa Symbol || throw(ArgumentError("@label requires a symbol, got $(typeof(name.value))"))
+    return esc(Expr(:symbolicblock, name.value, body))
 end
 
 """
