@@ -2039,3 +2039,56 @@ end
         end
     end
 end
+
+# Test that REPL picks up syntax version from active project and re-latches on project switch
+@testset "REPL syntax version switching" begin
+    mktempdir() do tmpdir
+        # Create two projects with different syntax versions
+        proj1 = joinpath(tmpdir, "proj1")
+        proj2 = joinpath(tmpdir, "proj2")
+        mkpath(proj1)
+        mkpath(proj2)
+        write(joinpath(proj1, "Project.toml"), "syntax.julia_version = \"1.13\"\n")
+        write(joinpath(proj2, "Project.toml"), "syntax.julia_version = \"1.14\"\n")
+        found_113 = found_114 = false
+
+        old_active_project = Base.ACTIVE_PROJECT[]
+        try
+            Base.set_active_project(joinpath(proj1, "Project.toml"))
+
+            fake_repl() do stdin_write, stdout_read, repl
+                repl.specialdisplay = REPL.REPLDisplay(repl)
+                repl.history_file = false
+
+                repltask = @async REPL.run_repl(repl)
+
+                # Wait for the first prompt
+                readuntil(stdout_read, "julia> ")
+
+                # Check syntax version is 1.13 from proj1
+                write(stdin_write, "(Base.Experimental.@VERSION).syntax\r")
+                readuntil(stdout_read, "v\"1.13")
+                found_113 = true
+
+                # Wait for next prompt
+                readuntil(stdout_read, "julia> ")
+
+                # Switch to proj2 with syntax version 1.14
+                write(stdin_write, "Base.set_active_project($(repr(joinpath(proj2, "Project.toml"))))\r")
+                readuntil(stdout_read, "julia> ")
+
+                # Next prompt should use syntax version 1.14 from proj2
+                write(stdin_write, "(Base.Experimental.@VERSION).syntax\r")
+                readuntil(stdout_read, "v\"1.14")
+                found_114 = true
+
+                write(stdin_write, '\x04')
+                Base.wait(repltask)
+            end
+        finally
+            Base.set_active_project(old_active_project)
+        end
+        @test found_113
+        @test found_114
+    end
+end
