@@ -2869,7 +2869,7 @@ function __require_prelocked(pkg::PkgId, env)
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
                     m isa Module && return m
 
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
 
                     unlock(require_lock)
@@ -2911,7 +2911,7 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
             elseif isa(loaded, Exception)
                 if precompilableerror(loaded)
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
                 else
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
