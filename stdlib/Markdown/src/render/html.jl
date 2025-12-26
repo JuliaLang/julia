@@ -65,11 +65,12 @@ function html(io::IO, header::Header{l}) where l
     end
 end
 
-function html(io::IO, code::Code)
+function html(io::IO, code′::Code)
+    if code′.language == "styled"
+        code′ = Code("", String(styled(code′.code)))
+    end
+    code = code′
     withtag(io, :pre) do
-        if code.language == "styled"
-            code = Code("", String(styled(code.code)))
-        end
         maybe_lang = !isempty(code.language) ? Any[:class=>"language-$(code.language)"] : []
         withtag(io, :code, maybe_lang...) do
             htmlesc(io, code.code)
@@ -136,10 +137,11 @@ function htmlinline(io::IO, content::Vector)
     end
 end
 
-function htmlinline(io::IO, code::Code)
-    if code.language == "styled"
-        code = Code("", String(styled(code.code)))
+function htmlinline(io::IO, code′::Code)
+    if code′.language == "styled"
+        code′ = Code("", String(styled(code′.code)))
     end
+    code = code′
     withtag(io, :code) do
         htmlesc(io, code.code)
     end
