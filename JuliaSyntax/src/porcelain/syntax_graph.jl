@@ -1072,31 +1072,31 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (for (iteration iter1 iters...) body) => (for (block iter1 iters...) body)
         @assert kind(parent) === K"for" && parent_i === 1
         ret_k = K"block"
-    elseif k === K"tuple" || k === K"vect" || k === K"braces"
-        if k === K"tuple"
-            # Unwrap singleton, no-trailing-comma tuple in a couple cases:
-            # (function (tuple (... xs)) body) => (function (... xs) body)
-            # (-> (tuple _) body) => (-> _ body), assuming _ not parameters
-            if n_cs === 1 && parent_i === 1 &&
-                !has_flags(st, TRAILING_COMMA_FLAG)
-                p_k = kind(parent)
-                c_k = kind(cs[1])
-                if (p_k === K"function" && c_k === K"...") ||
-                    (p_k === K"->" && c_k !== K"parameters")
-                    return _green_to_est(parent, parent_i, cs[1])
-                end
-            elseif n_cs === 2 && kind(parent) === K"->" && parent_i === 1 &&
-                kind(cs[2]) === K"parameters" && kind(cs[1]) !== K"..."
-                # This case should really be deleted.
-                # (-> (tuple x (parameters y)) _) => (-> (block x y) _)
-                c2_cs = preprocessed_green_children(cs[2])
-                if length(c2_cs) === 0
-                    ret_k = K"block"
-                    pop!(cs)
-                elseif length(c2_cs) === 1
-                    ret_k = K"block"
-                    cs[2] = c2_cs[1]
-                end
+    elseif k === K"vect" || k === K"braces"
+        _reorder_parameters!(cs, 1)
+    elseif k === K"tuple"
+        # Unwrap singleton, no-trailing-comma tuple in a couple cases:
+        # (function (tuple (... xs)) body) => (function (... xs) body)
+        # (-> (tuple _) body) => (-> _ body), assuming _ not parameters
+        if n_cs === 1 && parent_i === 1 &&
+            !has_flags(st, TRAILING_COMMA_FLAG)
+            p_k = kind(parent)
+            c_k = kind(cs[1])
+            if (p_k === K"function" && c_k === K"...") ||
+                (p_k === K"->" && c_k !== K"parameters")
+                return _green_to_est(parent, parent_i, cs[1])
+            end
+        elseif n_cs === 2 && kind(parent) === K"->" && parent_i === 1 &&
+            kind(cs[2]) === K"parameters" && kind(cs[1]) !== K"..."
+            # This case should really be deleted.
+            # (-> (tuple x (parameters y)) _) => (-> (block x y) _)
+            c2_cs = preprocessed_green_children(cs[2])
+            if length(c2_cs) === 0
+                ret_k = K"block"
+                pop!(cs)
+            elseif length(c2_cs) === 1
+                ret_k = K"block"
+                cs[2] = c2_cs[1]
             end
         end
         _reorder_parameters!(cs, 1)
@@ -1265,8 +1265,7 @@ function _map_green_to_est(parent::SyntaxTree, cs::SyntaxList;
                            kw_in_params=false, undef_parent=false)
     ret_cs = SyntaxList(cs.graph)
     for (i, c) in enumerate(cs)
-        undef_parent && (i = 0)
-        new_c = _green_to_est(parent, i, c; kw_in_params)
+        new_c = _green_to_est(parent, undef_parent ? 0 : i, c; kw_in_params)
         @assert should_include_node(new_c)
         push!(ret_cs, new_c)
     end
@@ -1290,14 +1289,13 @@ end
 
 # (call f a b (parameters c d) (parameters e)) =>
 # (call f (parameters (parameters e) c d) a b)
-#
-# `mknode` leaks nodes, but having multiple `parameters` blocks is extremely
-# rare nonsense syntax (`f(a,b;c=d;e)`)
 function _reorder_parameters!(cs::SyntaxList, params_pos::Int)
     (length(cs) > params_pos && kind(cs[end]) === K"parameters") || return cs
     local param_ball = pop!(cs)
     while length(cs) >= 1 && kind(cs[end]) === K"parameters"
         next_ball_cs = pushfirst!(copy(children(cs[end])), param_ball)
+        # `mknode` leaks nodes, but having multiple `parameters` blocks is
+        # extremely rare nonsense syntax (`f(a,b;c=d;e)`)
         param_ball = mknode(cs[end], next_ball_cs)
         pop!(cs)
     end
@@ -1334,8 +1332,8 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
     for i in eachindex(cs)
         c = cs[i]
         (prev_str, cur_str) = (cur_str, next_str)
-        next_str = !(i === lastindex(cs)) && kind(cs[i+1]) === literal_k
-        # optimization: push the current child unchanged if the following
+        next_str = i != lastindex(cs) && kind(cs[i+1]) === literal_k
+        # optimization: push the current child mostly unchanged if the following
         # one isn't a literal string
         if !prev_str && cur_str && !next_str
             push!(ret_cs, c)

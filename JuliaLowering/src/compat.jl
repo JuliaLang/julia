@@ -656,6 +656,12 @@ end
 isa_lowering_ast_node(@nospecialize(e)) =
     e isa Symbol || e isa QuoteNode || e isa Expr # || e isa GlobalRef
 
+function is_expr_value(st::SyntaxTree)
+    k = kind(st)
+    return JuliaSyntax.is_literal(k) || k === K"Value" ||
+        k === K"core" && st.name_val === "nothing"
+end
+
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     st = if e === Core.nothing
         # e.value can't be nothing in `K"Value"`, so represent with K"core"
@@ -701,7 +707,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         end
         setattr!(newleaf(graph, src, K"Value"), :value, e)
     end
-    @assert !isa_lowering_ast_node(e) || !hasattr(st, :value)
+    @assert isa_lowering_ast_node(e) || is_expr_value(st)
 
     return st._id, src
 end
@@ -713,7 +719,7 @@ function est_to_expr(st::SyntaxTree)
     elseif is_leaf(st) && hasattr(st, :name_val)
         n = Symbol(st.name_val)
         hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
-    elseif is_leaf(st) && hasattr(st, :value)
+    elseif is_leaf(st) && is_expr_value(st)
         v = st.value
         # Let `st.value isa Symbol` (or other AST node).  Since we enforce that
         # this is never produced by the reverse Expr->SyntaxTree transformation,
