@@ -243,7 +243,6 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
-    tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
@@ -251,13 +250,12 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
                 lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
     end
     print(io, prefix)
-    unit = tck > 0 ? " s  " : "    "
-    tc = max(tck, 1)
+    ms_per_s = 1000
     d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
     print(io,
           lpad(string(info.speed), 5), " MHz  ",
-          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
-          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
+          d(info.cpu_times!user / ms_per_s), d(info.cpu_times!nice / ms_per_s), d(info.cpu_times!sys / ms_per_s),
+          d(info.cpu_times!idle / ms_per_s), d(info.cpu_times!irq / ms_per_s, " s"))
     if tck <= 0
         print(io, "ticks")
     end
