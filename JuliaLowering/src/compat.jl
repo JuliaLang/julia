@@ -2,7 +2,7 @@ const JS = JuliaSyntax
 
 function _insert_tree_node(graph::SyntaxGraph, k::Kind, src::SourceAttrType,
                            attrs=[], flags::UInt16=0x0000)
-    id = newnode!(graph)
+    id = new_id!(graph)
     setattr!(graph, id, :kind, k)
     flags !== 0 && setattr!(graph, id, :syntax_flags, flags)
     setattr!(graph, id, :source, src)
@@ -659,15 +659,15 @@ isa_lowering_ast_node(@nospecialize(e)) =
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     st = if e === Core.nothing
         # e.value can't be nothing in `K"Value"`, so represent with K"core"
-        setattr!(makeleaf(graph, src, K"core"), :name_val, "nothing")
+        setattr!(newleaf(graph, src, K"core"), :name_val, "nothing")
     elseif e isa Symbol
-        setattr!(makeleaf(graph, src, K"Identifier"), :name_val, String(e))
+        setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
-        makenode(graph, src, K"inert", NodeId[cid])
+        newnode(graph, src, K"inert", NodeId[cid])
     elseif e isa Expr && e.head === :scope_layer
         @assert length(e.args) === 2 && e.args[1] isa Symbol
-        ident = makeleaf(graph, src, K"Identifier")
+        ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]))
         setattr!(ident, :scope_layer, e.args[2])
     elseif e isa Expr
@@ -685,9 +685,9 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
             end
         end
         if isnothing(st_k)
-            setattr!(makenode(graph, src, K"unknown_head", cs), :name_val, head_s)
+            setattr!(newnode(graph, src, K"unknown_head", cs), :name_val, head_s)
         else
-            makenode(graph, old_src, st_k, cs)
+            newnode(graph, old_src, st_k, cs)
         end
     # elseif e isa GlobalRef
         # TODO: Better-behaved as K"globalref", but lowering doesn't know this
@@ -700,7 +700,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
             # linenode oustside of block or toplevel
             src = e
         end
-        setattr!(makeleaf(graph, src, K"Value"), :value, e)
+        setattr!(newleaf(graph, src, K"Value"), :value, e)
     end
 
     return st._id, src

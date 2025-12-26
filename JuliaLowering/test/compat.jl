@@ -662,10 +662,12 @@ end
         x->Expr(:dummy, x)
     ]
 
+    # TODO: `@ast_` escaping is broken
+    unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
     local st_wrappers = Function[
-        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() (x::K"Value"))
-        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() [K"inert" x::K"Value"])
-        x->(@assert(!isnothing(x)); @ast _ast_test_graph() @__LINE__() [K"function" x::K"Value"])
+        x->(@assert(!isnothing(x)); @ast unused._graph unused (x::K"Value"))
+        x->(@assert(!isnothing(x)); @ast unused._graph unused [K"inert" x::K"Value"])
+        x->(@assert(!isnothing(x)); @ast unused._graph unused [K"function" x::K"Value"])
     ]
 
     @testset "every basic case" begin

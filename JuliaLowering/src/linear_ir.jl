@@ -345,7 +345,7 @@ end
 function make_label(ctx, srcref)
     id = ctx.next_label_id[]
     ctx.next_label_id[] += 1
-    makeleaf(ctx, srcref, K"label", [:id=>id])
+    setattr!(newleaf(ctx, srcref, K"label"), :id, id)
 end
 
 # flisp: make&mark-label
@@ -364,7 +364,7 @@ end
 
 function emit_latestworld(ctx, srcref)
     (isempty(ctx.code) || kind(last(ctx.code)) != K"latestworld") &&
-        emit(ctx, makeleaf(ctx, srcref, K"latestworld"))
+        emit(ctx, newleaf(ctx, srcref, K"latestworld"))
 end
 
 function compile_condition_term(ctx, ex)
@@ -596,7 +596,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
             k == K"new_opaque_closure" || k == K"cfunction"
-        callex = makenode(ctx, ex, k, compile_args(ctx, children(ex)))
+        callex = newnode(ctx, ex, k, compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
         elseif needs_value
@@ -687,9 +687,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"symbolic_goto"
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
-        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
-        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? leave
-        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? goto
+        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
+        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? leave
+        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? goto
         nothing
     elseif k == K"return"
         compile(ctx, ex[1], true, true)
@@ -791,7 +791,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, lam)
         end
     elseif k == K"gc_preserve_begin"
-        makenode(ctx, ex, k, compile_args(ctx, children(ex)))
+        newnode(ctx, ex, k, compile_args(ctx, children(ex)))
     elseif k == K"gc_preserve_end" || k == K"loopinfo"
         if needs_value
             throw(LoweringError(ex, "misplaced kind $k in value position"))
@@ -964,7 +964,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     if k == K"BindingId"
         id = ex.var_id
         if haskey(ssa_rewrites, id)
-            makeleaf(ctx, ex, K"SSAValue", [:var_id=>ssa_rewrites[id]])
+            setattr!(newleaf(ctx, ex, K"SSAValue"), :var_id, ssa_rewrites[id])
         else
             new_id = get(slot_rewrites, id, nothing)
             binfo = get_binding(ctx, id)
@@ -972,13 +972,14 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
                      binfo.kind == :static_parameter                 ? K"static_parameter" :
                      throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
-                makeleaf(ctx, ex, sk, [:var_id=>new_id])
+                setattr!(newleaf(ctx, ex, sk), :var_id, new_id)
             else
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
-                makeleaf(ctx, ex, K"globalref",
-                         [:name_val=>binfo.name, :mod=>binfo.mod])
+                out = newleaf(ctx, ex, K"globalref")
+                setattr!(out, :name_val, binfo.name)
+                setattr!(out, :mod, binfo.mod)
             end
         end
     elseif k == K"meta" || k == K"static_eval"
