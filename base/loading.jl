@@ -1682,8 +1682,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
-                            entry = first(entries)::Dict{String, Any}
-                            uuid = entry["uuid"]::String
+                            local entry = first(entries)::Dict{String, Any}
+                            local uuid = entry["uuid"]::String
                             deps′_expanded[dep_name] = uuid
                         end
                         return deps′_expanded
