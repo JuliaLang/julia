@@ -1654,7 +1654,7 @@ end
         # This should not throw a KeyError from end_loading
         Base.require_stdlib(Pkg_pkgid, "REPLExt", FakeREPL)
         # Verify the extension was loaded
-        Base.maybe_root_module(REPLExt_pkgid) isa Module || error("Issue #60392 has returned!")
+        Base.maybe_root_module(REPLExt_pkgid) isa Module || error("Something is wrong")
     '`
     @test success(cmd)
 end
