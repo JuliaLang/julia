@@ -2,6 +2,7 @@
 
 import REPL
 using REPL.TerminalMenus
+using StyledStrings
 using Test
 
 function simulate_input(menu::TerminalMenus.AbstractMenu, keys...; kwargs...)

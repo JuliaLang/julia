@@ -129,7 +129,7 @@ end
 ##################################################################
 
 """
-    header(m::AbstractMenu)::String
+    header(m::AbstractMenu)::AbstractString
 
 Return a header string to be printed above the menu.
 Defaults to "".
@@ -320,7 +320,8 @@ overwriting of the previous display.
 """
 function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init::Bool=false)
     # TODO Julia 2.0?: get rid of `init` and just use `oldstate`
-    buf = IOBuffer()
+    rawbuf = IOBuffer()
+    buf = IOContext(rawbuf, :color => get(out, :color, false))
     lastoption = numoptions(m)::Int
     ncleared = oldstate === nothing ? m.pagesize-1 : oldstate
 
@@ -355,11 +356,11 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         downscrollable = i == lastline && i != lastoption
 
         if upscrollable && downscrollable
-            print(buf, updown_arrow(m)::Union{Char,String})
+            print(buf, updown_arrow(m)::Union{AbstractChar,AbstractString})
         elseif upscrollable
-            print(buf, up_arrow(m)::Union{Char,String})
+            print(buf, up_arrow(m)::Union{AbstractChar,AbstractString})
         elseif downscrollable
-            print(buf, down_arrow(m)::Union{Char,String})
+            print(buf, down_arrow(m)::Union{AbstractChar,AbstractString})
         else
             print(buf, ' ')
         end
@@ -380,7 +381,7 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         print(buf, "\x1b[$(ncleared-newstate)A")
     end
 
-    print(out, String(take!(buf)))
+    print(out, String(take!(rawbuf)))
 
     return newstate
 end
@@ -398,17 +399,17 @@ ctrl_c_interrupt(::AbstractMenu) = CONFIG[:ctrl_c_interrupt]::Bool
 up_arrow(m::ConfiguredMenu) = up_arrow(m.config)
 up_arrow(c::AbstractConfig) = up_arrow(c.config)
 up_arrow(c::Config) = c.up_arrow
-up_arrow(::AbstractMenu) = CONFIG[:up_arrow]::Char
+up_arrow(::AbstractMenu) = CONFIG[:up_arrow]::AbstractChar
 
 down_arrow(m::ConfiguredMenu) = down_arrow(m.config)
 down_arrow(c::AbstractConfig) = down_arrow(c.config)
 down_arrow(c::Config) = c.down_arrow
-down_arrow(::AbstractMenu) = CONFIG[:down_arrow]::Char
+down_arrow(::AbstractMenu) = CONFIG[:down_arrow]::AbstractChar
 
 updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
 updown_arrow(c::AbstractConfig) = updown_arrow(c.config)
 updown_arrow(c::Config) = c.updown_arrow
-updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]::Char
+updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]::AbstractChar
 
 printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, iscursor ? cursor(m.config) : ' ', ' ')
 cursor(c::AbstractConfig) = cursor(c.config)
