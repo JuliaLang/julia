@@ -251,11 +251,12 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
     end
     print(io, prefix)
     ms_per_s = 1000
+    unit = " s  "
     d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
     print(io,
           lpad(string(info.speed), 5), " MHz  ",
           d(info.cpu_times!user / ms_per_s), d(info.cpu_times!nice / ms_per_s), d(info.cpu_times!sys / ms_per_s),
-          d(info.cpu_times!idle / ms_per_s), d(info.cpu_times!irq / ms_per_s, " s"))
+          d(info.cpu_times!idle / ms_per_s), d(info.cpu_times!irq / ms_per_s))
 end
 
 show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
