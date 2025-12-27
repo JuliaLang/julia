@@ -3128,22 +3128,11 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
-"""
-    summary(io::IO, ref::GenericMemoryRef)
-
-Print a brief description of a `GenericMemoryRef`, showing the remaining
-accessible length from the current offset. This improves error messages
-like `BoundsError` to reflect the effective size, similar to `SubString`.
-"""
-function Base.summary(io::IO, ref::GenericMemoryRef{kind,T,AS}) where {kind,T,AS}
+function Base.summary(io::IO, ref::GenericMemoryRef)
     mem = parent(ref)
-    idx = Core.memoryrefoffset(ref)            # 1-based offset within parent memory
-    rem = length(mem) - (idx - 1)              # remaining accessible elements
-    if rem <= 0
-        print(io, "empty ", typeof(ref))
-    else
-        print(io, rem, "-element ", typeof(ref))
-    end
+    offset = Core.memoryrefoffset(ref)            # 1-based offset within parent memory
+    len_after_offset = length(mem) - (offset - 1) # remaining accessible elements
+    print(io, len_after_offset, "-element ", typeof(ref))
 end
 
 ## `summary` for Function
