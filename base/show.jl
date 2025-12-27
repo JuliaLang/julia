@@ -3133,6 +3133,13 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
+function Base.summary(io::IO, ref::GenericMemoryRef)
+    mem = parent(ref)
+    offset = Core.memoryrefoffset(ref)            # 1-based offset within parent memory
+    len_after_offset = length(mem) - (offset - 1) # remaining accessible elements
+    print(io, len_after_offset, "-element ", typeof(ref))
+end
+
 ## `summary` for Function
 summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
 
