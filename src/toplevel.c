@@ -650,10 +650,9 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         jl_error("eval cannot be used in a generated function");
     }
 
-    jl_method_instance_t *mfunc = NULL;
     jl_code_info_t *thk = NULL;
     jl_value_t *root = NULL;
-    JL_GC_PUSH4(&mfunc, &thk, &ex, &root);
+    JL_GC_PUSH3(&thk, &ex, &root);
 
     size_t last_age = ct->world_age;
     if (!expanded && (jl_needs_lowering(e))) {
@@ -717,17 +716,32 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         JL_GC_POP();
         return (jl_value_t*)ex;
     }
-
-    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     assert(head == jl_thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     if (!jl_is_code_info(thk) || !jl_typetagis(thk->code, jl_array_any_type)) {
         jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
             "malformed \"thunk\" statement");
     }
+    jl_value_t *result = jl_eval_thunk(m, thk, fast);
+    ct->world_age = last_age;
+
+    JL_GC_POP();
+    return result;
+}
+
+// Evaluate lowered IR thunk `thk` at top level in module `m` in the latest world
+JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t *thk, int fast)
+{
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
+    JL_TYPECHK(jl_eval_thunk, code_info, (jl_value_t*)thk);
+    JL_TYPECHK(jl_eval_thunk, array_any, (jl_value_t*)thk->code);
     body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
 
+    jl_method_instance_t *mfunc = NULL;
     jl_value_t *result;
+    JL_GC_PUSH1(&mfunc);
     if (has_ccall ||
             ((forced_compile || (!has_defs && fast && has_loops)) &&
             jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
