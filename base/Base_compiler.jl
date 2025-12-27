@@ -397,7 +397,7 @@ const _return_type = Compiler.return_type
 # Enable compiler
 Compiler.bootstrap!()
 
-include("flfrontend.jl")
+include("compiler_frontend.jl")
 Core._setparser!(fl_parse)
 Core._setlowerer!(fl_lower)
 

@@ -1100,6 +1100,14 @@ _lower = nothing
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
+_compiler_frontend = nothing
+
+function _set_compiler_frontend!(frontend)
+    old = _compiler_frontend
+    setglobal!(Core, :_compiler_frontend, frontend)
+    return old
+end
+
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
 const _apply_pure = _apply
