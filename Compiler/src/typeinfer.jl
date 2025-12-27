@@ -440,18 +440,20 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
         # compute the cost (size) of inlining this code
         params = OptimizationParams(interp)
         cost_threshold = default = params.inline_cost_threshold
-        if ⊑(optimizer_lattice(interp), rt, Tuple) && !isconcretetype(widenconst(rt))
-            cost_threshold += params.inline_tupleret_bonus
-        end
-        # if the method is declared as `@inline`, increase the cost threshold 20x
-        if declared_inline
-            cost_threshold += 19*default
-        end
-        # a few functions get special treatment
-        if def.module === _topmod(def.module)
-            name = def.name
-            if name === :iterate || name === :unsafe_convert || name === :cconvert
-                cost_threshold += 4*default
+        if cost_threshold != typemax(Int)
+            if ⊑(optimizer_lattice(interp), rt, Tuple) && !isconcretetype(widenconst(rt))
+                cost_threshold += params.inline_tupleret_bonus
+            end
+            # if the method is declared as `@inline`, increase the cost threshold 20x
+            if declared_inline
+                cost_threshold += 19*default
+            end
+            # a few functions get special treatment
+            if def.module === _topmod(def.module)
+                name = def.name
+                if name === :iterate || name === :unsafe_convert || name === :cconvert
+                    cost_threshold += 4*default
+                end
             end
         end
         return inline_cost_model(ir, params, cost_threshold)
