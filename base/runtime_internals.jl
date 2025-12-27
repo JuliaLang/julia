@@ -1874,11 +1874,11 @@ end
 length(specs::MethodSpecializations) = count(Returns(true), specs)
 
 function length(mt::Core.MethodTable)
-    n = 0
+    n = Ref(0)
     visit(mt) do m
-        n += 1
+        n[] += 1
     end
-    return n::Int
+    return n[]
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
