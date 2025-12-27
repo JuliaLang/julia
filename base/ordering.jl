@@ -174,4 +174,19 @@ if ccall(:jl_ver_major, Int32, ()) < 2
     ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 end
 
+"""    rev(val)
+
+A wrapper that reverses the order of `isless` comparisons. Useful when sorting by several keys, some forward, some reverse.
+
+# Examples
+```julia
+sort(..., by=x -> (x.a, Order.rev(x.b), Order.rev(x.c)))
+```
+"""
+struct rev{T}
+    val::T
+end
+
+Base.isless(a::rev, b::rev) = isless(b.val, a.val)
+
 end
