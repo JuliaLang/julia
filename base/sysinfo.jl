@@ -128,8 +128,6 @@ const WORD_SIZE = Core.sizeof(Int) * 8
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
-
-CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
 """
 global SC_CLK_TCK::Clong
 
@@ -224,8 +222,7 @@ The `CPUinfo` type is a mutable struct with the following fields:
 - `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
 - `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
 
-The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
-unknown units.
+The times are in units of milliseconds.
 
 Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
@@ -246,7 +243,6 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
-    tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
@@ -254,16 +250,13 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
                 lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
     end
     print(io, prefix)
-    unit = tck > 0 ? " s  " : "    "
-    tc = max(tck, 1)
+    ms_per_s = 1000
+    unit = " s  "
     d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
     print(io,
           lpad(string(info.speed), 5), " MHz  ",
-          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
-          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
-    if tck <= 0
-        print(io, "ticks")
-    end
+          d(info.cpu_times!user / ms_per_s), d(info.cpu_times!nice / ms_per_s), d(info.cpu_times!sys / ms_per_s),
+          d(info.cpu_times!idle / ms_per_s), d(info.cpu_times!irq / ms_per_s))
 end
 
 show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
