@@ -389,6 +389,21 @@ ignored if the module is a small module. If left unspecified, the smaller
 of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
 number of logical CPU cores is used in its place.
 
+### [`JULIA_IMAGE_THREAD_POOL`](@id JULIA_IMAGE_THREAD_POOL)
+
+Set to `0` to disable cross-process thread coordination during parallel
+precompilation. By default, Julia processes use file locking to acquire threads
+from a shared pool stored at `DEPOT_PATH[1]/compiled/threadpool`, preventing
+thread oversubscription when multiple packages are being precompiled simultaneously.
+Threads are acquired just before LLVM parallel optimization and released immediately after.
+
+See also [`JULIA_IMAGE_THREAD_POOL_SIZE`](@ref JULIA_IMAGE_THREAD_POOL_SIZE).
+
+### [`JULIA_IMAGE_THREAD_POOL_SIZE`](@id JULIA_IMAGE_THREAD_POOL_SIZE)
+
+An unsigned integer that sets the maximum number of threads available in the
+thread pool for parallel image compilation. Defaults to the number of logical CPU cores.
+
 ### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
 
 A boolean value that determines if detailed timing information is printed during
