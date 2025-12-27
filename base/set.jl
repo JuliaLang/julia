@@ -52,7 +52,7 @@ function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     slots = copy(d.slots)
     keys = copy(d.keys)
     vals = similar(d.vals, Nothing)
-    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age))
 end
 
 Set(itr) = _Set(itr, IteratorEltype(itr))
@@ -956,7 +956,7 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
     count == 0 && return t
     c = 0
     news = Pair{K,V}[]
-    i = skip_deleted_floor!(t)
+    i = skip_deleted(t, 1)
     @inbounds while i != 0
         k1, v1 = t.keys[i], t.vals[i]
         x1 = Pair{K,V}(k1, v1)
