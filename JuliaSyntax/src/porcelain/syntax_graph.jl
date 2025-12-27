@@ -489,11 +489,13 @@ end
 function Base.push!(v::SyntaxList, ex::SyntaxTree)
     check_compatible_graph(v, ex)
     push!(v.ids, ex._id)
+    v
 end
 
 function Base.pushfirst!(v::SyntaxList, ex::SyntaxTree)
     check_compatible_graph(v, ex)
     pushfirst!(v.ids, ex._id)
+    v
 end
 
 function Base.similar(v::SyntaxList, size::Tuple=Base.size(v.ids))
@@ -525,8 +527,17 @@ function Base.pop!(v::SyntaxList)
     SyntaxTree(v.graph, pop!(v.ids))
 end
 
+function Base.popfirst!(v::SyntaxList)
+    SyntaxTree(v.graph, popfirst!(v.ids))
+end
+
 function Base.popat!(v::SyntaxList, i::Integer)
     SyntaxTree(v.graph, popat!(v.ids, i))
+end
+
+function Base.insert!(v::SyntaxList, i::Integer, st::SyntaxTree)
+    insert!(v.ids, i, st._id)
+    v
 end
 
 function Base.resize!(v::SyntaxList, n)
@@ -731,9 +742,11 @@ end
 
 #-------------------------------------------------------------------------------
 # RawGreenNode->SyntaxTree
+# WIP: expr_structure param will be deleted
 
 function build_tree(::Type{SyntaxTree}, stream::ParseStream;
-                                filename=nothing, first_line=1)
+                    filename=nothing, first_line=1,
+                    expr_structure=false)
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()
     sf = SourceFile(stream; filename, first_line)
@@ -741,7 +754,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     cs = SyntaxList(graph)
     for c in reverse_toplevel_siblings(cursor)
         is_trivia(c) && !is_error(c) && continue
-        push!(cs, SyntaxTree(graph, sf, c))
+        push!(cs, SyntaxTree(graph, sf, c; expr_structure))
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
@@ -752,7 +765,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     return SyntaxTree(graph, id)
 end
 
-function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
+function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor; expr_structure)
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16,
                        source=SourceAttrType, value=Any, name_val=String)
     green_id = GC.@preserve sf begin
@@ -760,7 +773,12 @@ function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
         offset = raw_offset - sf.byte_offset
         _insert_green(graph, sf, txtbuf, offset, cursor)
     end
-    out = _green_to_ast(K"None", SyntaxTree(graph, green_id))
+    gst = SyntaxTree(graph, green_id)
+    if expr_structure
+        out = _green_to_est(gst, 0, gst)
+    else
+        out = _green_to_ast(K"None", gst)
+    end
     @assert !isnothing(out) "SyntaxTree requires >0 nontrivia nodes"
     return out
 end
@@ -856,4 +874,487 @@ function _map_green_to_ast(parent::Kind, cs::SyntaxList; eq_to_kw=false)
         !isnothing(c2) && push!(out, c2)
     end
     return out
+end
+
+#-------------------------------------------------------------------------------
+# WIP: RawGreenNode->EST.  This will replace `_green_to_ast` above, and could
+# replace `node_to_expr` later.
+
+"""
+Convert green `st` to a SyntaxTree with Expr structure.  `parent_i` is the final
+position of `convert(st)` (our return value) within `convert(parent)`.  If
+`parent_i == 0`, neither it nor our `parent` are known or relevant to this
+conversion.
+
+We can't assume much about `st` since it's anything the parser produces.  Our
+correctness is defined against existing text->Expr transformations.
+
+All node rearrangements and head changes are determined before recursing on
+children, unlike in `node_to_expr`.  This is because these nodes are not mutable
+and filling the graph with temporary nodes to fix up later is less desirable,
+and also because knowing our parent's kind and our position within it
+ahead-of-time makes conversion simpler.  By default, for each node `st`, we
+  1. let `cs` be `children(st)` minus (non-recursively) all trivia and parens
+  2. rearrange `cs` based on length(cs), their/our/parent's kind/flags, etc.
+  3. let `ret_cs` be `map(convert, cs)`
+  4. return our new node `convert(st)` with `ret_cs` as children.
+However, we can stop and return an answer between any of these steps.  For
+example, deleting a child is easy in (2), but new non-leaf children we insert
+should be added to `ret_cs` rather than `cs` (unless the new child has
+pre-transformation structure and we're OK with step 3 creating it again).
+"""
+function _green_to_est(parent::SyntaxTree, parent_i::Int,
+                       st::SyntaxTree; kw_in_params=false)
+    if !should_include_node(st)
+        @assert kind(parent) === K"None" && parent_i === 0
+        return nothing
+    end
+
+    graph = syntax_graph(st)
+    k = kind(st)
+    coreref(s::String) = setattr!(newleaf(graph, st, K"core"), :name_val, s)
+    symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
+    valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
+
+    if is_leaf(st)
+        return if k === K"CmdMacroName" || k === K"StrMacroName"
+            name = lower_identifier_name(st.name_val, k)
+            symleaf(name)
+        elseif k === K"VERSION"
+            valleaf(version_to_expr(st))
+        elseif (v = get(st, :value, nothing); v isa Union{Int128,UInt128,BigInt})
+            # syntax TODO: likely unnecessary; this is just to match RGN->Expr,
+            # which added this to match flisp parsing text->Expr.
+            macname = v isa Int128 ? "@int128_str" :
+                v isa UInt128 ? "@uint128_str" : "@big_str"
+            mac = valleaf(GlobalRef(Core, Symbol(macname)))
+            arg = valleaf(replace(sourcetext(st), '_'=>""))
+            ret_cids = tree_ids(mac, coreref("nothing"), arg)
+            newnode(graph, st, K"macrocall", ret_cids)
+        else
+            st
+        end
+    end
+
+    # Non-leaf cases: each branch should either set `ret_k` and `cs` or recurse
+    # manually and return a finished SyntaxTree
+    ret_k::Kind = k
+    cs = preprocessed_green_children(st)
+    n_cs = length(cs)
+
+    if k === K"string" && n_cs > 0
+        return _string_to_est(st, cs; unwrap_literal=true)
+    elseif k === K"cmdstring" && n_cs > 0
+        # (cmdstring _...) => (macrocall Core.@cmd lno joined_str)
+        cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
+        loc_st = valleaf(source_location(LineNumberNode, st))
+        return newnode(graph, st, K"macrocall", tree_ids(
+            valleaf(GlobalRef(Core, Symbol("@cmd"))), loc_st, cmd_arg))
+    elseif k === K"macro_name" && n_cs === 1
+        # "M.@x" => (. M (macro_name x)) => (. M @x)
+        # "@M.x" => (macro_name (. M x)) => (. M @x)
+        #           (macro_name else) => else
+        if kind(cs[1]) === K"Identifier"
+            return symleaf(lower_identifier_name(cs[1].name_val, K"macro_name"))
+        else
+            inner_st = cs[1]
+            inner_cs = preprocessed_green_children(inner_st)
+            if (length(inner_cs) === 2 && kind(inner_st) === K"." &&
+                kind(inner_cs[2]) === K"Identifier")
+                (lhs, raw_m) = _green_to_est(cs[1], 1, inner_cs[1]), inner_cs[2]
+                mname_s = lower_identifier_name(raw_m.name_val, K"macro_name")
+                mname = setattr!(mkleaf(raw_m), :name_val, mname_s)
+                mname_inert = newnode(graph, raw_m, K"inert", tree_ids(mname))
+                return mknode(inner_st, tree_ids(lhs, mname_inert))
+            else
+                return _green_to_est(parent, 1, inner_st)
+            end
+        end
+    elseif k === K"?"
+        ret_k = K"if"
+    elseif k === K"op=" && n_cs === 3
+        # (op= a + b) => (+= a b)
+        # (.op= a + b) => (.+= a b) below
+        op_s = string(cs[2]) * '='
+        lhs = _green_to_est(st, 0, cs[1])
+        rhs = _green_to_est(st, 0, cs[3])
+        out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
+        return setattr!(out, :name_val, op_s)
+    elseif k === K".op=" && n_cs === 3
+        op_s = '.' * string(cs[2]) * '='
+        lhs = _green_to_est(st, 0, cs[1])
+        rhs = _green_to_est(st, 0, cs[3])
+        out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
+        return setattr!(out, :name_val, op_s)
+    elseif k === K"macrocall" && n_cs > 0
+        # LineNumberNodes are not usually added to the tree as they are in Expr,
+        # but this specifically inserts the macrocall child for compatibility
+        loc_st = let loc = source_location(LineNumberNode, st)
+            if n_cs >= 2 && kind(cs[2]) === K"VERSION"
+                v = version_to_expr(popat!(cs, 2))
+                loc = Core.MacroSource(loc, v)
+            end
+            valleaf(loc)
+        end
+        insert!(cs, 2, loc_st)
+        # foo`x` parses to (macrocall foo::CmdMacroName (cmdstring ::CmdString))
+        # so we need to unwrap the CmdString or else we get two macrocalls
+        if n_cs >= 2 && kind(cs[1]) === K"CmdMacroName"
+            ret_cs = _map_green_to_est(st, cs)
+            ret_cs[3] = ret_cs[3][3] # node leak
+            return mknode(st, ret_cs)
+        end
+        do_ex = kind(cs[end]) === K"do" ? pop!(cs) : nothing
+        _reorder_parameters!(cs, 3)
+        !isnothing(do_ex) && return _make_do_expression(st, cs, do_ex)
+    elseif k === K"doc"
+        # (doc str obj) => (macrocall Core.@doc lno str obj)
+        ret_k = K"macrocall"
+        pushfirst!(cs, valleaf(source_location(LineNumberNode, st)))
+        pushfirst!(cs, valleaf(GlobalRef(Core, Symbol("@doc"))))
+    elseif k === K"dotcall" || k === K"call" && n_cs > 0
+        if is_infix_op_call(st) || is_postfix_op_call(st)
+            cs[2], cs[1] = cs[1], cs[2]
+        end
+        if is_postfix_op_call(st) && kind(cs[1]) == K"Identifier" &&
+            cs[1].name_val === "'"
+            popfirst!(cs)
+            ret_k = K"'"
+        end
+        do_ex = kind(cs[end]) === K"do" ? pop!(cs) : nothing
+        _reorder_parameters!(cs, 2)
+        if k === K"dotcall"
+            if is_prefix_call(st)
+                # (dotcall f args...) => (. f (tuple args...))
+                ret_cs = _map_green_to_est(st, cs)
+                tuple = newnode(graph, st, K"tuple", ret_cs[2:end])
+                return newnode(graph, st, K".", tree_ids(ret_cs[1], tuple))
+            else
+                # (dotcall + args...) => (call .+ args...)
+                ret_k = K"call"
+                if kind(cs[1]) === K"Identifier"
+                    cs[1] = symleaf('.' * cs[1].name_val)
+                end
+            end
+        end
+        !isnothing(do_ex) && return _make_do_expression(st, cs, do_ex)
+    elseif k === K"."
+        if n_cs === 2
+            # (. lhs rhs) => (. lhs (inert rhs))
+            lhs = _green_to_est(st, 1, cs[1])
+            rhs = _green_to_est(st, 2, cs[2])
+            inert_rhs = kind(rhs) in KSet"quote inert" ? rhs :
+                newnode(graph, cs[2], K"inert", tree_ids(rhs))
+            return mknode(st, tree_ids(lhs, inert_rhs))
+        elseif n_cs === 1
+            # (. x) => (. x) or .x
+            # TODO: This is the one place where K"parens" change the result,
+            # meaning that either Expr is doing something wrong or SyntaxNode is
+            # deleting semantics.
+            paren_st = filter(should_include_node, children(parent))[1]
+            coalesce_dot = !(kind(paren_st) === K"parens") && parent_i === 1 &&
+                kind(parent) in KSet"call dotcall curly quote"
+
+            if (coalesce_dot || is_syntactic_operator(kind(cs[1])) ||
+                kind(parent) === K"comparison" && iseven(parent_i))
+                return symleaf('.' * cs[1].name_val)
+            end
+        end
+    elseif k === K"ref" || k === K"curly"
+        _reorder_parameters!(cs, 2)
+    elseif k === K"for" && n_cs === 2
+        # (for (iteration iter1) body) => (for iter1 body)
+        iters = preprocessed_green_children(cs[1])
+        if length(iters) === 1
+            cs[1] = iters[1]
+        end
+    elseif k === K"iteration"
+        # (for (iteration iter1 iters...) body) => (for (block iter1 iters...) body)
+        @assert kind(parent) === K"for" && parent_i === 1
+        ret_k = K"block"
+    elseif k === K"vect" || k === K"braces"
+        _reorder_parameters!(cs, 1)
+    elseif k === K"tuple"
+        # Unwrap singleton, no-trailing-comma tuple in a couple cases:
+        # (function (tuple (... xs)) body) => (function (... xs) body)
+        # (-> (tuple _) body) => (-> _ body), assuming _ not parameters
+        if n_cs === 1 && parent_i === 1 &&
+            !has_flags(st, TRAILING_COMMA_FLAG)
+            p_k = kind(parent)
+            c_k = kind(cs[1])
+            if (p_k === K"function" && c_k === K"...") ||
+                (p_k === K"->" && c_k !== K"parameters")
+                return _green_to_est(parent, parent_i, cs[1])
+            end
+        elseif n_cs === 2 && kind(parent) === K"->" && parent_i === 1 &&
+            kind(cs[2]) === K"parameters" && kind(cs[1]) !== K"..."
+            # This case should really be deleted.
+            # (-> (tuple x (parameters y)) _) => (-> (block x y) _)
+            c2_cs = preprocessed_green_children(cs[2])
+            if length(c2_cs) === 0
+                ret_k = K"block"
+                pop!(cs)
+            elseif length(c2_cs) === 1
+                ret_k = K"block"
+                cs[2] = c2_cs[1]
+            end
+        end
+        _reorder_parameters!(cs, 1)
+    elseif k === K"where" && n_cs === 2
+        # (where lhs (braces a b c)) => (where lhs a b c)
+        if kind(cs[2]) === K"braces"
+            rhs = pop!(cs)
+            append!(cs, preprocessed_green_children(rhs))
+            _reorder_parameters!(cs, 2)
+        end
+    elseif k === K"try"
+        # anything => (try try_block e catch_block [finally_block] [else_block])
+        try_ = cs[1]
+        st_false = valleaf(false)
+        catch_var = catch_ = else_ = finally_ = st_false
+        for c in cs[2:end]
+            inner_cs = preprocessed_green_children(c)
+            if kind(c) === K"catch"
+                if kind(inner_cs[1]) !== K"Placeholder"
+                    catch_var = inner_cs[1]
+                end
+                catch_ = inner_cs[2]
+            elseif kind(c) === K"else"
+                else_ = only(inner_cs)
+            elseif kind(c) === K"finally"
+                finally_ = only(inner_cs)
+            elseif kind(c) === K"error"
+                return mknode(st, cs) # give up
+            else
+                @assert false "Illegal subclause in `try`"
+            end
+        end
+        empty!(cs)
+        push!(cs, try_, catch_var, catch_)
+        if finally_ != st_false || else_ != st_false
+            push!(cs, finally_)
+            if else_ != st_false
+                push!(cs, else_)
+            end
+        end
+    elseif k === K"generator" && n_cs >= 2
+        # let (g2 x iter) mean (generator x iter.children...)
+        # (generator val iter_1 ... iter_n) =>
+        # (flatten (g2 (... (flatten (g2 (g2 val i_n) i_{n-1})) ...) i_1))
+        g_out = _green_to_est(st, 1, popfirst!(cs))
+        for c in Iterators.reverse(cs)
+            gen_cs = let rest = kind(c) === K"iteration" ?
+                preprocessed_green_children(c) : SyntaxList(graph, tree_ids(c))
+                rest = _map_green_to_est(st, rest; undef_parent=true)
+                pushfirst!(rest, g_out)
+            end
+            g_out = mknode(st, gen_cs)
+            if c !== cs[end]
+                g_out = newnode(graph, c, K"flatten", tree_ids(g_out))
+            end
+        end
+        return setattr!(g_out, :source, st._id) # outermost provenance
+    elseif k === K"filter"
+        @assert n_cs === 2
+        # (filter (iteration is...) cond) => (filter cond is...)
+        cond = pop!(cs)
+        cs = preprocessed_green_children(cs[1])
+        pushfirst!(cs, cond)
+    elseif k === K"in"
+        ret_k = K"="
+    elseif k === K"nrow" || k === K"ncat"
+        pushfirst!(cs, valleaf(numeric_flags(flags(st))))
+    elseif k === K"typed_ncat"
+        insert!(cs, 2, valleaf(numeric_flags(flags(st))))
+    elseif k === K"elseif"
+        # (elseif cond body) => (elseif (block cond) body)
+        # RGN->Expr block-wraps for linenodes; we do it for parity
+        ret_cs = _map_green_to_est(st, cs)
+        ret_cs[1] = newnode(graph, cs[1], K"block", tree_ids(ret_cs[1]))
+        return mknode(st, ret_cs)
+    elseif k === K"->" && kind(cs[2]) !== K"block"
+        ret_cs = _map_green_to_est(st, cs)
+        ret_cs[2] = newnode(graph, cs[2], K"block", tree_ids(ret_cs[2]))
+        return mknode(st, ret_cs)
+    elseif k === K"function" && n_cs >= 2 &&
+        has_flags(st, SHORT_FORM_FUNCTION_FLAG)
+        # (function-= callex body) => (= callex (block body))
+        # exception: no block on "x' = y", or if body is already a block
+        if kind(cs[2]) !== K"block" && !is_postfix_op_call(cs[1])
+            ret_cs = _map_green_to_est(st, cs)
+            ret_cs[2] = newnode(graph, cs[2], K"block", tree_ids(ret_cs[2]))
+            return newnode(graph, st, K"=", ret_cs)
+        end
+        ret_k = K"="
+    elseif k === K"module"
+        not_bare = valleaf(!has_flags(st, BARE_MODULE_FLAG))
+        insert!(cs, kind(cs[1]) === K"VERSION" ? 2 : 1, not_bare)
+    elseif k === K"quote" && n_cs === 1
+        # (quote something_simple) => (inert something_simple)
+        ret_c = _green_to_est(st, 1, cs[1])
+        return is_leaf(ret_c) && kind(ret_c) !== K"Bool" ?
+            newnode(graph, st, K"inert", tree_ids(ret_c)) :
+            mknode(st, tree_ids(ret_c))
+    elseif k === K"do"
+        ret_k = K"->"
+    elseif k === K"block"
+        # (let (block x) _...) => (let x _...)
+        # (let (block (= x y)) _...) => (let (= x y) _...)
+        # (let (block (:: x y)) _...) => (let (:: x y) _...)
+        # (struct _ (block (doc "foo" field1) (doc "bar" field2))) =>
+        # (struct _ (block "foo" field1 "bar" field2))
+        if kind(parent) === K"let" && parent_i === 1 && n_cs === 1
+            out = _green_to_est(st, 1, cs[1])
+            return kind(out) in KSet"Identifier = ::" ? out :
+                mknode(st, tree_ids(out))
+        elseif kind(parent) === K"struct" && parent_i === 3
+            cs_tmp = SyntaxList(cs)
+            for c in cs
+                kind(c) === K"doc" ?
+                    append!(cs_tmp, preprocessed_green_children(c)) :
+                    push!(cs_tmp, c)
+            end
+            cs = cs_tmp
+        end
+    elseif (k === K"local" || k === K"global") && n_cs === 1
+        # (local (const _)) => (const (local _))
+        # (local (tuple a b c)) => (local a b c)
+        if kind(cs[1]) === K"const"
+            ret_c1_cs = _map_green_to_est(st, preprocessed_green_children(cs[1]))
+            ret_cs = tree_ids(mknode(st, ret_c1_cs))
+            return mknode(cs[1], ret_cs)
+        elseif kind(cs[1]) === K"tuple"
+            cs = preprocessed_green_children(cs[1])
+        end
+    elseif k === K"return" && n_cs === 0
+        push!(cs, coreref("nothing"))
+    elseif k === K"juxtapose"
+        ret_k = K"call"
+        pushfirst!(cs, symleaf("*"))
+    elseif k === K"struct"
+        is_mutable = valleaf(has_flags(st, MUTABLE_FLAG))
+        pushfirst!(cs, is_mutable)
+    elseif k === K"importpath"
+        ret_k = K"."
+        for i in eachindex(cs)
+            if kind(cs[i]) === K"inert"
+                inner_cs = preprocessed_green_children(cs[i])
+                length(inner_cs) === 1 && (cs[i] = only(inner_cs))
+            end
+        end
+    elseif k === K"wrapper" # parse errors only
+        ret_k = K"block"
+    elseif k === K"parameters"
+        kw_in_params = kind(parent) === K"parameters" && parent_i === 1 ?
+            kw_in_params : !(kind(parent) in KSet"vect curly braces ref")
+    elseif k === K"="
+        p_k = kind(parent)
+        because_params = p_k === K"parameters" && parent_i >= 1 && kw_in_params
+        because_call = parent_i > 1 && (p_k == K"ref" ||
+            p_k in KSet"call dotcall" && is_prefix_call(parent))
+        ret_k = because_params || because_call ? K"kw" : K"="
+    end
+
+    # Recurse on `cs`.  If no children change, just return `st`.
+    ret_cs = _map_green_to_est(st, cs; kw_in_params)
+    return ret_cs.ids == children(st).ids && ret_k == kind(st) ?
+        st : setattr!(mknode(st, ret_cs), :kind, ret_k)
+end
+
+function _map_green_to_est(parent::SyntaxTree, cs::SyntaxList;
+                           kw_in_params=false, undef_parent=false)
+    ret_cs = SyntaxList(cs.graph)
+    for (i, c) in enumerate(cs)
+        new_c = _green_to_est(parent, undef_parent ? 0 : i, c; kw_in_params)
+        @assert should_include_node(new_c)
+        push!(ret_cs, new_c)
+    end
+    ret_cs
+end
+
+# When converting, first delete trivia and wrapper nodes in children so we can
+# observe child kinds before recursing, thus creating fewer "temporary" nodes
+function preprocessed_green_children(st::SyntaxTree)
+    cs = filter(should_include_node, children(st))
+    for i in eachindex(cs)
+        while kind(cs[i]) in KSet"var char parens"
+            inner_cs = preprocessed_green_children(cs[i])
+            if length(inner_cs) === 1
+                cs[i] = inner_cs[1]
+            end
+        end
+    end
+    return cs
+end
+
+# (call f a b (parameters c d) (parameters e)) =>
+# (call f (parameters (parameters e) c d) a b)
+function _reorder_parameters!(cs::SyntaxList, params_pos::Int)
+    (length(cs) > params_pos && kind(cs[end]) === K"parameters") || return cs
+    local param_ball = pop!(cs)
+    while length(cs) >= 1 && kind(cs[end]) === K"parameters"
+        next_ball_cs = pushfirst!(copy(children(cs[end])), param_ball)
+        # `mknode` leaks nodes, but having multiple `parameters` blocks is
+        # extremely rare nonsense syntax (`f(a,b;c=d;e)`)
+        param_ball = mknode(cs[end], next_ball_cs)
+        pop!(cs)
+    end
+    insert!(cs, params_pos, param_ball)
+    nothing
+end
+
+# (call args... (do _...)) -> (do (call args...) (-> _...))
+#
+# Expects preprocessed and rearranged `args`
+function _make_do_expression(st::SyntaxTree, args::SyntaxList, doex::SyntaxTree)
+    ret_doex = _green_to_est(st, 0, doex)
+    ret_callex = mknode(st, _map_green_to_est(st, args))
+    return newnode(st._graph, st, K"do", tree_ids(ret_callex, ret_doex))
+end
+
+# A `string` or `cmdstring` may have multiple literal strings within (from
+# newlines when triple-quoting).  A `string` may have interpolated values.
+#
+# (string "a" "b" "c") => "abc" # unwrap_literal=true
+# (string "a" "b" "c" 1) => (string "abc" 1)
+# (string "a" "b" (string "c" "d")) => (string "ab" (string "cd"))
+#
+# (cmdstring "a"::CmdString "b"::CmdString) => "ab"::CmdString
+#
+# Converting children-first (as _string_to_Expr does) would make this much
+# harder by converting literal strings without the parent's knowledge
+function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
+    ret_cs = SyntaxList(st)
+    literal_k = kind(st) === K"cmdstring" ? K"CmdString" : K"String"
+    prev_str = cur_str = false
+    next_str = length(cs) > 0 && kind(cs[1]) === literal_k
+    buf = IOBuffer()
+    for i in eachindex(cs)
+        c = cs[i]
+        (prev_str, cur_str) = (cur_str, next_str)
+        next_str = i != lastindex(cs) && kind(cs[i+1]) === literal_k
+        # optimization: push the current child mostly unchanged if the following
+        # one isn't a literal string
+        if !prev_str && cur_str && !next_str
+            push!(ret_cs, c)
+        elseif cur_str
+            write(buf, c.value)
+            if !next_str
+                ret_c = newleaf(st._graph, st, literal_k)
+                setattr!(ret_c, :value, String(take!(buf)))
+                push!(ret_cs, ret_c)
+            end
+        else
+            ret_c = kind(c) === K"string" ?
+                _string_to_est(c, preprocessed_green_children(c);
+                               unwrap_literal=false) :
+                _green_to_est(st, i, c)
+
+            push!(ret_cs, ret_c)
+        end
+    end
+    if unwrap_literal && length(ret_cs) === 1 && kind(ret_cs[1]) === literal_k
+        return ret_cs[1]
+    end
+    return mknode(st, ret_cs)
 end
