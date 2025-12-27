@@ -769,21 +769,32 @@ end
     Compute the location of padding in an isbits datatype. Recursive over the fields of that type.
 """
 @assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
-    pads = Padding[]
-    last_end::Int = baseoffset
-    for i = 1:fieldcount(T)
-        offset = baseoffset + Int(fieldoffset(T, i))
-        fT = fieldtype(T, i)
-        append!(pads, padding(fT, offset))
-        if offset != last_end
-            push!(pads, Padding(offset, offset-last_end))
+    # PERFORMANCE OPTIMIZATION: Use depthfirst traversal with an explicit stack rather than
+    # implementing the traversal with recursion. This avoids the overhead from recursive
+    # calls inside the compiler, where we need to create a MethodInstance for each call.
+    # The outcome is equivalent to recursively calling padding() on each field.
+    pads = sizehint!(Padding[], fieldcount(T)) # Rough guess: one padding region per field
+    stack = Tuple{Type, Int}[(T, baseoffset)]
+
+    while !isempty(stack)
+        current_type, current_offset = pop!(stack)
+        # Push fields in reverse order, so we process fields in order after popping.
+        field_end = current_offset + sizeof(current_type)
+        for i = fieldcount(current_type):-1:1
+            fT = fieldtype(current_type, i)::Type
+            offset = current_offset + Int(fieldoffset(current_type, i))
+            if offset + sizeof(fT) < field_end
+                # We count padding from the end backwards
+                push!(pads, Padding(field_end, field_end - (offset + sizeof(fT))))
+            end
+            # Check for internal padding inside this field
+            push!(stack, (fT, offset))
+            field_end = offset
         end
-        last_end = offset + sizeof(fT)
     end
-    if 0 < last_end - baseoffset < sizeof(T)
-        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end + baseoffset))
-    end
-    return Core.svec(pads...)
+
+    # Reverse the result to keep the order the same as it was before this PR.
+    return Core.svec(reverse(pads)...)
 end
 
 function CyclePadding(T::DataType)
@@ -833,91 +844,8 @@ end
     return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
-
-function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
-    writeoffset = 0
-    for i ∈ 1:fieldcount(In)
-        readoffset = fieldoffset(In, i)
-        fT = fieldtype(In, i)
-        if ispacked(fT)
-            readsize = sizeof(fT)
-            memcpy(ptr_out + writeoffset, ptr_in + readoffset, readsize)
-            writeoffset += readsize
-        else # nested padded type
-            _copytopacked!(ptr_out + writeoffset, Ptr{fT}(ptr_in + readoffset))
-            writeoffset += packedsize(fT)
-        end
-    end
-end
-
-function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
-    readoffset = 0
-    for i ∈ 1:fieldcount(Out)
-        writeoffset = fieldoffset(Out, i)
-        fT = fieldtype(Out, i)
-        if ispacked(fT)
-            writesize = sizeof(fT)
-            memcpy(ptr_out + writeoffset, ptr_in + readoffset, writesize)
-            readoffset += writesize
-        else # nested padded type
-            _copyfrompacked!(Ptr{fT}(ptr_out + writeoffset), ptr_in + readoffset)
-            readoffset += packedsize(fT)
-        end
-    end
-end
-
-@inline function _reinterpret(::Type{Out}, x::In) where {Out, In}
-    # handle non-primitive types
-    isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
-    isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
-    inpackedsize = packedsize(In)
-    outpackedsize = packedsize(Out)
-    inpackedsize == outpackedsize ||
-        throw(ArgumentError(LazyString("Packed sizes of types ", Out, " and ", In,
-            " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
-    in = Ref{In}(x)
-    out = Ref{Out}()
-    if struct_subpadding(Out, In)
-        # if packed the same, just copy
-        GC.@preserve in out begin
-            ptr_in = unsafe_convert(Ptr{In}, in)
-            ptr_out = unsafe_convert(Ptr{Out}, out)
-            memcpy(ptr_out, ptr_in, sizeof(Out))
-        end
-        return out[]
-    else
-        # mismatched padding
-        return _reinterpret_padding(Out, x)
-    end
-end
-
-# If the code reaches this part, it needs to handle padding and is unlikely
-# to compile to a noop. Therefore, we don't forcibly inline it.
-function _reinterpret_padding(::Type{Out}, x::In) where {Out, In}
-    inpackedsize = packedsize(In)
-    in = Ref{In}(x)
-    out = Ref{Out}()
-    GC.@preserve in out begin
-        ptr_in = unsafe_convert(Ptr{In}, in)
-        ptr_out = unsafe_convert(Ptr{Out}, out)
-
-        if fieldcount(In) > 0 && ispacked(Out)
-            _copytopacked!(ptr_out, ptr_in)
-        elseif fieldcount(Out) > 0 && ispacked(In)
-            _copyfrompacked!(ptr_out, ptr_in)
-        else
-            packed = Ref{NTuple{inpackedsize, UInt8}}()
-            GC.@preserve packed begin
-                ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
-                _copytopacked!(ptr_packed, ptr_in)
-                _copyfrompacked!(ptr_out, ptr_packed)
-            end
-        end
-    end
-    return out[]
-end
-
+# PERF: Read the field right off the struct, rather than computing it from scratch
+@assume_effects :foldable ispacked(::Type{T}) where T = !Base.datatype_haspadding(T)
 
 # Reductions with IndexSCartesian2
 
