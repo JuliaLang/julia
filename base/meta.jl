@@ -272,7 +272,12 @@ Takes the expression `x` and returns an equivalent expression in lowered form
 for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-lower(m::Module, @nospecialize(x)) = Core._lower(x, m, "none", 0, typemax(Csize_t), false)[1]
+function lower(m::Module, @nospecialize(x))
+    thunk = Base.CompilerFrontend.lower(m, x)
+    return thunk isa Core.CodeInfo ? Expr(:thunk, thunk) :
+           thunk isa Base.CompilerFrontend.ToplevelExpression ? thunk.val :
+           @assert false
+end
 
 """
     @lower [m] x
@@ -304,21 +309,13 @@ end
 
 ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
-# N.B.: Should match definition in src/ast.c:jl_parse
-function parser_for_module(mod::Union{Module, Nothing})
-    mod === nothing && return Core._parse
-    isdefined(mod, Symbol("#_internal_julia_parse")) ?
-        getglobal(mod, Symbol("#_internal_julia_parse")) :
-        Core._parse
-end
-
 function _parse_string(text::AbstractString, filename::AbstractString,
                        lineno::Integer, index::Integer, options,
-                       _parse=parser_for_module(nothing))
+                       _versionctx)
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = _parse(text, filename, lineno, index-1, options)
+    ex, offset::Int = Core._parse(text, filename, lineno, index-1, options, _versionctx)
     ex, offset+1
 end
 
@@ -355,8 +352,8 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 ```
 """
 function parse(str::AbstractString, pos::Integer;
-               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
-    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom, _parse)
+               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true, _versionctx=nothing)
+    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom, _versionctx)
     if raise && isexpr(ex, :error)
         err = ex.args[1]
         if err isa String
@@ -395,8 +392,8 @@ julia> Meta.parse("x = ")
 ```
 """
 function parse(str::AbstractString;
-               filename="none", raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
-    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, _parse)
+               filename="none", raise::Bool=true, depwarn::Bool=true, _versionctx=nothing)
+    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, _versionctx=_versionctx)
     if isexpr(ex, :error)
         return ex
     end
@@ -407,12 +404,12 @@ function parse(str::AbstractString;
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
-    return _parse_string(text, String(filename), lineno, pos, :atom, _parse)
+function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1, _versionctx=nothing)
+    return _parse_string(text, String(filename), lineno, pos, :atom, _versionctx)
 end
 
-function parseall(text::AbstractString; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
-    ex,_ = _parse_string(text, String(filename), lineno, 1, :all, _parse)
+function parseall(text::AbstractString; filename="none", lineno=1, _versionctx=nothing)
+    ex,_ = _parse_string(text, String(filename), lineno, 1, :all, _versionctx)
     return ex
 end
 
