@@ -650,12 +650,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         jl_error("eval cannot be used in a generated function");
     }
 
-    jl_method_instance_t *mfunc = NULL;
     jl_code_info_t *thk = NULL;
     jl_value_t *root = NULL;
-    JL_GC_PUSH4(&mfunc, &thk, &ex, &root);
+    JL_GC_PUSH3(&thk, &ex, &root);
 
-    size_t last_age = ct->world_age;
     if (!expanded && (jl_needs_lowering(e))) {
         ex = (jl_expr_t*)jl_svecref(jl_lower(e, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1), 0);
     }
@@ -717,17 +715,34 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         JL_GC_POP();
         return (jl_value_t*)ex;
     }
-
-    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     assert(head == jl_thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     if (!jl_is_code_info(thk) || !jl_typetagis(thk->code, jl_array_any_type)) {
         jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
             "malformed \"thunk\" statement");
     }
+    jl_value_t *result = jl_eval_thunk(m, thk, fast);
+
+    JL_GC_POP();
+    return result;
+}
+
+// Evaluate lowered IR thunk `thk` at top level in module `m` in the latest world
+JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t *thk, int fast)
+{
+    jl_task_t *ct = jl_current_task;
+    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
+    JL_TYPECHK(jl_eval_thunk, code_info, (jl_value_t*)thk);
+    JL_TYPECHK(jl_eval_thunk, array_any, (jl_value_t*)thk->code);
+
+    size_t last_age = ct->world_age;
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    ct->world_age = world;
     body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
 
+    jl_method_instance_t *mfunc = NULL;
     jl_value_t *result;
+    JL_GC_PUSH1(&mfunc);
     if (has_ccall ||
             ((forced_compile || (!has_defs && fast && has_loops)) &&
             jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
@@ -738,13 +753,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         mfunc = jl_method_instance_for_thunk(thk, m);
         jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
         // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
-        size_t world = jl_atomic_load_acquire(&jl_world_counter);
-        ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
             (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
-        ct->world_age = last_age;
     }
     else {
         // use interpreter
@@ -752,11 +764,9 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         if (has_opaque) {
             jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
         }
-        size_t world = jl_atomic_load_acquire(&jl_world_counter);
-        ct->world_age = world;
         result = jl_interpret_toplevel_thunk(m, thk);
-        ct->world_age = last_age;
     }
+    ct->world_age = last_age;
 
     JL_GC_POP();
     return result;
