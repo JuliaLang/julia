@@ -981,21 +981,7 @@ function workspace_manifest(project_file)
     return nothing
 end
 
-struct VersionedParse
-    ver::VersionNumber
-end
-
-function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    if !isdefined(Base, :JuliaSyntax)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
-    end
-    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
-end
-
-function parser_for_active_project()
+function frontend_for_active_project()
     project = active_project()
     sv = VERSION
     if project !== nothing && isfile(project)
@@ -1005,7 +991,7 @@ function parser_for_active_project()
             @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
         end
     end
-    VersionedParse(sv)
+    compiler_frontend(sv)
 end
 
 # find project file's corresponding manifest file
@@ -2784,9 +2770,8 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Core._parse
-global _internal_julia_lower = Core._lower
 
+Base.set_compiler_frontend!(__toplevel__, nothing, false)
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
 end
@@ -2957,13 +2942,13 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_syntax_version)
+    set_compiler_frontend!(__toplevel__, compiler_frontend(spec.julia_syntax_version), false)
     unlock(require_lock)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = Core._parse
+        set_compiler_frontend!(__toplevel__, nothing, false)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3091,6 +3076,31 @@ end
 
 # relative-path load
 
+function _trace_eval(loc, ex)
+    # Check global TRACE_EVAL first, fall back to command line option
+    trace_eval_setting = TRACE_EVAL
+    trace_eval = if trace_eval_setting !== nothing
+        # Convert symbol to integer value
+        setting = trace_eval_setting
+        if setting === :no
+            0
+        elseif setting === :loc
+            1
+        elseif setting === :full
+            2
+        else
+            error("Invalid TRACE_EVAL value: $(setting). Must be :no, :loc, or :full")
+        end
+    else
+        JLOptions().trace_eval
+    end
+    if trace_eval == 2 # show everything
+        println(stderr, "eval: ", loc, " ", ex)
+    elseif trace_eval == 1 # show top location only
+        println(stderr, "eval: ", loc)
+    end
+end
+
 """
     include_string([mapexpr::Function,] m::Module, code::AbstractString, filename::AbstractString="string")
 
@@ -3105,57 +3115,9 @@ actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`i
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString="string")
-    loc = LineNumberNode(1, Symbol(filename))
-    try
-        _parse = invokelatest(Meta.parser_for_module, mod)
-        ast = Meta.parseall(code; filename, _parse)
-        if !Meta.isexpr(ast, :toplevel)
-            @assert Core._lower != fl_lower
-            # Only reached when JuliaLowering and alternate parse functions are activated
-            return Core.eval(mod, ast)
-        end
-        result = nothing
-        line_and_ex = Expr(:toplevel, loc, nothing)
-        for ex in ast.args
-            if ex isa LineNumberNode
-                loc = ex
-                line_and_ex.args[1] = ex
-                continue
-            end
-            ex = mapexpr(ex)
-            # Wrap things to be eval'd in a :toplevel expr to carry line
-            # information as part of the expr.
-            line_and_ex.args[2] = ex
-            # Check global TRACE_EVAL first, fall back to command line option
-            trace_eval_setting = TRACE_EVAL
-            trace_eval = if trace_eval_setting !== nothing
-                # Convert symbol to integer value
-                setting = trace_eval_setting
-                if setting === :no
-                    0
-                elseif setting === :loc
-                    1
-                elseif setting === :full
-                    2
-                else
-                    error("Invalid TRACE_EVAL value: $(setting). Must be :no, :loc, or :full")
-                end
-            else
-                JLOptions().trace_eval
-            end
-            if trace_eval == 2 # show everything
-                println(stderr, "eval: ", line_and_ex)
-            elseif trace_eval == 1 # show top location only
-                println(stderr, "eval: ", line_and_ex.args[1])
-            end
-            result = Core.eval(mod, line_and_ex)
-        end
-        return result
-    catch exc
-        # TODO: Now that stacktraces are more reliable we should remove
-        # LoadError and expose the real error type directly.
-        rethrow(LoadError(filename, loc.line, exc))
-    end
+    return CompilerFrontend.include_string(mod, code;
+                                           filename, mapexpr, logexpr=_trace_eval,
+                                           throw_load_error=true)
 end
 
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
@@ -3302,7 +3264,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     # This one changes the parser behavior
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
+    set_compiler_frontend!(__toplevel__, compiler_frontend(syntax_version), false)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
     try

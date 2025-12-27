@@ -751,29 +751,6 @@ macro reexport(ex)
     return esc(calls)
 end
 
-struct VersionedLower
-    ver::VersionNumber
-end
-
-function (vp::VersionedLower)(@nospecialize(code), mod::Module,
-                              file="none", line=0, world=typemax(Csize_t), warn=false)
-    if !isdefined(Base, :JuliaLowering)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaLowering module is required for syntax version $(vp.ver), but it is not loaded.")
-    end
-    Base.JuliaLowering.core_lowering_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
-end
-
-function Base.set_syntax_version(m::Module, ver::VersionNumber)
-    parser = Base.VersionedParse(ver)
-    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
-    #lowerer = VersionedLower(ver)
-    #Core.declare_const(m, :_internal_julia_lower, lowerer)
-    nothing
-end
-
 """
     Base.Experimental.@set_syntax_version ver
 

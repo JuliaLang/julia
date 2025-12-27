@@ -174,7 +174,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
+    ex = Meta.parseall(s; filename, _versionctx=(mod, Base.get_world_counter()))
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -552,17 +552,18 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
-function var"#_internal_julia_parse"(args...)
-    main_parser[](args...)
-end
+const compiler_frontend = Base.ScopedValues.ScopedValue{Base.CompilerFrontend.AbstractCompilerFrontend}(
+    Base.compiler_frontend())
+
+Base.set_compiler_frontend!(MainInclude, compiler_frontend)
 
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
-# weakly exposes ans and err variables to Main
-export ans, err, var"#_internal_julia_parse"
+# weakly expose these variables to Main
+@eval export ans, err, $(Base.CompilerFrontend._frontend_var_name)
+
 end
 
 function should_use_main_entrypoint()
@@ -581,7 +582,7 @@ function _start()
     # `--project` has been processed at this point - latch the active project's syntax
     # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
     # at each prompt.
-    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
+    @Base.ScopedValues.with MainInclude.compiler_frontend=>frontend_for_active_project() try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
