@@ -1511,3 +1511,11 @@ end
     @test occursin("This hint caught my concrete exception type", exc_print)
     @test occursin("This other hint caught my abstract exception supertype", exc_print)
 end
+
+@testset "`get_filecolor`" begin
+    @test Base.get_filecolor("", @__MODULE__) == :light_black
+    @test Base.get_filecolor(@__FILE__, @__MODULE__; modulecolordict = Dict((@__MODULE__) => :cyan), modulecolorcycler = [:red]) == :cyan
+    @test Base.get_filecolor("REPL[1]", @__MODULE__; modulecolordict = Dict((@__MODULE__) => :cyan), modulecolorcycler = [:red]) == :cyan
+    @test Base.get_filecolor(@__FILE__, @__MODULE__; modulecolordict = Dict(), modulecolorcycler = [:cyan]) == :cyan
+    @test Base.get_filecolor("REPL[1]", @__MODULE__; modulecolordict = Dict(), modulecolorcycler = [:cyan]) == :cyan
+end
