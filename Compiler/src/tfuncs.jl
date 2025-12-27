@@ -1792,6 +1792,7 @@ end
     canconst = true
     tparams = Any[]
     outervars = TypeVar[]
+    isNT = isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME
 
     # first push the tailing vars from headtype into outervars
     outer_start, ua = 0, headtype
@@ -1810,6 +1811,25 @@ end
     ua = headtype
     for i = 2:largs
         ai = widenslotwrapper(argtypes[i])
+        if isNT
+            unw = unwrap_unionall(ai)
+            # If the second parameter of a named tuple type is an unknown type,
+            # refine it using length information from the names tuple (if present).
+            if isType(unw) && has_free_typevars(unw.parameters[1])
+                ntlength = nothing
+                if i == 2 && uw.parameters[1] isa Tuple
+                    ntlength = length(uw.parameters[1])
+                elseif i == 3
+                    maybelen = nfields_tfunc(𝕃, argtypes[2])
+                    if maybelen isa Const && maybelen.val isa Int
+                        ntlength = maybelen.val
+                    end
+                end
+                if ntlength !== nothing
+                    ai = typeintersect(Type{<:NTuple{ntlength,Any}}, ai)
+                end
+            end
+        end
         if isType(ai)
             aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
@@ -1879,7 +1899,7 @@ end
                 end
             else
                 # Is this the second parameter to a NamedTuple?
-                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
+                if isNT && isa(ua, UnionAll) && uw.parameters[2] === ua.var
                     # If the names are known, keep the upper bound, but otherwise widen to Tuple.
                     # This is a widening heuristic to avoid keeping type information
                     # that's unlikely to be useful.
