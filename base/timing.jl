@@ -541,7 +541,7 @@ function is_simply_call(@nospecialize ex)
     end
     # Ensure Expr(:call, .+, ...) get wrapped
     if ex.args[1] isa Symbol
-        sa = String(ex.args[1])
+        sa = String(ex.args[1]::Symbol)
         startswith(sa, ".") &&
             !endswith(sa, ".") &&
             isoperator(Symbol(sa[2:end])) &&
