@@ -3128,11 +3128,12 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
-function Base.summary(io::IO, ref::GenericMemoryRef)
-    mem = parent(ref)
-    offset = Core.memoryrefoffset(ref)            # 1-based offset within parent memory
-    len_after_offset = length(mem) - (offset - 1) # remaining accessible elements
-    print(io, len_after_offset, "-element ", typeof(ref))
+## `summary` for GenericMemoryRef
+function summary(io::IO, mref::GenericMemoryRef)
+    offset = Core.memoryrefoffset(mref)
+    len_after_offset = length(mref.mem) - offset + 1
+    print(io, len_after_offset, "-element ")
+    showarg(io, mref, true)
 end
 
 ## `summary` for Function
