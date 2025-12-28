@@ -3095,9 +3095,17 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
         getPointerTy(ctx.builder.getContext()));
+    // On x86_64, use non-atomic increment to avoid expensive lock xadd.
+    // Races may cause undercounting, which is acceptable for coverage.
+#if defined(__x86_64__) || defined(_M_X64)
+    auto *load = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
+    auto *inc = ctx.builder.CreateAdd(load, addend);
+    ctx.builder.CreateStore(inc, pv, true);  // volatile
+#else
     ctx.builder.CreateAtomicRMW(AtomicRMWInst::Add, pv,
                                            addend, MaybeAlign(),
                                            AtomicOrdering::Monotonic);
+#endif
 }
 
 // Code coverage

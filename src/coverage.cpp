@@ -142,8 +142,14 @@ extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_
         return;
     FileLogData *fileData = getOrCreateFileData(coverageData, filename);
     uint64_t *ptr = allocLine(fileData, line);
-    // Atomic increment - no lock needed
+    // On x86_64, use plain increment to avoid expensive lock xadd instruction.
+    // On ARM64, use atomic since ldadd is cheap.
+    // Races may cause undercounting, which is acceptable for coverage.
+#if defined(__x86_64__) || defined(_M_X64)
+    (*ptr)++;
+#else
     __atomic_fetch_add(ptr, 1, __ATOMIC_RELAXED);
+#endif
 }
 
 // Memory allocation log (malloc_log)
