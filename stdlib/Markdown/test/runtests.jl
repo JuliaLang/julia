@@ -1357,7 +1357,7 @@ end
 @testset "#59967: indented code blocks with more than one blank line" begin
     # Test the broken case in issue: indented code block with multiple blank lines
     md = Markdown.parse("""
-- code block with more than one blank line with indention doesn't work
+- code block with more than one blank line with indention does not work
   ```julia
   domaths(x::Number) = x + 5
 
@@ -1366,31 +1366,18 @@ end
   ```
 """)
 
-    lists = filter(x -> isa(x, Markdown.List), md.content)
+    expected = 
+        """
+        <ul>
+        <li><p>code block with more than one blank line with indention does not work</p>
+        <pre><code class="language-julia">domaths&#40;x::Number&#41; &#61; x &#43; 5
 
-    @test length(lists) >= 1
-    @test length(lists[1].items) >= 1
 
-    # Check if the first list item contains a code block
-    item = lists[1].items[1]
-    code = nothing
-    for x in item
-        if isa(x, Markdown.Code)
-            code = x
-            break
-        end
-    end
-
-    @test !isnothing(code)
-    if !isnothing(code)
-        @test code.language == "julia"
-        @test occursin("domaths", code.code)
-        @test occursin("domath", code.code)
-    end
-
-    # HTML should not contain raw backticks
-    html = Markdown.html(md)
-    @test !occursin("```", html)
+        domath&#40;x::Int&#41; &#61; x &#43; 10</code></pre>
+        </li>
+        </ul>
+        """
+    @test expected == Markdown.html(md)
 end
 
 @testset "Lazy Strings" begin
