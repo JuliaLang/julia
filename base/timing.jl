@@ -539,6 +539,14 @@ function is_simply_call(@nospecialize ex)
         Meta.isexpr(a, :..., 1) && is_simple_atom(a.args[1]) && continue
         return false
     end
+    # Ensure Expr(:call, .+, ...) get wrapped
+    if ex.args[1] isa Symbol
+        sa = String(ex.args[1]::Symbol)
+        startswith(sa, ".") &&
+            !endswith(sa, ".") &&
+            isoperator(Symbol(sa[2:end])) &&
+            return false
+    end
     return true
 end
 
