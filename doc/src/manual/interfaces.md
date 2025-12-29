@@ -42,7 +42,7 @@ for item in iter   # or  "for item = iter"
 end
 ```
 
-is translated into:
+is equivalent to:
 
 ```julia
 next = iterate(iter)
