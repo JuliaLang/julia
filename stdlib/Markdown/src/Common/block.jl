@@ -296,7 +296,7 @@ function list(stream::IO, block::MD)
                     # line is indented. If so, continue the list item.
                     saved_pos = position(stream)
 
-                    #Skip any additional blank lines and check indntation
+                    #Skip any additional blank lines and check indentation
                     still_indented = false
                     while !eof(stream)
                         if startswith(stream, "\n")
@@ -314,7 +314,7 @@ function list(stream::IO, block::MD)
                         #Multiple blank lines within indented content - allow it
                         println(buffer)
                     else
-                        # Double newline ends the current list
+                        #Double newline ends the current list
                         pushitem!(list, buffer)
                         break
                     end
