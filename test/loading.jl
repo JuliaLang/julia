@@ -37,6 +37,8 @@ original_depot_path = copy(Base.DEPOT_PATH)
 include("tempdepot.jl")
 include("precompile_utils.jl")
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 loaded_files = String[]
 push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
 include("test_sourcepath.jl")
@@ -1585,7 +1587,7 @@ end
                 `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_exists() broken=coverage_enabled
             rm_cov_files()
 
             # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
@@ -1593,7 +1595,7 @@ end
                 `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_exists() broken=coverage_enabled
             rm_cov_files()
         end
     end

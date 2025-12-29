@@ -6,6 +6,8 @@ using .Main.OffsetArrays
 isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
 using .Main: TSlow, WrapperArray
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
 fcviews(a::AbstractArray) = view(a, ntuple(Returns(:),ndims(a)-1)..., axes(a)[end])
@@ -642,7 +644,7 @@ end
 
 @testset "effect of StridedReinterpretArray's getindex" begin
     eff = Base.infer_effects(getindex, Base.typesof(reinterpret(Int8, Int[1]), 1))
-    @test Core.Compiler.is_effect_free(eff)
+    @test Core.Compiler.is_effect_free(eff) broken=coverage_enabled
 end
 
 # reinterpret of arbitrary bitstypes

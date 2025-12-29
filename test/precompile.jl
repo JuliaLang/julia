@@ -6,6 +6,8 @@ using REPL # testing the doc lookup function should be outside of the scope of t
 include("precompile_utils.jl")
 include("tempdepot.jl")
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 Foo_module = :Foo4b3a94a1a081a8cb
 foo_incl_dep = :foo4b3a94a1a081a8cb
 bar_incl_dep = :bar4b3a94a1a081a8cb
@@ -791,7 +793,7 @@ precompile_test_harness("code caching") do dir
                 end
             end
         end
-        @test hasspec
+        @test hasspec broken=coverage_enabled
 
         # Check that internal methods and their roots are accounted appropriately
         minternal = which(M.getelsize, (Vector,))
@@ -1870,8 +1872,8 @@ end
 
 @testset "Precompile external abstract interpreter" begin
     dir = @__DIR__
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr))
-    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr)) broken=coverage_enabled
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr)) broken=coverage_enabled
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -2139,7 +2141,7 @@ if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarc
             Base.stale_cachefile(pkgpath, cf) !== true
         end
         targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[7])
-        @test length(targets) > 1
+        @test length(targets) > 1 broken=coverage_enabled
     end
 end
 
@@ -2155,7 +2157,7 @@ precompile_test_harness("No backedge precompile") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("NoBackEdges"))
     @eval using NoBackEdges
     invokelatest() do
-        @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt)
+        @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt) broken=coverage_enabled
     end
 end
 
@@ -2175,9 +2177,9 @@ precompile_test_harness("Pre-compile Core methods") do load_path
         let tt = Tuple{Type{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
             match = first(Base._methods_by_ftype(tt, -1, Base.get_world_counter())),
             mi = Base.specialize_method(match)
-            @test isdefined(mi, :cache)
-            @test mi.cache.max_world === typemax(UInt)
-            @test mi.cache.invoke != C_NULL
+            @test isdefined(mi, :cache) broken=coverage_enabled
+            @test mi.cache.max_world === typemax(UInt) broken=coverage_enabled
+            @test mi.cache.invoke != C_NULL broken=coverage_enabled
         end
     end
 end
@@ -2520,7 +2522,7 @@ end
 
 # Verify that inference / caching was not performed for any macros in the sysimage
 let m = only(methods(Base.var"@big_str"))
-    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+    @test (m.specializations === Core.svec() || !isdefined(m.specializations, :cache))
 end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference

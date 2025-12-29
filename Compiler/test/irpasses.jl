@@ -7,6 +7,8 @@ using Core.IR
 include("setup_Compiler.jl")
 include("irutils.jl")
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # domsort
 # =======
 
@@ -674,7 +676,7 @@ struct FooPartialNew
     global f_partial
     f_partial(x) = new(x, 2).x
 end
-@test fully_eliminated(f_partial, Tuple{Float64})
+@test fully_eliminated(f_partial, Tuple{Float64}) broken=coverage_enabled
 
 # A SSAValue after the compaction line
 let code = Any[
@@ -974,7 +976,7 @@ function no_op_refint(r)
     r[]
     return
 end
-@test fully_eliminated(no_op_refint,Tuple{Base.RefValue{Int}}; retval=nothing)
+@test fully_eliminated(no_op_refint,Tuple{Base.RefValue{Int}}; retval=nothing) broken=coverage_enabled
 
 # check getfield elim handling of GlobalRef
 const _some_coeffs = (1,[2],3,4)
@@ -1093,10 +1095,10 @@ end
     @testset "$dim, $N" for dim in good_dims, N in Ns
         Int64(dim)^N > typemax(Int) && continue
         dims = ntuple(i->dim, N)
-        @test @eval fully_eliminated() do
+        @test (@eval fully_eliminated() do
             Array{Int,$N}(undef, $(dims...))
             nothing
-        end
+        end) broken=coverage_enabled
     end
 
     # shouldn't eliminate erroneous dead allocations
@@ -1117,15 +1119,15 @@ end
     @test fully_eliminated() do
         Int[]
         nothing
-    end
+    end broken=coverage_enabled
     @test fully_eliminated() do
         Matrix{Tuple{String,String}}(undef, 4, 4)
         nothing
-    end
+    end broken=coverage_enabled
     @test fully_eliminated() do
         IdDict{Any,Any}()
         nothing
-    end
+    end broken=coverage_enabled
 end
 
 # allow branch folding to look at type information
@@ -1171,7 +1173,7 @@ end
 let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     ir = Compiler.inflate_ir(ci)
     @test length(ir.stmts) == 3
-    @test length(ir.cfg.blocks) == 3
+    @test length(ir.cfg.blocks) == 3 broken=coverage_enabled
     Compiler.verify_ir(ir)
     ir = Compiler.cfg_simplify!(ir)
     Compiler.verify_ir(ir)
@@ -1179,7 +1181,7 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     @test isa(ir.stmts[length(ir.stmts)][:stmt], ReturnNode)
 end
 
-@test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
+@test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol))) broken=coverage_enabled
 
 # We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.
@@ -1266,7 +1268,7 @@ end
     strct.b = 5
     return strct.b
 end
-@test fully_eliminated(one_const_field_partial; retval=5)
+@test fully_eliminated(one_const_field_partial; retval=5) broken=coverage_enabled
 
 # Test that SROA updates the type of intermediate phi nodes (#50285)
 struct Immut50285
@@ -1308,7 +1310,7 @@ struct TParamTypeofTest1{T}
     @eval TParamTypeofTest1(x) = $(Expr(:new, :(TParamTypeofTest1{typeof(x)}), :x))
 end
 tparam_typeof_test_elim1(x) = TParamTypeofTest1(x).x
-@test fully_eliminated(tparam_typeof_test_elim1, Tuple{Any})
+@test fully_eliminated(tparam_typeof_test_elim1, Tuple{Any}) broken=coverage_enabled
 
 struct TParamTypeofTest2{S,T}
     x::S
@@ -1316,7 +1318,7 @@ struct TParamTypeofTest2{S,T}
     @eval TParamTypeofTest2(x, y) = $(Expr(:new, :(TParamTypeofTest2{typeof(x),typeof(y)}), :x, :y))
 end
 tparam_typeof_test_elim2(x, y) = TParamTypeofTest2(x, y).x
-@test fully_eliminated(tparam_typeof_test_elim2, Tuple{Any,Any})
+@test fully_eliminated(tparam_typeof_test_elim2, Tuple{Any,Any}) broken=coverage_enabled
 
 # Test that sroa doesn't get confused by free type parameters in struct types
 struct Wrap1{T}
@@ -1386,22 +1388,22 @@ end
 @test foo(true, 1) == 2
 
 # ifelse folding
-@test Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+@test Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,))) broken=coverage_enabled
 @test !Compiler.is_inlineable(code_typed1(exp, (Float64,)))
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
-end
+end broken=coverage_enabled
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
-end
+end broken=coverage_enabled
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(isa(x, Float64), x, exp(x))
-end
+end broken=coverage_enabled
 func_coreifelse(c, x) = Core.ifelse(c, x, x)
 func_ifelse(c, x) = ifelse(c, x, x)
-@test fully_eliminated(func_coreifelse, (Bool,Float64); retval=Core.Argument(3))
+@test fully_eliminated(func_coreifelse, (Bool,Float64); retval=Core.Argument(3)) broken=coverage_enabled
 @test !fully_eliminated(func_coreifelse, (Any,Float64))
-@test fully_eliminated(func_ifelse, (Bool,Float64); retval=Core.Argument(3))
+@test fully_eliminated(func_ifelse, (Bool,Float64); retval=Core.Argument(3)) broken=coverage_enabled
 @test !fully_eliminated(func_ifelse, (Any,Float64))
 
 # PhiC fixup of compact! with cfg modification
@@ -1570,7 +1572,7 @@ end
 @test_broken fully_eliminated(persistent_dict_elim_multiple)
 let code = code_typed(persistent_dict_elim_multiple)[1][1].code
     @test count(x->isexpr(x, :invoke), code) == 0
-    @test code[end] == Core.ReturnNode(1)
+    @test code[end] == Core.ReturnNode(1) broken=coverage_enabled
 end
 
 function persistent_dict_elim_multiple_phi(c::Bool)

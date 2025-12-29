@@ -5,6 +5,8 @@ using Test
 Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 if !Sys.iswindows()
     # TODO: reenable this on Windows. Without it we're not checking that Windows startup has no compilation.
     # On Windows CI runners using `open_fake_pty` is causing:
@@ -40,7 +42,7 @@ if !Sys.iswindows()
 
         n_precompiles = count(r"precompile\(", tracecompile_out)
 
-        @test n_precompiles <= expected_precompiles
+        @test n_precompiles <= expected_precompiles broken=coverage_enabled
 
         if n_precompiles == 0
             @debug "REPL: trace compile output: (none)"

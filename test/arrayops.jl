@@ -9,6 +9,8 @@ isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl
 using Random, LinearAlgebra
 using Dates
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
     @test count(!iszero, [1, 2, 3]) == 3

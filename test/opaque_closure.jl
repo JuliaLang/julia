@@ -3,6 +3,8 @@ using InteractiveUtils
 using Core: OpaqueClosure
 using Base.Experimental: @opaque
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 const_int() = 1
 const_int_barrier() = Base.inferencebarrier(1)::typeof(1)
 
@@ -49,8 +51,8 @@ let ci = @code_lowered OcClos2Int(1, 2)();
 end
 @test @inferred(oc_self_call_clos()) == 3
 let opt = @code_typed oc_self_call_clos()
-    @test length(opt[1].code) == 1
-    @test isa(opt[1].code[1], Core.ReturnNode)
+    @test length(opt[1].code) == 1 broken=coverage_enabled
+    @test isa(opt[1].code[1], Core.ReturnNode) broken=coverage_enabled
 end
 
 struct OcClos1Any
@@ -91,8 +93,8 @@ end
 @test @inferred(complicated_identity(1)) == 1
 @test @inferred(complicated_identity("a")) == "a"
 let ci = (@code_typed complicated_identity(1))[1]
-    @test length(ci.code) == 1
-    @test isa(ci.code[1], Core.ReturnNode)
+    @test length(ci.code) == 1 broken=coverage_enabled
+    @test isa(ci.code[1], Core.ReturnNode) broken=coverage_enabled
 end
 
 struct OcOpt

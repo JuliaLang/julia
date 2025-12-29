@@ -4,6 +4,7 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 
 const EscapeAnalysis = Compiler.EscapeAnalysis
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 include("EAUtils.jl")
 
@@ -51,7 +52,7 @@ function is_load_forwardable(x::EscapeInfo)
 end
 
 @testset "EAUtils" begin
-    @test_throws "everything has been constant folded" code_escapes() do; sin(42); end
+    coverage_enabled || @test_throws "everything has been constant folded" code_escapes() do; sin(42); end
     @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
     @test code_escapes(sin, (Int,)) isa EAUtils.EscapeResult
 end

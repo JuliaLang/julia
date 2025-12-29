@@ -2,6 +2,8 @@
 
 using Test
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # interpreted but inferred/optimized top-level expressions with vars
 let code = """
            while true
