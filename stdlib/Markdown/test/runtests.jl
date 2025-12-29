@@ -1366,7 +1366,7 @@ end
 
     # Parse Markdown normally
     md = Markdown.parse(input)
-    
+
     # Convert to HTML
     html = sprint(show, MIME"text/html"(), md)
 
@@ -1383,8 +1383,6 @@ end
     # Apply occursin elementwise using broadcasting
     @test count(occursin.("<li>", split(html, '\n'))) == 1
 end
-
-
 
 @testset "Lazy Strings" begin
     @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
