@@ -1366,7 +1366,7 @@ end
   ```
 """)
 
-    expected = 
+    expected =
         """
         <ul>
         <li><p>code block with more than one blank line with indention does not work</p>
