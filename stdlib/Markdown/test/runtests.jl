@@ -1354,6 +1354,38 @@ end
     @test insert_hlines(nothing) === nothing
 end
 
+@testset "issue: #59967: indented code blocks with more than one blank line" begin
+    input = """
+    - item
+
+        domaths(x::Number) = x + 5
+
+
+        domath(x::Int) = x + 10
+    """
+
+    # Parse Markdown normally
+    md = Markdown.parse(input)
+    
+    # Convert to HTML
+    html = sprint(show, MIME"text/html"(), md)
+
+    # Must still be a single list item
+    @test occursin("<ul>", html)
+    @test occursin("<li>", html)
+
+    # Content must not be dropped or split
+    @test occursin("item", html)
+    @test occursin("domaths", html)
+    @test occursin("domath", html)
+
+    # And importantly: no premature list termination
+    # Apply occursin elementwise using broadcasting
+    @test count(occursin.("<li>", split(html, '\n'))) == 1
+end
+
+
+
 @testset "Lazy Strings" begin
     @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end
