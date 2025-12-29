@@ -13,11 +13,11 @@ Base.unsafe_store!
 Base.unsafe_modify!
 Base.unsafe_replace!
 Base.unsafe_swap!
-Base.unsafe_copyto!{T}(::Ptr{T}, ::Ptr{T}, ::Any)
+Base.unsafe_copyto!{T}(::Ptr{T}, ::Ptr{T}, ::Any) where T
 Base.unsafe_copyto!(::Array, ::Any, ::Array, ::Any, ::Any)
 Base.copyto!
 Base.pointer
-Base.unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}}, ::Ptr{T}, ::NTuple{N,Int})
+Base.unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}}, ::Ptr{T}, ::NTuple{N,Int}) where {T,N}
 Base.pointer_from_objref
 Base.unsafe_pointer_to_objref
 Base.disable_sigint
