@@ -466,6 +466,82 @@ end
     end
 end
 
+# Tests for context keyword
+@testset "@test with context keyword" begin
+    # Test that context appears in Fail
+    let f = Test.Fail(:test, "false", nothing, "false", "(sin, Float64)", LineNumberNode(1), false)
+        @test occursin("Context: (sin, Float64)", sprint(show, f))
+    end
+
+    # Test that context is evaluated and shown in @test
+    let fails = @testset NoThrowTestSet begin
+            @test false context=(sin, Float64)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(sin, Float64)", fails[1].context)
+    end
+
+    # Test context with broken=true (should record as Broken)
+    let results = @testset NoThrowTestSet begin
+            @test false context="info" broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # Test context with Error (exception thrown)
+    let errors = @testset NoThrowTestSet begin
+            @test error("boom") context="error info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].context == "\"error info\""
+    end
+end
+
+@testset "@test_throws with context keyword" begin
+    # Test context appears when wrong exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ArgumentError error("wrong") context="extra info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].context == "\"extra info\""
+    end
+
+    # Test context with three-arg form
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException "pattern" error("wrong msg") context=(1, 2)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(1, 2)", fails[1].context)
+    end
+
+    # Test context when no exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1 + 1 context="no throw info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_nothing
+        @test fails[1].context == "\"no throw info\""
+    end
+end
+
+@testset "@test_broken with context keyword" begin
+    # Test context with @test_broken when test unexpectedly passes
+    let errors = @testset NoThrowTestSet begin
+            @test_broken true context="broken info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].test_type === :test_unbroken
+        @test errors[1].context == "\"broken info\""
+    end
+end
+
 @testset "printing of a TestSetException" begin
     tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}()))
     @test occursin("1 passed", tse_str)

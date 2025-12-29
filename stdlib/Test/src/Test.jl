@@ -201,9 +201,9 @@ function Base.show(io::IO, t::Fail)
             # evaluated version as well
             print(io, "\n   Evaluated: ", data)
         end
-        if t.context !== nothing
-            print(io, "\n     Context: ", t.context)
-        end
+    end
+    if t.context !== nothing
+        print(io, "\n     Context: ", t.context)
     end
 end
 
@@ -285,21 +285,21 @@ function Base.show(io::IO, t::Error)
     elseif t.test_type === :test_error
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
-        if t.context !== nothing
-            println(io, "     Context: ", t.context)
-        end
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     elseif t.test_type === :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
         println(io, " Expression: ", t.orig_expr)
-        println(io, " Got correct result, please change to @test if no longer broken.")
+        print(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type === :nontest_error
         # we had an error outside of a @test
         println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
+    end
+    if t.context !== nothing
+        print(io, "\n     Context: ", t.context)
     end
 end
 
@@ -452,6 +452,7 @@ end
     @test f(args...) key=val ...
     @test ex broken=true
     @test ex skip=true
+    @test ex context=ctx
 
 Test that the expression `ex` evaluates to `true`.
 If executed inside a `@testset`, return a `Pass` `Result` if it does, a `Fail` `Result` if it is
@@ -480,8 +481,8 @@ This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
 It is an error to supply more than one expression unless the first
 is a call expression and the rest are assignments (`k=v`).
 
-You can use any key for the `key=val` arguments, except for `broken` and `skip`,
-which have special meanings in the context of `@test`:
+You can use any key for the `key=val` arguments, except for `broken`, `skip`,
+and `context`, which have special meanings in the context of `@test`:
 
 * `broken=cond` indicates a test that should pass but currently consistently
   fails when `cond==true`.  Tests that the expression `ex` evaluates to `false`
@@ -492,6 +493,9 @@ which have special meanings in the context of `@test`:
   test summary reporting as `Broken`, when `cond==true`.  This can be useful for
   tests that intermittently fail, or tests of not-yet-implemented functionality.
   Regular `@test ex` is evaluated when `cond==false`.
+* `context=ctx` provides additional context that will be displayed if the test
+  fails. The context expression is evaluated and its result is shown in the
+  test failure output. This is useful for providing debugging information.
 
 # Examples
 
@@ -513,14 +517,18 @@ Test Passed
 
 !!! compat "Julia 1.7"
      The `broken` and `skip` keyword arguments require at least Julia 1.7.
+
+!!! compat "Julia 1.14"
+     The `context` keyword argument requires at least Julia 1.14.
 """
 macro test(ex, kws...)
-    # Collect the broken/skip keywords and remove them from the rest of keywords
+    # Collect the broken/skip/context keywords and remove them from the rest of keywords
     broken = [kw.args[2] for kw in kws if kw.args[1] === :broken]
     skip = [kw.args[2] for kw in kws if kw.args[1] === :skip]
-    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken), kws)
-    # Validation of broken/skip keywords
-    for (kw, name) in ((broken, :broken), (skip, :skip))
+    context = [kw.args[2] for kw in kws if kw.args[1] === :context]
+    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken, :context), kws)
+    # Validation of broken/skip/context keywords
+    for (kw, name) in ((broken, :broken), (skip, :skip), (context, :context))
         if length(kw) > 1
             error("invalid test macro call: cannot set $(name) keyword multiple times")
         end
@@ -535,12 +543,13 @@ macro test(ex, kws...)
     result = get_test_result(ex, __source__)
 
     ex = Expr(:inert, ex)
+    ctx = length(context) > 0 ? esc(context[1]) : nothing
     result = quote
         if $(length(skip) > 0 && esc(skip[1]))
             record(get_testset(), Broken(:skipped, $ex))
         else
             let _do = $(length(broken) > 0 && esc(broken[1])) ? do_broken_test : do_test
-                _do($result, $ex)
+                _do($result, $ex, $ctx)
             end
         end
     end
@@ -550,6 +559,7 @@ end
 """
     @test_broken ex
     @test_broken f(args...) key=val ...
+    @test_broken ex context=ctx
 
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
@@ -558,6 +568,9 @@ if the expression evaluates to `true`.  This is equivalent to
 [`@test ex broken=true`](@ref @test).
 
 The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
+
+The `context=ctx` keyword provides additional context that will be displayed
+if the test unexpectedly passes (becomes an `Error`).
 
 # Examples
 ```jldoctest
@@ -569,13 +582,20 @@ julia> @test_broken 1 == 2 atol=0.1
 Test Broken
   Expression: ==(1, 2, atol = 0.1)
 ```
+
+!!! compat "Julia 1.14"
+     The `context` keyword argument requires at least Julia 1.14.
 """
 macro test_broken(ex, kws...)
+    # Extract context keyword if present
+    context = [kw.args[2] for kw in kws if isa(kw, Expr) && kw.head === :(=) && kw.args[1] === :context]
+    kws = filter(kw -> !(isa(kw, Expr) && kw.head === :(=) && kw.args[1] === :context), kws)
     test_expr!("@test_broken", ex, kws...)
     result = get_test_result(ex, __source__)
+    ctx = length(context) > 0 ? esc(context[1]) : nothing
     # code to call do_test with execution result and original expr
     ex = Expr(:inert, ex)
-    return :(do_broken_test($result, $ex))
+    return :(do_broken_test($result, $ex, $ctx))
 end
 
 """
@@ -758,9 +778,10 @@ end
 
 # An internal function, called by the code generated by the @test
 # macro to actually perform the evaluation and manage the result.
-function do_test(result::ExecutionResult, @nospecialize orig_expr)
+function do_test(result::ExecutionResult, @nospecialize(orig_expr), context=nothing)
     # get_testset() returns the most recently added test set
     # We then call record() with this test set and the test result
+    context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
     if isa(result, Returned)
         # expr, in the case of a comparison, will contain the
         # comparison with evaluated values of each term spliced in.
@@ -771,33 +792,34 @@ function do_test(result::ExecutionResult, @nospecialize orig_expr)
         testres = if isa(value, Bool)
             # a true value Passes
             value ? Pass(:test, orig_expr, result.data, value, result.source) :
-                    Fail(:test, orig_expr, result.data, value, nothing, result.source, false)
+                    Fail(:test, orig_expr, result.data, value, context_str, result.source, false)
         else
             # If the result is non-Boolean, this counts as an Error
-            Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
+            Error(:test_nonbool, orig_expr, value, nothing, result.source, context_str)
         end
     else
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.current_exceptions, result.source, nothing)
+        testres = Error(:test_error, orig_expr, result.exception, result.current_exceptions, result.source, context_str)
     end
     isa(testres, Pass) || trigger_test_failure_break(result)
     record(get_testset(), testres)
 end
 
-function do_broken_test(result::ExecutionResult, @nospecialize orig_expr)
+function do_broken_test(result::ExecutionResult, @nospecialize(orig_expr), context=nothing)
     testres = Broken(:test, orig_expr)
+    context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
         value = result.value
         if isa(value, Bool)
             if value
-                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source, nothing)
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source, context_str)
             end
         else
             # If the result is non-Boolean, this counts as an Error
-            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source, context_str)
         end
     end
     record(get_testset(), testres)
@@ -808,6 +830,7 @@ end
 """
     @test_throws exception expr
     @test_throws extype pattern expr
+    @test_throws exception expr context=ctx
 
 Tests that the expression `expr` throws `exception`.
 The exception may specify either a type,
@@ -822,13 +845,17 @@ a message pattern are tested. The `extype` must be a type, and `pattern` may be
 a string, regular expression, or list of strings occurring in the displayed error message,
 a matching function, or a value.
 
-Note that `@test_throws` does not support a trailing keyword form.
+The optional `context=ctx` keyword provides additional context that will be displayed
+if the test fails (wrong exception type, wrong message, or no exception thrown).
 
 !!! compat "Julia 1.8"
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
 !!! compat "Julia 1.13"
     The three-argument form `@test_throws extype pattern expr` requires Julia v1.12 or later.
+
+!!! compat "Julia 1.14"
+    The `context` keyword argument requires at least Julia 1.14.
 
 # Examples
 ```jldoctest
@@ -857,23 +884,29 @@ In the third example, instead of matching a single string it could alternatively
 
 In the final example, both the exception type (`ErrorException`) and message pattern (`"error foo"`) are tested.
 """
-macro test_throws(extype, ex)
-    orig_ex = Expr(:inert, ex)
-    ex = Expr(:block, __source__, esc(ex))
-    result = quote
-        try
-            Returned($ex, nothing, $(QuoteNode(__source__)))
-        catch _e
-            if $(esc(extype)) != InterruptException && _e isa InterruptException
-                rethrow()
-            end
-            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
-        end
-    end
-    return :(do_test_throws($result, $orig_ex, $(esc(extype))))
-end
+macro test_throws(args...)
+    # Parse arguments: expect (extype, ex) or (extype, pattern, ex), with optional context=... at end
+    nargs = length(args)
+    nargs >= 2 || error("@test_throws requires at least 2 arguments")
 
-macro test_throws(extype, pattern, ex)
+    # Check for context=... keyword at end
+    ctx = nothing
+    if nargs >= 3 && args[end] isa Expr && args[end].head === :(=) && args[end].args[1] === :context
+        ctx = esc(args[end].args[2])
+        args = args[1:end-1]
+        nargs -= 1
+    end
+
+    if nargs == 2
+        extype, ex = args
+        pattern = nothing
+    elseif nargs == 3
+        extype, pattern, ex = args
+        pattern = esc(pattern)
+    else
+        error("@test_throws expects 2 or 3 positional arguments (plus optional context=...)")
+    end
+
     orig_ex = Expr(:inert, ex)
     ex = Expr(:block, __source__, esc(ex))
     result = quote
@@ -886,7 +919,7 @@ macro test_throws(extype, pattern, ex)
             Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
         end
     end
-    return :(do_test_throws($result, $orig_ex, $(esc(extype)), $(esc(pattern))))
+    return :(do_test_throws($result, $orig_ex, $(esc(extype)), $pattern, $ctx))
 end
 
 const MACROEXPAND_LIKE = Symbol.(("@macroexpand", "@macroexpand1", "macroexpand"))
@@ -906,7 +939,8 @@ end
 
 # An internal function, called by the code generated by @test_throws
 # to evaluate and catch the thrown exception - if it exists
-function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern=nothing)
+function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern=nothing, context=nothing)
+    context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
     if isa(result, Threw)
         # Check that the right type of exception was thrown
         success = false
@@ -917,7 +951,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extyp
         if pattern !== nothing
             # In 3-arg form, first argument must be a type
             if !isa(extype, Type)
-                testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, false, "First argument must be an exception type in three-argument form")
+                testres = Fail(:test_throws_wrong, orig_expr, extype, exc, context_str, result.source, false, "First argument must be an exception type in three-argument form")
                 record(get_testset(), testres)
                 return
             end
@@ -995,7 +1029,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extyp
                         "of type " * string(typeof(ex))
                     end
             end
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only, bt_str)
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, context_str, result.source, message_only, bt_str)
         end
     else
         # Handle no exception case - need to format extype properly for 3-arg form
@@ -1005,7 +1039,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extyp
                          string(pattern)
             extype = string(extype) * " with pattern " * pattern_str
         end
-        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
+        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, context_str, result.source, false)
     end
     record(get_testset(), testres)
 end
