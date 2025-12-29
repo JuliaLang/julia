@@ -7,6 +7,8 @@ using Core.IR
 include("setup_Compiler.jl")
 include("irutils.jl")
 
+const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+
 # domsort
 # =======
 
@@ -1179,7 +1181,7 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     @test isa(ir.stmts[length(ir.stmts)][:stmt], ReturnNode)
 end
 
-@test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
+@test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol))) broken=coverage_enabled
 
 # We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.

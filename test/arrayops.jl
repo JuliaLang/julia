@@ -9,6 +9,8 @@ isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl
 using Random, LinearAlgebra
 using Dates
 
+const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
     @test count(!iszero, [1, 2, 3]) == 3
@@ -104,11 +106,11 @@ end
     for Arr ∈ (Array{<:Any, 0}, Vector, Matrix, Array{<:Any, 3})
         for Shape ∈ (Tuple{Int}, Tuple{Int, Int})
             effects = Base.infer_effects(reshape, Tuple{Arr{Float32}, Shape})
-            @test Base.Compiler.is_effect_free(effects)
-            @test Base.Compiler.is_terminates(effects)
-            @test Base.Compiler.is_notaskstate(effects)
-            @test Base.Compiler.is_noub(effects)
-            @test Base.Compiler.is_nortcall(effects)
+            @test Base.Compiler.is_effect_free(effects) broken=coverage_enabled
+            @test Base.Compiler.is_terminates(effects) broken=coverage_enabled
+            @test Base.Compiler.is_notaskstate(effects) broken=coverage_enabled
+            @test Base.Compiler.is_noub(effects) broken=coverage_enabled
+            @test Base.Compiler.is_nortcall(effects) broken=coverage_enabled
         end
     end
 end

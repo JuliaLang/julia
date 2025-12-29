@@ -4,6 +4,8 @@ using Random, LinearAlgebra
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
+const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 
@@ -2339,12 +2341,12 @@ end
     for El ∈ (Float32, Real, Any)
         for Arr ∈ (Memory{El}, Array{El, 0}, Vector{El}, Matrix{El}, Array{El, 3})
             effects = Base.infer_effects(iterate, Tuple{Arr, Int})
-            @test Base.Compiler.is_effect_free(effects)
-            @test Base.Compiler.is_terminates(effects)
-            @test Base.Compiler.is_notaskstate(effects)
-            @test Base.Compiler.is_noub(effects)
-            @test Base.Compiler.is_nonoverlayed(effects)
-            @test Base.Compiler.is_nortcall(effects)
+            @test Base.Compiler.is_effect_free(effects) broken=coverage_enabled
+            @test Base.Compiler.is_terminates(effects) broken=coverage_enabled
+            @test Base.Compiler.is_notaskstate(effects) broken=coverage_enabled
+            @test Base.Compiler.is_noub(effects) broken=coverage_enabled
+            @test Base.Compiler.is_nonoverlayed(effects) broken=coverage_enabled
+            @test Base.Compiler.is_nortcall(effects) broken=coverage_enabled
         end
     end
 end

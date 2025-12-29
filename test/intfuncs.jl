@@ -2,6 +2,8 @@
 
 using Random
 
+const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+
 is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
 
 ⟷(a::T, b::T) where T <: Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128} = a === b
@@ -157,8 +159,8 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
     @test gcd(typemax(UInt), BigInt(1236189723689716298376189726398761298361892)) == 1
 
     @testset "effects" begin
-        @test is_effect_free(gcd, Tuple{Int,Int})
-        @test is_effect_free(lcm, Tuple{Int,Int})
+        @test is_effect_free(gcd, Tuple{Int,Int}) broken=coverage_enabled
+        @test is_effect_free(lcm, Tuple{Int,Int}) broken=coverage_enabled
     end
 end
 
@@ -761,15 +763,15 @@ end
 end
 
 # concrete-foldability
-@test Base.infer_effects(gcd, (Int,Int)) |> Core.Compiler.is_foldable
-@test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
-@test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
-@test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable
+@test (Base.infer_effects(gcd, (Int,Int)) |> Core.Compiler.is_foldable) broken=coverage_enabled
+@test (Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable) broken=coverage_enabled
+@test (Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable) broken=coverage_enabled
+@test (Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable) broken=coverage_enabled
 @testset "concrete-foldability: `hastypemax`" begin
-    @test Base.infer_effects(Base.hastypemax, (Type,)) |> Core.Compiler.is_foldable
-    @test Base.infer_effects(Base.hastypemax, (DataType,)) |> Core.Compiler.is_foldable
+    @test (Base.infer_effects(Base.hastypemax, (Type,)) |> Core.Compiler.is_foldable) broken=coverage_enabled
+    @test (Base.infer_effects(Base.hastypemax, (DataType,)) |> Core.Compiler.is_foldable) broken=coverage_enabled
     for t in (Bool, Int, BigInt)
-        @test Base.infer_effects(Base.hastypemax, (Type{t},)) |> Core.Compiler.is_foldable
+        @test (Base.infer_effects(Base.hastypemax, (Type{t},)) |> Core.Compiler.is_foldable) broken=coverage_enabled
     end
 end
 

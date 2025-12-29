@@ -6,6 +6,8 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+
 # interpreter that performs abstract interpretation only
 # (semi-concrete interpretation should be disabled automatically)
 @newinterp AbsIntOnlyInterp1
@@ -158,8 +160,8 @@ gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
 let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
     # check if `@consistent_overlay` together works with `@assume_effects`
     # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
-    @test Compiler.is_consistent_overlay(effects)
-    @test Compiler.is_foldable(effects)
+    @test Compiler.is_consistent_overlay(effects) broken=coverage_enabled
+    @test Compiler.is_foldable(effects) broken=coverage_enabled
 end
 @test Base.infer_return_type(; interp=MTOverlayInterp()) do
     Val(gpu_factorial2(3))

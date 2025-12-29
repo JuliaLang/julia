@@ -2,6 +2,8 @@
 
 using Random
 
+const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+
 @testset "constructors" begin
     v = [0x61,0x62,0x63,0x21]
     @test String(v) == "abc!" && isempty(v)
@@ -1222,13 +1224,13 @@ end
     @test lastindex(l) == lastindex("1+2")
     @test Base.infer_effects((Any,)) do a
         throw(lazy"a is $a")
-    end |> Core.Compiler.is_foldable
+    end |> Core.Compiler.is_foldable broken=coverage_enabled
     @test Base.infer_effects((Int,)) do a
         if a < 0
             throw(DomainError(a, lazy"$a isn't positive"))
         end
         return a
-    end |> Core.Compiler.is_foldable
+    end |> Core.Compiler.is_foldable broken=coverage_enabled
     let i=49248
         @test String(lazy"PR n°$i") == "PR n°49248"
     end
@@ -1248,15 +1250,15 @@ end
                    (hash, (String,UInt)),
                    (hash, (Char,UInt)),]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) context=(f, Ts)
-        @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts) broken=coverage_enabled
+        @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts) broken=coverage_enabled
     end
     for (f, Ts) in [(^, (String, Int)),
                    (^, (Char, Int)),
                    (codeunit, (String, Int)),
                    ]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts) broken=coverage_enabled
         @test !Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     # Substrings don't have any nice effects because the compiler can
