@@ -301,7 +301,7 @@ function list(stream::IO, block::MD)
                     while !eof(stream)
                         if startswith(stream, "\n")
                             continue
-                        elseif startswith(stream, " "^indent)
+                        elseif startswith(stream, " "^indent; eat = false)
                             still_indented = true
                             break
                         else

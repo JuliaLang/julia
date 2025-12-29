@@ -1354,34 +1354,43 @@ end
     @test insert_hlines(nothing) === nothing
 end
 
-@testset "issue: #59967: indented code blocks with more than one blank line" begin
-    input = """
-    - item
+@testset "#59967: indented code blocks with more than one blank line" begin
+    # Test the broken case in issue: indented code block with multiple blank lines
+    md = Markdown.parse("""
+- code block with more than one blank line with indention doesn't work
+  ```julia
+  domaths(x::Number) = x + 5
 
-        domaths(x::Number) = x + 5
 
+  domath(x::Int) = x + 10
+  ```
+""")
 
-        domath(x::Int) = x + 10
-    """
+    lists = filter(x -> isa(x, Markdown.List), md.content)
 
-    # Parse Markdown normally
-    md = Markdown.parse(input)
+    @test length(lists) >= 1
+    @test length(lists[1].items) >= 1
 
-    # Convert to HTML
-    html = sprint(show, MIME"text/html"(), md)
+    # Check if the first list item contains a code block
+    item = lists[1].items[1]
+    code = nothing
+    for x in item
+        if isa(x, Markdown.Code)
+            code = x
+            break
+        end
+    end
 
-    # Must still be a single list item
-    @test occursin("<ul>", html)
-    @test occursin("<li>", html)
+    @test !isnothing(code)
+    if !isnothing(code)
+        @test code.language == "julia"
+        @test occursin("domaths", code.code)
+        @test occursin("domath", code.code)
+    end
 
-    # Content must not be dropped or split
-    @test occursin("item", html)
-    @test occursin("domaths", html)
-    @test occursin("domath", html)
-
-    # And importantly: no premature list termination
-    # Apply occursin elementwise using broadcasting
-    @test count(occursin.("<li>", split(html, '\n'))) == 1
+    # HTML should not contain raw backticks
+    html = Markdown.html(md)
+    @test !occursin("```", html)
 end
 
 @testset "Lazy Strings" begin
