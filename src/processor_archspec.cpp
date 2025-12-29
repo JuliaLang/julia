@@ -14,6 +14,7 @@
 #include <archspec/llvm_compat.hpp>
 
 #include <algorithm>
+#include <climits>
 #include <cstring>
 #include "julia_assert.h"
 
@@ -24,6 +25,18 @@
 JL_DLLEXPORT bool jl_processor_print_help = false;
 
 namespace {
+
+// Check if debug output is enabled via JULIA_DEBUG=archspec or JULIA_DEBUG=all
+static bool debug_enabled() {
+    static int enabled = 1;
+    if (enabled == -1) {
+        const char *debug_env = getenv("JULIA_DEBUG");
+        enabled = debug_env && (strstr(debug_env, "archspec") || strstr(debug_env, "all"));
+    }
+    return enabled;
+}
+
+#define ARCHSPEC_DEBUG(...) do { if (debug_enabled()) jl_safe_printf(__VA_ARGS__); } while (0)
 
 static const archspec::Microarchitecture &get_host_arch() {
     static archspec::Microarchitecture host = archspec::host();
@@ -95,12 +108,25 @@ static std::string flags_to_string(uint32_t flags) {
     return s.empty() ? "(none)" : s;
 }
 
-static void print_targets(const char *label, const llvm::SmallVector<TargetData, 0> &targets) {
-    jl_safe_printf("[archspec] %s: %zu target(s)\n", label, targets.size());
+// Get archspec name for a CPU (for debug output)
+// Shows the normalized name that archspec uses internally
+static std::string get_archspec_name(const std::string &llvm_name) {
+    const auto &host_arch = get_host_arch();
+    return archspec::normalize_cpu_name(host_arch.family(), llvm_name);
+}
+
+static void print_targets(const char *label, const llvm::SmallVector<TargetData, 0> &targets, bool show_archspec = false) {
+    ARCHSPEC_DEBUG("[archspec] %s: %zu target(s)\n", label, targets.size());
     for (size_t i = 0; i < targets.size(); i++) {
         const auto &t = targets[i];
-        jl_safe_printf("[archspec]   [%zu] name='%s' features='%s' base=%d flags=[%s]\n",
-                       i, t.name.c_str(), t.features.c_str(), t.base, flags_to_string(t.flags).c_str());
+        ARCHSPEC_DEBUG("[archspec]   [%zu] name='%s'", i, t.name.c_str());
+        if (show_archspec && t.name != "generic") {
+            std::string archspec_name = get_archspec_name(t.name);
+            if (archspec_name != t.name)
+                ARCHSPEC_DEBUG(" → %s", archspec_name.c_str());
+        }
+        ARCHSPEC_DEBUG(" features='%s' base=%d flags=[%s]\n",
+                       t.features.c_str(), t.base, flags_to_string(t.flags).c_str());
     }
 }
 
@@ -280,11 +306,27 @@ static void ensure_cmdline_targets_initialized(const char *cpu_target) {
         return;
     targets_initialized = true;
     
-    jl_safe_printf("[archspec] Initializing targets from '%s'\n", cpu_target ? cpu_target : "(null)");
-    jl_safe_printf("[archspec] Host CPU: %s\n", host_cpu_name().c_str());
+    ARCHSPEC_DEBUG("[archspec] Initializing targets from '%s'\n", cpu_target ? cpu_target : "(null)");
+    
+    std::string host = host_cpu_name();
+    std::string host_archspec = get_archspec_name(host);
+    ARCHSPEC_DEBUG("[archspec] Host CPU: %s", host.c_str());
+    if (host != host_archspec)
+        ARCHSPEC_DEBUG(" (archspec: %s)", host_archspec.c_str());
+    ARCHSPEC_DEBUG("\n");
     
     cmdline_targets = parse_cmdline(cpu_target);
     print_targets("Parsed command line targets", cmdline_targets);
+    
+    // Show the requested target with its archspec name
+    if (!cmdline_targets.empty()) {
+        const auto &req = cmdline_targets[0];
+        std::string req_archspec = get_archspec_name(req.name);
+        ARCHSPEC_DEBUG("[archspec] Requested target: %s", req.name.c_str());
+        if (req.name != req_archspec)
+            ARCHSPEC_DEBUG(" (archspec: %s)", req_archspec.c_str());
+        ARCHSPEC_DEBUG("\n");
+    }
 }
 
 static int max_vector_size(const TargetData &t) {
@@ -312,35 +354,112 @@ static bool features_compatible(const std::string &required_features) {
     return true;
 }
 
-// Check if host CPU is compatible with a target CPU using archspec
-// Returns true if host has all features required by target
-static bool cpu_compatible(const std::string &host_name, const std::string &target_name) {
-    if (target_name == "generic")
+// Count how many features cpu_b has that also exist in cpu_a
+// Higher count means cpu_b is a better match for cpu_a
+static int count_matching_features(const std::string &cpu_a, const std::string &cpu_b) {
+    if (cpu_a == "generic" || cpu_b == "generic")
+        return 0;
+    
+    const auto &host_arch = get_host_arch();
+    std::string arch_family = host_arch.family();
+    
+    std::string a_archspec = archspec::normalize_cpu_name(arch_family, cpu_a);
+    std::string b_archspec = archspec::normalize_cpu_name(arch_family, cpu_b);
+    
+    auto &db = archspec::MicroarchitectureDatabase::instance();
+    auto a_opt = db.get(a_archspec);
+    auto b_opt = db.get(b_archspec);
+    
+    if (!a_opt.has_value() || !b_opt.has_value())
+        return 0;
+    
+    const auto &a_features = a_opt.value().get().features();
+    const auto &b_features = b_opt.value().get().features();
+    
+    int count = 0;
+    for (const auto &feat : b_features) {
+        if (a_features.find(feat) != a_features.end())
+            count++;
+    }
+    return count;
+}
+
+// Check if cpu_a is compatible with (can run code compiled for) cpu_b using archspec
+// Returns true if cpu_a >= cpu_b (cpu_a has all features required by cpu_b)
+// If reason is provided and compatibility fails, explains why
+static bool cpu_compatible(const std::string &cpu_a, const std::string &cpu_b, 
+                           std::string *reason = nullptr) {
+    // Any CPU can run generic code
+    if (cpu_b == "generic") {
         return true;
-    if (host_name == target_name)
+    }
+    
+    // Same CPU is always compatible
+    if (cpu_a == cpu_b) {
         return true;
+    }
+    
+    // If cpu_a is "generic", it can only run generic code (already handled above)
+    // generic cannot run code compiled for specific CPUs
+    if (cpu_a == "generic") {
+        if (reason) {
+            *reason = "'generic' can only run code compiled for 'generic', not '" + cpu_b + "'";
+        }
+        return false;
+    }
     
     // Get archspec microarchitectures for both
     const auto &host_arch = get_host_arch();
     std::string arch_family = host_arch.family();
     
     // Normalize LLVM names to archspec format
-    std::string host_archspec = archspec::normalize_cpu_name(arch_family, host_name);
-    std::string target_archspec = archspec::normalize_cpu_name(arch_family, target_name);
+    std::string a_archspec = archspec::normalize_cpu_name(arch_family, cpu_a);
+    std::string b_archspec = archspec::normalize_cpu_name(arch_family, cpu_b);
     
     auto &db = archspec::MicroarchitectureDatabase::instance();
-    auto host_opt = db.get(host_archspec);
-    auto target_opt = db.get(target_archspec);
+    auto a_opt = db.get(a_archspec);
+    auto b_opt = db.get(b_archspec);
     
-    // If either CPU isn't in the database, can't determine compatibility
-    if (!host_opt.has_value() || !target_opt.has_value())
+    // If cpu_a isn't in the database, can't determine compatibility
+    if (!a_opt.has_value()) {
+        if (reason) {
+            *reason = a_archspec + " not in archspec database";
+        }
         return false;
+    }
     
-    // Use archspec's comparison: host >= target means host has all features of target
-    const archspec::Microarchitecture &host_uarch = host_opt.value().get();
-    const archspec::Microarchitecture &target_uarch = target_opt.value().get();
+    // If cpu_b isn't in the database, can't determine compatibility
+    if (!b_opt.has_value()) {
+        if (reason) {
+            *reason = b_archspec + " not in archspec database";
+        }
+        return false;
+    }
     
-    return host_uarch >= target_uarch;
+    // Check feature compatibility: cpu_a can run code for cpu_b if it has all of cpu_b's features
+    const archspec::Microarchitecture &a_uarch = a_opt.value().get();
+    const archspec::Microarchitecture &b_uarch = b_opt.value().get();
+    
+    // Find which features cpu_a is missing compared to cpu_b
+    const auto &a_features = a_uarch.features();
+    const auto &b_features = b_uarch.features();
+    std::string missing;
+    for (const auto &feat : b_features) {
+        if (a_features.find(feat) == a_features.end()) {
+            if (!missing.empty()) missing += ", ";
+            missing += feat;
+        }
+    }
+    
+    // Compatible if no missing features (regardless of CPU lineage)
+    if (missing.empty()) {
+        return true;
+    }
+    
+    if (reason) {
+        *reason = "missing: " + missing;
+    }
+    return false;
 }
 
 static uint32_t match_sysimg_targets(const llvm::SmallVector<TargetData, 0> &sysimg,
@@ -356,8 +475,12 @@ static uint32_t match_sysimg_targets(const llvm::SmallVector<TargetData, 0> &sys
         const auto &t = sysimg[i];
         
         // Check compatibility using archspec
-        if (!cpu_compatible(host_name, t.name))
+        std::string compat_reason;
+        if (!cpu_compatible(host_name, t.name, &compat_reason)) {
+            ARCHSPEC_DEBUG("[archspec]   target[%u] '%s' not compatible: %s\n", 
+                           i, t.name.c_str(), compat_reason.c_str());
             continue;
+        }
         
         // Calculate specificity: exact match > ancestor match > generic
         int specificity = 0;
@@ -400,6 +523,38 @@ static uint32_t match_sysimg_targets(const llvm::SmallVector<TargetData, 0> &sys
     return best_idx;
 }
 
+// Select the best sysimage target for the current execution context.
+//
+// Target Selection Algorithm:
+// ---------------------------
+// When Julia starts, we need to select which version of the compiled code to use
+// from the sysimage. The sysimage may contain multiple versions compiled for
+// different CPU targets (e.g., generic, cortex-a57, apple-m1, etc.).
+//
+// We have two CPUs to consider:
+//   1. The "requested" target: specified via -C flag or JULIA_CPU_TARGET (first entry)
+//   2. The "host" CPU: the actual CPU we're running on
+//
+// For a sysimage target to be usable, BOTH conditions must hold:
+//   - requested >= sysimg_target: The requested CPU must be able to run code
+//     compiled for the sysimage target (i.e., has all required features)
+//   - host >= sysimg_target: The actual host CPU must also be able to run
+//     that code (since we're actually executing on the host)
+//
+// Among all compatible targets, we pick the most specific one:
+//   - Specificity 3: Exact match with requested target
+//   - Specificity 2: Exact match with host CPU
+//   - Specificity 1: Some other named compatible CPU
+//   - Specificity 0: generic (always compatible, least optimized)
+//
+// Example: User runs `julia -C cortex-a72` on an apple-m4 host, sysimage has
+// [generic, cortex-a57, apple-m1]:
+//   - generic: cortex-a72 >= generic ✓, apple-m4 >= generic ✓ → compatible
+//   - cortex-a57: cortex-a72 >= cortex-a57 ✓, but apple-m4 >= cortex-a57 may fail
+//     if they're in different architecture lineages
+//   - apple-m1: cortex-a72 >= apple-m1 may fail (different lineage)
+// Result: generic is selected as the only fully compatible option.
+//
 static uint32_t sysimg_init_cb(void *ctx, const void *id, jl_value_t **rejection_reason) {
     const char *cpu_target = (const char *)ctx;
     
@@ -410,30 +565,83 @@ static uint32_t sysimg_init_cb(void *ctx, const void *id, jl_value_t **rejection
         return UINT32_MAX;
     }
     
-    jl_safe_printf("[archspec] sysimg_init: %zu target(s) in image\n", sysimg.size());
-    print_targets("Sysimage targets", sysimg);
+    ARCHSPEC_DEBUG("[archspec] sysimg_init: %zu target(s) in image\n", sysimg.size());
+    print_targets("Sysimage targets", sysimg, true /* show archspec names */);
     
     ensure_cmdline_targets_initialized(cpu_target);
     
-    // Create a TargetData for the actual host CPU (not from cmdline!)
-    TargetData host_target;
-    host_target.name = host_cpu_name();
-    host_target.features = "";
-    host_target.flags = 0;
-    host_target.base = 0;
+    // The first command-line target is what the user requested (via -C or JULIA_CPU_TARGET)
+    const TargetData &requested = cmdline_targets[0];
     
-    jl_safe_printf("[archspec] Matching host '%s' against sysimage targets\n", host_target.name.c_str());
+    uint32_t best_idx = UINT32_MAX;
+    std::string host_name = host_cpu_name();
     
-    // Match HOST against sysimage targets
-    uint32_t best_idx = match_sysimg_targets(sysimg, host_target, rejection_reason);
+    ARCHSPEC_DEBUG("[archspec] Looking for target compatible with requested '%s' (host is '%s')\n", 
+                   requested.name.c_str(), host_name.c_str());
     
-    jl_safe_printf("[archspec] sysimg_init: selected target %u\n", best_idx);
+    // Find the best sysimage target that both the requested target and the host can run.
+    // We prefer targets with more matching features (closer in the CPU hierarchy).
+    int best_match_score = -1;
+    
+    for (uint32_t i = 0; i < sysimg.size(); i++) {
+        const auto &t = sysimg[i];
+        
+        // Condition 1: requested >= sysimg_target
+        // The code compiled for this target must be runnable on the requested CPU
+        std::string requested_compat_reason;
+        if (!cpu_compatible(requested.name, t.name, &requested_compat_reason)) {
+            ARCHSPEC_DEBUG("[archspec]   [%u] '%s': requested incompatible - %s\n",
+                           i, t.name.c_str(), requested_compat_reason.c_str());
+            continue;
+        }
+        
+        // Condition 2: host >= sysimg_target  
+        // The code must also be runnable on the actual host CPU
+        std::string host_compat_reason;
+        if (!cpu_compatible(host_name, t.name, &host_compat_reason)) {
+            ARCHSPEC_DEBUG("[archspec]   [%u] '%s': host incompatible - %s\n",
+                           i, t.name.c_str(), host_compat_reason.c_str());
+            continue;
+        }
+        
+        // Both conditions met - calculate match score based on feature overlap
+        // Higher score = more features of sysimg target are present in requested CPU
+        int match_score;
+        if (t.name == requested.name) {
+            match_score = INT_MAX;  // Exact match with requested target (best possible)
+        } else if (t.name == "generic") {
+            match_score = 0;  // generic is always compatible but least optimized
+        } else {
+            // Count how many features of this target match the requested CPU
+            // This prefers targets that are closer in the CPU hierarchy
+            match_score = count_matching_features(requested.name, t.name);
+        }
+        
+        ARCHSPEC_DEBUG("[archspec]   [%u] '%s': ✓ (score=%d)\n",
+                       i, t.name.c_str(), match_score);
+        
+        // Prefer higher match scores
+        // When scores are equal and > 0, prefer the current (keeps first high-scoring match)
+        // When scores are 0 (generic or unknown CPUs), prefer later indices (more specific targets)
+        if (match_score > best_match_score || 
+            (match_score == best_match_score && match_score == 0 && t.name != "generic")) {
+            best_match_score = match_score;
+            best_idx = i;
+        }
+    }
+    
+    if (best_idx == UINT32_MAX) {
+        ARCHSPEC_DEBUG("[archspec] No compatible target found for requested '%s' on host '%s'\n",
+                       requested.name.c_str(), host_name.c_str());
+    }
+    
+    ARCHSPEC_DEBUG("[archspec] sysimg_init: selected target %u\n", best_idx);
     
     if (best_idx != UINT32_MAX) {
         // Store the selected sysimage target for pkgimage matching
         selected_sysimg_target = sysimg[best_idx];
         jit_targets = cmdline_targets;
-        jl_safe_printf("[archspec] sysimg_init: selected sysimg target '%s'\n", 
+        ARCHSPEC_DEBUG("[archspec] sysimg_init: selected sysimg target '%s'\n", 
                        selected_sysimg_target.name.c_str());
     }
     
