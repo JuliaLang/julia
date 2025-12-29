@@ -186,7 +186,7 @@ const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 function slug(x::UInt32, p::Int)
     sprint(sizehint=p) do io
         y = x
-        n = length(slug_chars)
+        n = UInt32(length(slug_chars))
         for i = 1:p
             y, d = divrem(y, n)
             write(io, slug_chars[1+d])
@@ -1555,8 +1555,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
-                            entry = first(entries)::Dict{String, Any}
-                            uuid = entry["uuid"]::String
+                            local entry = first(entries)::Dict{String, Any}
+                            local uuid = entry["uuid"]::String
                             deps′_expanded[dep_name] = uuid
                         end
                         return deps′_expanded
@@ -2734,7 +2734,7 @@ function __require_prelocked(pkg::PkgId, env)
                     m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                     m isa Module && return m
 
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
 
                     unlock(require_lock)
@@ -2776,7 +2776,7 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
             elseif isa(loaded, Exception)
                 if precompilableerror(loaded)
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
                 else
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded

@@ -2949,10 +2949,11 @@ end
 
 function indcopy(sz::Dims, I::Tuple{Vararg{RangeIndex}})
     n = length(I)
-    s = sz[n]
+    _s = sz[n]
     for i = n+1:length(sz)
-        s *= sz[i]
+        _s *= sz[i]
     end
+    s = _s
     dst::typeof(I) = ntuple(i-> _findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
     src::typeof(I) = ntuple(i-> I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
     dst, src
