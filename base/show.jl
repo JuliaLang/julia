@@ -2591,11 +2591,11 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     levelcount = Int[]                     # number of nodes at each level
     strwid = 0
     st_0, st_backslash, st_squote, st_dquote = 0,1,2,4
-    state::Int = st_0
-    stateis(s) = (state & s) != 0
+    state = Ref(st_0)
+    stateis(s) = (state[] & s) != 0
     quoted() = stateis(st_squote) || stateis(st_dquote)
-    enter(s) = (state |= s)
-    leave(s) = (state &= ~s)
+    enter(s) = (state[] |= s)
+    leave(s) = (state[] &= ~s)
     for (i, c) in ANSIIterator(str)
         if c isa ANSIDelimiter
             depths[i] = depth
