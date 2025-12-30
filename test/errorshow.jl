@@ -198,7 +198,9 @@ let no_kwsorter_match, e
     no_kwsorter_match() = 0
     no_kwsorter_match(a;y=1) = y
     e = try no_kwsorter_match(y=1) catch ex; ex; end
-    @test occursin(Regex("no method matching.+\\(; y::$(Int)\\)"), sprint(showerror, e))
+    ex_str = sprint(showerror, e)
+    @test occursin("no_kwsorter_match()", ex_str)
+    @test occursin("got unsupported keyword argument \"y\"", ex_str)
 end
 
 ac15639line = @__LINE__
