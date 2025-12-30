@@ -3526,9 +3526,10 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
-            crc_so = UInt32(0)
-            if cache_objects
-                crc_so = open(_crc32c, tmppath_so, "r")
+            crc_so = if cache_objects
+                open(_crc32c, tmppath_so, "r")
+            else
+                UInt32(0)
             end
 
             # append extra crc to the end of the .ji file:
