@@ -71,10 +71,12 @@ See the [Display equations](@ref) section for non-inline LaTeX.
     ```
     
 !!! note
-    Inline ``\LaTeX`` may also be created within a set of single of `$` characters, though this is 
-    deprecated. The ``` `` ``` syntax is preferred as `$` is also used for string interpolation -
-    the parser will interpret an accidentally unmatched `$` as an intented string interpolation 
-    whereas it will alert the user to an unmatched ``` `` ```.
+    Inline ``\LaTeX`` may also be created within a set of single of `$` characters. However
+    this is not recommend as `$` is also used for string interpolation. Thus using it can
+    easily lead to unintended results. For example, inside an `md` string the parser will
+    interpret an unmatched `$` as string interpolation, leading to unexpected errors or
+    worse, unexpected behavior, when a variable is unexpectedly interpolated into a string.
+    In contrast, an unmatched ``` `` ``` results in a helpful error message.
 
 ### Links
 
