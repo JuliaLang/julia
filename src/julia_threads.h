@@ -19,6 +19,13 @@
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
 #endif
+
+#ifdef USE_NVTX
+#pragma GCC visibility push(default)
+#include <nvtx3/nvToolsExt.h>
+#pragma GCC visibility pop
+#include <nvtx3/nvToolsExtPayload.h>
+#endif
 // threading ------------------------------------------------------------------
 
 #ifdef __cplusplus
@@ -280,6 +287,9 @@ typedef struct _jl_task_t {
     jl_ptls_t ptls; // == jl_all_tls_states[tid]
 #ifdef USE_TRACY
     const char *name;
+#endif
+#ifdef USE_NVTX
+    nvtxEventAttributes_t nvtx_attrs;
 #endif
     // saved exception stack
     jl_excstack_t *excstack;
