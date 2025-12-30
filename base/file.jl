@@ -666,18 +666,18 @@ function temp_cleanup_purge_prelocked(force::Bool)
 end
 
 function temp_cleanup_purge_all()
-    may_need_gc = false
+    may_need_gc = Ref(false)
     @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, asap)
         try
             ispath(path) || return false
-            may_need_gc = true
+            may_need_gc[] = true
             return true
         catch ex
             ex isa InterruptException && rethrow()
             return true
         end
     end
-    if may_need_gc
+    if may_need_gc[]
         # this is only usually required on Sys.iswindows(), but may as well do it everywhere
         GC.gc(true)
     end
