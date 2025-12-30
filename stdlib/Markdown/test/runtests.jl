@@ -1354,6 +1354,55 @@ end
     @test insert_hlines(nothing) === nothing
 end
 
+@testset "#59967: indented code blocks with more than one blank line" begin
+    # Test the broken case in issue: indented code block with multiple blank lines
+    md = Markdown.parse("""
+    - code block inside a list with more than one blank line with indentation works
+      ```julia
+      domaths(x::Number) = x + 5
+
+
+      domath(x::Int) = x + 10
+      ```
+    - another entry, now testing code blocks without fences
+
+          # this is a code block
+          x = 1 + 1
+
+
+          # Two empty lines don't interrupt the code
+          y = x * 3
+
+    - a final list entry
+
+    And now to something completely different!
+    """)
+    expected =
+    """
+    <ul>
+    <li><p>code block inside a list with more than one blank line with indentation works</p>
+    <pre><code class="language-julia">domaths&#40;x::Number&#41; &#61; x &#43; 5
+
+
+    domath&#40;x::Int&#41; &#61; x &#43; 10</code></pre>
+    </li>
+    <li><p>another entry, now testing code blocks without fences</p>
+    <pre><code># this is a code block
+    x &#61; 1 &#43; 1
+
+
+    # Two empty lines don&#39;t interrupt the code
+    y &#61; x * 3</code></pre>
+    </li>
+    <li><p>a final list entry</p>
+    </li>
+    </ul>
+    <p>And now to something completely different&#33;</p>
+    """
+
+    @test expected == Markdown.html(md)
+end
+
 @testset "Lazy Strings" begin
     @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end
