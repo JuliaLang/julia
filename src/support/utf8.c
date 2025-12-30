@@ -27,7 +27,6 @@
 
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
-#define snprintf _snprintf
 #else
 #ifndef __FreeBSD__
 #include <alloca.h>

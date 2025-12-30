@@ -312,6 +312,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
             }
         }
     }
+    (void)catchjmp;
     assert(catchjmp);
     assert(UnwindData);
     assert(SectionAddrCheck);
