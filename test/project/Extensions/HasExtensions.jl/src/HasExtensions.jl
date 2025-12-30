@@ -6,5 +6,6 @@ foo(::HasExtensionsStruct) = 1
 
 ext_loaded = false
 ext_folder_loaded = false
+ext_dep_loaded = false
 
 end # module

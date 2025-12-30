@@ -1,8 +1,6 @@
 ; COM: NewPM-only test, tests that memoryssa is preserved correctly
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(LowerSIMDLoop),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(LowerSIMDLoop),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(LowerSIMDLoop),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK
 
 ; CHECK-LABEL: MemorySSA for function: simd_test
 ; CHECK-LABEL: @simd_test(
@@ -16,10 +14,10 @@ loop:
   %i = phi i64 [0, %top], [%nexti, %loop]
   %aptr = getelementptr double, double *%a, i64 %i
   %bptr = getelementptr double, double *%b, i64 %i
-; CHECK: MemoryUse([[MPHI]]) MayAlias
+; CHECK: MemoryUse([[MPHI]])
 ; CHECK: llvm.mem.parallel_loop_access
   %aval = load double, double *%aptr
-; CHECK: MemoryUse([[MPHI]]) MayAlias
+; CHECK: MemoryUse([[MPHI]])
   %bval = load double, double *%aptr
   %cval = fadd double %aval, %bval
 ; CHECK: [[MSSA_USE]] = MemoryDef([[MPHI]])
@@ -40,7 +38,7 @@ loop:
   %i = phi i64 [0, %top], [%nexti, %loop]
   %v = phi double [0.000000e+00, %top], [%nextv, %loop]
   %aptr = getelementptr double, double *%a, i64 %i
-; CHECK: MemoryUse(liveOnEntry) MayAlias
+; CHECK: MemoryUse(liveOnEntry) 
   %aval = load double, double *%aptr
   %nextv = fsub double %v, %aval
 ; CHECK: fsub reassoc contract double %v, %aval

@@ -1,11 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=0"
-
-# RUN: julia --startup-file=no %s %t
-# RUN: cat %t/* | FileCheck %s --check-prefixes=CHECK,TYPED
-
-# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=1"
+# RUN: export JULIA_LLVM_ARGS=""
 
 # RUN: julia --startup-file=no %s %t
 # RUN: cat %t/* | FileCheck %s --check-prefixes=CHECK,OPAQUE
@@ -17,7 +12,7 @@ struct Foo
     y::Int32
 end
 
-@generated foo(x)=:(ccall("extern foo", llvmcall, $x, ($x,), x))
+@generated foo(x) = :(ccall("extern foo", llvmcall, $x, ($x,), x))
 bar(x) = ntuple(i -> VecElement{Float16}(x[i]), 2)
 
 # CHECK: define
@@ -48,7 +43,7 @@ emit(foo, Float16)
 # CHECK: ret [2 x half]
 # CHECK-NOT: define
 # CHECK: }
-emit(foo, NTuple{2, Float16})
+emit(foo, NTuple{2,Float16})
 
 # COM: Make sure that we don't miss a function by accident (helps localize errors)
 # CHECK-NOT: {
@@ -67,7 +62,7 @@ emit(foo, NTuple{2, Float16})
 # CHECK: ret <2 x half>
 # CHECK-NOT: define
 # CHECK: }
-emit(foo, NTuple{2, VecElement{Float16}})
+emit(foo, NTuple{2,VecElement{Float16}})
 
 # COM: Make sure that we don't miss a function by accident (helps localize errors)
 # CHECK-NOT: {
@@ -89,7 +84,7 @@ emit(foo, NTuple{2, VecElement{Float16}})
 # OPAQUE: ret ptr addrspace(3)
 # CHECK-NOT: define
 # CHECK: }
-emit(foo, Core.LLVMPtr{Float32, 3})
+emit(foo, Core.LLVMPtr{Float32,3})
 
 # COM: Make sure that we don't miss a function by accident (helps localize errors)
 # CHECK-NOT: {
@@ -127,7 +122,7 @@ emit(foo, Foo)
 # CHECK: ret <2 x half>
 # CHECK-NOT: define
 # CHECK: }
-emit(bar, NTuple{2, Float16})
+emit(bar, NTuple{2,Float16})
 
 # COM: Make sure that we don't miss a function by accident (helps localize errors)
 # CHECK-NOT: {

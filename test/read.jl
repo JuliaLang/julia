@@ -170,6 +170,10 @@ for (name, f) in l
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
+        if isone(length(s))
+            @test readuntil(io(t), first(s)) == m
+            @test readuntil(io(t), first(s), keep=true) == kept
+        end
         @test readuntil(io(t), SubString(s, firstindex(s))) == m
         @test readuntil(io(t), SubString(s, firstindex(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m
@@ -264,10 +268,24 @@ for (name, f) in l
             n2 = readbytes!(s2, a2)
             @test n1 == n2
             @test length(a1) == length(a2)
-            @test a1[1:n1] == a2[1:n2]
+            let l = min(l, n)
+                @test a1[1:l] == a2[1:l]
+            end
             @test n <= length(text) || eof(s1)
             @test n <= length(text) || eof(s2)
 
+            cleanup()
+        end
+
+        # Test growing output array
+        let x = UInt8[],
+            io = io()
+            n = readbytes!(io, x)
+            @test n == 0
+            @test isempty(x)
+            n = readbytes!(io, x, typemax(Int))
+            @test n == length(x)
+            @test x == codeunits(text)
             cleanup()
         end
 
@@ -473,12 +491,6 @@ let s = "qwerty"
     @test read(IOBuffer(s)) == codeunits(s)
     @test read(IOBuffer(s), 10) == codeunits(s)
     @test read(IOBuffer(s), 1) == codeunits(s)[1:1]
-
-    # Test growing output array
-    x = UInt8[]
-    n = readbytes!(IOBuffer(s), x, 10)
-    @test x == codeunits(s)
-    @test n == length(x)
 end
 
 
@@ -666,7 +678,12 @@ let p = Pipe()
     @test data_read[1:nread] == data[2:nread+1]
     @test read(p.out, 49) == data[end-48:end]
     wait(t)
+
+    closewrite(p)
+    @test !isopen(p.in)
+    @test isopen(p.out)
     close(p)
+    @test !isopen(p.out)
 end
 
 @testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
@@ -719,4 +736,22 @@ end
         @test Base.isdone(r)
         @test isempty(r) && isempty(collect(r))
     end
+end
+
+@testset "Ref API" begin
+    io = PipeBuffer()
+    @test write(io, Ref{Any}(0xabcd_1234)) === 4
+    @test read(io, UInt32) === 0xabcd_1234
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Cvoid}}, io, C_NULL)
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Int}}, io, Ptr{Int}(0))
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Any}}, io, Ptr{Any}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, C_NULL)
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Int}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Any}(0))
+    @test eof(io)
+    @test write(io, C_NULL) === sizeof(Int)
+    @test write(io, Ptr{Int}(4)) === sizeof(Int)
+    @test write(io, Ptr{Any}(5)) === sizeof(Int)
+    @test read!(io, Int[1, 2, 3]) == [0, 4, 5]
+    @test eof(io)
 end

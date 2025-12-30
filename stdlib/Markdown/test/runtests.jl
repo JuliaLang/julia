@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Markdown
-import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
+using Test, Markdown, StyledStrings
+import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, insert_hlines, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
 # Basics
@@ -233,7 +233,7 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 
 # multiple whitespace is ignored
 @test sprint(term, md"a  b") == "  a b"
-@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)"
+@test sprint(term, md"[x](https://julialang.org)") == "  x"
 @test sprint(term, md"[x](@ref)") == "  x"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
@@ -298,6 +298,7 @@ end
 let doc =
     md"""
     1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
     2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
     """
     str = sprint(term, doc, 50)
@@ -376,8 +377,8 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
-    @test sprint(show, "text/plain", md"#") == "  " # edge case of empty header
+        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n    •  list2"
+    @test sprint(show, "text/plain", md"#") == "" # edge case of empty header
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -500,6 +501,30 @@ show(io::IO, m::MIME"text/plain", r::Reference) =
 sum_ref = md"Behaves like $(ref(sum))"
 @test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
 @test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
+
+# JuliaLang/julia#59783
+let x = 1,
+    result = md"""
+    $x
+
+    [^1]: $x
+
+    !!! note
+    $x
+    """,
+    expected = """
+    1
+
+    [^1]: 1
+
+    !!! note
+
+
+
+    1
+    """
+    @test plain(result) == expected
+end
 
 show(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
@@ -1157,7 +1182,7 @@ let buf = IOBuffer()
     show(buf, "text/markdown", md"*emph*")
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  \e[4memph\e[24m"
+    @test String(take!(buf)) in ("  \e[3memph\e[23m", "  \e[4memph\e[24m")
 end
 
 let word = "Markdown" # disable underline when wrapping lines
@@ -1166,8 +1191,8 @@ let word = "Markdown" # disable underline when wrapping lines
     long_italic_text = Markdown.parse('_' * join(fill(word, 10), ' ') * '_')
     show(ctx, MIME("text/plain"), long_italic_text)
     lines = split(String(take!(buf)), '\n')
-    @test endswith(lines[begin], Base.disable_text_style[:underline])
-    @test startswith(lines[begin+1], ' '^Markdown.margin * Base.text_colors[:underline])
+    @test endswith(lines[begin], r"\e\[2[34]m")
+    @test startswith(lines[begin+1], Regex(' '^Markdown.margin * "\e\\[[34]m"))
 end
 
 let word = "Markdown" # pre is of size Markdown.margin when wrapping title
@@ -1176,7 +1201,9 @@ let word = "Markdown" # pre is of size Markdown.margin when wrapping title
     long_title = Markdown.parse("# " * join(fill(word, 3)))
     show(ctx, MIME("text/plain"), long_title)
     lines = split(String(take!(buf)), '\n')
-    @test all(startswith(Base.text_colors[:bold] * ' '^Markdown.margin), lines)
+    @test all(l -> startswith(l, ' '^Markdown.margin * StyledStrings.ANSI_STYLE_CODES.bold_weight) ||
+                   startswith(l, StyledStrings.ANSI_STYLE_CODES.bold_weight * ' '^Markdown.margin),
+              lines)
 end
 
 struct Struct49454 end
@@ -1185,7 +1212,7 @@ Base.show(io::IO, ::Struct49454) =
 
 let buf = IOBuffer()
     ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], 10))
-    show(stdout, MIME("text/plain"), md"""
+    show(ctx, MIME("text/plain"), md"""
     text without $(Struct49454()) underline.
     """)
     lines = split(String(take!(buf)), '\n')
@@ -1259,8 +1286,30 @@ end
     s = @md_str """
        Misc:\\
        - line\\
+         break
        """
-    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line"
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n   break"
+end
+
+@testset "pullrequest #57664: en_or_em_dash" begin
+    # Test that two hyphens (--) is parsed as en dash (–)
+    # and three hyphens (---) is parsed as em dash (—)
+    hyphen_text = md"foo - bar"
+    en_dash_text = md"foo -- bar"
+    em_dash_text = md"foo --- bar"
+
+    @test sprint(show, "text/markdown", hyphen_text) == "foo - bar\n"
+    @test sprint(show, "text/markdown", en_dash_text) == "foo – bar\n"
+    @test sprint(show, "text/markdown", em_dash_text) == "foo — bar\n"
+
+    # Test that parsing works for hyphen-minus (-), en dash (–) and em dash (—)
+    hyphen_text = md"foo - bar"
+    en_dash_text = md"foo – bar"
+    em_dash_text = md"foo — bar"
+
+    @test hyphen_text |> Markdown.plain == "foo - bar\n"
+    @test en_dash_text |> Markdown.plain == "foo – bar\n"
+    @test em_dash_text |> Markdown.plain == "foo — bar\n"
 end
 
 @testset "pullrequest #41552: a code block has \\end{verbatim}" begin
@@ -1292,4 +1341,68 @@ end
     @test md"<mailto foo@bar.com>" |> html == """<p>&lt;mailto foo@bar.com&gt;</p>\n"""
     # see issue #42139
     @test md"<一轮红日初升>" |> html == """<p>&lt;一轮红日初升&gt;</p>\n"""
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Markdown))
+end
+
+@testset "Non-Markdown" begin
+    # https://github.com/JuliaLang/julia/issues/37765
+    @test isa(insert_hlines(Text("foo")), Text)
+    # https://github.com/JuliaLang/julia/issues/37757
+    @test insert_hlines(nothing) === nothing
+end
+
+@testset "#59967: indented code blocks with more than one blank line" begin
+    # Test the broken case in issue: indented code block with multiple blank lines
+    md = Markdown.parse("""
+    - code block inside a list with more than one blank line with indentation works
+      ```julia
+      domaths(x::Number) = x + 5
+
+
+      domath(x::Int) = x + 10
+      ```
+    - another entry, now testing code blocks without fences
+
+          # this is a code block
+          x = 1 + 1
+
+
+          # Two empty lines don't interrupt the code
+          y = x * 3
+
+    - a final list entry
+
+    And now to something completely different!
+    """)
+    expected =
+    """
+    <ul>
+    <li><p>code block inside a list with more than one blank line with indentation works</p>
+    <pre><code class="language-julia">domaths&#40;x::Number&#41; &#61; x &#43; 5
+
+
+    domath&#40;x::Int&#41; &#61; x &#43; 10</code></pre>
+    </li>
+    <li><p>another entry, now testing code blocks without fences</p>
+    <pre><code># this is a code block
+    x &#61; 1 &#43; 1
+
+
+    # Two empty lines don&#39;t interrupt the code
+    y &#61; x * 3</code></pre>
+    </li>
+    <li><p>a final list entry</p>
+    </li>
+    </ul>
+    <p>And now to something completely different&#33;</p>
+    """
+
+    @test expected == Markdown.html(md)
+end
+
+@testset "Lazy Strings" begin
+    @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end
