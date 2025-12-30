@@ -885,6 +885,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     n_already_precomp = Ref(0)
     n_loaded = Ref(0)
     interrupted = Ref(false)
+    t_print = Ref{Task}()
 
     function handle_interrupt(err, in_printloop::Bool)
         if err isa InterruptException
@@ -897,7 +898,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             notify(evt)
         end
         notify(first_started)
-        in_printloop || wait(t_print) # Wait to let the print loop cease first. This makes the printing incorrect, so we shouldn't wait here, but we do anyways.
+        in_printloop || (isassigned(t_print) && wait(t_print[])) # Wait to let the print loop cease first. This makes the printing incorrect, so we shouldn't wait here, but we do anyways.
         if err isa InterruptException
             @lock print_lock begin
                 println(io, " Interrupted: Exiting precompilation...", ansi_cleartoendofline)
@@ -912,45 +913,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     pkgspidlocked = Dict{PkgConfig,String}()
     pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
 
-    function monitor_std(pkg_config, pipe; single_requested_pkg=false)
-        local pkg, config = pkg_config
-        try
-            local liveprinting = false
-            local thistaskwaiting = false
-            while !eof(pipe)
-                local str = readline(pipe, keep=true)
-                if single_requested_pkg && (liveprinting || !isempty(str))
-                    @lock print_lock begin
-                        if !liveprinting
-                            liveprinting = true
-                            pkg_liveprinted[] = pkg
-                        end
-                        print(io, ansi_cleartoendofline, str)
-                    end
-                end
-                write(get!(IOBuffer, std_outputs, pkg_config), str)
-                if thistaskwaiting
-                    if occursin("Waiting for background task / IO / timer", str)
-                        thistaskwaiting = true
-                        !liveprinting && !fancyprint && @lock print_lock begin
-                            println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
-                        end
-                        push!(taskwaiting, pkg_config)
-                    end
-                else
-                    # XXX: don't just re-enable IO for random packages without printing the context for them first
-                    !liveprinting && !fancyprint && @lock print_lock begin
-                        print(io, ansi_cleartoendofline, str)
-                    end
-                end
-            end
-        catch err
-            err isa InterruptException || rethrow()
-        end
-    end
-
     ## fancy print loop
-    t_print = @async begin
+    t_print[] = @async begin
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done[]) && return
@@ -1104,7 +1068,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
 
                         # std monitoring
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                        t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
+                        t_monitor = @async _precompilepkgs_monitor_std(pkg_config, std_pipe,
+                            single_requested_pkg, ext_to_parent, hascolor, std_outputs, taskwaiting,
+                            pkg_liveprinted, print_lock, io, fancyprint, ansi_cleartoendofline)
 
                         local name
                         try
@@ -1230,7 +1196,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
     end
     notify(first_started) # in cases of no-op or !fancyprint
-    fancyprint && wait(t_print)
+    fancyprint && isassigned(t_print) && wait(t_print[])
     quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), tasks) || interrupted[] # all should have finished (to avoid memory corruption)
     seconds_elapsed = round(Int, (time_ns() - time_start) / 1e9)
     ndeps = count(values(was_recompiled))
@@ -1342,6 +1308,45 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
     end
     return collect(String, Iterators.flatten((v for (pkgid, v) in cachepath_cache if pkgid in requested_pkgids)))
+end
+
+function _precompilepkgs_monitor_std(pkg_config, pipe, single_requested_pkg::Bool,
+    ext_to_parent, hascolor::Bool, std_outputs, taskwaiting, pkg_liveprinted, print_lock,
+    io::IOContext, fancyprint::Bool, ansi_cleartoendofline::String)
+    local pkg, config = pkg_config
+    try
+        local liveprinting = false
+        local thistaskwaiting = false
+        while !eof(pipe)
+            local str = readline(pipe, keep=true)
+            if single_requested_pkg && (liveprinting || !isempty(str))
+                @lock print_lock begin
+                    if !liveprinting
+                        liveprinting = true
+                        pkg_liveprinted[] = pkg
+                    end
+                    print(io, ansi_cleartoendofline, str)
+                end
+            end
+            write(get!(IOBuffer, std_outputs, pkg_config), str)
+            if thistaskwaiting
+                if occursin("Waiting for background task / IO / timer", str)
+                    thistaskwaiting = true
+                    !liveprinting && !fancyprint && @lock print_lock begin
+                        println(io, full_name(ext_to_parent, pkg), _color_string(str, Base.warn_color(), hascolor))
+                    end
+                    push!(taskwaiting, pkg_config)
+                end
+            else
+                # XXX: don't just re-enable IO for random packages without printing the context for them first
+                !liveprinting && !fancyprint && @lock print_lock begin
+                    print(io, ansi_cleartoendofline, str)
+                end
+            end
+        end
+    catch err
+        err isa InterruptException || rethrow()
+    end
 end
 
 _timing_string(t) = string(lpad(round(t * 1e3, digits = 1), 9), " ms")
