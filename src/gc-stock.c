@@ -4132,11 +4132,6 @@ JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void)
     return GC_MAX_SZCLASS;
 }
 
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
-{
-    return sizeof(bigval_t);
-}
-
 JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *obj)
 {
     arraylist_push(&ptls->gc_tls.sweep_objs, obj);
