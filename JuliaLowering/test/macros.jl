@@ -122,6 +122,19 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
     "y"
 ]
 
+@test JuliaLowering.include_string(test_mod, raw"""
+v"1.14"
+""") isa VersionNumber
+@test JuliaLowering.include_string(test_mod, raw"""
+v"1.14"
+""";expr_compat_mode=true) isa VersionNumber
+@test JuliaLowering.include_string(test_mod, raw"""
+Base.Experimental.@VERSION
+""") isa NamedTuple
+@test JuliaLowering.include_string(test_mod, raw"""
+Base.Experimental.@VERSION
+""";expr_compat_mode=true) isa NamedTuple
+
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
@@ -323,7 +336,7 @@ end
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
     Caused by:
-    MethodError: no method matching var"@sig_mismatch"(::JuliaLowering.MacroContext, ::JuliaLowering.SyntaxTree""")
+    MethodError: no method matching var"@sig_mismatch"(""")
 end
 
 @testset "old macros producing exotic expr heads" begin
@@ -333,6 +346,14 @@ end
         p = Base.unsafe_convert(Ptr{Int}, x)
         GC.@preserve x unsafe_load(p)
     end""") === 101 # Expr(:gc_preserve)
+
+    # JuliaLowering.jl/issues/121
+    @test JuliaLowering.include_string(test_mod, """
+    GC.@preserve @static if true @__MODULE__ else end
+    """) isa Module
+    @test JuliaLowering.include_string(test_mod, """
+    GC.@preserve @static if true v"1.14" else end
+    """) isa VersionNumber
 
     # only invokelatest produces :isglobal now, so MWE here
     Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
@@ -431,6 +452,7 @@ end
         )
     end
     """) ≈ @ast_ [K"module"
+        v"1.14.0"::K"VERSION"
         "AA"::K"Identifier"
         [K"block"
         ]
@@ -476,7 +498,7 @@ end
             $init
             ($y, x)
         end)
-        @ast q q [K"inert" q]
+        @ast q._graph q [K"inert" q]
     end
     """)
     code = JuliaLowering.include_string(test_mod, """@make_quoted_code(x="outer x", x)""")
@@ -515,5 +537,101 @@ end
 """)
 code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
 @test JuliaLowering.eval(test_mod, code) === test_mod # !== test_mod.Mod1
+# the lowering/eval iterator needs to expand in the correct world age (currently
+# the only way to hit this from user code is macros producing toplevel)
+
+@testset "macros defining macros" begin
+    @eval test_mod macro make_and_use_macro_toplevel()
+        Expr(:toplevel,
+             esc(:(macro from_toplevel_expansion()
+                   :(123)
+               end)),
+             esc(:(@from_toplevel_expansion())))
+    end
+
+    @test JuliaLowering.include_string(
+        test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=true) === 123
+
+    if isdefined(test_mod, Symbol("@from_toplevel_expansion"))
+        Base.delete_binding(test_mod, Symbol("@from_toplevel_expansion"))
+    end
+
+    @test JuliaLowering.include_string(
+        test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=false) === 123
+end
+
+@testset "SIMD loopinfo" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval let
+        n = 10
+        x = zeros(n)
+        i = 1
+        while i ≤ n
+            x[i] += 1
+            i += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), nothing))  # Mark loop as SIMD loop
+        end
+        sum(x)
+    end
+    """; expr_compat_mode=true) == 10.0
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval let
+        n = 10
+        x = zeros(n)
+        i = 1
+        while i ≤ n
+            x[i] += 1
+            i += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), Symbol("julia.ivdep")))  # Mark loop as SIMD loop
+        end
+        sum(x)
+    end
+    """; expr_compat_mode=true) == 10.0
+
+    JuliaLowering.include_string(test_mod, """
+    @noinline function inner(x, y)
+        s = zero(eltype(x))
+        for i in eachindex(x, y)
+            @inbounds s += x[i]*y[i]
+        end
+        return s
+    end
+    """)
+
+    JuliaLowering.include_string(test_mod, """
+    @noinline function innersimd(x, y)
+        s = zero(eltype(x))
+        @simd for i in eachindex(x, y)
+            @inbounds s += x[i] * y[i]
+        end
+        return s
+    end
+    """)
+
+    @test test_mod.inner([1,2,3], [1,2,3]) == 14
+    @test test_mod.innersimd([1,2,3], [1,2,3]) == 14
+end
+
+@testset "@boundscheck / @inbounds" begin
+    JuliaLowering.include_string(test_mod, """
+    function sum_inbounds(A::AbstractArray)
+        r = zero(eltype(A))
+        for i in eachindex(A)
+            @inbounds r += A[i]
+        end
+        return r
+    end
+    """; expr_compat_mode=true)
+    @test test_mod.sum_inbounds([1,2,3]) == 6
+
+    JuliaLowering.include_string(test_mod, """
+    @inline function g_boundscheck(A, i)
+        @boundscheck checkbounds(A, i)
+        return A[i]
+    end
+    """; expr_compat_mode=true)
+    @test test_mod.g_boundscheck(1:2, 2) == 2
+end
 
 end

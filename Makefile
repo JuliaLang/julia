@@ -123,6 +123,10 @@ julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
+.PHONY: julia-sysimg-JL-release julia-sysimg-JL-debug
+julia-sysimg-JL-release julia-sysimg-JL-debug : julia-sysimg-JL-% : julia-sysimg-% julia-stdlib | $(build_private_libdir)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-JL-$*
+
 # Useful for cross-bootstrapping
 .PHONY: julia-sysbase-release julia-sysbase-debug
 julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
@@ -269,7 +273,7 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
 else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libzstd
+JL_PRIVATE_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
 JL_PRIVATE_EXES += zstd$(EXE) zstdmt$(EXE)
 ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
@@ -714,7 +718,7 @@ clean: | $(CLEAN_TARGETS)
 .PHONY: cleanall
 cleanall: clean
 	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
-	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
+	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv clean-utf8proc
 	-rm -fr $(build_prefix) $(build_staging)
 
 .PHONY: distcleanall

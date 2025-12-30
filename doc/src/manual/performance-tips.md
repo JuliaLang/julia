@@ -541,7 +541,7 @@ of type `Array{Any}`). But, if you're using one of these structures and happen t
 of an element, it helps to share this knowledge with the compiler:
 
 ```julia
-function foo(a::Array{Any,1})
+function foo(a::Vector{Any})
     x = a[1]::Int32
     b = x+1
     ...

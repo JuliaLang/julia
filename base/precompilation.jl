@@ -568,15 +568,15 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          _from_loading::Bool,
                          configs::Vector{Config},
                          io::IOContext{IO},
-                         fancyprint::Bool,
+                         fancyprint′::Bool,
                          manifest::Bool,
                          ignore_loaded::Bool)
     requested_pkgs = copy(pkgs) # for understanding user intent
     pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
     if pkgs isa Vector{PkgId}
-        requested_pkgids = copy(pkgs)
+        requested_pkgids′ = copy(pkgs)
     else
-        requested_pkgids = PkgId[]
+        requested_pkgids′ = PkgId[]
         for name in pkgs
             pkgid = Base.identify_package(name)
             if pkgid === nothing
@@ -586,9 +586,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     throw(PkgPrecompileError("Unknown package: $name"))
                 end
             end
-            push!(requested_pkgids, pkgid)
+            push!(requested_pkgids′, pkgid)
         end
     end
+    requested_pkgids = requested_pkgids′
 
     time_start = time_ns()
 
@@ -605,17 +606,20 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # suppress precompilation progress messages when precompiling for loading packages, except during interactive sessions
     # or when specified by logging heuristics that explicitly require it
     # since the complicated IO implemented here can have somewhat disastrous consequences when happening in the background (e.g. #59599)
-    logio = io
-    logcalls = nothing
+    logio′ = io
+    logcalls′ = nothing
     if _from_loading
         if isinteractive()
-            logcalls = CoreLogging.Info # sync with Base.compilecache
+            logcalls′ = CoreLogging.Info # sync with Base.compilecache
         else
-            logio = IOContext{IO}(devnull)
-            fancyprint = false
-            logcalls = CoreLogging.Debug # sync with Base.compilecache
+            logio′ = IOContext{IO}(devnull)
+            fancyprint′ = false
+            logcalls′ = CoreLogging.Debug # sync with Base.compilecache
         end
     end
+    fancyprint = fancyprint′
+    logio = logio′
+    logcalls = logcalls′
 
     nconfigs = length(configs)
     hascolor = get(logio, :color, false)::Bool
@@ -929,7 +933,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     if occursin("Waiting for background task / IO / timer", str)
                         thistaskwaiting = true
                         !liveprinting && !fancyprint && @lock print_lock begin
-                            println(io, pkg.name, color_string(str, Base.warn_color()))
+                            println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
                         end
                         push!(taskwaiting, pkg_config)
                     end
@@ -992,7 +996,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
                             loaded = warn_loaded && haskey(Base.loaded_modules, dep)
-                            flags, cacheflags = config
+                            local flags, cacheflags = config
                             name = describe_pkg(dep, dep in project_deps, dep in serial_deps, flags, cacheflags)
                             line = if pkg_config in precomperr_deps
                                 string(color_string("  ? ", Base.warn_color()), name)
@@ -1058,26 +1062,26 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
         cachepath_cache[pkg] = freshpaths
-        sourcepath = Base.locate_package(pkg)
+        sourcespec = Base.locate_package_load_spec(pkg)
         single_requested_pkg = length(requested_pkgs) == 1 &&
             (pkg in requested_pkgids || pkg.name in pkg_names)
         for config in configs
             pkg_config = (pkg, config)
-            if sourcepath === nothing
+            if sourcespec === nothing
                 failed_deps[pkg_config] = "Error: Missing source file for $(pkg)"
                 notify(was_processed[pkg_config])
                 continue
             end
             # Heuristic for when precompilation is disabled, which must not over-estimate however for any dependent
             # since it will also block precompilation of all dependents
-            if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
+            if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcespec.path, String))
                 @lock print_lock begin
                     Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
                 end
                 notify(was_processed[pkg_config])
                 continue
             end
-            flags, cacheflags = config
+            local flags, cacheflags = config
             task = @async begin
                 try
                     loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
@@ -1088,7 +1092,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         end
                     end
                     circular = pkg in circular_deps
-                    freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
+                    freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                     is_stale = freshpath === nothing
                     if !is_stale
                         push!(freshpaths, freshpath)
@@ -1102,6 +1106,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
                         t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
 
+                        local name
                         try
                             name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                             @lock print_lock begin
@@ -1117,28 +1122,33 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             end
                             # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
                             loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
-                            if !isempty(deps)
+
+                            flags_ =if !isempty(deps)
                                 # if deps is empty, either it doesn't have any (so compiled-modules is
                                 # irrelevant) or we couldn't compute them (so we actually should attempt
                                 # serial compile, as the dependencies are not in the parallel list)
-                                flags = `$flags --compiled-modules=strict`
+                                `$flags --compiled-modules=strict`
+                            else
+                                flags
                             end
+
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags, cacheflags, loadable_exts)
+                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
+                                                      flags=flags_, cacheflags, loadable_exts)
                                 end
                             else
                                 # allows processes to wait if another process is precompiling a given package to
                                 # a functionally identical package cache (except for preferences, which may differ)
-                                t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter) do
+                                fullname = full_name(ext_to_parent, pkg)
+                                t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, fullname) do
                                     # refresh and double-check the search now that we have global lock
                                     if interrupted_or_done[]
                                         return ErrorException("canceled")
                                     end
-                                    cachepaths = Base.find_all_in_cache_path(pkg)
-                                    local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
+                                    local cachepaths = Base.find_all_in_cache_path(pkg)
+                                    local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                                     local is_stale = freshpath === nothing
                                     if !is_stale
                                         push!(freshpaths, freshpath)
@@ -1147,8 +1157,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     logcalls === CoreLogging.Debug && @lock print_lock begin
                                         @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags, cacheflags, loadable_exts)
+                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
+                                                      flags=flags_, cacheflags, loadable_exts)
                                 end
                             end
                             if ret isa Exception
@@ -1165,7 +1175,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     cachefile, _ = ret::Tuple{String, Union{Nothing, String}}
                                     push!(freshpaths, cachefile)
                                     build_id, _ = Base.parse_cache_buildid(cachefile)
-                                    stale_cache_key = (pkg, build_id, sourcepath, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
+                                    stale_cache_key = (pkg, build_id, sourcespec, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
                                     stale_cache[stale_cache_key] = false
                                 end
                             end
@@ -1193,8 +1203,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
-                    # println("Task failed $err_outer")
-                    # Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
+                    println("Task failed $err_outer")
+                    Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
                     handle_interrupt(err_outer, false)
                     rethrow()
                 end
@@ -1207,8 +1217,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         interrupted_or_done[] = true
     catch err
         # For debugging:
-        # println("Task failed $err")
-        # Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
+        println("Task failed $err")
+        Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
         handle_interrupt(err, false) || rethrow()
     finally
         try
@@ -1244,7 +1254,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         if !quick_exit
             logstr = sprint(context=logio) do iostr
                 if fancyprint # replace the progress bar
-                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((p.name for p in requested_pkgids), ", ", " and ")) finished."
+                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((full_name(ext_to_parent, p) for p in requested_pkgids), ", ", " and ")) finished."
                     printpkgstyle(iostr, :Precompiling, what)
                 end
                 plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
@@ -1317,7 +1327,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         err_str = IOBuffer()
         for ((dep, config), err) in failed_deps
             write(err_str, "\n")
-            print(err_str, "\n", dep.name, " ")
+            print(err_str, "\n", full_name(ext_to_parent, dep), " ")
             join(err_str, config[1], " ")
             print(err_str, "\n", err)
         end
@@ -1347,7 +1357,7 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
-function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore)
+function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, fullname)
     if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
         return f()
     end
@@ -1368,7 +1378,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
         !fancyprint && @lock print_lock begin
-            println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
+            println(io, "    ", fullname, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         Base.release(parallel_limiter) # release so other work can be done while waiting
         try

@@ -14,6 +14,9 @@
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
+#if JL_LLVM_VERSION >= 210000
+#  include <llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h>
+#endif
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #if JL_LLVM_VERSION >= 200000
 #include <llvm/ExecutionEngine/Orc/AbsoluteSymbols.h>
@@ -1208,12 +1211,6 @@ public:
 #pragma clang diagnostic ignored "-Wunused-function"
 #endif
 
-// TODO: Port our memory management optimisations to JITLink instead of using the
-// default InProcessMemoryManager.
-std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT {
-    return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(/*Reservation Granularity*/ 16 * 1024 * 1024));
-}
-
 #ifdef _COMPILER_CLANG_
 #pragma clang diagnostic pop
 #endif
@@ -1237,6 +1234,7 @@ public:
 };
 
 RTDyldMemoryManager *createRTDyldMemoryManager(void) JL_NOTSAFEPOINT;
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
@@ -1401,7 +1399,12 @@ namespace {
         }
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
         auto TM = TheTarget->createTargetMachine(
-                TheTriple.getTriple(), TheCPU, FeaturesStr,
+#if JL_LLVM_VERSION < 210000
+                TheTriple.getTriple(),
+#else
+                TheTriple,
+#endif
+                TheCPU, FeaturesStr,
                 options,
                 relocmodel,
                 codemodel,
@@ -1931,7 +1934,8 @@ JuliaOJIT::JuliaOJIT()
     MemMgr(createRTDyldMemoryManager()),
     UnlockedObjectLayer(
             ES,
-            [this]() {
+            [this](auto&&...) {
+                // LLVM 21+ passes in a memory buffer
                 std::unique_ptr<RuntimeDyld::MemoryManager> result(new ForwardingMemoryManager(MemMgr));
                 return result;
             }
@@ -2387,7 +2391,11 @@ std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
 {
     auto NewTM = std::unique_ptr<TargetMachine>(getTarget()
         .createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             getTargetTriple().str(),
+#else
+            getTargetTriple(),
+#endif
             getTargetCPU(),
             getTargetFeatureString(),
             getTargetOptions(),

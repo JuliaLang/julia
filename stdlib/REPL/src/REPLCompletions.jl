@@ -288,13 +288,17 @@ function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vec
     return suggestions
 end
 
-const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export",
-    "finally", "for", "function", "global", "if", "import",
-    "let", "local", "macro", "module", "mutable struct",
-    "primitive type", "quote", "return", "struct",
-    "try", "using", "while"]
+const sorted_keywords = let
+    keywords = map(string, Base.JuliaSyntax.Tokenize.kws)
+    excluded = ("type", "doc", "var", "VERSION")
+    filter!(∉(excluded), keywords)
+    compound = ("abstract", "mutable", "primitive")
+    filter!(∉(compound), keywords)
+    push!(keywords, "abstract type", "mutable struct", "primitive type")
+    # Register additional keywords, not in JuliaSyntax keywords
+    push!(keywords, "ccall")
+    sort!(keywords)
+end
 
 complete_keyword!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeywordCompletion, sorted_keywords, s)
@@ -993,6 +997,7 @@ end
 
 function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true, hint::Bool=false)
     # filename needs to be string so macro can be evaluated
+    # TODO: JuliaSyntax version API here
     node = parseall(CursorNode, string, ignore_errors=true, keep_parens=true, filename="none")
     cur = @something seek_pos(node, pos) node
 
@@ -1021,8 +1026,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if obj !== nothing
             # Skip leading whitespace inside brackets.
             i = @something findnext(!isspace, string, first(key)) nextind(string, last(key))
-            key = i:last(key)
-            s = string[intersect(key, 1:pos)]
+            key = intersect(i:last(key), 1:pos)
+            s = string[key]
             matches = find_dict_matches(obj, s)
             length(matches) == 1 && !closed && (matches[1] *= ']')
             if length(matches) > 0
@@ -1047,7 +1052,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        s = do_string_unescape(string[intersect(r, 1:pos)])
+        r = intersect(r, 1:pos)
+        s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
         if length(ret) == 1 && !closed && close_path_completion(ret[1].path)
@@ -1090,8 +1096,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
         elseif kind(cur) == K"Identifier"
-            r = char_range(cur)
-            s = string[intersect(r, 1:pos)]
+            r = intersect(char_range(cur), 1:pos)
+            s = string[r]
             # Return without adding more suggestions if kwargs only
             complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true

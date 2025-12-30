@@ -740,7 +740,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     rethrow()
                 end
             end
-            ast = Base.parse_input_line(line)
+            ast = parse_repl_input_line(line, repl)
             (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
@@ -779,14 +779,18 @@ mutable struct LineEditREPL <: AbstractREPL
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
+    # Optional event to notify when the prompt is ready (used by precompilation)
+    prompt_ready_event::Union{Nothing, Base.Event}
     function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
         if !hascolor
             opts.beep_colors = [""]
         end
-        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
+        r = new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+        r.prompt_ready_event = nothing
+        r
     end
 end
 outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
@@ -814,7 +818,8 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
+Base.active_module(mistate::MIState) = mistate.active_module
+Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : Base.active_module(mistate)
 Base.active_module(::AbstractREPL) = Main
 Base.active_module(d::REPLDisplay) = Base.active_module(d.repl)
 
@@ -1116,8 +1121,17 @@ function history_reset_state(hist::REPLHistoryProvider)
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
+function parse_repl_input_line(line::String, repl; kwargs...)
+    # N.B.: This re-latches the syntax version for `Main`. If `Base.active_module` is not `Main`,
+    # then this does not affect the parser used for that module. We could probably skip this step
+    # in that case, but let's just be consistent on the off chance that the active module tries
+    # to `include(Main, ...)` or similar.
+    @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
+        mod=Base.active_module(repl), kwargs...)
+end
+
 function return_callback(s)
-    ast = Base.parse_input_line(takestring!(copy(LineEdit.buffer(s))), depwarn=false)
+    ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
     return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 
@@ -1290,7 +1304,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line::String->helpmode(outstream(repl), line, repl.mistate.active_module),
+        on_done = respond(line::String->helpmode(outstream(repl), line, Base.active_module(repl)),
                           repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
 
@@ -1371,7 +1385,7 @@ function setup_interface(
     help_mode.hist = hp
     dummy_pkg_mode.hist = hp
 
-    julia_prompt.on_done = respond(x->Base.parse_input_line(x,filename=repl_filename(repl,hp)), repl, julia_prompt)
+    julia_prompt.on_done = respond(x->parse_repl_input_line(x, repl; filename=repl_filename(repl,hp)), repl, julia_prompt)
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
@@ -1535,7 +1549,7 @@ function setup_interface(
                 dump_tail = false
                 nl_pos = findfirst('\n', input[oldpos:end])
                 if s.current_mode == julia_prompt
-                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
+                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, mod=Base.active_module(s))
                     if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                             (pos > ncodeunits(input) && !endswith(input, '\n'))
                         # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
@@ -1664,6 +1678,10 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     end
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
+    # Copy prompt_ready_event from repl to mistate (used by precompilation)
+    if isdefined(repl, :prompt_ready_event) && repl.prompt_ready_event !== nothing
+        repl.mistate.prompt_ready_event = repl.prompt_ready_event
+    end
     run_interface(terminal(repl), interface, repl.mistate)
     # Terminate Backend
     put!(backend.repl_channel, (nothing, -1))
@@ -1791,7 +1809,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         end
         line = readline(repl.stream, keep=true)
         if !isempty(line)
-            ast = Base.parse_input_line(line)
+            ast = parse_repl_input_line(line, repl)
             if have_color
                 print(repl.stream, Base.color_normal)
             end

@@ -15,10 +15,9 @@ import REPL
 using .JuliaSyntax: sourcetext, set_numeric_flags
 
 using .JuliaLowering:
-    SyntaxGraph, newnode!, ensure_attributes!,
+    SyntaxGraph, new_id!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
-    makenode, makeleaf, setattr!, sethead!,
-    is_leaf, numchildren, children,
+    setattr!, is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
     syntax_graph, Bindings, ScopeLayer, mapchildren
 
@@ -32,9 +31,9 @@ function _ast_test_graph()
 end
 
 function _source_node(graph, src)
-    id = newnode!(graph)
-    sethead!(graph, id, K"None")
-    setattr!(graph, id, source=src)
+    id = new_id!(graph)
+    setattr!(graph, id, :kind, K"None")
+    setattr!(graph, id, :source, src)
     SyntaxTree(graph, id)
 end
 
@@ -46,22 +45,6 @@ macro ast_(tree)
         @ast graph srcref $tree
     end
 end
-
-function ≈(ex1, ex2)
-    if kind(ex1) != kind(ex2) || is_leaf(ex1) != is_leaf(ex2)
-        return false
-    end
-    if is_leaf(ex1)
-        return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
-               get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
-    else
-        if numchildren(ex1) != numchildren(ex2)
-            return false
-        end
-        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
-    end
-end
-
 
 #-------------------------------------------------------------------------------
 function _format_as_ast_macro(io, ex, indent)
@@ -167,7 +150,8 @@ end
 function format_ir_for_test(mod, case)
     ex = parsestmt(SyntaxTree, case.input)
     try
-        if kind(ex) == K"macrocall" && kind(ex[1]) == K"macro_name" && ex[1][1].name_val == "ast_"
+        if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
+            ex[1].name_val == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
             ex = Base.eval(mod, Expr(ex))

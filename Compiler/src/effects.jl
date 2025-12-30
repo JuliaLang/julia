@@ -218,7 +218,7 @@ function is_better_effects(new::Effects, old::Effects)
         end
     end
     if new.effect_free == ALWAYS_TRUE
-        any_improved |= old.consistent != ALWAYS_TRUE
+        any_improved |= old.effect_free != ALWAYS_TRUE
     elseif new.effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         old.effect_free == ALWAYS_TRUE && return false
         any_improved |= old.effect_free != EFFECT_FREE_IF_INACCESSIBLEMEMONLY
