@@ -475,6 +475,7 @@
                        (if (nospecialize-meta? a) (caddr a) a))
                      kargl))
          (pargl (cdr argl))   ;; positional args
+         (ftype (decl-type (car pargl)))
          (body  (blockify body))
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let* ((l (if (null? pargl) '() (last pargl)))
@@ -581,7 +582,7 @@
           `((|::|
              ;; give the kw-sorter function slot a usable name
              ,(gensy)
-             (call (core typeof) (core kwcall))) ,kwdecl ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
           `(block
             ;; propagate method metadata to keyword sorter
             ,@(map propagate-method-meta (filter meta? prologue))
@@ -772,6 +773,7 @@
 
 (define (kwcall-stub-method-def-expr name sparams argl)
   (let* ((pargl (map rename-kwcall-arg argl))  ;; positional args (including the function itself)
+         (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let* ((l (if (null? pargl) '() (last pargl)))
                         ;; handle vararg with default value
@@ -791,7 +793,7 @@
          `((|::|
             ;; if there are optional positional args, we need to be able to reference the function name
             ,(gensy)
-            (call (core typeof) (core kwcall))) ,kwdecl ,@pargl ,@vararg)
+            (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
          (let* ((callee (arg-name (car forward-pargl)))
                 (args (map arg-name (cdr forward-pargl))))
            `(block
@@ -819,7 +821,9 @@
                 (let ((mdef (method-def-expr- name sparams argl body rett)))
                   `(block
                     ,mdef
-                    ,(kwcall-stub-method-def-expr name sparams argl)
+                    (if (call (core isdefinedglobal) Core (inert kwftype) (false))
+                        ,(kwcall-stub-method-def-expr name sparams argl)
+                        (null))
                     ,(if (or (symbol? name) (globalref? name)) name '(null))))
                 (method-def-expr- name sparams argl body rett)))))
 
@@ -2687,7 +2691,7 @@
             (meths (filter
                     (lambda (m)
                       (not (contains
-                            (lambda (x) (equal? x '(core kwcall)))
+                            (lambda (x) (or (eq? x 'kwftype) (equal? x '(core kwcall))))
                             (caddr m))))
                     meths))
             (meth (if (null? meths)
