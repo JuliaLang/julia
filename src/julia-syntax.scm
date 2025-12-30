@@ -285,6 +285,14 @@
         ((globalref? e) (hash-sym-ref? (caddr e)))
         (else #f)))
 
+(define (sig-has-local-decls? argl)
+  (any (lambda (ty)
+         (expr-contains-p
+          (lambda (e) (and (pair? e) (eq? (car e) 'local)))
+          ty
+          (lambda (x) (not (function-def? x)))))
+       (llist-types argl)))
+
 (define (sym-ref-or-overlay? e)
   (or (overlay? e)
       (sym-ref? e)))
@@ -771,9 +779,10 @@
          (gensy))
         (else arg)))
 
-(define (kwcall-stub-method-def-expr name sparams argl)
+(define (kwcall-stub-method-def-expr name sparams argl orig-body)
   (let* ((pargl (map rename-kwcall-arg argl))  ;; positional args (including the function itself)
          (ftype (decl-type (car pargl)))
+         (prologue (extract-method-prologue orig-body))
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let* ((l (if (null? pargl) '() (last pargl)))
                         ;; handle vararg with default value
@@ -797,6 +806,8 @@
          (let* ((callee (arg-name (car forward-pargl)))
                 (args (map arg-name (cdr forward-pargl))))
            `(block
+             ;; propagate method metadata to kwcall stub
+             ,@(map propagate-method-meta (filter meta? prologue))
              (if (call (top isempty) ,kw)
                  (return (call ,callee ,@args ,@splatted-vararg))
                  (return (call (top kwerr) ,kw ,callee ,@args ,@splatted-vararg)))))
@@ -817,12 +828,13 @@
             ;; no keywords
             (if (and (pair? argl) (pair? body)
                      (or (symbol? name) (globalref? name))
-                     (not (hash-sym-ref? name)))
+                     (not (hash-sym-ref? name))
+                     (not (sig-has-local-decls? argl)))
                 (let ((mdef (method-def-expr- name sparams argl body rett)))
                   `(block
                     ,mdef
-                    (if (call (core isdefinedglobal) Core (inert kwftype) (false))
-                        ,(kwcall-stub-method-def-expr name sparams argl)
+                    (if (call (core isdefinedglobal) (core Core) (inert kwftype) (false))
+                        ,(kwcall-stub-method-def-expr name sparams argl body)
                         (null))
                     ,(if (or (symbol? name) (globalref? name)) name '(null))))
                 (method-def-expr- name sparams argl body rett)))))
