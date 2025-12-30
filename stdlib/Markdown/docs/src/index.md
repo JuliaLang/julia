@@ -73,7 +73,6 @@ See the [Display equations](@ref) section for non-inline LaTeX.
     ```
     @doc raw"``\LaTeX`` syntax in a docstring." functionname
     ```
-    
 !!! note
     Inline ``\LaTeX`` may also be created within a set of single of `$` characters. However
     this is not recommend as `$` is also used for string interpolation. Thus using it can
