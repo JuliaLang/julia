@@ -930,7 +930,7 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
             for slot in 1:nslots
                 vt = varstate[slot]
                 widened_type = widenslotwrapper(ignorelimited(vt.typ))
-                varstate[slot] = VarState(widened_type, vt.undef)
+                varstate[slot] = VarState(widened_type, vt.ssadef, vt.undef)
             end
         end
     end
