@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstring>
+#include <set>
 #include "julia_assert.h"
 
 #ifndef _OS_WINDOWS_
@@ -384,11 +385,37 @@ static int count_matching_features(const std::string &cpu_a, const std::string &
     return count;
 }
 
+// Parse feature modifiers string (e.g., "-rdrnd,-avx512") into sets of removed features
+// Features are in LLVM format, we translate to archspec format
+static std::set<std::string> parse_removed_features(const std::string &features, 
+                                                     const std::string &arch_family) {
+    std::set<std::string> removed;
+    if (features.empty()) return removed;
+    
+    size_t pos = 0;
+    while (pos < features.size()) {
+        size_t comma = features.find(',', pos);
+        if (comma == std::string::npos) comma = features.size();
+        
+        std::string feat = features.substr(pos, comma - pos);
+        if (!feat.empty() && feat[0] == '-') {
+            // Remove the '-' prefix and translate to archspec format
+            std::string llvm_feat = feat.substr(1);
+            std::string archspec_feat = archspec::map_llvm_feature_to_archspec(arch_family, llvm_feat);
+            removed.insert(archspec_feat);
+        }
+        pos = comma + 1;
+    }
+    return removed;
+}
+
 // Check if cpu_a is compatible with (can run code compiled for) cpu_b using archspec
 // Returns true if cpu_a >= cpu_b (cpu_a has all features required by cpu_b)
 // If reason is provided and compatibility fails, explains why
+// b_feature_modifiers: optional LLVM feature modifiers for cpu_b (e.g., "-rdrnd" means don't require rdrnd)
 static bool cpu_compatible(const std::string &cpu_a, const std::string &cpu_b, 
-                           std::string *reason = nullptr) {
+                           std::string *reason = nullptr,
+                           const std::string &b_feature_modifiers = "") {
     // Any CPU can run generic code
     if (cpu_b == "generic") {
         return true;
@@ -440,11 +467,20 @@ static bool cpu_compatible(const std::string &cpu_a, const std::string &cpu_b,
     const archspec::Microarchitecture &a_uarch = a_opt.value().get();
     const archspec::Microarchitecture &b_uarch = b_opt.value().get();
     
+    // Parse feature modifiers to get removed features
+    // e.g., "-rdrnd" means the target was compiled WITHOUT using rdrnd
+    std::set<std::string> removed_features = parse_removed_features(b_feature_modifiers, arch_family);
+    
     // Find which features cpu_a is missing compared to cpu_b
+    // But don't count features that were explicitly removed from the target
     const auto &a_features = a_uarch.features();
     const auto &b_features = b_uarch.features();
     std::string missing;
     for (const auto &feat : b_features) {
+        // Skip features that were removed from the target (they're not required)
+        if (removed_features.count(feat) > 0) {
+            continue;
+        }
         if (a_features.find(feat) == a_features.end()) {
             if (!missing.empty()) missing += ", ";
             missing += feat;
@@ -475,8 +511,9 @@ static uint32_t match_sysimg_targets(const llvm::SmallVector<TargetData, 0> &sys
         const auto &t = sysimg[i];
         
         // Check compatibility using archspec
+        // Pass t.features to account for removed features (e.g., "-rdrnd" means no rdrand required)
         std::string compat_reason;
-        if (!cpu_compatible(host_name, t.name, &compat_reason)) {
+        if (!cpu_compatible(host_name, t.name, &compat_reason, t.features)) {
             ARCHSPEC_DEBUG("[archspec]   target[%u] '%s' not compatible: %s\n", 
                            i, t.name.c_str(), compat_reason.c_str());
             continue;
@@ -588,8 +625,9 @@ static uint32_t sysimg_init_cb(void *ctx, const void *id, jl_value_t **rejection
         
         // Condition 1: requested >= sysimg_target
         // The code compiled for this target must be runnable on the requested CPU
+        // Pass t.features to account for removed features (e.g., "-rdrnd" means no rdrand required)
         std::string requested_compat_reason;
-        if (!cpu_compatible(requested.name, t.name, &requested_compat_reason)) {
+        if (!cpu_compatible(requested.name, t.name, &requested_compat_reason, t.features)) {
             ARCHSPEC_DEBUG("[archspec]   [%u] '%s': requested incompatible - %s\n",
                            i, t.name.c_str(), requested_compat_reason.c_str());
             continue;
@@ -598,7 +636,7 @@ static uint32_t sysimg_init_cb(void *ctx, const void *id, jl_value_t **rejection
         // Condition 2: host >= sysimg_target  
         // The code must also be runnable on the actual host CPU
         std::string host_compat_reason;
-        if (!cpu_compatible(host_name, t.name, &host_compat_reason)) {
+        if (!cpu_compatible(host_name, t.name, &host_compat_reason, t.features)) {
             ARCHSPEC_DEBUG("[archspec]   [%u] '%s': host incompatible - %s\n",
                            i, t.name.c_str(), host_compat_reason.c_str());
             continue;
