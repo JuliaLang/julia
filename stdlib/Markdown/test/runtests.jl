@@ -1441,10 +1441,7 @@ end
       • back to top level
     """
 
-    io = IOBuffer()
-    show(io, "text/plain", m)
-    println(io)
-    actual = String(take!(io))
+    actual = sprint(show, MIME("text/plain"), m) * "\n"
 
     @test expected == actual
 end
