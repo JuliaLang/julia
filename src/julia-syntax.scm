@@ -278,6 +278,13 @@
 (define (overlay? e)
   (and (pair? e) (eq? (car e) 'overlay)))
 
+(define (hash-sym-ref? e)
+  (cond ((symbol? e)
+         (let ((s (string e)))
+           (and (> (length s) 0) (eqv? (string.char s 0) #\#))))
+        ((globalref? e) (hash-sym-ref? (caddr e)))
+        (else #f)))
+
 (define (sym-ref-or-overlay? e)
   (or (overlay? e)
       (sym-ref? e)))
@@ -756,10 +763,10 @@
          (list (car arg) (cadr arg) (rename-kwcall-arg (caddr arg))))
         ((decl? arg)
          (let ((name (decl-var arg)))
-           (if (eq? name UNUSED)
+           (if (or (eq? name UNUSED) (eq? name '|#self#|))
                (make-decl (gensy) (decl-type arg))
                arg)))
-        ((and (symbol? arg) (eq? arg UNUSED))
+        ((and (symbol? arg) (or (eq? arg UNUSED) (eq? arg '|#self#|)))
          (gensy))
         (else arg)))
 
@@ -807,13 +814,12 @@
                (keywords-method-def-expr name sparams argl body rett))
             ;; no keywords
             (if (and (pair? argl) (pair? body)
-                     (or (symbol? name) (globalref? name)))
+                     (or (symbol? name) (globalref? name))
+                     (not (hash-sym-ref? name)))
                 (let ((mdef (method-def-expr- name sparams argl body rett)))
                   `(block
                     ,mdef
-                    (if (call (core isdefinedglobal) Core (inert kwcall) (false))
-                        ,(kwcall-stub-method-def-expr name sparams argl)
-                        (null))
+                    ,(kwcall-stub-method-def-expr name sparams argl)
                     ,(if (or (symbol? name) (globalref? name)) name '(null))))
                 (method-def-expr- name sparams argl body rett)))))
 
@@ -2669,7 +2675,24 @@
                         (error "Opaque closure argument type may not be specified both in the method signature and separately"))
                     (if (or (varargexpr? lastarg) (vararg? lastarg))
                         '(true) '(false))))
-            (meth  (cadddr (caddr (expand-forms F)))) ;; `method` expr
+            ;; Expand the function expression and locate the (method ...) expression.
+            ;; This must be robust to boilerplate inserted by function lowering.
+            (expanded-F (expand-forms F))
+            (meths (expr-find-all
+                    (lambda (x)
+                      (and (pair? x) (eq? (car x) 'method) (length> x 3)))
+                    expanded-F
+                    (lambda (x) x)))
+            ;; Prefer the positional method (not any kwcall sorter/stub methods).
+            (meths (filter
+                    (lambda (m)
+                      (not (contains
+                            (lambda (x) (equal? x '(core kwcall)))
+                            (caddr m))))
+                    meths))
+            (meth (if (null? meths)
+                      (error "malformed opaque closure")
+                      (last meths)))
             (lam       (cadddr meth))
             (sig-block (caddr meth))
             (sig-block (if (and (pair? sig-block) (eq? (car sig-block) 'block))

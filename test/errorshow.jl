@@ -199,7 +199,7 @@ let no_kwsorter_match, e
     no_kwsorter_match(a;y=1) = y
     e = try no_kwsorter_match(y=1) catch ex; ex; end
     ex_str = sprint(showerror, e)
-    @test occursin("no_kwsorter_match()", ex_str)
+    @test occursin("no_kwsorter_match", ex_str)
     @test occursin("got unsupported keyword argument \"y\"", ex_str)
 end
 

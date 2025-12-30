@@ -93,7 +93,12 @@ function kwarg_decl(m::Method, kwtype = nothing)
                 push!(kws, kws[i])
                 deleteat!(kws, i)
             end
-            isempty(kws) && push!(kws,  :var"...")
+            if isempty(kws)
+                # A kwcall stub exists for dispatch, but the positional method itself
+                # takes no keyword arguments.
+                m.nkw == 0 && return Symbol[]
+                push!(kws, :var"...")
+            end
             return kws
         end
     end
