@@ -367,8 +367,8 @@ annotate!(s::SubString{<:AnnotatedString}, label::Symbol, @nospecialize(val::Any
 
 Annotate `char` with the labeled value `(label, value)`.
 """
-annotate!(c::AnnotatedChar, label::Symbol, @nospecialize(val::Any)) =
-    (push!(c.annotations, Annotation((; label, val))); c)
+annotate!(c::AnnotatedChar, label::Symbol, @nospecialize(value::Any)) =
+    (push!(c.annotations, Annotation((; label, value))); c)
 
 """
     annotations(str::Union{AnnotatedString, SubString{AnnotatedString}},
