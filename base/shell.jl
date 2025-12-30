@@ -171,7 +171,7 @@ function shell_split(s::AbstractString)
     parsed = shell_parse(s, false)[1]
     args = String[]
     for arg in parsed
-        push!(args, string(arg...))
+        push!(args, string(arg...)::String)
     end
     args
 end
@@ -344,7 +344,7 @@ function shell_escape_csh(io::IO, args::AbstractString...)
 end
 shell_escape_csh(args::AbstractString...) =
     sprint(shell_escape_csh, args...;
-           sizehint = sum(sizeof.(args)) + length(args) * 3)
+           sizehint = sum(sizeof, args) + length(args) * 3)
 
 """
     shell_escape_wincmd(s::AbstractString)
@@ -494,4 +494,4 @@ function escape_microsoft_c_args(io::IO, args::AbstractString...)
 end
 escape_microsoft_c_args(args::AbstractString...) =
     sprint(escape_microsoft_c_args, args...;
-           sizehint = (sum(sizeof.(args)) + 3*length(args)))
+           sizehint = (sum(sizeof, args) + 3*length(args)))

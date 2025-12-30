@@ -9,7 +9,7 @@ isreal(x::AbstractArray{<:Real}) = true
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> AbstractVector
+    vec(a::AbstractArray)::AbstractVector
 
 Reshape the array `a` as a one-dimensional column vector. Return `a` if it is
 already an `AbstractVector`. The resulting array
@@ -88,11 +88,17 @@ function _dropdims(A::AbstractArray, dims::Dims)
             dims[j] == dims[i] && throw(ArgumentError("dropped dims must be unique"))
         end
     end
+    ox = axes(A)
     ax = _foldoneto((ds, d) -> d in dims ? ds : (ds..., axes(A,d)), (), Val(ndims(A)))
-    reshape(A, ax::typeof(_sub(axes(A), dims)))
+    if isconcretetype(eltype(ox))
+        # if all the axes are the same type, we can use the tail as the
+        # axes of the result rather than extracting one at each index
+        return reshape(A, ax::typeof(_sub(ox, dims)))
+    else
+        return reshape(A, ax)
+    end
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
-
 
 """
     insertdims(A; dims)
@@ -518,6 +524,9 @@ function check(arr, inner, outer)
         # TODO: Currently one based indexing is demanded for inner !== nothing,
         # but not for outer !== nothing. Decide for something consistent.
         Base.require_one_based_indexing(arr)
+        if !all(n -> n isa Integer, inner)
+            throw(ArgumentError("repeat requires integer counts, got inner = $inner"))
+        end
         if any(<(0), inner)
             throw(ArgumentError("no inner repetition count may be negative; got $inner"))
         end
@@ -526,6 +535,9 @@ function check(arr, inner, outer)
         end
     end
     if outer !== nothing
+        if !all(n -> n isa Integer, outer)
+            throw(ArgumentError("repeat requires integer counts, got outer = $outer"))
+        end
         if any(<(0), outer)
             throw(ArgumentError("no outer repetition count may be negative; got $outer"))
         end

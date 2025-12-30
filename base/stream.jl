@@ -76,7 +76,7 @@ function getproperty(stream::LibuvStream, name::Symbol)
 end
 
 # IO
-# +- GenericIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
+# +- GenericIOBuffer{T<:AbstractVector{UInt8}} (not exported)
 # +- AbstractPipe (not exported)
 # .  +- Pipe
 # .  +- Process (not exported)
@@ -89,7 +89,7 @@ end
 # .  +- TTY (not exported)
 # .  +- UDPSocket
 # .  +- BufferStream (FIXME: 2.0)
-# +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
+# +- IOBuffer = Base.GenericIOBuffer{Vector{UInt8}}
 # +- IOStream
 
 # IOServer
@@ -202,12 +202,7 @@ end
 
 function PipeEndpoint(fd::OS_HANDLE)
     pipe = PipeEndpoint()
-    iolock_begin()
-    err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
-    uv_error("pipe_open", err)
-    pipe.status = StatusOpen
-    iolock_end()
-    return pipe
+    return open_pipe!(pipe, fd)
 end
 if OS_HANDLE != RawFD
     PipeEndpoint(fd::RawFD) = PipeEndpoint(Libc._get_osfhandle(fd))
@@ -283,8 +278,8 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
-setup_stdio(stream::LibuvStream, ::Bool) = (stream, false)
-rawhandle(stream::LibuvStream) = stream.handle
+setup_stdio(stream::Union{LibuvStream, LibuvServer}, ::Bool) = (stream, false)
+rawhandle(stream::Union{LibuvStream, LibuvServer}) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
 function init_stdio(handle::Ptr{Cvoid})
@@ -316,9 +311,9 @@ function init_stdio(handle::Ptr{Cvoid})
 end
 
 """
-    open(fd::OS_HANDLE) -> IO
+    open(fd::OS_HANDLE)::IO
 
-Take a raw file descriptor wrap it in a Julia-aware IO type,
+Take a raw file descriptor and wrap it in a Julia-aware IO type,
 and take ownership of the fd handle.
 Call `open(Libc.dup(fd))` to avoid the ownership capture
 of the original handle.
@@ -378,7 +373,7 @@ end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
     if x.status == StatusUninit || x.status == StatusInit || x.handle === C_NULL
-        throw(ArgumentError("$x is not initialized"))
+        throw(ArgumentError("stream not initialized"))
     end
     return x.status != StatusClosed
 end
@@ -615,9 +610,10 @@ end
 ## BUFFER ##
 ## Allocate space in buffer (for immediate use)
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
-    ensureroom(buffer, Int(recommended_size))
+    ensureroom(buffer, recommended_size)
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = min(length(buffer.data)-buffer.offset, buffer.maxsize) + buffer.offset - ptr + 1
+    start_offset = ptr - 1
+    nb = max(0, min(length(buffer.data) - start_offset, buffer.maxsize - (start_offset - get_offset(buffer))))
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
@@ -804,6 +800,7 @@ show(io::IO, stream::Pipe) = print(io,
     uv_status_string(stream.out), ", ",
     bytesavailable(stream), " bytes waiting)")
 
+closewrite(pipe::Pipe) = close(pipe.in)
 
 ## Functions for PipeEndpoint and PipeServer ##
 
@@ -941,8 +938,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
-        newbuf = PipeBuffer(a, maxsize=nb)
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        initsize = length(a)
+        newbuf = _truncated_pipebuffer(a; maxsize=nb)
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -951,7 +948,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         finally
             s.buffer = sbuf
         end
-        compact(newbuf)
+        _take!(a, _unsafe_take!(newbuf))
+        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread
@@ -988,8 +986,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     if bytesavailable(sbuf) >= nb
         unsafe_read(sbuf, p, nb)
     else
-        newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        newbuf = _truncated_pipebuffer(unsafe_wrap(Array, p, nb); maxsize=Int(nb))
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -1026,7 +1023,7 @@ function readavailable(this::LibuvStream)
     return bytes
 end
 
-function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
+function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
     iolock_begin()
     buf = x.buffer
     @assert buf.seekable == false
@@ -1056,9 +1053,9 @@ function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
             end
         end
     end
-    bytes = readuntil(buf, c, keep=keep)
+    copyuntil(out, buf, c; keep)
     iolock_end()
-    return bytes
+    return out
 end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
@@ -1248,7 +1245,15 @@ function _redirect_io_libc(stream, unix_fd::Int)
                 -10 - unix_fd, Libc._get_osfhandle(posix_fd))
         end
     end
-    dup(posix_fd, RawFD(unix_fd))
+    GC.@preserve stream dup(posix_fd, RawFD(unix_fd))
+    nothing
+end
+function _redirect_io_cglobal(handle::Union{LibuvStream, IOStream, Nothing}, unix_fd::Int)
+    c_sym = unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
+            unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
+            unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
+            C_NULL
+    c_sym == C_NULL || unsafe_store!(c_sym, handle === nothing ? Ptr{Cvoid}(unix_fd) : handle.handle)
     nothing
 end
 function _redirect_io_global(io, unix_fd::Int)
@@ -1259,11 +1264,7 @@ function _redirect_io_global(io, unix_fd::Int)
 end
 function (f::RedirectStdStream)(handle::Union{LibuvStream, IOStream})
     _redirect_io_libc(handle, f.unix_fd)
-    c_sym = f.unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
-            f.unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
-            f.unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
-            C_NULL
-    c_sym == C_NULL || unsafe_store!(c_sym, handle.handle)
+    _redirect_io_cglobal(handle, f.unix_fd)
     _redirect_io_global(handle, f.unix_fd)
     return handle
 end
@@ -1272,6 +1273,7 @@ function (f::RedirectStdStream)(::DevNull)
     handle = open(nulldev, write=f.writable)
     _redirect_io_libc(handle, f.unix_fd)
     close(handle) # handle has been dup'ed in _redirect_io_libc
+    _redirect_io_cglobal(nothing, f.unix_fd)
     _redirect_io_global(devnull, f.unix_fd)
     return devnull
 end
@@ -1555,6 +1557,63 @@ function wait_readnb(s::BufferStream, nb::Int)
             wait(s.cond)
         end
     end
+end
+
+function readavailable(this::BufferStream)
+    bytes = lock(this.cond) do
+        wait_readnb(this, 1)
+        buf = this.buffer
+        @assert buf.seekable == false
+        take!(buf)
+    end
+    return bytes
+end
+
+function read(stream::BufferStream)
+    bytes = lock(stream.cond) do
+        wait_close(stream)
+        take!(stream.buffer)
+    end
+    return bytes
+end
+
+function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
+    sbuf = s.buffer
+    @assert sbuf.seekable == false
+    @assert sbuf.maxsize >= nb
+
+    function wait_locked(s, buf, nb)
+        while bytesavailable(buf) < nb
+            s.readerror === nothing || throw(s.readerror)
+            isopen(s) || break
+            s.status != StatusEOF || break
+            wait_readnb(s, nb)
+        end
+    end
+
+    bytes = lock(s.cond) do
+        if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
+            wait_locked(s, sbuf, nb)
+        end
+        if bytesavailable(sbuf) >= nb
+            nread = readbytes!(sbuf, a, nb)
+        else
+            initsize = length(a)
+            newbuf = _truncated_pipebuffer(a; maxsize=nb)
+            nread = try
+                s.buffer = newbuf
+                write(newbuf, sbuf)
+                wait_locked(s, newbuf, nb)
+                bytesavailable(newbuf)
+            finally
+                s.buffer = sbuf
+            end
+            _take!(a, _unsafe_take!(newbuf))
+            length(a) >= initsize || resize!(a, initsize)
+        end
+        return nread
+    end
+    return bytes
 end
 
 show(io::IO, s::BufferStream) = print(io, "BufferStream(bytes waiting=", bytesavailable(s.buffer), ", isopen=", isopen(s), ")")

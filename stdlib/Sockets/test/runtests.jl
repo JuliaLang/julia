@@ -3,12 +3,21 @@
 using Sockets, Random, Test
 using Base: Experimental
 
+# This is for debugging only - if the system doesn't have `netstat`, we just ignore it
+netstat() = try; read(ignorestatus(`netstat -ndi`), String); catch; return ""; end
+const netstat_before = netstat()
+
 # set up a watchdog alarm for 10 minutes
 # so that we can attempt to get a "friendly" backtrace if something gets stuck
 # (although this'll also terminate any attempted debugging session)
 # expected test duration is about 5-10 seconds
 function killjob(d)
     Core.print(Core.stderr, d)
+    Core.print(Core.stderr, "Netstat before:\n")
+    Core.print(Core.stderr, netstat_before)
+    Core.print(Core.stderr, "\nNetstat after:\n")
+    # This might fail if we're in a bad libuv state
+    Core.print(Core.stderr, netstat())
     if Sys.islinux()
         SIGINFO = 10
     elseif Sys.isbsd()
@@ -547,14 +556,12 @@ end
         fetch(r)
     end
 
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let addr = Sockets.InetAddr(ip"192.0.2.5", 4444)
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
         r = @async close(s)
         @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
-        close(srv)
     end
 end
 
@@ -639,11 +646,26 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
-    try
-        getipaddr(IPv6) in getipaddrs(IPv6)
-    catch
-        if !isempty(getipaddrs(IPv6))
-            @test "getipaddr(IPv6) errored when it shouldn't have!"
+
+    has_ipv4 = !isempty(getipaddrs(IPv4))
+    if has_ipv4
+        @test getipaddr(IPv4) in getipaddrs(IPv4)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv4)
+    end
+
+    has_ipv6 = !isempty(getipaddrs(IPv6))
+    if has_ipv6
+        @test getipaddr(IPv6) in getipaddrs(IPv6)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv6)
+    end
+
+    @testset "getipaddr() prefers IPv4 over IPv6" begin
+        if has_ipv4
+            @test getipaddr() isa IPv4
+        else
+            @test getipaddr() isa IPv6
         end
     end
 

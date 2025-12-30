@@ -54,19 +54,11 @@ JL_DLLEXPORT int LLVMDiv_uov(unsigned numbits, integerPart *pa, integerPart *pb,
 JL_DLLEXPORT int LLVMRem_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 JL_DLLEXPORT int LLVMRem_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 
-#if JL_LLVM_VERSION >= 170000
 JL_DLLEXPORT unsigned LLVMPopcount(unsigned numbits, integerPart *pa);
 JL_DLLEXPORT unsigned LLVMCountr_one(unsigned numbits, integerPart *pa);
 JL_DLLEXPORT unsigned LLVMCountr_zero(unsigned numbits, integerPart *pa);
 JL_DLLEXPORT unsigned LLVMCountl_one(unsigned numbits, integerPart *pa);
 JL_DLLEXPORT unsigned LLVMCountl_zero(unsigned numbits, integerPart *pa);
-#else
-JL_DLLEXPORT unsigned LLVMCountPopulation(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountTrailingOnes(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountTrailingZeros(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountLeadingOnes(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountLeadingZeros(unsigned numbits, integerPart *pa);
-#endif
 
 JL_DLLEXPORT void LLVMFPtoSI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
 JL_DLLEXPORT void LLVMFPtoUI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
@@ -82,17 +74,10 @@ JL_DLLEXPORT int LLVMFPtoUI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatyp
 JL_DLLEXPORT void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 JL_DLLEXPORT void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 
-#if JL_LLVM_VERSION >= 170000
 JL_DLLEXPORT unsigned countr_zero_8(uint8_t Val);
 JL_DLLEXPORT unsigned countr_zero_16(uint16_t Val);
 JL_DLLEXPORT unsigned countr_zero_32(uint32_t Val);
 JL_DLLEXPORT unsigned countr_zero_64(uint64_t Val);
-#else
-JL_DLLEXPORT unsigned countTrailingZeros_8(uint8_t Val);
-JL_DLLEXPORT unsigned countTrailingZeros_16(uint16_t Val);
-JL_DLLEXPORT unsigned countTrailingZeros_32(uint32_t Val);
-JL_DLLEXPORT unsigned countTrailingZeros_64(uint64_t Val);
-#endif
 
 //uint8_t getSwappedBytes_8(uint8_t Value); // no-op
 //uint16_t getSwappedBytes_16(uint16_t Value);

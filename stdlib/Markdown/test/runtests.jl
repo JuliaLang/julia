@@ -502,6 +502,30 @@ sum_ref = md"Behaves like $(ref(sum))"
 @test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
 @test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
+# JuliaLang/julia#59783
+let x = 1,
+    result = md"""
+    $x
+
+    [^1]: $x
+
+    !!! note
+    $x
+    """,
+    expected = """
+    1
+
+    [^1]: 1
+
+    !!! note
+
+
+
+    1
+    """
+    @test plain(result) == expected
+end
+
 show(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
@@ -1267,6 +1291,27 @@ end
     @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n   break"
 end
 
+@testset "pullrequest #57664: en_or_em_dash" begin
+    # Test that two hyphens (--) is parsed as en dash (–)
+    # and three hyphens (---) is parsed as em dash (—)
+    hyphen_text = md"foo - bar"
+    en_dash_text = md"foo -- bar"
+    em_dash_text = md"foo --- bar"
+
+    @test sprint(show, "text/markdown", hyphen_text) == "foo - bar\n"
+    @test sprint(show, "text/markdown", en_dash_text) == "foo – bar\n"
+    @test sprint(show, "text/markdown", em_dash_text) == "foo — bar\n"
+
+    # Test that parsing works for hyphen-minus (-), en dash (–) and em dash (—)
+    hyphen_text = md"foo - bar"
+    en_dash_text = md"foo – bar"
+    em_dash_text = md"foo — bar"
+
+    @test hyphen_text |> Markdown.plain == "foo - bar\n"
+    @test en_dash_text |> Markdown.plain == "foo – bar\n"
+    @test em_dash_text |> Markdown.plain == "foo — bar\n"
+end
+
 @testset "pullrequest #41552: a code block has \\end{verbatim}" begin
     s1 = md"""
          ```tex
@@ -1307,6 +1352,55 @@ end
     @test isa(insert_hlines(Text("foo")), Text)
     # https://github.com/JuliaLang/julia/issues/37757
     @test insert_hlines(nothing) === nothing
+end
+
+@testset "#59967: indented code blocks with more than one blank line" begin
+    # Test the broken case in issue: indented code block with multiple blank lines
+    md = Markdown.parse("""
+    - code block inside a list with more than one blank line with indentation works
+      ```julia
+      domaths(x::Number) = x + 5
+
+
+      domath(x::Int) = x + 10
+      ```
+    - another entry, now testing code blocks without fences
+
+          # this is a code block
+          x = 1 + 1
+
+
+          # Two empty lines don't interrupt the code
+          y = x * 3
+
+    - a final list entry
+
+    And now to something completely different!
+    """)
+    expected =
+    """
+    <ul>
+    <li><p>code block inside a list with more than one blank line with indentation works</p>
+    <pre><code class="language-julia">domaths&#40;x::Number&#41; &#61; x &#43; 5
+
+
+    domath&#40;x::Int&#41; &#61; x &#43; 10</code></pre>
+    </li>
+    <li><p>another entry, now testing code blocks without fences</p>
+    <pre><code># this is a code block
+    x &#61; 1 &#43; 1
+
+
+    # Two empty lines don&#39;t interrupt the code
+    y &#61; x * 3</code></pre>
+    </li>
+    <li><p>a final list entry</p>
+    </li>
+    </ul>
+    <p>And now to something completely different&#33;</p>
+    """
+
+    @test expected == Markdown.html(md)
 end
 
 @testset "Lazy Strings" begin
