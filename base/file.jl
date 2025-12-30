@@ -1057,27 +1057,20 @@ struct DirEntry
     name::String
     rawtype::Cint
 end
-function Base.getproperty(obj::DirEntry, p::Symbol)
-    if p === :path
-        return joinpath(getfield(obj, :dir), getfield(obj, :name))
-    else
-        return getfield(obj, p)
-    end
-end
-Base.propertynames(::DirEntry) = (:dir, :name, :path, :rawtype)
+path(obj::DirEntry) = joinpath(getfield(obj, :dir), getfield(obj, :name))
 Base.isless(a::DirEntry, b::DirEntry) = a.dir == b.dir ? isless(a.name, b.name) : isless(a.dir, b.dir)
 Base.hash(o::DirEntry, h::UInt) = hash(o.dir, hash(o.name, hash(o.rawtype, h)))
 Base.:(==)(a::DirEntry, b::DirEntry) = a.name == b.name && a.dir == b.dir && a.rawtype == b.rawtype
-joinpath(obj::DirEntry, args...) = joinpath(obj.path, args...)
+joinpath(obj::DirEntry, args...) = joinpath(path(obj), args...)
 isunknown(obj::DirEntry) =  obj.rawtype == UV_DIRENT_UNKNOWN
-islink(obj::DirEntry) =     isunknown(obj) ? islink(obj.path) : obj.rawtype == UV_DIRENT_LINK
-isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(obj.path)      : obj.rawtype == UV_DIRENT_FILE
-isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(obj.path)       : obj.rawtype == UV_DIRENT_DIR
-isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(obj.path)      : obj.rawtype == UV_DIRENT_FIFO
-issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(obj.path)    : obj.rawtype == UV_DIRENT_SOCKET
-ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(obj.path)   : obj.rawtype == UV_DIRENT_CHAR
-isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.path)  : obj.rawtype == UV_DIRENT_BLOCK
-realpath(obj::DirEntry) = realpath(obj.path)
+islink(obj::DirEntry) =     isunknown(obj) ? islink(path(obj)) : obj.rawtype == UV_DIRENT_LINK
+isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(path(obj))      : obj.rawtype == UV_DIRENT_FILE
+isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(path(obj))       : obj.rawtype == UV_DIRENT_DIR
+isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(path(obj))      : obj.rawtype == UV_DIRENT_FIFO
+issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(path(obj))    : obj.rawtype == UV_DIRENT_SOCKET
+ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(path(obj))   : obj.rawtype == UV_DIRENT_CHAR
+isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(path(obj))  : obj.rawtype == UV_DIRENT_BLOCK
+realpath(obj::DirEntry) = realpath(path(obj))
 
 """
     _readdirx(dir::AbstractString=pwd(); sort::Bool = true)::Vector{DirEntry}
@@ -1096,7 +1089,7 @@ object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back 
 
 ```julia
 for obj in _readdirx()
-    isfile(obj) && println("\$(obj.name) is a file with path \$(obj.path)")
+    isfile(obj) && println("\$(obj.name) is a file with path \$(path(obj))")
 end
 ```
 """
