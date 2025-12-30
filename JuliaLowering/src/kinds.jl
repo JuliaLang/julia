@@ -14,14 +14,8 @@ function _register_kinds()
             "gc_preserve"
             "gc_preserve_begin"
             "gc_preserve_end"
-            # A literal Julia value of any kind, as might be inserted into the
-            # AST during macro expansion
-            "Value"
             # A (quoted) `Symbol`
             "Symbol"
-            # QuoteNode; not quasiquote
-            "inert"
-            "unknown_head"
             # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
             "boundscheck"
@@ -92,7 +86,6 @@ function _register_kinds()
             "_typevars" # used for supplying already-allocated `TypeVar`s to `where`
             "with_static_parameters"
             "top"
-            "core"
             "lambda"
             # "A source location literal" - a node which exists only to record
             # a sourceref
