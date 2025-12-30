@@ -944,8 +944,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     else
                         pkg_queue
                     end
+                    local i_local = i
+                    local final_loop_local = final_loop
                     str_ = sprint() do iostr
-                        if i > 1
+                        if i_local > 1
                             print(iostr, ansi_cleartoend)
                         end
                         bar.current = n_done[] - n_already_precomp[]
@@ -953,7 +955,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
                         termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
-                        if !final_loop
+                        if !final_loop_local
                             s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=logio)
                             print(iostr, Base._truncate_at_width_or_chars(true, s, termwidth), "\n")
                         end
@@ -976,7 +978,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             elseif started[pkg_config]
                                 # Offset each spinner animation using the first character in the package name as the seed.
                                 # If not offset, on larger terminal fonts it looks odd that they all sync-up
-                                anim_char = anim_chars[(i + Int(dep.name[1])) % length(anim_chars) + 1]
+                                anim_char = anim_chars[(i_local + Int(dep.name[1])) % length(anim_chars) + 1]
                                 anim_char_colored = dep in project_deps ? anim_char : color_string(anim_char, :light_black)
                                 waiting = if haskey(pkgspidlocked, pkg_config)
                                     who_has_lock = pkgspidlocked[pkg_config]
