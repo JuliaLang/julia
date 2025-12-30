@@ -45,27 +45,15 @@ function root_module(mod::Module)
     end
 end
 
-function format_box_log(var, m::Method)
-    file, line = method_location(m)
-    return string(
-        "mod=", root_module(m.module),
-        "\tvar=", var,
-        "\tfunc=", m.name,
-        "\tsig=", m.sig,
-        "\tfile=", file,
-        "\tline=", line
-    )
-end
-
 function format_box_fields(var, m::Method)
     file, line = method_location(m)
+    location = isempty(file) ? "" : string(file, ":", line)
     return (
         mod = string(root_module(m.module)),
         var = string(var),
         func = string(m.name),
         sig = string(m.sig),
-        file = string(file),
-        line = string(line),
+        location = location,
     )
 end
 
@@ -171,15 +159,14 @@ function scan_all_methods()
     Base.visit(Core.methodtable) do m
         scan_method!(lines, m, modules)
     end
-    sort!(lines, by = entry -> entry.mod)
+    sort!(lines, by = entry -> (entry.mod, entry.func, entry.var))
     if format == "plain"
         for entry in lines
             println("mod=", entry.mod,
                     "\tvar=", entry.var,
                     "\tfunc=", entry.func,
                     "\tsig=", entry.sig,
-                    "\tfile=", entry.file,
-                    "\tline=", entry.line)
+                    "\tlocation=", entry.location)
         end
     else
         # treat "markdown" and "markdown-table" as table output
@@ -190,15 +177,14 @@ function scan_all_methods()
                     println()
                 end
                 println("## ", entry.mod)
-                println("| var | func | sig | file | line |")
-                println("| --- | --- | --- | --- | --- |")
+                println("| var | func | sig | location |")
+                println("| --- | --- | --- | --- |")
                 last_mod = entry.mod
             end
             println("| ", md_code(escape_md(entry.var)),
                     " | ", md_code(escape_md(entry.func)),
                     " | ", md_code(escape_md(entry.sig)),
-                    " | ", md_code(escape_md(entry.file)),
-                    " | ", md_code(escape_md(entry.line)),
+                    " | ", md_code(escape_md(entry.location)),
                     " |")
         end
     end
