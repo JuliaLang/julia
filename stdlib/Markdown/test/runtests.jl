@@ -502,8 +502,8 @@ sum_ref = md"Behaves like $(ref(sum))"
 @test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
 @test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
-# JuliaLang/julia#59783
-let x = 1,
+@testset "JuliaLang/julia#59783 and #53362" begin
+    x = 1
     result = md"""
     $x
 
@@ -511,7 +511,9 @@ let x = 1,
 
     !!! note
     $x
-    """,
+
+    > $x
+    """
     expected = """
     1
 
@@ -522,6 +524,9 @@ let x = 1,
 
 
     1
+
+    > 1
+
     """
     @test plain(result) == expected
 end
