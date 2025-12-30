@@ -132,6 +132,10 @@ function latexinline(io::IO, md::Italic)
     end
 end
 
+function latexinline(io::IO, br::LineBreak)
+    println(io, "\\\\")
+end
+
 function latexinline(io::IO, md::Image)
     wrapblock(io, "figure") do
         println(io, "\\centering")
