@@ -1406,3 +1406,45 @@ end
 @testset "Lazy Strings" begin
     @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end
+
+@testset "#40508: terminal rendering of nested lists, with hard breaks" begin
+    m = md"""
+    Before the list:
+    - top level\
+      with an extra line
+      - second level\
+        again with an extra line
+        - third level\
+          yet again with an extra line
+          - fourth level\
+            and another extra line
+            - fifth level\
+              final extra line
+    - back to top level
+    """
+
+    # check the terminal output
+
+    expected = """
+      Before the list:
+
+      • top level
+        with an extra line
+        – second level
+          again with an extra line
+          ▪ third level
+            yet again with an extra line
+            – fourth level
+              and another extra line
+              ▪ fifth level
+                final extra line
+      • back to top level
+    """
+
+    io = IOBuffer()
+    show(io, "text/plain", m)
+    println(io)
+    actual = String(take!(io))
+
+    @test expected == actual
+end

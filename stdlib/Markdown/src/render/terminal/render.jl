@@ -70,7 +70,8 @@ function term(io::IO, f::Footnote, columns)
     end
 end
 
-const _list_bullets = ("•  ", "–  ", "▪  ")
+const _list_bullets = ("• ", "– ", "▪ ")
+const _bullet_width = 2  # all bullets must have the same "length"
 
 function term(io::IO, md::List, columns, depth::Int = 1)
     dterm(io, md, columns, _depth)      = term(io, md, columns)
@@ -83,7 +84,7 @@ function term(io::IO, md::List, columns, depth::Int = 1)
         else
             _list_bullets[2 + mod(depth, length(_list_bullets) - 1)]
         end
-        print(io, ' '^ifelse(depth == 1, 2margin, 2*(depth-1)), styled"{markdown_list:$bullet}")
+        print(io, ' '^margin, styled"{markdown_list:$bullet}")
         buf = AnnotatedIOBuffer()
         if point isa Vector && !isempty(point)
             for (i, elt) in enumerate(point[1:end-1])
@@ -102,7 +103,7 @@ function term(io::IO, md::List, columns, depth::Int = 1)
              for line in Iterators.filter(!isempty, lines)),
             init=if isempty(lines) 0 else length(first(lines)) end)
         for (l, line) in enumerate(lines)
-            l > 1 && print(io, ' '^ifelse(depth == 1, 2margin + 3, 3))
+            l > 1 && print(io, ' '^(margin + _bullet_width))
             !isempty(line) && print(io, line[common_indent+1:end])
             l < length(lines) && println(io)
         end
