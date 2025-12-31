@@ -71,7 +71,6 @@ function term(io::IO, f::Footnote, columns)
 end
 
 const _list_bullets = ("• ", "– ", "▪ ")
-const _bullet_width = 2  # all bullets must have the same "length"
 
 function term(io::IO, md::List, columns, depth::Int = 1)
     dterm(io, md, columns, _depth)      = term(io, md, columns)
@@ -103,7 +102,7 @@ function term(io::IO, md::List, columns, depth::Int = 1)
              for line in Iterators.filter(!isempty, lines)),
             init=if isempty(lines) 0 else length(first(lines)) end)
         for (l, line) in enumerate(lines)
-            l > 1 && print(io, ' '^(margin + _bullet_width))
+            l > 1 && print(io, ' '^(margin + length(bullet)))
             !isempty(line) && print(io, line[common_indent+1:end])
             l < length(lines) && println(io)
         end

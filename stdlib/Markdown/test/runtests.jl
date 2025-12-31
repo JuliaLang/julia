@@ -1408,8 +1408,11 @@ end
 end
 
 @testset "#40508: terminal rendering of nested lists, with hard breaks" begin
+    #
+    # Test an unordered list.
+    #
     m = md"""
-    Before the list:
+    An unordered list:
     - top level\
       with an extra line
       - second level\
@@ -1423,10 +1426,8 @@ end
     - back to top level
     """
 
-    # check the terminal output
-
     expected = """
-      Before the list:
+      An unordered list:
 
       • top level
         with an extra line
@@ -1442,6 +1443,64 @@ end
     """
 
     actual = sprint(show, MIME("text/plain"), m) * "\n"
+    @test expected == actual
 
+    #
+    # Test an ordered list. These behave differently if the number of list
+    # entries increases to another power of ten. For example, when going from
+    # 9 to 10 list entries. We test this here.
+    #
+    m = md"""
+    An unordered list:
+    1. top level\
+       with an extra line
+       1. second level\
+          again with an extra line
+          1. third level\
+             yet again with an extra line
+             1. fourth level\
+                and another extra line
+                1. fifth level\
+                   final extra line
+          1. more third level
+          1. more third level
+          1. more third level
+          1. more third level
+          1. more third level
+          1. more third level
+          1. more third level
+          1. more third level
+          1. more third level\
+             with an extra line
+    1. back to top level
+    """
+
+    expected = """
+      An unordered list:
+
+      1. top level
+         with an extra line
+         1. second level
+            again with an extra line
+             1. third level
+                yet again with an extra line
+                1. fourth level
+                   and another extra line
+                   1. fifth level
+                      final extra line
+             2. more third level
+             3. more third level
+             4. more third level
+             5. more third level
+             6. more third level
+             7. more third level
+             8. more third level
+             9. more third level
+            10. more third level
+                with an extra line
+      2. back to top level
+    """
+
+    actual = sprint(show, MIME("text/plain"), m) * "\n"
     @test expected == actual
 end
