@@ -4,7 +4,7 @@
 
 module PCRE
 
-import ..RefValue
+import ..RefValue, ..DenseString
 
 # include($BUILDROOT/base/pcre_h.jl)
 include(string(Base.BUILDROOT, "pcre_h.jl"))
