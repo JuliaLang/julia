@@ -145,7 +145,7 @@ end
 
 function findnext(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::Union{String, SubString{String}},
+    s::DenseString,
     i::Integer,
 )
     # TODO: Redesign these strange rules for errors, see #54584
@@ -189,7 +189,7 @@ function findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
 end
 
 # This is essentially just a wrapper around memchr. i must be inbounds.
-function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
+function _search(a::Union{DenseString,DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
     fst = firstindex(a)
     GC.@preserve a begin
         p = pointer(a)
@@ -200,7 +200,7 @@ end
 
 function findprev(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::Union{String, SubString{String}},
+    s::DenseString,
     i::Integer,
 )
     # TODO: Redesign these strange rules for errors, see #54584
@@ -241,7 +241,7 @@ function findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
 end
 
 # This is essentially just a wrapper around memrchr. i must be inbounds.
-function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
+function _rsearch(a::Union{DenseString,DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
     fst = firstindex(a)
     GC.@preserve a begin
         p = pointer(a)
@@ -252,7 +252,7 @@ end
 
 function findall(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::Union{String, SubString{String}},
+    s::DenseString,
 )
     iter = FwCharPosIter(s, pred.x)
     return if is_standalone_byte(iter.last_char_byte)
@@ -363,7 +363,7 @@ function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
 end
 
-_nthbyte(s::Union{String, SubString{String}}, i) = codeunit(s, i)
+_nthbyte(s::DenseString, i) = codeunit(s, i)
 _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 
 function _searchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)

@@ -259,7 +259,7 @@ tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as 
 
 ## string to float functions ##
 
-function tryparse(::Type{Float64}, s::String)
+function tryparse(::Type{Float64}, s::Union{String, DenseStringViewAndSub})
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
@@ -269,7 +269,7 @@ function tryparse(::Type{Float64}, s::SubString{String})
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
     hasvalue ? val : nothing
 end
-function tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float64}, s::Union{String, DenseStringViewAndSub}, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
@@ -279,7 +279,7 @@ function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-function tryparse(::Type{Float32}, s::String)
+function tryparse(::Type{Float32}, s::Union{String, DenseStringViewAndSub})
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
@@ -289,7 +289,7 @@ function tryparse(::Type{Float32}, s::SubString{String})
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
     hasvalue ? val : nothing
 end
-function tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float32}, s::Union{String, DenseStringViewAndSub}, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
@@ -307,7 +307,7 @@ tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int
 
 ## string to complex functions ##
 
-function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
+function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}, DenseStringViewAndSub}, i::Int, e::Int, raise::Bool) where {T<:Real}
     # skip initial whitespace
     while i ≤ e && isspace(s[i])
         i = nextind(s, i)
