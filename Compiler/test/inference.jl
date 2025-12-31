@@ -731,7 +731,7 @@ for (codetype, all_ssa) in Any[
     local i
     for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
-        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
+        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) context=typ
     end
     test_inferred_static(codetype, all_ssa)
 end
@@ -1298,7 +1298,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
                 continue
             end
         end
-        @test false || "Side effect expressions found $ex"
+        @test false context="Side effect expressions found $ex"
         return
     end
 end

@@ -1248,16 +1248,16 @@ end
                    (hash, (String,UInt)),
                    (hash, (Char,UInt)),]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) || (f, Ts)
-        @test Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     for (f, Ts) in [(^, (String, Int)),
                    (^, (Char, Int)),
                    (codeunit, (String, Int)),
                    ]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) || (f, Ts)
-        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     # Substrings don't have any nice effects because the compiler can
     # invent fake indices leading to out of bounds
@@ -1267,8 +1267,8 @@ end
                    (hash, (SubString{String},UInt)),
                    ]
         e = Base.infer_effects(f, Ts)
-        @test !Core.Compiler.is_foldable(e) || (f, Ts)
-        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test !Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     @test_throws ArgumentError Symbol("a\0a")
 

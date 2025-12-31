@@ -58,6 +58,10 @@ Standard library changes
 
 #### Test
 
+* `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
+  that provides additional information displayed on test failure. This is useful for
+  debugging which specific case failed in parameterized tests ([#60501]).
+
 #### InteractiveUtils
 
 #### Dates
