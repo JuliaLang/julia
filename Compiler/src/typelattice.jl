@@ -786,8 +786,17 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable,
     for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
-        if newtype isa Conditional && !conditional_valid(newtype, changes)
-            newtype = widenconditional(newtype)
+        if newtype isa Conditional
+            if !conditional_valid(newtype, changes)
+                newtype = widenconditional(newtype)
+            elseif !conditional_valid(newtype, state)
+                # newtype = conditional_tmerge(...) # merge thentype/elsetype info from state
+            end
+        end
+        if oldtype isa Conditional
+            if !conditional_valid(oldtype, changes)
+                # oldtype = conditional_tmerge(...) # merge thentype/elsetype info from changes
+            end
         end
         # COMBAK: we can potentially recompute any Conditional newtype & oldtype to use the new reaching def after merging in type information from the other side
         if schanged(lattice, newtype, oldtype)
