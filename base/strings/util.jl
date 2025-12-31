@@ -66,8 +66,8 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-function startswith(a::Union{String, SubString{String}},
-                    b::Union{String, SubString{String}})
+function startswith(a::DenseString,
+                    b::DenseString)
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
@@ -98,8 +98,8 @@ function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
 end
 Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
 
-function endswith(a::Union{String, SubString{String}},
-                  b::Union{String, SubString{String}})
+function endswith(a::DenseString,
+                  b::DenseString)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false

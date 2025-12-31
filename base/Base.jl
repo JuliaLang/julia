@@ -54,6 +54,7 @@ include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
 include("strings/cstring.jl")
+include("strings/stringview.jl")
 
 include("cartesian.jl")
 using .Cartesian

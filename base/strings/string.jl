@@ -1,6 +1,48 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
+    StringView{T<:AbstractVector{UInt8}} <: AbstractString
+
+`StringView(array)` creates an `AbstractString` representation of
+any `array` of `UInt8` data, interpreted as UTF-8 encoded Unicode.
+It does *not* make a copy of or modify `array`.
+
+Use `codeunits(s)` to get the array that `s` wraps.
+
+# Examples
+```jldoctest
+julia> arr = [0x61, 0x62, 0x63];
+
+julia> s = StringView(arr)
+"abc"
+
+julia> codeunits(s) === arr
+true
+
+julia> arr[1] = 0x64; s
+"dbc"
+```
+"""
+struct StringView{T <: AbstractVector{UInt8}} <: AbstractString
+    data::T
+
+    function StringView{T}(data::T) where {T <: AbstractVector{UInt8}}
+        # For now, StringViews code assumes one-based indexing
+        require_one_based_indexing(data)
+
+        # Prevent someone constructing e.g. a `StringView{AbstractVector{UInt8}}`,
+        # the existence of which will complicate the implementation and provide
+        # no usability benefit.
+        if !isconcretetype(T)
+            throw(ArgumentError("StringView must be parameterized with a concrete type"))
+        end
+
+        new{T}(data)
+    end
+end
+
+
+"""
     StringIndexError(str, i)
 
 An error occurred when trying to access `str` at index `i` that is not valid.
@@ -193,7 +235,7 @@ typemin(::String) = typemin(String)
 
 @propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
 
-# s should be String or SubString{String}
+# s should be String, StringView, or SubString{String}
 @inline function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
@@ -451,7 +493,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@inline function iterate(s::String, i::Int=firstindex(s))
+@inline function iterate(s::Union{String, StringView}, i::Int=firstindex(s))
     (i % UInt) - 1 < ncodeunits(s) || return nothing
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
@@ -482,7 +524,7 @@ function iterate_continued(s, i::Int, u::UInt32)
     return reinterpret(Char, u), i
 end
 
-@propagate_inbounds function getindex(s::String, i::Int)
+@propagate_inbounds function getindex(s::Union{String, StringView}, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u)
@@ -516,7 +558,10 @@ function getindex_continued(s, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+function getindex(s::Union{String, StringView}, r::AbstractUnitRange{<:Integer})
+    span = (Int(first(r))::Int):(Int(last(r)))::Int
+    return s[span]
+end
 
 @inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
@@ -534,10 +579,12 @@ getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(
 end
 
 # nothrow because we know the start and end indices are valid
-@assume_effects :nothrow length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+@assume_effects :nothrow function length(s::Union{String, StringView})
+    return length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+end
 
 # effects needed because @inbounds
-@assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)
+@assume_effects :consistent :effect_free @inline function length(s::Union{String, StringView}, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
@@ -548,7 +595,7 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
+@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::Union{String, StringView}, i::Int, n::Int, c::Int)
     i < n || return c
     b = codeunit(s, i)
     while true
