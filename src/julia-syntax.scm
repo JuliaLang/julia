@@ -483,8 +483,8 @@
                        (if (nospecialize-meta? a) (caddr a) a))
                      kargl))
          (pargl (cdr argl))   ;; positional args
-         (ftype (decl-type (car pargl)))
          (body  (blockify body))
+         (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let* ((l (if (null? pargl) '() (last pargl)))
                         ;; handle vararg with default value
