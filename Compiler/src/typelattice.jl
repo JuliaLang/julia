@@ -221,7 +221,7 @@ LimitedAccuracy(@nospecialize(T), ::Nothing) = T
 
 A special singleton that represents a variable has not been analyzed yet.
 Particularly, all SSA value types are initialized as `NOT_FOUND` when creating a new `InferenceState`.
-Note that this is only used for `smerge`, which updates abstract state `VarTable`,
+Note that this is only used for `ssavaluetypes`, which doesn't use lattice updates,
 and thus we don't define the lattice for this.
 """
 struct NotFound end
@@ -725,30 +725,41 @@ widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 # state management #
 ####################
 
-function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState}, join_pc::Int)
+function smerge(lattice::AbstractLattice, sa::VarState, sb::VarState)
+    sa === sb && return sa
+    ta = sa.typ
+    tb = sb.typ
+    if ta === Bottom
+        merged = tb
+    elseif tb === Bottom
+        merged = ta
+    else
+        merged = tmerge(lattice, ta, tb)
+    end
+    return VarState(merged, sa.ssadef, sa.undef | sb.undef)
+end
+
+function defmerge(sa::VarState, sb::VarState, join_pc::Int)
     sa === sb && return sa
     sa === NOT_FOUND && return sb
     sb === NOT_FOUND && return sa
     ta = sa.typ
     tb = sb.typ
     if ta === Bottom
-        ssadef = sb.ssadef
-        merged = tb
+        return sb.ssadef
     elseif tb === Bottom
-        ssadef = sa.ssadef
-        merged = ta
-    else
-        ssadef = sa.ssadef
-        if ssadef != sb.ssadef
-            ssadef = join_pc
-        end
-        merged = tmerge(lattice, ta, tb)
+        return sa.ssadef
     end
-    return VarState(merged, ssadef, sa.undef | sb.undef)
+    ssadef = sa.ssadef
+    if ssadef != sb.ssadef
+        return join_pc
+    end
+    return ssadef
 end
 
-@nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int) =
-    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && (n.ssadef === o.ssadef || o.ssadef === join_pc) && ⊑(lattice, n.typ, o.typ))))
+
+@nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
+    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && ⊑(lattice, n.typ, o.typ))))
 
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable, join_pc::Int)
     changed = false
@@ -759,35 +770,31 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable,
         end
     end
     for i = 1:length(state)
-        newtype = changes[i]
-        oldtype = state[i]
-        if newtype isa Conditional && !conditional_valid(newtype, changes)
-            newtype = widenconditional(newtype)
-        end
         # In addition to computing the type, the merge here computes the "reaching definition"
         # for a slot. The provided `join_pc` is a "virtual" PC, which corresponds to the ϕ-block
         # that would exist at the beginning of the BasicBlock.
         #
         # This effectively applies the "path-convergence criterion" for SSA construction.
-        #
-        # COMBAK: after we compute the new reaching def for every slot,
-        # we can potentially recompute any Conditional newtype & oldtype to use the new reaching def after merging in type information from them from the other side
-        if schanged(lattice, newtype, oldtype, join_pc)
-            state[i] = smerge(lattice, oldtype, newtype, join_pc)
+        newtype = changes[i]
+        oldtype = state[i]
+        newdef = defmerge(oldtype, newtype, join_pc)
+        if newdef != oldtype.ssadef
+            state[i] = VarState(oldtype.typ, newdef, oldtype.undef)
             changed = true
         end
     end
-    #for i = 1:length(state)
-    #    sa = state[i]
-    #    oldtype = widenconditional(changes[i])
-    #    if sa isa VarState
-    #        ta = sa.typ
-    #        if ta isa Conditional && (oldtype isa Const || newtype isa Const)
-    #            # update the relevant "reaching def" for this slot to the current def
-    #            state[i] = VarState(Conditional(ta.slot, state[ta.slot].ssadef, ta.thentype, ta.elsetype, isdefined=ta.isdefined), sa.ssadef, sa.undef)
-    #        end
-    #    end
-    #end
+    for i = 1:length(state)
+        newtype = changes[i]
+        oldtype = state[i]
+        if newtype isa Conditional && !conditional_valid(newtype, changes)
+            newtype = widenconditional(newtype)
+        end
+        # COMBAK: we can potentially recompute any Conditional newtype & oldtype to use the new reaching def after merging in type information from the other side
+        if schanged(lattice, newtype, oldtype)
+            state[i] = smerge(lattice, oldtype, newtype)
+            changed = true
+        end
+    end
     return changed
 end
 
