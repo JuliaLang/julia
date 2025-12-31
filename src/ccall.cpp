@@ -924,6 +924,11 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(ctx, tti, &toboxed);
+        if (t == getVoidTy(ctx.builder.getContext())) {
+            emit_error(ctx, "llvmcall does not support zero-sized argument types");
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
         argtypes.push_back(t);
         if (4 + i > nargs) {
             emit_error(ctx, "Missing arguments to llvmcall!");
@@ -942,6 +947,11 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     jl_value_t *rtt = rt;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(ctx, rtt, &retboxed);
+    if (jl_is_datatype(rtt) && jl_datatype_size((jl_datatype_t*)rtt) == 0 && rettype != getVoidTy(ctx.builder.getContext())) {
+        emit_error(ctx, "llvmcall does not support zero-sized return types");
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
 
     // Make sure to find a unique name
     std::string ir_name;
