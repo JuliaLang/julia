@@ -2,7 +2,7 @@ const DenseStringView = StringView{<:Union{DenseVector{UInt8}, <:FastContiguousS
 const StringAndSub = Union{String, SubString{String}}
 const StringViewAndSub = Union{StringView, SubString{<:StringView}}
 const DenseStringViewAndSub = Union{DenseStringView, SubString{<:DenseStringView}}
-const DenseString = Union{StringViewAndSub, StringAndSub}
+const DenseString = Union{DenseStringViewAndSub, StringAndSub}
 const UTF8String = Union{StringAndSub, StringViewAndSub}
 
 StringView(v::AbstractVector{UInt8}) = StringView{typeof(v)}(v)
@@ -42,7 +42,7 @@ cmp(a::UTF8String, b::UTF8String) = cmp(codeunits(a), codeunits(b))
 
 # Typemin and one is the empty string (multiplicative identity)
 typemin(::Type{StringView{Vector{UInt8}}}) = StringView(Vector{UInt8}(undef, 0))
-typemin(::Type{StringView{CodeUnits{UInt8, String}}}) = StringView(b"")
+typemin(::Type{StringView{CodeUnits{UInt8, String}}}) = StringView(CodeUnits(""))
 typemin(::T) where {T <: StringView} = typemin(T)
 one(::Union{T, Type{T}}) where {T <: StringView} = typemin(T)
 
@@ -54,11 +54,11 @@ write(io::IO, s::StringViewAndSub) = write(io, codeunits(s))
 print(io::IO, s::StringViewAndSub) = (write(io, s); nothing)
 
 @propagate_inbounds function thisind(s::StringViewAndSub, i::Integer)::Int
-    _thisind_str(s, Int(i)::Int)
+    return _thisind_str(s, Int(i)::Int)
 end
 
 @propagate_inbounds function nextind(s::StringViewAndSub, i::Integer)::Int
-    _nextind_str(s, Int(i)::Int)
+    return _nextind_str(s, Int(i)::Int)
 end
 
 isvalid(s::StringViewAndSub, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
