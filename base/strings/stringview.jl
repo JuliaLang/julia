@@ -6,8 +6,6 @@ const DenseString = Union{DenseStringViewAndSub, StringAndSub}
 const UTF8String = Union{StringAndSub, StringViewAndSub}
 
 StringView(v::AbstractVector{UInt8}) = StringView{typeof(v)}(v)
-StringView(s::StringView) = s
-StringView{S1}(s::StringView{S2}) where {S1 <: AbstractVector{UInt8}, S2 <: S1} = s
 Vector{UInt8}(s::StringViewAndSub) = Vector{UInt8}(codeunits(s))
 Array{UInt8}(s::StringViewAndSub) = Vector{UInt8}(s)
 String(s::StringViewAndSub) = String(copyto!(StringVector(ncodeunits(s)), codeunits(s)))
@@ -45,6 +43,7 @@ typemin(::Type{StringView{Vector{UInt8}}}) = StringView(Vector{UInt8}(undef, 0))
 typemin(::Type{StringView{CodeUnits{UInt8, String}}}) = StringView(CodeUnits(""))
 typemin(::T) where {T <: StringView} = typemin(T)
 one(::Union{T, Type{T}}) where {T <: StringView} = typemin(T)
+oneunit(::Union{T, Type{T}}) where {T <: StringView} = typemin(T)
 
 # Forward to optimised isascii(::AbstractVector{UInt8})
 isascii(s::StringViewAndSub) = isascii(codeunits(s))
@@ -53,18 +52,16 @@ isascii(s::StringViewAndSub) = isascii(codeunits(s))
 write(io::IO, s::StringViewAndSub) = write(io, codeunits(s))
 print(io::IO, s::StringViewAndSub) = (write(io, s); nothing)
 
-@propagate_inbounds function thisind(s::StringViewAndSub, i::Integer)::Int
-    return _thisind_str(s, Int(i)::Int)
-end
+@propagate_inbounds thisind(s::StringViewAndSub, i::Int) = _thisind_str(s, Int(i)::Int)
+@propagate_inbounds thisind(s::StringViewAndSub, i::Int) = _thisind_str(s, i)
 
-@propagate_inbounds function nextind(s::StringViewAndSub, i::Integer)::Int
-    return _nextind_str(s, Int(i)::Int)
-end
+@propagate_inbounds nextind(s::StringViewAndSub, i::Integer) = _nextind_str(s, Int(i)::Int)
+@propagate_inbounds nextind(s::StringViewAndSub, i::Int) = _nextind_str(s, i)
 
 isvalid(s::StringViewAndSub, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
 reverse(s::StringView) = StringView(reverse(codeunits(s)))
-reverse(s::SubString{StringView}) = SubString(StringView(reverse(codeunits(s))))
+reverse(s::SubString{<:StringView}) = SubString(StringView(reverse(codeunits(s))))
 
 # This is different from the String implementation, because when r is empty,
 # we cannot just return the constant "".
@@ -92,9 +89,10 @@ function chomp(s::StringViewAndSub)
         has_cr = has_lf & two_bytes & (cu[ncu - two_bytes] == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    off = s isa String ? 0 : s.offset
-    par = s isa String ? s : s.string
-    return @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+    off = s isa StringView ? 0 : s.offset
+    par = s isa StringView ? s : s.string
+    T = s isa SubString ? typeof(s) : SubString{typeof(s)}
+    return @inbounds @inline T(par, off, len, Val{:noshift}())
 end
 
 function replace(io::IO, s::DenseStringViewAndSub, pat_f::Pair...; count = typemax(Int))
