@@ -235,14 +235,14 @@ end
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
     i = Int(i)::Int
     @boundscheck i > Int(lastindex(a))::Int && throw(BoundsError(a, i))
-    i < Int(firstindex(i))::Int && return nothing
+    i < Int(firstindex(a))::Int && return nothing
     memrchr(a, pred.x, i)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
     i = Int(i)::Int
     @boundscheck i > Int(lastindex(a))::Int && throw(BoundsError(a, i))
-    i < Int(firstindex(i))::Int && return nothing
+    i < Int(firstindex(a))::Int && return nothing
     memrchr(a, pred.x, i)
 end
 
@@ -258,7 +258,7 @@ end
 function memrchr(a::DenseInt8, b::Int8, i::Int)
     fst = firstindex(a)
     GC.@preserve a begin
-        p = pointer(a)
+        p = Ptr{UInt8}(pointer(a))
         q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst+1)
     end
     return q == C_NULL ? nothing : (q-p+fst) % Int
