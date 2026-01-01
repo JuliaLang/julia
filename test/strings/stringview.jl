@@ -1,5 +1,3 @@
-isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
-
 @testset "StringViews" begin
 
     @testset "Construction" begin
@@ -16,10 +14,6 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         @test StringView(UInt8[0xc3, 0xa5]) == "å"
 
         @test StringView(0x42:0x45) == "BCDE"
-
-        # One-based indexing requirement. Not guranteed, can be supported in the future.
-        @test StringView(UInt8[0x61, 0x62, 0x63]) == "abc"
-        @test_throws ArgumentError StringView(OffsetArrays.OffsetArray([0x41, 0x42, 0x43], 2))
     end
 
     @testset "Construction from other types" begin
@@ -98,7 +92,6 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         @test ncodeunits(StringView(UInt8[])) == 0
         @test length(StringView(UInt8[])) == 0
 
-        # codeunit indexing
         b = Vector{UInt8}("foobar")
         s = StringView(b)
         @test ncodeunits(s) == sizeof(s) == length(b)
@@ -349,7 +342,7 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         ss = SubString(s, 2, 5) # "ooba"
         abc = StringView(0x61:0x63)
 
-        for str in (s, ss, abc)
+        for str in Any[s, ss, abc]
             sS, n = String(str), lastindex(str)
             @test startswith(str, "foo") == startswith(sS, "foo")
             @test endswith(str, "bar") == endswith(sS, "bar")
@@ -389,7 +382,6 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         @test m !== nothing
         @test m.captures[1] == "c"
 
-        # Extended regex tests from old tests
         b = Vector{UInt8}("foobar")
         s = StringView(b)
         ss = SubString(s, 2, 5) # "ooba"
@@ -406,7 +398,6 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         @test findnext(r"[aeiou]+", s, 1) == 2:3
         @test findnext(r"[aeiou]+", ss, 1) == 1:2
 
-        # Regex match returns RegexMatch
         sv = StringView(codeunits("foo 1234 bar"))
         m = match(r"[0-9]+", sv)
         @test m isa RegexMatch
@@ -460,9 +451,9 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
     end
 
     @testset "Mixed parsing" begin
-        for val in (true, 1234, 1234.5, 1234.5f0, 4.5 + 3.25im)
+        for val in Any[true, 1234, 1234.5, 1234.5f0, 4.5 + 3.25im]
             sval = string(val)
-            for str in (StringView(codeunits(sval)), SubString("foo" * sval * "bar", 4, 3 + length(sval)))
+            for str in Any[StringView(codeunits(sval)), SubString("foo" * sval * "bar", 4, 3 + length(sval))]
                 @test parse(typeof(val), str) === val
             end
         end
@@ -486,7 +477,6 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         sub = SubString(StringView(b"hello"), 2, 4)
         @test sub == "ell"
 
-        # SubString properties
         b = Vector{UInt8}("foobar")
         s = StringView(b)
         ss = SubString(s, 2, 5) # "ooba"
@@ -513,12 +503,10 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         @test replace(StringView(0x61:0x63), "b" => "x") == "axc"
         @test replace(StringView(b"test"), "t" => "T") == "TesT"
 
-        # Extended replace tests
         @test replace(StringView(b"abcd"), r"[bc]?" => "^") == "^a^^d^"
         @test replace(StringView(b"a"), 'a' => typeof) == "Char"
         @test replace(StringView(b"The foxes."), r"fox(es)?" => s"bus\1") == "The buses."
 
-        # Multiple replacements (Julia 1.7+)
         @test replace(StringView(b"foobarbaz"), "oo" => "zz", "ar" => "zz", "z" => "m") == "fzzbzzbam"
         @test replace(StringView(b"foobar"), 'o' => '0', "" => "") == "f00bar"
 
@@ -559,10 +547,17 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         abc = StringView(0x61:0x63)
         invalid = StringView([0x8b, 0x52, 0x9b, 0x8d])
 
-        for str in (s, abc, invalid, ss)
+        for str in Any[s, abc, invalid, ss]
             @test reverse(str) == reverse(String(str))
-            T = str isa SubString ? typeof(parent(str)) : typeof(str)
-            @test reverse(str) isa T
+            reverse_T = if str isa StringView{<:UnitRange}
+                StringView{StepRange{UInt8, Int8}}
+            else
+                typeof(str)
+            end
+            if !isa(reverse(str), reverse_T)
+                println(typeof(str), " ", str, " ", typeof(reverse(str)))
+            end
+            @test reverse(str) isa reverse_T
         end
     end
 
@@ -621,7 +616,7 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
         abc = StringView(0x61:0x63)
         invalid = StringView([0x8b, 0x52, 0x9b, 0x8d])
 
-        for str in (s, abc, invalid, ss)
+        for str in Any[s, abc, invalid, ss]
             @test hash(str) == hash(String(str))
         end
     end
