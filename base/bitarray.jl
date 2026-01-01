@@ -1735,6 +1735,9 @@ end
 minimum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-empty")) : all(B)
 maximum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-empty")) : any(B)
 
+minimum(B::BitArray; dims::D=:) where {D} = _all(B, dims)
+maximum(B::BitArray; dims::D=:) where {D} = _any(B, dims)
+
 ## map over bitarrays ##
 
 # Specializing map is even more important for bitarrays than it is for generic
