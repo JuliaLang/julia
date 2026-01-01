@@ -1399,14 +1399,27 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 }
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;
-                if (jl_field_isptr(vt, i)) {
+                enum jl_fieldkind_t kind = jl_field_kind(vt, i);
+                if (kind == JL_FIELDKIND_ISPTR) {
                     n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth, ctx);
                 }
                 else {
                     jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(vt, i);
-                    if (jl_is_uniontype(ft)) {
+                    if (kind == JL_FIELDKIND_ISUNION) {
                         uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
                         ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                    }
+                    else if (kind == JL_FIELDKIND_ISOTHER && jl_is_uniontype(ft)) {
+                        jl_uniontype_t *uty = (jl_uniontype_t*)ft;
+                        if (undefref_check((jl_datatype_t*)uty->b, (jl_value_t*)fld_ptr, NULL) == NULL)
+                            ft = (jl_datatype_t*)uty->a;
+                        else
+                            ft = (jl_datatype_t*)uty->b;
+                    }
+                    else if (kind == JL_FIELDKIND_ISOTHER) {
+                        if (undefref_check(ft, (jl_value_t*)fld_ptr, NULL) == NULL) {
+                            n += jl_printf(out, "#undef: ");
+                        }
                     }
                     n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth, ctx);
                 }

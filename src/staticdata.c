@@ -1308,7 +1308,7 @@ static void record_memoryrefs_inside(jl_serializer_state *s, jl_datatype_t *t, s
         if (jl_field_isptr(t, i))
             continue;
         jl_value_t *ft = jl_field_type_concrete(t, i);
-        if (jl_is_uniontype(ft))
+        if (jl_is_uniontype(ft)) // TODO(jwn)
             continue;
         if (jl_is_genericmemoryref_type(ft))
             record_memoryref(s, reloc_offset + offset, *(jl_genericmemoryref_t*)(data + offset));
@@ -2927,7 +2927,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             if (jl_field_isptr(st, field)) {
                 record_field_change((jl_value_t**)fldaddr, newval);
             }
-            else if (jl_field_size(st, field) > 0) {
+            else if (jl_field_size(st, field) > 0) { // TODO(jwn)
                 // replace the bits
                 ptrhash_put(&bits_replace, (void*)fldaddr, newval);
                 // and any pointers inside

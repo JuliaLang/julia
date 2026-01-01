@@ -737,12 +737,12 @@ struct FieldDesc
 end
 
 struct FieldDescStorage{T}
-    ptrsize::T
+    kindsize::T
     offset::T
 end
 FieldDesc(fd::FieldDescStorage{T}) where {T} =
-    FieldDesc(false, fd.ptrsize & 3 == 1,
-              fd.ptrsize >> 1, fd.offset)
+    FieldDesc(false, fd.kindsize & 3 == 1,
+              fd.kindsize >> 1, fd.offset)
 
 struct DataTypeFieldDesc
     dt::DataType
