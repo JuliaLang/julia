@@ -5,7 +5,7 @@ using Test
 include("setup_Compiler.jl")
 include("irutils.jl")
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 # Test that the Core._apply_iterate bail path taints effects
 function f_apply_bail(f)
@@ -29,7 +29,7 @@ end
 @test fully_eliminated((Int,)) do x
     return_type_unused(x)
     return nothing
-end
+end broken=coverage_enabled
 
 # Test that ambiguous calls don't accidentally get nothrow effect
 ambig_effects_test(a::Int, b) = 1
@@ -64,7 +64,7 @@ Base.@assume_effects :foldable concrete_eval(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
     concrete_eval(getindex, ___CONST_DICT___, :a)
-end
+end broken=coverage_enabled
 
 # :removable override
 Base.@assume_effects :removable removable_call(
@@ -72,7 +72,7 @@ Base.@assume_effects :removable removable_call(
 @test fully_eliminated() do
     @noinline removable_call(getindex, ___CONST_DICT___, :a)
     nothing
-end
+end broken=coverage_enabled
 
 # terminates_globally override
 # https://github.com/JuliaLang/julia/issues/41694
@@ -88,7 +88,7 @@ end
 @test Compiler.is_foldable(Base.infer_effects(issue41694, (Int,))) broken=coverage_enabled
 @test fully_eliminated() do
     issue41694(2)
-end
+end broken=coverage_enabled
 
 Base.@assume_effects :terminates_globally function recur_termination1(x)
     x == 0 && return 1
@@ -101,8 +101,8 @@ function recur_termination2()
     Base.@assume_effects :total !:terminates_globally
     recur_termination1(12)
 end
-@test fully_eliminated(recur_termination2)
-@test fully_eliminated() do; recur_termination2(); end
+@test fully_eliminated(recur_termination2) broken=coverage_enabled
+@test fully_eliminated() do; recur_termination2(); end broken=coverage_enabled
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
     x == 0 && return 1
@@ -118,8 +118,8 @@ function recur_termination2x()
     Base.@assume_effects :total !:terminates_globally
     recur_termination21(12) + recur_termination22(12)
 end
-@test fully_eliminated(recur_termination2x)
-@test fully_eliminated() do; recur_termination2x(); end
+@test fully_eliminated(recur_termination2x) broken=coverage_enabled
+@test fully_eliminated() do; recur_termination2x(); end broken=coverage_enabled
 
 # anonymous function support for `@assume_effects`
 @test fully_eliminated() do
@@ -134,7 +134,7 @@ end
         end
         return res
     end
-end
+end broken=coverage_enabled
 
 # control flow backedge should taint `terminates`
 @test Base.infer_effects((Int,)) do n
@@ -355,7 +355,7 @@ end
 end |> Compiler.is_foldable) broken=coverage_enabled
 @test fully_eliminated(; retval=97) do
     entry_to_be_invalidated('a')
-end
+end broken=coverage_enabled
 getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
 @test Base.infer_effects((Char,)) do x
     entry_to_be_invalidated(x)
@@ -576,7 +576,7 @@ end
 @test Compiler.is_inaccessiblememonly(Base.infer_effects(mutable_consistent, (Symbol,))) broken=coverage_enabled
 @test fully_eliminated(; retval=:foo) do
     mutable_consistent(:foo)
-end
+end broken=coverage_enabled
 
 function nested_mutable_consistent(s)
     SafeRef(SafeRef(SafeRef(SafeRef(SafeRef(s)))))[][][][][]
@@ -584,7 +584,7 @@ end
 @test Compiler.is_inaccessiblememonly(Base.infer_effects(nested_mutable_consistent, (Symbol,))) broken=coverage_enabled
 @test fully_eliminated(; retval=:foo) do
     nested_mutable_consistent(:foo)
-end
+end broken=coverage_enabled
 
 const consistent_global = Some(:foo)
 @test (Base.infer_effects() do
@@ -659,7 +659,7 @@ end
 @test fully_eliminated((Int,)) do v
     removable_if_unused3(v)
     nothing
-end
+end broken=coverage_enabled
 
 @noinline function unremovable_if_unused1!(x)
     setref!(x, 42)
@@ -801,7 +801,7 @@ let effects = Base.infer_effects(size, (Array,Int))
     @test Compiler.is_terminates(effects) broken=coverage_enabled
 end
 # Test that arraysize has proper effect modeling
-@test fully_eliminated(M->(size(M, 2); nothing), (Matrix{Float64},))
+@test fully_eliminated(M->(size(M, 2); nothing), (Matrix{Float64},)) broken=coverage_enabled
 
 # arraylen
 # --------
@@ -990,7 +990,7 @@ isassigned_effects(s) = isassigned(Ref(s))
 @test Compiler.is_consistent(Base.infer_effects(isassigned_effects, (Symbol,))) broken=coverage_enabled
 @test fully_eliminated(; retval=true) do
     isassigned_effects(:foo)
-end
+end broken=coverage_enabled
 
 # inference on throw block should be disabled only when the effects are already known to be
 # concrete-eval ineligible:
@@ -1016,12 +1016,12 @@ end |> !Compiler.is_consistent
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)
-@test fully_eliminated(f50198)
+@test fully_eliminated(f50198) broken=coverage_enabled
 
 # Effects properly applied to flags by irinterp (#50311)
 f50311(x, s) = Symbol(s)
 g50311(x) = Val{f50311((1.0, x), "foo")}()
-@test fully_eliminated(g50311, Tuple{Float64})
+@test fully_eliminated(g50311, Tuple{Float64}) broken=coverage_enabled
 
 # getglobal effects
 const my_defined_var = 42

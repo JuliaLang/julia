@@ -8,7 +8,7 @@ using Dates: Date, Day
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @test (@inferred Base.IteratorSize(Any)) isa Base.SizeUnknown
 

@@ -2,7 +2,7 @@
 
 using Random
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @testset "constructors" begin
     v = [0x61,0x62,0x63,0x21]

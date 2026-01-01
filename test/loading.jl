@@ -2,6 +2,8 @@
 
 using Test
 
+const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+
 # Tests for @__LINE__ inside and outside of macros
 # NOTE: the __LINE__ numbers for these first couple tests are significant, so
 # adding any lines here will make those tests fail
@@ -1585,7 +1587,7 @@ end
                 `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_exists() broken=coverage_enabled
             rm_cov_files()
 
             # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
@@ -1593,7 +1595,7 @@ end
                 `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            @test cov_exists()
+            @test cov_exists() broken=coverage_enabled
             rm_cov_files()
         end
     end

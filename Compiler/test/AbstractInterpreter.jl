@@ -6,7 +6,7 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 # interpreter that performs abstract interpretation only
 # (semi-concrete interpretation should be disabled automatically)

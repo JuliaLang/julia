@@ -2,7 +2,7 @@
 
 using Base: delete
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @test_throws TypeError NamedTuple{1,Tuple{}}
 @test_throws TypeError NamedTuple{(),1}

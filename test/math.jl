@@ -10,7 +10,7 @@ using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)

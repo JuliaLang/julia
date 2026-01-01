@@ -7,7 +7,7 @@ using Test
 include("setup_Compiler.jl")
 include("irutils.jl")
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 # tests for Compiler correctness and precision
 using .Compiler: Conditional, ⊑

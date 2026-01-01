@@ -4,7 +4,7 @@
 
 using Random
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @testset "flipsign/copysign" begin
     for y in (-4, Float32(-4), -4.0, big(-4.0))

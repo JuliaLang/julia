@@ -2,7 +2,7 @@
 
 using Random
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
 
@@ -730,10 +730,10 @@ end
 
 @testset "constant prop in gcd" begin
     ci = code_typed(() -> gcd(14, 21))[][1]
-    @test ci.code == Any[Core.ReturnNode(7)]
+    @test ci.code == Any[Core.ReturnNode(7)] broken=coverage_enabled
 
     ci = code_typed(() -> 14 // 21)[][1]
-    @test ci.code == Any[Core.ReturnNode(2 // 3)]
+    @test ci.code == Any[Core.ReturnNode(2 // 3)] broken=coverage_enabled
 end
 @testset "binomial" begin
     for T in (Int8, Int16, Int32, Int64)

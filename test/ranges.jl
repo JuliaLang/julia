@@ -6,7 +6,7 @@ using InteractiveUtils: code_llvm
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)

@@ -4,7 +4,7 @@ using Random: randstring
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1

@@ -5,7 +5,7 @@ using Random: randcycle
 isdefined(Main, :ImmutableArrays) || @eval Main include("testhelpers/ImmutableArrays.jl")
 using .Main.ImmutableArrays
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @testset "binomial" begin
     @test binomial(5,-1) == 0

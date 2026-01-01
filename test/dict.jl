@@ -2,7 +2,7 @@
 
 using Random
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @testset "Pair" begin
     p = Pair(10,20)

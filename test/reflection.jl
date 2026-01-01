@@ -4,7 +4,7 @@ using Test
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be

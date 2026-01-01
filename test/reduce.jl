@@ -4,7 +4,7 @@ using Random
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 ==ₜ(::Any, ::Any) = false
 ==ₜ(a::T, b::T) where {T} = isequal(a, b)

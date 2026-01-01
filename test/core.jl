@@ -6,7 +6,7 @@ using Random, InteractiveUtils
 
 const Bottom = Union{}
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 # For curmod_*
 include("testenv.jl")
