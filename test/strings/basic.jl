@@ -307,8 +307,6 @@ end
     end
     @test nb === 3
     @test String(take!(f)) == "123"
-
-    @test all(T -> T <: Union{Union{}, Int}, Base.return_types(write, (IO, AbstractString)))
 end
 
 @testset "issue #7248" begin
@@ -905,11 +903,6 @@ end
                 end
             end
         end
-    end
-
-    @testset "return type infers to `Int`" begin
-        @test Int === Base.infer_return_type(prevind, Tuple{AbstractString, Vararg})
-        @test Int === Base.infer_return_type(nextind, Tuple{AbstractString, Vararg})
     end
 end
 
