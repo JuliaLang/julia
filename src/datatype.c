@@ -750,7 +750,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     isbitsegal = 0;
                 }
                 else {
-                    if (fsz > jl_datatype_size(fld)) {
+                    if (fsz > jl_datatype_size(restfld)) {
                         // We have to pad the size to integer size class, but it means this has some padding
                         isbitsegal = 0;
                         haspadding = 1;
@@ -842,9 +842,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (desc[i].kind == JL_FIELDKIND_ISPTR)
                 pointers[ptr_i++] = offset;
             else if (desc[i].kind == JL_FIELDKIND_ISOTHER) {
-                if (jl_is_uniontype(fld)) {
+                if (jl_is_uniontype(fld))
                     fld = ((jl_uniontype_t*)fld)->b;
-                }
+                assert(jl_is_datatype(fld));
                 int j, npointers = ((jl_datatype_t*)fld)->layout->npointers;
                 for (j = 0; j < npointers; j++) {
                     pointers[ptr_i++] = offset + jl_ptr_offset((jl_datatype_t*)fld, j);
@@ -1847,10 +1847,11 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
                 return ((jl_datatype_t*)ty)->instance;
         }
         else { // kind == JL_FIELDKIND_ISOTHER
-            assert(jl_is_uniontype(ty));
-            jl_uniontype_t *uty = (jl_uniontype_t*)ty;
-            undefval = ((jl_datatype_t*)uty->a)->instance;
-            ty = uty->b;
+            if (jl_is_uniontype(ty)) {
+                jl_uniontype_t *uty = (jl_uniontype_t*)ty;
+                undefval = ((jl_datatype_t*)uty->a)->instance;
+                ty = uty->b;
+            }
         }
     }
     jl_value_t *r;
@@ -1919,18 +1920,32 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
             if (jl_is_datatype_singleton((jl_datatype_t*)rty))
                 return;
         }
-        else {
+        else { // isbits or isother
             if (hasptr && jl_is_uniontype(ty)) {
                 jl_uniontype_t *uty = (jl_uniontype_t*)ty;
                 jl_value_t *undefval = ((jl_datatype_t*)uty->a)->instance;
                 ty = uty->b;
-                assert(((jl_datatype_t*)ty)->layout->first_ptr >= 0);
                 if (undefval == rhs) {
-                    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs) + ((jl_datatype_t*)ty)->layout->first_ptr, NULL);
+                    const jl_datatype_layout_t *ly = ((jl_datatype_t*)ty)->layout;
+                    assert(jl_is_concrete_type(ty) && ly->first_ptr >= 0);
+                    // TODO(jwn): jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs) + ly->first_ptr, NULL);
+                    const uint8_t *ptrs8 = (const uint8_t*)jl_dt_layout_ptrs(ly);
+                    const uint16_t *ptrs16 = (const uint16_t*)jl_dt_layout_ptrs(ly);
+                    const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
+                    for (size_t i = 0; i < ly->npointers; i++) {
+                        uint32_t fld;
+                        if (ly->flags.fielddesc_type == 0)
+                            fld = ptrs8[i];
+                        else if (ly->flags.fielddesc_type == 1)
+                            fld = ptrs16[i];
+                        else
+                            fld = ptrs32[i];
+                        jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs) + fld, NULL);
+                    }
                     return;
                 }
             }
-            assert(hasptr == (((jl_datatype_t*)ty)->layout->first_ptr >= 0));
+            assert(jl_is_concrete_type(ty) && hasptr == (((jl_datatype_t*)ty)->layout->first_ptr >= 0));
         }
         size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
         assert(!isatomic || jl_typeis(rhs, ty));
@@ -2009,7 +2024,8 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     size_t offs = jl_field_offset(st, i);
     jl_value_t *r;
     char *p = (char*)v + offs;
-    if (jl_field_isptr(st, i)) {
+    enum jl_fieldkind_t kind = jl_field_kind(st, i);
+    if (kind == JL_FIELDKIND_ISPTR) { // jwn
         if (isatomic)
             r = jl_atomic_exchange((_Atomic(jl_value_t*)*)p, rhs);
         else
@@ -2156,7 +2172,8 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
     size_t offs = jl_field_offset(st, i);
     jl_value_t *ty = jl_field_type_concrete(st, i);
     char *p = (char*)v + offs;
-    if (jl_field_isptr(st, i)) {
+    enum jl_fieldkind_t kind = jl_field_kind(st, i);
+    if (kind == JL_FIELDKIND_ISPTR) { // jwn
         return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, NULL, NULL, NULL);
     }
     else {
@@ -2205,6 +2222,7 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
         isatomic = isatomic_none; // this makes GCC happy
     }
     else {
+        // jwn
         hasptr = ((jl_datatype_t*)ty)->layout->first_ptr >= 0;
         assert(jl_typeis(rhs, ty));
     }
@@ -2264,7 +2282,8 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
         jl_type_error("replacefield!", ty, rhs);
     size_t offs = jl_field_offset(st, i);
     char *p = (char*)v + offs;
-    if (jl_field_isptr(st, i)) {
+    enum jl_fieldkind_t kind = jl_field_kind(st, i);
+    if (kind == JL_FIELDKIND_ISPTR) { // jwn
         return replace_value(ty, (_Atomic(jl_value_t*)*)p, v, expected, rhs, isatomic, NULL, NULL);
     }
     else {
@@ -2305,7 +2324,8 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
     size_t offs = jl_field_offset(st, i);
     int success;
     char *p = (char*)v + offs;
-    if (jl_field_isptr(st, i)) {
+    enum jl_fieldkind_t kind = jl_field_kind(st, i);
+    if (kind == JL_FIELDKIND_ISPTR) { // jwn
         _Atomic(jl_value_t*) *px = (_Atomic(jl_value_t*)*)p;
         jl_value_t *r = NULL;
         success = isatomic ? jl_atomic_cmpswap(px, &r, rhs) : jl_atomic_cmpswap_release(px, &r, rhs);

@@ -572,28 +572,28 @@ typedef struct {
 
 
 enum jl_fieldkind_t {
-    JL_FIELDKIND_ISBITS,
-    JL_FIELDKIND_ISPTR,
-    JL_FIELDKIND_ISUNION,
-    JL_FIELDKIND_ISOTHER, // hasptr, possibly also singleton-union
+    JL_FIELDKIND_ISBITS, // !hasptr
+    JL_FIELDKIND_ISPTR, // anything
+    JL_FIELDKIND_ISUNION, // !hasptr && isunion
+    JL_FIELDKIND_ISOTHER, // hasptr, possibly also singleton-union // TODO(jwn): rename to HASPTR
 };
 
 // in little-endian, kind is always part of the first byte, avoiding the need for a branch in computing isptr
 typedef struct {
     uint8_t kind:2;
-    uint8_t size:7;
+    uint8_t size:6;
     uint8_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc8_t;
 
 typedef struct {
     uint16_t kind:2;
-    uint16_t size:15;
+    uint16_t size:14;
     uint16_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc16_t;
 
 typedef struct {
     uint32_t kind:2;
-    uint32_t size:31;
+    uint32_t size:30;
     uint32_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc32_t;
 
