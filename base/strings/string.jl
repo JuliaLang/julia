@@ -1,26 +1,31 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    StringView{T<:AbstractVector{UInt8}} <: AbstractString
+    StringView{T <: AbstractVector{UInt8}} <: AbstractString
 
 `StringView(array)` creates an `AbstractString` representation of
 any `array` of `UInt8` data, interpreted as UTF-8 encoded Unicode.
-It does *not* make a copy of or modify `array`.
+Similar to `String`, the underlying data may be arbitrary, including invalid UTF-8.
 
+Constructing a `StringView` does not make a copy of or modify the array.
 Use `codeunits(s)` to get the array that `s` wraps.
+The array may be mutated, which will be reflected in the resulting `StringView`.
+
+!!! compat "Julia 1.14"
+    The `StringView` type requires at least Julia 1.14.
 
 # Examples
 ```jldoctest
-julia> arr = [0x61, 0x62, 0x63];
+julia> arr = [0x61, 0xf0, 0x62, 0x63];
 
 julia> s = StringView(arr)
-"abc"
+"a\\xf0bc"
 
 julia> codeunits(s) === arr
 true
 
-julia> arr[1] = 0x64; s
-"dbc"
+julia> arr[2] = Int('x'); s
+"axbc"
 ```
 """
 struct StringView{T <: AbstractVector{UInt8}} <: AbstractString
