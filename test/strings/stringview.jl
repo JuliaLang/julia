@@ -201,6 +201,7 @@
         s = StringView(UInt8[0x61, 0x62, 0x63, 0x64])
         @test s[1:2] == StringView(UInt8[0x61, 0x62])
         @test s[2:4] == StringView(UInt8[0x62, 0x63, 0x64])
+        @test typeof(s[1:0]) == typeof(s)
 
         @test StringView(UInt8[0x61, 0x62])[1:1] == StringView(UInt8[0x61])
         @test StringView(UInt8[0x61, 0x62, 0x63])[2:2] == "b"
@@ -540,6 +541,10 @@
         @test reverse(StringView(UInt8[])) == ""
         @test reverse(StringView(0x61:0x63)) == "cba"
 
+        s = "abævø∩\0c"
+        @test reverse(StringView(collect(codeunits(s)))) == reverse(s)
+        @test reverse(StringView(codeunits(s))) isa StringView{Memory{UInt8}}
+
         # reverse returns same value as String reverse and same type
         b = Vector{UInt8}("foobar")
         s = StringView(b)
@@ -549,15 +554,9 @@
 
         for str in Any[s, abc, invalid, ss]
             @test reverse(str) == reverse(String(str))
-            reverse_T = if str isa StringView{<:UnitRange}
-                StringView{StepRange{UInt8, Int8}}
-            else
-                typeof(str)
-            end
-            if !isa(reverse(str), reverse_T)
-                println(typeof(str), " ", str, " ", typeof(reverse(str)))
-            end
-            @test reverse(str) isa reverse_T
+
+            # Not guaranteed, but let's test it anyway, to reduce breakage
+            @test reverse(str) isa StringView{Memory{UInt8}}
         end
     end
 
@@ -571,14 +570,12 @@
     end
 
     @testset "write and print" begin
-        s = StringView(UInt8[0x61, 0x62, 0x63])
         io = IOBuffer()
-        write(io, s)
+        write(io, StringView(UInt8[0x61, 0x62, 0x63]))
         @test String(take!(io)) == "abc"
 
-        s = StringView(UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f])
         io = IOBuffer()
-        print(io, s)
+        print(io, StringView(UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]))
         @test String(take!(io)) == "hello"
 
         io = IOBuffer()
