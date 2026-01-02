@@ -71,10 +71,10 @@ oneunit(::Union{T, Type{T}}) where {T <: StringView} = typemin(T)
 isascii(s::StringViewAndSub) = isascii(codeunits(s))
 
 # The canonical binary representation of strings is simply their byte content.
-write(io::IO, s::StringViewAndSub) = write(io, codeunits(s))
+write(io::IO, s::StringViewAndSub) = write(io, codeunits(s))::Int
 print(io::IO, s::StringViewAndSub) = (write(io, s); nothing)
 
-@propagate_inbounds thisind(s::StringViewAndSub, i::Int) = _thisind_str(s, Int(i)::Int)
+@propagate_inbounds thisind(s::StringViewAndSub, i::Integer) = _thisind_str(s, Int(i)::Int)
 @propagate_inbounds thisind(s::StringViewAndSub, i::Int) = _thisind_str(s, i)
 
 @propagate_inbounds nextind(s::StringViewAndSub, i::Integer) = _nextind_str(s, Int(i)::Int)
