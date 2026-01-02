@@ -14,6 +14,9 @@
         @test StringView(UInt8[0xc3, 0xa5]) == "å"
 
         @test StringView(0x42:0x45) == "BCDE"
+
+        # Non-concrete parameter
+        @test_throws ArgumentError StringView{DenseVector{UInt8}}([0x01])
     end
 
     @testset "Construction from other types" begin
