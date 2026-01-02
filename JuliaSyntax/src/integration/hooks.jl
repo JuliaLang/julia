@@ -3,6 +3,7 @@
 
 const _has_v1_6_hooks  = VERSION >= v"1.6"
 const _has_v1_10_hooks = isdefined(Core, :_setparser!)
+const _has_v1_14_hooks = isdefined(Base, :CompilerFrontend)
 
 struct ErrorSpec
     child_idx::Int
@@ -213,7 +214,8 @@ function build_base_compat_expr(stream, rule; filename="none", first_line=1)
     return topex
 end
 
-function core_parser_hook(code, filename::String, first_line::Int, offset::Int, rule::Symbol; syntax_version = v"1.13")
+function core_parser_hook(code, filename::String, first_line::Int, offset::Int, rule::Symbol,
+                          syntax_version = min(VERSION, v"1.13"))
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -315,6 +317,9 @@ function enable_in_core!(enable=true; freeze_world_age = true,
         debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing))
     if !_has_v1_6_hooks
         error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
+    end
+    if _has_v1_14_hooks
+        error("TODO: As of julia 1.14, JuliaSyntax integrates into Base via the Base.CompilerFrontend interface")
     end
     if enable && !isnothing(debug_filename)
         _debug_log[] = open(debug_filename, "w")
