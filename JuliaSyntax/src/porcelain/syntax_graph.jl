@@ -858,14 +858,24 @@ function _stm(line::LineNumberNode, st, pats; debug=false)
     return esc(out_blk)
 end
 
+function _stm_vcat_to_hcat(p::Expr)
+    Meta.isexpr(p, :vcat) || return p
+    out = Expr(:hcat)
+    for a in p.args
+        Meta.isexpr(a, :row) ? append!(out.args, a.args) : push!(out.args, a)
+    end
+    return out
+end
+
 function _stm_destruct_pat(per::Expr)
     pe, r = per.args[1:2]
-    Base.remove_linenums!(pe)
+    Base.remove_linenums!(pe) # errors in lhs of `->` are caught in usage check
     return Meta.isexpr(pe, :tuple) ? (pe.args[1], pe.args[2:end], r) :
         (pe, Expr[], r)
 end
 
 function _stm_matches(p::Union{Symbol, Expr}, st, debug=false, indent="")
+    p = Meta.isexpr(p, :vcat) ? _stm_vcat_to_hcat(p) : p
     if p isa Symbol
         debug && printstyled(string(indent, p, "=", st, "\n"); color=:yellow)
         return true
@@ -905,14 +915,16 @@ function _stm_matches(p::Union{Symbol, Expr}, st, debug=false, indent="")
                              color=(all_ok ? :green : :red))
         return all_ok
     end
-    @assert false
+    @assert false "unexpected syntax; enable or fix `_stm_check_usage`"
 end
 
 # Assuming _stm_matches, construct an Expr that assigns syms to SyntaxTrees.
 # Note st_rhs_expr is a ref-expr with a SyntaxTree/List value (in context).
 function _stm_assigns(p, st_rhs_expr; assigns=Expr(:block))
-    if p isa Symbol && p != :_
-        push!(assigns.args, Expr(:(=), p, st_rhs_expr))
+    p = Meta.isexpr(p, :vcat) ? _stm_vcat_to_hcat(p) : p
+    if p isa Symbol
+        p != :_ && push!(assigns.args, Expr(:(=), p, st_rhs_expr))
+        return assigns
     elseif p isa Expr
         p_args = filter(e->!(e isa LineNumberNode), p.args)[2:end]
         dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
@@ -928,9 +940,9 @@ function _stm_assigns(p, st_rhs_expr; assigns=Expr(:block))
                 _stm_assigns(p_args[end-i], :($st_rhs_expr[end-$i]); assigns)
             end
         end
+        return assigns
     end
-    return assigns
-    @assert false
+    @assert false "unexpected syntax; enable or fix `_stm_check_usage`"
 end
 
 # Check for correct pattern syntax.  Not needed outside of development.
@@ -945,17 +957,30 @@ function _stm_check_usage(pats::Expr)
             # some form of equality we don't implement, or they made a mistake)
             dup = p in syms && p !== :_
             push!(syms, p)
-            return !dup || @assert(false, "invalid duplicate non-underscore identifier $p")
+            @assert(!dup, "invalid duplicate non-underscore identifier $p")
+            return true
+        elseif Meta.isexpr(p, :vect)
+            @assert(length(p.args) === 1,
+                    "use spaces, not commas, in @stm []-patterns")
+        elseif Meta.isexpr(p, :hcat)
+            @assert(length(p.args) >= 2)
+        elseif Meta.isexpr(p, :vcat)
+            p = _stm_vcat_to_hcat(p)
+            @assert(length(p.args) >= 2)
+        else
+            @assert(false, "malformed pattern $p")
         end
-        return (Meta.isexpr(p, :vect, 1) ||
-            (Meta.isexpr(p, :hcat) && length(p.args) >= 1 &&
-            isnothing(@assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
-                              "Multiple `...` in a pattern is ambiguous")) &&
-            all(x->_stm_check_pattern(x; syms), p.args[2:end])) &&
-            # This exact syntax is not necessary since the kind can't be
-            # provided by a variable, but requiring [K"kinds"] is consistent.
-            Meta.isexpr(p.args[1], :macrocall, 3) &&
-            p.args[1].args[1] === Symbol("@K_str") && p.args[1].args[3] isa String)
+        @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
+                "Multiple `...` in a pattern is ambiguous")
+
+        # This exact syntax is not necessary since the kind can't be provided by
+        # a variable, but requiring [K"kinds"] is consistent and allows us to
+        # implement list matching later.
+        @assert(Meta.isexpr(p.args[1], :macrocall, 3) &&
+            p.args[1].args[1] === Symbol("@K_str") &&
+            p.args[1].args[3] isa String, "first pattern elt must be K\"\"")
+
+        return all(x->_stm_check_pattern(x; syms), p.args[2:end])
     end
 
     @assert Meta.isexpr(pats, :block) "Usage: @st_match st begin; ...; end"
