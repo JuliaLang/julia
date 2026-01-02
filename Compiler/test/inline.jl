@@ -1382,7 +1382,6 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1 broken=coverage_enabled
     @test count(isinvoke(:noinline_finalizer), src.code) == 1 broken=coverage_enabled
 end
-end
 
 # Test that we resolve a `finalizer` call that we don't handle currently
 mutable struct DoAllocNoEscapeBranch
@@ -1404,7 +1403,6 @@ let src = code_typed1() do
     end
     @test !any(iscall((src, Core.finalizer)), src.code) broken=coverage_enabled
     @test !any(isinvoke(:finalizer), src.code)
-end
 end
 
 const FINALIZATION_COUNT = Ref(0)
@@ -1458,7 +1456,6 @@ let src = code_typed1(useless_finalizer, ())
     @test count(iscall((src, Core.finalizer)), src.code) == 0 broken=coverage_enabled
     @test length(src.code) == 2 broken=coverage_enabled
 end
-end
 
 # tests finalizer inlining when def/uses involve control flow
 function cfg_finalization1(io)
@@ -1478,7 +1475,6 @@ let
     init_finalization_count!()
     cfg_finalization1(IOBuffer())
     @test get_finalization_count() == 1000 broken=coverage_enabled
-end
 end
 
 function cfg_finalization2(io)
@@ -1500,7 +1496,6 @@ let
     cfg_finalization2(IOBuffer())
     @test get_finalization_count() == 1000 broken=coverage_enabled
 end
-end
 
 function cfg_finalization3(io)
     for i = -999:1000
@@ -1520,7 +1515,6 @@ let
     init_finalization_count!()
     cfg_finalization3(IOBuffer())
     @test get_finalization_count() == 1000 broken=coverage_enabled
-end
 end
 
 function cfg_finalization4(io)
@@ -1543,7 +1537,6 @@ let
     cfg_finalization4(IOBuffer())
     @test get_finalization_count() == 1000 broken=coverage_enabled
 end
-end
 
 function cfg_finalization5(io)
     for i = -999:1000
@@ -1563,7 +1556,6 @@ let
     init_finalization_count!()
     cfg_finalization5(IOBuffer())
     @test get_finalization_count() == 1000 broken=coverage_enabled
-end
 end
 
 function cfg_finalization6(io)
@@ -1610,7 +1602,6 @@ let
     cfg_finalization7(IOBuffer())
     @test get_finalization_count() == 1000 broken=coverage_enabled
 end
-end
 
 # Load forwarding with `finalizer` elision
 let src = code_typed1((Int,)) do x
@@ -1624,7 +1615,6 @@ let src = code_typed1((Int,)) do x
     end
     @test count(iscall((src, getfield)), src.code) == 0 broken=coverage_enabled
 end
-end
 let src = code_typed1((Int,)) do x
         xs = finalizer(Ref(x)) do obj
             @noinline
@@ -1637,7 +1627,6 @@ let src = code_typed1((Int,)) do x
     end
     @test count(iscall((src, getfield)), src.code) == 0 broken=coverage_enabled
     @test count(iscall((src, setfield!)), src.code) == 1
-end
 end
 
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
