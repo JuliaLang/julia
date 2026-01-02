@@ -818,9 +818,6 @@ macro stm_debug(st, pats)
     _stm(__source__, st, pats; debug=true)
 end
 
-# TODO: forgot to support vcat (i.e. newlines in patterns currently require a
-# double-semicolon continuation)
-
 # TODO: SyntaxList pattern matching could take similar syntax and use most of
 # the same machinery
 
