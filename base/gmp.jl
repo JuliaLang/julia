@@ -685,8 +685,10 @@ function gcdx(a::BigInt, b::BigInt)
 end
 
 +(x::BigInt, y::BigInt, rest::BigInt...) = sum(tuple(x, y, rest...))
-sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
+function sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}; kws...)
+    isempty(kws) || return sum(identity, arr; kws...)
     foldl(MPZ.add!, arr; init=BigInt(0))
+end
 
 function prod(arr::AbstractArray{BigInt})
     any(iszero, arr) && return zero(BigInt)
