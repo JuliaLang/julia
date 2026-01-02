@@ -117,20 +117,19 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
     face = Symbol("markdown_h$l")
     underline = _header_underlines[l]
     pre = ' '^margin
-    local line_width
-    with_output_annotations(io, :face => face) do io
+    line_width = with_output_annotations(io, :face => face) do io
         headline = annotprint(terminline, md.text)
         lines = wraplines(headline, columns - 4margin)
         for (i, line) in enumerate(lines)
             print(io, pre, line)
             i < length(lines) && println(io)
         end
-        line_width = if length(lines) == 1
-            min(textwidth(lines[end]), columns)
+        if length(lines) == 1
+            return min(textwidth(lines[end]), columns)
         elseif length(lines) > 1
-            max(textwidth(lines[end]), div(columns, 3)+length(pre))
+            return max(textwidth(lines[end]), div(columns, 3)+length(pre))
         else
-            0
+            return 0
         end
     end
     header_width = max(0, line_width)

@@ -1,7 +1,7 @@
 # Lowering Pass 2 - syntax desugaring
 
-struct DesugaringContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct DesugaringContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     mod::Module
@@ -268,7 +268,7 @@ function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
             [K"call" "getfield"::K"core" tmp i::K"Integer"]
         ])
     end
-    makenode(ctx, assignment_srcref, K"block", stmts)
+    newnode(ctx, assignment_srcref, K"block", stmts)
 end
 
 # Implement destructuring with `lhs` a tuple expression (possibly with
@@ -403,7 +403,7 @@ function expand_property_destruct(ctx, ex, is_const)
         ]))
     end
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 # Expands all cases of general tuple destructuring, eg
@@ -444,7 +444,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
     end
     _destructure(ctx, ex, stmts, lhs, rhs1, is_const)
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 #-------------------------------------------------------------------------------
@@ -1481,7 +1481,7 @@ function expand_condition(ctx, ex)
         # jumps rather than first computing a bool and then jumping.
         cs = expand_cond_children(ctx, test)
         @assert length(cs) > 1
-        test = makenode(ctx, test, k, cs)
+        test = newnode(ctx, test, k, cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -2167,9 +2167,10 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
         if !isnothing(declmeta)
-            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id], [:meta=>declmeta]))
+            push!(stmts, setattr!(newnode(ctx, ex, declkind, tree_ids(ex)),
+                                  :meta, declmeta))
         else
-            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id]))
+            push!(stmts, newnode(ctx, ex, declkind, tree_ids(ex)))
         end
     elseif k == K"Placeholder"
         nothing
@@ -2178,7 +2179,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
             @chk numchildren(ex) == 2
             name = ex[1]
             if kind(name) == K"Identifier"
-                push!(stmts, makenode(ctx, ex, K"decl", NodeId[name._id, ex[2]._id]))
+                push!(stmts, newnode(ctx, ex, K"decl", tree_ids(name, ex[2])))
             else
                 # TODO: Currently, this ignores the LHS in `_::T = val`.
                 # We should probably do one of the following:
@@ -2222,7 +2223,7 @@ function expand_decls(ctx, ex)
             throw(LoweringError(ex, "invalid syntax in variable declaration"))
         end
     end
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 # Iterate over the variable names assigned to from a "fancy assignment left hand
@@ -3352,7 +3353,7 @@ end
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        name = mapleaf(ctx, ex, k)
+        name = setattr!(mkleaf(ex), :kind, k)
         name.name_val = "@$(ex.name_val)"
         name
     elseif is_valid_modref(ex)
@@ -4422,7 +4423,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # structure. For now we attribute to the parent node.
         cond = length(cs) == 2 ?
             cs[1] :
-            makenode(ctx, ex, k, cs[1:end-1])
+            newnode(ctx, ex, k, cs[1:end-1])
         # This transformation assumes the type assertion `cond::Bool` will be
         # added by a later compiler pass (currently done in codegen)
         if k == K"&&"

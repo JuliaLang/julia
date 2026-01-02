@@ -2181,7 +2181,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, "end")
         end
 
+    elseif head === :module && nargs==4 && isa(args[1],VersionNumber) && isa(args[2],Bool)
+        # New 4-argument form: (version, baremodule_flag, name, body)
+        show_block(IOContext(io, beginsym=>false), args[2] ? :module : :baremodule, args[3], args[4], indent, quote_level)
+        print(io, "end")
     elseif head === :module && nargs==3 && isa(args[1],Bool)
+        # Old 3-argument form: (baremodule_flag, name, body)
         show_block(IOContext(io, beginsym=>false), args[1] ? :module : :baremodule, args[2], args[3], indent, quote_level)
         print(io, "end")
 
@@ -2586,11 +2591,11 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     levelcount = Int[]                     # number of nodes at each level
     strwid = 0
     st_0, st_backslash, st_squote, st_dquote = 0,1,2,4
-    state::Int = st_0
-    stateis(s) = (state & s) != 0
+    state = Ref(st_0)
+    stateis(s) = (state[] & s) != 0
     quoted() = stateis(st_squote) || stateis(st_dquote)
-    enter(s) = (state |= s)
-    leave(s) = (state &= ~s)
+    enter(s) = (state[] |= s)
+    leave(s) = (state[] &= ~s)
     for (i, c) in ANSIIterator(str)
         if c isa ANSIDelimiter
             depths[i] = depth

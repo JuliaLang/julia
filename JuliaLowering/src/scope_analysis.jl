@@ -52,8 +52,8 @@ function ScopeInfo(ctx, parent_id, node_id, is_lambda, is_permeable)
     return s
 end
 
-struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     mod::Module
     # Every lexical scope, indexed by ScopeId
@@ -338,7 +338,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         record_lambda_var!(ctx, scope, get_binding(ctx, ex), capt=true)
         ex
     elseif k == K"softscope"
-        makeleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ctx, ex, K"TOMBSTONE")
     elseif !needs_resolution(ex)
         ex
     elseif k == K"local"
@@ -366,7 +366,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         ex_out
     elseif k == K"always_defined"
         resolve_name(ctx, ex[1]).is_always_defined = true
-        makeleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"lambda"
         newscope = enter_scope!(ctx, ex)
         arg_bindings = _resolve_scopes(ctx, ex[1], newscope)
@@ -452,7 +452,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
                 end
             end
             push!(stmts, locals_dict)
-            makenode(ctx, ex, K"block", stmts)
+            newnode(ctx, ex, K"block", stmts)
         end
     elseif k == K"assert"
         etype = extension_type(ex)
@@ -476,7 +476,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         else
             throw(LoweringError(ex, "Unknown syntax assertion"))
         end
-        makeleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"function_decl"
         resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
         name = resolved[1]
@@ -529,14 +529,14 @@ end
 
 ClosureBindings(name_stack) = ClosureBindings(name_stack, Vector{LambdaBindings}())
 
-struct VariableAnalysisContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     mod::Module
     scopes::Vector{ScopeInfo}
     lambda_bindings::LambdaBindings
     # Stack of method definitions for closure naming
-    method_def_stack::SyntaxList{GraphType}
+    method_def_stack::SyntaxList{Attrs, Vector{NodeId}}
     # Collection of information about each closure, principally which methods
     # are part of the closure (and hence captures).
     closure_bindings::Dict{IdTag,ClosureBindings}

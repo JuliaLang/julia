@@ -15,10 +15,9 @@ import REPL
 using .JuliaSyntax: sourcetext, set_numeric_flags
 
 using .JuliaLowering:
-    SyntaxGraph, newnode!, ensure_attributes!,
+    SyntaxGraph, new_id!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
-    makenode, makeleaf, setattr!,
-    is_leaf, numchildren, children,
+    setattr!, is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
     syntax_graph, Bindings, ScopeLayer, mapchildren
 
@@ -32,7 +31,7 @@ function _ast_test_graph()
 end
 
 function _source_node(graph, src)
-    id = newnode!(graph)
+    id = new_id!(graph)
     setattr!(graph, id, :kind, K"None")
     setattr!(graph, id, :source, src)
     SyntaxTree(graph, id)

@@ -260,7 +260,7 @@ end
 copy_to_bitarray_chunks!(dest::Vector{UInt64}, pos_d::Int, src::BitArray, pos_s::Int, numbits::Int) =
     copy_chunks!(dest, pos_d, src.chunks, pos_s, numbits)
 
-# pack 8 Bools encoded as one contiguous UIn64 into a single byte, e.g.:
+# pack 8 Bools encoded as one contiguous UInt64 into a single byte, e.g.:
 # 0000001:0000001:00000000:00000000:00000001:00000000:00000000:00000001 → 11001001 → 0xc9
 function pack8bools(z::UInt64)
     z |= z >>> 7

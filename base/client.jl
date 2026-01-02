@@ -307,9 +307,9 @@ function exec_options(opts)
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
-            Core.eval(Main, parse_input_line(arg))
+            Core.eval(Main, parse_input_line(arg; mod=Main))
         elseif cmd == 'E'
-            invokelatest(show, Core.eval(Main, parse_input_line(arg)))
+            invokelatest(show, Core.eval(Main, parse_input_line(arg; mod=Main)))
             println()
         elseif cmd == 'm'
             entrypoint = push!(split(arg, "."), "main")
@@ -552,12 +552,17 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
+const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
+function _internal_julia_parse(args...)
+    main_parser[](args...)
+end
+
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err
+export ans, err, _internal_julia_parse
 end
 
 function should_use_main_entrypoint()
@@ -573,7 +578,10 @@ function _start()
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
     local ret = 0
-    try
+    # `--project` has been processed at this point - latch the active project's syntax
+    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
+    # at each prompt.
+    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)

@@ -90,12 +90,14 @@ Lexical scope ID
 """
 const ScopeId = Int
 
-function JuliaSyntax.makeleaf(ctx::AbstractLoweringContext, srcref, proto)
-    makeleaf(syntax_graph(ctx), srcref, proto)
+function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
+                    prov::Union{SyntaxTree, SourceAttrType},
+                    k::Kind)
+    newleaf(syntax_graph(ctx), prov, k)
 end
 
-function newleaf(ctx, srcref, k::Kind, @nospecialize(value))
-    leaf = makeleaf(ctx, srcref, k)
+function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
+    leaf = newleaf(ctx, prov, k)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
             k == K"globalref" || k == K"Placeholder"
         setattr!(leaf._graph, leaf._id, :name_val, value)
@@ -122,19 +124,21 @@ function newleaf(ctx, srcref, k::Kind, @nospecialize(value))
     leaf
 end
 
+JuliaSyntax.newnode(ctx::AbstractLoweringContext,
+                    prov::Union{SyntaxTree, SourceAttrType},
+                    k::Kind, cs) =
+    newnode(syntax_graph(ctx), prov, k, cs)
+
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
 core_ref(ctx, ex, name) = newleaf(ctx, ex, K"core", name)
-svec_type(ctx, ex) = core_ref(ctx, ex, "svec")
 nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
-
-top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 
 # Assign `ex` to an SSA variable.
 # Return (variable, assignment_node)
 function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var = ssavar(ctx, ex, name)
-    assign_var = makenode(ctx, ex, K"=", NodeId[var._id, ex._id])
+    assign_var = newnode(ctx, ex, K"=", tree_ids(var, ex))
     var, assign_var
 end
 
@@ -143,24 +147,35 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, makenode(ctx, ex, K"=", NodeId[var._id, ex._id]))
+    push!(stmts, newnode(ctx, ex, K"=", tree_ids(var, ex)))
     var
 end
 
 #-------------------------------------------------------------------------------
 # @ast macro
 
-function JuliaSyntax._node_id(graph::SyntaxGraph, ex)
+_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
+
+_node_ids(graph::SyntaxGraph) = ()
+_node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
+_node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
+_node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
+function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
+    check_compatible_graph(graph, cs)
+    cs.ids
+end
+
+function _node_id(graph::SyntaxGraph, ex)
     # Fallback to give a comprehensible error message for use with the @ast macro
     error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
 end
-function JuliaSyntax._node_id(graph::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
+function _node_id(graph::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
     # Fallback to give a comprehensible error message for use with the @ast macro
     error("Attempt to use vector as an AST node. Did you mean to splat this? (content: `$(repr(ex))`)")
 end
 
 function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val)
-    push!(ids, JuliaSyntax._node_id(graph, val))
+    push!(ids, _node_id(graph, val))
 end
 function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val::Nothing)
     nothing
@@ -238,7 +253,7 @@ function _expand_ast_tree(ctx, srcref, tree)
         # Leaf node with copied attributes
         kind = esc(tree.args[3])
         srcref = esc(tree.args[2])
-        :(mapleaf($ctx, $srcref, $kind))
+        :(setattr!(mkleaf($srcref), :kind, $kind))
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
         # Interior node
         flatargs = []
@@ -262,7 +277,7 @@ function _expand_ast_tree(ctx, srcref, tree)
         end
         push!(child_stmts, :(child_ids))
         let (kind, srcref, kws) = _match_kind(srcref, flatargs[1])
-            n = :(makenode($ctx, $srcref, $kind, $children_ex))
+            n = :(newnode($ctx, $srcref, $kind, $children_ex))
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
@@ -340,7 +355,7 @@ to indicate that the "primary" location of the source is the location where
 macro ast(ctx, srcref, tree)
     quote
         ctx = $(esc(ctx))
-        srcref = $(_match_srcref(srcref))
+        srcref::$SyntaxTree = $(_match_srcref(srcref))
         $(_expand_ast_tree(:ctx, :srcref, tree))
     end
 end
@@ -351,14 +366,14 @@ function set_scope_layer(ctx, ex, layer_id, force)
     new_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
 
     ex2 = if k == K"module" || k == K"toplevel" || k == K"inert"
-        makenode(ctx, ex, ex, children(ex))
+        mknode(ex, children(ex))
     elseif k == K"."
-        children = NodeId[set_scope_layer(ctx, ex[1], layer_id, force), ex[2]]
-        makenode(ctx, ex, ex, children)
+        cs = tree_ids(set_scope_layer(ctx, ex[1], layer_id, force), ex[2])
+        mknode(ex, cs)
     elseif !is_leaf(ex)
         mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex)
     else
-        makeleaf(ctx, ex, ex)
+        mkleaf(ex)
     end
     setattr!(ex2, :scope_layer, new_layer)
 end
@@ -562,9 +577,9 @@ end
 # Context wrapper which helps to construct a list of statements to be executed
 # prior to some expression. Useful when we need to use subexpressions multiple
 # times.
-struct StatementListCtx{Ctx, GraphType} <: AbstractLoweringContext
+struct StatementListCtx{Ctx, Attrs} <: AbstractLoweringContext
     ctx::Ctx
-    stmts::SyntaxList{GraphType}
+    stmts::SyntaxList{Attrs, Vector{NodeId}}
 end
 
 function Base.getproperty(ctx::StatementListCtx, field::Symbol)
