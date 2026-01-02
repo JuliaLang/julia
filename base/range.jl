@@ -864,26 +864,15 @@ last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
 
-function minimum(r::AbstractUnitRange; init=_InitialValue())
+function _extremum_range(f::F, r::AbstractRange, m, init) where {F}
     isempty(r) && return init isa _InitialValue ? throw(ArgumentError("range must be non-empty")) : init
-    m = first(r)
-    return init isa _InitialValue ? m : min(m, init)
+    return init isa _InitialValue ? m : f(m, init)
 end
-function maximum(r::AbstractUnitRange; init=_InitialValue())
-    isempty(r) && return init isa _InitialValue ? throw(ArgumentError("range must be non-empty")) : init
-    m = last(r)
-    return init isa _InitialValue ? m : max(m, init)
-end
-function minimum(r::AbstractRange; init=_InitialValue())
-    isempty(r) && return init isa _InitialValue ? throw(ArgumentError("range must be non-empty")) : init
-    m = min(first(r), last(r))
-    return init isa _InitialValue ? m : min(m, init)
-end
-function maximum(r::AbstractRange; init=_InitialValue())
-    isempty(r) && return init isa _InitialValue ? throw(ArgumentError("range must be non-empty")) : init
-    m = max(first(r), last(r))
-    return init isa _InitialValue ? m : max(m, init)
-end
+
+minimum(r::AbstractUnitRange; init=_InitialValue()) = _extremum_range(min, r, first(r), init)
+maximum(r::AbstractUnitRange; init=_InitialValue()) = _extremum_range(max, r, last(r), init)
+minimum(r::AbstractRange; init=_InitialValue()) = _extremum_range(min, r, min(first(r), last(r)), init)
+maximum(r::AbstractRange; init=_InitialValue()) = _extremum_range(max, r, max(first(r), last(r)), init)
 
 """
     argmin(r::AbstractRange)
