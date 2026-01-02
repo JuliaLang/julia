@@ -77,16 +77,6 @@ function String(v::Vector{UInt8})
     setfield!(v, :ref, memoryref(Memory{UInt8}()))
     return str
 end
-function String(v::ReinterpretArray{UInt8, 1, S, Vector{S}, IsReshaped}) where {S, IsReshaped}
-    len = length(v)
-    len == 0 && return ""
-    return ccall(:jl_pchar_to_string, Ref{String}, (Ptr{S}, Int), v.parent.ref, len)
-end
-function String(v::ReinterpretArray{UInt8, 1, S, Memory{S}, IsReshaped}) where {S, IsReshaped}
-    len = length(v)
-    len == 0 && return ""
-    return ccall(:jl_pchar_to_string, Ref{String}, (Ptr{S}, Int), v.parent.ptr, len)
-end
 
 """
     unsafe_takestring(m::Memory{UInt8})::String

@@ -918,6 +918,11 @@ function _reinterpret_padding(::Type{Out}, x::In) where {Out, In}
     return out[]
 end
 
+function String(v::Base.ReinterpretArray{UInt8,1,S,<:Union{Vector{S},Memory{S}},IsReshaped}) where {S,IsReshaped}
+    len = length(v)
+    len == 0 && return ""
+    return ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8}, Int), v, len)
+end
 
 # Reductions with IndexSCartesian2
 
