@@ -1,5 +1,8 @@
 /* Julia DTrace provider */
 
+typedef struct { int dummy; } jl_task_t;
+typedef struct { int dummy; } jl_ptls_t;
+
 provider julia {
     probe gc__begin(int collection);
     probe gc__stop_the_world();
