@@ -568,12 +568,14 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
     jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
     enum jl_partition_kind constant_kind)
 {
+    JL_GC_PUSH1(&val);
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world);
     if (jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
+    JL_GC_POP();
     return bpart;
 }
 
