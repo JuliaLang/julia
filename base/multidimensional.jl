@@ -1066,8 +1066,6 @@ end
     $(_generate_unsafe_setindex!_body(2))
 end
 
-diff(a::AbstractVector) = diff(a; dims=1)
-
 function diff(a::AbstractVector; dims::Integer=1)
     require_one_based_indexing(a)
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))

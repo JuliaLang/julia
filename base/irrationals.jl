@@ -200,7 +200,12 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
-round(x::Irrational, r::RoundingMode) = round(float(x), r)
+function round(x::Irrational, r::RoundingMode;
+               digits::Union{Nothing,Integer}=nothing,
+               sigdigits::Union{Nothing,Integer}=nothing,
+               base::Union{Nothing,Integer}=nothing)
+    round(float(x), r; digits=digits, sigdigits=sigdigits, base=base)
+end
 
 """
     @irrational sym [val] def

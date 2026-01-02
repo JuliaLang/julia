@@ -48,35 +48,6 @@ isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would b
 
 # See rounding.jl for docstring.
 
-# NOTE: historically this relied on keyword dispatch behaviour (#9498), where keyword
-# calls could fall back to a less-specific method that accepted keywords. With #9498
-# fixed, we need keyword support on the most-specific positional methods.
-function round(x::IEEEFloat, r::RoundingMode{:Nearest};
-               digits::Union{Nothing,Integer}=nothing,
-               sigdigits::Union{Nothing,Integer}=nothing,
-               base::Union{Nothing,Integer}=nothing)
-    if digits === nothing
-        if sigdigits === nothing
-            if base === nothing
-                return rint_llvm(x)
-            else
-                # See comment in the generic method below.
-                return round(x, r)
-            end
-        else
-            isfinite(x) || return float(x)
-            _round_sigdigits(x, r, sigdigits, base === nothing ? 10 : base)
-        end
-    else
-        if sigdigits === nothing
-            isfinite(x) || return float(x)
-            _round_digits(x, r, digits, base === nothing ? 10 : base)
-        else
-            throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
-        end
-    end
-end
-
 function round(x::Real, r::RoundingMode=RoundNearest;
                digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
     if digits === nothing

@@ -118,14 +118,14 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 11 == get_world_counter() == tls_world_age()
+@test wc265 + 12 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
 @test wc265 + 1 == fetch(wc265_41332a)
 @test wc265 + 9 == fetch(wc265_41332b)
-@test wc265 + 11 == fetch(wc265_41332c)
+@test wc265 + 12 == fetch(wc265_41332c)
 @test wc265 + 9 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
@@ -134,7 +134,7 @@ wc265 = get_world_counter()
 @test put_n_take!(get_world_counter, ()) == wc265
 @test put_n_take!(tls_world_age, ()) + 3 == wc265
 f265(::Int) = 1
-@test put_n_take!(get_world_counter, ()) == wc265 + 1 == get_world_counter() == tls_world_age()
+@test put_n_take!(get_world_counter, ()) == wc265 + 2 == get_world_counter() == tls_world_age()
 @test put_n_take!(tls_world_age, ()) + 3 == wc265
 
 @test g265() == Int[1, 1, 1]
@@ -202,7 +202,7 @@ cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.methodta
 @test cache26506.max_world === typemax(UInt)
 w26506 = Base.get_world_counter()
 f26506(x::String) = 3
-@test w26506+1 === Base.get_world_counter()
+@test w26506+2 === Base.get_world_counter()
 # The entry we created above should have been truncated
 @test cache26506.max_world == w26506
 # Captures the world age on creation

@@ -796,7 +796,7 @@ end
 prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
-function sizehint!(B::BitVector, sz::Integer)
+function sizehint!(B::BitVector, sz::Integer; shrink::Bool=true)
     sizehint!(B.chunks, num_bit_chunks(sz))
     return B
 end
@@ -1732,11 +1732,21 @@ function any(B::BitArray)
     return false
 end
 
-minimum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-empty")) : all(B)
-maximum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-empty")) : any(B)
+function minimum(B::BitArray; dims=:)
+    if dims === (:)
+        isempty(B) && throw(ArgumentError("argument must be non-empty"))
+        return all(B)
+    end
+    return reduce(&, B; dims=dims)
+end
 
-minimum(B::BitArray; dims::D=:) where {D} = _all(B, dims)
-maximum(B::BitArray; dims::D=:) where {D} = _any(B, dims)
+function maximum(B::BitArray; dims=:)
+    if dims === (:)
+        isempty(B) && throw(ArgumentError("argument must be non-empty"))
+        return any(B)
+    end
+    return reduce(|, B; dims=dims)
+end
 
 ## map over bitarrays ##
 
