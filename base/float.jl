@@ -472,25 +472,12 @@ function _round_kwargs(x, r::RoundingMode, digits, sigdigits, base)
     end
 end
 
-function round(x::IEEEFloat, ::RoundingMode{:ToZero};
-               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
-    digits === nothing && sigdigits === nothing && return trunc_llvm(x)
-    _round_kwargs(x, RoundToZero, digits, sigdigits, base)
-end
-function round(x::IEEEFloat, ::RoundingMode{:Down};
-               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
-    digits === nothing && sigdigits === nothing && return floor_llvm(x)
-    _round_kwargs(x, RoundDown, digits, sigdigits, base)
-end
-function round(x::IEEEFloat, ::RoundingMode{:Up};
-               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
-    digits === nothing && sigdigits === nothing && return ceil_llvm(x)
-    _round_kwargs(x, RoundUp, digits, sigdigits, base)
-end
-function round(x::IEEEFloat, ::RoundingMode{:Nearest};
-               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
-    digits === nothing && sigdigits === nothing && return rint_llvm(x)
-    _round_kwargs(x, RoundNearest, digits, sigdigits, base)
+for (R, f) in ((:ToZero, :trunc_llvm), (:Down, :floor_llvm), (:Up, :ceil_llvm), (:Nearest, :rint_llvm))
+    @eval function round(x::IEEEFloat, r::RoundingMode{$(QuoteNode(R))};
+                         digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+        digits === nothing && sigdigits === nothing && return $f(x)
+        _round_kwargs(x, r, digits, sigdigits, base)
+    end
 end
 
 rounds_up(x, ::RoundingMode{:Down}) = false
