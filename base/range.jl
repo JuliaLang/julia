@@ -688,7 +688,7 @@ end
 
 ## interface implementations
 
-length(r::AbstractRange) = error("length implementation missing") # catch mistakes
+length(r::AbstractRange) = throw(NotImplementedError(length, (r,), AbstractRange)) # catch mistakes
 size(r::AbstractRange) = (@inline; (length(r),))
 
 isempty(r::StepRange) =
