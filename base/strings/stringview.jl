@@ -26,6 +26,28 @@ unsafe_convert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = convert(Ptr{Int8},
 cconvert(::Type{Ptr{UInt8}}, s::DenseStringViewAndSub) = s
 cconvert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = s
 
+function Base.reverse(s::StringViewAndSub)
+    mem = Memory{UInt8}(undef, ncodeunits(s))
+    offset = length(mem)
+    for char in s
+        ncu = ncodeunits(char)
+        offset -= ncu
+        # This may trigger if `length` of the underlying vector is wrongly
+        # implemented, or the vector is concurrently mutated.
+        # With this check, `@inbounds` below is safe
+        offset < 0 && error("Invalid implementation of vector length")
+        u = reinterpret(UInt32, char)
+        i = offset
+        while true
+            # This is safe due to the check above
+            @inbounds mem[(i += 1)] = (u >> 24) % UInt8
+            u <<= 8
+            iszero(u) && break
+        end
+    end
+    return StringView(mem)
+end
+
 sizeof(s::StringView) = length(s.data)
 ncodeunits(s::StringView) = length(s.data)
 codeunit(::StringView) = UInt8
@@ -60,9 +82,6 @@ print(io::IO, s::StringViewAndSub) = (write(io, s); nothing)
 
 isvalid(s::StringViewAndSub, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-reverse(s::StringView) = StringView(reverse(codeunits(s)))
-reverse(s::SubString{<:StringView}) = SubString(StringView(reverse(codeunits(s))))
-
 # This is different from the String implementation, because when r is empty,
 # we cannot just return the constant "".
 @inline function getindex(s::StringView, r::UnitRange{Int})
@@ -75,7 +94,7 @@ reverse(s::SubString{<:StringView}) = SubString(StringView(reverse(codeunits(s))
         @inbounds isvalid(s, j) || string_index_err(s, j)
     end
     j = nextind(s, j) - 1
-    return StringView(s.data[i:j])
+    return StringView(cu[i:j])
 end
 
 function chomp(s::StringViewAndSub)
