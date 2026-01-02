@@ -2,7 +2,7 @@
 
 import Libdl
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 # helper function for passing input to stdin
 # and returning the stdout result

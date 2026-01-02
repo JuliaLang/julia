@@ -2,8 +2,6 @@
 
 using Test
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
-
 # Tests for @__LINE__ inside and outside of macros
 # NOTE: the __LINE__ numbers for these first couple tests are significant, so
 # adding any lines here will make those tests fail
@@ -38,6 +36,8 @@ end
 original_depot_path = copy(Base.DEPOT_PATH)
 include("tempdepot.jl")
 include("precompile_utils.jl")
+
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 loaded_files = String[]
 push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))

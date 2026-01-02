@@ -4,7 +4,7 @@ using Base.ScopedValues
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0

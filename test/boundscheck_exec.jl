@@ -7,7 +7,7 @@ using Test, Random, InteractiveUtils
 @enum BCOption bc_default bc_on bc_off
 bc_opt = BCOption(Base.JLOptions().check_bounds)
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 # test for boundscheck block eliminated at same level
 @inline function A1()

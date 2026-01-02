@@ -9,7 +9,7 @@ using Downloads: Downloads, download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 yescmd = `yes`
 echocmd = `echo`

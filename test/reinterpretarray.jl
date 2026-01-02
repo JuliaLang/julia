@@ -6,7 +6,7 @@ using .Main.OffsetArrays
 isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
 using .Main: TSlow, WrapperArray
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)

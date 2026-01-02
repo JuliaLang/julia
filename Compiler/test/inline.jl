@@ -168,7 +168,7 @@ function f_ifelse(x)
     b = ifelse(a, true, false)
     return b ? x + 1 : x
 end
-@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2 broken=coverage_enabled
 
 # Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
@@ -205,7 +205,7 @@ end
 function cprop_inline_baz2()
     return cprop_inline_bar(cprop_inline_foo2()..., cprop_inline_foo2()...)
 end
-@test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2
+@test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2 broken=coverage_enabled
 
 # Check that apply_type/TypeVar can be fully eliminated
 function f_apply_typevar(T)
@@ -1239,7 +1239,7 @@ let src = code_typed1() do
             DoAllocNoEscape()
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 # Test that a case when `Core.finalizer` is registered interprocedurally,
@@ -1254,7 +1254,7 @@ let src = code_typed1() do
             end
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 function register_finalizer!(obj)
@@ -1268,7 +1268,7 @@ let src = code_typed1() do
             register_finalizer!(obj)
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 function genfinalizer(val)
@@ -1282,7 +1282,7 @@ let src = code_typed1() do
             finalizer(genfinalizer(nothing), obj)
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 # Test that we can inline a finalizer that just returns a constant value
@@ -1298,7 +1298,7 @@ let src = code_typed1() do
             DoAllocConst()
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 # Test that finalizer elision doesn't cause a throw to be inlined into a function
@@ -1343,8 +1343,8 @@ let src = code_typed1(Tuple{Any}) do x
     end
     @test count(x->isexpr(x, :static_parameter), src.code) == 0 # A bad inline might leave left-over :static_parameter
     nnothrow_invokes = count(isinvoke(:nothrow_side_effect), src.code)
-    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
-          count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes
+    @test (count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
+          count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes) broken=coverage_enabled
     # TODO: Our effect modeling is not yet strong enough to fully eliminate this
     @test_broken count(isnew, src.code) == 0
 end
@@ -1379,8 +1379,9 @@ let src = code_typed1() do
             DoAllocNoEscapeNoInline()
         end
     end
-    @test count(isnew, src.code) == 1
-    @test count(isinvoke(:noinline_finalizer), src.code) == 1
+    @test count(isnew, src.code) == 1 broken=coverage_enabled
+    @test count(isinvoke(:noinline_finalizer), src.code) == 1 broken=coverage_enabled
+end
 end
 
 # Test that we resolve a `finalizer` call that we don't handle currently
@@ -1401,8 +1402,9 @@ let src = code_typed1() do
             DoAllocNoEscapeBranch(i)
         end
     end
-    @test !any(iscall((src, Core.finalizer)), src.code)
+    @test !any(iscall((src, Core.finalizer)), src.code) broken=coverage_enabled
     @test !any(isinvoke(:finalizer), src.code)
+end
 end
 
 const FINALIZATION_COUNT = Ref(0)
@@ -1436,12 +1438,12 @@ function const_finalization(io)
     end
 end
 let src = code_typed1(const_finalization, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     const_finalization(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 # Test that finalizers that don't do anything are just erased from the IR
@@ -1453,8 +1455,9 @@ function useless_finalizer()
     return x
 end
 let src = code_typed1(useless_finalizer, ())
-    @test count(iscall((src, Core.finalizer)), src.code) == 0
-    @test length(src.code) == 2
+    @test count(iscall((src, Core.finalizer)), src.code) == 0 broken=coverage_enabled
+    @test length(src.code) == 2 broken=coverage_enabled
+end
 end
 
 # tests finalizer inlining when def/uses involve control flow
@@ -1469,12 +1472,13 @@ function cfg_finalization1(io)
     end
 end
 let src = code_typed1(cfg_finalization1, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization1(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
+end
 end
 
 function cfg_finalization2(io)
@@ -1489,12 +1493,13 @@ function cfg_finalization2(io)
     end
 end
 let src = code_typed1(cfg_finalization2, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization2(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
+end
 end
 
 function cfg_finalization3(io)
@@ -1509,12 +1514,13 @@ function cfg_finalization3(io)
     end
 end
 let src = code_typed1(cfg_finalization3, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization3(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
+end
 end
 
 function cfg_finalization4(io)
@@ -1530,12 +1536,13 @@ function cfg_finalization4(io)
     end
 end
 let src = code_typed1(cfg_finalization4, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization4(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
+end
 end
 
 function cfg_finalization5(io)
@@ -1550,12 +1557,13 @@ function cfg_finalization5(io)
     end
 end
 let src = code_typed1(cfg_finalization5, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization5(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
+end
 end
 
 function cfg_finalization6(io)
@@ -1569,12 +1577,12 @@ function cfg_finalization6(io)
     end
 end
 let src = code_typed1(cfg_finalization6, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization6(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 function cfg_finalization7(io)
@@ -1595,12 +1603,13 @@ function cfg_finalization7(io)
     end
 end
 let src = code_typed1(cfg_finalization7, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization7(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
+end
 end
 
 # Load forwarding with `finalizer` elision
@@ -1613,7 +1622,8 @@ let src = code_typed1((Int,)) do x
         Base.@assume_effects :nothrow @noinline println("xs[] = ", @inline xs[])
         return xs[]
     end
-    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0 broken=coverage_enabled
+end
 end
 let src = code_typed1((Int,)) do x
         xs = finalizer(Ref(x)) do obj
@@ -1625,8 +1635,9 @@ let src = code_typed1((Int,)) do x
         xs[] += 1
         return xs[]
     end
-    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0 broken=coverage_enabled
     @test count(iscall((src, setfield!)), src.code) == 1
+end
 end
 
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
@@ -1797,7 +1808,7 @@ let src = code_typed1((Any,)) do x
         end
         nothing
     end
-    @test count(iscall((src, f_union_unmatched)), src.code) == 0
+    @test count(iscall((src, f_union_unmatched)), src.code) == 0 broken=coverage_enabled
 end
 
 # modifyfield! handling
@@ -2109,12 +2120,12 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(iscall((src, Core.setglobal!)), src.code)
+        @test any(iscall((src, Core.setglobal!)), src.code) broken=coverage_enabled
     end
 
     let
         run_finalizer_escape_test(true, true)
-        @test finalizer_escape == 3
+        @test finalizer_escape == 3 broken=coverage_enabled
     end
 end
 
@@ -2277,11 +2288,11 @@ let src = code_typed1(foreign_alloc, (Type{Float64},Int,))
     @test count(iscall((src, Core.finalizer)), src.code) == 1
 end
 let src = code_typed1(f_EA_finalizer, (Int,))
-    @test count(iscall((src, Core.finalizer)), src.code) == 0
+    @test count(iscall((src, Core.finalizer)), src.code) == 0 broken=coverage_enabled
 end
 let;Base.Experimental.@force_compile
     f_EA_finalizer(42000)
-    @test foreign_buffer_checker.finalized
+    @test foreign_buffer_checker.finalized broken=coverage_enabled
 end
 
 # JuliaLang/julia#56422:

@@ -641,10 +641,10 @@ for f = Any[removable_if_unused1, removable_if_unused2]
     @test Compiler.is_inaccessiblememonly(effects) broken=coverage_enabled
     @test Compiler.is_effect_free(effects) broken=coverage_enabled
     @test Compiler.is_removable_if_unused(effects) broken=coverage_enabled
-    @test @eval fully_eliminated() do
+    @test (@eval fully_eliminated() do
         $f()
         nothing
-    end
+    end) broken=coverage_enabled
 end
 @noinline function removable_if_unused3(v)
     x = makeref()
@@ -694,10 +694,10 @@ let good_dims = [1, 2, 3, 4, 10]
         @test @eval(Base.infer_effects() do
             construct_array(Int, $(dims...))
         end |> Compiler.is_removable_if_unused) broken=coverage_enabled
-        @test @eval fully_eliminated() do
+        @test (@eval fully_eliminated() do
             construct_array(Int, $(dims...))
             nothing
-        end
+        end) broken=coverage_enabled
     end
 end
 # should analyze throwness correctly

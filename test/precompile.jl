@@ -6,7 +6,7 @@ using REPL # testing the doc lookup function should be outside of the scope of t
 include("precompile_utils.jl")
 include("tempdepot.jl")
 
-const coverage_enabled = (Base.JLOptions().code_coverage != 0)
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 
 Foo_module = :Foo4b3a94a1a081a8cb
 foo_incl_dep = :foo4b3a94a1a081a8cb
