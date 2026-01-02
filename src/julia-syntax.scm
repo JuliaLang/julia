@@ -367,8 +367,10 @@
     functionloc))
 
 ;; construct the (method ...) expression for one primitive method definition,
-;; assuming optional and keyword args are already handled
-(define (method-def-expr- name sparams argl body (rett '(core Any)))
+;; assuming optional and keyword args are already handled.
+;; declare?: when #f, skip generating the (method name) short-form declaration.
+;; This is used for kwcall stubs where the original method already generated the declaration.
+(define (method-def-expr- name sparams argl body (rett '(core Any)) (declare? #t))
   (if
    (any kwarg? argl)
    ;; has optional positional args
@@ -388,7 +390,7 @@
         (receive
          (vararg req) (separate vararg? argl)
          (optional-positional-defs name sparams req opt dfl body
-                                   (append req opt vararg) rett)))))
+                                   (append req opt vararg) rett declare?)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
           (anames (llist-vars argl))
@@ -454,13 +456,13 @@
                                  (call (core svec) ,@temps)
                                  (inert ,loc)))
                           ,body))))
-       (if (or (symbol? name) (globalref? name))
+       (if (and declare? (or (symbol? name) (globalref? name)))
            `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
            (if (overlay? name)
              (if (not (null? generator))
                 `(block ,@generator ,mdef)
                 mdef)
-            `(block ,@generator ,mdef (null))))))))
+            `(block ,@generator (latestworld-if-toplevel) ,mdef (null))))))))
 
 ;; wrap expr in nested scopes assigning names to vals
 (define (scopenest names vals expr)
@@ -688,7 +690,7 @@
           (else
            (loop filtered (cdr params))))))
 
-(define (optional-positional-defs name sparams req opt dfl body overall-argl rett)
+(define (optional-positional-defs name sparams req opt dfl body overall-argl rett (declare? #t))
   (let ((prologue (without-generated (extract-method-prologue body))))
     `(block
       ,@(map (lambda (n)
@@ -720,9 +722,9 @@
                                `(block
                                  ,@prologue
                                  (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
-                 (method-def-expr- name sp passed body)))
+                 (method-def-expr- name sp passed body '(core Any) declare?)))
              (iota (length opt)))
-      ,(method-def-expr- name sparams overall-argl body rett))))
+      ,(method-def-expr- name sparams overall-argl body rett declare?))))
 
 ;; strip empty (parameters ...), normalizing `f(x;)` to `f(x)`.
 (define (remove-empty-parameters argl)
@@ -811,7 +813,8 @@
              (if (call (top isempty) ,kw)
                  (return (call ,callee ,@args ,@splatted-vararg))
                  (return (call (top kwerr) ,kw ,callee ,@args ,@splatted-vararg)))))
-         '(core Any))))
+         '(core Any)
+         #f)))  ;; skip declaration; original method already generated it
 
 ;; method-def-expr checks for keyword arguments, and if there are any, calls
 ;; keywords-method-def-expr to expand the definition into several method
@@ -836,7 +839,7 @@
                     (if (call (core isdefinedglobal) (core Core) (inert kwftype) (false))
                         ,(kwcall-stub-method-def-expr name sparams argl body)
                         (null))
-                    ,(if (or (symbol? name) (globalref? name)) name '(null))))
+                    ,(if (or (symbol? name) (globalref? name)) `(unnecessary ,name) '(null))))
                 (method-def-expr- name sparams argl body rett)))))
 
 (define (struct-def-expr name params super fields mut)
