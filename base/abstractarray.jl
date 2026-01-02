@@ -215,9 +215,19 @@ String
      For arrays, this function requires at least Julia 1.2.
 """
 valtype(A::Type{<:AbstractArray}) = eltype(A)
-
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
+
+"""
+    swapat!(A, i, j)
+
+Swap the elements of array `A` at indices `i` and `j` in-place.
+"""
+@inline function swapat!(A::AbstractArray, i, j)
+    A[i], A[j] = A[j], A[i]
+    return A
+end
+
 
 
 """

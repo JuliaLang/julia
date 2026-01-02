@@ -1057,6 +1057,17 @@ end
 @test nextind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
 @test prevind(zeros(4), 2) == 1
 @test prevind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 1)
+@testset "swapat!" begin
+    A = [1, 2, 3]
+    swapat!(A, 1, 3)
+    @test A == [3, 2, 1]
+
+    B = reshape(1:4, 2, 2)
+    swapat!(B, 1, 4)
+    @test B[1] == 4
+    @test B[4] == 1
+end
+
 
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a
