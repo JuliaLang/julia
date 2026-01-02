@@ -148,6 +148,12 @@ end
         @testset "_stm_check_usage" begin
             bad = Expr[
                 :(@stm st begin
+                      [a] -> false
+                  end)
+                :(@stm st begin
+                      [K"None",a] -> false
+                  end)
+                :(@stm st begin
                       [K"None" a a] -> false
                   end)
                 :(@stm st begin
@@ -170,7 +176,6 @@ end
                 end
             end
         end
-
     end
 
     @testset "nested patterns" begin
@@ -193,6 +198,36 @@ end
             [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2 bad]]] -> 3
             [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier" bad] k2]]] -> 2
             [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+        end
+    end
+
+    @testset "vcat form (newlines in pattern)" begin
+        @test @stm st begin
+            [K"call"
+             f
+             a
+             b
+             c] -> true
+        end
+        @test @stm st begin
+            [K"call"
+             f a b c] -> true
+        end
+        @test @stm st begin
+            [K"call"
+
+
+             f a b c] -> true
+        end
+        @test @stm st begin
+            [K"call"
+             [K"Identifier"] [K"Identifier"]
+             [K"kw" [K"Identifier"] k1]
+             [K"call"
+              [K"Identifier"]
+              [K"kw"
+               [K"Identifier"]
+               k2]]] -> true
         end
     end
 
