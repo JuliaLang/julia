@@ -92,6 +92,19 @@ function single_stride_dim(A::Array)
 end
 single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
+function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+    A_cconv = Base.cconvert(Ptr{T}, A)
+    GC.@preserve A_cconv begin
+        A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+        for d in 1:N
+            stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+            first_idx = first(axes(A, d))
+            A_ptr += (I[d] - first_idx) * stride_in_bytes
+        end
+        unsafe_load(A_ptr)
+    end
+end
+
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
@@ -99,7 +112,8 @@ function test_cartesian(@nospecialize(A), @nospecialize(B))
         @test A[IA] == B[IB]
         if A isa StridedArray
             v1 = GC.@preserve A unsafe_load(pointer(A.parent, sum((0,(strides(A) .* (IA.I .- 1))...))+Base.first_index(A)))
-            @test v1 == B[IB]
+            v2 = unsafe_strided_getindex(A, Tuple(IA)...)
+            @test v1 == v2 == B[IB]
         end
     end
 end
