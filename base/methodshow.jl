@@ -85,7 +85,8 @@ function kwarg_decl(m::Method, kwtype = nothing)
         if kwli !== nothing
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
-            kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
+            locals = slotnames[(kwli.nargs + 1):end]
+            kws = filter(x -> !(x === empty_sym || '#' in string(x)), locals)
             # ensure the kwarg... is always printed last. The order of the arguments are not
             # necessarily the same as defined in the function
             i = findfirst(x -> endswith(string(x)::String, "..."), kws)
@@ -94,9 +95,9 @@ function kwarg_decl(m::Method, kwtype = nothing)
                 deleteat!(kws, i)
             end
             if isempty(kws)
-                # A kwcall stub exists for dispatch, but the positional method itself
-                # takes no keyword arguments.
-                m.nkw == 0 && return Symbol[]
+                # If there are no extra slots at all, this is the auto-generated kwcall
+                # stub for a non-keyword method.
+                isempty(locals) && return Symbol[]
                 push!(kws, :var"...")
             end
             return kws

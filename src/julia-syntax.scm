@@ -544,7 +544,7 @@
                   sparams))
          (kw      (gensy))
          (kwdecl  `(|::| ,kw (core NamedTuple)))
-         (rkw     (if (null? restkw) '() (symbol (string (car restkw) "..."))))
+         (rkw     (if (null? restkw) '() (symbol "...")))
          (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
          (mangled (let ((und (and name (undot-name name))))
                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
