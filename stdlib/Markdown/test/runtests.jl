@@ -274,7 +274,7 @@ end
 
 # Issue #38275
 function test_list_wrap(str, lenmin, lenmax)
-    strs = split(str, '\n')
+    strs = rstrip.(split(str, '\n'))
     l = length.(strs)
     for i = 1:length(l)-1
         if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
@@ -283,14 +283,29 @@ function test_list_wrap(str, lenmin, lenmax)
             l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
         end
     end
+
     # Check consistent indentation
-    rngs = findfirst.((". ",), strs)
-    k = last(rngs[1])
+    # First, locate the list labels ends (position of bullet, or the "." at
+    # the end of a numeric label
+    labelends = findfirst.((r"[.•–▪] ",), strs)
+    # sanity checks: label end locations must be either equal or separated by at least one char
+    sorted_labels = unique(sort(filter(!isnothing, labelends)))
+    for i in 1:length(sorted_labels)-1
+        first(sorted_labels[i]) + 1 < first(sorted_labels[i+1]) || return false
+    end
+
+    # next check that after each label / bullet the following lines have the right indent
+    k = first(labelends[1])+1
     rex = Regex('^' * " "^k * "\\w")
-    for (i, rng) in enumerate(rngs)
-        isa(rng, AbstractRange) && last(rng) == k && continue  # every numbered line starts the text at the same position
-        rng === nothing && (isempty(strs[i]) || match(rex, strs[i]) !== nothing) && continue  # every unnumbered line is indented to text in numbered lines
-        return false
+    for (i, le) in enumerate(labelends)
+        if le === nothing
+            # every unlabeled line is indented to text in labeled lines
+            (isempty(strs[i]) || match(rex, strs[i]) !== nothing) || return false
+        else
+            # determine indent for following lines
+            k = first(le)+1
+            rex = Regex('^' * " "^k * "\\w")
+        end
     end
     return true
 end
@@ -298,6 +313,16 @@ end
 let doc =
     md"""
     1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+       - a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+         - a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+           999. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+           1000. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+       - a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
 
     2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
     """
