@@ -1455,9 +1455,9 @@ end
               ▪ fifth level
                 final extra line
       • back to top level
-    """
+    """ |> chomp
 
-    actual = sprint(show, MIME("text/plain"), m) * "\n"
+    actual = sprint(show, MIME("text/plain"), m)
     @test expected == actual
 
     #
@@ -1471,22 +1471,14 @@ end
        with an extra line
        1. second level\
           again with an extra line
-          1. third level\
-             yet again with an extra line
-             1. fourth level\
-                and another extra line
-                1. fifth level\
-                   final extra line
-          1. more third level
-          1. more third level
-          1. more third level
-          1. more third level
-          1. more third level
-          1. more third level
-          1. more third level
-          1. more third level
-          1. more third level\
-             with an extra line
+           999. third level\
+                yet again with an extra line
+                1. fourth level\
+                   and another extra line
+                   1. fifth level\
+                      final extra line
+          1000. more third level\
+                with an extra line
     1. back to top level
     """
 
@@ -1497,25 +1489,17 @@ end
          with an extra line
          1. second level
             again with an extra line
-             1. third level
-                yet again with an extra line
-                1. fourth level
-                   and another extra line
-                   1. fifth level
-                      final extra line
-             2. more third level
-             3. more third level
-             4. more third level
-             5. more third level
-             6. more third level
-             7. more third level
-             8. more third level
-             9. more third level
-            10. more third level
-                with an extra line
+             999. third level
+                  yet again with an extra line
+                  1. fourth level
+                     and another extra line
+                     1. fifth level
+                        final extra line
+            1000. more third level
+                  with an extra line
       2. back to top level
-    """
+    """ |> chomp
 
-    actual = sprint(show, MIME("text/plain"), m) * "\n"
+    actual = sprint(show, MIME("text/plain"), m)
     @test expected == actual
 end
