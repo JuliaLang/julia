@@ -308,6 +308,8 @@ to_index(i::Integer) = convert(Int,i)::Int
 to_index(i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
+to_index(I::AbstractRange{Bool}) = LogicalIndex(I)
+to_index(I::AbstractRange{<:Integer}) = _int(I)
 to_index(I::AbstractArray{Union{}}) = I
 to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
     throw(ArgumentError(LazyString("invalid index: ", limitrepr(I), " of type ", typeof(I))))
