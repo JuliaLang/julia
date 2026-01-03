@@ -569,7 +569,7 @@ julia> A # both A[1] and A[2] are the very same vector
 function fill end
 
 fill(v, dims::DimOrInd...) = fill(v, dims)
-fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
+fill(v, dims::NTuple{N, Union{Integer, AbstractOneTo}}) where {N} = fill(v, to_shape(dims))
 fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
 fill(v, dims::NTuple{N, DimOrInd}) where {N} = (a=similar(Array{typeof(v),N}, dims); fill!(a, v); a)
 fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
@@ -621,23 +621,23 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         $fname(dims::DimOrInd...) = $fname(dims)
         $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
-        $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
-        function $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N}
-            a = Array{T,N}(undef, dims)
-            fill!(a, $felt(T))
-            return a
-        end
-        function $fname(::Type{T}, dims::Tuple{}) where {T}
-            a = Array{T}(undef)
-            fill!(a, $felt(T))
-            return a
-        end
-        function $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N}
-            a = similar(Array{T,N}, dims)
-            fill!(a, $felt(T))
-            return a
+        # this method isn't strictly necessary, but is provided anyway to avoid
+        # ambiguities if packages define zeros(::Type{T}, ::Tuple{Vararg{AxisType}})
+        $fname(::Type{T}, ::Tuple{}) where {T} = _fill_similar(T, (), $felt(T))
+        function $fname(::Type{T}, dims::Tuple{Vararg{DimOrInd}}) where {T}
+            # check if the zero or one element is of the same type
+            # if yes, delegate to `fill` to construct the container
+            # if not, construct a container of the correct type and fill it up
+            el = $felt(T)
+            typeof(el) == T && return fill(el, dims)
+            return _fill_similar(T, dims, el)
         end
     end
+end
+function _fill_similar(::Type{T}, dims, el) where {T}
+    a = similar(Array{T,length(dims)}, dims)
+    fill!(a, el)
+    return a
 end
 
 ## Conversions ##
