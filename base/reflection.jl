@@ -1114,7 +1114,7 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     match = match::Method
     slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), match.slot_syms)
     locals = slotnames[(match.nargs + 1):end] # remove positional arguments
-    Symbol("kw#stub") in locals && return false
+    match.is_kwcall_stub && return false
     kws = filter(x -> !(x === Symbol("") || '#' in string(x)), locals)
     if isempty(kws)
         # If there are no extra slots at all, this is the auto-generated kwcall stub

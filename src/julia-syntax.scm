@@ -808,9 +808,9 @@
          (let* ((callee (arg-name (car forward-pargl)))
                 (args (map arg-name (cdr forward-pargl))))
            `(block
+             (meta kwcall_stub)
              ;; propagate method metadata to kwcall stub
              ,@(map propagate-method-meta (filter meta? prologue))
-             (local ,(symbol "kw#stub"))
              (if (call (top isempty) ,kw)
                  (return (call ,callee ,@args ,@splatted-vararg))
                  (return (call (top kwerr) ,kw ,callee ,@args ,@splatted-vararg)))))
