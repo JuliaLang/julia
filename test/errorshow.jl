@@ -442,6 +442,23 @@ let err_str
     @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 
+# Issue 39938 - transpose/adjoint hint for unsupported element types
+let err_str
+    struct NoTransposeType x::Int end
+    v = [NoTransposeType(1)]
+    err_str = @except_str transpose(v)[1,1] MethodError
+    @test occursin("MethodError: no method matching transpose(", err_str)
+    @test occursin("transpose is a linear-algebra operation that applies recursively to elements.", err_str)
+    @test occursin("To permute dimensions of an array, use permutedims.", err_str)
+
+    struct NoAdjointType x::Int end
+    v2 = [NoAdjointType(1)]
+    err_str = @except_str adjoint(v2)[1,1] MethodError
+    @test occursin("MethodError: no method matching adjoint(", err_str)
+    @test occursin("adjoint is a linear-algebra operation that applies recursively to elements.", err_str)
+    @test occursin("To permute dimensions of an array, use permutedims.", err_str)
+end
+
 import Core: String
 method_defs_lineno = @__LINE__() + 1
 String() = throw(ErrorException("1"))
