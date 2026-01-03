@@ -377,7 +377,22 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n    •  list2"
+        """
+          Title
+          ≡≡≡≡≡
+
+          Some discussion
+
+          │  A quote
+
+          Section important
+          =================
+
+          Some bolded
+
+          • list1
+          • list2
+        """ |> chomp
     @test sprint(show, "text/plain", md"#") == "" # edge case of empty header
     @test sprint(show, "text/markdown", book) ==
         """
