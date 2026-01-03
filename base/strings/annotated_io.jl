@@ -2,12 +2,14 @@
 
 ## AnnotatedIOBuffer
 
-struct AnnotatedIOBuffer <: AbstractPipe
+struct AnnotatedIOBuffer{V} <: AbstractPipe
     io::IOBuffer
-    annotations::Vector{RegionAnnotation}
+    annotations::Vector{RegionAnnotation{V}}
 end
 
-AnnotatedIOBuffer(io::IOBuffer) = AnnotatedIOBuffer(io, Vector{RegionAnnotation}())
+AnnotatedIOBuffer{V}(io::IOBuffer) where {V} = AnnotatedIOBuffer(io, Vector{RegionAnnotation{V}}())
+AnnotatedIOBuffer(io::IOBuffer) = AnnotatedIOBuffer{Any}(io)
+AnnotatedIOBuffer{V}() where {V} = AnnotatedIOBuffer{V}(IOBuffer())
 AnnotatedIOBuffer() = AnnotatedIOBuffer(IOBuffer())
 
 function show(io::IO, aio::AnnotatedIOBuffer)
@@ -32,12 +34,12 @@ annotations(io::AnnotatedIOBuffer) = io.annotations
 annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
     (_annotate!(io.annotations, range, label, val); io)
 
-function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:AnnotatedString}})
-    astr = AnnotatedString(astr)
+function write(io::AnnotatedIOBuffer{V}, astr::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {S, V}
+    astr = AnnotatedString{S, V}(astr)::AnnotatedString{S, V}
     offset = position(io.io)
     eof(io) || _clear_annotations_in_region!(io.annotations, offset+1:offset+ncodeunits(astr))
     _insert_annotations!(io, astr.annotations)
-    write(io.io, String(astr))
+    write(io.io, astr.string)
 end
 
 write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
@@ -46,7 +48,7 @@ write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
 
-function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
+function write(dest::AnnotatedIOBuffer{V}, src::AnnotatedIOBuffer{V}) where {V}
     destpos = position(dest)
     isappending = eof(dest)
     srcpos = position(src)
@@ -58,9 +60,8 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
     nb
 end
 
-# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers)
-# work as expected.
-function write(io::AbstractPipe, s::Union{AnnotatedString, SubString{<:AnnotatedString}})
+# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers) work as expected.
+function write(io::AbstractPipe, s::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {S}
     if pipe_writer(io) isa AnnotatedIOBuffer
         write(pipe_writer(io), s)
     else
@@ -77,16 +78,20 @@ function write(io::AbstractPipe, c::AnnotatedChar)
     end::Int
 end
 
-function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{T}}) where {T <: AbstractString}
+function read(io::AnnotatedIOBuffer{V}, ::Type{AnnotatedString{S, V}}) where {S, V}
     start = position(io)
     if start == 0
-        AnnotatedString(read(io.io, T), copy(io.annotations))
+        AnnotatedString{S, V}(read(io.io, S), RegionAnnotation{V}[RegionAnnotation{V}(a) for a in io.annotations])
     else
-        annots = [@inline(setindex(annot, UnitRange{Int}(max(1, first(annot.region) - start), last(annot.region)-start), :region))
-                  for annot in io.annotations if last(annot.region) > start]
-        AnnotatedString(read(io.io, T), annots)
+        annots = RegionAnnotation{V}[
+            (region = max(1, first(annot.region) - start):last(annot.region)-start,
+             label = annot.label,
+             value = convert(V, annot.value))
+            for annot in io.annotations if last(annot.region) > start]
+        AnnotatedString{S, V}(read(io.io, S), annots)
     end
 end
+read(io::AnnotatedIOBuffer{V}, ::Type{AnnotatedString{S}}) where {S, V} = read(io, AnnotatedString{S, V})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{AbstractString}}) = read(io, AnnotatedString{String})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{String})
 
@@ -116,10 +121,10 @@ This operates by removing all elements of `annotations` that are entirely
 contained in `span`, truncating ranges that partially overlap, and splitting
 annotations that subsume `span` to just exist either side of `span`.
 """
-function _clear_annotations_in_region!(annotations::Vector{RegionAnnotation}, span::UnitRange{Int})
+function _clear_annotations_in_region!(annotations::Vector{RegionAnnotation{V}}, span::UnitRange{Int}) where {V}
     # Clear out any overlapping pre-existing annotations.
     filter!(ann -> first(ann.region) < first(span) || last(ann.region) > last(span), annotations)
-    extras = Tuple{Int, RegionAnnotation}[]
+    extras = Tuple{Int, RegionAnnotation{V}}[]
     for i in eachindex(annotations)
         annot = annotations[i]
         region = annot.region
@@ -164,7 +169,7 @@ This is implemented so that one can say write an `AnnotatedString` to an
 `AnnotatedIOBuffer` one character at a time without needlessly producing a
 new annotation for each character.
 """
-function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vector{RegionAnnotation}, offset::Int = 0)
+function _insert_annotations!(annots::Vector{RegionAnnotation{V}}, newannots::Vector{RegionAnnotation{V′}}, offset::Int = 0) where {V, V′ <: V}
     run = 0
     if !isempty(annots) && last(last(annots).region) == offset
         for i in reverse(axes(newannots, 1))
@@ -229,7 +234,7 @@ function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vecto
     end
 end
 
-_insert_annotations!(io::AnnotatedIOBuffer, newannots::Vector{RegionAnnotation}, offset::Int = position(io)) =
+_insert_annotations!(io::AnnotatedIOBuffer, newannots::Vector{<:RegionAnnotation}, offset::Int = position(io)) =
     _insert_annotations!(io.annotations, newannots, offset)
 
 # String replacement
@@ -238,7 +243,7 @@ _insert_annotations!(io::AnnotatedIOBuffer, newannots::Vector{RegionAnnotation},
 # substantial slowdown here. If we remove `; count` from the signature
 # and run the sample code above in `_insert_annotations!`, the runtime
 # drops from ~4400ns to ~580ns (~7x faster). I cannot guess why this is.
-function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; count = typemax(Int))
+function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Pair...; count = typemax(Int)) where {V}
     if count == 0 || isempty(pat_f)
         write(out, str)
         return out
@@ -275,13 +280,13 @@ function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; c
         replacement = replacers[ridx]
         _isannotated(replacement) || continue
         annots = annotations(replacement)
-        annots′ = if eltype(annots) == Annotation # When it's a char not a string
+        annots′ = if eltype(annots) <: Annotation # When it's a char not a string
             region = 1:newbytes
-            [@NamedTuple{region::UnitRange{Int}, label::Symbol, value}((region, label, value))
+            [@NamedTuple{region::UnitRange{Int}, label::Symbol, value::V}((region, label, value))
              for (; label, value) in annots]
         else
             annots
-        end::Vector{RegionAnnotation}
+        end
         _insert_annotations!(newannots, annots′, destoff)
     end
     push!(replacements, (region = e1:(e1-1), offset = last(replacements).offset))
@@ -331,9 +336,23 @@ end
 replace(out::IO, str::AnnotatedString, pat_f::Pair...; count=typemax(Int)) =
     replace(out, str.string, pat_f...; count)
 
-function replace(str::AnnotatedString, pat_f::Pair...; count=typemax(Int))
-    isempty(pat_f) || iszero(count) && return str
-    out = AnnotatedIOBuffer()
+_annot_replace_pair_valtype() = Union{}
+_annot_replace_pair_valtype(::Pair{P, V}) where {P, V} = annot_promote_valtype(V)
+_annot_replace_pair_valtype(::Pair{P1, V1}, ::Pair{P2, V2}) where {P1, V1, P2, V2} =
+    annot_promote_valtype(V1, V2)
+_annot_replace_pair_valtype(p1::Pair, p2::Pair, rest::Pair...) =
+    (@inline; afoldl(((::Type{T}, p) where {T}) -> promote_type(T, _annot_replace_pair_valtype(p)), _annot_replace_pair_valtype(p1, p2), rest...))
+
+function _annot_replace_pair_valtype(str::AnnotatedString{S, Vs}, pat_f::Pair...) where {S, Vs}
+    Vp = _annot_replace_pair_valtype(pat_f...)
+    Vu = Union{Vs, Vp}
+    if Base.unionlen(Vu) <= 3 Vu else Any end
+end
+
+function replace(str::AnnotatedString{S}, pat_f::Pair...; count=typemax(Int)) where {S}
+    V = _annot_replace_pair_valtype(str, pat_f...)
+    isempty(pat_f) || iszero(count) && return AnnotatedString{S, V}(str)
+    out = AnnotatedIOBuffer{V}()
     replace(out, str, pat_f...; count)
     read(seekstart(out), AnnotatedString)
 end
@@ -353,18 +372,28 @@ using ..Base: eachregion, invoke_in_world, tls_world_age
 
 # Write
 
-ansi_write(f::Function, io::IO, x::Any) = f(io, String(x))
+function ansi_write(f::Function, io::IO, x::Any)
+    if x isa AnnotatedString
+        f(io, x.string)
+    elseif x isa SubString{<:AnnotatedString}
+        f(io, SubString(x.string.string, x.offset, x.ncodeunits, Val{:noshift}()))
+    elseif x isa AnnotatedChar
+        f(io, x.char)
+    else
+        throw(MethodError(ansi_write, (f, io, x)))
+    end
+end
 
 ansi_write_(f::Function, io::IO, @nospecialize(x::Any)) =
     invoke_in_world(tls_world_age(), ansi_write, f, io, x)
 
-Base.write(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
+Base.write(io::IO, s::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {S} =
     ansi_write_(write, io, s)::Int
 
 Base.write(io::IO, c::AnnotatedChar) =
     ansi_write_(write, io, c)::Int
 
-function Base.write(io::IO, aio::AnnotatedIOBuffer)
+function Base.write(io::IO, aio::AnnotatedIOBuffer{V}) where {V}
     if get(io, :color, false) == true
         # This does introduce an overhead that technically
         # could be avoided, but I'm not sure that it's currently
@@ -372,7 +401,7 @@ function Base.write(io::IO, aio::AnnotatedIOBuffer)
         # writing from an AnnotatedIOBuffer with style.
         # In the meantime, by converting to an `AnnotatedString` we can just
         # reuse all the work done to make that work.
-        ansi_write_(write, io, read(aio, AnnotatedString))::Int
+        ansi_write_(write, io, read(aio, AnnotatedString{String, V}))::Int
     else
         write(io, aio.io)
     end

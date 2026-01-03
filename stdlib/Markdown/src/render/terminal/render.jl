@@ -35,32 +35,32 @@ function term(io::IO, md::BlockQuote, columns)
     end
 end
 
+const ADMONITION_FACES = Dict(
+    "danger"  => face"error",
+    "warning" => face"warning",
+    "info"    => face"info",
+    "note"    => face"note",
+    "tip"     => face"tip",
+    "compat"  => face"bright_cyan",
+    "todo"    => face"magenta",
+)
+
 function term(io::IO, md::Admonition, columns)
-    accent = if md.category == "danger"
-        :error
-    elseif md.category in ("warning", "info", "note", "tip")
-        Symbol(md.category)
-    elseif md.category == "compat"
-        :bright_cyan
-    elseif md.category == "todo"
-        :magenta
-    else
-        :default
-    end
+    accent = get(ADMONITION_FACES, md.category, face"")
     title = if isempty(md.title) md.category else md.title end
-    print(io, ' '^margin, styled"{$accent,markdown_admonition:│ $title}",
-          '\n', ' '^margin, styled"{$accent,markdown_admonition:│}", '\n')
+    print(io, ' '^margin, styled"{$accent,admonition:│ $title}",
+          '\n', ' '^margin, styled"{$accent,admonition:│}", '\n')
     content = annotprint(term, md.content, columns - 10)
     lines = split(rstrip(content), '\n')
     for (i, line) in enumerate(lines)
-        print(io, ' '^margin, styled"{$accent,markdown_admonition:│}", line)
+        print(io, ' '^margin, styled"{$accent,admonition:│}", line)
         i < length(lines) && println(io)
     end
 end
 
 function term(io::IO, f::Footnote, columns)
     print(io, ' '^margin, "│ ")
-    print(io, styled"{markdown_footnote:[^$(f.id)]}")
+    print(io, styled"{footnote:[^$(f.id)]}")
     println(io, '\n', ' '^margin, '│')
     content = annotprint(term, f.text, columns - 10)
     lines = split(rstrip(content), '\n')
@@ -83,8 +83,8 @@ function term(io::IO, md::List, columns, depth::Int = 1)
         else
             _list_bullets[2 + mod(depth, length(_list_bullets) - 1)]
         end
-        print(io, ' '^ifelse(depth == 1, 2margin, 2*(depth-1)), styled"{markdown_list:$bullet}")
-        buf = AnnotatedIOBuffer()
+        print(io, ' '^ifelse(depth == 1, 2margin, 2*(depth-1)), styled"{list:$bullet}")
+        buf = AnnotatedIOBuffer{Union{Face, String}}()
         if point isa Vector && !isempty(point)
             for (i, elt) in enumerate(point[1:end-1])
                 dterm(buf, elt, columns - 10, depth + 1)
@@ -114,7 +114,7 @@ const _header_underlines = collect("≡=–-⋅ ")
 # TODO settle on another option with unicode e.g. "≡=≃–∼⋅" ?
 
 function term(io::AnnotIO, md::Header{l}, columns) where l
-    face = Symbol("markdown_h$l")
+    face = (face"h1", face"h2", face"h3", face"h4", face"h5", face"h6")[l]
     underline = _header_underlines[l]
     pre = ' '^margin
     line_width = with_output_annotations(io, :face => face) do io
@@ -145,7 +145,7 @@ function term(io::IO, md::Code, columns)
     elseif md.language == "julia-repl" || Base.startswith(md.language, "jldoctest")
         hl = AnnotatedString(md.code)
         for (; match) in eachmatch(r"(?:^|\n)julia>", hl)
-            StyledStrings.face!(match, :markdown_julia_prompt)
+            StyledStrings.face!(match, face"julia_prompt")
             afterprompt = match.offset + ncodeunits(match) + 1
             _, exprend = Meta.parse(md.code, afterprompt, raise = false)
             highlight!(hl[afterprompt:prevind(md.code, exprend)])
@@ -160,7 +160,7 @@ function term(io::IO, md::Code, columns)
     elseif md.language == "styled"
         styled(md.code)
     else
-        styled"{markdown_code:$(md.code)}"
+        styled"{code:$(md.code)}"
     end
     lines = split(code, '\n')
     for (i, line) in enumerate(lines)
@@ -170,17 +170,17 @@ function term(io::IO, md::Code, columns)
 end
 
 function term(io::IO, tex::LaTeX, columns)
-    print(io, ' '^margin, styled"{markdown_latex:$(tex.formula)}")
+    print(io, ' '^margin, styled"{latex:$(tex.formula)}")
 end
 
 term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
 
 function term(io::IO, br::HorizontalRule, columns)
-    print(io, ' '^margin, styled"{markdown_hrule:$('─'^(columns - 2margin))}")
+    print(io, ' '^margin, styled"{hrule:$('─'^(columns - 2margin))}")
 end
 
 function term(io::IO, md::MarkdownElement, columns)
-    a = IOContext(AnnotatedIOBuffer(), io)
+    a = IOContext(AnnotatedIOBuffer{Union{Face, String}}(), io)
     term(a, md, columns)
     print(io, read(seekstart(a.io), AnnotatedString))
 end
@@ -202,11 +202,11 @@ function terminline(io::IO, md::AbstractString)
 end
 
 function terminline(io::AnnotIO, md::Bold)
-    with_output_annotations(io -> terminline(io, md.text), io, :face => :bold)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => face"bold")
 end
 
 function terminline(io::AnnotIO, md::Italic)
-    with_output_annotations(io -> terminline(io, md.text), io, :face => :italic)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => face"italic")
 end
 
 function terminline(io::IO, md::LineBreak)
@@ -218,14 +218,14 @@ function terminline(io::IO, md::Image)
 end
 
 function terminline(io::IO, f::Footnote)
-    print(io, styled"{markdown_footnote:[^$(f.id)]}")
+    print(io, styled"{footnote:[^$(f.id)]}")
 end
 
 function terminline(io::AnnotIO, md::Link)
     annots = if occursin(r"^(https?|file)://", md.url)
-        (:face => :markdown_link, :link => md.url)
+        (:face => face"link", :link => md.url)
     else
-        (:face => :markdown_link,)
+        (:face => face"link",)
     end
     with_output_annotations(io -> terminline(io, md.text), io, annots...)
 end
@@ -236,15 +236,15 @@ function terminline(io::IO, code::Code)
     else
         code.code
     end
-    print(io, styled"{markdown_inlinecode:$body}")
+    print(io, styled"{inlinecode:$body}")
 end
 
 function terminline(io::IO, tex::LaTeX)
-    print(io, styled"{markdown_latex:$(tex.formula)}")
+    print(io, styled"{latex:$(tex.formula)}")
 end
 
 function terminline(io::IO, md::MarkdownElement)
-    a = IOContext(AnnotatedIOBuffer(), io)
+    a = IOContext(AnnotatedIOBuffer{Union{Face, String}}(), io)
     terminline(a, md)
     print(io, read(seekstart(a.io), AnnotatedString))
 end
