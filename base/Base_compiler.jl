@@ -236,7 +236,7 @@ setfield!(typeof(invoke).name, :max_args, Int32(3), :monotonic) # invoke, f, T, 
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
-function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(args...))
+function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), args...)
     @inline
     isempty(kwargs) && return applicable(args...)
     isempty(args) && return false
