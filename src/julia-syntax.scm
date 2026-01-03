@@ -544,7 +544,7 @@
                   sparams))
          (kw      (gensy))
          (kwdecl  `(|::| ,kw (core NamedTuple)))
-         (rkw     (if (null? restkw) '() (symbol "...")))
+         (rkw     (if (null? restkw) '() (symbol (string (car restkw) "..."))))
          (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
          (mangled (let ((und (and name (undot-name name))))
                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
@@ -810,6 +810,7 @@
            `(block
              ;; propagate method metadata to kwcall stub
              ,@(map propagate-method-meta (filter meta? prologue))
+             (local ,(symbol "kw#stub"))
              (if (call (top isempty) ,kw)
                  (return (call ,callee ,@args ,@splatted-vararg))
                  (return (call (top kwerr) ,kw ,callee ,@args ,@splatted-vararg)))))

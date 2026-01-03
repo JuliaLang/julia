@@ -86,6 +86,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
             locals = slotnames[(kwli.nargs + 1):end]
+            Symbol("kw#stub") in locals && return Symbol[]
             kws = filter(x -> !(x === empty_sym || '#' in string(x)), locals)
             # ensure the kwarg... is always printed last. The order of the arguments are not
             # necessarily the same as defined in the function
