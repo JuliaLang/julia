@@ -1174,7 +1174,10 @@ end
 # issue 20225, check this can print
 @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
 
-# different output depending on whether color is requested: +# issue 20225, check this can print
+# Helper to strip trailing \e[0m (general reset) while preserving specific style resets
+strip_trailing_reset(s) = replace(s, r"\e\[0m$" => "")
+
+# different output depending on whether color is requested:
 let buf = IOBuffer()
     @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
     show(buf, "text/plain", md"*emph*")
@@ -1191,8 +1194,10 @@ let word = "Markdown" # disable underline when wrapping lines
     long_italic_text = Markdown.parse('_' * join(fill(word, 10), ' ') * '_')
     show(ctx, MIME("text/plain"), long_italic_text)
     lines = split(String(take!(buf)), '\n')
-    @test endswith(lines[begin], r"\e\[2[34]m")
-    @test startswith(lines[begin+1], Regex(' '^Markdown.margin * "\e\\[[34]m"))
+    # Strip trailing general reset codes that may differ between test environments
+    lines_norm = strip_trailing_reset.(lines)
+    @test endswith(lines_norm[begin], r"\e\[2[34]m")
+    @test startswith(lines_norm[begin+1], Regex(' '^Markdown.margin * "\e\\[[34]m"))
 end
 
 let word = "Markdown" # pre is of size Markdown.margin when wrapping title
@@ -1201,9 +1206,11 @@ let word = "Markdown" # pre is of size Markdown.margin when wrapping title
     long_title = Markdown.parse("# " * join(fill(word, 3)))
     show(ctx, MIME("text/plain"), long_title)
     lines = split(String(take!(buf)), '\n')
+    # Strip trailing general reset codes that may differ between test environments
+    lines_norm = strip_trailing_reset.(lines)
     @test all(l -> startswith(l, ' '^Markdown.margin * StyledStrings.ANSI_STYLE_CODES.bold_weight) ||
                    startswith(l, StyledStrings.ANSI_STYLE_CODES.bold_weight * ' '^Markdown.margin),
-              lines)
+              lines_norm)
 end
 
 struct Struct49454 end
