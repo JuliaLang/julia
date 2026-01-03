@@ -85,6 +85,7 @@ include("reduce.jl")
 
 ## core structures
 include("reshapedarray.jl")
+include("reinterpret.jl")
 include("reinterpretarray.jl")
 
 # Some type
