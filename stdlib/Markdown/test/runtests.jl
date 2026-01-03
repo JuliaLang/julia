@@ -487,18 +487,14 @@ for (input, output) in (
 end
 
 # Interpolation / Custom types
-mutable struct Reference
+mutable struct Reference1
     ref
 end
 
-ref(x) = Reference(x)
-
-ref(sum)
-
-show(io::IO, m::MIME"text/plain", r::Reference) =
+show(io::IO, m::MIME"text/plain", r::Reference1) =
     print(io, "$(r.ref) (see Julia docs)")
 
-sum_ref = md"Behaves like $(ref(sum))"
+sum_ref = md"Behaves like $(Reference1(sum))"
 @test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
 @test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
@@ -531,7 +527,14 @@ sum_ref = md"Behaves like $(ref(sum))"
     @test plain(result) == expected
 end
 
-show(io::IO, m::MIME"text/html", r::Reference) =
+mutable struct Reference2
+    ref
+end
+
+sum_ref = md"Behaves like $(Reference2(sum))"
+show(io::IO, m::MIME"text/plain", r::Reference2) =
+    print(io, "$(r.ref) (see Julia docs)")
+show(io::IO, m::MIME"text/html", r::Reference2) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
