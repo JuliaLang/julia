@@ -376,13 +376,21 @@ struct OffsetCConvert{T, C}
     byte_offset::Int
     cconv_parent::C
 end
-# # Avoid unneeded nesting
-# function OffsetCConvert{T}(byte_offset::Int, cconv_parent::OffsetCConvert{C}) where {T, C}
-#     OffsetCConvert{T, C}(
-#         cconv_parent.byte_offset + byte_offset,
-#         cconv_parent.cconv_parent,
-#     )
-# end
+
+# Avoid unneeded nesting
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::OffsetCConvert{T}) where {T}
+    _offset_cconvert(
+        Ptr{T},
+        cconv_parent.byte_offset + byte_offset,
+        cconv_parent.cconv_parent,
+    )
+end
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::C) where {T,C}
+    OffsetCConvert{T,C}(
+        byte_offset,
+        cconv_parent,
+    )
+end
 
 function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
     Ptr{S}(unsafe_convert(Ptr{T}, c.cconv_parent) + c.byte_offset)
@@ -396,8 +404,9 @@ function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIn
     else
         _memory_offset(parent, map(first, V.indices)...)
     end
-    OffsetCConvert{T, typeof(p)}(
-        Δmem,
+    _offset_cconvert(
+        Ptr{T},
+        Int(Δmem),
         p,
     )
 end
