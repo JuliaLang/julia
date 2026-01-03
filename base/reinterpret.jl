@@ -224,7 +224,7 @@ end
     offsets_to_copy::Tuple,
 )::Nothing
     (src_offset, dst_offset, bytes_to_copy) = @inbounds Base.first(offsets_to_copy)
-    unsafe_copyto!(
+    Base.memcpy(
         dst_ptr + dst_offset,
         src_ptr + src_offset,
         bytes_to_copy,
