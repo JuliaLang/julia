@@ -1115,7 +1115,6 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     match.is_kwcall_stub && return false
     kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), match.slot_syms)
     kws = kws[(match.nargs + 1):end] # remove positional arguments
-    kws = filter(x -> !(x === Symbol("") || '#' in string(x)), kws)
     isempty(kws) && return true
     for kw in kws
         endswith(String(kw), "...") && return true
