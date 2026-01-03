@@ -1291,6 +1291,52 @@ end
     @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n   break"
 end
 
+@testset "linebreaks in lists" begin
+    # similar to the preceding test, but unlike that, actually uses a Markdown list
+    # (the prior example might look like it uses a list, but it doesn't)
+    s = @md_str """
+       Misc:\\
+       stuff
+       - line\\
+         break
+       """
+    @test sprint(show, MIME("text/plain"), s) * "\n" ==
+            raw"""
+              Misc:
+              stuff
+
+                •  line
+                   break
+            """
+    @test Markdown.plain(s) ==
+            raw"""
+            Misc:
+            stuff
+
+              * line
+                break
+            """
+    @test Markdown.html(s) ==
+            raw"""
+            <p>Misc:<br />stuff</p>
+            <ul>
+            <li><p>line<br />break</p>
+            </li>
+            </ul>
+            """
+    @test Markdown.latex(s) ==
+            raw"""
+            Misc:\\
+            stuff
+
+            \begin{itemize}
+            \item line\\
+            break
+
+            \end{itemize}
+            """
+end
+
 @testset "pullrequest #57664: en_or_em_dash" begin
     # Test that two hyphens (--) is parsed as en dash (–)
     # and three hyphens (---) is parsed as em dash (—)
