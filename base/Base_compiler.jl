@@ -236,14 +236,9 @@ setfield!(typeof(invoke).name, :max_args, Int32(3), :monotonic) # invoke, f, T, 
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
-function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), args...)
-    @inline
-    isempty(kwargs) && return applicable(args...)
-    isempty(args) && return false
-    f = args[1]
-    t = tuple_type_tail(typeof(args))
-    return hasmethod(f, t, keys(kwargs))
-end
+Core.kwcall(::NamedTuple{(),Tuple{}}, ::typeof(applicable)) = false
+Core.kwcall(::NamedTuple{(),Tuple{}}, ::typeof(applicable), arg, args...) = (@inline; applicable(arg, args...))
+Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), f, args...) = (@inline; hasmethod(f, args..., keys(kwargs)))
 function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
