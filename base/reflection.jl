@@ -1112,16 +1112,11 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
     match === nothing && return false
     match = match::Method
-    slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), match.slot_syms)
-    locals = slotnames[(match.nargs + 1):end] # remove positional arguments
     match.is_kwcall_stub && return false
-    kws = filter(x -> !(x === Symbol("") || '#' in string(x)), locals)
-    if isempty(kws)
-        # If there are no extra slots at all, this is the auto-generated kwcall stub
-        # for a non-keyword method.
-        isempty(locals) && return false
-        return true # some kwfuncs simply forward everything directly
-    end
+    kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), match.slot_syms)
+    kws = kws[(match.nargs + 1):end] # remove positional arguments
+    kws = filter(x -> !(x === Symbol("") || '#' in string(x)), kws)
+    isempty(kws) && return true
     for kw in kws
         endswith(String(kw), "...") && return true
     end
