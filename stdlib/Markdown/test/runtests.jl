@@ -223,11 +223,20 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test md"""
 > foo
 >
->   * bar
+> * bar
 >
 > ```
 > baz
-> ```""" |> plain == """> foo\n>\n>   * bar\n>\n> ```\n> baz\n> ```\n\n"""
+> ```""" |> plain == """
+> foo
+>
+> * bar
+>
+> ```
+> baz
+> ```
+
+"""
 
 # Terminal (markdown) output
 
@@ -392,8 +401,8 @@ let out =
 
         Some **bolded**
 
-          * list1
-          * list2
+        * list1
+        * list2
         """
 end
 let out =
@@ -896,9 +905,9 @@ let t_1 =
 
 
             !!! warning "custom title"
-                  * foo
-                  * bar
-                  * baz
+                * foo
+                * bar
+                * baz
 
                 foo bar baz
 
@@ -1009,24 +1018,24 @@ let text =
             """
             1. A paragraph with two lines.
 
-                ```
-                indented code
-                ```
+               ```
+               indented code
+               ```
 
-                > A block quote.
+               > A block quote.
 
-              * one
+            * one
 
             two
 
-              * one
+            * one
 
-                two
+              two
 
-              * baz
-              * ```
-                foo
-                ```
+            * baz
+            * ```
+              foo
+              ```
 
             1. foo
             2. bar
@@ -1318,8 +1327,8 @@ end
             Misc:
             stuff
 
-              * line
-                break
+            * line
+              break
             """
     @test Markdown.html(s) ==
             raw"""
