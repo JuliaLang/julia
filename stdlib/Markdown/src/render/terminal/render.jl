@@ -77,7 +77,7 @@ function term(io::IO, md::List, columns, depth::Int = 1)
     dterm(io, md::List, columns, depth) = term(io, md, columns, depth)
     for (i, point) in enumerate(md.items)
         bullet = if isordered(md)
-            string(lpad(i + md.ordered - 1, ndigits(length(md.items))), ". ")
+            string(lpad(i + md.ordered - 1, ndigits(length(md.items) + md.ordered - 1)), ". ")
         elseif depth == 1
             first(_list_bullets)
         else
