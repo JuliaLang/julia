@@ -119,6 +119,8 @@ plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 
 plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 
+plaininline(io::IO, md::Strikethrough) = plaininline(io, "~~", md.text, "~~")
+
 function plaininline(io::IO, md::Code)
     if occursin("`", md.code)
         n = maximum(length(m.match) for m in eachmatch(r"(`+)", md.code))

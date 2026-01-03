@@ -163,6 +163,12 @@ function htmlinline(io::IO, md::Italic)
     end
 end
 
+function htmlinline(io::IO, md::Strikethrough)
+    withtag(io, :s) do
+        htmlinline(io, md.text)
+    end
+end
+
 function htmlinline(io::IO, md::Image)
     tag(io, :img, :src=>md.url, :alt=>md.alt)
 end

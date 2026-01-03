@@ -132,6 +132,12 @@ function latexinline(io::IO, md::Italic)
     end
 end
 
+function latexinline(io::IO, md::Strikethrough)
+    wrapinline(io, "sout") do  # requires the ulem package
+        latexinline(io, md.text)
+    end
+end
+
 function latexinline(io::IO, br::LineBreak)
     println(io, "\\\\")
 end

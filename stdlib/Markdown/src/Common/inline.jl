@@ -36,6 +36,22 @@ function underscore_bold(stream::IO, md::MD)
     return result === nothing ? nothing : Bold(parseinline(result, md))
 end
 
+mutable struct Strikethrough <: MarkdownElement
+    text
+end
+
+@trigger '~' ->
+function tilde_strikethrough(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "~")
+    return result === nothing ? nothing : Strikethrough(parseinline(result, md))
+end
+
+@trigger '~' ->
+function double_tilde_strikethrough(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "~~")
+    return result === nothing ? nothing : Strikethrough(parseinline(result, md))
+end
+
 # ––––
 # Code
 # ––––
