@@ -14,6 +14,7 @@ include("interp.jl")
                linebreak, escapes,
                tex, interp,
                en_or_em_dash, inline_code,
+               double_tilde_strikethrough, tilde_strikethrough,
                asterisk_bold, underscore_bold,
                asterisk_italic, underscore_italic,
                image, footnote_link, link, autolink]
