@@ -11,4 +11,6 @@ include("interp.jl")
                blockquote, admonition, footnote, github_table, horizontalrule, setextheader, paragraph,
 
                linebreak, escapes, tex, interp, en_or_em_dash, inline_code,
-               asterisk_bold, underscore_bold, asterisk_italic, underscore_italic, image, footnote_link, link, autolink]
+               asterisk_bold, underscore_bold,
+               asterisk_italic, underscore_italic,
+               image, footnote_link, link, autolink]
