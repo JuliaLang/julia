@@ -44,22 +44,8 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
-# >> this use of `unsigned` is defined somewhere else << the docstring should migrate there
 """
-    unsigned(T::Integer)
-
-Convert an integer bitstype to the unsigned type of the same size.
-# Examples
-```jldoctest
-julia> unsigned(Int16)
-UInt16
-julia> unsigned(UInt64)
-UInt64
-```
-""" unsigned
-
-"""
-    signed(T::Integer)
+    signed(T::Type{<:Integer})
 
 Convert an integer bitstype to the signed type of the same size.
 # Examples
@@ -68,8 +54,14 @@ julia> signed(UInt16)
 Int16
 julia> signed(UInt64)
 Int64
+julia> signed(Int16)
+Int16
+julia> signed(Int64)
+Int64
 ```
 """
+signed(::Type{<:Integer})
+
 signed(::Type{Bool}) = Int
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
