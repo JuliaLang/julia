@@ -29,10 +29,11 @@ struct JumpTarget{Attrs}
     label::SyntaxTree{Attrs}
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
     catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolic_block valued breaks
 end
 
-function JumpTarget(label::SyntaxTree{Attrs}, ctx) where {Attrs}
-    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpTarget(label::SyntaxTree{Attrs}, ctx, result_var=nothing) where {Attrs}
+    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack), result_var)
 end
 
 struct JumpOrigin{Attrs}
@@ -78,6 +79,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     finally_handlers::Vector{FinallyHandler{Attrs}}
     symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
     symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
+    symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
     meta::Dict{Symbol, Any}
     mod::Module
 end
@@ -90,7 +92,7 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
                     is_toplevel_thunk, lambda_bindings, rett,
                     Dict{String,JumpTarget{Attrs}}(), SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
-                    Vector{JumpOrigin{Attrs}}(), Dict{Symbol, Any}(), ctx.mod)
+                    Vector{JumpOrigin{Attrs}}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -298,6 +300,14 @@ function emit_break(ctx, ex)
     if isnothing(target)
         ty = name == "loop_exit" ? "break" : "continue"
         throw(LoweringError(ex, "$ty must be used inside a `while` or `for` loop"))
+    end
+    # Handle valued break (break name val)
+    if numchildren(ex) >= 2
+        if isnothing(target.result_var)
+            throw(LoweringError(ex, "break with value not allowed for label `$name`"))
+        end
+        val = compile(ctx, ex[2], true, false)
+        emit_assignment(ctx, ex, target.result_var, val)
     end
     if !isempty(ctx.finally_handlers)
         handler = last(ctx.finally_handlers)
@@ -660,7 +670,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end_label = make_label(ctx, ex)
         name = ex[1].name_val
         outer_target = get(ctx.break_targets, name, nothing)
-        ctx.break_targets[name] = JumpTarget(end_label, ctx)
+        # Inherit result_var from outer symbolicblock if present
+        outer_result_var = isnothing(outer_target) ? nothing : outer_target.result_var
+        ctx.break_targets[name] = JumpTarget(end_label, ctx, outer_result_var)
         compile(ctx, ex[2], false, false)
         if isnothing(outer_target)
             delete!(ctx.break_targets, name)
@@ -671,12 +683,57 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
+    elseif k == K"symbolic_block"
+        # Labeled block that can be exited with `break name value`
+        end_label = make_label(ctx, ex)
+        name = ex[1].name_val
+        # Check for duplicate labels
+        if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
+            throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        end
+        # Mark this as a symbolic block to prevent @goto from targeting it
+        push!(ctx.symbolic_block_labels, name)
+        # Create result variable if value is needed (break name value is supported for all labeled constructs)
+        result_var = if needs_value || in_tail_pos
+            new_mutable_var(ctx, ex, name)
+        else
+            nothing
+        end
+        # Initialize result to nothing (for break without value)
+        if !isnothing(result_var)
+            emit(ctx, @ast ctx ex result_var := "nothing"::K"core")
+        end
+        # Register this block in break_targets
+        outer_target = get(ctx.break_targets, name, nothing)
+        ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
+        # Compile body
+        body_val = compile(ctx, ex[2], !isnothing(result_var), false)
+        # Assign body value to result var if body produced a value
+        if !isnothing(result_var) && !isnothing(body_val)
+            emit_assignment(ctx, ex, result_var, body_val)
+        end
+        # Restore break_targets
+        if isnothing(outer_target)
+            delete!(ctx.break_targets, name)
+        else
+            ctx.break_targets[name] = outer_target
+        end
+        emit(ctx, end_label)
+        # Return result
+        if in_tail_pos
+            emit_return(ctx, ex, result_var)
+            nothing
+        elseif needs_value
+            result_var
+        else
+            nothing
+        end
     elseif k == K"break"
         emit_break(ctx, ex)
     elseif k == K"symbolic_label"
         label = emit_label(ctx, ex)
         name = ex.name_val
-        if haskey(ctx.symbolic_jump_targets, name)
+        if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))
         end
         push!(ctx.symbolic_jump_targets, name=>JumpTarget(label, ctx))
@@ -927,6 +984,10 @@ function compile_body(ctx, ex)
         name = origin.goto.name_val
         target = get(ctx.symbolic_jump_targets, name, nothing)
         if isnothing(target)
+            # Check if it's a symbolic block label
+            if name in ctx.symbolic_block_labels
+                throw(LoweringError(origin.goto, "cannot use @goto to jump to @label block `$name`"))
+            end
             throw(LoweringError(origin.goto, "label `$name` referenced but not defined"))
         end
         i = origin.index
@@ -1134,7 +1195,7 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
                            Vector{FinallyHandler{Attrs}}(),
                            Dict{String, JumpTarget{Attrs}}(),
                            Vector{JumpOrigin{Attrs}}(),
-                           Dict{Symbol, Any}(), ctx.mod)
+                           Set{String}(), Dict{Symbol, Any}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     _ctx, res
 end
