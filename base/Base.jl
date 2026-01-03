@@ -214,7 +214,7 @@ let SOURCE_PATH = ""
         push!(_included_files, (mod, abspath(path)))
         SOURCE_PATH = path
         text = read(path, String)
-        result = CompilerFrontend.include_string(mod, text)
+        result = CompilerFrontend.include_string(mod, text; filename=path)
         SOURCE_PATH = prev
         return result
     end

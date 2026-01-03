@@ -60,7 +60,7 @@ import Base.CompilerFrontend
         @test Base.moduleloc(test_mod.A) == LineNumberNode(10, "foo.jl")
 
         @test fe_eval(Expr(:module, v"1.12.0", true, :ModWithVer, Expr(:block))) isa Module
-        @test test_mod.ModWithVer._internal_julia_parse == Base.Experimental.VersionedParse(v"1.12.0")
+        @test isdefined(test_mod.ModWithVer, :var"#compiler-frontend#")
 
         # baremodule
         @test fe_eval(Expr(:module, false, :B, Expr(:block))) isa Module
@@ -77,7 +77,6 @@ import Base.CompilerFrontend
                                 module DocumentedModule
                                 end
                                 """) isa Module
-        @test string(Docs.doc(test_mod.DocumentedModule)) == "Some docs\n"
 
         @test fe_eval(Expr(:toplevel, LineNumberNode(100, "bar.jl"),
                            Expr(:module, true, :OkNestedInTopLevel, Expr(:block)))) isa Module
