@@ -39,6 +39,7 @@ New library features
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+* The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string.
 
 Standard library changes
 ------------------------
