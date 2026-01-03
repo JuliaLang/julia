@@ -93,6 +93,7 @@ end
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
     @test Tuple(fill(1.,5)) === (1.0,1.0,1.0,1.0,1.0)
+    @test Tuple() === ()
     @test_throws MethodError convert(Tuple, fill(1.,5))
 
     @testset "ambiguity between tuple constructors #20990" begin
