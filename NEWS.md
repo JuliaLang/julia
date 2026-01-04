@@ -18,6 +18,9 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+  - Captured variables that are assigned in all branches of an `if`/`elseif`/`else` statement
+    no longer allocate a `Core.Box`, reducing heap allocations in closures ([#60542]).
+
 Command-line option changes
 ---------------------------
 
