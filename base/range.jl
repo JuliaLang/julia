@@ -1424,8 +1424,20 @@ _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(
 
 ## sorting ##
 
-issorted(r::AbstractUnitRange) = true
-issorted(r::AbstractRange) = length(r) <= 1 || step(r) >= zero(step(r))
+function issorted(r::AbstractUnitRange; lt=isless)
+    if lt == isless || lt == (<=)
+        true
+    else
+        issorted(collect(r); lt=lt)
+    end
+end
+function issorted(r::AbstractRange; lt=isless)
+    if lt == isless || lt == (<=)
+        length(r) <= 1 || step(r) >= zero(step(r))
+    else
+        issorted(collect(r); lt=lt)
+    end
+end
 
 function sort(r::AbstractUnitRange; kws...)
     isempty(kws) && return r
