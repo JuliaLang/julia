@@ -301,13 +301,13 @@ end
     input = "+++\n"
     expected = "<p>+++</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 45
     input = "===\n"
     expected = "<p>===</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 46
     input = "--\n**\n__\n"
@@ -597,7 +597,7 @@ end
     input = "`Foo\n----\n`\n\n<a title=\"a lot\n---\nof dashes\"/>\n"
     expected = "<h2>`Foo</h2>\n<p>`</p>\n<h2>&lt;a title=&quot;a lot</h2>\n<p>of dashes&quot;/&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 92
     input = "> Foo\n---\n"
@@ -633,7 +633,7 @@ end
     input = "\n====\n"
     expected = "<p>====</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 98
     input = "---\n---\n"
@@ -1261,7 +1261,7 @@ end
     input = "[foo]: /url 'title\n\nwith blank line'\n\n[foo]\n"
     expected = "<p>[foo]: /url 'title</p>\n<p>with blank line'</p>\n<p>[foo]</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 198
     input = "[foo]:\n/url\n\n[foo]\n"
@@ -1273,7 +1273,7 @@ end
     input = "[foo]:\n\n[foo]\n"
     expected = "<p>[foo]:</p>\n<p>[foo]</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 200
     input = "[foo]: <>\n\n[foo]\n"
@@ -1333,7 +1333,7 @@ end
     input = "[foo]: /url \"title\" ok\n"
     expected = "<p>[foo]: /url &quot;title&quot; ok</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 210
     input = "[foo]: /url\n\"title\" ok\n"
@@ -2083,7 +2083,7 @@ end
     input = "`hi`lo`\n"
     expected = "<p><code>hi</code>lo`</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
 end
 
@@ -2156,7 +2156,7 @@ end
     input = "`foo\\`bar`\n"
     expected = "<p><code>foo\\</code>bar`</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 339
     input = "``foo`bar``\n"
@@ -2186,7 +2186,7 @@ end
     input = "`<a href=\"`\">`\n"
     expected = "<p><code>&lt;a href=&quot;</code>&quot;&gt;`</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 344
     input = "<a href=\"`\">`\n"
@@ -2198,7 +2198,7 @@ end
     input = "`<https://foo.bar.`baz>`\n"
     expected = "<p><code>&lt;https://foo.bar.</code>baz&gt;`</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 346
     input = "<https://foo.bar.`baz>`\n"
@@ -2216,7 +2216,7 @@ end
     input = "`foo\n"
     expected = "<p>`foo</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 349
     input = "`foo``bar``\n"
@@ -2319,7 +2319,7 @@ end
     input = "foo-_(bar)_\n"
     expected = "<p>foo-<em>(bar)</em></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 365
     input = "_foo*\n"
@@ -2397,7 +2397,7 @@ end
     input = "_(bar)_.\n"
     expected = "<p><em>(bar)</em>.</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 378
     input = "**foo bar**\n"
@@ -2475,7 +2475,7 @@ end
     input = "foo-__(bar)__\n"
     expected = "<p>foo-<strong>(bar)</strong></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 391
     input = "**foo bar **\n"
@@ -2493,7 +2493,7 @@ end
     input = "*(**foo**)*\n"
     expected = "<p><em>(<strong>foo</strong>)</em></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 394
     input = "**Gomphocarpus (*Gomphocarpus physocarpus*, syn.\n*Asclepias physocarpa*)**\n"
@@ -2529,7 +2529,7 @@ end
     input = "_(__foo__)_\n"
     expected = "<p><em>(<strong>foo</strong>)</em></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 400
     input = "__foo__bar\n"
@@ -2553,7 +2553,7 @@ end
     input = "__(bar)__.\n"
     expected = "<p><strong>(bar)</strong>.</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 404
     input = "*foo [bar](/url)*\n"
@@ -3118,13 +3118,13 @@ end
     input = "[link](foo(and(bar)))\n"
     expected = "<p><a href=\"foo(and(bar))\">link</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 497
     input = "[link](foo(and(bar))\n"
     expected = "<p>[link](foo(and(bar))</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 498
     input = "[link](foo\\(and\\(bar\\))\n"
@@ -3148,7 +3148,7 @@ end
     input = "[link](#fragment)\n\n[link](https://example.com#fragment)\n\n[link](https://example.com?foo=3#frag)\n"
     expected = "<p><a href=\"#fragment\">link</a></p>\n<p><a href=\"https://example.com#fragment\">link</a></p>\n<p><a href=\"https://example.com?foo=3#frag\">link</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 502
     input = "[link](foo\\bar)\n"
@@ -3208,25 +3208,25 @@ end
     input = "[link] (/uri)\n"
     expected = "<p>[link] (/uri)</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 512
     input = "[link [foo [bar]]](/uri)\n"
     expected = "<p><a href=\"/uri\">link [foo [bar]]</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 513
     input = "[link] bar](/uri)\n"
     expected = "<p>[link] bar](/uri)</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 514
     input = "[link [bar](/uri)\n"
     expected = "<p>[link <a href=\"/uri\">bar</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 515
     input = "[link \\[bar](/uri)\n"
@@ -3280,7 +3280,7 @@ end
     input = "*foo [bar* baz]\n"
     expected = "<p><em>foo [bar</em> baz]</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 524
     input = "[foo <bar attr=\"](baz)\">\n"
@@ -3418,19 +3418,19 @@ end
     input = "[foo][ref[]\n\n[ref[]: /uri\n"
     expected = "<p>[foo][ref[]</p>\n<p>[ref[]: /uri</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 547
     input = "[foo][ref[bar]]\n\n[ref[bar]]: /uri\n"
     expected = "<p>[foo][ref[bar]]</p>\n<p>[ref[bar]]: /uri</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 548
     input = "[[[foo]]]\n\n[[[foo]]]: /url\n"
     expected = "<p>[[[foo]]]</p>\n<p>[[[foo]]]: /url</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 549
     input = "[foo][ref\\[]\n\n[ref\\[]: /uri\n"
@@ -3448,7 +3448,7 @@ end
     input = "[]\n\n[]: /uri\n"
     expected = "<p>[]</p>\n<p>[]: /uri</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 552
     input = "[\n ]\n\n[\n ]: /uri\n"
@@ -3689,7 +3689,7 @@ end
     input = "![[foo]]\n\n[[foo]]: /url \"title\"\n"
     expected = "<p>![[foo]]</p>\n<p>[[foo]]: /url &quot;title&quot;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 591
     input = "![Foo]\n\n[foo]: /url \"title\"\n"
@@ -3726,7 +3726,7 @@ end
     input = "<https://foo.bar.baz/test?q=hello&id=22&boolean>\n"
     expected = "<p><a href=\"https://foo.bar.baz/test?q=hello&amp;id=22&amp;boolean\">https://foo.bar.baz/test?q=hello&amp;id=22&amp;boolean</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 596
     input = "<irc://foo.bar:2233/baz>\n"
@@ -3792,7 +3792,7 @@ end
     input = "<foo\\+@bar.example.com>\n"
     expected = "<p>&lt;foo+@bar.example.com&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 607
     input = "<>\n"
@@ -3877,13 +3877,13 @@ end
     input = "<a h*#ref=\"hi\">\n"
     expected = "<p>&lt;a h*#ref=&quot;hi&quot;&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 620
     input = "<a href=\"hi'> <a href=hi'>\n"
     expected = "<p>&lt;a href=&quot;hi'&gt; &lt;a href=hi'&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 621
     input = "< a><\nfoo><bar/ >\n<foo bar=baz\nbim!bop />\n"
@@ -3895,7 +3895,7 @@ end
     input = "<a href='bar'title=title>\n"
     expected = "<p>&lt;a href='bar'title=title&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 623
     input = "</a></foo >\n"
@@ -3907,7 +3907,7 @@ end
     input = "</a href=\"foo\">\n"
     expected = "<p>&lt;/a href=&quot;foo&quot;&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 625
     input = "foo <!-- this is a --\ncomment - with hyphens -->\n"
@@ -4084,7 +4084,7 @@ end
     input = "hello \$.;'there\n"
     expected = "<p>hello \$.;'there</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 651
     input = "Foo χρῆν\n"

@@ -390,7 +390,7 @@ end
     h2
     ---
     not
-    == =""" |> html == "<h1>h1</h1>\n<h2>h2</h2>\n<p>not &#61;&#61; &#61;</p>\n"
+    == =""" |> html == "<h1>h1</h1>\n<h2>h2</h2>\n<p>not == =</p>\n"
 end
 
 @testset "the 'book' example input" begin
@@ -556,7 +556,7 @@ end
 
     sum_ref = md"Behaves like $(Reference1(sum))"
     @test Markdown.plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
-    @test Markdown.html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
+    @test Markdown.html(sum_ref) == "<p>Behaves like sum (see Julia docs)</p>\n"
 
     @testset "JuliaLang/julia#59783 and #53362" begin
         x = 1
@@ -598,7 +598,7 @@ end
         Markdown.withtag(io, :a, :href=>"test") do
             Markdown.htmlesc(io, Markdown.plaininline(r))
         end
-    @test Markdown.html(sum_ref) == "<p>Behaves like <a href=\"test\">sum &#40;see Julia docs&#41;</a></p>\n"
+    @test Markdown.html(sum_ref) == "<p>Behaves like <a href=\"test\">sum (see Julia docs)</a></p>\n"
 end
 
 @testset "GH tables" begin
@@ -936,7 +936,7 @@ end
             <div class="admonition warning"><p class="admonition-title">custom title</p></div>
             <h2>Bar</h2>
             <div class="admonition danger"><p class="admonition-title"></p></div>
-            <p>&#33;&#33;&#33;</p>
+            <p>!!!</p>
             """
     @test actual == expected
 
@@ -1480,23 +1480,23 @@ end
     """
     <ul>
     <li><p>code block inside a list with more than one blank line with indentation works</p>
-    <pre><code class="language-julia">domaths&#40;x::Number&#41; &#61; x &#43; 5
+    <pre><code class="language-julia">domaths(x::Number) = x + 5
 
 
-    domath&#40;x::Int&#41; &#61; x &#43; 10</code></pre>
+    domath(x::Int) = x + 10</code></pre>
     </li>
     <li><p>another entry, now testing code blocks without fences</p>
     <pre><code># this is a code block
-    x &#61; 1 &#43; 1
+    x = 1 + 1
 
 
-    # Two empty lines don&#39;t interrupt the code
-    y &#61; x * 3</code></pre>
+    # Two empty lines don't interrupt the code
+    y = x * 3</code></pre>
     </li>
     <li><p>a final list entry</p>
     </li>
     </ul>
-    <p>And now to something completely different&#33;</p>
+    <p>And now to something completely different!</p>
     """
 
     @test expected == Markdown.html(md)
