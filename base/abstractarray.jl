@@ -3582,6 +3582,7 @@ pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
 # sizehint! does nothing by default
 sizehint!(a::AbstractVector, _) = a
+sizehint!(a::AbstractVector, n::Integer; shrink::Bool=true) = a
 
 # The semantics of `collect` are weird. Better to write our own
 function rest(a::AbstractArray{T}, state...) where {T}

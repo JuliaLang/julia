@@ -48,7 +48,6 @@ isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would b
 
 # See rounding.jl for docstring.
 
-# NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
                digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
     if digits === nothing
