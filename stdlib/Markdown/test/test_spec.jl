@@ -88,7 +88,7 @@ end
     input = "\\!\\\"\\#\\\$\\%\\&\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~\n"
     expected = "<p>!&quot;#\$%&amp;'()*+,-./:;&lt;=&gt;?@[\\]^_`{|}~</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 13
     input = "\\\t\\A\\a\\ \\3\\φ\\«\n"
@@ -663,7 +663,7 @@ end
     input = "\\> foo\n------\n"
     expected = "<h2>&gt; foo</h2>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 103
     input = "Foo\n\nbar\n---\nbaz\n"
@@ -3955,7 +3955,7 @@ end
     input = "<a href=\"\\\"\">\n"
     expected = "<p>&lt;a href=&quot;&quot;&quot;&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
 end
 
