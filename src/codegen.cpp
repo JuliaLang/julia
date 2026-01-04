@@ -8722,7 +8722,9 @@ static jl_llvm_functions_t
     if (src->inlining == 2)
         FnAttrs.addAttribute(Attribute::NoInline);
 
-#ifdef JL_DEBUG_BUILD
+    // Add strong stack protection for debug builds only when using the large code model,
+    // otherwise LLVM might try to relocate the stack canary out of range (see e.g. #59303)
+#if defined(JL_DEBUG_BUILD) && !(defined(_CPU_AARCH64_) || defined(_CPU_RISCV_))
     FnAttrs.addAttribute(Attribute::StackProtectStrong);
 #endif
 
