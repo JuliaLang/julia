@@ -2851,6 +2851,8 @@ const EXAMPLE_RANGES = AbstractRange[
     UInt8(1):UInt8(10),
     UInt8(10):-UInt8(1):UInt8(1),
     'a':'z',
+    LinRange(0.3376448676263234, 1.509664528429199, 3),
+    range(0.3376448676263234, step=0.5860098304014378, length=3),
 ]
 
 @testset "cmp(::AbstractRange, ::AbstractRange)" begin
