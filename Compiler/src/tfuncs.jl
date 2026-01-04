@@ -3159,9 +3159,9 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
 end
 
 function _is_kwcall_nonempty(argtypes::Vector{Any})
-    if length(argtypes) >= 2 && isa(argtypes[1], Const) && argtypes[1].val === Core.kwcall
+    if length(argtypes) >= 2 && singleton_type(argtypes[1]) === Core.kwcall
         kw = unwrap_unionall(widenconst(argtypes[2]))
-        if kw isa DataType && kw.name === NamedTuple.name
+        if kw isa DataType && kw.name === typename(NamedTuple)
             names = kw.parameters[1]
             return names isa Tuple && !isempty(names)
         end
