@@ -69,7 +69,7 @@ using Markdown
     input = "#\tFoo\n"
     expected = "<h1>Foo</h1>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 11
     input = "*\t*\t*\t\n"

@@ -56,7 +56,7 @@ function hashheader(stream::IO, md::MD)
 
         c = ' '
         # Allow empty headers, but require a space
-        !eof(stream) && (c = read(stream, Char); !(c in " \n")) &&
+        !eof(stream) && (c = read(stream, Char); !(c in " \t\n")) &&
             return false
 
         if c != '\n' # Empty header
