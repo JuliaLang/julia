@@ -3517,6 +3517,51 @@ function expand_typevars(ctx, type_params)
     return (typevar_names, typevar_stmts)
 end
 
+# Check if a supertype expression is a vacuous UnionAll
+# (i.e., has a where clause with type variables that don't appear in the supertype body)
+function check_vacuous_unionall(ctx, supertype)
+    if kind(supertype) == K"where" && numchildren(supertype) == 2
+        # This is a `where` expression in the supertype position
+        # E.g., `Foo where {T <: AbstractFloat}` in struct definition
+        body = supertype[1]
+        rhs = supertype[2]
+
+        # Extract the where clause variables
+        where_vars = SyntaxList(ctx)
+        if kind(rhs) == K"braces"
+            # Format: where {T <: Bound, ...}
+            for r in children(rhs)
+                bounds = analyze_typevar(ctx, r)
+                push!(where_vars, bounds[1])
+            end
+        elseif kind(rhs) == K"_typevars"
+            # Format: where {T, U, ...} with _typevars
+            append!(where_vars, children(rhs[1]))
+        else
+            # Single variable format: where T
+            bounds = analyze_typevar(ctx, rhs)
+            push!(where_vars, bounds[1])
+        end
+
+        # Check if any where variable appears in the body
+        unused_vars = SyntaxList(ctx)
+        for var in where_vars
+            if !contains_identifier(body, var)
+                push!(unused_vars, var)
+            end
+        end
+
+        # If there are unused variables, emit a warning
+        if !isempty(unused_vars)
+            var_names = join([var.name_val for var in unused_vars], ", ")
+            Base.warn_once(
+                "type variable $var_names not used in supertype declaration",
+                key=(supertype, :vacuous_unionall)
+            )
+        end
+    end
+end
+
 function expand_abstract_or_primitive_type(ctx, ex)
     is_abstract = kind(ex) == K"abstract"
     if is_abstract
@@ -3527,6 +3572,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
         nbits = ex[2]
     end
     name, type_params, supertype = analyze_type_sig(ctx, ex[1])
+    check_vacuous_unionall(ctx, supertype)
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
     @ast ctx ex [K"block"
@@ -4009,6 +4055,7 @@ function expand_struct_def(ctx, ex, docs)
         throw(LoweringError(type_body, "expected block for `struct` fields"))
     end
     struct_name, type_params, supertype = analyze_type_sig(ctx, type_sig)
+    check_vacuous_unionall(ctx, supertype)
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     field_names = SyntaxList(ctx)
     field_types = SyntaxList(ctx)

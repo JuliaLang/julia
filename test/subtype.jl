@@ -2793,3 +2793,34 @@ end
 #issue 58115
 @test Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{             Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}  , Tuple{}} <:
       Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}}}, Tuple{}}
+
+# issue #60418
+# Warn when a vacuous UnionAll is used as a supertype
+let
+    # Test struct with vacuous UnionAll in supertype
+    abstract type Foo60418 end
+    
+    # This should work without warning - T is used in the bounds
+    struct Bar60418{T <: AbstractFloat} <: Foo60418
+        a::T
+    end
+    
+    # This should warn - T is declared in the supertype where clause but not used
+    @test_warn r"type variable.*not used in supertype declaration" begin
+        struct Baz60418{T} <: Foo60418 where {T <: AbstractFloat}
+            a::T
+        end
+    end
+    
+    # This should warn - the where clause variables aren't used in the supertype
+    @test_warn r"type variable.*not used in supertype declaration" begin
+        struct Qux60418{S} <: Foo60418 where {T <: AbstractFloat}
+            a::S
+        end
+    end
+    
+    # This should also warn for abstract types
+    @test_warn r"type variable.*not used in supertype declaration" begin
+        abstract type Abstract60418 <: Foo60418 where {T <: AbstractFloat} end
+    end
+end
