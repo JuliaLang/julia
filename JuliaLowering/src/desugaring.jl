@@ -3554,8 +3554,9 @@ function check_vacuous_unionall(ctx, supertype)
         # If there are unused variables, emit a warning
         if !isempty(unused_vars)
             var_names = join([var.name_val for var in unused_vars], ", ")
+            var_word = length(unused_vars) == 1 ? "type variable" : "type variables"
             Base.warn_once(
-                "type variable $var_names not used in supertype declaration",
+                "$var_word $var_names not used in supertype declaration",
                 key=(supertype, :vacuous_unionall)
             )
         end
