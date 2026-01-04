@@ -2939,8 +2939,6 @@ _iterator_axes(x, ::IteratorSize) = axes(x)
 # For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
 _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
     _typed_stack(dims, T, S, IteratorSize(S), A)
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S} =
-    _typed_stack(dims, T, S, HasShape{1}(), A)
 function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
     if dims == N+1
         _typed_stack(:, T, S, A, (_vec_axis(A),))
@@ -3582,7 +3580,7 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
-# sizehint! does not nothing by default
+# sizehint! does nothing by default
 sizehint!(a::AbstractVector, _) = a
 
 # The semantics of `collect` are weird. Better to write our own

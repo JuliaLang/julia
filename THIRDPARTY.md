@@ -4,6 +4,7 @@ and some utilities (most of the rest of the files in this repository). See below
 for exceptions.
 
 - [crc32c.c](https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software) (CRC-32c checksum code by Mark Adler) [[ZLib](https://opensource.org/licenses/Zlib)].
+- [dl-cache.h](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html) (for reading ld-cache files on startup) [LGPL2.1+]
 - [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions) [BSD-3]. The portion of code that Julia uses from LDC is [BSD-3] licensed.
 - [LLVM](https://releases.llvm.org/3.9.0/LICENSE.TXT) (for parts of src/disasm.cpp) [UIUC]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]

@@ -193,7 +193,7 @@ static void gc_verify_track(jl_ptls_t ptls)
             gc_mark_finlist(&mq, &ptls2->finalizers, 0);
         }
         gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-        gc_mark_loop_serial_(ptls, &mq);
+        gc_collect_neighbors(ptls, &mq);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -255,7 +255,7 @@ void gc_verify(jl_ptls_t ptls)
         gc_mark_finlist(&mq, &ptls2->finalizers, 0);
     }
     gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-    gc_mark_loop_serial_(ptls, &mq);
+    gc_collect_neighbors(ptls, &mq);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
@@ -1098,27 +1098,6 @@ void gc_count_pool(void)
     // also GC_CLEAN
     jl_safe_printf("free pages: % "  PRId64 "\n", empty_pages);
     jl_safe_printf("************************\n");
-}
-
-void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
-    if (!gc_logging_enabled) {
-        return;
-    }
-    jl_safe_printf("\nGC: pause %.2fms. collected %fMB. %s %s\n",
-        pause/1e6, freed/(double)(1<<20),
-        full ? "full" : "incr",
-        recollect ? "recollect" : ""
-    );
-
-    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
-        jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
-        jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
-        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
-        (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
-    );
-    // Should fragmentation use bytes_resident instead of heap_size?
 }
 
 #ifdef __cplusplus

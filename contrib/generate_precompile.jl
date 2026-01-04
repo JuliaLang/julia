@@ -41,6 +41,7 @@ precompile(Tuple{typeof(Base.Terminals.enable_bracketed_paste), Base.Terminals.T
 precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
+precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}}
 
 # loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))
@@ -51,9 +52,7 @@ precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int
 precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int})
 precompile(Tuple{Type{Pair{A, B} where B where A}, Base.PkgId, UInt128})
 precompile(Tuple{typeof(Base.in!), Tuple{Module, String, UInt64, UInt32, Float64}, Base.Set{Any}})
-precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:allow_typevars, :volatile_inf_result), Tuple{Bool, Nothing}}, typeof(Base.Compiler.handle_match!), Array{Base.Compiler.InliningCase, 1}, Core.MethodMatch, Array{Any, 1}, Base.Compiler.CallInfo, UInt32, Base.Compiler.InliningState{Base.Compiler.NativeInterpreter}})
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
-precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:allow_typevars, :volatile_inf_result), Tuple{Bool, Base.Compiler.VolatileInferenceResult}}, typeof(Base.Compiler.handle_match!), Array{Base.Compiler.InliningCase, 1}, Core.MethodMatch, Array{Any, 1}, Base.Compiler.CallInfo, UInt32, Base.Compiler.InliningState{Base.Compiler.NativeInterpreter}})
 precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Vararg{Pair{Base.PkgId, UInt128}}})
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
@@ -347,8 +346,8 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             uuid = "$pkguuid"
             """)
         touch(joinpath(pkgpath, "Manifest.toml"))
-        tmp_prec = tempname(prec_path)
-        tmp_proc = tempname(prec_path)
+        tmp_prec = tempname(prec_path; cleanup=false)
+        tmp_proc = tempname(prec_path; cleanup=false)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(joinpath(prec_path,"depot"))));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));

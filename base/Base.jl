@@ -33,6 +33,33 @@ end
 # metaprogramming
 include("meta.jl")
 
+# Strings
+include("multimedia.jl")
+using .Multimedia
+
+include("char.jl")
+function array_new_memory(mem::Memory{UInt8}, newlen::Int)
+    # add an optimization to array_new_memory for StringVector
+    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
+        # TODO: when implemented, this should use a memory growing call
+        return typeof(mem)(undef, newlen)
+    else
+        # If data is in a String, keep it that way.
+        # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
+        str = _string_n(newlen)
+        return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
+    end
+end
+include("strings/basic.jl")
+include("strings/string.jl")
+include("strings/substring.jl")
+include("strings/cstring.jl")
+
+include("cartesian.jl")
+using .Cartesian
+include("hashing.jl")
+include("osutils.jl")
+
 # subarrays
 include("subarray.jl")
 include("views.jl")
@@ -60,38 +87,11 @@ include("reduce.jl")
 include("reshapedarray.jl")
 include("reinterpretarray.jl")
 
-include("multimedia.jl")
-using .Multimedia
-
 # Some type
 include("some.jl")
 
 include("dict.jl")
 include("set.jl")
-
-# Strings
-include("char.jl")
-function array_new_memory(mem::Memory{UInt8}, newlen::Int)
-    # add an optimization to array_new_memory for StringVector
-    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
-        # TODO: when implemented, this should use a memory growing call
-        return typeof(mem)(undef, newlen)
-    else
-        # If data is in a String, keep it that way.
-        # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
-        str = _string_n(newlen)
-        return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
-    end
-end
-include("strings/basic.jl")
-include("strings/string.jl")
-include("strings/substring.jl")
-include("strings/cstring.jl")
-
-include("cartesian.jl")
-using .Cartesian
-include("hashing.jl")
-include("osutils.jl")
 
 # Core I/O
 include("io.jl")
@@ -315,9 +315,12 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 @eval Core const Compiler = $Base.Compiler
 @eval Compiler const fl_parse = $Base.fl_parse
 
-# External libraries vendored into Base
+# Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string(BUILDROOT, "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
+include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+
+# May be replaced in incremental sysimage build after-the-fact
+const JuliaLowering = nothing
 
 end_base_include = time_ns()
 
@@ -396,6 +399,11 @@ function __init__()
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
+    end
+    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
+        # This is not available by default, but JuliaLowering can be added to
+        # Base after-the-fact via an incremental sysimage build.
+        JuliaLowering.activate!()
     end
 
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())

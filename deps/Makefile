@@ -36,8 +36,6 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS := JuliaSyntax
-
 ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
 endif
@@ -212,7 +210,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd p7zip csl \
-	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
+	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
 	terminfo mmtk_julia
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
@@ -247,6 +245,22 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 	rm -rf $(build_prefix)
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
+.PHONY: default
+.PHONY: get
+.PHONY: extract
+.PHONY: configure
+.PHONY: compile
+.PHONY: check
+.PHONY: fastcheck
+.PHONY: stage
+.PHONY: install
+.PHONY: version-check
+
+.PHONY: uninstall
+.PHONY: cleanall
+.PHONY: distcleanall
+.PHONY: getall
+
 include $(SRCDIR)/BOLT.mk
 include $(SRCDIR)/csl.mk
 include $(SRCDIR)/sanitizers.mk
@@ -280,8 +294,5 @@ include $(SRCDIR)/terminfo.mk
 
 # MMTk
 include $(SRCDIR)/mmtk_julia.mk
-
-# vendored Julia libs
-include $(SRCDIR)/JuliaSyntax.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

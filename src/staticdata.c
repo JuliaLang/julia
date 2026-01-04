@@ -1244,12 +1244,13 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             // TODO: Remove dead entries
             newm_data->min_world = data->min_world;
             newm_data->max_world = data->max_world;
+            newm_data->flags = data->flags;
             if (s->incremental) {
                 if (data->max_world != ~(size_t)0)
                     newm_data->max_world = 0;
                 newm_data->min_world = jl_require_world;
             }
-            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[3*i])));
+            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[4*i])));
             arraylist_push(&s->relocs_list, (void*)backref_id(s, data->mod, s->link_ids_relocs));
         }
         newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
@@ -1271,11 +1272,13 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_uint(s->s, data->min_world);
                 write_uint(s->s, data->max_world);
             }
-            static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void*), "_jl_module_using mismatch");
+            write_uint(s->s, data->flags);
+            static_assert(sizeof(struct _jl_module_using) == 4*sizeof(void*), "_jl_module_using mismatch");
             tot += sizeof(struct _jl_module_using);
         }
         for (; i < module_usings_max(m); i++) {
             write_pointer(s->s);
+            write_uint(s->s, 0);
             write_uint(s->s, 0);
             write_uint(s->s, 0);
             tot += sizeof(struct _jl_module_using);
@@ -3301,10 +3304,25 @@ static int ci_not_internal_cache(jl_code_instance_t *ci)
     return !(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID) || jl_object_in_image(mi->def.value);
 }
 
+static uint8_t jl_get_toplevel_syntax_version(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_module_t *toplevel = (jl_module_t*)jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
+    JL_GC_PROMISE_ROOTED(toplevel);
+    jl_value_t *syntax_version = jl_get_global_value(toplevel, jl_symbol("_internal_syntax_version"), ct->world_age);
+    return jl_unbox_uint8(syntax_version);
+}
+
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
 {
     *checksumpos = write_header(f, 0);
     write_uint8(f, jl_cache_flags());
+    // write the syntax version marker. Note that unlike a VersionNumber, this is
+    // private to the serialization format and only needs to be reloaded by the
+    // same version of Julia that wrote it. As a result, we don't store the full
+    // VersionNumber, only an index of which of the supported syntax versions to
+    // select.
+    write_uint8(f, jl_get_toplevel_syntax_version());
     // write description of contents (name, uuid, buildid)
     write_worklist_for_header(f, worklist);
     // Determine unique (module, abspath, fsize, hash, mtime) dependencies for the files defining modules in the worklist
@@ -3322,12 +3340,6 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
                                          ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, jl_array_t *module_init_order)
 {
-    if (jl_options.strip_ir || jl_options.trim) {
-        // make sure this is precompiled for jl_foreach_reachable_mtable
-        jl_get_loaded_modules();
-    }
-    jl_gc_collect(JL_GC_FULL);
-    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
 
     // iff emit_split
@@ -3362,6 +3374,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         if (emit_split) {
             checksumpos_ff = write_header(ff, 1);
             write_uint8(ff, jl_cache_flags());
+            write_uint8(ff, jl_get_toplevel_syntax_version());
             write_mod_list(ff, mod_array);
         }
         else {
@@ -3374,6 +3387,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     if (_native_data != NULL)
         native_functions = *_native_data;
 
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     // Make sure we don't run any Julia code concurrently after this point
     // since it will invalidate our serialization preparations
     jl_gc_enable_finalizers(ct, 0);
@@ -3534,23 +3549,37 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
     image->size = ZSTD_getFrameContentSize(data, *plen);
     size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
     size_t aligned_size = LLT_ALIGN(image->size, page_size);
+    int fail = 0;
 #if defined(_OS_WINDOWS_)
     size_t large_page_size = GetLargePageMinimum();
-    if (image->size > 4 * large_page_size) {
+    image->data = NULL;
+    if (large_page_size > 0 && image->size > 4 * large_page_size) {
         size_t aligned_size = LLT_ALIGN(image->size, large_page_size);
         image->data = (char *)VirtualAlloc(
             NULL, aligned_size, MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
     }
-    else {
+    if (!image->data) {
+        /* Try small pages if large pages failed. */
         image->data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
                                            PAGE_READWRITE);
     }
+    fail = !image->data;
 #else
-    image->data =
-        (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    image->data = (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    fail = image->data == (void *)-1;
 #endif
-    if (!image->data || image->data == (void *)-1) {
-        jl_printf(JL_STDERR, "ERROR: failed to allocate space for system image\n");
+    if (fail) {
+        const char *err;
+#if defined(_OS_WINDOWS_)
+        char err_buf[256];
+        win32_formatmessage(GetLastError(), err_buf, sizeof(err_buf));
+        err = err_buf;
+#else
+        err = strerror(errno);
+#endif
+        jl_printf(JL_STDERR, "ERROR: failed to allocate memory for system image: %s\n",
+                  err);
         jl_exit(1);
     }
 
@@ -4292,6 +4321,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
     if (pkgimage && !jl_match_cache_flags_current(flags)) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }
+    // Syntax version mismatch is not fatal to load
+    (void)read_uint8(f); // syntax_version
     if (!pkgimage) {
         // skip past the worklist
         size_t len;

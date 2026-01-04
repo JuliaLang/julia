@@ -1071,7 +1071,7 @@ let # Test for https://github.com/JuliaLang/julia/issues/43402
     end
 
     refs = map(Core.SSAValue, findall(@nospecialize(x)->Meta.isexpr(x, :new), src.code))
-    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == :(:some_ccall), src.code)
+    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == Expr(:tuple, :(:some_ccall)), src.code)
     @assert some_ccall !== nothing
     stmt = src.code[some_ccall]
     nccallargs = length(stmt.args[3]::Core.SimpleVector)
@@ -1499,11 +1499,10 @@ let code = Any[
     # Simulate the important results from inference
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
-    slot_id = 4
-    for block_id = 3:5
-        # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-        sv.bb_vartables[block_id][slot_id] = VarState(Bool, #= maybe_undef =# false)
-    end
+    # (_4 !== nothing) conditional narrows the type, triggering PiNodes
+    sv.bb_vartables[#= block_id =# 3][#= slot_id =# 4] = VarState(Bool, #= def =# 5, #= maybe_undef =# false)
+    sv.bb_vartables[#= block_id =# 4][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
+    sv.bb_vartables[#= block_id =# 5][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
 
     ir = Compiler.convert_to_ircode(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
