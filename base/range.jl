@@ -1168,7 +1168,7 @@ function ==(r::AbstractRange, s::AbstractRange)
     return true
 end
 
-function cmp(r1::AbstractRange{T}, r2::AbstractRange{T}) where {T}
+function cmp(r1::T, r2::T) where {T <: AbstractRange}
     firstindex(r1) == firstindex(r2) || return cmp(firstindex(r1), firstindex(r2))
     (isempty(r1) || isempty(r2)) && return cmp(isempty(r2), isempty(r1))
     first(r1) != first(r2) && return cmp(first(r1), first(r2))
