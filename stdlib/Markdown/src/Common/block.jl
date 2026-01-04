@@ -248,7 +248,7 @@ end
 
 mutable struct List <: MarkdownElement
     items::Vector{Any}
-    ordered::Int # `-1` is unordered, `>= 0` is ordered.
+    ordered::Int # `-1` is unordered, `>= 0` is ordered and indicates the start index.
     loose::Bool # TODO: Renderers should use this field
 end
 List(x::AbstractVector, b::Integer) = List(x, b, false)
