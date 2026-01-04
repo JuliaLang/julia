@@ -4673,3 +4673,78 @@ module M59755 end
     @test M59755.v6 === 5
     @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
 end
+
+# Test that `if cond; x = a; else x = b; end` doesn't introduce a Core.Box
+# when x is captured, due to optimization in lambda-optimize-vars!
+@testset "if-else assignment without boxing" begin
+    function if_else_nobox(cond, a, b)
+        if cond
+            x = a
+        else
+            x = b
+        end
+        return () -> x
+    end
+    closure_type = typeof(if_else_nobox(true, 1, 2))
+    @test fieldtype(closure_type, 1) !== Core.Box
+    @test if_else_nobox(true, 1, 2)() == 1
+    @test if_else_nobox(false, 1, 2)() == 2
+
+    # Also works with multiple variables assigned in both branches
+    function if_else_nobox_multi(cond, a, b, c, d)
+        if cond
+            @noinline identity(1)
+            x = a
+            y = b
+        else
+            @noinline identity(2)
+            x = c
+            y = d
+        end
+        return () -> (x, y)
+    end
+    closure_type2 = typeof(if_else_nobox_multi(true, 1, 2, 3, 4))
+    @test fieldtype(closure_type2, 1) !== Core.Box
+    @test fieldtype(closure_type2, 2) !== Core.Box
+    @test if_else_nobox_multi(true, 1, 2, 3, 4)() == (1, 2)
+    @test if_else_nobox_multi(false, 1, 2, 3, 4)() == (3, 4)
+
+    # Also works with elseif chains
+    function if_elseif_nobox(cond1, cond2, a, b, c)
+        if cond1
+            x = a
+        elseif cond2
+            x = b
+        else
+            x = c
+        end
+        return () -> x
+    end
+    closure_type3 = typeof(if_elseif_nobox(true, false, 1, 2, 3))
+    @test fieldtype(closure_type3, 1) !== Core.Box
+    @test if_elseif_nobox(true, false, 1, 2, 3)() == 1
+    @test if_elseif_nobox(false, true, 1, 2, 3)() == 2
+    @test if_elseif_nobox(false, false, 1, 2, 3)() == 3
+
+    # Variable assigned in only one branch must still be boxed
+    function if_else_onebranch(cond, a)
+        x = 0
+        if cond
+            x = a
+        end
+        return () -> x
+    end
+    @test fieldtype(typeof(if_else_onebranch(true, 1)), 1) === Core.Box
+
+    # Variable used before assignment in one branch must still be boxed
+    function if_else_usefirst(cond, a, b)
+        if cond
+            x = a
+        else
+            @noinline println(devnull, x)
+            x = b
+        end
+        return () -> x
+    end
+    @test fieldtype(typeof(if_else_usefirst(true, 1, 2)), 1) === Core.Box
+end

@@ -3915,6 +3915,8 @@ f(x) = yt(x)
 
 ;; Try to identify never-undef variables, and then clear the `captured` flag for single-assigned,
 ;; never-undef variables to avoid allocating unnecessary `Box`es.
+;; Also handles the case where a variable is assigned in both branches of an if-else, making
+;; it effectively single-assigned on each control path.
 (define (lambda-optimize-vars! lam)
   (assert (eq? (car lam) 'lambda))
   ;; memoize all-methods-for to avoid O(n^2) behavior
@@ -3933,12 +3935,18 @@ f(x) = yt(x)
         (decl   (table))
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
-        (seen   (table))) ;; all variables we've seen assignments to
+        (seen   (table))  ;; all variables we've seen assignments to
+        (ifa    (table))  ;; variables assigned in all branches of if-else ("if-assigned")
+        (has-ifa #f))     ;; whether ifa has any entries
     ;; Collect candidate variables: those that are captured (and hence we want to optimize)
     ;; and only assigned once. This populates the initial `unused` table.
+    ;; Also collect captured variables assigned more than once for if-branch analysis.
     (for-each (lambda (v)
-                (if (and (vinfo:capt v) (vinfo:sa v))
-                    (put! unused (car v) #t)))
+                (if (vinfo:capt v)
+                    (if (vinfo:sa v)
+                        (put! unused (car v) #t)
+                        (begin (put! ifa (car v) #t)
+                               (set! has-ifa #t)))))
               vi)
     (define (restore old)
       (table.foreach (lambda (k v)
@@ -3964,7 +3972,10 @@ f(x) = yt(x)
           ;; it from being removed from `unused`.
           (begin (put! live var #t)
                  (put! seen var #t)
-                 (del! unused var))))
+                 (del! unused var)))
+      ;; Also track assignments to ifa candidates (captured non-sa variables)
+      (if (has? ifa var)
+          (put! live var #t)))
     (define (declare! var)
       (if (has? unused var)
           (put! decl var #t)))
@@ -3997,7 +4008,74 @@ f(x) = yt(x)
             ((eq? (car e) 'symboliclabel)
              (kill)
              #t)
-            ((memq (car e) '(if elseif trycatch tryfinally trycatchelse))
+            ((eq? (car e) 'if)
+             ;; Special handling for if-else: track variables assigned in ALL branches.
+             ;; If a captured variable is assigned in ALL branches (and not used before
+             ;; assignment in any), it's effectively single-assigned per control path.
+             (let ((prev (table.clone live)))
+               (cond
+                ;; if-else with exactly 3 args (cond, then, else) and we have candidates
+                ((and (length= e 4) has-ifa)
+                 (let ((has-label #f)
+                       (all-assigned #f))
+                   ;; Visit condition
+                   (if (visit (cadr e)) (set! has-label #t))
+                   (let ((pre-branch-live (table.clone live)))
+                     (kill)
+                     ;; Visit then-branch
+                     (if (visit (caddr e)) (set! has-label #t))
+                     (set! all-assigned (table.clone live))
+                     ;; Process else-branch (may be elseif chain)
+                     (let process-else ((else-expr (cadddr e)))
+                       (set! live (table.clone pre-branch-live))
+                       (kill)
+                       (cond
+                        ;; else-branch is an elseif
+                        ((and (pair? else-expr) (eq? (car else-expr) 'elseif)
+                              (length= else-expr 4))
+                         ;; Visit elseif condition
+                         (if (visit (cadr else-expr)) (set! has-label #t))
+                         (kill)
+                         ;; Visit elseif then-branch
+                         (if (visit (caddr else-expr)) (set! has-label #t))
+                         ;; Intersect with all-assigned
+                         (let ((branch-assigned live))
+                           (table.foreach
+                            (lambda (var _)
+                              (if (not (has? branch-assigned var))
+                                  (del! all-assigned var)))
+                            all-assigned))
+                         ;; Process nested else
+                         (process-else (cadddr else-expr)))
+                        ;; else-branch is regular expression (final else)
+                        (else
+                         (if (visit else-expr) (set! has-label #t))
+                         ;; Intersect with all-assigned
+                         (let ((branch-assigned live))
+                           (table.foreach
+                            (lambda (var _)
+                              (if (not (has? branch-assigned var))
+                                  (del! all-assigned var)))
+                            all-assigned)))))
+                     ;; Mark variables assigned in all branches as effectively single-assigned
+                     (table.foreach
+                      (lambda (var _)
+                        (if (has? all-assigned var)
+                            (begin
+                              (put! seen var #t)
+                              (put! unused var #t)
+                              (del! ifa var))))
+                      ifa)
+                     (kill)
+                     (if has-label
+                         (begin (kill) #t)
+                         (begin (restore prev) #f)))))
+                ;; No ifa candidates - use default handling
+                (else
+                 (if (eager-any (lambda (e) (begin0 (visit e) (kill))) (cdr e))
+                     (begin (kill) #t)
+                     (begin (restore prev) #f))))))
+            ((memq (car e) '(elseif trycatch tryfinally trycatchelse))
              (let ((prev (table.clone live)))
                (if (eager-any (lambda (e) (begin0 (visit e)
                                                   (kill)))
@@ -4048,10 +4126,18 @@ f(x) = yt(x)
                     (let ((vv (assq v vi)))
                       (vinfo:set-never-undef! vv #t))))
               (append (table.keys live) (table.keys unused)))
+    ;; Clear captured flag for single-assigned never-undef variables
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
                     (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
               vi)
+    ;; Also clear captured flag for variables that were assigned in all branches of an if-else
+    ;; (these are in `unused` but not `ifa`, and have never-undef set)
+    (for-each (lambda (var)
+                (let ((vv (assq var vi)))
+                  (if (and vv (vinfo:never-undef vv) (not (has? ifa var)))
+                      (set-car! (cddr vv) (logand (caddr vv) (lognot 5))))))
+              (table.keys unused))
     lam))
 
 (define (is-var-boxed? v lam)
