@@ -6,7 +6,7 @@ function is_valid_ir_argument(ctx, ex)
     if is_simple_atom(ctx, ex) || k in KSet"inert top core quote static_eval"
         true
     elseif k == K"BindingId"
-        binfo = lookup_binding(ctx, ex)
+        binfo = get_binding(ctx, ex)
         bk = binfo.kind
         bk === :slot
         # TODO: We should theoretically be able to allow `bk ===
@@ -20,41 +20,41 @@ function is_valid_ir_argument(ctx, ex)
 end
 
 function is_ssa(ctx, ex)
-    kind(ex) == K"BindingId" && lookup_binding(ctx, ex).is_ssa
+    kind(ex) == K"BindingId" && get_binding(ctx, ex).is_ssa
 end
 
 # Target to jump to, including info on try handler nesting and catch block
 # nesting
-struct JumpTarget{GraphType}
-    label::SyntaxTree{GraphType}
-    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+struct JumpTarget{Attrs}
+    label::SyntaxTree{Attrs}
+    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
 end
 
-function JumpTarget(label::SyntaxTree{GraphType}, ctx) where {GraphType}
-    JumpTarget{GraphType}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpTarget(label::SyntaxTree{Attrs}, ctx) where {Attrs}
+    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
 end
 
-struct JumpOrigin{GraphType}
-    goto::SyntaxTree{GraphType}
+struct JumpOrigin{Attrs}
+    goto::SyntaxTree{Attrs}
     index::Int
-    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
 end
 
-function JumpOrigin(goto::SyntaxTree{GraphType}, index, ctx) where {GraphType}
-    JumpOrigin{GraphType}(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpOrigin(goto::SyntaxTree{Attrs}, index, ctx) where {Attrs}
+    JumpOrigin{Attrs}(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
 end
 
-struct FinallyHandler{GraphType}
-    tagvar::SyntaxTree{GraphType}
-    target::JumpTarget{GraphType}
-    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree{GraphType}}}}
+struct FinallyHandler{Attrs}
+    tagvar::SyntaxTree{Attrs}
+    target::JumpTarget{Attrs}
+    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree{Attrs}}}}
 end
 
-function FinallyHandler(tagvar::SyntaxTree{GraphType}, target::JumpTarget) where {GraphType}
-    FinallyHandler{GraphType}(tagvar, target,
-        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree{GraphType}}}}())
+function FinallyHandler(tagvar::SyntaxTree{Attrs}, target::JumpTarget) where {Attrs}
+    FinallyHandler{Attrs}(tagvar, target,
+        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree{Attrs}}}}())
 end
 
 
@@ -64,20 +64,20 @@ Context for creating linear IR.
 One of these is created per lambda expression to flatten the body down to
 a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
-struct LinearIRContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
-    code::SyntaxList{GraphType, Vector{NodeId}}
+struct LinearIRContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
+    code::SyntaxList{Attrs, Vector{NodeId}}
     bindings::Bindings
     next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
     lambda_bindings::LambdaBindings
-    return_type::Union{Nothing, SyntaxTree{GraphType}}
-    break_targets::Dict{String, JumpTarget{GraphType}}
-    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    finally_handlers::Vector{FinallyHandler{GraphType}}
-    symbolic_jump_targets::Dict{String,JumpTarget{GraphType}}
-    symbolic_jump_origins::Vector{JumpOrigin{GraphType}}
+    return_type::Union{Nothing, SyntaxTree{Attrs}}
+    break_targets::Dict{String, JumpTarget{Attrs}}
+    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    finally_handlers::Vector{FinallyHandler{Attrs}}
+    symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
+    symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
     meta::Dict{Symbol, Any}
     mod::Module
 end
@@ -85,12 +85,12 @@ end
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
     graph = syntax_graph(ctx)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
-    GraphType = typeof(graph)
+    Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, rett,
-                    Dict{String,JumpTarget{GraphType}}(), SyntaxList(ctx), SyntaxList(ctx),
-                    Vector{FinallyHandler{GraphType}}(), Dict{String,JumpTarget{GraphType}}(),
-                    Vector{JumpOrigin{GraphType}}(), Dict{Symbol, Any}(), ctx.mod)
+                    Dict{String,JumpTarget{Attrs}}(), SyntaxList(ctx), SyntaxList(ctx),
+                    Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
+                    Vector{JumpOrigin{Attrs}}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -101,10 +101,8 @@ function is_valid_body_ir_argument(ctx, ex)
     if is_valid_ir_argument(ctx, ex)
         true
     elseif kind(ex) == K"BindingId"
-        binfo = lookup_binding(ctx, ex)
-        # Arguments are always defined
-        # TODO: use equiv of vinfo:never-undef when we have it
-        binfo.kind == :argument
+        binfo = get_binding(ctx, ex)
+        binfo.kind == :argument && binfo.is_always_defined
     else
         false
     end
@@ -116,12 +114,12 @@ function is_simple_arg(ctx, ex)
            k == K"top" || k == K"core" || k == K"globalref" || k == K"static_eval"
 end
 
+# flisp note: arguments are always counted as single-assign, so effects on
+# arguments within compile_args are thrown out (intentional?)
 function is_single_assign_var(ctx::LinearIRContext, ex)
     kind(ex) == K"BindingId" || return false
-    binfo = lookup_binding(ctx, ex)
-    # Arguments are always single-assign
-    # TODO: Use equiv of vinfo:sa when we have it
-    return binfo.kind == :argument
+    binfo = get_binding(ctx, ex)
+    return binfo.kind == :argument || binfo.is_assigned_once
 end
 
 function is_const_read_arg(ctx, ex)
@@ -143,7 +141,7 @@ end
 
 function check_no_local_bindings(ctx, ex, msg)
     contains_nonglobal_binding = contains_unquoted(ex) do e
-        kind(e) == K"BindingId" && lookup_binding(ctx, e).kind !== :global
+        kind(e) == K"BindingId" && get_binding(ctx, e).kind !== :global
     end
     if contains_nonglobal_binding
         throw(LoweringError(ex, msg))
@@ -171,10 +169,6 @@ end
 function emit(ctx::LinearIRContext, ex)
     push!(ctx.code, ex)
     return ex
-end
-
-function emit(ctx::LinearIRContext, srcref, k, args...)
-    emit(ctx, makenode(ctx, srcref, k, args...))
 end
 
 # Emit computation of ex, assigning the result to an ssavar and returning that
@@ -318,7 +312,7 @@ end
 # `op` may be either K"=" (where global assignments are converted to setglobal!)
 # or K"constdecl".  flisp: emit-assignment-or-setglobal
 function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
-    binfo = lookup_binding(ctx, lhs.var_id)
+    binfo = get_binding(ctx, lhs.var_id)
     if binfo.kind == :global
         emit(ctx, @ast ctx srcref [
             K"call"
@@ -328,7 +322,7 @@ function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
             rhs
         ])
     else
-        emit(ctx, srcref, op, lhs, rhs)
+        emit(ctx, @ast ctx srcref [op lhs rhs])
     end
 end
 
@@ -351,7 +345,7 @@ end
 function make_label(ctx, srcref)
     id = ctx.next_label_id[]
     ctx.next_label_id[] += 1
-    makeleaf(ctx, srcref, K"label", id=id)
+    setattr!(newleaf(ctx, srcref, K"label"), :id, id)
 end
 
 # flisp: make&mark-label
@@ -370,7 +364,7 @@ end
 
 function emit_latestworld(ctx, srcref)
     (isempty(ctx.code) || kind(last(ctx.code)) != K"latestworld") &&
-        emit(ctx, makeleaf(ctx, srcref, K"latestworld"))
+        emit(ctx, newleaf(ctx, srcref, K"latestworld"))
 end
 
 function compile_condition_term(ctx, ex)
@@ -602,7 +596,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
             k == K"new_opaque_closure" || k == K"cfunction"
-        callex = makenode(ctx, ex, k, compile_args(ctx, children(ex)))
+        callex = newnode(ctx, ex, k, compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
         elseif needs_value
@@ -618,7 +612,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif k == K"constdecl" && numchildren(ex) == 1
             # No RHS - make undefined constant
             mod, name = if kind(ex[1]) == K"BindingId"
-                binfo = lookup_binding(ctx, ex[1])
+                binfo = get_binding(ctx, ex[1])
                 binfo.mod, binfo.name
             else
                 @assert kind(ex[1]) == K"Value" && typeof(ex[1].value) === GlobalRef
@@ -693,9 +687,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"symbolic_goto"
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
-        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
-        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? leave
-        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? goto
+        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
+        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? leave
+        emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? goto
         nothing
     elseif k == K"return"
         compile(ctx, ex[1], true, true)
@@ -773,7 +767,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            emit(ctx, ex, K"method", fname, sig, lam)
+            emit(ctx, @ast ctx ex [K"method" fname sig lam])
             @assert !needs_value && !in_tail_pos
             nothing
         end
@@ -797,8 +791,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, lam)
         end
     elseif k == K"gc_preserve_begin"
-        makenode(ctx, ex, k, compile_args(ctx, children(ex)))
-    elseif k == K"gc_preserve_end"
+        newnode(ctx, ex, k, compile_args(ctx, children(ex)))
+    elseif k == K"gc_preserve_end" || k == K"loopinfo"
         if needs_value
             throw(LoweringError(ex, "misplaced kind $k in value position"))
         end
@@ -907,7 +901,7 @@ function unnecessary_newvar_ids(ctx, stmts)
         k = kind(ex)
         if k == K"newvar"
             id = ex[1].var_id
-            if !lookup_binding(ctx, id).is_captured
+            if !get_binding(ctx, id).is_captured
                 push!(vars, id)
             end
         elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
@@ -970,20 +964,22 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     if k == K"BindingId"
         id = ex.var_id
         if haskey(ssa_rewrites, id)
-            makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[id])
+            setattr!(newleaf(ctx, ex, K"SSAValue"), :var_id, ssa_rewrites[id])
         else
             new_id = get(slot_rewrites, id, nothing)
-            binfo = lookup_binding(ctx, id)
+            binfo = get_binding(ctx, id)
             if !isnothing(new_id)
                 sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
                      binfo.kind == :static_parameter                 ? K"static_parameter" :
                      throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
-                makeleaf(ctx, ex, sk; var_id=new_id)
+                setattr!(newleaf(ctx, ex, sk), :var_id, new_id)
             else
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
-                makeleaf(ctx, ex, K"globalref", binfo.name, mod=binfo.mod)
+                out = newleaf(ctx, ex, K"globalref")
+                setattr!(out, :name_val, binfo.name)
+                setattr!(out, :mod, binfo.mod)
             end
         end
     elseif k == K"meta" || k == K"static_eval"
@@ -1070,27 +1066,27 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(arg.name_val, :argument, false, false, false, false, false))
+            push!(slots, Slot(arg.name_val, :argument, getmeta(arg, :nospecialize, false),
+                              false, false, false, false))
         else
             @assert kind(arg) == K"BindingId"
             id = arg.var_id
-            binfo = lookup_binding(ctx, id)
-            lbinfo = lookup_lambda_binding(ctx, id)
+            binfo = get_binding(ctx, id)
             @assert binfo.kind == :local || binfo.kind == :argument
-            # FIXME: is_single_assign, is_maybe_undef
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
-                              lbinfo.is_read, false, false, lbinfo.is_called))
+                              binfo.is_read, binfo.is_assigned_once,
+                              binfo.is_used_undef, binfo.is_called))
             slot_rewrites[id] = length(slots)
         end
     end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    for (id, lbinfo) in sort(collect(pairs(lambda_bindings.bindings)), by=first)
-        if !lbinfo.is_captured
-            binfo = lookup_binding(ctx.bindings, id)
+    for (id, is_capt) in sort(collect(pairs(lambda_bindings.locals_capt)), by=first)
+        if !is_capt
+            binfo = get_binding(ctx.bindings, id)
             if binfo.kind == :local
-                # FIXME: is_single_assign, is_maybe_undef
                 push!(slots, Slot(binfo.name, :local, false,
-                                  lbinfo.is_read, false, false, lbinfo.is_called))
+                                  binfo.is_read, binfo.is_assigned_once,
+                                  binfo.is_used_undef, binfo.is_called))
                 slot_rewrites[id] = length(slots)
             end
         end
@@ -1098,7 +1094,7 @@ function compile_lambda(outer_ctx, ex)
     for (i,arg) in enumerate(children(static_parameters))
         @assert kind(arg) == K"BindingId"
         id = arg.var_id
-        info = lookup_binding(ctx.bindings, id)
+        info = get_binding(ctx.bindings, id)
         @assert info.kind == :static_parameter
         slot_rewrites[id] = i
     end
@@ -1130,14 +1126,14 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
                               id=Int)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
-    GraphType = typeof(graph)
+    Attrs = typeof(graph.attributes)
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
                            Ref(0), false, LambdaBindings(), nothing,
-                           Dict{String,JumpTarget{typeof(graph)}}(),
+                           Dict{String,JumpTarget{Attrs}}(),
                            SyntaxList(graph), SyntaxList(graph),
-                           Vector{FinallyHandler{GraphType}}(),
-                           Dict{String, JumpTarget{GraphType}}(),
-                           Vector{JumpOrigin{GraphType}}(),
+                           Vector{FinallyHandler{Attrs}}(),
+                           Dict{String, JumpTarget{Attrs}}(),
+                           Vector{JumpOrigin{Attrs}}(),
                            Dict{Symbol, Any}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     _ctx, res

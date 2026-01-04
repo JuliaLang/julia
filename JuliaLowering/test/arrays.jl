@@ -145,4 +145,18 @@ let
 end
 """) == (3, 7, 2, 5)
 
+# begin/end not replaced in some cases
+JuliaLowering.include_string(test_mod, "f(args...;kws...) = 2")
+@test JuliaLowering.include_string(test_mod, """
+    [7,8,9][f(;var"end"=123, var"begin"=456)]
+""") === 8
+@test JuliaLowering.include_string(test_mod, """
+    [7,8,9][f(quote var"end" end)]
+""") === 8
+@test JuliaLowering.include_string(test_mod, """
+let var"end" = [1,2,3], y = [7,8,9]
+    y[var"end"[var"end"]]
+end
+""") === 9
+
 end # @testset "Array syntax" begin

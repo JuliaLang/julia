@@ -13,7 +13,7 @@ function var_kind(ctx, ex)
     if isnothing(id)
         return nothing
     end
-    binfo = lookup_binding(ctx, id)
+    binfo = get_binding(ctx, id)
     return binfo.kind == :local ?
         (binfo.is_captured ? :local_captured : :local) :
         binfo.kind
@@ -25,7 +25,7 @@ function var_mod(ctx, ex)
     if isnothing(id)
         return nothing
     end
-    return lookup_binding(ctx, id).mod
+    return get_binding(ctx, id).mod
 end
 
 function formatsrc(ex; kws...)

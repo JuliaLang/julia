@@ -462,12 +462,12 @@ end
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{ComplexF64,2}
+@test A3890{Float64}.types[1] === Matrix{ComplexF64}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{ComplexF64,2}
+@test B3890{Float64}.types[1] === Matrix{ComplexF64}
 
 # issue #786
 mutable struct Node{T}
@@ -3894,14 +3894,14 @@ f12092(x::Int, y::Int...) = 2
 
 # issue #12063
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
-f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
+f12063(tt, g, p, c, b, v, cu::T, d::AbstractMatrix{T}, ve) where {T} = 1
 f12063(args...) = 2
 g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, zeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587
 mutable struct Sampler11587{N}
-    clampedpos::Array{Int,2}
+    clampedpos::Matrix{Int}
     buf::Array{Float64,N}
 end
 function Sampler11587()
@@ -7435,9 +7435,9 @@ end
 @test repackage28445()
 
 # issue #28597
-@test_throws ArgumentError Array{Int, 2}(undef, 0, -10)
-@test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
-@test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
+@test_throws ArgumentError Matrix{Int}(undef, 0, -10)
+@test_throws ArgumentError Matrix{Int}(undef, -10, 0)
+@test_throws ArgumentError Matrix{Int}(undef, -1, -1)
 
 # issue #54244
 # test that zero sized array doesn't throw even with large axes

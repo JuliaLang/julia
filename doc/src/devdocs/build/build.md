@@ -163,6 +163,7 @@ Building Julia requires that the following software be installed:
 
 - **[GNU make](https://www.gnu.org/software/make)**                — building dependencies.
 - **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
+  - On Linux with g++, the static version of libstdc++ is also required.  If it is unavailable, set `USE_RT_STATIC_LIBSTDCXX=0` in `Make.user`.
 - **[libatomic](https://gcc.gnu.org)**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python](https://www.python.org/)** (>=2.7)          — needed to build LLVM.
 - **[gfortran](https://gcc.gnu.org/fortran/)**                — compiling and linking Fortran libraries.
@@ -175,15 +176,16 @@ Building Julia requires that the following software be installed:
 - **[pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/)**              — needed to build `libgit2` correctly, especially for proxy support.
 - **[powershell](https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview)** (>= 3.0)     — necessary only on Windows.
 - **[which](https://carlowood.github.io/which/)**                   — needed for checking build dependencies.
+- **[diffutils](https://www.gnu.org/software/diffutils/)**                   - `cmp` is used by the makefiles
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
+sudo apt-get install build-essential libatomic1 python3 gfortran perl wget m4 cmake pkg-config curl
 ```
 
 On Red Hat-based distributions (e.g. Fedora, CentOS), you can install them with `yum`:
 ```
-sudo dnf install gcc gcc-c++ gcc-gfortran python3 perl wget m4 cmake pkgconfig curl
+sudo dnf install gcc gcc-c++ gcc-gfortran python3 perl wget m4 cmake pkgconfig curl which diffutils libatomic libstdc++-static
 ```
 
 Julia uses the following external libraries, which are automatically

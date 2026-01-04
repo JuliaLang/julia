@@ -817,7 +817,7 @@ function compute_edges!(sv::InferenceState)
     for i in 1:length(sv.stmt_info)
         add_edges!(edges, sv.stmt_info[i])
     end
-    user_edges = sv.src.edges
+    user_edges = sv.src.edges::Union{Nothing, SimpleVector, Vector{Any}}
     if user_edges !== nothing && user_edges !== empty_edges
         append!(edges, user_edges)
     end
@@ -930,7 +930,7 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
             for slot in 1:nslots
                 vt = varstate[slot]
                 widened_type = widenslotwrapper(ignorelimited(vt.typ))
-                varstate[slot] = VarState(widened_type, vt.undef)
+                varstate[slot] = VarState(widened_type, vt.ssadef, vt.undef)
             end
         end
     end
@@ -1642,6 +1642,12 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
             atype = argtypes_to_type(argtypes)
+        elseif isexpr(stmt, :new)
+            # When creating a struct of Function type, check to see if we should
+            # proactively compile the lambda
+            t, _, _, _ = instanceof_tfunc(argextype(stmt.args[1], ci, sptypes))
+            t <: Function || continue
+            atype = Tuple{t, Vararg}
         else
             # TODO: handle other StmtInfo like OpaqueClosure?
             continue

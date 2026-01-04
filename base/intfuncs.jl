@@ -871,42 +871,45 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 function bin(x::Unsigned, pad::Int, neg::Bool)
     m = top_set_bit(x)
     n = neg + max(pad, m)
-    a = StringMemory(n)
-    # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
-    #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
-    # end
-    i = n
-    @inbounds while i >= 4
-        b = UInt32((x % UInt8)::UInt8)
-        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
-        a[i-3] = (d >> 0x00) % UInt8
-        a[i-2] = (d >> 0x08) % UInt8
-        a[i-1] = (d >> 0x10) % UInt8
-        a[i]   = (d >> 0x18) % UInt8
-        x >>= 0x4
-        i -= 4
+    str = _string_n(n)
+    GC.@preserve str begin
+        p = pointer(str)
+        i = n
+        while i >= 4
+            b = UInt32((x % UInt8)::UInt8)
+            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+            unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
+            unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
+            unsafe_store!(p, (d >> 0x10) % UInt8, i-1)
+            unsafe_store!(p, (d >> 0x18) % UInt8, i)
+            x >>= 0x4
+            i -= 4
+        end
+        while i > neg
+            unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x1), i)
+            x >>= 0x1
+            i -= 1
+        end
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
-    while i > neg
-        @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x1)
-        x >>= 0x1
-        i -= 1
-    end
-    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    unsafe_takestring(a)
+    return str
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     m = div(top_set_bit(x) + 2, 3)
     n = neg + max(pad, m)
-    a = StringMemory(n)
-    i = n
-    while i > neg
-        @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x7)
-        x >>= 0x3
-        i -= 1
+    str = _string_n(n)
+    GC.@preserve str begin
+        p = pointer(str)
+        i = n
+        while i > neg
+            unsafe_store!(p, 0x30 + ((x % UInt8)::UInt8 & 0x7), i)
+            x >>= 0x3
+            i -= 1
+        end
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
-    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    unsafe_takestring(a)
+    return str
 end
 
 # 2-digit decimal characters ("00":"99")
@@ -973,31 +976,63 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
-    a = StringMemory(n)
-    append_c_digits_fast(n, x, a, 1)
-    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    unsafe_takestring(a)
+    str = _string_n(n)
+    GC.@preserve str begin
+        p = pointer(str)
+        i = n
+        while i > 9 && x > typemax(UInt)
+            d, r = divrem(x, 0x3b9aca00) # 10^9
+            x = oftype(x, d)
+            r32 = r % UInt32
+            for j in 0:3
+                q, s = divrem(r32, 0x64)
+                r32 = q
+                v = @inbounds _dec_d100[1 + (s % Int)]
+                unsafe_store!(p, (v >> 8) % UInt8, i - 2*j)
+                unsafe_store!(p, v % UInt8, i - 2*j - 1)
+            end
+            unsafe_store!(p, 0x30 + (r32 % UInt8), i - 8)
+            i -= 9
+        end
+        y = x % UInt
+        while i >= 2
+            d, r = divrem(y, 0x64)
+            y = d
+            v = @inbounds _dec_d100[1 + (r % Int)]
+            unsafe_store!(p, (v >> 8) % UInt8, i)
+            unsafe_store!(p, v % UInt8, i - 1)
+            i -= 2
+        end
+        if i > neg
+            unsafe_store!(p, 0x30 + (rem(y, 0xa) % UInt8), i)
+        end
+        neg && unsafe_store!(p, 0x2d, 1) # '-'
+    end
+    return str
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
-    a = StringMemory(n)
-    i = n
-    while i >= 2
-        b = (x % UInt8)::UInt8
-        d1, d2 = b >> 0x4, b & 0xf
-        @inbounds a[i-1] = d1 + ifelse(d1 > 0x9, 0x57, 0x30)
-        @inbounds a[i]   = d2 + ifelse(d2 > 0x9, 0x57, 0x30)
-        x >>= 0x8
-        i -= 2
+    str = _string_n(n)
+    GC.@preserve str begin
+        p = pointer(str)
+        i = n
+        while i >= 2
+            b = (x % UInt8)::UInt8
+            d1, d2 = b >> 0x4, b & 0xf
+            unsafe_store!(p, d1 + ifelse(d1 > 0x9, 0x57, 0x30), i-1)
+            unsafe_store!(p, d2 + ifelse(d2 > 0x9, 0x57, 0x30), i)
+            x >>= 0x8
+            i -= 2
+        end
+        if i > neg
+            d = (x % UInt8)::UInt8 & 0xf
+            unsafe_store!(p, d + ifelse(d > 0x9, 0x57, 0x30), i)
+        end
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
-    if i > neg
-        d = (x % UInt8)::UInt8 & 0xf
-        @inbounds a[i] = d + ifelse(d > 0x9, 0x57, 0x30)
-    end
-    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    unsafe_takestring(a)
+    return str
 end
 
 const base36digits = UInt8['0':'9';'a':'z']
@@ -1009,20 +1044,23 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     b = (base % Int)::Int
     digits = abs(b) <= 36 ? base36digits : base62digits
     n = neg + ndigits(x, base=b, pad=pad)
-    a = StringMemory(n)
-    i = n
-    @inbounds while i > neg
-        if b > 0
-            a[i] = digits[1 + (rem(x, b) % Int)::Int]
-            x = div(x,b)
-        else
-            a[i] = digits[1 + (mod(x, -b) % Int)::Int]
-            x = cld(x,b)
+    str = _string_n(n)
+    GC.@preserve str begin
+        p = pointer(str)
+        i = n
+        while i > neg
+            if b > 0
+                unsafe_store!(p, @inbounds(digits[1 + (rem(x, b) % Int)::Int]), i)
+                x = div(x,b)
+            else
+                unsafe_store!(p, @inbounds(digits[1 + (mod(x, -b) % Int)::Int]), i)
+                x = cld(x,b)
+            end
+            i -= 1
         end
-        i -= 1
+        neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
     end
-    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    unsafe_takestring(a)
+    return str
 end
 
 split_sign(n::Integer) = unsigned(abs(n)), n < 0
@@ -1095,19 +1133,22 @@ julia> bitstring(2.2)
 function bitstring(x::T) where {T}
     isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
     sz = sizeof(T) * 8
-    str = StringMemory(sz)
-    i = sz
-    @inbounds while i >= 4
-        b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
-        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
-        str[i-3] = (d >> 0x00) % UInt8
-        str[i-2] = (d >> 0x08) % UInt8
-        str[i-1] = (d >> 0x10) % UInt8
-        str[i]   = (d >> 0x18) % UInt8
-        x = lshr_int(x, 4)
-        i -= 4
+    str = _string_n(sz)
+    GC.@preserve str begin
+        p = pointer(str)
+        i = sz
+        while i >= 4
+            b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
+            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+            unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
+            unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
+            unsafe_store!(p, (d >> 0x10) % UInt8, i-1)
+            unsafe_store!(p, (d >> 0x18) % UInt8, i)
+            x = lshr_int(x, 4)
+            i -= 4
+        end
     end
-    return unsafe_takestring(str)
+    return str
 end
 
 """

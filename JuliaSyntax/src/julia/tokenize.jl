@@ -147,7 +147,7 @@ end
     end
     # Additional allowed cases
     return $(_char_in_set_expr(:u,
-        collect("²³¹ʰʲʳʷʸˡˢˣᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜⱼⱽꜛꜜꜝ")))
+        collect("²³¹ʰʲʳʷʸˡˢˣ˱˲ᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵅᵇᵈᵉᵋᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶲᶸᶻᶿ′″‴‵‶‷⁗⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₔₕₖₗₘₙₚₛₜⱼⱽꜛꜜꜝ")))
 end
 
 function optakessuffix(k)
@@ -173,7 +173,7 @@ function optakessuffix(k)
         k == K"!"   ||
         k == K".'"  ||
         k == K"->"  ||
-        K"¬" <= k <= K"∜"
+        K"BEGIN_UNICODE_OPS" <= k <= K"END_UNICODE_OPS"
     )
 end
 
@@ -1057,6 +1057,14 @@ function lex_digit(l::Lexer, kind)
                 if !accept_number(l, isdigit) || !had_digits
                     return emit(l, K"ErrorInvalidNumericConstant") # `0x1p` `0x.p0`
                 end
+                # Check for invalid trailing decimal point
+                # https://github.com/JuliaLang/julia/issues/60189
+                pc = peekchar(l)
+                if pc == '.'
+                    accept_batch(l, c->(c == '.' || isdigit(c)))
+                    # `0x1p3.` `0x1p3.2` `0x1.5p2.3`
+                    return emit(l, K"ErrorInvalidNumericConstant")
+                end
             elseif isfloat
                 return emit(l, K"ErrorHexFloatMustContainP") # `0x.` `0x1.0`
             end
@@ -1245,12 +1253,12 @@ function lex_identifier(l::Lexer, c)
     end
 end
 
-# This creates a hash for chars in [a-z] using 5 bit per char.
+# This creates a hash for chars in [A-z] using 6 bit per char.
 # Requires an additional input-length check somewhere, because
-# this only works up to ~12 chars.
+# this only works up to ~10 chars.
 @inline function simple_hash(c::Char, h::UInt64)
-    bytehash = (clamp(c - 'a' + 1, -1, 30) % UInt8) & 0x1f
-    h << 5 + bytehash
+    bytehash = (clamp(c - 'A' + 1, -1, 60) % UInt8) & 0x3f
+    h << 6 + bytehash
 end
 
 function simple_hash(str)
@@ -1305,10 +1313,11 @@ K"outer",
 K"primitive",
 K"type",
 K"var",
+K"VERSION"
 ]
 
 const _true_hash = simple_hash("true")
 const _false_hash = simple_hash("false")
-const _kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
+const _kw_hash = Dict(simple_hash(string(kw)) => kw for kw in kws)
 
 end # module

@@ -1800,9 +1800,6 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 # scoping #
 ###########
 
-_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-
-
 # high-level, more convenient method lookup functions
 
 function visit(f, mt::Core.MethodTable)
@@ -1877,11 +1874,11 @@ end
 length(specs::MethodSpecializations) = count(Returns(true), specs)
 
 function length(mt::Core.MethodTable)
-    n = 0
+    n = Ref(0)
     visit(mt) do m
-        n += 1
+        n[] += 1
     end
-    return n::Int
+    return n[]
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 

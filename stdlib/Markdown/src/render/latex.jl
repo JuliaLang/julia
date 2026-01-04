@@ -32,10 +32,11 @@ function latex(io::IO, header::Header{l}) where l
     println(io)
 end
 
-function latex(io::IO, code::Code)
-    if code.language == "styled"
-        code = Code("", String(styled(code.code)))
+function latex(io::IO, code′::Code)
+    if code′.language == "styled"
+        code′ = Code("", String(styled(code′.code)))
     end
+    code = code′
     occursin("\\end{verbatim}", code.code) && error("Cannot include \"\\end{verbatim}\" in a latex code block")
     wrapblock(io, "verbatim") do
         println(io, code.code)
@@ -129,6 +130,10 @@ function latexinline(io::IO, md::Italic)
     wrapinline(io, "emph") do
         latexinline(io, md.text)
     end
+end
+
+function latexinline(io::IO, br::LineBreak)
+    println(io, "\\\\")
 end
 
 function latexinline(io::IO, md::Image)

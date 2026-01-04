@@ -154,7 +154,7 @@ end
 @static if Base.USING_STOCK_GC
 # must be kept in sync with `src/gc-stock.h``
 const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
-                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE, :FULL_SWEEP_REASON_LARGE_HEAP_GROWTH]
 end
 
 """
@@ -538,6 +538,14 @@ function is_simply_call(@nospecialize ex)
         is_simple_atom(a) && continue
         Meta.isexpr(a, :..., 1) && is_simple_atom(a.args[1]) && continue
         return false
+    end
+    # Ensure Expr(:call, .+, ...) get wrapped
+    if ex.args[1] isa Symbol
+        sa = String(ex.args[1]::Symbol)
+        startswith(sa, ".") &&
+            !endswith(sa, ".") &&
+            isoperator(Symbol(sa[2:end])) &&
+            return false
     end
     return true
 end

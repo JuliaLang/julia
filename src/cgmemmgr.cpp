@@ -256,7 +256,7 @@ static void *create_shared_map(size_t size, size_t id) JL_NOTSAFEPOINT
     return addr;
 }
 
-static intptr_t init_shared_map() JL_NOTSAFEPOINT
+[[maybe_unused]] static intptr_t init_shared_map() JL_NOTSAFEPOINT
 {
     anon_hdl = get_anon_hdl();
     if (anon_hdl == -1)
@@ -548,13 +548,12 @@ public:
     virtual ~ROAllocator() JL_NOTSAFEPOINT {}
     virtual void finalize() JL_NOTSAFEPOINT
     {
-        for (auto &alloc: allocations) {
-            // ensure the mapped pages are consistent
-            sys::Memory::InvalidateInstructionCache(alloc.wr_addr,
-                                                    alloc.sz);
-            sys::Memory::InvalidateInstructionCache(alloc.rt_addr,
-                                                    alloc.sz);
-        }
+        // Note: on some aarch64 platforms, like Apple CPUs, we need read
+        // permission in order to invalidate instruction cache lines.  We are
+        // not guaranteed to have read permission on the wr_addr when using
+        // DualMapAllocator.
+        for (auto &alloc : allocations)
+            sys::Memory::InvalidateInstructionCache(alloc.rt_addr, alloc.sz);
         completed.clear();
         allocations.clear();
     }
@@ -772,6 +771,7 @@ public:
 std::pair<std::unique_ptr<ROAllocator>, std::unique_ptr<ROAllocator>>
 get_preferred_allocators() JL_NOTSAFEPOINT
 {
+#if !(defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_))
 #ifdef _OS_LINUX_
     if (get_self_mem_fd() != -1)
         return {std::make_unique<SelfMemAllocator>(false),
@@ -780,6 +780,7 @@ get_preferred_allocators() JL_NOTSAFEPOINT
     if (init_shared_map() != -1)
         return {std::make_unique<DualMapAllocator>(false),
                 std::make_unique<DualMapAllocator>(true)};
+#endif
     return {};
 }
 
@@ -960,7 +961,8 @@ public:
     void deallocate(std::vector<FinalizedAlloc> Allocs,
                     OnDeallocatedFunction OnDeallocated) override
     {
-        jl_unreachable();
+        // This shouldn't be reachable, but we will get a better error message
+        // from JITLink if we leak this allocation and fail elsewhere.
     }
 
 protected:
@@ -998,7 +1000,10 @@ class JLJITLinkMemoryManager::InFlightAlloc
 public:
     InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G) : MM(MM), G(G) {}
 
-    void abandon(OnAbandonedFunction OnAbandoned) override { jl_unreachable(); }
+    void abandon(OnAbandonedFunction OnAbandoned) override {
+        // This shouldn't be reachable, but we will get a better error message
+        // from JITLink if we leak this allocation and fail elsewhere.
+    }
 
     void finalize(OnFinalizedFunction OnFinalized) override
     {
@@ -1008,10 +1013,19 @@ public:
             if (!FA)
                 return OnFinalized(FA.takeError());
             // Need to handle dealloc actions when we GC code
+#if JL_LLVM_VERSION >= 210000 && JL_LLVM_VERSION < 220000
+            // This change was reverted before llvm 22 is branched off
+            orc::shared::runFinalizeActions(GP->allocActions(), [&] (auto E) {
+                if (!E)
+                    return OnFinalized(E.takeError());
+                OnFinalized(std::move(FA));
+            });
+#else
             auto E = orc::shared::runFinalizeActions(GP->allocActions());
             if (!E)
                 return OnFinalized(E.takeError());
             OnFinalized(std::move(FA));
+#endif
         });
     }
 };

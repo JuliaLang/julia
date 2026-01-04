@@ -1733,7 +1733,7 @@ let src = code_typed1(with_unmatched_typeparam)
             break
         end
     end
-    @test isnothing(found) || (source=src, statement=found)
+    @test isnothing(found) context=(; source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
