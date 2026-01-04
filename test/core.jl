@@ -6,6 +6,8 @@ using Random, InteractiveUtils
 
 const Bottom = Union{}
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # For curmod_*
 include("testenv.jl")
 
@@ -8194,7 +8196,7 @@ foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
 @test 10 <= foo46503(1, nothing) <= 11
 
 @testset "effect override on Symbol(::String)" begin
-    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,))) broken=coverage_enabled
 end
 
 @testset "error message for getfield with bad integer type" begin
@@ -8287,25 +8289,25 @@ struct ModTParamUnionAll{A, B}; end
 
 # effects for objectid
 for T in (Int, String, Symbol, Module)
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Ref{T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Ref{T}},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Vector{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Ref{T},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Ref{T}},))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Vector{T}},))) broken=coverage_enabled
 end
-@test Core.Compiler.is_foldable(Base.infer_effects(objectid, (DataType,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(objectid, (DataType,))) broken=coverage_enabled
 
 # donotdelete should not taint consistency of the containing function
 f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)
-@test Core.Compiler.is_consistent(Base.infer_effects(f_donotdete, (Tuple{Float64},)))
+@test Core.Compiler.is_consistent(Base.infer_effects(f_donotdete, (Tuple{Float64},))) broken=coverage_enabled
 
 # Test conditional UndefRefError (#50250)
 struct Foo50250
@@ -8338,8 +8340,8 @@ let u = Union{Type{Union{}}, Type{Any}}, ab = bar50293(u)
 end
 
 # `SimpleVector`-operations should be concrete-eval eligible
-@test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
-@test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
+@test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,))) broken=coverage_enabled
+@test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int))) broken=coverage_enabled
 
 # Test that a the lowering of nothrow globalref
 module WellKnownGlobal
