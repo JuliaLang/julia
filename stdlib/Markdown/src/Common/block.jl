@@ -132,11 +132,11 @@ end
 function footnote(stream::IO, block::MD)
     withstream(stream) do
         regex = r"^\[\^(\w+)\]:"
-        str = startswith(stream, regex)
-        if isempty(str)
+        m = matchstart(stream, regex)
+        if m === nothing
             return false
         else
-            ref = (match(regex, str)::AbstractMatch).captures[1]
+            ref = m.captures[1]
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
@@ -259,22 +259,25 @@ List(xs...) = List(vcat(xs...))
 isordered(list::List) = list.ordered >= 0
 
 const BULLETS = r"^ {0,3}(\*|\+|-)( |$)"
-const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|\d+(\.|\)))( |$)"
+const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|(\d+)(\.|\)))( |$)"
 
 @breaking true ->
 function list(stream::IO, block::MD)
     withstream(stream) do
-        bullet = startswith(stream, NUM_OR_BULLETS; eat = false)
-        indent = isempty(bullet) ? (return false) : length(bullet)
+        m = matchstart(stream, NUM_OR_BULLETS; eat = false)
+        isnothing(m) && return false
+        indent = length(m.match)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if occursin(BULLETS, bullet)
+            if m.captures[3] == nothing
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, BULLETS
-            elseif occursin(r"^ {0,3}\d+(\.|\))( |$)", bullet)
-                # An ordered list. Either with `1. ` or `1) ` style numbering.
-                r = occursin(".", bullet) ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
-                Base.parse(Int, (match(r, bullet)::AbstractMatch).captures[1]), r
+            elseif m.captures[3] == "."
+                # An ordered list with `1. ` style numbering.
+                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\.( |$)"
+            elseif m.captures[3] == ")"
+                # An ordered list with `1) ` style numbering.
+                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\)( |$)"
             else
                 # Failed to match any bullets. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -299,7 +302,7 @@ function list(stream::IO, block::MD)
                     # Skip any additional blank lines and check indentation
                     still_indented = false
                     while !eof(stream)
-                        if startswith(stream, "\n";eat = true)
+                        if startswith(stream, "\n"; eat = true)
                             continue
                         elseif startswith(stream, " "^indent; eat = false)
                             still_indented = true
@@ -328,8 +331,8 @@ function list(stream::IO, block::MD)
                     # Indented text that is part of the current list item.
                     print(buffer, readline(stream, keep=true))
                 else
-                    matched = startswith(stream, regex)
-                    if isempty(matched)
+                    matched = matchstart(stream, regex)
+                    if matched === nothing
                         # Unindented text meaning we have left the current list.
                         pushitem!(list, buffer)
                         break
