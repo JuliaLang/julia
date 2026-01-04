@@ -1115,3 +1115,15 @@ function add_one57190!()
 end
 
 @test add_one57190!() == 1
+
+# Test atomic Float16 operations at all optimization levels (GlobalISel miscompile on AArch64)
+# See https://github.com/JuliaLang/julia/pull/54140#issuecomment-2855794363
+for opt in 0:3
+    @test success(run(```$(Base.julia_cmd()) --startup-file=no -O$opt -e '
+        a = Threads.Atomic{Float16}(Float16(0))
+        a[] = Float16(1.5)
+        @assert a[] === Float16(1.5) "atomic Float16 store failed: got \$(a[]) expected 1.5 (opt level = -O$(Base.JLOptions().opt_level))"
+        a[] = Float16(3.25)
+        @assert a[] === Float16(3.25) "atomic Float16 store failed: got \$(a[]) expected 3.25 (opt level = -O$(Base.JLOptions().opt_level))"
+    '```))
+end
