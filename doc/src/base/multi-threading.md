@@ -54,6 +54,12 @@ Base.Threads.atomic_fence_heavy
 Base.Threads.atomic_fence_light
 ```
 
+## Semaphores
+
+```@docs
+Base.@acquire
+```
+
 ## ccall using a libuv threadpool (Experimental)
 
 ```@docs
