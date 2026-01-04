@@ -2048,7 +2048,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL
 JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici);
 JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags);
-int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world);
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 

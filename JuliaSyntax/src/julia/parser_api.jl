@@ -43,21 +43,41 @@ structures may be extracted from `stream` with the [`build_tree`](@ref) function
 * `:statement` — parse a single statement, or statements separated by semicolons.
 * `:atom` — parse a single syntax "atom": a literal, identifier, or
   parenthesized expression.
+
+If `incremental` is `true`, skip whitespace (including newlines) before parsing
+an atom or statement and skip any trailing whitespace up to the newline when
+parsing a statement. In incremental mode it's not an error for the end of
+stream to be reached and `all_trivia(stream)` can be used to detect if the end
+of the stream was reached without encountering significant syntax.
 """
-function parse!(stream::ParseStream; rule::Symbol=:all)
+function parse!(stream::ParseStream; rule::Symbol=:all, incremental=false)
     if rule == :toplevel
         Base.depwarn("Use of rule == :toplevel in parse!() is deprecated. use `rule=:all` instead.", :parse!)
         rule = :all
     end
+    mark = position(stream)
     ps = ParseState(stream)
+    if incremental && rule != :all
+        bump_trivia(stream, skip_newlines=true)
+    end
     if rule === :all
         parse_toplevel(ps)
     elseif rule === :statement
-        parse_stmts(ps)
+        if !incremental || peek(stream) != K"EndMarker"
+            parse_stmts(ps)
+        end
     elseif rule === :atom
-        parse_atom(ps)
+        if !incremental || peek(stream) != K"EndMarker"
+            parse_atom(ps)
+        end
     else
         throw(ArgumentError("Unknown grammar rule $rule"))
+    end
+    if incremental && rule == :statement
+        bump_trivia(stream; skip_newlines=false)
+        if peek(stream) == K"NewlineWs"
+            bump(stream, TRIVIA_FLAG)
+        end
     end
     validate_tokens(stream)
     stream
@@ -81,12 +101,12 @@ end
 
 function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=VERSION,
                 ignore_trivia=true, filename=nothing, first_line=1, ignore_errors=false,
-                ignore_warnings=ignore_errors, kws...) where {T}
+                ignore_warnings=ignore_errors, incremental=false, kws...) where {T}
     stream = ParseStream(text, index; version=version)
     if ignore_trivia && rule != :all
         bump_trivia(stream, skip_newlines=true)
     end
-    parse!(stream; rule=rule)
+    parse!(stream; rule=rule, incremental=incremental)
     if need_eof
         if (ignore_trivia  && peek(stream, skip_newlines=true) != K"EndMarker") ||
            (!ignore_trivia && (peek(stream, skip_newlines=false, skip_whitespace=false) != K"EndMarker"))
@@ -108,7 +128,8 @@ _parse_docs = """
               ignore_trivia=true,
               filename=nothing,
               ignore_errors=false,
-              ignore_warnings=ignore_errors)
+              ignore_warnings=ignore_errors,
+              incremental=false)
 
     # Parse all statements at top level (file scope)
     parseall(...)
