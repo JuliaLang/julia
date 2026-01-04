@@ -4747,4 +4747,30 @@ end
         return () -> x
     end
     @test fieldtype(typeof(if_else_usefirst(true, 1, 2)), 1) === Core.Box
+
+    # Closure captured before assignment must still be boxed
+    function if_else_capture_before_assign(cond, a, b)
+        f = () -> x
+        if cond
+            x = a
+        else
+            x = b
+        end
+        return f
+    end
+    @test fieldtype(typeof(if_else_capture_before_assign(true, 1, 2)), 1) === Core.Box
+
+    # @goto can skip assignments, so must still be boxed
+    function if_else_with_goto(cond, a, b)
+        if cond
+            @goto skip
+            x = a
+        else
+            x = b
+        end
+        @label skip
+        x = 0
+        return () -> x
+    end
+    @test fieldtype(typeof(if_else_with_goto(true, 1, 2)), 1) === Core.Box
 end
