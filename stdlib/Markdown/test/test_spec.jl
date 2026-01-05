@@ -295,7 +295,7 @@ end
     input = "***\n---\n___\n"
     expected = "<hr />\n<hr />\n<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 44
     input = "+++\n"
@@ -337,7 +337,7 @@ end
     input = "_____________________________________\n"
     expected = "<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 51
     input = " - - -\n"
