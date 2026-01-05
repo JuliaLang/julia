@@ -33,6 +33,11 @@ struct IncludeInto <: Function
 end
 (this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
 
+struct EvalInto <: Function
+    m::Module
+end
+(this::EvalInto)(Core.@nospecialize(e)) = Core.eval(this.m, e)
+
 # from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
@@ -147,7 +152,7 @@ function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
     # using Base
     Core._using(mod, _topmod(mod), UInt8(0))
     Core.declare_const(mod, :include, IncludeInto(mod))
-    Core.declare_const(mod, :eval, Core.EvalInto(mod))
+    Core.declare_const(mod, :eval, EvalInto(mod))
     if syntax_ver === nothing
         return nothing
     end

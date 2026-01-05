@@ -3115,7 +3115,7 @@ actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`i
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString="string")
-    return CompilerFrontend.include_string(mod, code;
+    return @_hidestack_begin 15 CompilerFrontend.include_string(mod, code;
                                            filename, mapexpr, logexpr=_trace_eval,
                                            throw_load_error=true)
 end
@@ -3161,7 +3161,6 @@ Base.include # defined in Base.jl
 
 # Full include() implementation which is used after bootstrap
 function _include(mapexpr::Function, mod::Module, _path::AbstractString)
-    @noinline # Workaround for module availability in _simplify_include_frames
     path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before eval in include_string
         invokelatest(callback, mod, path)

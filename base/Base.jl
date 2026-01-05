@@ -203,10 +203,11 @@ set_compiler_frontend!(Base, _default_compiler_frontend)
 for m in methods(eval)
     delete_method(m)
 end
-eval(x) = CompilerFrontend.eval(Base, x)
-eval(mod::Module, x) = CompilerFrontend.eval(mod, x)
+@_hidestack _hidden_eval(m::Module, x) = @_hidestack_begin 10 CompilerFrontend.eval(m, x)
+@noinline eval(x) = _hidden_eval(Base, x)
+@noinline eval(mod::Module, x) = _hidden_eval(mod, x)
 Core._setparser!(CompilerFrontend._parse_hook)
-Core._seteval!(CompilerFrontend.eval)
+Core._seteval!(_hidden_eval)
 
 # Switch to a simple, race-y TLS, relative include for the rest of Base
 delete_method(which(include, (Module, String)))
@@ -310,27 +311,26 @@ Docs.loaddocs(CoreDocs.DOCS)
 
 include("precompilation.jl")
 
-# finally, now make `include` point to the full version
-for m in methods(include)
-    delete_method(m)
-end
-for m in methods(IncludeInto(Base))
-    delete_method(m)
-end
+# finally, now make `include` and eval point to the full version
+foreach(delete_method, methods(include))
+foreach(delete_method, methods(IncludeInto(Base)))
+foreach(delete_method, methods(EvalInto(Base)))
 
 # This method is here only to be overwritten during the test suite to test
 # various sysimg related invalidation scenarios.
 a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # Final public API for `Base.include()` always requires a module
-@noinline include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
-@noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
-(this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
-(this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
+@noinline include(mod::Module, _path::AbstractString) = @_hidestack_begin 15 _include(identity, mod, _path)
+@noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = @_hidestack_begin 15 _include(mapexpr, mod, _path)
+@_hidestack (this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
+@_hidestack (this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
+@_hidestack (this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
 # Compatibility with when Compiler was in Core
 @eval Core const Compiler = $Base.Compiler
 @eval Compiler const fl_parse = $Base.fl_parse
+@eval Core const EvalInto = $Base.EvalInto
 
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")

@@ -495,11 +495,6 @@ _bootstrap_eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, 
 _eval = _bootstrap_eval
 eval(m::Module, @nospecialize(e)) = (@noinline; _eval(m, e))
 
-struct EvalInto <: Function
-    m::Module
-end
-(this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
-
 mutable struct Box
     contents::Any
     Box(@nospecialize(x)) = new(x)

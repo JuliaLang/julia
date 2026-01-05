@@ -49,10 +49,10 @@ Evaluate an expression in the global scope of the containing module.
 Every `Module` (except those defined with `baremodule`) has a private 1-argument definition
 of `eval`, which evaluates expressions in that module, for use inside that module.
 """
-Core.EvalInto
+Base.EvalInto
 
 const include = Base.IncludeInto(Main)
-const eval = Core.EvalInto(Main)
+const eval = Base.EvalInto(Main)
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (Main, abspath(@__FILE__)))
