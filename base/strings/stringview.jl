@@ -2,7 +2,7 @@ const DenseStringView = StringView{<:Union{DenseVector{UInt8}, <:FastContiguousS
 const StringAndSub = Union{String, SubString{String}}
 const StringViewAndSub = Union{StringView, SubString{<:StringView}}
 const DenseStringViewAndSub = Union{DenseStringView, SubString{<:DenseStringView}}
-const DenseString = Union{DenseStringViewAndSub, StringAndSub}
+const DenseUTF8String = Union{DenseStringViewAndSub, StringAndSub}
 const UTF8String = Union{StringAndSub, StringViewAndSub}
 
 StringView(v::AbstractVector{UInt8}) = StringView{typeof(v)}(v)
