@@ -179,10 +179,57 @@ static llvm::SmallVector<TargetData, 0> deserialize_target_data(const uint8_t *d
     return res;
 }
 
+// Check if a CPU name is valid (known to archspec or is a special name)
+static bool is_valid_cpu_name(const std::string &name) {
+    if (name.empty())
+        return false;
+    // Special names that are always valid
+    if (name == "native" || name == "generic" || name == "help" || name == "sysimage")
+        return true;
+    
+    // Check if the CPU exists in the archspec database
+    const auto &db = archspec::MicroarchitectureDatabase::instance();
+    
+    // Try direct lookup first
+    auto uarch = db.get(name);
+    if (uarch)
+        return true;
+    
+    // Try with normalized name (handle LLVM naming conventions)
+    const auto &host_arch = get_host_arch();
+    std::string normalized = archspec::normalize_cpu_name(host_arch.family(), name);
+    if (!normalized.empty() && normalized != name) {
+        uarch = db.get(normalized);
+        if (uarch)
+            return true;
+    }
+    
+    // Also check x86 and aarch64 families explicitly for cross-platform validation
+    std::string norm_x86 = archspec::normalize_cpu_name("x86_64", name);
+    if (!norm_x86.empty()) {
+        uarch = db.get(norm_x86);
+        if (uarch)
+            return true;
+    }
+    
+    std::string norm_arm = archspec::normalize_cpu_name("aarch64", name);
+    if (!norm_arm.empty()) {
+        uarch = db.get(norm_arm);
+        if (uarch)
+            return true;
+    }
+    
+    return false;
+}
+
 static llvm::SmallVector<TargetData, 0> parse_cmdline(const char *option) {
     llvm::SmallVector<TargetData, 0> res;
     if (!option) 
         return res;
+    
+    // Check for empty string
+    if (option[0] == '\0')
+        jl_error("Invalid target option: empty CPU name");
     
     std::string processed_option;
     std::string_view opt(option);
@@ -213,6 +260,12 @@ static llvm::SmallVector<TargetData, 0> parse_cmdline(const char *option) {
         
         std::string_view target_str = str.substr(pos, end - pos);
         
+        // Check for empty target at the beginning (e.g., ";cpu2" or empty string)
+        if (target_str.empty() || target_str[0] == ',' || target_str[0] == ';') {
+            if (res.empty()) // First target must have a name
+                jl_error("Invalid target option: empty CPU name");
+        }
+        
         // Parse tokens within this target (comma-separated)
         size_t tpos = 0;
         bool first_token = true;
@@ -227,6 +280,11 @@ static llvm::SmallVector<TargetData, 0> parse_cmdline(const char *option) {
                 if (first_token) {
                     t.name = std::string(token);
                     first_token = false;
+                    // Validate CPU name (but not for "help" which is handled specially)
+                    if (t.name != "help" && !is_valid_cpu_name(t.name)) {
+                        std::string msg = "Invalid target option: unknown CPU name \"" + t.name + "\"";
+                        jl_error(msg.c_str());
+                    }
                 } else {
                     // Check for special modifiers
                     bool disable = (token[0] == '-');
