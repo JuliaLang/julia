@@ -365,12 +365,12 @@ function horizontalrule(stream::IO, block::MD)
        for char in readeach(stream, Char)
            char == '\n' && break
            isspace(char) && continue
-           if n==0 || char==rule
+           if n == 0
                rule = char
-               n += 1
-           else
+           elseif char != rule
                return false
            end
+           n += 1
        end
        is_hr = (n ≥ 3 && rule in "*-_")
        is_hr && push!(block, HorizontalRule())
