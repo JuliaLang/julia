@@ -78,7 +78,7 @@ See the [Display equations](@ref) section for non-inline LaTeX.
     this is not recommend as `$` is also used for string interpolation. Thus using it can
     easily lead to unintended results. For example, inside an `md` string the parser will
     interpret an unmatched `$` as string interpolation, leading to unexpected errors or
-    worse, unexpected behavior, when a variable is unexpectedly interpolated into a string.
+    worse, undesired behavior, when a variable is unexpectedly interpolated into a string.
     In contrast, an unmatched ``` `` ``` results in a helpful error message.
 
 ### Links
