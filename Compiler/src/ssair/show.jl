@@ -534,28 +534,25 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                 started::Bool = false
                 if !update_line_only && showtypes && !isa(frame.method, Symbol) && nctx != 1
                     print(io, linestart)
-                    with_output_color(linecolor, io) do io
-                        print(io, indent("│"))
-                        print(io, "┌ invoke ", frame.method)
+                    printstyled(io, indent("│"), color=linecolor)
+                    printstyled(io, "┌ invoke ", frame.method, color=linecolor)
                         println(io)
-                    end
                     started = true
                 end
                 print(io, linestart)
-                with_output_color(linecolor, io) do io
-                    print(io, indent("│"))
+                printstyled(io, indent("│"), color=linecolor)
                     push!(context, frame)
                     if update_line_only
                         update_line_only = false
                     else
                         context_depth[] += 1
-                        nctx != 1 && print(io, started ? "│" : "┌")
+                    nctx != 1 && printstyled(io, started ? "│" : "┌", color=linecolor)
                     end
-                    print(io, " @ ", frame.file)
+                printstyled(io, " @ ", frame.file, color=linecolor)
                     if frame.line != typemax(frame.line) && frame.line != 0
-                        print(io, ":", frame.line)
+                    printstyled(io, ":", frame.line, color=linecolor)
                     end
-                    print(io, " within `", method_name(frame), "`")
+                printstyled(io, " within `", method_name(frame), "`", color=linecolor)
                     if collapse
                         method = method_name(frame)
                         while nctx < nframes
@@ -563,8 +560,7 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                             method_name(frame) === method || break
                             nctx += 1
                             push!(context, frame)
-                            print(io, " @ ", frame.file, ":", frame.line)
-                        end
+                        printstyled(io, " @ ", frame.file, ":", frame.line, color=linecolor)
                     end
                 end
                 println(io)
