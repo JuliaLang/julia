@@ -508,6 +508,42 @@ end
     end
 end
 
+@testset "Assigned-to arguments" begin
+    # These examples are all macros, since they have specialized de-optimization
+    # behavior that sends un-optimized code straight to codegen. Normal compiled
+    # functions essentially always pass through SSA conversion on the way to the
+    # optimizer, erasing these slots (potentially hiding bugs in slot handling)
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro m_assigned_args_1(x)
+        x = x + 1
+        return x
+    end
+    var"@m_assigned_args_1"(LineNumberNode(0, nothing), Main, 2)
+    """; expr_compat_mode=true) == 3
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro m_assigned_args_2(x, y = 1)
+        (y, x) = (x + 1, y + 1)
+        return y - x
+    end
+    (
+        var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 2),
+        var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 1, 2),
+    )
+    """; expr_compat_mode=true) == (1, -1)
+
+    for expr_compat_mode in (false, true)
+        @test JuliaLowering.include_string(test_mod, raw"""
+        macro m_assigned_args(ex)
+            ex = Base.remove_linenums!(ex)
+            return ex
+        end
+        ((@m_assigned_args 1 + 1), @m_assigned_args 1)
+        """; expr_compat_mode) == (2, 1)
+    end
+end
+
 @testset "Generated functions" begin
     for expr_compat_mode in (false, true)
     @test JuliaLowering.include_string(test_mod, raw"""
