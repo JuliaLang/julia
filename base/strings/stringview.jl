@@ -28,22 +28,13 @@ cconvert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = s
 
 function Base.reverse(s::StringViewAndSub)
     mem = Memory{UInt8}(undef, ncodeunits(s))
-    offset = length(mem)
-    for char in s
-        ncu = ncodeunits(char)
-        offset -= ncu
-        # This may trigger if `length` of the underlying vector is wrongly
-        # implemented, or the vector is concurrently mutated.
-        # With this check, `@inbounds` below is safe
-        offset < 0 && error("Invalid implementation of vector length")
-        u = reinterpret(UInt32, char)
-        i = offset
-        while true
-            # This is safe due to the check above
-            @inbounds mem[(i += 1)] = (u >> 24) % UInt8
-            u <<= 8
-            iszero(u) && break
-        end
+    offs = sizeof(s) + 1
+    for c in s
+        offs -= ncodeunits(c)
+        # Since StringView is generic over the wrapped array, we could invoke UB
+        # if we don't validate the array behaves as expected.
+        offs < 1 && error("Invalid implementation of vector length")
+        __unsafe_string!(mem, c, offs)
     end
     return StringView(mem)
 end
