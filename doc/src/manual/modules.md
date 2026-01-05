@@ -163,6 +163,12 @@ You can combine multiple `using` and `import` statements of the same kind in a c
 julia> using LinearAlgebra, Random
 ```
 
+Modules can be loaded without explicitly including their code if the code can be found in
+[`Base.LOAD_PATH`](@ref). To work, there must be one module per file and the file name be identical
+to the module name. Note that this is case sensitive (see [`Base.require`](@ref)). For example,
+module `Foo` above would need to be placed in file `Foo.jl` in a directory contained in
+`Base.LOAD_PATH`.
+
 ### `using` and `import` with specific identifiers, and adding methods
 
 When `using ModuleName:` or `import ModuleName:` is followed by a comma-separated list of names, the module is loaded, but *only those specific names are brought into the namespace* by the statement. For example,
