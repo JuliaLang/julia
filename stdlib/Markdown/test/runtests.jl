@@ -1382,9 +1382,11 @@ end
             """
     @test Markdown.html(s) ==
             raw"""
-            <p>Misc:<br />stuff</p>
+            <p>Misc:<br />
+            stuff</p>
             <ul>
-            <li><p>line<br />break</p>
+            <li><p>line<br />
+            break</p>
             </li>
             </ul>
             """
