@@ -3985,7 +3985,12 @@ f(x) = yt(x)
           ;; it from being removed from `unused`.
           (begin (put! live var #t)
                  (put! seen var #t)
-                 (del! unused var)))
+                 (del! unused var)
+                 ;; If this variable was promoted by if-else optimization, this new
+                 ;; assignment makes it truly multi-assigned. Remove from ifa-promoted
+                 ;; so its captured flag won't be cleared at the end.
+                 (if (has? ifa-promoted var)
+                     (del! ifa-promoted var))))
       ;; Also track assignments to ifa candidates (captured non-sa variables)
       ;; Use both live (for use-before-assign check) and ifa-assigned (not affected by kill)
       (if (has? ifa var)
@@ -4084,22 +4089,41 @@ f(x) = yt(x)
                               (if (not (has? branch-assigned var))
                                   (del! all-assigned var)))
                             all-assigned)))))
-                     ;; Restore ifa-assigned
-                     (set! ifa-assigned pre-ifa-assigned)
+                     ;; Add variables assigned in all branches to ifa-assigned before restoring
+                     ;; This allows nested if-elses to communicate their assignments upward
+                     (table.foreach
+                      (lambda (var _) (put! ifa-assigned var #t))
+                      all-assigned)
+                     ;; Restore ifa-assigned base (before this if-else)
+                     (table.foreach
+                      (lambda (var _) (put! ifa-assigned var #t))
+                      pre-ifa-assigned)
                      ;; Mark variables assigned in all branches as effectively single-assigned
-                     ;; Disable if @goto was seen before OR during this if-else
-                     ;; and the var wasn't used before assigned in any branch
-                     (if (not has-symbolic-goto)
-                         (table.foreach
-                          (lambda (var _)
-                            (if (and (has? all-assigned var)
-                                     (not (has? ifa-used-first var)))
-                                (begin
-                                  (put! seen var #t)
-                                  (put! unused var #t)
-                                  (put! ifa-promoted var #t)
-                                  (del! ifa var))))
-                          ifa))
+                     ;; Disable if @goto was seen before this if-else OR if a new @goto appeared
+                     ;; during branch processing (which could jump out and bypass assignments)
+                     (let ((any-goto-seen (or pre-if-has-goto has-symbolic-goto)))
+                       (if (not any-goto-seen)
+                           (table.foreach
+                            (lambda (var _)
+                              (if (and (has? all-assigned var)
+                                       (not (has? ifa-used-first var)))
+                                  (if (has? ifa-promoted var)
+                                      ;; Variable was already promoted. Check if it was promoted
+                                      ;; during this if-else (nested case) or before (multi-if-else case).
+                                      ;; If it's in ifa-assigned, it was assigned during our analysis.
+                                      (if (not (has? ifa-assigned var))
+                                          ;; Not assigned during our processing, so promotion was from
+                                          ;; a previous if-else. Now it's assigned again - undo promotion.
+                                          (begin
+                                            (del! unused var)
+                                            (del! seen var)
+                                            (del! ifa-promoted var)))
+                                      ;; First time seeing this variable assigned in all branches
+                                      (begin
+                                        (put! seen var #t)
+                                        (put! unused var #t)
+                                        (put! ifa-promoted var #t)))))
+                            ifa)))
                      (kill)
                      (if has-label
                          (begin (kill) #t)
@@ -4120,8 +4144,26 @@ f(x) = yt(x)
                    (begin (restore prev) #f))))
             ((or (eq? (car e) '_while) (eq? (car e) '_do_while))
              (let ((prev  (table.clone live))
-                   (decl- (table.clone decl)))
+                   (decl- (table.clone decl))
+                   (pre-loop-ifa-assigned (table.clone ifa-assigned))
+                   (pre-loop-ifa-promoted (table.clone ifa-promoted)))
+               (set! ifa-assigned (table))
                (let ((result (eager-any visit (cdr e))))
+                 ;; Variables assigned in loop are multi-assigned, remove from ifa tracking
+                 (table.foreach
+                  (lambda (var _)
+                    (if (has? ifa var)
+                        (del! ifa var)))
+                  ifa-assigned)
+                 ;; Also revert any promotions that happened inside the loop
+                 (table.foreach
+                  (lambda (var _)
+                    (if (not (has? pre-loop-ifa-promoted var))
+                        (begin
+                          (del! ifa-promoted var)
+                          (del! unused var))))
+                  ifa-promoted)
+                 (set! ifa-assigned pre-loop-ifa-assigned)
                  (leave-loop! decl-)
                  (if result
                      #t
@@ -4165,13 +4207,13 @@ f(x) = yt(x)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
                     (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
               vi)
-    ;; Also clear captured flag for variables that were assigned in all branches of an if-else
-    ;; (these are in `unused` but not `ifa`, and have never-undef set)
+    ;; Also clear captured flag for variables that were promoted by if-else analysis
+    ;; Only clear if the variable is still in unused (wasn't assigned again later)
     (for-each (lambda (var)
                 (let ((vv (assq var vi)))
-                  (if (and vv (vinfo:never-undef vv) (not (has? ifa var)))
+                  (if (and vv (vinfo:never-undef vv) (has? unused var))
                       (set-car! (cddr vv) (logand (caddr vv) (lognot 5))))))
-              (table.keys unused))
+              (table.keys ifa-promoted))
     lam))
 
 (define (is-var-boxed? v lam)

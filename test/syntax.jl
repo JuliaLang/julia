@@ -4773,4 +4773,129 @@ end
         return () -> x
     end
     @test fieldtype(typeof(if_else_with_goto(true, 1, 2)), 1) === Core.Box
+
+    # Nested if-else: should still avoid boxing when assigned in all paths
+    function nested_if_else_nobox(c1, c2, a, b, c, d)
+        if c1
+            if c2
+                x = a
+            else
+                x = b
+            end
+        else
+            if c2
+                x = c
+            else
+                x = d
+            end
+        end
+        return () -> x
+    end
+    closure_nested = typeof(nested_if_else_nobox(true, true, 1, 2, 3, 4))
+    @test fieldtype(closure_nested, 1) !== Core.Box
+    @test nested_if_else_nobox(true, true, 1, 2, 3, 4)() == 1
+    @test nested_if_else_nobox(true, false, 1, 2, 3, 4)() == 2
+    @test nested_if_else_nobox(false, true, 1, 2, 3, 4)() == 3
+    @test nested_if_else_nobox(false, false, 1, 2, 3, 4)() == 4
+
+    # Loop with assignment must still be boxed (multiple assignments)
+    function if_else_with_loop(cond, n, a, b)
+        if cond
+            x = a
+            for i in 1:n
+                x = i
+            end
+        else
+            x = b
+        end
+        return () -> x
+    end
+    @test fieldtype(typeof(if_else_with_loop(true, 3, 1, 2)), 1) === Core.Box
+
+    # While loop with assignment must still be boxed
+    function if_else_with_while(cond, a, b)
+        if cond
+            x = a
+            i = 0
+            while i < 2
+                x = i
+                i += 1
+            end
+        else
+            x = b
+        end
+        return () -> x
+    end
+    @test fieldtype(typeof(if_else_with_while(true, 1, 2)), 1) === Core.Box
+
+    # Deeply nested if-else (3 levels) should still optimize
+    function deeply_nested_if_else(c1, c2, c3, vals...)
+        if c1
+            if c2
+                if c3
+                    x = vals[1]
+                else
+                    x = vals[2]
+                end
+            else
+                if c3
+                    x = vals[3]
+                else
+                    x = vals[4]
+                end
+            end
+        else
+            if c2
+                if c3
+                    x = vals[5]
+                else
+                    x = vals[6]
+                end
+            else
+                if c3
+                    x = vals[7]
+                else
+                    x = vals[8]
+                end
+            end
+        end
+        return () -> x
+    end
+    closure_deep = typeof(deeply_nested_if_else(true, true, true, 1, 2, 3, 4, 5, 6, 7, 8))
+    @test fieldtype(closure_deep, 1) !== Core.Box
+    @test deeply_nested_if_else(true, true, true, 1, 2, 3, 4, 5, 6, 7, 8)() == 1
+    @test deeply_nested_if_else(false, false, false, 1, 2, 3, 4, 5, 6, 7, 8)() == 8
+
+    # If-else inside a loop should still box (loop causes multiple assignments)
+    function if_in_loop(n, a, b)
+        x = 0  # Initialize x in outer scope
+        for i in 1:n
+            if i > n ÷ 2
+                x = a
+            else
+                x = b
+            end
+        end
+        return () -> x
+    end
+    @test fieldtype(typeof(if_in_loop(3, 1, 2)), 1) === Core.Box
+
+    # Multiple separate if-else blocks: variable assigned in two different if-elses
+    # should remain boxed
+    function multi_if_else(cond)
+        if cond
+            x = 1
+        else
+            x = 2
+        end
+        g = function ()
+            x
+        end
+        if true
+            x = 123
+        end
+        return g
+    end
+    @test fieldtype(typeof(multi_if_else(true)), 1) === Core.Box
 end
+
