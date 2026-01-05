@@ -1357,8 +1357,8 @@ end
               Misc:
               stuff
 
-                •  line
-                   break
+              • line
+                break
             """
     @test Markdown.plain(s) ==
             raw"""
