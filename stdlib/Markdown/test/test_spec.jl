@@ -3780,13 +3780,13 @@ end
     input = "<foo@bar.example.com>\n"
     expected = "<p><a href=\"mailto:foo@bar.example.com\">foo@bar.example.com</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 605
     input = "<foo+special@Bar.baz-bar0.com>\n"
     expected = "<p><a href=\"mailto:foo+special@Bar.baz-bar0.com\">foo+special@Bar.baz-bar0.com</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 606
     input = "<foo\\+@bar.example.com>\n"

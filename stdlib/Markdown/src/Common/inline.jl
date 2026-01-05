@@ -141,6 +141,7 @@ function autolink(stream::IO, md::MD)
         url ≡ nothing && return
         _is_link(url) && return Link(url, url)
         _is_mailto(url) && return Link(url, url)
+        _is_email(url) && return Link(url, "mailto:" * url)
         return
     end
 end
@@ -161,9 +162,15 @@ function _is_link(s::AbstractString)
 end
 
 # non-normative regex from the HTML5 spec
-const _email_regex = r"^mailto\:[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+const _email_regex_str = raw"""[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"""
+const _mailto_regex = Regex("^mailto\\:" * _email_regex_str)
+const _email_regex = Regex("^" * _email_regex_str)
 
 function _is_mailto(s::AbstractString)
+    return occursin(_mailto_regex, s)
+end
+
+function _is_email(s::AbstractString)
     return occursin(_email_regex, s)
 end
 
