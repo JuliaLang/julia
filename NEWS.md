@@ -50,6 +50,11 @@ Standard library changes
 
 #### LinearAlgebra
 
+#### Markdown
+
+  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
+    Markdown parser. ([#60537])
+
 #### Profile
 
 #### Random

@@ -28,6 +28,14 @@ Surround words with one asterisk, `*`, to display the enclosed text in italics.
 A paragraph containing an *italicized* word.
 ```
 
+### Strikethrough
+
+Surround words with one or two tildes, `~` or`~~`, to display the enclosed text with a strikethrough, or a line through it.
+
+```
+A paragraph containing a ~~struck~~ word.
+```
+
 ### Literals
 
 Surround text that should be displayed exactly as written with single backticks, ``` ` ``` .

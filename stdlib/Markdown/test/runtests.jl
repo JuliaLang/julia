@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Markdown, StyledStrings
-import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, insert_hlines, plain, term, html, rst, Table, Code, LaTeX, Footnote
+import Markdown: MD, Paragraph, Header, Italic, Bold, Strikethrough, LineBreak, Table, Code, LaTeX, Footnote
+import Markdown: insert_hlines, plain, term, html, rst
 import Base: show
 
 # Basics
@@ -13,6 +14,8 @@ import Base: show
 @test md"foo _bar_ baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
 @test md"foo **bar** baz" == MD(Paragraph(["foo ", Bold("bar"), " baz"]))
 @test md"foo __bar__ baz" == MD(Paragraph(["foo ", Bold("bar"), " baz"]))
+@test md"foo ~bar~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
+@test md"foo ~~bar~~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
 @test md"""foo
 bar""" == MD(Paragraph(["foo bar"]))
 @test md"""foo\
@@ -25,8 +28,8 @@ bar""" == MD(Paragraph(["foo", LineBreak(), "bar"]))
   empty
   """ == MD(Header{1}(""), Paragraph("empty"))
 @test md"## section" == MD(Header{2}("section"))
-@test md"# title *foo* `bar` **baz**" ==
-    MD(Header{1}(["title ", Italic("foo")," ",Code("bar")," ",Bold("baz")]))
+@test md"# title *foo* `bar` **baz** ~~qux~~" ==
+    MD(Header{1}(["title ", Italic("foo")," ",Code("bar")," ",Bold("baz")," ",Strikethrough("qux")]))
 @test md"""
 h1
 ===""" == md"# h1"
@@ -1314,6 +1317,7 @@ end
     @test contains_X(md"[$x](..)") # Link
     @test contains_X(md"**$x**") # Bold
     @test contains_X(md"*$x*") # Italic
+    @test contains_X(md"~$x~") # Strikethrough
     @test contains_X( # Table
         md"""
         | name |

@@ -148,6 +148,7 @@ if Base.generating_output()
     **bold text**
     *italicized text*
     ***bold and italicized text***
+    ~~strikethrough effect~~
     > blockquote
     1. First item
     2. Second item

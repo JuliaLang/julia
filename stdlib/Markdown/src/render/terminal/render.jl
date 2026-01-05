@@ -219,6 +219,10 @@ function terminline(io::AnnotIO, md::Italic)
     with_output_annotations(io -> terminline(io, md.text), io, :face => :italic)
 end
 
+function terminline(io::AnnotIO, md::Strikethrough)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => :strikethrough)
+end
+
 function terminline(io::IO, md::LineBreak)
     println(io)
 end
