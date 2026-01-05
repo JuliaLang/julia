@@ -4898,4 +4898,3 @@ end
     end
     @test fieldtype(typeof(multi_if_else(true)), 1) === Core.Box
 end
-
