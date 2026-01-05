@@ -15,7 +15,7 @@ using Markdown
     input = "\tfoo\tbaz\t\tbim\n"
     expected = "<pre><code>foo\tbaz\t\tbim\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 2
     input = "  \tfoo\tbaz\t\tbim\n"
@@ -27,7 +27,7 @@ using Markdown
     input = "    a\ta\n    ὐ\ta\n"
     expected = "<pre><code>a\ta\nὐ\ta\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 4
     input = "  - foo\n\n\tbar\n"
@@ -57,7 +57,7 @@ using Markdown
     input = "    foo\n\tbar\n"
     expected = "<pre><code>foo\nbar\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 9
     input = " - foo\n   - bar\n\t - baz\n"
@@ -124,13 +124,13 @@ end
     input = "    \\[\\]\n"
     expected = "<pre><code>\\[\\]\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 19
     input = "~~~\n\\[\\]\n~~~\n"
     expected = "<pre><code>\\[\\]\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 20
     input = "<https://example.com?find=\\*>\n"
@@ -239,7 +239,7 @@ end
     input = "    f&ouml;f&ouml;\n"
     expected = "<pre><code>f&amp;ouml;f&amp;ouml;\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 37
     input = "&#42;foo&#42;\n*foo*\n"
@@ -325,7 +325,7 @@ end
     input = "    ***\n"
     expected = "<pre><code>***\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 49
     input = "Foo\n    ***\n"
@@ -458,7 +458,7 @@ end
     input = "    # foo\n"
     expected = "<pre><code># foo\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 70
     input = "foo\n    # bar\n"
@@ -561,7 +561,7 @@ end
     input = "    Foo\n    ---\n\n    Foo\n---\n"
     expected = "<pre><code>Foo\n---\n\nFoo\n</code></pre>\n<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 86
     input = "Foo\n   ----      \n"
@@ -651,7 +651,7 @@ end
     input = "    foo\n---\n"
     expected = "<pre><code>foo\n</code></pre>\n<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 101
     input = "> foo\n-----\n"
@@ -700,7 +700,7 @@ end
     input = "    a simple\n      indented code block\n"
     expected = "<pre><code>a simple\n  indented code block\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 108
     input = "  - foo\n\n    bar\n"
@@ -718,19 +718,19 @@ end
     input = "    <a/>\n    *hi*\n\n    - one\n"
     expected = "<pre><code>&lt;a/&gt;\n*hi*\n\n- one\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 111
     input = "    chunk1\n\n    chunk2\n  \n \n \n    chunk3\n"
     expected = "<pre><code>chunk1\n\nchunk2\n\n\n\nchunk3\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 112
     input = "    chunk1\n      \n      chunk2\n"
     expected = "<pre><code>chunk1\n  \n  chunk2\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 113
     input = "Foo\n    bar\n\n"
@@ -742,25 +742,25 @@ end
     input = "    foo\nbar\n"
     expected = "<pre><code>foo\n</code></pre>\n<p>bar</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 115
     input = "# Heading\n    foo\nHeading\n------\n    foo\n----\n"
     expected = "<h1>Heading</h1>\n<pre><code>foo\n</code></pre>\n<h2>Heading</h2>\n<pre><code>foo\n</code></pre>\n<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 116
     input = "        foo\n    bar\n"
     expected = "<pre><code>    foo\nbar\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 117
     input = "\n    \n    foo\n    \n\n"
     expected = "<pre><code>foo\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 118
     input = "    foo  \n"
@@ -779,13 +779,13 @@ end
     input = "```\n<\n >\n```\n"
     expected = "<pre><code>&lt;\n &gt;\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 120
     input = "~~~\n<\n >\n~~~\n"
     expected = "<pre><code>&lt;\n &gt;\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 121
     input = "``\nfoo\n``\n"
@@ -797,13 +797,13 @@ end
     input = "```\naaa\n~~~\n```\n"
     expected = "<pre><code>aaa\n~~~\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 123
     input = "~~~\naaa\n```\n~~~\n"
     expected = "<pre><code>aaa\n```\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 124
     input = "````\naaa\n```\n``````\n"
@@ -815,7 +815,7 @@ end
     input = "~~~~\naaa\n~~~\n~~~~\n"
     expected = "<pre><code>aaa\n~~~\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 126
     input = "```\n"
@@ -839,7 +839,7 @@ end
     input = "```\n\n  \n```\n"
     expected = "<pre><code>\n  \n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 130
     input = "```\n```\n"
@@ -869,7 +869,7 @@ end
     input = "    ```\n    aaa\n    ```\n"
     expected = "<pre><code>```\naaa\n```\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 135
     input = "```\naaa\n  ```\n"
@@ -905,19 +905,19 @@ end
     input = "foo\n```\nbar\n```\nbaz\n"
     expected = "<p>foo</p>\n<pre><code>bar\n</code></pre>\n<p>baz</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 141
     input = "foo\n---\n~~~\nbar\n~~~\n# baz\n"
     expected = "<h2>foo</h2>\n<pre><code>bar\n</code></pre>\n<h1>baz</h1>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 142
     input = "```ruby\ndef foo(x)\n  return 3\nend\n```\n"
     expected = "<pre><code class=\"language-ruby\">def foo(x)\n  return 3\nend\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 143
     input = "~~~~    ruby startline=3 \$%@#\$\ndef foo(x)\n  return 3\nend\n~~~~~~~\n"
@@ -1345,13 +1345,13 @@ end
     input = "    [foo]: /url \"title\"\n\n[foo]\n"
     expected = "<pre><code>[foo]: /url &quot;title&quot;\n</code></pre>\n<p>[foo]</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 212
     input = "```\n[foo]: /url\n```\n\n[foo]\n"
     expected = "<pre><code>[foo]: /url\n</code></pre>\n<p>[foo]</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 213
     input = "Foo\n[bar]: /baz\n\n[bar]\n"
@@ -1436,7 +1436,7 @@ end
     input = "    aaa\nbbb\n"
     expected = "<pre><code>aaa\n</code></pre>\n<p>bbb</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 226
     input = "aaa     \nbbb     \n"
@@ -1486,7 +1486,7 @@ end
     input = "    > # Foo\n    > bar\n    > baz\n"
     expected = "<pre><code>&gt; # Foo\n&gt; bar\n&gt; baz\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 232
     input = "> # Foo\n> bar\nbaz\n"
@@ -1516,7 +1516,7 @@ end
     input = ">     foo\n    bar\n"
     expected = "<blockquote>\n<pre><code>foo\n</code></pre>\n</blockquote>\n<pre><code>bar\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 237
     input = "> ```\nfoo\n```\n"
@@ -1612,7 +1612,7 @@ end
     input = ">     code\n\n>    not code\n"
     expected = "<blockquote>\n<pre><code>code\n</code></pre>\n</blockquote>\n<blockquote>\n<p>not code</p>\n</blockquote>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
 end
 
@@ -1739,7 +1739,7 @@ end
     input = "    indented code\n\nparagraph\n\n    more code\n"
     expected = "<pre><code>indented code\n</code></pre>\n<p>paragraph</p>\n<pre><code>more code\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 273
     input = "1.     indented code\n\n   paragraph\n\n       more code\n"
@@ -1841,7 +1841,7 @@ end
     input = "    1.  A paragraph\n        with two lines.\n\n            indented code\n\n        > A block quote.\n"
     expected = "<pre><code>1.  A paragraph\n    with two lines.\n\n        indented code\n\n    &gt; A block quote.\n</code></pre>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 290
     input = "  1.  A paragraph\nwith two lines.\n\n          indented code\n\n      > A block quote.\n"
