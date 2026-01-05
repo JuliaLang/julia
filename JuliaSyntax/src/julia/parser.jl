@@ -1280,7 +1280,7 @@ function parse_unary(ps::ParseState)
             return (needs_parameters=is_paren_call,
                     is_paren_call=is_paren_call,
                     is_block=!is_paren_call && num_semis > 0)
-        end
+        end::NamedTuple{(:needs_parameters, :is_paren_call, :is_block, :delim_flags), Tuple{Bool, Bool, Bool, RawFlags}}
 
         # The precedence between unary + and any following infix ^ depends on
         # whether the parens are a function call or not
@@ -2242,7 +2242,8 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                         parsed_call           = _parsed_call,
                         needs_parse_call      = _needs_parse_call,
                         maybe_grouping_parens = _maybe_grouping_parens)
-            end
+            end::NamedTuple{(:needs_parameters, :is_anon_func, :parsed_call, :needs_parse_call, :maybe_grouping_parens, :delim_flags),
+                            Tuple{Bool, Bool, Bool, Bool, Bool, RawFlags}}
             is_anon_func = opts.is_anon_func
             parsed_call = opts.parsed_call
             needs_parse_call = opts.needs_parse_call
@@ -2776,7 +2777,7 @@ function parse_call_arglist(ps::ParseState, closer)
 
     parse_brackets(ps, closer, false) do _, _, _, _
         return (needs_parameters=true,)
-    end
+    end::NamedTuple{(:needs_parameters, :delim_flags), Tuple{Bool, RawFlags}}
 end
 
 # Parse the suffix of comma-separated array expressions such as
@@ -2793,7 +2794,7 @@ function parse_vect(ps::ParseState, closer, prefix_trailing_comma)
     opts = parse_brackets(ps, closer) do _, _, _, num_subexprs
         return (needs_parameters=true,
                 num_subexprs=num_subexprs)
-    end
+    end::NamedTuple{(:needs_parameters, :num_subexprs, :delim_flags), Tuple{Bool, Int, RawFlags}}
     delim_flags = opts.delim_flags
     if opts.num_subexprs == 0 && prefix_trailing_comma
         delim_flags |= TRAILING_COMMA_FLAG
@@ -3150,7 +3151,7 @@ function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=fa
             return (needs_parameters=is_tuple,
                     is_tuple=is_tuple,
                     is_block=num_semis > 0)
-        end
+        end::NamedTuple{(:needs_parameters, :is_tuple, :is_block, :delim_flags), Tuple{Bool, Bool, Bool, RawFlags}}
         if opts.is_tuple
             # Tuple syntax with commas
             # (x,)        ==>  (tuple-p x)
@@ -3328,7 +3329,7 @@ function parse_string(ps::ParseState, raw::Bool)
                 opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
                     return (needs_parameters=false,
                             simple_interp=!had_commas && num_semis == 0 && num_subexprs == 1)
-                end
+                end::NamedTuple{(:needs_parameters, :simple_interp, :delim_flags), Tuple{Bool, Bool, RawFlags}}
                 if !opts.simple_interp || peek_behind(ps, skip_parens=false).kind == K"generator"
                     # "$(x,y)" ==> (string (parens (error x y)))
                     emit(ps, m, K"error", error="invalid interpolation syntax")
