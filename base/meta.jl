@@ -275,6 +275,7 @@ See also [`code_lowered`](@ref).
 function lower(m::Module, @nospecialize(x))
     thunk = Base.CompilerFrontend.lower(m, x)
     return thunk isa Core.CodeInfo ? Expr(:thunk, thunk) :
+           thunk isa Base.CompilerFrontend.LoweringFailure ? Expr(:error, thunk.exc) :
            thunk isa Base.CompilerFrontend.ToplevelExpression ? thunk.val :
            @assert false
 end
