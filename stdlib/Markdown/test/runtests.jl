@@ -93,16 +93,16 @@ let text =
     This isn't part of the footnote.
     """,
     md = Markdown.parse(text)
-    @test length(md.content) == 4
-    @test isa(md.content[1], Markdown.Paragraph)
-    @test isa(md.content[2], Markdown.Footnote)
-    @test isa(md.content[3], Markdown.Footnote)
-    @test isa(md.content[4], Markdown.Paragraph)
+    @test length(md) == 4
+    @test isa(md[1], Markdown.Paragraph)
+    @test isa(md[2], Markdown.Footnote)
+    @test isa(md[3], Markdown.Footnote)
+    @test isa(md[4], Markdown.Paragraph)
 
-    @test md.content[2].id == "1"
-    @test md.content[3].id == "note"
+    @test md[2].id == "1"
+    @test md[3].id == "note"
 
-    @test length(md.content[3].text) == 5
+    @test length(md[3].text) == 5
 
     let expected =
             """
@@ -173,13 +173,14 @@ let doc = md"""
 1. pirate
 2. ninja
 3. zombie"""
-    @test isa(doc.content[1], Markdown.List)
-    @test isa(doc.content[2], Markdown.List)
-    @test doc.content[1].items[1][1].content[1] == "one"
-    @test doc.content[1].items[2][1].content[1] == "two"
-    @test doc.content[2].items[1][1].content[1] == "pirate"
-    @test doc.content[2].items[2][1].content[1] == "ninja"
-    @test doc.content[2].items[3][1].content[1] == "zombie"
+    @test length(doc) === 2
+    @test isa(doc[1], Markdown.List)
+    @test isa(doc[2], Markdown.List)
+    @test doc[1].items[1][1].content[1] == "one"
+    @test doc[1].items[2][1].content[1] == "two"
+    @test doc[2].items[1][1].content[1] == "pirate"
+    @test doc[2].items[2][1].content[1] == "ninja"
+    @test doc[2].items[3][1].content[1] == "zombie"
 end
 
 let doc = Markdown.parse(
@@ -192,20 +193,20 @@ let doc = Markdown.parse(
         ... another paragraph.
         """
     )
-    @test length(doc.content) === 3
-    @test isa(doc.content[1], Markdown.Paragraph)
-    @test isa(doc.content[2], Markdown.List)
-    @test isa(doc.content[3], Markdown.Paragraph)
+    @test length(doc) === 3
+    @test isa(doc[1], Markdown.Paragraph)
+    @test isa(doc[2], Markdown.List)
+    @test isa(doc[3], Markdown.Paragraph)
 
-    @test length(doc.content[2].items) === 2
-    @test doc.content[2].items[1][1].content[1] == "one"
-    @test length(doc.content[2].items[2]) == 2
-    @test doc.content[2].items[2][1].content[1] == "two"
+    @test length(doc[2].items) === 2
+    @test doc[2].items[1][1].content[1] == "one"
+    @test length(doc[2].items[2]) == 2
+    @test doc[2].items[2][1].content[1] == "two"
 
-    @test isa(doc.content[2].items[2][2], Markdown.List)
-    @test length(doc.content[2].items[2][2].items) === 2
-    @test doc.content[2].items[2][2].items[1][1].content[1] == "three"
-    @test doc.content[2].items[2][2].items[2][1].content[1] == "four"
+    @test isa(doc[2].items[2][2], Markdown.List)
+    @test length(doc[2].items[2][2].items) === 2
+    @test doc[2].items[2][2].items[1][1].content[1] == "three"
+    @test doc[2].items[2][2].items[2][1].content[1] == "four"
 end
 
 @test md"Foo [bar]" == MD(Paragraph("Foo [bar]"))
@@ -820,41 +821,41 @@ let t_1 =
 
     # Content Tests.
 
-    @test isa(m_1.content[2], Markdown.Admonition)
-    @test m_1.content[2].category == "note"
-    @test m_1.content[2].title == "Note"
-    @test m_1.content[2].content == []
+    @test isa(m_1[2], Markdown.Admonition)
+    @test m_1[2].category == "note"
+    @test m_1[2].title == "Note"
+    @test m_1[2].content == []
 
-    @test isa(m_1.content[3], Markdown.Admonition)
-    @test m_1.content[3].category == "warning"
-    @test m_1.content[3].title == "custom title"
-    @test m_1.content[3].content == []
+    @test isa(m_1[3], Markdown.Admonition)
+    @test m_1[3].category == "warning"
+    @test m_1[3].title == "custom title"
+    @test m_1[3].content == []
 
-    @test isa(m_1.content[5], Markdown.Admonition)
-    @test m_1.content[5].category == "danger"
-    @test m_1.content[5].title == ""
-    @test m_1.content[5].content == []
+    @test isa(m_1[5], Markdown.Admonition)
+    @test m_1[5].category == "danger"
+    @test m_1[5].title == ""
+    @test m_1[5].content == []
 
-    @test isa(m_1.content[6], Markdown.Paragraph)
+    @test isa(m_1[6], Markdown.Paragraph)
 
-    @test isa(m_2.content[1], Markdown.Admonition)
-    @test m_2.content[1].category == "note"
-    @test m_2.content[1].title == "Note"
-    @test isa(m_2.content[1].content[1], Markdown.Paragraph)
-    @test isa(m_2.content[1].content[2], Markdown.Paragraph)
+    @test isa(m_2[1], Markdown.Admonition)
+    @test m_2[1].category == "note"
+    @test m_2[1].title == "Note"
+    @test isa(m_2[1].content[1], Markdown.Paragraph)
+    @test isa(m_2[1].content[2], Markdown.Paragraph)
 
-    @test isa(m_2.content[2], Markdown.Admonition)
-    @test m_2.content[2].category == "warning"
-    @test m_2.content[2].title == "custom title"
-    @test isa(m_2.content[2].content[1], Markdown.List)
-    @test isa(m_2.content[2].content[2], Markdown.Paragraph)
+    @test isa(m_2[2], Markdown.Admonition)
+    @test m_2[2].category == "warning"
+    @test m_2[2].title == "custom title"
+    @test isa(m_2[2].content[1], Markdown.List)
+    @test isa(m_2[2].content[2], Markdown.Paragraph)
 
-    @test isa(m_2.content[3], Markdown.Admonition)
-    @test m_2.content[3].category == "danger"
-    @test m_2.content[3].title == ""
-    @test isa(m_2.content[3].content[1], Markdown.Code)
-    @test isa(m_2.content[3].content[2], Markdown.Code)
-    @test isa(m_2.content[3].content[3], Markdown.Header{1})
+    @test isa(m_2[3], Markdown.Admonition)
+    @test m_2[3].category == "danger"
+    @test m_2[3].title == ""
+    @test isa(m_2[3].content[1], Markdown.Code)
+    @test isa(m_2[3].content[2], Markdown.Code)
+    @test isa(m_2[3].content[3], Markdown.Header{1})
 
     # Rendering Tests.
     let out = Markdown.plain(m_1),
@@ -1030,25 +1031,25 @@ let text =
 
     # Content and structure tests.
 
-    @test length(md.content) == 6
-    @test length(md.content[1].items) == 1
-    @test length(md.content[1].items[1]) == 3
-    @test isa(md.content[1].items[1][1], Markdown.Paragraph)
-    @test isa(md.content[1].items[1][2], Markdown.Code)
-    @test isa(md.content[1].items[1][3], Markdown.BlockQuote)
-    @test length(md.content[2].items) == 1
-    @test isa(md.content[2].items[1][1], Markdown.Paragraph)
-    @test isa(md.content[3], Markdown.Paragraph)
-    @test length(md.content[4].items) == 1
-    @test isa(md.content[4].items[1][1], Paragraph)
-    @test isa(md.content[4].items[1][2], Paragraph)
-    @test length(md.content[5].items) == 2
-    @test isa(md.content[5].items[1][1], Markdown.Paragraph)
-    @test isa(md.content[5].items[2][1], Markdown.Code)
-    @test length(md.content[6].items) == 3
-    @test md.content[6].items[1][1].content[1] == "foo"
-    @test md.content[6].items[2][1].content[1] == "bar"
-    @test md.content[6].items[3][1].content[1] == "baz"
+    @test length(md) == 6
+    @test length(md[1].items) == 1
+    @test length(md[1].items[1]) == 3
+    @test isa(md[1].items[1][1], Markdown.Paragraph)
+    @test isa(md[1].items[1][2], Markdown.Code)
+    @test isa(md[1].items[1][3], Markdown.BlockQuote)
+    @test length(md[2].items) == 1
+    @test isa(md[2].items[1][1], Markdown.Paragraph)
+    @test isa(md[3], Markdown.Paragraph)
+    @test length(md[4].items) == 1
+    @test isa(md[4].items[1][1], Paragraph)
+    @test isa(md[4].items[1][2], Paragraph)
+    @test length(md[5].items) == 2
+    @test isa(md[5].items[1][1], Markdown.Paragraph)
+    @test isa(md[5].items[2][1], Markdown.Code)
+    @test length(md[6].items) == 3
+    @test md[6].items[1][1].content[1] == "foo"
+    @test md[6].items[2][1].content[1] == "bar"
+    @test md[6].items[3][1].content[1] == "baz"
 
     # Rendering tests.
     let expected =
@@ -1166,9 +1167,9 @@ let text =
         """,
     md = Markdown.parse(text)
 
-    @test md.content[1].ordered == 42
-    @test md.content[2].ordered == 1
-    @test md.content[3].ordered == -1
+    @test md[1].ordered == 42
+    @test md[2].ordered == 1
+    @test md[3].ordered == -1
 
     let expected =
             """
@@ -1293,10 +1294,10 @@ end
 
 let
     v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
-    @test v.content[2].loose
-    @test !v.content[3].loose
-    @test v.content[5].loose
-    @test !v.content[7].loose
+    @test v[2].loose
+    @test !v[3].loose
+    @test v[5].loose
+    @test !v[7].loose
 end
 
 # issue #29995
