@@ -9,6 +9,7 @@ export compiler_frontend, set_compiler_frontend!
 public eval, include_string, lower_init, lower_step, location, _parse_hook
 
 using Base
+using Base: @_hidestack_end
 using Core: CodeInfo
 
 abstract type AbstractCompilerFrontend
@@ -107,20 +108,20 @@ function simple_eval
 end
 
 function _check_top_level_effect(mod::Module)
-    @ccall jl_check_top_level_effect(mod::Any, "eval"::Ptr{UInt8})::Cvoid
+    @_hidestack_end @ccall jl_check_top_level_effect(mod::Any, "eval"::Ptr{UInt8})::Cvoid
 end
 
 function simple_eval(mod::Module, thunk::CodeInfo)
     _check_top_level_effect(mod)
-    @ccall jl_eval_thunk(mod::Any, thunk::Any, 1::Cint)::Any
+    @_hidestack_end @ccall jl_eval_thunk(mod::Any, thunk::Any, 1::Cint)::Any
 end
 
 # Shim in case we want extend the allowed types of the location field
 unpack_location(loc::LineNumberNode) = (string(something(loc.file, :none)), loc.line)
 
-function _toplevel_eval_flex(mod::Module, x::Any, fileref, lineref)
-    @ccall jl_toplevel_eval_flex(mod::Any, x::Any, 1::Cint, 0::Cint,
-                                 fileref::Ptr{Ptr{UInt8}}, lineref::Ptr{Csize_t})::Any
+function _interpret_toplevel(mod::Module, x::Any, fileref, lineref)
+    @_hidestack_end @ccall jl_toplevel_eval_flex(mod::Any, x::Any, 1::Cint, 0::Cint,
+                                     fileref::Ptr{Ptr{UInt8}}, lineref::Ptr{Csize_t})::Any
 end
 
 function simple_eval(mod::Module, v::ToplevelExpression)
@@ -130,23 +131,23 @@ function simple_eval(mod::Module, v::ToplevelExpression)
     fileref = Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, file))
     lineref = Ref{Csize_t}(line)
 
-    # Use toplevel expression interpreter for special cases where the existing
-    # eval/lowering pipeline doesn't produce a CodeInfo. Requires latest world.
-    invokelatest(_toplevel_eval_flex, mod, v.val, fileref, lineref)
+    # Use builtin toplevel expression interpreter for special cases where it
+    # currently doesn't use a CodeInfo. Requires the latest world for symbol lookup.
+    invokelatest(_interpret_toplevel, mod, v.val, fileref, lineref)
 end
 
 function simple_eval(mod::Module, newmod::BeginModule)
     _check_top_level_effect(mod)
     file, line = unpack_location(newmod.location)
-    @ccall jl_begin_new_module(mod::Module, newmod.name::Symbol,
-                               newmod.syntax_version::Any,
-                               newmod.standard_defs::Cint,
-                               file::Ptr{UInt8}, line::Cint)::Module
+    @_hidestack_end @ccall jl_begin_new_module(mod::Module, newmod.name::Symbol,
+                                               newmod.syntax_version::Any,
+                                               newmod.standard_defs::Cint,
+                                               file::Ptr{UInt8}, line::Cint)::Module
 end
 
 function simple_eval(mod::Module, ::EndModule)
     _check_top_level_effect(mod)
-    @ccall jl_end_new_module(mod::Module)::Cvoid
+    @_hidestack_end @ccall jl_end_new_module(mod::Module)::Cvoid
     return mod
 end
 

@@ -987,39 +987,54 @@ function _backtrace_remove_kwcall_frames!(trace)
     deleteat!(trace, todelete)
 end
 
-# For improved user experience, filter out frames for include() implementation
-# - see #33065. See also #35371 for extended discussion of internal frames.
-function _backtrace_simplify_include_frames!(trace)
+macro _mangled_hs_syms(s)
+    # Unfortunately the LLVM debug info writer mangles the "<hide-stack...>"
+    # markers with a directory of "." and this is system dependent so we must
+    # test both mangled and unmangled symbols depending on use of codegen vs
+    # interpreter.
+    mangled = QuoteNode(Symbol(joinpath(".", s)))
+    orig = QuoteNode(Symbol(s))
+    :(($orig, $mangled))
+end
+
+# For improved user experience, filter out frames for julia runtime code which
+# are routinely interspersed with user code. See #33065. See also #35371 for
+# extended discussion of internal frames.
+function _backtrace_simplify_include_frames!(trace,
+            hidestack_modules=(Core, Base, Base.CompilerFrontend))
     kept_frames = trues(length(trace))
-    first_ignored = nothing
+    first_hidden = 0
+    remaining_hidden = 0
     for i in length(trace):-1:1
         frame::StackFrame, _ = trace[i]
-        mod = parentmodule(frame)
-        if mod === Base && frame.func === :IncludeInto ||
-           mod === Core && frame.func === :EvalInto
-            kept_frames[i] = false
-        elseif first_ignored === nothing
-            if mod === Base && frame.func === :_include
-                # Hide include() machinery by default
-                first_ignored = i
+        if remaining_hidden > 0
+            remaining_hidden -= 1
+        end
+        if frame.func === :var"macro expansion"
+            if frame.file in @_mangled_hs_syms("<hide-stack caller>")
+                # i+1 is the caller; i-1 is a "macro" frame representing the
+                # caller body wrapped inside the macro output.
+                kept_frames[i-1:i+1] .= false
+            elseif frame.file in @_mangled_hs_syms("<hide-stack begin>")
+                if first_hidden == 0
+                    first_hidden = i
+                end
+                maxhide = frame.line + 2 # +2 frames for begin/end pair
+                remaining_hidden = max(remaining_hidden, maxhide)
+            elseif frame.file in @_mangled_hs_syms("<hide-stack end>")
+                if remaining_hidden > 0
+                    kept_frames[i:first_hidden] .= false
+                    first_hidden = 0
+                end
             end
         else
-            first_ignored = first_ignored::Int
-            # Hack: allow `mod==nothing` as a workaround for inlined functions.
-            # TODO: Fix this by improving debug info.
-            if mod in (Base,Core,nothing) && 1+first_ignored-i <= 5
-                if frame.func === :eval
-                    kept_frames[i:first_ignored] .= false
-                    first_ignored = nothing
-                end
-            else
-                # Bail out to avoid hiding frames in unexpected circumstances
-                first_ignored = nothing
+            mod = parentmodule(frame)
+            if mod !== nothing && !(mod in hidestack_modules)
+                # Reserve frame hiding hack for the language implementation
+                # mod===nothing is permitted because inlined frames lack module information
+                remaining_hidden = 0
             end
         end
-    end
-    if first_ignored !== nothing
-        kept_frames[1:first_ignored] .= false
     end
     keepat!(trace, kept_frames)
 end
