@@ -2376,8 +2376,8 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
     include_string(@__MODULE__, "1 + #= #= blah =# =# 2") ==
     include_string(@__MODULE__, "1 + #= #= #= nested =# =# =# 2") ==
     include_string(@__MODULE__, "1 + #= \0 =# 2")
-@test_throws LoadError include_string(@__MODULE__, "#=")
-@test_throws LoadError include_string(@__MODULE__, "#= #= #= =# =# =")
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__, "#=")
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__, "#= #= #= =# =# =")
 
 # issue #6142
 import Base: +
