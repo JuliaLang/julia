@@ -963,24 +963,38 @@ macro test_throws(args...)
     testex = Expr(:block, __source__, esc(ex))
     source = QuoteNode(__source__)
 
-    result = quote
-        if $(skip !== nothing && skip)
-            record(get_testset(), Broken(:skipped, $orig_ex))
-        else
-            _result = try
-                Returned($testex, nothing, $source)
-            catch _e
-                if $(esc(extype)) != InterruptException && _e isa InterruptException
-                    rethrow()
-                end
-                Threw(_e, Base.current_exceptions(), $source)
+    # Build the try-catch expression
+    trycatch = quote
+        try
+            Returned($testex, nothing, $source)
+        catch _e
+            if $(esc(extype)) != InterruptException && _e isa InterruptException
+                rethrow()
             end
-            if $(broken !== nothing && broken)
-                do_broken_test_throws(_result, $orig_ex, $(esc(extype)), $pattern, $ctx)
+            Threw(_e, Base.current_exceptions(), $source)
+        end
+    end
+
+    if skip !== nothing
+        result = quote
+            if $skip
+                record(get_testset(), Broken(:skipped, $orig_ex))
+            elseif $(broken !== nothing && broken)
+                do_broken_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
             else
-                do_test_throws(_result, $orig_ex, $(esc(extype)), $pattern, $ctx)
+                do_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
             end
         end
+    elseif broken !== nothing
+        result = quote
+            if $broken
+                do_broken_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
+            else
+                do_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
+            end
+        end
+    else
+        result = :(do_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx))
     end
     return result
 end
