@@ -423,7 +423,7 @@ Julia applies the following order and associativity of operations, from highest 
 [^1]:
     Unary operators and juxtaposition of numeric literals take precedence over `^` only *within the exponent*.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`.
 [^2]:
-    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e.g., `√√-a` as `√(√(-a))`.
+    Multiple applications of the unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e.g., `√√-a` as `√(√(-a))`.
 [^3]:
     The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
     c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
