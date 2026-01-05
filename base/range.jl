@@ -1453,11 +1453,14 @@ end
 sortperm(r::AbstractUnitRange) = eachindex(r)
 sortperm(r::AbstractRange) = issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
 
-function sum(r::AbstractRange{<:Real})
+function sum(r::AbstractRange{<:Real}; init=_InitialValue())
+    isempty(r) && return init isa _InitialValue ? zero(eltype(r)) : init
+
     l = length(r)
     # note that a little care is required to avoid overflow in l*(l-1)/2
-    return l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
-                                     : (step(r) * l) * ((l-1)>>1))
+    s = l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
+                                  : (step(r) * l) * ((l-1)>>1))
+    return init isa _InitialValue ? s : init + s
 end
 
 function _in_range(x, r::AbstractRange)
