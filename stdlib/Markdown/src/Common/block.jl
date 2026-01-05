@@ -358,6 +358,7 @@ pushitem!(list, buffer) = push!(list.items, parse(takestring!(buffer)).content)
 mutable struct HorizontalRule <: MarkdownElement
 end
 
+@breaking true ->
 function horizontalrule(stream::IO, block::MD)
    withstream(stream) do
        n, rule = 0, ' '

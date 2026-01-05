@@ -57,7 +57,7 @@ function github_paragraph(stream::IO, md::MD)
     return true
 end
 
-@flavor github [list, indentcode, blockquote, admonition, footnote, hashheader,
+@flavor github [horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
                 fencedcode, github_table, github_paragraph,
 
                 linebreak, escapes,
