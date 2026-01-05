@@ -2,7 +2,6 @@
 
 using Test, Markdown, StyledStrings
 import Markdown: MD, Paragraph, Header, Italic, Bold, Strikethrough, LineBreak, Table, Code, LaTeX, Footnote
-import Markdown: insert_hlines, plain, term, html, rst
 import Base: show
 
 # Basics
@@ -59,7 +58,7 @@ code_in_code = md"""
 ````
 """
 @test code_in_code == MD(Code("```"))
-@test plain(code_in_code) == "````\n```\n````\n"
+@test Markdown.plain(code_in_code) == "````\n```\n````\n"
 
 let text = "Foo ```bar` ``baz`` ```\n",
     md = Markdown.parse(text)
@@ -214,16 +213,16 @@ end
 @test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
 
 # Basic plain (markdown) output
-@test md"foo" |> plain == "foo\n"
-@test md"foo *bar* baz" |> plain == "foo *bar* baz\n"
-@test md"# title" |> plain == "# title\n"
-@test md"## section" |> plain == "## section\n"
-@test md"## section `foo`" |> plain == "## section `foo`\n"
+@test md"foo" |> Markdown.plain == "foo\n"
+@test md"foo *bar* baz" |> Markdown.plain == "foo *bar* baz\n"
+@test md"# title" |> Markdown.plain == "# title\n"
+@test md"## section" |> Markdown.plain == "## section\n"
+@test md"## section `foo`" |> Markdown.plain == "## section `foo`\n"
 @test md"""Hello
 
 ---
-World""" |> plain == "Hello\n\n---\n\nWorld\n"
-@test md"[*a*](b)" |> plain == "[*a*](b)\n"
+World""" |> Markdown.plain == "Hello\n\n---\n\nWorld\n"
+@test md"[*a*](b)" |> Markdown.plain == "[*a*](b)\n"
 @test md"""
 > foo
 >
@@ -231,19 +230,19 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 >
 > ```
 > baz
-> ```""" |> plain == """> foo\n>\n>   * bar\n>\n> ```\n> baz\n> ```\n\n"""
+> ```""" |> Markdown.plain == """> foo\n>\n>   * bar\n>\n> ```\n> baz\n> ```\n\n"""
 
 # Terminal (markdown) output
 
 # multiple whitespace is ignored
-@test sprint(term, md"a  b") == "  a b"
-@test sprint(term, md"[x](https://julialang.org)") == "  x"
-@test sprint(term, md"[x](@ref)") == "  x"
-@test sprint(term, md"[x](@ref something)") == "  x"
-@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
+@test sprint(Markdown.term, md"a  b") == "  a b"
+@test sprint(Markdown.term, md"[x](https://julialang.org)") == "  x"
+@test sprint(Markdown.term, md"[x](@ref)") == "  x"
+@test sprint(Markdown.term, md"[x](@ref something)") == "  x"
+@test sprint(Markdown.term, md"![x](https://julialang.org)") == "  (Image: x)"
 
 # math (LaTeX)
-@test sprint(term, md"""
+@test sprint(Markdown.term, md"""
 ```math
 A = Q R
 ```
@@ -256,19 +255,19 @@ let doc = Markdown.parse(
         3. b
         """
     )
-    @test occursin("1. ", sprint(term, doc))
-    @test occursin("2. ", sprint(term, doc))
-    @test !occursin("3. ", sprint(term, doc))
+    @test occursin("1. ", sprint(Markdown.term, doc))
+    @test occursin("2. ", sprint(Markdown.term, doc))
+    @test !occursin("3. ", sprint(Markdown.term, doc))
 end
 
 # Testing margin when printing Tables to the terminal.
-@test sprint(term, md"""
+@test sprint(Markdown.term, md"""
 | R |
 |---|
 | L |
 """) == "  R\n  –\n  L"
 
-@test sprint(term, md"""
+@test sprint(Markdown.term, md"""
 !!! note "Tables in admonitions"
 
     | R |
@@ -330,11 +329,11 @@ let doc =
 
     2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
     """
-    str = sprint(term, doc, 50)
+    str = sprint(Markdown.term, doc, 50)
     @test test_list_wrap(str, 40, 50)
-    str = sprint(term, doc, 60)
+    str = sprint(Markdown.term, doc, 60)
     @test test_list_wrap(str, 50, 60)
-    str = sprint(term, doc, 80)
+    str = sprint(Markdown.term, doc, 80)
     @test test_list_wrap(str, 70, 80)
 end
 
@@ -527,7 +526,7 @@ for (input, output) in (
         md"[`x`](:???:`x`)"   => "```x`` <:???:`x`>`_\n",
         md"[x](y)"            => "`x <y>`_\n",
     )
-    @test rst(input) == output
+    @test Markdown.rst(input) == output
 end
 
 # Interpolation / Custom types
@@ -539,8 +538,8 @@ show(io::IO, m::MIME"text/plain", r::Reference1) =
     print(io, "$(r.ref) (see Julia docs)")
 
 sum_ref = md"Behaves like $(Reference1(sum))"
-@test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
-@test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
+@test Markdown.plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
+@test Markdown.html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
 @testset "JuliaLang/julia#59783 and #53362" begin
     x = 1
@@ -568,7 +567,7 @@ sum_ref = md"Behaves like $(Reference1(sum))"
     > 1
 
     """
-    @test plain(result) == expected
+    @test Markdown.plain(result) == expected
 end
 
 mutable struct Reference2
@@ -582,7 +581,7 @@ show(io::IO, m::MIME"text/html", r::Reference2) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
-@test html(sum_ref) == "<p>Behaves like <a href=\"test\">sum &#40;see Julia docs&#41;</a></p>\n"
+@test Markdown.html(sum_ref) == "<p>Behaves like <a href=\"test\">sum &#40;see Julia docs&#41;</a></p>\n"
 
 @test md"""
 ````julia
@@ -1448,9 +1447,9 @@ end
 
 @testset "Non-Markdown" begin
     # https://github.com/JuliaLang/julia/issues/37765
-    @test isa(insert_hlines(Text("foo")), Text)
+    @test isa(Markdown.insert_hlines(Text("foo")), Text)
     # https://github.com/JuliaLang/julia/issues/37757
-    @test insert_hlines(nothing) === nothing
+    @test Markdown.insert_hlines(nothing) === nothing
 end
 
 @testset "#59967: indented code blocks with more than one blank line" begin
