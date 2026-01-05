@@ -1639,3 +1639,22 @@ end
         end
     end
 end
+@testset "require_stdlib extension with non-stdlib from module" begin
+    # Test that require_stdlib doesn't error when called with an extension
+    # and the `from` module is not from the bundled depot (from_stdlib=false path)
+    # This is a regression test for https://github.com/JuliaLang/julia/issues/60392
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e '
+        Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+        REPLExt_pkgid = Base.PkgId(Base.uuid5(Pkg_pkgid.uuid, "REPLExt"), "REPLExt")
+        # Create and register a fake REPL module to simulate a non-stdlib module being loaded
+        # This triggers the from_stdlib=false path since the fake module is not from the bundled depot
+        FakeREPL = Module(:REPL)
+        FakeREPL_pkgid = Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL")
+        Base.register_root_module(FakeREPL)
+        # This should not throw a KeyError from end_loading
+        Base.require_stdlib(Pkg_pkgid, "REPLExt", FakeREPL)
+        # Verify the extension was loaded
+        Base.maybe_root_module(REPLExt_pkgid) isa Module || error("Something is wrong")
+    '`
+    @test success(cmd)
+end

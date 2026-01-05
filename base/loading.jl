@@ -2694,6 +2694,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
         return newm
     end
     env = Sys.STDLIB
+    loading_started = false
     try
         depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
         from_stdlib = true # set to false if `from` is a normal package so we do not want the internal loader for the extension either
@@ -2718,10 +2719,11 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
             newm = start_loading(this_uuidkey, UInt128(0), true)
             newm === nothing || return newm
+            loading_started = true
             newm = _require_search_from_serialized(this_uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
-        end_loading(this_uuidkey, newm)
+        loading_started && end_loading(this_uuidkey, newm)
     end
     if newm isa Module
         # After successfully loading, notify downstream consumers
