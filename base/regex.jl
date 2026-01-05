@@ -308,7 +308,7 @@ function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
-function occursin(r::Regex, s::DenseString; offset::Integer=0)
+function occursin(r::Regex, s::DenseUTF8String; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
@@ -340,7 +340,7 @@ function startswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
-function startswith(s::DenseString, r::Regex)
+function startswith(s::DenseUTF8String, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
@@ -372,7 +372,7 @@ function endswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
-function endswith(s::DenseString, r::Regex)
+function endswith(s::DenseUTF8String, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
@@ -427,7 +427,7 @@ true
 """
 function match end
 
-function match(re::Regex, str::Union{SubString{String}, String, DenseStringViewAndSub}, idx::Integer,
+function match(re::Regex, str::DenseUTF8String, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
@@ -484,7 +484,7 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String and AnnotatedString types; use String(s) to convert"
 ))
 
-function findnext(re::Regex, str::DenseString, idx::Integer)
+function findnext(re::Regex, str::DenseUTF8String, idx::Integer)
     _findnext_re(re, str, idx, C_NULL)
 end
 

@@ -211,7 +211,7 @@ end
 
 function findprev(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::DenseString,
+    s::DenseUTF8String,
     i::Integer,
 )
     # TODO: Redesign these strange rules for errors, see #54584
@@ -274,7 +274,7 @@ end
 
 function findall(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::DenseString,
+    s::DenseUTF8String,
 )
     iter = FwCharPosIter(s, pred.x)
     return if is_standalone_byte(iter.last_char_byte)
@@ -385,7 +385,7 @@ function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
 end
 
-_nthbyte(s::DenseString, i) = codeunit(s, i)
+_nthbyte(s::DenseUTF8String, i) = codeunit(s, i)
 _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 
 function _searchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
