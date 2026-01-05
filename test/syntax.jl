@@ -485,21 +485,17 @@ end
 @test_throws MethodError eval(Meta.parse("(Any=>Any)[:a=>1,:b=>2]"))
 
 # issue #16720
-let err = try
-    include_string(@__MODULE__, "module A
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__,
+    """
+    module A
 
-        function broken()
+    function broken()
 
-            x[1] = some_func(
+        x[1] = some_func(
 
-        end
-
-        end")
-    catch e
-        e
     end
-    @test err.line in (5, 7)
-end
+
+    end""")
 
 # PR #17393
 for op in (:.==, :.&, :.|, :.≤)
@@ -1897,8 +1893,8 @@ end
 @test Meta.isexpr(Meta.parse("1, "), :incomplete)
 @test Meta.isexpr(Meta.parse("1,\n"), :incomplete)
 @test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
-@test_throws LoadError include_string(@__MODULE__, "1,")
-@test_throws LoadError include_string(@__MODULE__, "1,\n")
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__, "1,")
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__, "1,\n")
 
 # issue #30062
 @test_loweringerror(Base.remove_linenums!(quote if false end, b+=2 end),
