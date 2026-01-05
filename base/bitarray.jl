@@ -1709,7 +1709,7 @@ findall(::typeof(!iszero), B::BitArray) = findall(B)
 _sum(A::BitArray, dims)    = reduce(+, A, dims=dims)
 _sum(B::BitArray, ::Colon) = count(B)
 
-function all(B::BitArray)
+function _all_bitarray(B::BitArray)
     isempty(B) && return true
     Bc = B.chunks
     @inbounds begin
@@ -1721,7 +1721,12 @@ function all(B::BitArray)
     return true
 end
 
-function any(B::BitArray)
+function all(B::BitArray; dims=:)
+    dims === (:) && return _all_bitarray(B)
+    return reduce(&, B; dims=dims)
+end
+
+function _any_bitarray(B::BitArray)
     isempty(B) && return false
     Bc = B.chunks
     @inbounds begin
@@ -1732,10 +1737,15 @@ function any(B::BitArray)
     return false
 end
 
+function any(B::BitArray; dims=:)
+    dims === (:) && return _any_bitarray(B)
+    return reduce(|, B; dims=dims)
+end
+
 function minimum(B::BitArray; dims=:)
     if dims === (:)
         isempty(B) && throw(ArgumentError("argument must be non-empty"))
-        return all(B)
+        return _all_bitarray(B)
     end
     return reduce(&, B; dims=dims)
 end
@@ -1743,7 +1753,7 @@ end
 function maximum(B::BitArray; dims=:)
     if dims === (:)
         isempty(B) && throw(ArgumentError("argument must be non-empty"))
-        return any(B)
+        return _any_bitarray(B)
     end
     return reduce(|, B; dims=dims)
 end
