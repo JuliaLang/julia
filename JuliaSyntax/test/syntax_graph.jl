@@ -272,15 +272,11 @@ end
     @testset "`when` clauses affect matching" begin
         @test @stm st begin
             (_, when=false) -> false
-            (_, when=false, when=false) -> false
-            (_, when=false, when=true) -> false
-            (_, when=true, when=true) -> true
+            (_, when=true) -> true
         end
         @test @stm st begin
             ([K"call" _...], when=false) -> false
-            ([K"call" _...], when=false, when=false) -> false
-            ([K"call" _...], when=false, when=true) -> false
-            ([K"call" _...], when=true, when=true) -> true
+            ([K"call" _...], when=true) -> true
         end
         @test @stm st begin
             ([K"call" _ _...], when=kind(st[1])===K"Identifier") -> true
@@ -290,22 +286,28 @@ end
         end
     end
 
-    @testset "effects of when/`run` clauses" begin
+    @testset "effects of when=cond" begin
         let x = Int[]
             @test @stm st begin
-                (_, when=(push!(x, 1); true), run=push!(x, 2)) -> x == [1,2]
+                (_, when=(push!(x, 1); true)) -> x == [1]
             end
+            empty!(x)
+
             @test @stm st begin
-                (_, when=(push!(x, 3); true),
-                 when=(push!(x, 4); false),
-                 when=(push!(x, 5); true)) -> false
-                _ -> x == [1,2,3,4]
+                (_, when=(push!(x, 1); false)) -> false
+                (_, when=(push!(x, 2); false)) -> false
+                (_, when=(push!(x, 3); true)) -> x == [1, 2, 3]
             end
+            empty!(x)
+
             @test @stm st begin
-                (x_pat,
-                 when=((x_when = x_pat); true),
-                 run=(x_run = x_pat)) ->
-                     x_pat == x_when == x_run
+                ([K"block"], when=(push!(x, 123); false)) -> false
+                (_, when=(push!(x, 1); true)) -> x == [1]
+            end
+            empty!(x)
+
+            @test @stm st begin
+                (x_pat, when=((x_when = x_pat); true)) -> x_pat == x_when
             end
         end
     end
