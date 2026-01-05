@@ -274,7 +274,7 @@ end
 
 # Issue #38275
 function test_list_wrap(str, lenmin, lenmax)
-    strs = split(str, '\n')
+    strs = rstrip.(split(str, '\n'))
     l = length.(strs)
     for i = 1:length(l)-1
         if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
@@ -283,14 +283,29 @@ function test_list_wrap(str, lenmin, lenmax)
             l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
         end
     end
+
     # Check consistent indentation
-    rngs = findfirst.((". ",), strs)
-    k = last(rngs[1])
+    # First, locate the list labels ends (position of bullet, or the "." at
+    # the end of a numeric label
+    labelends = findfirst.((r"[.•–▪] ",), strs)
+    # sanity checks: label end locations must be either equal or separated by at least one char
+    sorted_labels = unique(sort(filter(!isnothing, labelends)))
+    for i in 1:length(sorted_labels)-1
+        first(sorted_labels[i]) + 1 < first(sorted_labels[i+1]) || return false
+    end
+
+    # next check that after each label / bullet the following lines have the right indent
+    k = first(labelends[1])+1
     rex = Regex('^' * " "^k * "\\w")
-    for (i, rng) in enumerate(rngs)
-        isa(rng, AbstractRange) && last(rng) == k && continue  # every numbered line starts the text at the same position
-        rng === nothing && (isempty(strs[i]) || match(rex, strs[i]) !== nothing) && continue  # every unnumbered line is indented to text in numbered lines
-        return false
+    for (i, le) in enumerate(labelends)
+        if le === nothing
+            # every unlabeled line is indented to text in labeled lines
+            (isempty(strs[i]) || match(rex, strs[i]) !== nothing) || return false
+        else
+            # determine indent for following lines
+            k = first(le)+1
+            rex = Regex('^' * " "^k * "\\w")
+        end
     end
     return true
 end
@@ -298,6 +313,16 @@ end
 let doc =
     md"""
     1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+       - a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+         - a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+           999. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+           1000. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+       - a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
 
     2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
     """
@@ -377,7 +402,22 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n    •  list2"
+        """
+          Title
+          ≡≡≡≡≡
+
+          Some discussion
+
+          │  A quote
+
+          Section important
+          =================
+
+          Some bolded
+
+          • list1
+          • list2
+        """ |> chomp
     @test sprint(show, "text/plain", md"#") == "" # edge case of empty header
     @test sprint(show, "text/markdown", book) ==
         """
@@ -1459,4 +1499,86 @@ end
 
 @testset "Lazy Strings" begin
     @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
+end
+
+@testset "#40508: terminal rendering of nested lists, with hard breaks" begin
+    #
+    # Test an unordered list.
+    #
+    m = md"""
+    An unordered list:
+    - top level\
+      with an extra line
+      - second level\
+        again with an extra line
+        - third level\
+          yet again with an extra line
+          - fourth level\
+            and another extra line
+            - fifth level\
+              final extra line
+    - back to top level
+    """
+
+    expected = """
+      An unordered list:
+
+      • top level
+        with an extra line
+        – second level
+          again with an extra line
+          ▪ third level
+            yet again with an extra line
+            – fourth level
+              and another extra line
+              ▪ fifth level
+                final extra line
+      • back to top level
+    """ |> chomp
+
+    actual = sprint(show, MIME("text/plain"), m)
+    @test expected == actual
+
+    #
+    # Test an ordered list. These behave differently if the number of list
+    # entries increases to another power of ten. For example, when going from
+    # 9 to 10 list entries. We test this here.
+    #
+    m = md"""
+    An unordered list:
+    1. top level\
+       with an extra line
+       1. second level\
+          again with an extra line
+           999. third level\
+                yet again with an extra line
+                1. fourth level\
+                   and another extra line
+                   1. fifth level\
+                      final extra line
+          1000. more third level\
+                with an extra line
+    1. back to top level
+    """
+
+    expected = """
+      An unordered list:
+
+      1. top level
+         with an extra line
+         1. second level
+            again with an extra line
+             999. third level
+                  yet again with an extra line
+                  1. fourth level
+                     and another extra line
+                     1. fifth level
+                        final extra line
+            1000. more third level
+                  with an extra line
+      2. back to top level
+    """ |> chomp
+
+    actual = sprint(show, MIME("text/plain"), m)
+    @test expected == actual
 end
