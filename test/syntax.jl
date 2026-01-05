@@ -19,7 +19,7 @@ macro test_parseerror(str, msg)
 end
 
 macro test_loweringerror(ex, msg, opt=nothing)
-    code = :(@test Meta.lower(@__MODULE__, $(esc(ex))) == Expr(:error, $(esc(msg))))
+    code = :(@test Meta.lower(@__MODULE__, $(esc(ex))) == Expr(:error, ErrorException(string("syntax: ", $(esc(msg))))))
     code.args[2] = __source__
     if opt === :broken
         code.args[1] = :var"@test_broken"
@@ -337,7 +337,7 @@ end
 
 # issue #15798
 # lowering preserves Expr(:error)
-@test Meta.lower(Main, Expr(:error, "no")) == Expr(:error, "no")
+@test Meta.lower(Main, Expr(:error, ErrorException("no"))) == Expr(:error, ErrorException("no"))
 
 # issue #19861 make sure macro-expansion happens in the newest world for top-level expression
 @test eval(Base.parse_input_line("""
