@@ -2,7 +2,7 @@
 
 # Updating this listing is fairly easy, assuming existence of a unix system,
 # posix shell, and `awk`. Just call this file with `sh`, and it will be
-# updated to the latest terminfo snapshot. This works because the file is a
+# updated to the latest terminfo snapshot. This works because this file is a
 # bit of a quine.
 
 #=
@@ -135,7 +135,8 @@ function getcustomalias(allterms::Vector{NTuple{3, String}}, type, short, descri
         "Tc"    => ":truecolor",
         "XF"    => ":xterm_focus",
         "fd"    => ":focus_disable",
-        "fe"    => ":focus_enable")
+        "fe"    => ":focus_enable",
+        )
     if startswith(short, 'k') && !occursin("keypad", description)
         return ":key_" * replace(lowercase(description), r"[^a-z]" => '_')
     end
