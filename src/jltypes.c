@@ -3719,28 +3719,13 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b000001110100011100011 }; // Set fields 1, 2, 6-8, 12, 14-16 as const
+    const static uint32_t code_instance_constfields[1]  = { 0b000001110000011100011 }; // Set fields 1, 2, 6-8, 14-16 as const
     const static uint32_t code_instance_atomicfields[1] = { 0b111110001011100011100 }; // Set fields 3-5, 9-12, 13, 17-21 as atomic
     // Fields 4-5 are only operated on by construction and deserialization, so are effectively const at runtime
     // Fields ipo_purity_bits and analysis_results are not currently threadsafe or reliable, as they get mutated after optimization, but are not declared atomic
     // and there is no way to tell (during inference) if their value is finalized yet (to wait for them to be narrowed if applicable)
     jl_code_instance_type->name->constfields = code_instance_constfields;
     jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
-
-    jl_const_type = jl_new_datatype(jl_symbol("Const"), core, jl_any_type, jl_emptysvec,
-                                       jl_perm_symsvec(1, "val"),
-                                       jl_svec1(jl_any_type),
-                                       jl_emptysvec, 0, 0, 1);
-
-    jl_partial_struct_type = jl_new_datatype(jl_symbol("PartialStruct"), core, jl_any_type, jl_emptysvec,
-                                       jl_perm_symsvec(3, "typ", "undefs", "fields"),
-                                       jl_svec(3, jl_any_type, jl_any_type, jl_array_any_type),
-                                       jl_emptysvec, 0, 0, 3);
-
-    jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
-                                          jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
-                                          jl_svec(3, jl_long_type, jl_any_type, jl_any_type),
-                                          jl_emptysvec, 0, 0, 3);
 
     jl_method_match_type = jl_new_datatype(jl_symbol("MethodMatch"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(4, "spec_types", "sparams", "method", "fully_covers"),
@@ -3859,11 +3844,6 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_emptysvec, 0, 0, 5)->name->wrapper;
     jl_opaque_closure_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type))->name;
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type));
-
-    jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
-        jl_perm_symsvec(4, "typ", "env", "parent", "source"),
-        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_any_type),
-        jl_emptysvec, 0, 0, 4);
 
     // complete builtin type metadata
     jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
@@ -3993,6 +3973,11 @@ void post_boot_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
+
+    jl_const_type = (jl_datatype_t*)core("Const");
+    jl_partial_struct_type = (jl_datatype_t*)core("PartialStruct");
+    jl_interconditional_type = (jl_datatype_t*)core("InterConditional");
+    jl_partial_opaque_type = (jl_datatype_t*)core("PartialOpaque");
 
     export_jl_small_typeof();
     export_jl_sysimg_globals();

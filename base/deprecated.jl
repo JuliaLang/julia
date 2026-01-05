@@ -24,9 +24,10 @@ const __internal_changes_list = (
     :invertedlinetables,
     :codeinforefactor,
     :miuninferredrm,
-    :codeinfonargs,  # #54341
+    :codeinfonargs, #54341
     :ocnopartial,
     :printcodeinfocalls,
+    :syntacticccall, #59165
     # Add new change names above this line
 )
 
@@ -537,7 +538,7 @@ end
 """
     isbindingresolved(m::Module, s::Symbol) -> Bool
 
-Returns whether the binding of a symbol in a module is resolved.
+Return whether the binding of a symbol in a module is resolved.
 
 See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
 
@@ -565,3 +566,20 @@ end
 to_power_type(x) = oftype(x*x, x)
 
 # END 1.12 deprecations
+
+# BEGIN 1.13 deprecations
+
+@deprecate merge(combine::Callable, d::AbstractDict, others::AbstractDict...) mergewith(combine, d, others...)
+
+# end 1.13 deprecations
+
+# BEGIN 1.14 deprecations
+
+# Revise calls this
+function explicit_manifest_entry_path(args...)
+    spec = explicit_manifest_entry_load_spec(args...)
+    spec === nothing && return nothing
+    return spec.path
+end
+
+# END 1.14 deprecations

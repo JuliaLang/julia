@@ -91,7 +91,7 @@ end
 """
     Threads.threadpool(tid = threadid())::Symbol
 
-Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
+Return the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -101,7 +101,7 @@ end
 """
     Threads.threadpooldescription(tid = threadid())::String
 
-Returns the specified thread's threadpool name with extended description where appropriate.
+Return the specified thread's threadpool name with extended description where appropriate.
 """
 function threadpooldescription(tid = threadid())
     threadpool_name = threadpool(tid)
@@ -119,7 +119,7 @@ end
 """
     Threads.nthreadpools()::Int
 
-Returns the number of threadpools currently configured.
+Return the number of threadpools currently configured.
 """
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
@@ -147,7 +147,7 @@ end
 """
     threadpooltids(pool::Symbol)
 
-Returns a vector of IDs of threads in the given pool.
+Return a vector of IDs of threads in the given pool.
 """
 function threadpooltids(pool::Symbol)
     ni = _nthreads_in_pool(Int8(0))
@@ -163,7 +163,7 @@ end
 """
     Threads.ngcthreads()::Int
 
-Returns the number of GC threads currently configured.
+Return the number of GC threads currently configured.
 This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
@@ -287,8 +287,14 @@ A macro to execute a `for` loop in parallel. The iteration space is distributed 
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
 
+Tasks spawned by `@threads` are scheduled on the `:default` threadpool. This means that
+`@threads` will not use threads from the `:interactive` threadpool, even if called from
+the main thread or from a task in the interactive pool. The `:default` threadpool is
+intended for compute-intensive parallel workloads.
+
 See also: [`@spawn`](@ref Threads.@spawn) and
 `pmap` in [`Distributed`](@ref man-distributed).
+For more information on threadpools, see the chapter on [threadpools](@ref man-threadpools).
 
 # Extended help
 

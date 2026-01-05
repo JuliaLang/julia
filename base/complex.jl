@@ -120,7 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{Union{}}, slurp...) = Union{}(im)
+real(::Type{Union{}}, slurp...) = Union{}
 
 """
     isreal(x)::Bool
@@ -188,6 +188,7 @@ Union{Missing, Complex{Int64}}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
+complex(::Type{Union{}}, slurp...) = Union{}
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -195,16 +196,16 @@ function show(io::IO, z::Complex)
     r, i = reim(z)
     compact = get(io, :compact, false)::Bool
     show(io, r)
-    if signbit(i) && !isnan(i)
+    bufio = IOBuffer()
+    show(IOContext(bufio, io), i)
+    seekstart(bufio)
+    if peek(bufio) === UInt8('-')
+        seek(bufio, 1)
         print(io, compact ? "-" : " - ")
-        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
-            show(io, -widen(i))
-        else
-            show(io, -i)
-        end
+        write(io, bufio)
     else
         print(io, compact ? "+" : " + ")
-        show(io, i)
+        write(io, bufio)
     end
     if !(isa(i,Signed) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
@@ -248,8 +249,8 @@ isequal(z::Real, w::Complex) = isequal(z,real(w))::Bool & isequal(zero(z),imag(w
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
-const h_imag = 0x32a7a07f3e7cd1f % UInt
-const hash_0_imag = 0x153e9f914f9b5b92 % UInt
+const h_imag = 0x32a7a07f3e7cd1f9 % UInt
+const hash_0_imag = hash(0, h_imag)
 
 function hash(z::Complex, h::UInt)
     # TODO: with default argument specialization, this would be better:
@@ -289,9 +290,11 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+_mulsub(a, b, c) = _mulsub(promote(a, b, c)...)
+_mulsub(a::T, b::T, c::T) where {T<:Real} = muladd(a, b, -c)
 muladd(z::Complex, w::Complex, x::Complex) =
-    Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -real(x))),
-            muladd(real(z), imag(w),  muladd(imag(z), real(w),  imag(x))))
+    Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), real(x))),
+            muladd(real(z), imag(w), muladd(imag(z), real(w), imag(x))))
 
 # handle Bool and Complex{Bool}
 # avoid type signature ambiguity warnings
@@ -338,7 +341,7 @@ muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
 muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
 muladd(z::Complex, w::Complex, x::Real) =
-    Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -x)),
+    Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), x)),
             muladd(real(z), imag(w), imag(z) * real(w)))
 
 /(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))

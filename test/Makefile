@@ -11,7 +11,12 @@ export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
-TESTGROUPS = unicode strings compiler Compiler
+# used by JuliaLowering_stdlibs.jl test (invokes `make` for JL sysimage)
+export MAKE
+export BUILDROOT
+export JULIA_BUILD_MODE
+
+TESTGROUPS = unicode strings compiler Compiler JuliaSyntax JuliaLowering
 TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
 		$(filter-out runtests testdefs relocatedepot, \
@@ -28,19 +33,24 @@ TRIMMING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/trimming" "CC=$(CC)"
 TEST_JULIA_OPTIONS := --check-bounds=yes --startup-file=no --depwarn=error
 TEST_SCRIPT_OPTIONS := --buildroot=$(call cygpath_w,$(BUILDROOT))
 
+.PHONY: default
 default:
 
+.PHONY: $(TESTS)
 $(TESTS):
-	@cd $(SRCDIR) && \
+	+@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) $@)
 
+.PHONY: install-revise-deps
 install-revise-deps:
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise --help-list install_revise_deps)
 
+.PHONY: $(addprefix revise-, $(TESTS))
 $(addprefix revise-, $(TESTS)): revise-% :
 	@cd $(SRCDIR) && \
     $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise $*)
 
+.PHONY: relocatedepot
 relocatedepot:
 	@rm -rf $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
@@ -54,6 +64,7 @@ relocatedepot:
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) $@)
 
+.PHONY: revise-relocatedepot
 revise-relocatedepot: revise-% :
 	@rm -rf $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
@@ -67,23 +78,26 @@ revise-relocatedepot: revise-% :
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise $*)
 
+.PHONY: embedding
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
 
+.PHONY: gcext
 gcext:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
 
+.PHONY: trimming
 trimming:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(TRIMMING_ARGS)
 	@$(MAKE) -C $(SRCDIR)/$@ clean $(TRIMMING_ARGS)
 
+.PHONY: clangsa
 clangsa:
 	@$(MAKE) -C $(SRCDIR)/$@
 
+.PHONY: clean
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 	@$(MAKE) -C llvmpasses $@
 	@$(MAKE) -C trimming $@ $(TRIMMING_ARGS)
-
-.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) relocatedepot revise-relocatedepot embedding gcext trimming clangsa clean

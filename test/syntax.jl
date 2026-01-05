@@ -1684,6 +1684,9 @@ end
 # #16356
 @test_parseerror "0xapi"
 
+# #60189
+@test_parseerror "0x1p3.2"
+
 # #22523 #22712
 @test_parseerror "a?b:c"
 @test_parseerror "a ?b:c"
@@ -2600,6 +2603,15 @@ end
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :broadcasted)) == 3
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :materialize)) == 1
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
+end
+
+module M59008 # dotop with global LHS in macro
+using Test
+global a = 1
+macro counter()
+    :(a += 1)
+end
+@test @counter() === 2 === a
 end
 
 # issue #37656
@@ -3721,7 +3733,7 @@ end
     @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
 end
 
-@testset "removing argument sideeffects" begin
+@testset "removing argument side effects" begin
     # Allow let blocks in broadcasted LHSes, but only evaluate them once:
     execs = 0
     array = [1]
@@ -3737,6 +3749,15 @@ end
     let; execs += 1; array; end::Vector{Int} .= 7
     @test array == [7]
     @test execs == 4
+
+    # remove argument side effects on lhs kwcall
+    pa_execs = 0
+    kw_execs = 0
+    f60152(v, pa; kw) = copy(v)
+    @test (f60152([1, 2, 3], 0; kw=0) .*= 2) == [2,4,6]
+    @test (f60152([1, 2, 3], (pa_execs+=1); kw=(kw_execs+=1)) .*= 2) == [2,4,6]
+    @test pa_execs === 1
+    @test kw_execs === 1
 end
 
 # Allow GlobalRefs in macro definition
@@ -4607,4 +4628,48 @@ end
     # Test with undefined macro
     @test_throws UndefVarError macroexpand(@__MODULE__, :(@undefined_macro(x)))
     @test_throws UndefVarError macroexpand!(@__MODULE__, :(@undefined_macro(x)))
+end
+
+# #59755 - Don't hoist global declarations out of toplevel-preserving syntax
+module M59755 end
+@testset "toplevel-preserving syntax" begin
+    Core.eval(M59755, :(if true
+                            global v1::Bool
+                        else
+                            const v1 = 1
+                        end))
+    @test !isdefined(M59755, :v1)
+    @test Base.binding_kind(M59755, :v1) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(M59755, :v1) == Bool
+
+    Core.eval(M59755, :(if false
+                            global v2::Bool
+                        else
+                            const v2 = 2
+                        end))
+    @test M59755.v2 === 2
+    @test Base.binding_kind(M59755, :v2) == Base.PARTITION_KIND_CONST
+
+    Core.eval(M59755, :(v3 = if true
+                            global v4::Bool
+                            4
+                        else
+                            const v4 = 5
+                            6
+                        end))
+    @test M59755.v3 == 4
+    @test !isdefined(M59755, :v4)
+    @test Base.binding_kind(M59755, :v4) == Base.PARTITION_KIND_GLOBAL
+    @test Core.get_binding_type(M59755, :v4) == Bool
+
+    Core.eval(M59755, :(v5 = if false
+                            global v6::Bool
+                            4
+                        else
+                            const v6 = 5
+                            6
+                        end))
+    @test M59755.v5 === 6
+    @test M59755.v6 === 5
+    @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
 end

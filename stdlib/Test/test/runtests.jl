@@ -24,6 +24,10 @@ import Logging: Debug, Info, Warn, with_logger
     @test isapprox(1, 1; [(:atol, 0)]...)
     @test isapprox(1, 2; atol)
     @test isapprox(1, 3; a.atol)
+    # Test custom .. operator (not a broadcast operator)
+    ..(x, y) = x == y
+    @test 'a' .. 'a'
+    @test !('a' .. 'b')
 end
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
@@ -459,6 +463,82 @@ end
         @test length(fails) == 1
         @test fails[1] isa Test.Fail
         @test fails[1].test_type === :test_throws_wrong
+    end
+end
+
+# Tests for context keyword
+@testset "@test with context keyword" begin
+    # Test that context appears in Fail
+    let f = Test.Fail(:test, "false", nothing, "false", "(sin, Float64)", LineNumberNode(1), false)
+        @test occursin("Context: (sin, Float64)", sprint(show, f))
+    end
+
+    # Test that context is evaluated and shown in @test
+    let fails = @testset NoThrowTestSet begin
+            @test false context=(sin, Float64)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(sin, Float64)", fails[1].context)
+    end
+
+    # Test context with broken=true (should record as Broken)
+    let results = @testset NoThrowTestSet begin
+            @test false context="info" broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # Test context with Error (exception thrown)
+    let errors = @testset NoThrowTestSet begin
+            @test error("boom") context="error info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].context == "\"error info\""
+    end
+end
+
+@testset "@test_throws with context keyword" begin
+    # Test context appears when wrong exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ArgumentError error("wrong") context="extra info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].context == "\"extra info\""
+    end
+
+    # Test context with three-arg form
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException "pattern" error("wrong msg") context=(1, 2)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(1, 2)", fails[1].context)
+    end
+
+    # Test context when no exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1 + 1 context="no throw info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_nothing
+        @test fails[1].context == "\"no throw info\""
+    end
+end
+
+@testset "@test_broken with context keyword" begin
+    # Test context with @test_broken when test unexpectedly passes
+    let errors = @testset NoThrowTestSet begin
+            @test_broken true context="broken info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].test_type === :test_unbroken
+        @test errors[1].context == "\"broken info\""
     end
 end
 
@@ -977,11 +1057,11 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
         end'`), stderr=devnull), String)
     @test occursin(r"""
         Test Summary: \| Pass  Fail  Total +Time
-        Foo Tests     \|    2     2      4  \s*\d*\.\ds
-          Animals     \|    1     1      2  \s*\d*\.\ds
-            Felines   \|    1            1  \s*\d*\.\ds
-            Canines   \|          1      1  \s*\d*\.\ds
-          Arrays      \|    1     1      2  \s*\d*\.\ds
+        Foo Tests     \|    2     2      4  \s*(\d+m)?\d*\.\ds
+          Animals     \|    1     1      2  \s*(\d+m)?\d*\.\ds
+            Felines   \|    1            1  \s*(\d+m)?\d*\.\ds
+            Canines   \|          1      1  \s*(\d+m)?\d*\.\ds
+          Arrays      \|    1     1      2  \s*(\d+m)?\d*\.\ds
         """, msg)
 end
 
@@ -1360,16 +1440,16 @@ end
 @testset "verbose option" begin
     expected = r"""
     Test Summary:             \| Pass  Total +Time
-    Parent                    \|    9      9  \s*\d*\.\ds
-      Child 1                 \|    3      3  \s*\d*\.\ds
-        Child 1\.1 \(long name\) \|    1      1  \s*\d*\.\ds
-        Child 1\.2             \|    1      1  \s*\d*\.\ds
-        Child 1\.3             \|    1      1  \s*\d*\.\ds
-      Child 2                 \|    3      3  \s*\d*\.\ds
-      Child 3                 \|    3      3  \s*\d*\.\ds
-        Child 3\.1             \|    1      1  \s*\d*\.\ds
-        Child 3\.2             \|    1      1  \s*\d*\.\ds
-        Child 3\.3             \|    1      1  \s*\d*\.\ds
+    Parent                    \|    9      9  \s*(\d+m)?\d*\.\ds
+      Child 1                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 1\.1 \(long name\) \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
+      Child 2                 \|    3      3  \s*(\d+m)?\d*\.\ds
+      Child 3                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 3\.1             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
     """
 
     mktemp() do f, _
@@ -1431,8 +1511,8 @@ end
     @testset "non failfast (default)" begin
         expected = r"""
         Test Summary: \| Pass  Fail  Error  Total +Time
-        Foo           \|    1     2      1      4  \s*\d*\.\ds
-          Bar         \|    1     1             2  \s*\d*\.\ds
+        Foo           \|    1     2      1      4  \s*(\d+m)?\d*\.\ds
+          Bar         \|    1     1             2  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1457,7 +1537,7 @@ end
     @testset "failfast begin-end" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1482,8 +1562,8 @@ end
     @testset "failfast for-loop" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
-          1           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
         mktemp() do f, _
             write(f,
@@ -1508,8 +1588,8 @@ end
     @testset "failfast passes to child testsets" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
-          1           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1534,7 +1614,7 @@ end
     @testset "failfast via env var" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1950,6 +2030,8 @@ end
         @test _escape_call(:(Main.f.(x, y))) == (; func=:(Broadcast.BroadcastFunction($(esc(:(Main.f))))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(Main.f))))
         @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
+        # Test that .. operator is not treated as a broadcast operator
+        @test _escape_call(:(x .. y)) == (; func=esc(:(..)), args, kwargs, quoted_func=:(:..))
     end
 end
 
@@ -2014,7 +2096,7 @@ end
     io = IOBuffer()
 
     # Create a testset with passing and failing tests
-    ts = Test.DefaultTestSet("IO Test")
+    ts = Test.DefaultTestSet("IO Test"; time_start=1.36071654e9)
     Test.record(ts, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(1), false))
     fail = Test.Fail(:test, "1 == 2", nothing, nothing, LineNumberNode(2, Symbol("test.jl")))
     push!(ts.results, fail)

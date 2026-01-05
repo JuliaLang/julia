@@ -95,8 +95,8 @@ ERROR: cannot assign a value to imported variable Base.sqrt from module Main
 ```
 
 !!! compat "Julia 1.12"
-  Note that in versions prior to Julia 1.12, these errors depended on *use* rather than definition of
-  the conflicting binding.
+    Note that in versions prior to Julia 1.12, these errors depended on *use*
+    rather than definition of the conflicting binding.
 
 ## [Allowed Variable Names](@id man-allowed-variable-names)
 

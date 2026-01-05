@@ -1063,6 +1063,20 @@ end
 The syntax `catch e` (where `e` is any variable) assigns the thrown
 exception object to the given variable within the `catch` block.
 
+```julia
+try
+    a_dangerous_operation()
+catch e
+    if isa(e, EOFError)
+        @warn "The operation failed - EOF."
+    elseif isa(e, OutOfMemoryError)
+        @warn "The operation failed - OOM."
+    else
+        rethrow() # ensure other exceptions can bubble up the call stack
+    end
+end
+```
+
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 
@@ -1430,8 +1444,6 @@ Note that contrary to `ccall`, the argument types must be specified as a tuple t
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
-
-[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
 
 See
 [`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
@@ -3187,7 +3199,7 @@ undef
 """
     Ptr{T}()
 
-Creates a null pointer to type `T`.
+Create a null pointer to type `T`.
 """
 Ptr{T}()
 
