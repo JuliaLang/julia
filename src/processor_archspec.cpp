@@ -29,7 +29,7 @@ namespace {
 
 // Check if debug output is enabled via JULIA_DEBUG=archspec or JULIA_DEBUG=all
 static bool debug_enabled() {
-    static int enabled = 1;
+    static int enabled = -1;
     if (enabled == -1) {
         const char *debug_env = getenv("JULIA_DEBUG");
         enabled = debug_env && (strstr(debug_env, "archspec") || strstr(debug_env, "all"));
