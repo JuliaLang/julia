@@ -27,7 +27,7 @@ function CompilerFrontend.syntaxtree(frontend::DefaultCompilerFrontend,
     syntaxtree(frontend, Expr, res)
 end
 
-function CompilerFrontend.syntaxtree(::AbstractCompilerFrontend, ::Type{Expr},
+function CompilerFrontend.syntaxtree(::DefaultCompilerFrontend, ::Type{Expr},
                                      res::JuliaSyntaxParseResult)
     stream = res.stream
     ex = JuliaSyntax.all_trivia(stream) ? nothing :
@@ -36,7 +36,7 @@ function CompilerFrontend.syntaxtree(::AbstractCompilerFrontend, ::Type{Expr},
     return ex
 end
 
-function CompilerFrontend.syntaxtree(::AbstractCompilerFrontend, ::Type{T},
+function CompilerFrontend.syntaxtree(::DefaultCompilerFrontend, ::Type{T},
                                      res::JuliaSyntaxParseResult) where {T}
     stream = res.stream
     ex = JuliaSyntax.all_trivia(stream) ? nothing :
@@ -44,7 +44,7 @@ function CompilerFrontend.syntaxtree(::AbstractCompilerFrontend, ::Type{T},
     return ex
 end
 
-function CompilerFrontend.checkparse(::AbstractCompilerFrontend, res::JuliaSyntaxParseResult;
+function CompilerFrontend.checkparse(::DefaultCompilerFrontend, res::JuliaSyntaxParseResult;
                                      warn=false)
     stream = res.stream
     if JuliaSyntax.any_error(stream)
