@@ -4,7 +4,7 @@ baremodule CompilerFrontend
 # Parsing
 export AbstractCompilerFrontend, parsecode, syntaxtree, checkparse
 # Lowering
-export TopLevelCodeIterator, BeginModule, EndModule, ToplevelExpression
+export TopLevelCodeIterator, BeginModule, EndModule, ToplevelExpression, LoweringFailure
 export compiler_frontend, set_compiler_frontend!
 public eval, include_string, lower_init, lower_step, location, _parse_hook
 
@@ -70,6 +70,12 @@ end
 struct ToplevelExpression
     val
     location # Currently LineNumberNode
+end
+
+# Communicate errors using LoweringFailure
+struct LoweringFailure
+    exc::Exception
+    location
 end
 
 # Return a subtype of `TopLevelCodeIterator` which may be passed to `lower_step`
@@ -142,6 +148,11 @@ function simple_eval(mod::Module, ::EndModule)
     _check_top_level_effect(mod)
     @ccall jl_end_new_module(mod::Module)::Cvoid
     return mod
+end
+
+function simple_eval(mod::Module, err::LoweringFailure)
+    # Call into the interpreter to get a stack frame for the lowering error.
+    simple_eval(mod, ToplevelExpression(Expr(:error, err.exc), err.location))
 end
 
 function eval(frontend::AbstractCompilerFrontend, mod::Module, ex; throw_load_error=false, opts...)
@@ -309,20 +320,16 @@ function CompilerFrontend.syntaxtree(frontend::FlispCompilerFrontend, ::Type{Exp
 end
 
 function CompilerFrontend.checkparse(frontend::FlispCompilerFrontend, ex)
-    if !(ex isa Expr)
-        return
+    if ex isa Expr && ex.head === :toplevel && !isempty(ex.args)
+        ex = last(ex.args)
     end
-    h = ex.head
-    if h === :toplevel && !isempty(ex.args)
-        checkparse(frontend, last(ex.args))
-    elseif h === :error || h === :incomplete
+    if ex isa Expr && (ex.head === :error || ex.head === :incomplete)
         err = ex.args[1]
         if err isa String
             err = Meta.ParseError(err)
         end
         throw(err)
     end
-    return
 end
 
 function CompilerFrontend.lower_init(::FlispCompilerFrontend, mod::Module, ex;
@@ -418,14 +425,16 @@ function CompilerFrontend.lower_step(iter::FlispLoweringIterator, mod::Module, g
         elseif length(ex.args) == 4
             syntax_version, std_defs, newmod_name, body = ex.args
         else
-            error("syntax: malformed module expression")
+            return LoweringFailure(ErrorException("syntax: malformed module expression"),
+                                   iter.current_loc)
         end
         std_defs = std_defs === true
         if !(newmod_name isa Symbol)
-            throw(TypeError(:module, "", Symbol, newmod_name))
+            return LoweringFailure(TypeError(:module, "", Symbol, newmod_name), iter.current_loc)
         end
         if !(body isa Expr && body.head == :block)
-            error("syntax: malformed module expression")
+            return LoweringFailure(ErrorException("syntax: malformed module expression"),
+                                   iter.current_loc)
         end
         loc = length(body.args) >= 1 && body.args[1] isa LineNumberNode ?
               body.args[1] : current_loc
@@ -443,6 +452,8 @@ function CompilerFrontend.lower_step(iter::FlispLoweringIterator, mod::Module, g
         lowered = fl_lower(ex, mod, file, line, get_world(), iter.warn)[1]
         if lowered isa Expr && lowered.head == :thunk
             return lowered.args[1]
+        elseif lowered isa Expr && lowered.head == :error
+            return LoweringFailure(ErrorException("syntax: $(lowered.args[1])"), iter.current_loc)
         else
             # May get here when macros expand to non-thunks
             _push_next_expr!(iter, lowered, false, 0)
