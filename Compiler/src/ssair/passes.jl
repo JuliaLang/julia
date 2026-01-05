@@ -361,20 +361,25 @@ function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     already_inserted_ssa(compact, compact.idx-1)(0, old)
 end
 
-function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
-    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
-        id = old.id
-        if id <= length(compact.ir.stmts)
-            return id <= processed_idx
-        end
-        id -= length(compact.ir.stmts)
-        if id <= length(compact.ir.new_nodes)
-            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-        end
-        id -= length(compact.ir.new_nodes)
-        @assert id <= length(compact.pending_nodes)
-        return !(id in compact.pending_perm)
+function _already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int,
+                               phi_arg::Int, old::OldSSAValue)
+    id = old.id
+    if id <= length(compact.ir.stmts)
+        return id <= processed_idx
     end
+    id -= length(compact.ir.stmts)
+    if id <= length(compact.ir.new_nodes)
+        return _already_inserted_ssa(compact, processed_idx, phi_arg,
+                                     OldSSAValue(compact.ir.new_nodes.info[id].pos))
+    end
+    id -= length(compact.ir.new_nodes)
+    @assert id <= length(compact.pending_nodes)
+    return !(id in compact.pending_perm)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return (phi_arg::Int, old::OldSSAValue) ->
+        _already_inserted_ssa(compact, processed_idx, phi_arg, old)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
