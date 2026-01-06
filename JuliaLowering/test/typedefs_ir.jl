@@ -1259,3 +1259,119 @@ end
     15  (return %₁₄)
 42  latestworld
 43  (return core.nothing)
+
+########################################
+# Basic typegroup
+typegroup
+    struct A
+        b::B
+    end
+    struct B
+        a::A
+    end
+end
+#---------------------
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.declare_global TestMod :B false)
+4   latestworld
+5   (= slot₂/A (call core.TypeVar :A))
+6   (= slot₃/B (call core.TypeVar :B))
+7   (call core.svec)
+8   (call core.svec :b)
+9   (call core.svec)
+10  slot₃/B
+11  (call core.svec %₁₀)
+12  (call core.svec %₇ %₈ %₉ false 1 core.Any %₁₁)
+13  (call core.svec)
+14  (call core.svec :a)
+15  (call core.svec)
+16  slot₂/A
+17  (call core.svec %₁₆)
+18  (call core.svec %₁₃ %₁₄ %₁₅ false 1 core.Any %₁₇)
+19  slot₂/A
+20  slot₃/B
+21  (call core.svec %₁₉ %₂₀)
+22  (call core.svec %₁₂ %₁₈)
+23  (call core.resolve_typegroup TestMod %₂₁ %₂₂)
+24  (call top.indexed_iterate %₂₃ 1)
+25  (= slot₂/A (call core.getfield %₂₄ 1))
+26  (= slot₁/iterstate (call core.getfield %₂₄ 2))
+27  slot₁/iterstate
+28  (call top.indexed_iterate %₂₃ 2 %₂₇)
+29  (= slot₃/B (call core.getfield %₂₈ 1))
+30  slot₂/A
+31  (call core.declare_const TestMod :A %₃₀)
+32  latestworld
+33  slot₃/B
+34  (call core.declare_const TestMod :B %₃₃)
+35  latestworld
+36  TestMod.A
+37  SourceLocation::2:5
+38  (call core._defaultctors %₃₆ %₃₇)
+39  TestMod.B
+40  SourceLocation::5:5
+41  (call core._defaultctors %₃₉ %₄₀)
+42  latestworld
+43  (return core.nothing)
+
+########################################
+# Typegroup with supertype and apply_type_or_typeapp replacement
+typegroup
+    struct A <: AbstractVector{B}
+        b::Union{Nothing, B}
+    end
+    struct B
+        a::A
+    end
+end
+#---------------------
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.declare_global TestMod :B false)
+4   latestworld
+5   (= slot₂/A (call core.TypeVar :A))
+6   (= slot₃/B (call core.TypeVar :B))
+7   (call core.svec)
+8   (call core.svec :b)
+9   (call core.svec)
+10  TestMod.AbstractVector
+11  slot₃/B
+12  (call core.apply_type_or_typeapp %₁₀ %₁₁)
+13  TestMod.Union
+14  TestMod.Nothing
+15  slot₃/B
+16  (call core.apply_type_or_typeapp %₁₃ %₁₄ %₁₅)
+17  (call core.svec %₁₆)
+18  (call core.svec %₇ %₈ %₉ false 1 %₁₂ %₁₇)
+19  (call core.svec)
+20  (call core.svec :a)
+21  (call core.svec)
+22  slot₂/A
+23  (call core.svec %₂₂)
+24  (call core.svec %₁₉ %₂₀ %₂₁ false 1 core.Any %₂₃)
+25  slot₂/A
+26  slot₃/B
+27  (call core.svec %₂₅ %₂₆)
+28  (call core.svec %₁₈ %₂₄)
+29  (call core.resolve_typegroup TestMod %₂₇ %₂₈)
+30  (call top.indexed_iterate %₂₉ 1)
+31  (= slot₂/A (call core.getfield %₃₀ 1))
+32  (= slot₁/iterstate (call core.getfield %₃₀ 2))
+33  slot₁/iterstate
+34  (call top.indexed_iterate %₂₉ 2 %₃₃)
+35  (= slot₃/B (call core.getfield %₃₄ 1))
+36  slot₂/A
+37  (call core.declare_const TestMod :A %₃₆)
+38  latestworld
+39  slot₃/B
+40  (call core.declare_const TestMod :B %₃₉)
+41  latestworld
+42  TestMod.A
+43  SourceLocation::2:5
+44  (call core._defaultctors %₄₂ %₄₃)
+45  TestMod.B
+46  SourceLocation::5:5
+47  (call core._defaultctors %₄₅ %₄₆)
+48  latestworld
+49  (return core.nothing)

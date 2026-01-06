@@ -2311,6 +2311,8 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         }
         return 1;
     }
+    if (jl_is_typeapp(x) || jl_is_typeapp(y))
+        jl_error("internal error: TypeApp in subtyping");
     int obvious_subtype = 2;
     if (jl_obvious_subtype(x, y, &obvious_subtype)) {
 #ifdef NDEBUG
@@ -2528,6 +2530,8 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         return 1;
     if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
         return 1;
+    if (jl_is_typeapp(t))
+        jl_error("internal error: TypeApp in jl_isa");
     if (jl_is_type(x)) {
         if (t == (jl_value_t*)jl_type_type)
             return 1;
@@ -4646,6 +4650,8 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         if (issubty && a == jl_bottom_type) *issubty = 1;
         return jl_bottom_type;
     }
+    if (jl_is_typeapp(a) || jl_is_typeapp(b))
+        jl_error("internal error: TypeApp in type intersection");
     int szb = jl_subtype_env_size(b);
     int sz = 0, i = 0;
     jl_value_t **env, **ans;
