@@ -279,9 +279,7 @@ end
 # right hand side is directly indexable.
 function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
     n_lhs = numchildren(lhs)
-    if n_lhs > 0
-        iterstate = new_local_binding(ctx, rhs, "iterstate")
-    end
+    iterstate = n_lhs > 0 ? new_local_binding(ctx, rhs, "iterstate") : nothing
 
     end_stmts = SyntaxList(ctx)
     wrap(asgn) = is_const ? (@ast ctx assignment_srcref [K"const" asgn]) : asgn
@@ -1620,7 +1618,7 @@ function expand_named_tuple(ctx, ex, kws, eq_is_kw;
     names = SyntaxList(ctx)
     values = SyntaxList(ctx)
     current_nt = nothing
-    for (i,kw) in enumerate(kws)
+    for kw in kws
         k = kind(kw)
         appended_nt = nothing
         name = nothing
@@ -3488,6 +3486,8 @@ function analyze_type_sig(ctx, ex)
         end
     end
     @isdefined(name) || throw(LoweringError(ex, "invalid type signature"))
+    @isdefined(type_params) || throw(LoweringError(ex, "invalid type signature"))
+    @isdefined(supertype) || throw(LoweringError(ex, "invalid type signature"))
 
     return (name, type_params, supertype)
 end
@@ -3524,8 +3524,8 @@ function expand_abstract_or_primitive_type(ctx, ex)
     else
         @assert kind(ex) == K"primitive"
         @chk numchildren(ex) == 2
-        nbits = ex[2]
     end
+    nbits = is_abstract ? nothing : ex[2]
     name, type_params, supertype = analyze_type_sig(ctx, ex[1])
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
