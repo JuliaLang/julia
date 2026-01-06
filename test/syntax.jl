@@ -4910,4 +4910,18 @@ end
         return g
     end
     @test fieldtype(typeof(capture_before_if_else()), 1) === Core.Box
+
+    # Closure captured INSIDE branch with assignment after capture (must be boxed)
+    function capture_inside_branch_then_assign()
+        x = 0
+        if true
+            x = 1
+            g = () -> x
+            x = 2
+        else
+            x = 3
+        end
+        return g
+    end
+    @test fieldtype(typeof(capture_inside_branch_then_assign()), 1) === Core.Box
 end
