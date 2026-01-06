@@ -756,17 +756,24 @@ structure?) and a `let` (bind trees to these names if so).  Each pattern uses a
 limited version of the @ast syntax:
 
 ```
-<pattern> = <tree_identifier>
+<pattern> = <tree_sym>
+          | <tree_sym>::K"<leaf_kind>"
           | [K"<kind>" <pattern>*]
-          | [K"<kind>" <pattern>* <list_identifier>... <pattern>*]
+          | [K"<kind>" <pattern>* <list_sym>... <pattern>*]
 
 # note "*" is the meta-operator meaning one or more, and "..." is literal
 ```
 
-where a `[K"k" p1 p2 ps...]` form matches any tree with kind `k` and >=2
-children (bound to `p1` and `p2`), and `ps` is bound to the possibly-empty
-SyntaxList of children `3:end`.  Identifiers (except `_`) can't be re-used, but
-may check for some form of tree equivalence in a future implementation.
+where a `[K"k" p1 p2 ps...]` form matches any non-leaf tree with kind `k` and
+>=2 children (bound to `p1` and `p2`), and `ps` is bound to the possibly-empty
+SyntaxList of children `3:end`.
+
+Note that the syntax for matching leaves is different: `someleaf::K"kind"`, even
+though the K"kind" determines whether it's a leaf anyway.  This is for
+consistency with `@ast`.
+
+Identifiers (except `_`) can't be re-used, but reuse may check for some form of
+tree equivalence in a future implementation.
 
 ## Extra condition: `when`
 
@@ -790,7 +797,7 @@ julia> st = JuliaSyntax.parsestmt(
     JuliaSyntax.SyntaxTree, "function foo(x,y,z); x; end")
 
 julia> JuliaSyntax.@stm st begin
-    [K"function" [K"call" fname [K"parameters" kws...]] body] ->
+    [K"function" [K"call" fname::K"Identifier" [K"parameters" kws...]] body] ->
         "no positional args, only kwargs: $(kws)"
     [K"function" fname] ->
         "zero-method function $fname"
@@ -887,36 +894,50 @@ function _stm_matches_wrapper(p::Expr, st_ex, debug)
 end
 
 function _stm_matches(p::Expr, st_gs::Symbol, k_gs::Symbol, nc_gs::Symbol, debug)
-    pat_k = Kind(p.args[1].args[3])
-    out = Expr(:&&, :($pat_k === $k_gs))
-    debug && push!(out.args, Expr(:block, :(printstyled(
-        string("[kind]: ", $k_gs, "\n"); color=:yellow)), true))
+    if Meta.isexpr(p, :(::))
+        pat_k = Kind(p.args[2].args[3])
+        if !debug
+            Expr(:&&, :($pat_k === $k_gs), :($nc_gs === 0))
+        else
+            Expr(:&&, :($pat_k === $k_gs),
+                 Expr(:block, :(printstyled(
+                     string("[kind]: ", $k_gs, "\n"); color=:yellow)), true),
+                 :($nc_gs === 0),
+                 Expr(:block, :(printstyled(
+                     string("[numc]: ", $nc_gs, "\n"); color=:green)), true))
+        end
+    else
+        pat_k = Kind(p.args[1].args[3])
+        out = Expr(:&&, :($pat_k === $k_gs))
+        debug && push!(out.args, Expr(:block, :(printstyled(
+            string("[kind]: ", $k_gs, "\n"); color=:yellow)), true))
 
-    p_args = p.args[2:end]
-    dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
-    dots_start = something(dots_i, length(p_args) + 1)
-    n_after_dots = length(p_args) - dots_start # -1 if no dots
+        p_args = p.args[2:end]
+        dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
+        dots_start = something(dots_i, length(p_args) + 1)
+        n_after_dots = length(p_args) - dots_start # -1 if no dots
 
-    push!(out.args, isnothing(dots_i) ?
-        :($nc_gs === $(length(p_args))) :
-        :($nc_gs >= $(length(p_args) - 1)))
-    debug && push!(out.args, Expr(:block, :(printstyled(
-        string("[numc]: ", $nc_gs, "\n"); color=:yellow)), true))
+        push!(out.args, isnothing(dots_i) ?
+            :($nc_gs === $(length(p_args))) :
+            :($nc_gs >= $(length(p_args) - 1)))
+        debug && push!(out.args, Expr(:block, :(printstyled(
+            string("[numc]: ", $nc_gs, "\n"); color=:yellow)), true))
 
-    for i in 1:dots_start-1
-        p_args[i] isa Symbol && continue
-        push!(out.args,
-              _stm_matches_wrapper(p_args[i], :($st_gs[$i]), debug))
+        for i in 1:dots_start-1
+            p_args[i] isa Symbol && continue
+            push!(out.args,
+                  _stm_matches_wrapper(p_args[i], :($st_gs[$i]), debug))
+        end
+        for i in n_after_dots-1:-1:0
+            p_args[end-i] isa Symbol && continue
+            push!(out.args,
+                  _stm_matches_wrapper(p_args[end-i], :($st_gs[end-$i]), debug))
+        end
+        debug && push!(out.args, Expr(:block, :(printstyled(
+            string("matched: ", $st_gs, " with ", $(QuoteNode(p)), "\n");
+            color=:green)), true))
+        return out
     end
-    for i in n_after_dots-1:-1:0
-        p_args[end-i] isa Symbol && continue
-        push!(out.args,
-              _stm_matches_wrapper(p_args[end-i], :($st_gs[end-$i]), debug))
-    end
-    debug && push!(out.args, Expr(:block, :(printstyled(
-        string("matched: ", $st_gs, " with ", $(QuoteNode(p)), "\n");
-        color=:green)), true))
-    return out
 end
 
 # Assuming _stm_matches, construct an Expr that assigns syms to SyntaxTrees.
@@ -925,6 +946,8 @@ function _stm_assigns(p, st_rhs_expr; assigns=Expr(:block))
     if p isa Symbol
         p != :_ && push!(assigns.args, Expr(:(=), p, st_rhs_expr))
         return assigns
+    elseif Meta.isexpr(p, :(::))
+        return _stm_assigns(p.args[1], st_rhs_expr; assigns)
     elseif p isa Expr
         p_args = p.args[2:end]
         dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
@@ -947,54 +970,64 @@ end
 
 # Check for correct pattern syntax.  Not needed outside of development.
 function _stm_check_usage(pats::Expr)
-    function _stm_check_pattern(p; syms=Set{Symbol}())
+    # This exact `K"kind"` syntax is not necessary since the kind can't be
+    # provided by a variable, but requiring [K"kinds"] is consistent with `@ast`
+    # and allows us to implement list matching later.
+    function _stm_check_k_str(p)
+        @assert(Meta.isexpr(p, :macrocall, 3) &&
+            p.args[1] === Symbol("@K_str") &&
+            p.args[3] isa String, "expected `K\"kind\"`, got $p")
+    end
+    function _stm_check_pattern_sym(p::Symbol, syms=Set{Symbol}())
+        # No support for duplicate syms for now (user is either looking for
+        # some form of equality we don't implement, or they made a mistake)
+        dup = p in syms && p !== :_
+        push!(syms, p)
+        @assert(!dup, "invalid duplicate identifier $p")
+    end
+    function _stm_check_pattern(p, syms=Set{Symbol}())
         if Meta.isexpr(p, :(...), 1)
-            p = p.args[1]
-            @assert(p isa Symbol, "Expected symbol before `...` in $p")
-        end
-        if p isa Symbol
-            # No support for duplicate syms for now (user is either looking for
-            # some form of equality we don't implement, or they made a mistake)
-            dup = p in syms && p !== :_
-            push!(syms, p)
-            @assert(!dup, "invalid duplicate non-underscore identifier $p")
-            return nothing
-        elseif Meta.isexpr(p, :vect)
-            @assert(length(p.args) === 1,
-                    "use spaces, not commas, in @stm []-patterns")
-        elseif Meta.isexpr(p, :hcat)
-            @assert(length(p.args) >= 2)
-        elseif Meta.isexpr(p, :vcat)
-            p = _stm_vcat_to_hcat(p)
-            @assert(length(p.args) >= 2)
+            @assert(p.args[1] isa Symbol, "expected symbol before `...` in $p")
+            _stm_check_pattern_sym(p.args[1], syms)
+        elseif p isa Symbol
+            _stm_check_pattern_sym(p, syms)
+        elseif Meta.isexpr(p, :(::))
+            @assert(length(p.args) === 2, "expected two args to `::` in $p")
+            @assert(p.args[1] isa Symbol, "expected symbol before `::` in $p")
+            _stm_check_pattern_sym(p.args[1], syms)
+            _stm_check_k_str(p.args[2])
+        elseif Meta.isexpr(p, (:vect, :hcat, :vcat))
+            # may have subpatterns
+            if Meta.isexpr(p, :vect)
+                @assert(length(p.args) === 1,
+                        "use spaces, not commas, in @stm []-patterns")
+            elseif Meta.isexpr(p, :hcat)
+                @assert(length(p.args) >= 2)
+            elseif Meta.isexpr(p, :vcat)
+                p = _stm_vcat_to_hcat(p)
+                @assert(length(p.args) >= 2)
+            end
+            @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
+                    "multiple `...` in a pattern is ambiguous")
+            _stm_check_k_str(p.args[1])
+            for subp in p.args[2:end]
+                _stm_check_pattern(subp, syms)
+            end
         else
             @assert(false, "malformed pattern $p")
         end
-        @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
-                "Multiple `...` in a pattern is ambiguous")
-
-        # This exact `K"kind"` syntax is not necessary since the kind can't be
-        # provided by a variable, but requiring [K"kinds"] is consistent with
-        # `@ast` and allows us to implement list matching later.
-        @assert(Meta.isexpr(p.args[1], :macrocall, 3) &&
-            p.args[1].args[1] === Symbol("@K_str") &&
-            p.args[1].args[3] isa String, "first pattern elt must be K\"\"")
-
-        for subp in p.args[2:end]
-            _stm_check_pattern(subp; syms)
-        end
     end
 
-    @assert Meta.isexpr(pats, :block) "Usage: @stm st begin; ...; end"
+    @assert Meta.isexpr(pats, :block) "usage: @stm st begin; ...; end"
     for pcr in filter(e->!isa(e, LineNumberNode), pats.args)
-        @assert(Meta.isexpr(pcr, :(->), 2), "Expected pat -> res, got malformed case: $pcr")
+        @assert(Meta.isexpr(pcr, :(->), 2), "expected pat -> res, got malformed case: $pcr")
         if Meta.isexpr(pcr.args[1], :tuple)
             @assert(length(pcr.args[1].args) === 2,
-                    "Expected `pat` or `(pat, when=cond)`, got $(pcr.args[1])")
+                    "expected `pat` or `(pat, when=cond)`, got $(pcr.args[1])")
             p = pcr.args[1].args[1]
             c = pcr.args[1].args[2]
             @assert(Meta.isexpr(c, :(=), 2) && c.args[1] === :when,
-                    "Expected `(when=cond)` in tuple pattern, got $(c)")
+                    "expected `(when=cond)` in tuple pattern, got $(c)")
         else
             p = pcr.args[1]
         end

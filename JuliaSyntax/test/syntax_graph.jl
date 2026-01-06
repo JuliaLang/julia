@@ -141,7 +141,7 @@ end
     @testset "errors" begin
         # no match
         @test_throws ErrorException @stm st begin
-            [K"Identifier"] -> false
+            _::K"Identifier" -> false
         end
 
         # assuming we run this checker by default
@@ -168,6 +168,18 @@ end
                 :(@stm st begin
                       [K"None" a... b...] -> false
                   end)
+                :(@stm st begin
+                      ([K"None"]...) -> false
+                  end)
+                :(@stm st begin
+                      [K"None" [K"None"]...] -> false
+                  end)
+                :(@stm st begin
+                      [K"None" x::K"Identifier"...] -> false
+                  end)
+                :(@stm st begin
+                      [[K"None"]::K"Identifier"] -> false
+                  end)
             ]
             for e in bad
                 Base.remove_linenums!(e)
@@ -180,24 +192,30 @@ end
 
     @testset "nested patterns" begin
         @test 1 === @stm st begin
-            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
-            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" _ k2]]] -> 2
-            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" _ k1] [K"call" _ _]] -> 3
-            [K"call" [K"Identifier"] [K"Identifier"] _ _ ] -> 4
+            [K"call" _::K"Identifier" _::K"Identifier" [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" _::K"Identifier" k2]]] -> 1
+            [K"call" _::K"Identifier" _::K"Identifier" [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" _ k2]]] -> 2
+            [K"call" _::K"Identifier" _::K"Identifier" [K"kw" _ k1] [K"call" _ _]] -> 3
+            [K"call" _::K"Identifier" _::K"Identifier" _ _ ] -> 4
             [K"call" _ _ _ _] -> 5
         end
         @test 1 === @stm st begin
-            [K"call" _ _ [K"None" [K"Identifier"] k1] [K"None" [K"Identifier"] [K"None" [K"None"] k2]]] -> 5
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"None" [K"Identifier"] [K"None" [K"None"] k2]]] -> 4
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"None" [K"None"] k2]]] -> 3
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"None"] k2]]] -> 2
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+            [K"call" _ _ [K"None" _::K"Identifier" k1] [K"None" _::K"Identifier" [K"None" [K"None"] k2]]] -> 5
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"None" _::K"Identifier" [K"None" [K"None"] k2]]] -> 4
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"None" [K"None"] k2]]] -> 3
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" [K"None"] k2]]] -> 2
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" _::K"Identifier" k2]]] -> 1
         end
         @test 1 === @stm st begin
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2] bad]] -> 4
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2 bad]]] -> 3
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier" bad] k2]]] -> 2
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" _::K"Identifier" k2] bad]] -> 4
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" _::K"Identifier" k2 bad]]] -> 3
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" [K"Identifier" bad] k2]]] -> 2
+            [K"call" _ _ [K"kw" _::K"Identifier" k1] [K"call" _::K"Identifier" [K"kw" _::K"Identifier" k2]]] -> 1
+        end
+        @test @stm st begin
+            [K"call" x::K"Identifier" _ _ _] -> x === st[1]
+        end
+        @test @stm st begin
+            [K"call" _ _ [K"kw" x::K"Identifier" _] _] -> x === st[3][1]
         end
     end
 
@@ -221,12 +239,12 @@ end
         end
         @test @stm st begin
             [K"call"
-             [K"Identifier"] [K"Identifier"]
-             [K"kw" [K"Identifier"] k1]
+             _::K"Identifier" _::K"Identifier"
+             [K"kw" _::K"Identifier" k1]
              [K"call"
-              [K"Identifier"]
+              _::K"Identifier"
               [K"kw"
-               [K"Identifier"]
+               _::K"Identifier"
                k2]]] -> true
         end
     end
