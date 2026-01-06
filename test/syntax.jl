@@ -4677,7 +4677,8 @@ end
 # Test that `if cond; x = a; else x = b; end` doesn't introduce a Core.Box
 # when x is captured, due to optimization in lambda-optimize-vars!
 @testset "if-else assignment without boxing" begin
-    function if_else_nobox(cond, a, b)
+    # Basic case: assign in both branches, capture after
+    function ifa_basic(cond, a, b)
         if cond
             x = a
         else
@@ -4685,13 +4686,13 @@ end
         end
         return () -> x
     end
-    closure_type = typeof(if_else_nobox(true, 1, 2))
+    closure_type = typeof(ifa_basic(true, 1, 2))
     @test fieldtype(closure_type, 1) !== Core.Box
-    @test if_else_nobox(true, 1, 2)() == 1
-    @test if_else_nobox(false, 1, 2)() == 2
+    @test ifa_basic(true, 1, 2)() == 1
+    @test ifa_basic(false, 1, 2)() == 2
 
-    # Also works with multiple variables assigned in both branches
-    function if_else_nobox_multi(cond, a, b, c, d)
+    # Multiple variables assigned in both branches
+    function ifa_multi_vars(cond, a, b, c, d)
         if cond
             @noinline identity(1)
             x = a
@@ -4703,14 +4704,14 @@ end
         end
         return () -> (x, y)
     end
-    closure_type2 = typeof(if_else_nobox_multi(true, 1, 2, 3, 4))
+    closure_type2 = typeof(ifa_multi_vars(true, 1, 2, 3, 4))
     @test fieldtype(closure_type2, 1) !== Core.Box
     @test fieldtype(closure_type2, 2) !== Core.Box
-    @test if_else_nobox_multi(true, 1, 2, 3, 4)() == (1, 2)
-    @test if_else_nobox_multi(false, 1, 2, 3, 4)() == (3, 4)
+    @test ifa_multi_vars(true, 1, 2, 3, 4)() == (1, 2)
+    @test ifa_multi_vars(false, 1, 2, 3, 4)() == (3, 4)
 
-    # Also works with elseif chains
-    function if_elseif_nobox(cond1, cond2, a, b, c)
+    # Elseif chain: assign in all branches
+    function ifa_elseif(cond1, cond2, a, b, c)
         if cond1
             x = a
         elseif cond2
@@ -4720,24 +4721,24 @@ end
         end
         return () -> x
     end
-    closure_type3 = typeof(if_elseif_nobox(true, false, 1, 2, 3))
+    closure_type3 = typeof(ifa_elseif(true, false, 1, 2, 3))
     @test fieldtype(closure_type3, 1) !== Core.Box
-    @test if_elseif_nobox(true, false, 1, 2, 3)() == 1
-    @test if_elseif_nobox(false, true, 1, 2, 3)() == 2
-    @test if_elseif_nobox(false, false, 1, 2, 3)() == 3
+    @test ifa_elseif(true, false, 1, 2, 3)() == 1
+    @test ifa_elseif(false, true, 1, 2, 3)() == 2
+    @test ifa_elseif(false, false, 1, 2, 3)() == 3
 
-    # Variable assigned in only one branch must still be boxed
-    function if_else_onebranch(cond, a)
+    # BOXED: Missing else branch (not all paths assign)
+    function box_missing_else(cond, a)
         x = 0
         if cond
             x = a
         end
         return () -> x
     end
-    @test fieldtype(typeof(if_else_onebranch(true, 1)), 1) === Core.Box
+    @test fieldtype(typeof(box_missing_else(true, 1)), 1) === Core.Box
 
-    # Variable used before assignment in one branch must still be boxed
-    function if_else_usefirst(cond, a, b)
+    # BOXED: Use before assignment in one branch
+    function box_use_before_assign(cond, a, b)
         if cond
             x = a
         else
@@ -4746,10 +4747,10 @@ end
         end
         return () -> x
     end
-    @test fieldtype(typeof(if_else_usefirst(true, 1, 2)), 1) === Core.Box
+    @test fieldtype(typeof(box_use_before_assign(true, 1, 2)), 1) === Core.Box
 
-    # Closure captured before assignment must still be boxed
-    function if_else_capture_before_assign(cond, a, b)
+    # BOXED: Capture before any assignment
+    function box_capture_before_any_assign(cond, a, b)
         f = () -> x
         if cond
             x = a
@@ -4758,10 +4759,10 @@ end
         end
         return f
     end
-    @test fieldtype(typeof(if_else_capture_before_assign(true, 1, 2)), 1) === Core.Box
+    @test fieldtype(typeof(box_capture_before_any_assign(true, 1, 2)), 1) === Core.Box
 
-    # @goto can skip assignments, so must still be boxed
-    function if_else_with_goto(cond, a, b)
+    # BOXED: @goto can skip assignments
+    function box_goto_skips_assign(cond, a, b)
         if cond
             @goto skip
             x = a
@@ -4772,10 +4773,10 @@ end
         x = 0
         return () -> x
     end
-    @test fieldtype(typeof(if_else_with_goto(true, 1, 2)), 1) === Core.Box
+    @test fieldtype(typeof(box_goto_skips_assign(true, 1, 2)), 1) === Core.Box
 
-    # Nested if-else: should still avoid boxing when assigned in all paths
-    function nested_if_else_nobox(c1, c2, a, b, c, d)
+    # Nested if-else: all leaf paths assign
+    function ifa_nested(c1, c2, a, b, c, d)
         if c1
             if c2
                 x = a
@@ -4791,15 +4792,15 @@ end
         end
         return () -> x
     end
-    closure_nested = typeof(nested_if_else_nobox(true, true, 1, 2, 3, 4))
+    closure_nested = typeof(ifa_nested(true, true, 1, 2, 3, 4))
     @test fieldtype(closure_nested, 1) !== Core.Box
-    @test nested_if_else_nobox(true, true, 1, 2, 3, 4)() == 1
-    @test nested_if_else_nobox(true, false, 1, 2, 3, 4)() == 2
-    @test nested_if_else_nobox(false, true, 1, 2, 3, 4)() == 3
-    @test nested_if_else_nobox(false, false, 1, 2, 3, 4)() == 4
+    @test ifa_nested(true, true, 1, 2, 3, 4)() == 1
+    @test ifa_nested(true, false, 1, 2, 3, 4)() == 2
+    @test ifa_nested(false, true, 1, 2, 3, 4)() == 3
+    @test ifa_nested(false, false, 1, 2, 3, 4)() == 4
 
-    # Loop with assignment must still be boxed (multiple assignments)
-    function if_else_with_loop(cond, n, a, b)
+    # BOXED: For loop inside branch causes multiple assignments
+    function box_for_loop_in_branch(cond, n, a, b)
         if cond
             x = a
             for i in 1:n
@@ -4810,10 +4811,10 @@ end
         end
         return () -> x
     end
-    @test fieldtype(typeof(if_else_with_loop(true, 3, 1, 2)), 1) === Core.Box
+    @test fieldtype(typeof(box_for_loop_in_branch(true, 3, 1, 2)), 1) === Core.Box
 
-    # While loop with assignment must still be boxed
-    function if_else_with_while(cond, a, b)
+    # BOXED: While loop inside branch causes multiple assignments
+    function box_while_loop_in_branch(cond, a, b)
         if cond
             x = a
             i = 0
@@ -4826,10 +4827,10 @@ end
         end
         return () -> x
     end
-    @test fieldtype(typeof(if_else_with_while(true, 1, 2)), 1) === Core.Box
+    @test fieldtype(typeof(box_while_loop_in_branch(true, 1, 2)), 1) === Core.Box
 
-    # Deeply nested if-else (3 levels) should still optimize
-    function deeply_nested_if_else(c1, c2, c3, vals...)
+    # Deeply nested if-else (3 levels): all 8 leaf paths assign
+    function ifa_deeply_nested(c1, c2, c3, vals...)
         if c1
             if c2
                 if c3
@@ -4861,13 +4862,13 @@ end
         end
         return () -> x
     end
-    closure_deep = typeof(deeply_nested_if_else(true, true, true, 1, 2, 3, 4, 5, 6, 7, 8))
+    closure_deep = typeof(ifa_deeply_nested(true, true, true, 1, 2, 3, 4, 5, 6, 7, 8))
     @test fieldtype(closure_deep, 1) !== Core.Box
-    @test deeply_nested_if_else(true, true, true, 1, 2, 3, 4, 5, 6, 7, 8)() == 1
-    @test deeply_nested_if_else(false, false, false, 1, 2, 3, 4, 5, 6, 7, 8)() == 8
+    @test ifa_deeply_nested(true, true, true, 1, 2, 3, 4, 5, 6, 7, 8)() == 1
+    @test ifa_deeply_nested(false, false, false, 1, 2, 3, 4, 5, 6, 7, 8)() == 8
 
-    # If-else inside a loop should still box (loop causes multiple assignments)
-    function if_in_loop(n, a, b)
+    # BOXED: If-else inside a loop (loop re-executes assignments)
+    function box_ifelse_inside_loop(n, a, b)
         x = 0  # Initialize x in outer scope
         for i in 1:n
             if i > n ÷ 2
@@ -4878,11 +4879,10 @@ end
         end
         return () -> x
     end
-    @test fieldtype(typeof(if_in_loop(3, 1, 2)), 1) === Core.Box
+    @test fieldtype(typeof(box_ifelse_inside_loop(3, 1, 2)), 1) === Core.Box
 
-    # Multiple separate if-else blocks: variable assigned in two different if-elses
-    # should remain boxed
-    function multi_if_else(cond)
+    # BOXED: Assignment after capture (second if-else after closure)
+    function box_assign_after_capture(cond)
         if cond
             x = 1
         else
@@ -4896,10 +4896,10 @@ end
         end
         return g
     end
-    @test fieldtype(typeof(multi_if_else(true)), 1) === Core.Box
+    @test fieldtype(typeof(box_assign_after_capture(true)), 1) === Core.Box
 
-    # Closure captured BEFORE if-else must see updated value (must be boxed)
-    function capture_before_if_else()
+    # BOXED: Assignment before if-else, capture before if-else
+    function box_assign_and_capture_before_ifelse()
         x = 1
         g = () -> x
         if rand() > 0.5
@@ -4909,10 +4909,10 @@ end
         end
         return g
     end
-    @test fieldtype(typeof(capture_before_if_else()), 1) === Core.Box
+    @test fieldtype(typeof(box_assign_and_capture_before_ifelse()), 1) === Core.Box
 
-    # Closure captured INSIDE branch with assignment after capture (must be boxed)
-    function capture_inside_branch_then_assign()
+    # BOXED: Capture inside branch, then assign again in same branch
+    function box_capture_inside_branch_then_assign()
         x = 0
         if true
             x = 1
@@ -4923,5 +4923,5 @@ end
         end
         return g
     end
-    @test fieldtype(typeof(capture_inside_branch_then_assign()), 1) === Core.Box
+    @test fieldtype(typeof(box_capture_inside_branch_then_assign()), 1) === Core.Box
 end
