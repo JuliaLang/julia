@@ -263,7 +263,8 @@ function peek_initial_reserved_words(ps::ParseState)
         k2 = peek(ps, 2, skip_newlines=false)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
-               (k == K"abstract"  && k2 == K"type")
+               (k == K"abstract"  && k2 == K"type")   ||
+               (k == K"recursive" && k2 == K"type")
     else
         return false
     end
@@ -271,7 +272,7 @@ end
 
 function is_block_form(k)
     kind(k) in KSet"block quote if for while let function macro
-                    abstract primitive struct try module"
+                    abstract primitive struct recursive_type try module"
 end
 
 function is_syntactic_unary_op(k)
@@ -2044,6 +2045,34 @@ function parse_resword(ps::ParseState)
         bump_semicolon_trivia(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"primitive")
+    elseif word == K"recursive"
+        # Mutually recursive type definitions
+        # recursive type A ... end           ==> (recursive_type A (block ...))
+        # recursive type (A, B) ... end      ==> (recursive_type (tuple A B) (block ...))
+        # recursive type struct A ... end end ==> (recursive_type (tuple) (block ...))
+        bump(ps, TRIVIA_FLAG)
+        @check peek(ps) == K"type"
+        bump(ps, TRIVIA_FLAG)
+        name_mark = position(ps)
+        # Parse name(s) - either single identifier, tuple of identifiers, or nothing (infer from body)
+        # Use skip_newlines=true to peek past any newlines after "type"
+        next_tok = peek(ps; skip_newlines=true)
+        if next_tok == K"("
+            # Tuple of names: (A, B, C) - use standard paren parsing which handles newlines
+            bump_trivia(ps)  # consume any newlines before (
+            parse_paren(ps)
+        elseif next_tok == K"struct" || next_tok == K"mutable" || next_tok == K"abstract"
+            # No explicit names - emit empty tuple, types inferred from body
+            # Don't bump the newlines - let parse_block handle them
+            emit(ps, name_mark, K"tuple")
+        else
+            # Single name
+            parse_atom(ps)
+        end
+        # Parse the body block containing struct/abstract definitions
+        parse_block(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"recursive_type")
     elseif word == K"try"
         parse_try(ps)
     elseif word == K"return"

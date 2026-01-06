@@ -1385,6 +1385,296 @@
      (receive (name params super) (analyze-type-sig sig)
               (struct-def-expr name params super fields mut)))))
 
+;; Expand recursive type block for mutually recursive type definitions
+;; Syntax: recursive type Name ... end
+;;     or: recursive type (Name1, Name2, ...) ... end
+
+;; Helper: substitute recursive type names with incomplete type variables in a type expression
+;; name-to-var is an alist mapping symbols to SSA values
+(define (substitute-recursive-names expr name-to-var)
+  (cond
+   ((symbol? expr)
+    (let ((entry (assq expr name-to-var)))
+      (if entry (cdr entry) expr)))
+   ((not (pair? expr)) expr)
+   ((quoted? expr) expr)
+   ((eq? (car expr) 'curly)
+    ;; Type application: T{X, Y}
+    (let* ((head (cadr expr))
+           (args (cddr expr))
+           (head-sub (substitute-recursive-names head name-to-var))
+           (args-sub (map (lambda (a) (substitute-recursive-names a name-to-var)) args)))
+      (if (or (not (eq? head head-sub)) (not (equal? args args-sub)))
+          ;; Use union_or_incomplete for Union, apply_type_or_incomplete otherwise
+          (if (eq? head 'Union)
+              `(call (core union_or_incomplete) ,@args-sub)
+              `(call (core apply_type_or_incomplete) ,head-sub ,@args-sub))
+          `(curly ,head ,@args))))
+   ((eq? (car expr) 'where)
+    `(where ,(substitute-recursive-names (cadr expr) name-to-var) ,@(cddr expr)))
+   (else
+    (map (lambda (x) (substitute-recursive-names x name-to-var)) expr))))
+
+;; Helper: check if expr is a const assignment (const (= name value))
+(define (const-assignment? x)
+  (and (pair? x) (eq? (car x) 'const)
+       (pair? (cdr x)) (pair? (cadr x)) (eq? (car (cadr x)) '=)))
+
+;; Helper: check if expr contains a reference to a given name
+(define (expr-contains-name? expr name)
+  (cond
+   ((eq? expr name) #t)
+   ((not (pair? expr)) #f)
+   ((quoted? expr) #f)
+   (else (any (lambda (x) (expr-contains-name? x name)) expr))))
+
+(define (expand-recursive-type e)
+  (let* ((names-expr (cadr e))
+         (body (caddr e))
+         ;; Extract the list of declared names
+         (names (cond ((symbol? names-expr) (list names-expr))
+                      ((and (pair? names-expr) (eq? (car names-expr) 'tuple))
+                       (cdr names-expr))
+                      (else (error "invalid recursive type declaration"))))
+         (body-stmts (if (and (pair? body) (eq? (car body) 'block))
+                        (cdr body)
+                        (list body)))
+         ;; Find all struct/abstract definitions in the body
+         (struct-defs (filter (lambda (x)
+                               (and (pair? x)
+                                    (or (eq? (car x) 'struct)
+                                        (eq? (car x) 'abstract))))
+                             body-stmts))
+         ;; Find all const assignments in the body (const (= name value))
+         (const-defs (filter const-assignment? body-stmts))
+         ;; Separate const defs: those defining anchor names vs others
+         (const-anchor-defs (filter (lambda (def)
+                                      (let ((assign (cadr def)))
+                                        (memq (cadr assign) names)))
+                                    const-defs))
+         (const-other-defs (filter (lambda (def)
+                                     (let ((assign (cadr def)))
+                                       (not (memq (cadr assign) names))))
+                                   const-defs))
+         ;; Extract names from struct definitions (use analyze-type-sig for both)
+         (struct-names (map (lambda (def)
+                             (let ((sig (if (eq? (car def) 'abstract)
+                                            (cadr def)
+                                            (caddr def))))
+                               (receive (n p s) (analyze-type-sig sig) n)))
+                           struct-defs))
+         ;; Names from const anchor definitions
+         (const-anchor-names (map (lambda (def)
+                                    (let ((assign (cadr def)))
+                                      (cadr assign)))
+                                  const-anchor-defs))
+         ;; Check for self-referential const anchors (e.g., const Foo = Union{Int, Foo})
+         ;; These create circular definitions that cannot be resolved
+         (_ (for-each (lambda (def)
+                        (let* ((assign (cadr def))
+                               (name (cadr assign))
+                               (value (caddr assign)))
+                          (if (expr-contains-name? value name)
+                              (error (string "self-referential type alias: " name
+                                            " cannot reference itself in its definition")))))
+                      const-anchor-defs))
+         ;; All struct/abstract names that need incomplete types and resolution
+         (all-names struct-names)
+         ;; Generate temp variables for incomplete types (before resolution)
+         (incomplete-vars (map (lambda (n) (make-ssavalue)) all-names))
+         ;; Generate temp variables for resolved types (after resolution)
+         (resolved-vars (map (lambda (n) (make-ssavalue)) all-names))
+         ;; Generate temp variables for const anchor incomplete values (IncompleteUnion etc)
+         (const-anchor-incomplete-vars (map (lambda (n) (make-ssavalue)) const-anchor-names))
+         ;; Generate temp variables for const anchor final values
+         (const-anchor-vars (map (lambda (n) (make-ssavalue)) const-anchor-names))
+         ;; Create name to incomplete variable mapping (struct/abstract + const anchor incompletes)
+         (name-to-var (append (map cons all-names incomplete-vars)
+                              (map cons const-anchor-names const-anchor-incomplete-vars)))
+         ;; Create name to resolved variable mapping (includes const anchor vars)
+         (name-to-resolved (append (map cons all-names resolved-vars)
+                                   (map cons const-anchor-names const-anchor-vars))))
+    ;; Generate the lowered code
+    (expand-forms
+     `(block
+       ;; Create placeholder IncompleteStruct for each struct/abstract name
+       ,@(map (lambda (name var)
+               `(= ,var (call (core IncompleteStruct) (inert ,name))))
+             all-names incomplete-vars)
+       ;; Evaluate const anchor RHS to create incomplete values (e.g., IncompleteUnion)
+       ;; These are evaluated with struct incompletes substituted, so Union{Leaf,Branch}
+       ;; becomes an IncompleteUnion containing the incomplete Leaf and Branch
+       ,@(map (lambda (def var)
+               (let* ((assign (cadr def))
+                      (value (caddr assign))
+                      (value-sub (substitute-recursive-names value name-to-var)))
+                 `(= ,var ,value-sub)))
+             const-anchor-defs const-anchor-incomplete-vars)
+       ;; Process each struct/abstract definition and fill in fields
+       ,@(apply append
+                (map (lambda (def)
+                       (if (eq? (car def) 'abstract)
+                           ;; Abstract type
+                           (let ((sig (cadr def)))
+                             (receive (name params-raw super) (analyze-type-sig sig)
+                               (receive (params bounds) (sparam-name-bounds params-raw)
+                                 (let* ((var (cdr (assq name name-to-var)))
+                                        (super-sub (substitute-recursive-names super name-to-var))
+                                        (setfield-stmts
+                                         `((call (core setfield!) ,var (inert super) ,super-sub)
+                                           (call (core setfield!) ,var (inert parameters) (call (core svec) ,@params))
+                                           (call (core setfield!) ,var (inert abstract) (true)))))
+                                   (if (null? params)
+                                       setfield-stmts
+                                       ;; Wrap in scope to bind TypeVars
+                                       `((scope-block
+                                          (block
+                                           ,@(map (lambda (v) `(local ,v)) params)
+                                           ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+                                           ,@setfield-stmts))))))))
+                           ;; Struct type
+                           ;; Note: Parser produces (true)/(false) as lists, not #t/#f
+                           (let* ((mut-val (cadr def))
+                                  (mut (equal? mut-val '(true)))
+                                  (sig (caddr def))
+                                  (fields-block (cadddr def)))
+                             (receive (name params-raw super) (analyze-type-sig sig)
+                               (receive (params bounds) (sparam-name-bounds params-raw)
+                                 (let* ((fblock-stmts (if (and (pair? fields-block) (eq? (car fields-block) 'block))
+                                                         (cdr fields-block)
+                                                         (list fields-block)))
+                                        ;; Use filter instead of separate to avoid multiple values
+                                        (flattened-stmts (flatten-blocks fblock-stmts))
+                                        (fields0 (filter eventually-decl? flattened-stmts))
+                                        ;; Extract inner constructor definitions for min-initialized
+                                        (defs0 (filter (lambda (x) (not (eventually-decl? x))) flattened-stmts))
+                                        (inner-defs (filter (lambda (x) (not (or (effect-free? x) (and (pair? x) (eq? (car x) 'string)))))
+                                                            defs0))
+                                        ;; Extract field names and types with attributes
+                                        (attrs '())
+                                        (fields (let ((n 0))
+                                                  (map (lambda (x)
+                                                         (set! n (+ n 1))
+                                                         (let loop ((x x))
+                                                           (if (and (pair? x) (not (decl? x)))
+                                                               (begin
+                                                                 (set! attrs (cons (quotify (car x)) (cons n attrs)))
+                                                                 (loop (cadr x)))
+                                                               x)))
+                                                       fields0)))
+                                        (attrs (reverse attrs))
+                                        (field-names (map decl-var fields))
+                                        (field-types-raw (map decl-type fields))
+                                        (field-types (map (lambda (ft) (substitute-recursive-names ft name-to-var)) field-types-raw))
+                                        (super-sub (substitute-recursive-names super name-to-var))
+                                        (var (cdr (assq name name-to-var)))
+                                        ;; Compute min-initialized from inner constructors
+                                        (min-init (min (ctors-min-initialized inner-defs) (length fields)))
+                                        (setfield-stmts
+                                         `((call (core setfield!) ,var (inert super) ,super-sub)
+                                           (call (core setfield!) ,var (inert parameters) (call (core svec) ,@params))
+                                           (call (core setfield!) ,var (inert fieldnames)
+                                                 (call (core svec) ,@(map quotify field-names)))
+                                           (call (core setfield!) ,var (inert fieldtypes)
+                                                 (call (core svec) ,@field-types))
+                                           (call (core setfield!) ,var (inert fieldattrs)
+                                                 (call (core svec) ,@attrs))
+                                           (call (core setfield!) ,var (inert mutabl) ,(if mut '(true) '(false)))
+                                           (call (core setfield!) ,var (inert min_initialized) ,min-init))))
+                                   (if (null? params)
+                                       setfield-stmts
+                                       ;; Wrap in scope to bind TypeVars
+                                       `((scope-block
+                                          (block
+                                           ,@(map (lambda (v) `(local ,v)) params)
+                                           ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+                                           ,@setfield-stmts))))))))))
+                     struct-defs))
+       ;; Resolve all incompletes
+       (= (tuple ,@resolved-vars)
+          (call (core resolve_incompletes) (thismodule) ,@incomplete-vars))
+       ;; Bind to global constants
+       ,@(map (lambda (name var)
+               `(const (globalref (thismodule) ,name) ,var))
+             all-names resolved-vars)
+       ;; Process deferred const assignments for anchor names (assign to temp var, then global)
+       ,@(apply append
+                (map (lambda (def var)
+                       (let* ((assign (cadr def))  ; (= name value)
+                              (name (cadr assign))
+                              (value (caddr assign))
+                              (value-sub (substitute-recursive-names value name-to-resolved)))
+                         `((= ,var ,value-sub)
+                           (const (globalref (thismodule) ,name) ,var))))
+                     const-anchor-defs const-anchor-vars))
+       ;; Process other const assignments (not anchor names)
+       ,@(map (lambda (def)
+               (let* ((assign (cadr def))  ; (= name value)
+                      (name (cadr assign))
+                      (value (caddr assign))
+                      (value-sub (substitute-recursive-names value name-to-resolved)))
+                 `(const (globalref (thismodule) ,name) ,value-sub)))
+             const-other-defs)
+       (latestworld)
+       ;; Generate default constructors for each struct
+       ,@(let ((name-to-resolved (map cons all-names resolved-vars)))
+           (apply append
+                (map (lambda (def)
+                       (if (eq? (car def) 'struct)
+                           (let* ((sig (caddr def))
+                                  (fields-block (cadddr def)))
+                             (receive (name params super) (analyze-type-sig sig)
+                               (let* ((fblock-stmts (if (and (pair? fields-block) (eq? (car fields-block) 'block))
+                                                        (cdr fields-block)
+                                                        (list fields-block)))
+                                      (loc (if (and (pair? fblock-stmts) (linenum? (car fblock-stmts)))
+                                               (car fblock-stmts)
+                                               '(line 0 ||)))
+                                      ;; Use filter instead of separate to avoid multiple values
+                                      (flattened-stmts (flatten-blocks fblock-stmts))
+                                      (fields0 (filter eventually-decl? flattened-stmts))
+                                      (defs0 (filter (lambda (x) (not (eventually-decl? x))) flattened-stmts))
+                                      (inner-ctors (filter (lambda (x) (not (or (effect-free? x) (and (pair? x) (eq? (car x) 'string)))))
+                                                          defs0))
+                                      (var (cdr (assq name name-to-resolved))))
+                                 (if (null? inner-ctors)
+                                     ;; Use default constructors
+                                     `((call (core _defaultctors) ,var (inert ,loc)))
+                                     ;; Has inner constructors - rewrite them
+                                     (let* (
+                                            (fields (map (lambda (x)
+                                                          (let loop ((x x))
+                                                            (if (and (pair? x) (not (decl? x)))
+                                                                (loop (cadr x))
+                                                                x)))
+                                                        fields0))
+                                            (field-names (map decl-var fields))
+                                            (field-types (map decl-type fields)))
+                                       `((scope-block
+                                          (block
+                                           (hardscope)
+                                           (global ,name)
+                                           ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types))
+                                                 inner-ctors)))))))))
+                           '()))
+                     struct-defs)))
+       (latestworld)
+       ;; Return the resolved types - prefer declared names if they match, otherwise return all structs
+       ,(let ((anchor-vars (filter (lambda (x) x)
+                                   (map (lambda (n)
+                                          (let ((found (assq n name-to-resolved)))
+                                            (and found (cdr found))))
+                                        names))))
+          (if (null? anchor-vars)
+              ;; Declared names don't match defined types - return all struct types
+              (if (= (length all-names) 1)
+                  (car resolved-vars)
+                  `(tuple ,@resolved-vars))
+              ;; Return the matched declared names
+              (if (= (length anchor-vars) 1)
+                  (car anchor-vars)
+                  `(tuple ,@anchor-vars))))))))
+
 ;; the following are for expanding `try` blocks
 
 (define (find-symbolic-label-defs e tbl)
@@ -2583,6 +2873,7 @@
    'soft-let       (lambda (e) (expand-let e #f))
    'macro          expand-macro-def
    'struct         expand-struct-def
+   'recursive_type expand-recursive-type
    'try            expand-try
 
    'lambda

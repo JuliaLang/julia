@@ -152,6 +152,87 @@ end
 # another possible issue in #44712
 @test (("", 0),) !== (("", 1),)
 
+# recursive type blocks (issue #269)
+let
+    # basic mutual recursion
+    recursive type RTEdge
+        struct RTNode
+            edges::Vector{RTEdge}
+        end
+        struct RTEdge
+            from::RTNode
+            to::RTNode
+        end
+    end
+    @test fieldtype(RTNode, :edges) == Vector{RTEdge}
+    @test fieldtype(RTEdge, :from) == RTNode
+    n1, n2 = RTNode(RTEdge[]), RTNode(RTEdge[])
+    e = RTEdge(n1, n2)
+    push!(n1.edges, e)
+    @test n1.edges[1] === e
+
+    # parametric self-reference
+    recursive type RTNS
+        struct RTNS{T}
+            value::T
+            next::Union{Nothing, RTNS{T}}
+        end
+    end
+    list = RTNS{Int}(1, RTNS{Int}(2, nothing))
+    @test list.value == 1
+    @test list.next.value == 2
+    @test list.next.next === nothing
+
+    # parametric mutual recursion
+    recursive type RTParamEdge
+        struct RTParamNode{T}
+            data::T
+            edges::Vector{RTParamEdge{T}}
+        end
+        struct RTParamEdge{T}
+            weight::Float64
+            target::RTParamNode{T}
+        end
+    end
+    pn = RTParamNode{String}("root", RTParamEdge{String}[])
+    pe = RTParamEdge{String}(1.5, pn)
+    @test pe.target === pn
+
+    # abstract types and inheritance
+    recursive type RTMutableNode
+        abstract type RTAbstractNode end
+        struct RTImmutableNode <: RTAbstractNode
+            children::Vector{RTMutableNode}
+        end
+        mutable struct RTMutableNode <: RTAbstractNode
+            parent::Union{Nothing, RTImmutableNode}
+        end
+    end
+    @test RTImmutableNode <: RTAbstractNode
+    @test RTMutableNode <: RTAbstractNode
+
+    # const type aliases within recursive blocks
+    recursive type RTTreeAlias
+        struct RTLeafA
+            value::Int
+        end
+        struct RTBranchA
+            left::Union{RTLeafA, RTBranchA}
+            right::Union{RTLeafA, RTBranchA}
+        end
+        const RTTreeNodeA = Union{RTLeafA, RTBranchA}
+    end
+    @test RTTreeNodeA === Union{RTLeafA, RTBranchA}
+    tree::RTTreeNodeA = RTBranchA(RTLeafA(1), RTLeafA(2))
+    @test tree.left.value == 1
+
+    # return value
+    @test (recursive type RTSingle; struct RTSingle; x::Int; end; end) === RTSingle
+
+    # self-referential type alias should error
+    @test_throws ErrorException eval(:(recursive type SelfRef; const SelfRef = Union{Int, SelfRef}; end))
+end
+
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
 @test f47(Vector{Vector{Int}}()) == 0

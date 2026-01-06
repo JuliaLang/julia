@@ -508,6 +508,83 @@ ERROR: setfield!: const field .b of type Baz cannot be changed
 [...]
 ```
 
+## Mutually Recursive Types
+
+By default, type definitions cannot reference types that have not yet been defined. This makes
+it impossible to define mutually recursive types where two or more types reference each other:
+
+```julia
+struct Foo
+    b::Bar  # ERROR: Bar is not defined
+end
+
+struct Bar
+    a::Foo
+end
+```
+
+The `recursive type` block solves this by allowing forward declarations of type names:
+
+```jldoctest recursivetypes
+julia> recursive type Edge
+           struct Node
+               edges::Vector{Edge}
+           end
+
+           struct Edge
+               from::Node
+               to::Node
+           end
+       end
+Edge
+```
+
+The name after `recursive type` (here `Edge`) declares an incomplete type that can be referenced
+by all type definitions inside the block. Multiple names can be declared using tuple syntax:
+`recursive type (A, B)`.
+
+All struct kinds are supported inside recursive type blocks:
+
+```jldoctest recursivetypes2
+julia> recursive type MutableNode
+           abstract type AbstractNode end
+
+           struct ImmutableNode <: AbstractNode
+               children::Vector{MutableNode}
+           end
+
+           mutable struct MutableNode <: AbstractNode
+               parent::Union{Nothing, ImmutableNode}
+           end
+       end
+MutableNode
+
+julia> ImmutableNode <: AbstractNode
+true
+```
+
+Parametric types work as expected:
+
+```jldoctest
+julia> recursive type NS
+           struct NS{T}
+               value::T
+               next::Union{Nothing, NS{T}}
+           end
+       end
+NS
+
+julia> NS{Int}(1, NS{Int}(2, nothing))
+NS{Int64}(1, NS{Int64}(2, nothing))
+```
+
+The block returns the type(s) corresponding to the declared name(s), and all defined types
+are bound as constants in the enclosing module.
+
+!!! note
+    Method definitions are not allowed inside `recursive type` blocks. Define methods
+    after the block completes.
+
 ## [Declared Types](@id man-declared-types)
 
 The three kinds of types (abstract, primitive, composite) discussed in the previous

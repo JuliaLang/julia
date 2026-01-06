@@ -729,7 +729,7 @@
 ;; symbol tokens that do not simply parse to themselves when appearing alone as
 ;; an element of an argument list
 (define non-standalone-symbol-token?
-  (Set (append operators reserved-words '(.... mutable primitive abstract))))
+  (Set (append operators reserved-words '(.... mutable primitive abstract recursive))))
 
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)
@@ -1094,7 +1094,7 @@
              (fix-syntactic-unary (list op arg)))))))
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
-                                 try module)))
+                                 try module recursive)))
 
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
@@ -1137,7 +1137,7 @@
     (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
 (define (parse-call-with-initial-ex s ex tok)
-  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract)))
+  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract recursive)))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
@@ -1522,6 +1522,27 @@
                           (nb   (with-space-sensitive (parse-cond s))))
                      (begin0 (list 'primitive spec nb)
                              (expect-end (take-lineendings s) "primitive type"))))))
+
+       ((recursive)
+        (if (not (eq? (peek-token s) 'type))
+            (parse-call-chain s word #f)
+            (begin (take-token s)
+                   ;; Parse the type name(s) - either a single name, a tuple (Name1, Name2, ...), or nothing (infer from body)
+                   (let* ((next-tok (peek-token s))
+                          (names (cond ((eqv? next-tok #\()
+                                        (begin (take-token s)
+                                               (let ((tup (parse-arglist s #\))))
+                                                 (if (and (pair? tup) (eq? (car tup) 'tuple))
+                                                     tup
+                                                     `(tuple ,@tup)))))
+                                       ;; If the next token is a keyword that starts a type definition, use empty tuple
+                                       ((memq next-tok '(struct mutable abstract))
+                                        '(tuple))
+                                       ;; Otherwise parse a single name
+                                       (else (parse-atom s)))))
+                     (let ((body (parse-block s)))
+                       (begin0 (list 'recursive_type names body)
+                               (expect-end s "recursive type")))))))
 
        ((try)
         (let ((try-block (if (memq (peek-token s) '(catch finally))

@@ -1120,6 +1120,130 @@ struct Pair{A, B}
     end
 end
 
+# Incomplete types for mutually recursive type definitions.
+# These are ordinary mutable structs - being mutable gives them identity semantics
+# which is important for the substitution map during resolution.
+
+"""
+Represents an incomplete struct type during mutual recursion resolution.
+"""
+mutable struct IncompleteStruct
+    const name::Symbol
+    super::Any                    # Supertype (may be incomplete or nothing)
+    parameters::SimpleVector      # Type parameters (TypeVars)
+    fieldnames::SimpleVector      # Field names (Symbols)
+    fieldtypes::SimpleVector      # Field types (may contain Incomplete* refs)
+    fieldattrs::SimpleVector      # Field attributes
+    mutabl::Bool                  # Is mutable struct
+    abstract::Bool                # Is abstract type
+    min_initialized::Int          # Minimum fields initialized by constructors
+
+    # Constructor for placeholder (name only)
+    IncompleteStruct(name::Symbol) = new(name, nothing, svec(), svec(), svec(), svec(), false, false, 0)
+
+    # Full constructor
+    function IncompleteStruct(name::Symbol, @nospecialize(super), parameters::SimpleVector,
+                              fieldnames::SimpleVector, fieldtypes::SimpleVector,
+                              fieldattrs::SimpleVector, mutabl::Bool, abstract::Bool,
+                              min_initialized::Int)
+        new(name, super, parameters, fieldnames, fieldtypes, fieldattrs, mutabl, abstract, min_initialized)
+    end
+end
+
+"""
+Represents a Union involving incomplete types.
+"""
+mutable struct IncompleteUnion
+    types::SimpleVector           # Union members (may contain Incomplete* refs)
+    IncompleteUnion(types::SimpleVector) = new(types)
+end
+
+"""
+Represents a UnionAll with incomplete components.
+"""
+mutable struct IncompleteUnionAll
+    var::TypeVar                  # Type variable
+    body::Any                     # Body (may be incomplete)
+    IncompleteUnionAll(var::TypeVar, @nospecialize(body)) = new(var, body)
+end
+
+"""
+Represents a type application where some parameters are incomplete.
+"""
+mutable struct IncompleteTypeApp
+    head::Any                     # The type constructor (e.g., Vector)
+    params::SimpleVector          # Parameters (may contain Incomplete* refs)
+    IncompleteTypeApp(@nospecialize(head), params::SimpleVector) = new(head, params)
+end
+
+# Predicate to check if a value is any incomplete type
+is_incomplete(@nospecialize(x)) = x isa IncompleteStruct || x isa IncompleteUnion ||
+                                   x isa IncompleteUnionAll || x isa IncompleteTypeApp
+
+"""
+    apply_type_or_incomplete(tc, params...)
+
+Apply type parameters, returning an `IncompleteTypeApp` if any parameter is incomplete.
+Otherwise, calls `Core.apply_type` for normal type application.
+"""
+function apply_type_or_incomplete(@nospecialize(tc), @nospecialize params...)
+    # Check if the type constructor itself is incomplete
+    if is_incomplete(tc)
+        return IncompleteTypeApp(tc, svec(params...))
+    end
+    # Use index-based iteration to avoid needing iterate() on mixed tuples
+    # Use sle_int directly since <= is not available in Core at this point
+    n = nfields(params)
+    i = 1
+    while sle_int(i, n)
+        p = getfield(params, i)
+        if is_incomplete(p)
+            return IncompleteTypeApp(tc, svec(params...))
+        end
+        i = add_int(i, 1)
+    end
+    return apply_type(tc, params...)
+end
+
+"""
+    union_or_incomplete(types...)
+
+Create a Union, returning an `IncompleteUnion` if any member is incomplete.
+Otherwise, creates a normal Union type.
+"""
+function union_or_incomplete(@nospecialize types...)
+    # Use index-based iteration to avoid needing iterate() on mixed tuples
+    # Use sle_int directly since <= is not available in Core at this point
+    n = nfields(types)
+    i = 1
+    while sle_int(i, n)
+        t = getfield(types, i)
+        if is_incomplete(t)
+            return IncompleteUnion(svec(types...))
+        end
+        i = add_int(i, 1)
+    end
+    return Union{types...}
+end
+
+"""
+    resolve_incompletes(mod::Module, incompletes...)
+
+Resolve multiple incomplete types atomically into real DataTypes.
+Takes a module and IncompleteStruct values and returns a tuple of resolved types in the same order.
+This is called at the end of a `recursive type` block to convert all incomplete
+type definitions into real Julia types.
+"""
+function resolve_incompletes(mod::Module, @nospecialize incompletes...)
+    n = nfields(incompletes)
+    if n === 0
+        return ()
+    end
+    # Call the C function that does the actual resolution
+    # Pass the tuple directly - the C function will iterate over it
+    return ccall(:jl_resolve_incompletes, Any, (Any, Any), mod, incompletes)
+end
+
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
     world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
