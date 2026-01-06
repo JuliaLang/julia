@@ -690,10 +690,14 @@ function sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}; k
     foldl(MPZ.add!, arr; init=BigInt(0))
 end
 
-function prod(arr::AbstractArray{BigInt})
-    any(iszero, arr) && return zero(BigInt)
-    _prod(arr, firstindex(arr), lastindex(arr))
+function prod(arr::AbstractArray{BigInt}; dims=:, kw...)
+    if dims === (:) && isempty(kw)
+        any(iszero, arr) && return zero(BigInt)
+        return _prod(arr, firstindex(arr), lastindex(arr))
+    end
+    return invoke(prod, Tuple{AbstractArray}, arr; dims=dims, kw...)
 end
+
 function _prod(arr::AbstractArray{BigInt}, lo, hi)
     if hi - lo + 1 <= 16
         # compute first the needed number of bits for the result,

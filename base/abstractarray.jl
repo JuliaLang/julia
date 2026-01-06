@@ -3585,7 +3585,7 @@ sizehint!(a::AbstractVector, _; shrink::Bool=true) = a
 sizehint!(a::AbstractVector, n::Integer; shrink::Bool=true) = a
 
 function _safe_nonshrinking_sizehint!(a, n::Integer)
-    if hasmethod(sizehint!, Tuple{typeof(a), typeof(n)}, (:shrink,))
+    if @isdefined(hasmethod) && hasmethod(sizehint!, Tuple{typeof(a), typeof(n)}, (:shrink,))
         return sizehint!(a, n; shrink=false)
     end
     return sizehint!(a, n)

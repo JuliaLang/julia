@@ -1605,8 +1605,9 @@ function _findprev_int(testf::Function, B::BitArray, start::Int)
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
-function findmax(a::BitArray)
+function findmax(a::BitArray; dims=:)
     isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    dims !== (:) && return invoke(findmax, Tuple{AbstractArray}, a; dims=dims)
     m, mi = false, 1
     ti = 1
     ac = a.chunks
@@ -1618,8 +1619,9 @@ function findmax(a::BitArray)
     return m, @inbounds keys(a)[mi]
 end
 
-function findmin(a::BitArray)
+function findmin(a::BitArray; dims=:)
     isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    dims !== (:) && return invoke(findmin, Tuple{AbstractArray}, a; dims=dims)
     m, mi = true, 1
     ti = 1
     ac = a.chunks

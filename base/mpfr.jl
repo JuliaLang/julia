@@ -932,7 +932,8 @@ end
 # TODO: use a higher-precision BigFloat(pi) here?
 rem2pi(x::BigFloat, r::RoundingMode) = rem(x, 2*BigFloat(pi), r)
 
-function sum(arr::AbstractArray{BigFloat})
+function sum(arr::AbstractArray{BigFloat}; dims=:, kw...)
+    dims === (:) && isempty(kw) || return invoke(sum, Tuple{AbstractArray}, arr; dims=dims, kw...)
     z = BigFloat(0)
     for i in arr
         ccall((:mpfr_add, libmpfr), Int32,

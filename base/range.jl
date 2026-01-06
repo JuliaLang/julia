@@ -1424,19 +1424,17 @@ _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(
 
 ## sorting ##
 
-function issorted(r::AbstractUnitRange; lt=isless)
-    if lt == isless || lt == (<=)
-        true
-    else
-        issorted(collect(r); lt=lt)
+function issorted(r::AbstractUnitRange; lt=isless, by=identity, rev::Bool=false)
+    if by === identity && !rev && (lt == isless || lt == (<=))
+        return true
     end
+    return issorted(collect(r); lt=lt, by=by, rev=rev)
 end
-function issorted(r::AbstractRange; lt=isless)
-    if lt == isless || lt == (<=)
-        length(r) <= 1 || step(r) >= zero(step(r))
-    else
-        issorted(collect(r); lt=lt)
+function issorted(r::AbstractRange; lt=isless, by=identity, rev::Bool=false)
+    if by === identity && !rev && (lt == isless || lt == (<=))
+        return length(r) <= 1 || step(r) >= zero(step(r))
     end
+    return issorted(collect(r); lt=lt, by=by, rev=rev)
 end
 
 function sort(r::AbstractUnitRange; kws...)
@@ -1450,8 +1448,18 @@ function sort(r::AbstractRange; kws...)
     sort!(collect(r); kws...)
 end
 
-sortperm(r::AbstractUnitRange) = eachindex(r)
-sortperm(r::AbstractRange) = issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
+function sortperm(r::AbstractUnitRange; kws...)
+    if isempty(kws)
+        return eachindex(r)
+    end
+    return sortperm(collect(r); kws...)
+end
+function sortperm(r::AbstractRange; kws...)
+    if isempty(kws)
+        return issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
+    end
+    return sortperm(collect(r); kws...)
+end
 
 function sum(r::AbstractRange{<:Real}; init=_InitialValue())
     isempty(r) && return init isa _InitialValue ? zero(eltype(r)) : init
