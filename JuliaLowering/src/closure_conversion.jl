@@ -306,8 +306,8 @@ function is_boxed(binfo::BindingInfo)
     # * :argument when it's not reassigned
     # * :static_parameter (these can't be reassigned)
     defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
-    # * Single-assigned LOCAL variables that are assigned before any control flow
-    #   (identified by dominance analysis in optimize_captured_vars!)
+    # * Single-assigned LOCAL variables that are assigned before any closure captures them
+    #   (identified by liveness analysis in optimize_captured_vars!)
     #   This optimization only applies to locals, not arguments, because n_assigned
     #   counts assignments inside closures too, and arguments that are reassigned
     #   inside closures still need boxing.

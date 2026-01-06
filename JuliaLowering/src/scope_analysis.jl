@@ -699,85 +699,33 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
 end
 
 #-------------------------------------------------------------------------------
-# Basic-block-local dominance analysis to identify never-undef variables.
-# For single-assigned, never-undef captured variables, we can avoid Box allocation.
-# This is similar to flisp's `lambda-optimize-vars!` function.
+# Tree-based liveness analysis to identify never-undef variables.
 #
-# NOTE: This is a simplified analysis on tree-structured IR. A more robust approach
-# would be to internally linearize each lambda body and perform proper dominance
-# analysis on the CFG, as flisp does. The current implementation only tracks the
-# "first basic block" by detecting control flow constructs, which is conservative
-# but handles common cases.
+# Walks the AST tracking assignment order using save/restore for control flow.
+# Variables that are assigned before any closure captures them don't need Box.
+# This is similar to flisp's `lambda-optimize-vars!` function in julia-syntax.scm.
 #
-# To handle common patterns like early return guards (`x === nothing && return`),
-# we recognize these patterns and don't treat them as control flow that breaks
-# the basic block, since code after an early return guard will definitely execute
-# if we reach it.
-
-# Check if expression kind represents control flow that breaks basic blocks.
-# Note: `while`/`for` are desugared to `_while`/`_do_while`, `try` to `trycatchelse`/`tryfinally`,
-# and `continue` to `break` before scope analysis.
-function is_control_flow(k::Kind)
-    k in KSet"if elseif _while _do_while break return break_block symbolic_label symbolic_goto tryfinally trycatchelse"
-end
-
-# Check if an expression only contains early exits (return/break) and will
-# never fall through to subsequent code.
-# Note: `continue` is desugared to `break` before scope analysis.
-function is_early_exit_only(ex)
-    k = kind(ex)
-    if k in KSet"return break"
-        return true
-    elseif k == K"block"
-        cs = children(ex)
-        # A block is early-exit-only if its last statement is an early exit
-        return !isempty(cs) && is_early_exit_only(last(cs))
-    end
-    return false
-end
-
-# Check if a control flow expression is an "early return guard" pattern.
-# These patterns check a condition and return early, but code after them
-# will definitely execute if we reach it. Examples:
-#   - `x === nothing && return nothing`
-#   - `if x === nothing; return nothing; end`
+# The algorithm uses save/restore pattern to track variable liveness across
+# control flow constructs:
+# - `unused`: candidate variables not yet used (read) in current block
+# - `live`: variables that have been assigned in current block
+# - `seen`: all variables we've seen assigned
+# - `decl`: variables declared (local) - for loop handling
 #
-# For these patterns, we don't want to set `seen_control_flow = true` because
-# the subsequent code is still in the "first basic block" conceptually.
-#
-# Note: `&&` and `||` are desugared to `if` before scope analysis:
-#   - `x && return` becomes `if x; return; else false; end`
-#   - `x || return` becomes `if x; true; else return; end`
-function is_early_return_guard(ex)
-    kind(ex) == K"if" || return false
-    nchs = numchildren(ex)
-    if nchs == 2  # condition + then-branch, no else
-        # Pattern: if cond; return/break/continue; end
-        return is_early_exit_only(ex[2])
-    elseif nchs == 3
-        # Check for desugared `&&` or `||` patterns:
-        # - `if cond; early_exit; else value; end` - from `&&`
-        #   Code after this is reachable if we took the else branch
-        # - `if cond; value; else early_exit; end` - from `||`
-        #   Code after this is reachable if we took the then branch
-        then_branch = ex[2]
-        else_branch = ex[3]
-        then_is_exit = is_early_exit_only(then_branch)
-        else_is_exit = is_early_exit_only(else_branch)
-        # If exactly one branch is an early exit, code after is reachable
-        # from the non-exit branch
-        return then_is_exit ⊻ else_is_exit
-    end
-    return false
-end
+# When control flow is encountered, `live` is saved. After visiting branches,
+# `live` is restored to the pre-control-flow state. This treats assignments
+# inside control flow as "uncertain" (they may not execute), so only
+# assignments after control flow are considered definite. For example:
+#   `if c; x=1; end; ()->x` - x assigned inside if, may not execute → needs Box
+#   `if c; f(); end; x=1; ()->x` - x assigned after if, always executes → no Box
 
 """
     optimize_captured_vars!(ctx, ex)
 
-Perform basic-block-local dominance analysis to find variables that are
-single-assigned and assigned before any control flow (never-undef).
-For such variables, we can mark them as `is_always_defined=true` to avoid
-unnecessary `Core.Box` allocations during closure conversion.
+Perform tree-based liveness analysis to find captured variables that are
+assigned before any closure captures them (never-undef). For such variables,
+we can mark them as `is_always_defined=true` to avoid unnecessary `Core.Box`
+allocations during closure conversion.
 
 This is called on the outermost lambda, and recursively processes nested lambdas.
 """
@@ -821,92 +769,191 @@ function _optimize_lambda_vars!(ctx, ex)
             push!(candidates, id)
         end
     end
-
     isempty(candidates) && return
 
-    # Track variables that are assigned in the current basic block (before any branch)
+    # flisp-compatible tables for tracking variable liveness:
+    # - unused: candidate variables not yet used (read) in current block
+    # - live: variables that have been assigned in current block
+    # - seen: all variables we've seen assigned
+    # - decl: variables declared (local) - for loop handling
+    unused = candidates
     live = Set{IdTag}()
-    # Track all variables we've seen assigned
     seen = Set{IdTag}()
-    # Flag to indicate if we've seen control flow
-    seen_control_flow = Ref(false)
+    decl = Set{IdTag}()
 
-    function visit(e)
-        ek = kind(e)
-        if ek == K"BindingId"
-            # Variable use - if it's a candidate and we haven't assigned it yet
-            # in this block, it might be used before definition
-            id = e.var_id
-            if id in candidates && !(id in live) && !seen_control_flow[]
-                # Used before assigned in this block - remove from candidates
-                delete!(candidates, id)
+    # When control flow is seen, move live variables back to unused
+    function kill!()
+        union!(unused, live)
+        empty!(live)
+    end
+
+    # Restore live to a previous state, moving new additions back to unused
+    function restore!(prev)
+        for id in live
+            if !(id in prev)
+                push!(unused, id)
             end
+        end
+        empty!(live)
+        union!(live, prev)
+    end
+
+    # At the end of a loop, remove live variables that were declared outside,
+    # since those might be assigned multiple times (issue #37690 in Julia)
+    function leave_loop!(old_decl)
+        for id in collect(live)
+            if id in old_decl
+                delete!(live, id)
+            end
+        end
+        empty!(decl)
+        union!(decl, old_decl)
+    end
+
+    # When a variable is used (read), remove from unused
+    function mark_used!(var_id)
+        if var_id in unused
+            delete!(unused, var_id)
+        end
+    end
+
+    # When a variable is captured by a nested lambda before being assigned
+    function mark_captured!(var_id)
+        if var_id in unused
+            delete!(unused, var_id)
+        end
+    end
+
+    # When a variable is assigned, move from unused to live
+    function assign!(var_id)
+        if var_id in unused
+            push!(live, var_id)
+            push!(seen, var_id)
+            delete!(unused, var_id)
+        end
+    end
+
+    # Track local declarations for loop handling
+    function declare!(var_id)
+        if var_id in unused
+            push!(decl, var_id)
+        end
+    end
+
+    # Returns whether e contained a symbolic_label
+    function visit(e)
+        k = kind(e)
+
+        if k == K"BindingId"
+            mark_used!(e.var_id)
+            return false
+
         elseif is_leaf(e) || is_quoted(e)
-            return
-        elseif ek == K"="
-            # Visit RHS first
-            visit(e[2])
-            # Then record assignment
+            return false
+
+        elseif k == K"="
+            # Visit RHS first, then record assignment
+            has_label = visit(e[2])
             lhs = e[1]
             if kind(lhs) == K"BindingId"
-                id = lhs.var_id
-                if id in candidates && !seen_control_flow[]
-                    push!(live, id)
-                    push!(seen, id)
-                end
+                assign!(lhs.var_id)
             end
-        elseif ek == K"lambda"
-            # A nested lambda captures variables at the point it's defined.
-            # Any candidate that's captured but not yet assigned needs boxing.
+            return has_label
+
+        elseif k == K"lambda"
+            # Check captures from nested lambda
             nested_lb = e.lambda_bindings
             for (id, is_capt) in nested_lb.locals_capt
-                if is_capt && id in candidates && !(id in live)
-                    # This variable is captured by a closure before it's assigned
-                    delete!(candidates, id)
+                if is_capt
+                    mark_captured!(id)
                 end
             end
             # Don't recurse into nested lambdas - they have their own analysis
-            return
-        elseif ek == K"local"
-            # Local declarations are not uses - skip them
-            return
-        elseif ek == K"method_defs" || ek == K"function_decl"
-            # Function definitions also capture variables
-            # Process any nested lambdas within to check captures
+            return false
+
+        elseif k == K"local"
+            # Track local declarations for loop handling
             for child in children(e)
-                visit(child)
-            end
-            return
-        elseif is_control_flow(ek)
-            if is_early_return_guard(e)
-                # Early return guards (e.g., `x && return`) don't break the basic block.
-                # Code after them will definitely execute if we reach it, so we can
-                # continue tracking assignments without setting seen_control_flow.
-                # We need to visit the condition and the fall-through branch.
-                visit(e[1])  # Visit condition
-                # For 3-child if (desugared && or ||), visit the fall-through branch
-                if numchildren(e) == 3
-                    then_branch = e[2]
-                    else_branch = e[3]
-                    # Visit whichever branch is NOT the early exit
-                    if is_early_exit_only(then_branch)
-                        visit(else_branch)  # else is fall-through
-                    else
-                        visit(then_branch)  # then is fall-through
-                    end
+                if kind(child) == K"BindingId"
+                    declare!(child.var_id)
                 end
+            end
+            return false
+
+        elseif k == K"method_defs" || k == K"function_decl"
+            # Process nested lambdas within
+            has_label = false
+            for child in children(e)
+                has_label |= visit(child)
+            end
+            return has_label
+
+        elseif k == K"return"
+            has_label = numchildren(e) >= 1 ? visit(e[1]) : false
+            kill!()
+            return has_label
+
+        elseif k in KSet"break symbolic_goto"
+            kill!()
+            return false
+
+        elseif k == K"symbolic_label"
+            kill!()
+            return true
+
+        elseif k in KSet"if elseif trycatchelse tryfinally"
+            prev = copy(live)
+            has_label = false
+            for child in children(e)
+                has_label |= visit(child)
+                kill!()
+            end
+            if has_label
+                # If there's a label inside, we could have skipped a prior
+                # variable initialization
+                return true
             else
-                # Regular control flow - mark that we've seen it
-                seen_control_flow[] = true
-                # Still visit children to find any remaining assignments
-                for child in children(e)
-                    visit(child)
-                end
+                restore!(prev)
+                return false
             end
-        else
+
+        elseif k in KSet"_while _do_while"
+            prev = copy(live)
+            old_decl = copy(decl)
+            has_label = false
             for child in children(e)
-                visit(child)
+                has_label |= visit(child)
             end
+            leave_loop!(old_decl)
+            if has_label
+                kill!()
+                return true
+            else
+                restore!(prev)
+                return false
+            end
+
+        elseif k == K"break_block"
+            # Similar to if - save/restore pattern
+            prev = copy(live)
+            has_label = false
+            for child in children(e)
+                has_label |= visit(child)
+            end
+            if has_label
+                kill!()
+                return true
+            else
+                restore!(prev)
+                return false
+            end
+
+        else
+            has_label = false
+            for child in children(e)
+                has_label |= visit(child)
+            end
+            return has_label
         end
     end
 
@@ -922,10 +969,11 @@ function _optimize_lambda_vars!(ctx, ex)
         end
     end
 
-    # Variables in `live` (assigned before control flow) are never-undef
-    # Update their is_always_defined flag
-    for id in live
-        get_binding(ctx, id).is_always_defined = true
+    # Variables in live or unused (that were seen assigned) are never-undef
+    for id in union(live, unused)
+        if id in seen
+            get_binding(ctx, id).is_always_defined = true
+        end
     end
 end
 

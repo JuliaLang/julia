@@ -743,6 +743,165 @@ slots: [slot₁/#self#(!read) slot₂/tmp(!read)]
 18  (return %₁)
 
 ########################################
+# Assignment after if statement doesn't need Box (flisp-compatible save/restore)
+function f_after_if(cond)
+    if cond
+        println("hello")
+    end
+    y = 1
+    () -> y
+end
+#---------------------
+1   (method TestMod.f_after_if)
+2   latestworld
+3   (call core.svec :y)
+4   (call core.svec false)
+5   (call JuliaLowering.eval_closure_type TestMod :#f_after_if#->##0 %₃ %₄)
+6   latestworld
+7   TestMod.#f_after_if#->##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::6:5
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read)]
+    1   (call core.getfield slot₁/#self# :y)
+    2   (return %₁)
+13  latestworld
+14  TestMod.f_after_if
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₅ core.Any)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/cond slot₃/y(single_assign)]
+    1   (gotoifnot slot₂/cond label₄)
+    2   TestMod.println
+    3   (call %₂ "hello")
+    4   (= slot₃/y 1)
+    5   TestMod.#f_after_if#->##0
+    6   slot₃/y
+    7   (call core.typeof %₆)
+    8   (call core.apply_type %₅ %₇)
+    9   slot₃/y
+    10  (new %₈ %₉)
+    11  (return %₁₀)
+21  latestworld
+22  TestMod.f_after_if
+23  (return %₂₂)
+
+########################################
+# Ternary operator (if expression in value position) doesn't need Box
+function f_ternary(x)
+    y = x > 0 ? x : 0
+    () -> y
+end
+#---------------------
+1   (method TestMod.f_ternary)
+2   latestworld
+3   (call core.svec :y)
+4   (call core.svec false)
+5   (call JuliaLowering.eval_closure_type TestMod :#f_ternary#->##0 %₃ %₄)
+6   latestworld
+7   TestMod.#f_ternary#->##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::3:5
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read)]
+    1   (call core.getfield slot₁/#self# :y)
+    2   (return %₁)
+13  latestworld
+14  TestMod.f_ternary
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₅ core.Any)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y(single_assign) slot₄/if_val(!read)]
+    1   TestMod.>
+    2   (call %₁ slot₂/x 0)
+    3   (gotoifnot %₂ label₇)
+    4   slot₂/x
+    5   (= slot₄/if_val %₄)
+    6   (goto label₈)
+    7   (= slot₄/if_val 0)
+    8   slot₄/if_val
+    9   (= slot₃/y %₈)
+    10  TestMod.#f_ternary#->##0
+    11  slot₃/y
+    12  (call core.typeof %₁₁)
+    13  (call core.apply_type %₁₀ %₁₂)
+    14  slot₃/y
+    15  (new %₁₃ %₁₄)
+    16  (return %₁₅)
+21  latestworld
+22  TestMod.f_ternary
+23  (return %₂₂)
+
+########################################
+# || guard pattern (value position with early exit) doesn't need Box
+function f_or_guard(x)
+    (x === nothing || x === missing) && return nothing
+    y = x
+    () -> y
+end
+#---------------------
+1   (method TestMod.f_or_guard)
+2   latestworld
+3   (call core.svec :y)
+4   (call core.svec false)
+5   (call JuliaLowering.eval_closure_type TestMod :#f_or_guard#->##0 %₃ %₄)
+6   latestworld
+7   TestMod.#f_or_guard#->##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::4:5
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read)]
+    1   (call core.getfield slot₁/#self# :y)
+    2   (return %₁)
+13  latestworld
+14  TestMod.f_or_guard
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₅ core.Any)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y(single_assign) slot₄/if_val(!read)]
+    1   TestMod.===
+    2   TestMod.nothing
+    3   (call %₁ slot₂/x %₂)
+    4   (gotoifnot %₃ label₇)
+    5   (= slot₄/if_val true)
+    6   (goto label₁₀)
+    7   TestMod.===
+    8   TestMod.missing
+    9   (= slot₄/if_val (call %₇ slot₂/x %₈))
+    10  slot₄/if_val
+    11  (gotoifnot %₁₀ label₁₅)
+    12  TestMod.nothing
+    13  (return %₁₂)
+    14  (goto label₁₅)
+    15  slot₂/x
+    16  (= slot₃/y %₁₅)
+    17  TestMod.#f_or_guard#->##0
+    18  slot₃/y
+    19  (call core.typeof %₁₈)
+    20  (call core.apply_type %₁₇ %₁₉)
+    21  slot₃/y
+    22  (new %₂₀ %₂₁)
+    23  (return %₂₂)
+21  latestworld
+22  TestMod.f_or_guard
+23  (return %₂₂)
+
+########################################
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)
