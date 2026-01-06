@@ -767,6 +767,12 @@
             Expr(:struct, false, :A, Expr(:block, LineNumberNode(2), "doc", :a))
     end
 
+    @testset "typegroup" begin
+        @test parsestmt("typegroup\nstruct A\nend\nend", version=v"1.14") ==
+            Expr(:typegroup, Expr(:block, LineNumberNode(2),
+                Expr(:struct, false, :A, Expr(:block, LineNumberNode(2)))))
+    end
+
     @testset "export" begin
         @test parsestmt("export a") == Expr(:export, :a)
         @test parsestmt("export @a") == Expr(:export, Symbol("@a"))

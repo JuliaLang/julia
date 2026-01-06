@@ -299,7 +299,10 @@ JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua)
 
 int jl_has_fixed_layout(jl_datatype_t *dt)
 {
-    if (dt->isconcretetype)
+    // A type with isconcretetype=1 but types=NULL is currently being instantiated
+    // and doesn't have a fixed layout yet. This prevents infinite recursion when
+    // computing layouts for mutually recursive parametric types.
+    if (dt->isconcretetype && dt->types != NULL)
         return 1;
     if (jl_is_genericmemory_type(dt)) { // GenericMemory{kind,addrspace,T} uses T for final layout, which is a parameter not a field however
         // optionally: return !layout_uses_free_typevars(jl_tparam1(dt), env);
@@ -2919,7 +2922,15 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             for (i = 0; i < n; i++)
                 env[i].val = jl_svecref(ndt->parameters, i);
             assert(ndt->types == NULL);
-            ndt->types = inst_ftypes(t->types, &env[n - 1], &top, 1);
+            // Push ndt onto the stack for cycle detection.
+            // This is important for mutually recursive types: if a field type
+            // of ndt references ndt (directly or indirectly), we need ndt on
+            // the stack so lookup_type_stack can find it and return the
+            // in-progress type instead of recursing infinitely.
+            jl_typestack_t ndt_top;
+            ndt_top.tt = ndt;
+            ndt_top.prev = &top;
+            ndt->types = inst_ftypes(t->types, &env[n - 1], &ndt_top, 1);
             jl_gc_wb(ndt, ndt->types);
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
@@ -3969,6 +3980,9 @@ void post_boot_hooks(void)
     jl_value_t *kwcall_func  = core("kwcall");
     jl_kwcall_type = (jl_datatype_t*)jl_typeof(kwcall_func);
     jl_atomic_store_relaxed(&jl_kwcall_type->name->max_args, 0);
+
+    // Initialize incomplete type references for mutually recursive types
+    jl_init_incomplete_types();
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
