@@ -1037,7 +1037,7 @@ function check_exception_match(result::ExecutionResult, @nospecialize(orig_expr)
 
     exc = result.exception
     message_only = false
-    
+
     # Handle three-argument form (type + pattern)
     if pattern !== nothing
         # In 3-arg form, first argument must be a type
@@ -1069,9 +1069,9 @@ function check_exception_match(result::ExecutionResult, @nospecialize(orig_expr)
         unwrapped_expr.head in (:call, :macrocall) &&
         (unwrapped_expr.args[1] in MACROEXPAND_LIKE ||
          (unwrapped_expr.args[1] isa GlobalRef && unwrapped_expr.args[1].name in MACROEXPAND_LIKE))
-    
+
     extype_display = extype
-    
+
     if isa(extype, Type)
         success =
             if from_macroexpand && extype == LoadError && exc isa Exception
@@ -1084,15 +1084,18 @@ function check_exception_match(result::ExecutionResult, @nospecialize(orig_expr)
                 isa(exc, extype)
             end
     elseif isa(extype, Exception) || !isa(exc, Exception)
+        # Decorated LoadErrors are unwrapped if the actual exception matches the inner exception
+        extype_for_match = extype
         if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
-            extype_display = extype.error # deprecated
+            extype_for_match = extype.error # deprecated: use inner exception for matching
+            extype_display = extype.error
         end
         # Support `UndefVarError(:x)` meaning `UndefVarError(:x, scope)` for any `scope`.
         # Retains the behaviour from pre-v1.11 when `UndefVarError` didn't have `scope`.
-        if isa(extype, UndefVarError) && !isdefined(extype, :scope)
-            success = exc isa UndefVarError && exc.var == extype.var
-        elseif isa(exc, typeof(extype))
-            success = isequalexception(exc, extype)
+        if isa(extype_for_match, UndefVarError) && !isdefined(extype_for_match, :scope)
+            success = exc isa UndefVarError && exc.var == extype_for_match.var
+        elseif isa(exc, typeof(extype_for_match))
+            success = isequalexception(exc, extype_for_match)
         else
             success = false
         end
@@ -1107,7 +1110,7 @@ function check_exception_match(result::ExecutionResult, @nospecialize(orig_expr)
             extype_display = "< match function >"
         end
     end
-    
+
     return success, message_only, exc, extype_display, nothing
 end
 
@@ -1115,16 +1118,16 @@ end
 # to evaluate and catch the thrown exception - if it exists
 function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern=nothing, context=nothing)
     context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
-    
+
     success, message_only, exc, extype_display, error_msg = check_exception_match(result, orig_expr, extype, pattern)
-    
+
     # Handle specification errors
     if error_msg !== nothing
         testres = Fail(:test_throws_wrong, orig_expr, extype, exc, context_str, result.source, false, error_msg)
         record(get_testset(), testres)
         return
     end
-    
+
     if success
         testres = Pass(:test_throws, orig_expr, extype_display, exc, result.source, message_only)
     elseif isa(result, Threw)
@@ -1151,9 +1154,9 @@ end
 # to evaluate and catch the thrown exception - if it exists
 function do_broken_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern=nothing, context=nothing)
     context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
-    
+
     success, _, _, extype_display, _ = check_exception_match(result, orig_expr, extype, pattern)
-    
+
     if success
         # Test passed when it was expected to be broken - this is an error (unexpected pass)
         testres = Error(:test_unbroken, orig_expr, extype_display, nothing, result.source, context_str)
