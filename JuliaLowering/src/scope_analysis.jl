@@ -663,10 +663,84 @@ end
 # Basic-block-local dominance analysis to identify never-undef variables.
 # For single-assigned, never-undef captured variables, we can avoid Box allocation.
 # This is similar to flisp's `lambda-optimize-vars!` function.
+#
+# NOTE: This analysis is performed on the tree-structured IR before linearization.
+# A more robust approach would be to perform this analysis after `linearize_ir`,
+# where control flow is explicit (gotos/labels) and proper dominance analysis
+# is straightforward - flisp does it this way. However, in JuliaLowering the passes
+# are structured as: resolve_scopes -> convert_closures -> linearize_ir, and
+# `convert_closures` needs the `is_always_defined` information to decide whether
+# to use `Core.Box`. Reordering these passes would require significant refactoring.
+#
+# As a workaround for common patterns like early return guards (`x && return`),
+# we recognize these patterns and don't treat them as control flow that breaks
+# the basic block, since code after an early return guard will definitely execute
+# if we reach it.
 
-# Check if expression kind represents control flow that breaks basic blocks
+# Check if expression kind represents control flow that breaks basic blocks.
+# Note: && and || are included because they have short-circuit semantics and
+# can contain early exits like `x && return`.
 function is_control_flow(k::Kind)
-    k in KSet"if elseif while for break continue return break_block symbolic_label symbolic_goto try tryfinally trycatchelse"
+    k in KSet"if elseif while for break continue return break_block symbolic_label symbolic_goto try tryfinally trycatchelse && ||"
+end
+
+# Check if an expression only contains early exits (return/break/continue)
+# and will never fall through to subsequent code.
+# Note: We don't check for `throw(...)` calls here because `throw` could be
+# a local variable shadowing `Core.throw`, and we don't have binding info yet.
+function is_early_exit_only(ex)
+    k = kind(ex)
+    if k in KSet"return break continue"
+        return true
+    elseif k == K"block"
+        cs = children(ex)
+        # A block is early-exit-only if its last statement is an early exit
+        return !isempty(cs) && is_early_exit_only(last(cs))
+    end
+    return false
+end
+
+# Check if a control flow expression is an "early return guard" pattern.
+# These patterns check a condition and return early, but code after them
+# will definitely execute if we reach it. Examples:
+#   - `x === nothing && return nothing`
+#   - `if x === nothing; return nothing; end`
+#
+# For these patterns, we don't want to set `seen_control_flow = true` because
+# the subsequent code is still in the "first basic block" conceptually.
+#
+# Note: `&&` and `||` are desugared to `if` before scope analysis:
+#   - `x && return` becomes `if x; return; else false; end`
+#   - `x || return` becomes `if x; x; else return; end` (approximately)
+function is_early_return_guard(ex)
+    k = kind(ex)
+    if k == K"&&"
+        # Pattern: cond && return/break/continue
+        return numchildren(ex) >= 2 && is_early_exit_only(ex[2])
+    elseif k == K"||"
+        # Pattern: cond || return/break/continue
+        return numchildren(ex) >= 2 && is_early_exit_only(ex[2])
+    elseif k == K"if"
+        nchs = numchildren(ex)
+        if nchs == 2  # condition + then-branch, no else
+            # Pattern: if cond; return/break/continue; end
+            return is_early_exit_only(ex[2])
+        elseif nchs == 3
+            # Check for desugared `&&` or `||` patterns:
+            # - `if cond; early_exit; else value; end` - from `&&`
+            #   Code after this is reachable if we took the else branch
+            # - `if cond; value; else early_exit; end` - from `||`
+            #   Code after this is reachable if we took the then branch
+            then_branch = ex[2]
+            else_branch = ex[3]
+            then_is_exit = is_early_exit_only(then_branch)
+            else_is_exit = is_early_exit_only(else_branch)
+            # If exactly one branch is an early exit, code after is reachable
+            # from the non-exit branch
+            return then_is_exit ⊻ else_is_exit
+        end
+    end
+    return false
 end
 
 """
@@ -776,11 +850,34 @@ function _optimize_lambda_vars!(ctx, ex)
             end
             return
         elseif is_control_flow(ek)
-            # Control flow - mark that we've seen it
-            seen_control_flow[] = true
-            # Still visit children to find any remaining assignments
-            for child in children(e)
-                visit(child)
+            if is_early_return_guard(e)
+                # Early return guards (e.g., `x && return`) don't break the basic block.
+                # Code after them will definitely execute if we reach it, so we can
+                # continue tracking assignments without setting seen_control_flow.
+                # We need to visit the condition and the fall-through branch.
+                if ek == K"&&" || ek == K"||"
+                    visit(e[1])  # Visit condition only, skip the early exit
+                elseif ek == K"if"
+                    visit(e[1])  # Visit condition
+                    # For 3-child if (desugared && or ||), visit the fall-through branch
+                    if numchildren(e) == 3
+                        then_branch = e[2]
+                        else_branch = e[3]
+                        # Visit whichever branch is NOT the early exit
+                        if is_early_exit_only(then_branch)
+                            visit(else_branch)  # else is fall-through
+                        else
+                            visit(then_branch)  # then is fall-through
+                        end
+                    end
+                end
+            else
+                # Regular control flow - mark that we've seen it
+                seen_control_flow[] = true
+                # Still visit children to find any remaining assignments
+                for child in children(e)
+                    visit(child)
+                end
             end
         else
             for child in children(e)

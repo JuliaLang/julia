@@ -821,6 +821,61 @@ end
 24  (return %₂₃)
 
 ########################################
+# Early return guard pattern - assignment after `cond && return` doesn't need Box
+# The && is desugared to `if cond; return; else false; end` before scope analysis
+function f_early_return(x)
+    x === nothing && return nothing
+    y = 1
+    g() = y
+end
+#---------------------
+1   (method TestMod.f_early_return)
+2   latestworld
+3   (call core.svec :y)
+4   (call core.svec false)
+5   (call JuliaLowering.eval_closure_type TestMod :#f_early_return#g##0 %₃ %₄)
+6   latestworld
+7   TestMod.#f_early_return#g##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::4:5
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read)]
+    1   (call core.getfield slot₁/#self# :y)
+    2   (return %₁)
+13  latestworld
+14  TestMod.f_early_return
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₅ core.Any)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/g slot₄/y(!read)]
+    1   (newvar slot₃/g)
+    2   TestMod.===
+    3   TestMod.nothing
+    4   (call %₂ slot₂/x %₃)
+    5   (gotoifnot %₄ label₉)
+    6   TestMod.nothing
+    7   (return %₆)
+    8   (goto label₉)
+    9   (= slot₄/y 1)
+    10  TestMod.#f_early_return#g##0
+    11  slot₄/y
+    12  (call core.typeof %₁₁)
+    13  (call core.apply_type %₁₀ %₁₂)
+    14  slot₄/y
+    15  (new %₁₃ %₁₄)
+    16  (= slot₃/g %₁₅)
+    17  slot₃/g
+    18  (return %₁₇)
+21  latestworld
+22  TestMod.f_early_return
+23  (return %₂₂)
+
+########################################
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)
