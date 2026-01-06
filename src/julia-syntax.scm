@@ -3915,8 +3915,8 @@ f(x) = yt(x)
 
 ;; Try to identify never-undef variables, and then clear the `captured` flag for single-assigned,
 ;; never-undef variables to avoid allocating unnecessary `Box`es.
-;; Also handles the case where a variable is assigned in both branches of an if-else, making
-;; it effectively single-assigned on each control path.
+;; Also handles captured variables assigned in all branches of if-else, treating the if-else
+;; as a single definition point when there are no other assignments and capture is after.
 (define (lambda-optimize-vars! lam)
   (assert (eq? (car lam) 'lambda))
   ;; memoize all-methods-for to avoid O(n^2) behavior
@@ -3936,21 +3936,22 @@ f(x) = yt(x)
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
         (seen   (table))  ;; all variables we've seen assignments to
-        (ifa    (table))  ;; variables assigned in all branches of if-else ("if-assigned")
-        (ifa-promoted (table))  ;; variables promoted from ifa to unused (safe to keep when captured)
-        (ifa-used-first (table))  ;; ifa vars used before assigned in some branch (can't optimize)
-        (ifa-assigned (table))  ;; tracks ifa var assignments (not affected by kill)
-        (has-ifa #f)      ;; whether ifa has any entries
-        (has-symbolic-goto #f))  ;; whether we've seen a @goto (disables ifa optimization)
-    ;; Collect candidate variables: those that are captured (and hence we want to optimize)
-    ;; and only assigned once. This populates the initial `unused` table.
-    ;; Also collect captured variables assigned more than once for if-branch analysis.
+        ;; if-else optimization for captured multi-assigned variables:
+        (ifa-candidates (table))      ;; captured multi-assigned vars (potential optimization)
+        (assigned-outside (table))    ;; vars assigned outside any qualifying if-else
+        (captured-early (table))      ;; vars captured before their if-else completes
+        (ifa-completed (table))       ;; vars that completed a valid if-else (all branches assigned)
+        (in-ifa-for (table))          ;; during if-else visit: which vars we're tracking
+        (used-before-assign (table))  ;; vars used before assigned in some branch
+        (has-candidates #f))          ;; whether we have any ifa candidates
+    ;; Collect candidate variables: those that are captured and single-assigned go into `unused`.
+    ;; Captured multi-assigned vars go into ifa-candidates for if-else optimization.
     (for-each (lambda (v)
                 (if (vinfo:capt v)
                     (if (vinfo:sa v)
                         (put! unused (car v) #t)
-                        (begin (put! ifa (car v) #t)
-                               (set! has-ifa #t)))))
+                        (begin (put! ifa-candidates (car v) #t)
+                               (set! has-candidates #t)))))
               vi)
     (define (restore old)
       (table.foreach (lambda (k v)
@@ -3966,37 +3967,28 @@ f(x) = yt(x)
       ;; Note arguments are only "used" for purposes of this analysis when
       ;; they are captured, since they are never undefined.
       (if (and (has? unused var) (not (memq var args)))
-          (del! unused var))
-      ;; Track if an ifa var is used before being assigned in current block
-      ;; (live tracks what's been assigned in the current block)
-      (if (and (has? ifa var) (not (has? live var)))
-          (put! ifa-used-first var #t)))
+          (del! unused var)))
     (define (mark-captured var)
-      ;; For original SA variables, always remove from unused when captured
-      ;; For ifa-promoted variables, they're safe to keep (assigned in all branches before capture)
-      (if (and (has? unused var) (not (has? ifa-promoted var)))
+      (if (and (has? unused var) (not (has? ifa-completed var)))
           (del! unused var))
-      ;; Remove from ifa if captured before assignment
-      (if (and (has? ifa var) (not (has? seen var)))
-          (del! ifa var)))
+      ;; For ifa candidates: if captured before if-else completes, can't optimize
+      (if (and (has? ifa-candidates var)
+               (not (has? ifa-completed var)))
+          (put! captured-early var #t)))
     (define (assign! var)
       (if (has? unused var)
           ;; When a variable is assigned, move it to the live set to protect
           ;; it from being removed from `unused`.
           (begin (put! live var #t)
                  (put! seen var #t)
-                 (del! unused var)
-                 ;; If this variable was promoted by if-else optimization, this new
-                 ;; assignment makes it truly multi-assigned. Remove from ifa-promoted
-                 ;; so its captured flag won't be cleared at the end.
-                 (if (has? ifa-promoted var)
-                     (del! ifa-promoted var))))
-      ;; Also track assignments to ifa candidates (captured non-sa variables)
-      ;; Use both live (for use-before-assign check) and ifa-assigned (not affected by kill)
-      (if (has? ifa var)
-          (begin (put! live var #t)
-                 (put! seen var #t)
-                 (put! ifa-assigned var #t))))
+                 (del! unused var)))
+      ;; Track assignments for ifa candidates
+      (if (has? ifa-candidates var)
+          (begin
+            (put! seen var #t)
+            ;; If not currently inside an if-else for this var, it's assigned outside
+            (if (not (has? in-ifa-for var))
+                (put! assigned-outside var #t)))))
     (define (declare! var)
       (if (has? unused var)
           (put! decl var #t)))
@@ -4008,6 +4000,19 @@ f(x) = yt(x)
                       (del! live k)))
                 (table.keys live))
       (set! decl old-decls))
+    ;; Returns table of vars assigned in ALL branches
+    (define (intersect-branch-tables branch-tables)
+      (if (null? branch-tables)
+          (table)
+          (let ((result (table.clone (car branch-tables))))
+            (for-each (lambda (branch-tbl)
+                        (table.foreach
+                         (lambda (var _)
+                           (if (not (has? branch-tbl var))
+                               (del! result var)))
+                         result))
+                      (cdr branch-tables))
+            result)))
     (define (visit e)
       ;; returns whether e contained a symboliclabel
       (cond ((atom? e) (if (symbol? e) (mark-used e))
@@ -4024,111 +4029,125 @@ f(x) = yt(x)
              (begin0 (visit (cadr e))
                      (kill)))
             ((memq (car e) '(break label symbolicgoto))
-             (if (eq? (car e) 'symbolicgoto)
-                 (set! has-symbolic-goto #t))
              (kill)
              #f)
             ((eq? (car e) 'symboliclabel)
              (kill)
              #t)
             ((eq? (car e) 'if)
-             ;; Special handling for if-else: track variables assigned in ALL branches.
-             ;; If a captured variable is assigned in ALL branches (and not used before
-             ;; assignment in any), it's effectively single-assigned per control path.
-             (let ((prev (table.clone live))
-                   ;; Save has-symbolic-goto before visiting branches - we only care about
-                   ;; gotos BEFORE this if-else (that could jump into it), not gotos inside
-                   (pre-if-has-goto has-symbolic-goto))
+             (let ((prev (table.clone live)))
                (cond
-                ;; if-else with exactly 3 args (cond, then, else) and we have candidates
-                ((and (length= e 4) has-ifa (not pre-if-has-goto))
+                ;; if-else with exactly 3 args and we have candidates
+                ((and (length= e 4) has-candidates)
                  (let ((has-label #f)
-                       (all-assigned #f)
-                       (pre-ifa-assigned (table.clone ifa-assigned)))
+                       (branch-tables '())
+                       (prev-in-ifa (table.clone in-ifa-for))
+                       (branch-assigned (table)))  ;; track assignments within current branch
+                   ;; Mark eligible candidates as being inside this if-else
+                   (table.foreach
+                    (lambda (var _)
+                      (if (and (not (has? ifa-completed var))
+                               (not (has? assigned-outside var)))
+                          (put! in-ifa-for var #t)))
+                    ifa-candidates)
                    ;; Visit condition
                    (if (visit (cadr e)) (set! has-label #t))
                    (let ((pre-branch-live (table.clone live)))
-                     (kill)
-                     ;; Clear ifa-assigned for then-branch
-                     (set! ifa-assigned (table))
-                     ;; Visit then-branch
-                     (if (visit (caddr e)) (set! has-label #t))
-                     ;; Capture assignments from then-branch (ifa-assigned not affected by kill)
-                     (set! all-assigned (table.clone ifa-assigned))
-                     ;; Process else-branch (may be elseif chain)
-                     (let process-else ((else-expr (cadddr e)))
-                       (set! live (table.clone pre-branch-live))
-                       (kill)
-                       ;; Clear ifa-assigned for this branch
-                       (set! ifa-assigned (table))
-                       (cond
-                        ;; else-branch is an elseif
-                        ((and (pair? else-expr) (eq? (car else-expr) 'elseif)
-                              (length= else-expr 4))
-                         ;; Visit elseif condition
-                         (if (visit (cadr else-expr)) (set! has-label #t))
-                         (kill)
-                         ;; Visit elseif then-branch
-                         (if (visit (caddr else-expr)) (set! has-label #t))
-                         ;; Intersect with all-assigned using ifa-assigned
-                         (let ((branch-assigned ifa-assigned))
-                           (table.foreach
-                            (lambda (var _)
-                              (if (not (has? branch-assigned var))
-                                  (del! all-assigned var)))
-                            all-assigned))
-                         ;; Process nested else
-                         (process-else (cadddr else-expr)))
-                        ;; else-branch is regular expression (final else)
-                        (else
-                         (if (visit else-expr) (set! has-label #t))
-                         ;; Intersect with all-assigned using ifa-assigned
-                         (let ((branch-assigned ifa-assigned))
-                           (table.foreach
-                            (lambda (var _)
-                              (if (not (has? branch-assigned var))
-                                  (del! all-assigned var)))
-                            all-assigned)))))
-                     ;; Add variables assigned in all branches to ifa-assigned before restoring
-                     ;; This allows nested if-elses to communicate their assignments upward
-                     (table.foreach
-                      (lambda (var _) (put! ifa-assigned var #t))
-                      all-assigned)
-                     ;; Restore ifa-assigned base (before this if-else)
-                     (table.foreach
-                      (lambda (var _) (put! ifa-assigned var #t))
-                      pre-ifa-assigned)
-                     ;; Mark variables assigned in all branches as effectively single-assigned
-                     ;; Disable if @goto was seen before this if-else OR if a new @goto appeared
-                     ;; during branch processing (which could jump out and bypass assignments)
-                     (let ((any-goto-seen (or pre-if-has-goto has-symbolic-goto)))
-                       (if (not any-goto-seen)
-                           (table.foreach
-                            (lambda (var _)
-                              (if (and (has? all-assigned var)
-                                       (not (has? ifa-used-first var)))
-                                  (if (has? ifa-promoted var)
-                                      ;; Variable was already promoted. Check if it was promoted
-                                      ;; during this if-else (nested case) or before (multi-if-else case).
-                                      ;; If it's in ifa-assigned, it was assigned during our analysis.
-                                      (if (not (has? ifa-assigned var))
-                                          ;; Not assigned during our processing, so promotion was from
-                                          ;; a previous if-else. Now it's assigned again - undo promotion.
-                                          (begin
-                                            (del! unused var)
-                                            (del! seen var)
-                                            (del! ifa-promoted var)))
-                                      ;; First time seeing this variable assigned in all branches
-                                      (begin
-                                        (put! seen var #t)
-                                        (put! unused var #t)
-                                        (put! ifa-promoted var #t)))))
-                            ifa)))
+                     ;; Collect assignments from each branch
+                     (let collect-branches ((branches (list (caddr e) (cadddr e)))
+                                            (branch-assigns '()))
+                       (if (null? branches)
+                           (set! branch-tables (reverse branch-assigns))
+                           (let ((branch (car branches)))
+                             (set! live (table.clone pre-branch-live))
+                             (kill)
+                             (set! branch-assigned (table))
+                             (let ((branch-tbl (table)))
+                               ;; Visit branch, tracking assignments and use-before-assign
+                               (let visit-branch ((expr branch))
+                                 (cond
+                                  ((atom? expr)
+                                   (if (symbol? expr)
+                                       (begin
+                                         (mark-used expr)
+                                         ;; Track use-before-assign for ifa candidates
+                                         (if (and (has? in-ifa-for expr)
+                                                  (not (has? branch-assigned expr)))
+                                             (put! used-before-assign expr #t)))))
+                                  ((lambda-opt-ignored-exprs (car expr)) #f)
+                                  ((eq? (car expr) 'symboliclabel)
+                                   (set! has-label #t))
+                                  ((eq? (car expr) '=)
+                                   (visit-branch (caddr expr))
+                                   (let ((var (cadr expr)))
+                                     (assign! var)
+                                     (if (has? in-ifa-for var)
+                                         (begin
+                                           (put! branch-tbl var #t)
+                                           (put! branch-assigned var #t)))))
+                                  ;; Handle loops inside branches - mark vars as assigned-outside
+                                  ((or (eq? (car expr) '_while) (eq? (car expr) '_do_while))
+                                   (let ((prev-in-ifa-loop (table.clone in-ifa-for)))
+                                     ;; Clear in-ifa-for during loop
+                                     (set! in-ifa-for (table))
+                                     (for-each visit-branch (cdr expr))
+                                     (set! in-ifa-for prev-in-ifa-loop)))
+                                  ;; Handle elseif chain
+                                  ((and (eq? (car expr) 'elseif) (length= expr 4))
+                                   (visit-branch (cadr expr))
+                                   (kill)
+                                   (set! branch-assigned (table))
+                                   (let ((elseif-branch-tbl (table)))
+                                     (let visit-elseif-then ((e2 (caddr expr)))
+                                       (cond
+                                        ((atom? e2)
+                                         (if (symbol? e2)
+                                             (begin
+                                               (mark-used e2)
+                                               (if (and (has? in-ifa-for e2)
+                                                        (not (has? branch-assigned e2)))
+                                                   (put! used-before-assign e2 #t)))))
+                                        ((lambda-opt-ignored-exprs (car e2)) #f)
+                                        ((eq? (car e2) 'symboliclabel)
+                                         (set! has-label #t))
+                                        ((eq? (car e2) '=)
+                                         (visit-elseif-then (caddr e2))
+                                         (let ((var (cadr e2)))
+                                           (assign! var)
+                                           (if (has? in-ifa-for var)
+                                               (begin
+                                                 (put! elseif-branch-tbl var #t)
+                                                 (put! branch-assigned var #t)))))
+                                        ((or (eq? (car e2) '_while) (eq? (car e2) '_do_while))
+                                         (let ((prev-in-ifa-loop (table.clone in-ifa-for)))
+                                           (set! in-ifa-for (table))
+                                           (for-each visit-elseif-then (cdr e2))
+                                           (set! in-ifa-for prev-in-ifa-loop)))
+                                        (else
+                                         (for-each visit-elseif-then (cdr e2)))))
+                                     (set! branch-assigns (cons elseif-branch-tbl branch-assigns)))
+                                   (set! live (table.clone pre-branch-live))
+                                   (collect-branches (list (cadddr expr)) branch-assigns))
+                                  (else
+                                   (for-each visit-branch (cdr expr)))))
+                               (if (not (and (pair? branch) (eq? (car branch) 'elseif)))
+                                   (collect-branches (cdr branches)
+                                                     (cons branch-tbl branch-assigns)))))))
+                     ;; Mark vars assigned in ALL branches as completed (if not used-before-assign)
+                     (let ((all-assigned (intersect-branch-tables branch-tables)))
+                       (table.foreach
+                        (lambda (var _)
+                          (if (and (has? in-ifa-for var)
+                                   (not (has? captured-early var))
+                                   (not (has? used-before-assign var)))
+                              (put! ifa-completed var #t)))
+                        all-assigned))
+                     (set! in-ifa-for prev-in-ifa)
                      (kill)
                      (if has-label
                          (begin (kill) #t)
                          (begin (restore prev) #f)))))
-                ;; No ifa candidates - use default handling
+                ;; Default if handling
                 (else
                  (if (eager-any (lambda (e) (begin0 (visit e) (kill))) (cdr e))
                      (begin (kill) #t)
@@ -4145,25 +4164,11 @@ f(x) = yt(x)
             ((or (eq? (car e) '_while) (eq? (car e) '_do_while))
              (let ((prev  (table.clone live))
                    (decl- (table.clone decl))
-                   (pre-loop-ifa-assigned (table.clone ifa-assigned))
-                   (pre-loop-ifa-promoted (table.clone ifa-promoted)))
-               (set! ifa-assigned (table))
+                   (prev-in-ifa (table.clone in-ifa-for)))
+               ;; Clear in-ifa-for during loop - assignments in loop are "outside"
+               (set! in-ifa-for (table))
                (let ((result (eager-any visit (cdr e))))
-                 ;; Variables assigned in loop are multi-assigned, remove from ifa tracking
-                 (table.foreach
-                  (lambda (var _)
-                    (if (has? ifa var)
-                        (del! ifa var)))
-                  ifa-assigned)
-                 ;; Also revert any promotions that happened inside the loop
-                 (table.foreach
-                  (lambda (var _)
-                    (if (not (has? pre-loop-ifa-promoted var))
-                        (begin
-                          (del! ifa-promoted var)
-                          (del! unused var))))
-                  ifa-promoted)
-                 (set! ifa-assigned pre-loop-ifa-assigned)
+                 (set! in-ifa-for prev-in-ifa)
                  (leave-loop! decl-)
                  (if result
                      #t
@@ -4207,13 +4212,17 @@ f(x) = yt(x)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
                     (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
               vi)
-    ;; Also clear captured flag for variables that were promoted by if-else analysis
-    ;; Only clear if the variable is still in unused (wasn't assigned again later)
+    ;; Also clear captured flag for ifa-completed vars not assigned outside or captured early
     (for-each (lambda (var)
-                (let ((vv (assq var vi)))
-                  (if (and vv (vinfo:never-undef vv) (has? unused var))
-                      (set-car! (cddr vv) (logand (caddr vv) (lognot 5))))))
-              (table.keys ifa-promoted))
+                (if (and (has? ifa-completed var)
+                         (not (has? assigned-outside var))
+                         (not (has? captured-early var)))
+                    (let ((vv (assq var vi)))
+                      (if vv
+                          (begin
+                            (vinfo:set-never-undef! vv #t)
+                            (set-car! (cddr vv) (logand (caddr vv) (lognot 5))))))))
+              (table.keys ifa-candidates))
     lam))
 
 (define (is-var-boxed? v lam)
