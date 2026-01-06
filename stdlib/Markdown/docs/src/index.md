@@ -82,8 +82,8 @@ See the [Display equations](@ref) section for non-inline LaTeX.
     @doc raw"``\LaTeX`` syntax in a docstring." functionname
     ```
 !!! note
-    Inline ``\LaTeX`` may also be created within a set of single of `$` characters. However
-    this is not recommend as `$` is also used for string interpolation. Thus using it can
+    Inline ``\LaTeX`` can also be created using a pair of single `$` characters. However
+    this is not recommended as `$` is also used for string interpolation. Thus using it can
     easily lead to unintended results. For example, inside an `md` string the parser will
     interpret an unmatched `$` as string interpolation, leading to unexpected errors or
     worse, undesired behavior, when a variable is unexpectedly interpolated into a string.
