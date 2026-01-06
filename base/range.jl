@@ -1125,19 +1125,23 @@ function show(io::IO, r::StepRangeLen)
 end
 
 function ==(r::T, s::T) where {T<:AbstractRange}
+    isequal(firstindex(r), firstindex(s)) || return false
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
 function ==(r::OrdinalRange, s::OrdinalRange)
+    isequal(firstindex(r), firstindex(s)) || return false
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
-==(r::AbstractUnitRange, s::AbstractUnitRange) =
-    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s)))
+function ==(r::AbstractUnitRange, s::AbstractUnitRange)
+    isequal(firstindex(r), firstindex(s)) || return false
+    return (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s)))
+end
 
 ==(r::OneTo, s::OneTo) = last(r) == last(s)
 
@@ -1154,6 +1158,7 @@ _has_length_one(r::OrdinalRange) = first(r) == last(r)
 _has_length_one(r::AbstractRange) = isone(length(r))
 
 function ==(r::AbstractRange, s::AbstractRange)
+    isequal(firstindex(r), firstindex(s)) || return false
     lr = length(r)
     if lr != length(s)
         return false
