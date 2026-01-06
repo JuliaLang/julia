@@ -53,15 +53,8 @@
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
 #endif
-// The sanitizers don't play well with our memory manager
 
-#if defined(JL_FORCE_JITLINK) || defined(_CPU_AARCH64_) || defined(HAS_SANITIZER)
-# define JL_USE_JITLINK
-#endif
-
-#if defined(_CPU_RISCV64_)
-# define JL_USE_JITLINK
-#endif
+#define JL_USE_JITLINK
 
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 # include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
