@@ -468,7 +468,7 @@ julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
 
 ### Scalar Indices
 
-For a 2-dimensional array, we first choose the row, and then the column to get to the element we want to select. 
+For a 2-dimensional array, we first choose the row, and then the column to get to the element we want to select.
 
 ```jldoctest
 julia> A = reshape(1:35, 5, 7)
@@ -610,7 +610,7 @@ We can cherry-pick elements along multiple dimensions. Lets go back to `B`, say 
 \end{bmatrix}
 ```
 
-From here, we want the $2^{nd}$ row from both the arrays, and within that the $[{\color{Cyan} 4^{th}} ,\; {\color{Green} 1^{st}}, \; {\color{Magenta} 3^{rd}}, \; {\color{Green} 1^{st}}]$ columns. 
+From here, we want the $2^{nd}$ row from both the arrays, and within that the $[{\color{Cyan} 4^{th}} ,\; {\color{Green} 1^{st}}, \; {\color{Magenta} 3^{rd}}, \; {\color{Green} 1^{st}}]$ columns.
 
 ```jldoctest
 julia> B[2, [4, 1, 3, 1], 1, [2, 3]]
@@ -623,7 +623,7 @@ julia> B[2, [4, 1, 3, 1], 1, [2, 3]]
 
 #### Output Dimensionality
 
-As can be seen, the result of using these vectorized indices is also an array. The dimensions of the resulting array are based on the dimensions of the input indices. Ignoring all the scalar indices, the resulting array's shape is the length of the vectorized indices. For example if `J` is a vector of indices, then `B[2, J, 1, 2]` is an array with `length(J)`, and its `j`th element is `B[1, J[j], 1, 2]`. More generally speaking, if $y = X[I_1, I_2, \cdots, I_n]$ and all $I_k$ indices are vectors, then $y$ will be an $n$-dimensional array its shape will be $(length(I_1), length(I_2), \cdots, length(I_n))$, with $y[i_1, i_2, \cdots, i_n] = X[\;I_1[i_1], I_2[i_2], \cdots, I_n[i_n]\;]$. 
+As can be seen, the result of using these vectorized indices is also an array. The dimensions of the resulting array are based on the dimensions of the input indices. Ignoring all the scalar indices, the resulting array's shape is the length of the vectorized indices. For example if `J` is a vector of indices, then `B[2, J, 1, 2]` is an array with `length(J)`, and its `j`th element is `B[1, J[j], 1, 2]`. More generally speaking, if $y = X[I_1, I_2, \cdots, I_n]$ and all $I_k$ indices are vectors, then $y$ will be an $n$-dimensional array its shape will be $(length(I_1), length(I_2), \cdots, length(I_n))$, with $y[i_1, i_2, \cdots, i_n] = X[\;I_1[i_1], I_2[i_2], \cdots, I_n[i_n]\;]$.
 
 But why stop at vectorized indices? Why not have matrices as indices?
 
@@ -677,7 +677,7 @@ We can mix and match boolean indices with other types of indices that we have le
 
 ```jldoctest
 julia> mask = [
-       false true false 
+       false true false
        false false true
        ]
 2×3 Matrix{Bool}:
@@ -694,7 +694,7 @@ julia> B[2, 4, mask]
  71
 ```
 
-The output vector has its elements in the column order of the mask's coordinates, i.e., `B[2, 4, 1, 2]` shows up first and `B[2, 4, 2, 3]` shows up after. 
+The output vector has its elements in the column order of the mask's coordinates, i.e., `B[2, 4, 1, 2]` shows up first and `B[2, 4, 2, 3]` shows up after.
 
 In previous sections on scalar indices, range indices, and array indices, we needed to provide an index for each dimension. However, this does not seem to hold for examples in this section. `A[idx]` has a single item in the index for a 2-dimensional array. `B[2, 4, mask]` are just 3 items, whereas `B` has 4 dimensions. So what gives? Remember, the boolean mask is expanded to the coordinates of all its `true` cells. `A[idx]` expands to `A[1, 1], A[2, 2], etc.`. Similarly `B[2, 4, mask]` expands to  `B[2, 4, 2, 3]` and `B[2, 4, 1, 2]`. We are stil providing an index for each dimension, its just...masked  ;-) For this reason the dimensions of the `mask` should match the dimensions that I am specifying. Remember, `B` is $3 \times 4 \times 2 \times 3$, i.e., its last two dimensions are $2 \times\ 3$, and because `mask` is trying to specify the coordinates of elements in these two dimensions, it must also be a $2 \times 3$ array. Of course this idea can be extended to any number of dimensions. If I want to specify the last three dimensions, then I need to use a $4 \times 2 \times 3$ mask, and so on.
 
@@ -709,7 +709,7 @@ julia> R = rand(1:100, 4, 4)
  52  89  49  64
 ```
 
-Further, lets say we want to select all the even elements from this matrix. We can use the [`iseven()`](@ref) function for this. However, this function only accepts a `Number`,  not an **array** of numbers. As you will see in the [Array and Vectorized Operators and Functions](@ref man-array-and-vectorized-operators-and-functions) section, we can use the dot-syntax to automatically apply this function to each element of the array. 
+Further, lets say we want to select all the even elements from this matrix. We can use the [`iseven()`](@ref) function for this. However, this function only accepts a `Number`,  not an **array** of numbers. As you will see in the [Array and Vectorized Operators and Functions](@ref man-array-and-vectorized-operators-and-functions) section, we can use the dot-syntax to automatically apply this function to each element of the array.
 
 ```jldoctest
 julia> iseven.(R)
@@ -735,7 +735,7 @@ julia> R[iseven.(R)]
 
 ### Cartesian Indexing
 
-The indexing style we have been using so far is called Cartesian, because we specify the coordinates of the elements we want to select. The `CartesianIndex{N}` type formalizes this concept. It is parameterized by the number of dimensions we want to index with it. 
+The indexing style we have been using so far is called Cartesian, because we specify the coordinates of the elements we want to select. The `CartesianIndex{N}` type formalizes this concept. It is parameterized by the number of dimensions we want to index with it.
 
 ```jldoctest
 julia> idx = CartesianIndex(2, 4, 2, 3)
@@ -847,7 +847,7 @@ julia> B[2, 4, [CartesianIndex(2, 3), CartesianIndex(1, 2)]]
  35
 ```
 
-The value of `N` in `CartesianIndex{N}` must be the number of dimensions it is representing. In the above example, even though `B` is a four-dimensional array, we are using `CartesianIndex{2}` to specify the last two dimensions. 
+The value of `N` in `CartesianIndex{N}` must be the number of dimensions it is representing. In the above example, even though `B` is a four-dimensional array, we are using `CartesianIndex{2}` to specify the last two dimensions.
 
 !!! warning
 
@@ -857,7 +857,7 @@ The value of `N` in `CartesianIndex{N}` must be the number of dimensions it is r
 
 ### Linear Indexing
 
-In Julia's default implementation, a multi-dimensional array is internally represented as one big contiguous single-dimensional array in column major form. For example, the following matrix 
+In Julia's default implementation, a multi-dimensional array is internally represented as one big contiguous single-dimensional array in column major form. For example, the following matrix
 
 ```math
 \begin{bmatrix}
@@ -873,7 +873,7 @@ is internally represented in memory as -
 [ {\color{magenta}1 \; 2 \; 3} \; {\color{cyan}4 \; 5 \; 6} \; {\color{orange}7 \; 8 \; 9} ]
 ```
 
-In fact you can use the [`vec()`](@ref) function to reshape any multi-dimensional array into its column-major one-dimensional form. When only one scalar index is provided, that index no longer represents a location in a particular dimension of the array. Instead, it selects the corresponding element in the column major form of the array. This is known as _linear indexing_. 
+In fact you can use the [`vec()`](@ref) function to reshape any multi-dimensional array into its column-major one-dimensional form. When only one scalar index is provided, that index no longer represents a location in a particular dimension of the array. Instead, it selects the corresponding element in the column major form of the array. This is known as _linear indexing_.
 
 ```jldoctest linindexing
 julia> A = [2 6; 4 7; 3 1]
@@ -881,7 +881,7 @@ julia> A = [2 6; 4 7; 3 1]
  2  6
  4  7
  3  1
- 
+
 julia> vec(A)
 6-element Vector{Int64}:
  2
