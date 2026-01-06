@@ -2357,6 +2357,516 @@ JL_DLLEXPORT int jl_nth_pointer_isdefined(jl_value_t *v, size_t i)
     return get_nth_pointer(v, i) != NULL;
 }
 
+// ============================================================================
+// Mutually Recursive Types Resolution
+// ============================================================================
+
+// Cache for incomplete type DataTypes (looked up from Core after boot.jl loads)
+static jl_datatype_t *jl_incompletestruct_type = NULL;
+static jl_datatype_t *jl_incompleteunionall_type = NULL;
+static jl_datatype_t *jl_incompletetypeapp_type = NULL;
+
+// Initialize incomplete type references from Core module
+// Called after boot.jl is loaded
+JL_DLLEXPORT void jl_init_incomplete_types(void)
+{
+    jl_incompletestruct_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("IncompleteStruct"));
+    jl_incompleteunionall_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("IncompleteUnionAll"));
+    jl_incompletetypeapp_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("IncompleteTypeApp"));
+}
+
+// Type predicates for incomplete types
+STATIC_INLINE int jl_is_incompletestruct(jl_value_t *v) JL_NOTSAFEPOINT {
+    return jl_incompletestruct_type != NULL && jl_typeis(v, jl_incompletestruct_type);
+}
+STATIC_INLINE int jl_is_incompleteunionall(jl_value_t *v) JL_NOTSAFEPOINT {
+    return jl_incompleteunionall_type != NULL && jl_typeis(v, jl_incompleteunionall_type);
+}
+STATIC_INLINE int jl_is_incompletetypeapp(jl_value_t *v) JL_NOTSAFEPOINT {
+    return jl_incompletetypeapp_type != NULL && jl_typeis(v, jl_incompletetypeapp_type);
+}
+
+// Field accessors for IncompleteStruct
+// Layout: name(0), super(1), parameters(2), fieldnames(3), fieldtypes(4), fieldattrs(5), mutabl(6), abstract(7), min_initialized(8)
+#define jl_incompletestruct_name(is)       ((jl_sym_t*)jl_get_nth_field_noalloc((jl_value_t*)(is), 0))
+#define jl_incompletestruct_super(is)      (jl_get_nth_field_noalloc((jl_value_t*)(is), 1))
+#define jl_incompletestruct_params(is)     ((jl_svec_t*)jl_get_nth_field_noalloc((jl_value_t*)(is), 2))
+#define jl_incompletestruct_fieldnames(is) ((jl_svec_t*)jl_get_nth_field_noalloc((jl_value_t*)(is), 3))
+#define jl_incompletestruct_fieldtypes(is) ((jl_svec_t*)jl_get_nth_field_noalloc((jl_value_t*)(is), 4))
+#define jl_incompletestruct_fieldattrs(is) ((jl_svec_t*)jl_get_nth_field_noalloc((jl_value_t*)(is), 5))
+// Bool/Int fields stored as pointers to boxed values, so noalloc is safe
+#define jl_incompletestruct_mutabl(is)     (jl_get_nth_field_noalloc((jl_value_t*)(is), 6) == jl_true)
+#define jl_incompletestruct_abstract(is)   (jl_get_nth_field_noalloc((jl_value_t*)(is), 7) == jl_true)
+#define jl_incompletestruct_min_initialized(is) ((int)jl_unbox_long(jl_get_nth_field_noalloc((jl_value_t*)(is), 8)))
+
+// Field accessors for IncompleteUnionAll
+#define jl_incompleteunionall_var(iua)     ((jl_tvar_t*)jl_get_nth_field_noalloc((jl_value_t*)(iua), 0))
+#define jl_incompleteunionall_body(iua)    (jl_get_nth_field_noalloc((jl_value_t*)(iua), 1))
+
+// Field accessors for IncompleteTypeApp
+#define jl_incompletetypeapp_head(ita)     (jl_get_nth_field_noalloc((jl_value_t*)(ita), 0))
+#define jl_incompletetypeapp_params(ita)   ((jl_svec_t*)jl_get_nth_field_noalloc((jl_value_t*)(ita), 1))
+
+// Forward declaration
+static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map, htable_t *resolving_set);
+
+// Check if a type expression contains a specific incomplete type reference
+static int contains_specific_incomplete(jl_value_t *t, jl_value_t *target) JL_NOTSAFEPOINT
+{
+    if (t == target)
+        return 1;
+    if (jl_is_incompletetypeapp(t)) {
+        jl_value_t *head = jl_incompletetypeapp_head(t);
+        if (contains_specific_incomplete(head, target))
+            return 1;
+        jl_svec_t *params = jl_incompletetypeapp_params(t);
+        size_t n = jl_svec_len(params);
+        for (size_t i = 0; i < n; i++) {
+            if (contains_specific_incomplete(jl_svecref(params, i), target))
+                return 1;
+        }
+        return 0;
+    }
+    if (jl_is_incompleteunionall(t))
+        return contains_specific_incomplete(jl_incompleteunionall_body(t), target);
+    if (jl_is_unionall(t))
+        return contains_specific_incomplete(((jl_unionall_t*)t)->body, target);
+    if (jl_is_uniontype(t))
+        return contains_specific_incomplete(((jl_uniontype_t*)t)->a, target) ||
+               contains_specific_incomplete(((jl_uniontype_t*)t)->b, target);
+    if (jl_is_datatype(t)) {
+        jl_svec_t *params = ((jl_datatype_t*)t)->parameters;
+        size_t n = jl_svec_len(params);
+        for (size_t i = 0; i < n; i++) {
+            if (contains_specific_incomplete(jl_svecref(params, i), target))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+// Check if a type expression references a specific typename
+// This is used to detect self-referential types for mayinlinealloc
+static int references_typename(jl_value_t *t, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT
+{
+    if (t == NULL)
+        return 0;
+    if (jl_is_typevar(t))
+        return freevars;
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        if (dt->name == name)
+            return 1;
+        if (!affects_layout)
+            return 0;
+        // Check type parameters
+        jl_svec_t *params = dt->parameters;
+        size_t n = jl_svec_len(params);
+        for (size_t i = 0; i < n; i++) {
+            if (references_typename(jl_svecref(params, i), name, affects_layout, freevars))
+                return 1;
+        }
+        return 0;
+    }
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        return references_typename(u->a, name, affects_layout, freevars) ||
+               references_typename(u->b, name, affects_layout, freevars);
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        return references_typename(ua->body, name, affects_layout, 0);
+    }
+    return 0;
+}
+
+// Resolve type references, substituting incomplete types with their resolved DataTypes
+// resolving_set tracks types currently being resolved to detect cycles
+static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map, htable_t *resolving_set)
+{
+    // IncompleteStruct -> look up in substitution map
+    if (jl_is_incompletestruct(t)) {
+        jl_value_t *dt = (jl_value_t*)ptrhash_get(subst_map, t);
+        if (dt != HT_NOTFOUND)
+            return dt;
+        jl_error("unresolved incomplete type reference");
+    }
+
+    // IncompleteTypeApp -> resolve head and params, apply to real type
+    // Also handles Union (head == Union) by using jl_type_union
+    if (jl_is_incompletetypeapp(t)) {
+        // Check if already resolved (cached in subst_map)
+        jl_value_t *cached = (jl_value_t*)ptrhash_get(subst_map, t);
+        if (cached != HT_NOTFOUND)
+            return cached;
+        jl_value_t *head = jl_incompletetypeapp_head(t);
+        jl_svec_t *params = jl_incompletetypeapp_params(t);
+        size_t n = jl_svec_len(params);
+        JL_GC_PUSH2(&head, &params);
+        // Resolve all parameters first - use PUSHARGS to root the resolved values
+        jl_value_t **resolved;
+        JL_GC_PUSHARGS(resolved, n);
+        for (size_t i = 0; i < n; i++) {
+            resolved[i] = resolve_type_refs(jl_svecref(params, i), subst_map, resolving_set);
+        }
+        jl_value_t *result;
+        // Special case: Union is stored as IncompleteTypeApp with head == Union
+        if (head == (jl_value_t*)jl_uniontype_type) {
+            result = jl_type_union(resolved, n);
+        } else {
+            // Resolve the head type - if it's an IncompleteStruct, get its wrapper (UnionAll)
+            head = resolve_type_refs(head, subst_map, resolving_set);
+            // For parametric types, we need the wrapper (UnionAll), not the DataType
+            if (jl_is_datatype(head) && ((jl_datatype_t*)head)->name->wrapper != NULL) {
+                head = ((jl_datatype_t*)head)->name->wrapper;
+            }
+            result = jl_apply_type(head, resolved, n);
+        }
+        // Cache the result
+        ptrhash_put(subst_map, t, result);
+        JL_GC_POP();  // resolved
+        JL_GC_POP();  // head, params
+        return result;
+    }
+
+    // IncompleteUnionAll -> resolve body, create real UnionAll
+    if (jl_is_incompleteunionall(t)) {
+        jl_tvar_t *var = jl_incompleteunionall_var(t);
+        jl_value_t *body = jl_incompleteunionall_body(t);
+        JL_GC_PUSH2(&var, &body);
+        body = resolve_type_refs(body, subst_map, resolving_set);
+        jl_value_t *result = jl_type_unionall(var, body);
+        JL_GC_POP();
+        return result;
+    }
+
+    // Regular UnionAll -> resolve body if needed
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        jl_value_t *body = resolve_type_refs(ua->body, subst_map, resolving_set);
+        if (body == ua->body)
+            return t;
+        JL_GC_PUSH1(&body);
+        jl_value_t *result = jl_type_unionall(ua->var, body);
+        JL_GC_POP();
+        return result;
+    }
+
+    // Regular Union -> resolve each member if needed
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        jl_value_t *a = resolve_type_refs(u->a, subst_map, resolving_set);
+        JL_GC_PUSH1(&a);
+        jl_value_t *b = resolve_type_refs(u->b, subst_map, resolving_set);
+        if (a == u->a && b == u->b) {
+            JL_GC_POP();
+            return t;
+        }
+        jl_value_t *types[2] = {a, b};
+        jl_value_t *result = jl_type_union(types, 2);
+        JL_GC_POP();
+        return result;
+    }
+
+    // DataType with parameters -> resolve parameters if any contain incomplete refs
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        jl_svec_t *params = dt->parameters;
+        size_t n = jl_svec_len(params);
+        if (n == 0)
+            return t;
+        int changed = 0;
+        jl_value_t **resolved;
+        JL_GC_PUSHARGS(resolved, n);
+        for (size_t i = 0; i < n; i++) {
+            jl_value_t *orig = jl_svecref(params, i);
+            resolved[i] = resolve_type_refs(orig, subst_map, resolving_set);
+            if (resolved[i] != orig)
+                changed = 1;
+        }
+        if (!changed) {
+            JL_GC_POP();
+            return t;
+        }
+        jl_value_t *result = jl_apply_type((jl_value_t*)dt->name->wrapper, resolved, n);
+        JL_GC_POP();
+        return result;
+    }
+
+    return t;
+}
+
+// Resolve multiple incomplete types atomically into real DataTypes
+// Arguments: module, tuple of IncompleteStruct values
+// Returns: tuple of resolved types in the same order
+JL_DLLEXPORT jl_value_t *jl_resolve_incompletes(jl_module_t *module, jl_value_t *incompletes_tuple)
+{
+    // Get number of incompletes from the tuple
+    size_t n = jl_nfields(incompletes_tuple);
+    if (n == 0)
+        return jl_f_tuple(NULL, NULL, 0);
+
+    // Allocate arrays for tracking
+    jl_datatype_t **datatypes = (jl_datatype_t**)alloca(n * sizeof(jl_datatype_t*));
+    jl_value_t **results = (jl_value_t**)alloca(n * sizeof(jl_value_t*));
+    memset(datatypes, 0, n * sizeof(jl_datatype_t*));
+    memset(results, 0, n * sizeof(jl_value_t*));
+
+    // GC roots for the datatypes we create
+    JL_GC_PUSHARGS(results, n);
+
+    htable_t subst_map;
+    htable_new(&subst_map, n);
+    htable_t resolving_set;
+    htable_new(&resolving_set, 8);
+
+    JL_TRY {
+        // Step 1: Create empty DataTypes for each IncompleteStruct
+        // Non-incomplete values (e.g., type aliases) are stored for later substitution
+        // If the same IncompleteStruct appears multiple times, reuse the existing DataType
+        for (size_t i = 0; i < n; i++) {
+            jl_value_t *incomplete = jl_fieldref(incompletes_tuple, i);
+            if (!jl_is_incompletestruct(incomplete)) {
+                // Not an IncompleteStruct - store original, will substitute at end
+                datatypes[i] = NULL;
+                results[i] = incomplete;
+                continue;
+            }
+            // Check if we've already processed this IncompleteStruct
+            jl_value_t *existing = (jl_value_t*)ptrhash_get(&subst_map, incomplete);
+            if (existing != HT_NOTFOUND) {
+                // Already processed - reuse the existing result (value is rooted in results[])
+                JL_GC_PUSH1(&existing);
+                datatypes[i] = NULL;  // Mark as non-primary
+                results[i] = existing;
+                JL_GC_POP();
+                continue;
+            }
+            jl_value_t *is = incomplete;
+            jl_sym_t *name = jl_incompletestruct_name(is);
+            int abstract = jl_incompletestruct_abstract(is);
+            int mutabl = jl_incompletestruct_mutabl(is);
+            jl_svec_t *fieldnames = jl_incompletestruct_fieldnames(is);
+            // Root is and fieldnames across allocations below
+            JL_GC_PUSH2(&is, &fieldnames);
+
+            datatypes[i] = jl_new_uninitialized_datatype();
+            results[i] = (jl_value_t*)datatypes[i];
+
+            // Create typename
+            jl_typename_t *tn = jl_new_typename_in(name, module, abstract, mutabl);
+            datatypes[i]->name = tn;
+            jl_gc_wb(datatypes[i], tn);
+            tn->names = fieldnames;
+            jl_gc_wb(tn, fieldnames);
+            // Compute n_uninitialized from min_initialized
+            // n_uninitialized = nfields - min_initialized
+            int min_initialized = abstract ? 0 : jl_incompletestruct_min_initialized(is);
+            tn->n_uninitialized = (int32_t)(jl_svec_len(fieldnames) - min_initialized);
+
+            // Set up initial values
+            datatypes[i]->super = jl_any_type;
+            datatypes[i]->parameters = jl_emptysvec;
+            datatypes[i]->types = NULL;
+
+            // Build substitution map: incomplete -> datatype
+            ptrhash_put(&subst_map, is, datatypes[i]);
+            JL_GC_POP();
+        }
+
+        // Step 2: Resolve type parameters and set up wrapper UnionAlls
+        // (Must happen before resolving supertypes so A{T} can be resolved)
+        for (size_t i = 0; i < n; i++) {
+            if (datatypes[i] == NULL) continue;  // Skip non-incomplete values
+            jl_value_t *is = jl_fieldref(incompletes_tuple, i);
+            jl_svec_t *params = jl_incompletestruct_params(is);
+            size_t np = jl_svec_len(params);
+            // Root is and params across allocations in the UnionAll creation loop
+            JL_GC_PUSH2(&is, &params);
+
+            datatypes[i]->parameters = params;
+            jl_gc_wb(datatypes[i], params);
+
+            // Create wrapper UnionAll chain
+            if (datatypes[i]->name->wrapper == NULL) {
+                jl_value_t *wrapper = (jl_value_t*)datatypes[i];
+                JL_GC_PUSH1(&wrapper);
+                datatypes[i]->name->wrapper = wrapper;
+                jl_gc_wb(datatypes[i]->name, datatypes[i]);
+                for (int j = np - 1; j >= 0; j--) {
+                    jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(params, j);
+                    wrapper = jl_new_struct(jl_unionall_type, tv, wrapper);
+                    datatypes[i]->name->wrapper = wrapper;
+                    jl_gc_wb(datatypes[i]->name, wrapper);
+                }
+                results[i] = wrapper;
+                JL_GC_POP();
+            }
+            // Update substitution map to use wrapper (UnionAll) for parametric types
+            // This ensures field types like `field::A` resolve to the UnionAll, not the DataType
+            ptrhash_put(&subst_map, is, results[i]);
+            JL_GC_POP();
+        }
+
+        // Step 3: Resolve supertypes (after wrapper UnionAlls are set up)
+        for (size_t i = 0; i < n; i++) {
+            if (datatypes[i] == NULL) continue;  // Skip non-incomplete values
+            jl_value_t *is = jl_fieldref(incompletes_tuple, i);
+            jl_value_t *super = jl_incompletestruct_super(is);
+            if (super != jl_nothing && super != NULL) {
+                // Root super, is, and resolved_super in a single GC frame
+                jl_value_t *resolved_super = NULL;
+                JL_GC_PUSH3(&super, &is, &resolved_super);
+                // Disallow self-referential supertypes (e.g., struct A <: SomeType{A})
+                if (contains_specific_incomplete(super, is)) {
+                    jl_errorf("invalid subtyping: supertype of %s cannot reference itself",
+                             jl_symbol_name(jl_incompletestruct_name(is)));
+                }
+                resolved_super = resolve_type_refs(super, &subst_map, &resolving_set);
+                if (!jl_is_datatype(resolved_super) || !((jl_datatype_t*)resolved_super)->name->abstract) {
+                    jl_errorf("invalid subtyping: supertype of %s must be an abstract type",
+                             jl_symbol_name(jl_incompletestruct_name(is)));
+                }
+                datatypes[i]->super = (jl_datatype_t*)resolved_super;
+                jl_gc_wb(datatypes[i], datatypes[i]->super);
+                JL_GC_POP();
+            }
+        }
+
+        // Step 3.5: Precompute hash values BEFORE resolving field types
+        // This is critical because jl_apply_type uses type_hash for caching.
+        // If the hash is 0, caching is skipped and duplicate types are created.
+        // NOTE: We reset isconcretetype to 0 afterwards to prevent jl_has_fixed_layout
+        // from returning true before layouts are actually computed (which would cause
+        // infinite recursion for self-referential types).
+        for (size_t i = 0; i < n; i++) {
+            if (datatypes[i] == NULL) continue;  // Skip non-incomplete values
+            // Use results[i] (which is rooted) instead of datatypes[i] for GC safety
+            jl_precompute_memoized_dt((jl_datatype_t*)results[i], 0);
+            ((jl_datatype_t*)results[i])->isconcretetype = 0;  // Will be set properly after layout
+        }
+
+        // Step 4: Resolve field types (for non-abstract types)
+        for (size_t i = 0; i < n; i++) {
+            if (datatypes[i] == NULL) continue;  // Skip non-incomplete values
+            jl_value_t *is = jl_fieldref(incompletes_tuple, i);
+            if (jl_incompletestruct_abstract(is))
+                continue;
+
+            jl_svec_t *is_types = jl_incompletestruct_fieldtypes(is);
+            size_t nf = jl_svec_len(is_types);
+            // Root is_types BEFORE allocating ftypes
+            jl_svec_t *ftypes = NULL;
+            JL_GC_PUSH2(&ftypes, &is_types);
+            ftypes = jl_alloc_svec(nf);
+            for (size_t j = 0; j < nf; j++) {
+                jl_value_t *ft = jl_svecref(is_types, j);
+                jl_value_t *resolved = resolve_type_refs(ft, &subst_map, &resolving_set);
+                jl_svecset(ftypes, j, resolved);
+            }
+            datatypes[i]->types = ftypes;
+            jl_gc_wb(datatypes[i], ftypes);
+            JL_GC_POP();
+        }
+
+        // Step 5: Process field attributes and compute layouts
+        for (size_t i = 0; i < n; i++) {
+            if (datatypes[i] == NULL) continue;  // Skip non-incomplete values
+            jl_value_t *is = jl_fieldref(incompletes_tuple, i);
+            if (jl_incompletestruct_abstract(is))
+                continue;
+
+            jl_svec_t *fattrs = jl_incompletestruct_fieldattrs(is);
+            jl_svec_t *fnames = jl_incompletestruct_fieldnames(is);
+            int mutabl = jl_incompletestruct_mutabl(is);
+
+            // Process field attributes (atomic, const)
+            uint32_t *atomicfields = NULL;
+            uint32_t *constfields = NULL;
+            for (size_t j = 0; j + 1 < jl_svec_len(fattrs); j += 2) {
+                jl_value_t *fldi = jl_svecref(fattrs, j);
+                jl_sym_t *attr = (jl_sym_t*)jl_svecref(fattrs, j + 1);
+                size_t fldn = jl_unbox_long(fldi) - 1;
+                if (attr == jl_atomic_sym) {
+                    if (atomicfields == NULL) {
+                        size_t nb = (jl_svec_len(fnames) + 31) / 32 * sizeof(uint32_t);
+                        atomicfields = (uint32_t*)malloc_s(nb);
+                        memset(atomicfields, 0, nb);
+                    }
+                    atomicfields[fldn / 32] |= 1 << (fldn % 32);
+                }
+                else if (attr == jl_const_sym) {
+                    if (constfields == NULL) {
+                        size_t nb = (jl_svec_len(fnames) + 31) / 32 * sizeof(uint32_t);
+                        constfields = (uint32_t*)malloc_s(nb);
+                        memset(constfields, 0, nb);
+                    }
+                    constfields[fldn / 32] |= 1 << (fldn % 32);
+                }
+            }
+            datatypes[i]->name->atomicfields = atomicfields;
+            datatypes[i]->name->constfields = constfields;
+
+            // Use results[i] (which is rooted) instead of datatypes[i] for GC safety
+            jl_datatype_t *dt = (jl_datatype_t*)results[i];
+
+            // Compute field layout FIRST (before setting mayinlinealloc)
+            // This prevents infinite recursion for self-referential types:
+            // - jl_datatype_isinlinealloc checks mayinlinealloc before trying jl_struct_try_layout
+            // - If mayinlinealloc = 0, it returns 0 immediately without recursive layout computation
+            if (dt->types != NULL) {
+                jl_compute_field_offsets(dt);
+            }
+
+            // Now that layout is computed, set mayinlinealloc for immutable types
+            // BUT check if any field references ANY type in the recursive block
+            // For mutually recursive types, we must check all types, not just self-references
+            if (!mutabl && dt->types != NULL) {
+                size_t nf = jl_svec_len(dt->types);
+                int mayinlinealloc = 1;
+                for (size_t j = 0; j < nf && mayinlinealloc; j++) {
+                    jl_value_t *fld = jl_svecref(dt->types, j);
+                    // Check if this field references ANY type in the recursive block
+                    for (size_t k = 0; k < n && mayinlinealloc; k++) {
+                        if (datatypes[k] != NULL && references_typename(fld, ((jl_datatype_t*)results[k])->name, 1, 1)) {
+                            mayinlinealloc = 0;
+                        }
+                    }
+                }
+                dt->name->mayinlinealloc = mayinlinealloc;
+            }
+
+            // Precompute hash and isconcretetype now that layout is ready
+            jl_precompute_memoized_dt(dt, 0);
+
+            // Allocate singleton instance for empty structs
+            // This must be done after jl_precompute_memoized_dt sets isconcretetype = 1
+            jl_maybe_allocate_singleton_instance(dt);
+        }
+
+        // Step 6: Resolve non-incomplete values (e.g., type aliases like Vector{IncompleteStruct})
+        for (size_t i = 0; i < n; i++) {
+            if (datatypes[i] != NULL) continue;  // Skip already-resolved incompletes
+            jl_value_t *val = results[i];
+            results[i] = resolve_type_refs(val, &subst_map, &resolving_set);
+        }
+    }
+    JL_CATCH {
+        htable_free(&subst_map);
+        htable_free(&resolving_set);
+        JL_GC_POP();
+        jl_rethrow();
+    }
+
+    htable_free(&subst_map);
+    htable_free(&resolving_set);
+
+    // Build result tuple
+    jl_value_t *result = jl_f_tuple(NULL, results, n);
+    JL_GC_POP();
+    return result;
+}
+
 #ifdef __cplusplus
 }
 #endif

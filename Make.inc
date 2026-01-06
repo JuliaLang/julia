@@ -1710,6 +1710,15 @@ ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
 # by dropping lib/gcc/<platform>/<version> from the install directory it reports
 CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+# On Linux without system headers (e.g., BinaryBuilder containers), derive sysroot from GCC
+ifeq ($(OS), Linux)
+GCC_SYSROOT := $(shell $(CC) --print-sysroot 2>/dev/null)
+ifneq ($(GCC_SYSROOT),)
+ifeq ($(wildcard /usr/include/stdlib.h),)
+ CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+endif
+endif
+endif
 endif
 
 
