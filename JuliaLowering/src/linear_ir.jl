@@ -71,7 +71,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
     lambda_bindings::LambdaBindings
-    argmap::Dict{IdTag, SyntaxTree{Attrs}}
+    argmap::Dict{IdTag, IdTag}
     return_type::Union{Nothing, SyntaxTree{Attrs}}
     break_targets::Dict{String, JumpTarget{Attrs}}
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
@@ -88,7 +88,7 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
     Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
-                    is_toplevel_thunk, lambda_bindings, Dict{IdTag, SyntaxTree{Attrs}}(), rett,
+                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(), rett,
                     Dict{String,JumpTarget{Attrs}}(), SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
                     Vector{JumpOrigin{Attrs}}(), Dict{Symbol, Any}(), ctx.mod)
@@ -580,7 +580,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
-            ex1 = get(ctx.argmap, binfo.id, ex1)
+            if haskey(ctx.argmap, binfo.id)
+                ex1 = setattr!(newleaf(ctx, ex1, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+            end
         end
         if in_tail_pos
             emit_return(ctx, ex1)
@@ -631,7 +633,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             rhs = compile(ctx, ex[2], true, false)
             if kind(lhs) == K"BindingId"
                 binfo = get_binding(ctx, lhs)
-                lhs = get(ctx.argmap, binfo.id, lhs)
+                if haskey(ctx.argmap, binfo.id)
+                    lhs = setattr!(newleaf(ctx, lhs, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+                end
             end
             if needs_value && !isnothing(rhs)
                 r = emit_assign_tmp(ctx, rhs)
@@ -1074,13 +1078,14 @@ function compile_lambda(outer_ctx, ex)
         id = arg.var_id
         binfo = get_binding(ctx, id)
         if binfo.is_assigned
-            @assert !haskey(ctx.argmap, binfo.name)
-            ctx.argmap[binfo.id] = new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name)
+            @assert !haskey(ctx.argmap, binfo.id)
+            ctx.argmap[binfo.id] = new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name).var_id
         end
     end
     compile_body(ctx, ex[3])
-    for (binding_id, local_slot) in pairs(ctx.argmap)
-        binding = binding_ex(ctx, binding_id)
+    for (id, remapped) in pairs(ctx.argmap)
+        binding = binding_ex(ctx, id)
+        local_slot = binding_ex(ctx, remapped)
         pushfirst!(ctx.code, @ast ctx binding [K"=" local_slot binding])
     end
     slots = Vector{Slot}()
@@ -1151,7 +1156,7 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
     Attrs = typeof(graph.attributes)
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
                            Ref(0), false, LambdaBindings(),
-                           Dict{IdTag, SyntaxTree{Attrs}}(), nothing,
+                           Dict{IdTag,IdTag}(), nothing,
                            Dict{String,JumpTarget{Attrs}}(),
                            SyntaxList(graph), SyntaxList(graph),
                            Vector{FinallyHandler{Attrs}}(),
