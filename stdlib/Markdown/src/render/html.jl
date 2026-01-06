@@ -22,19 +22,8 @@ end
 
 tag(io::IO, tag, attrs...) = withtag(nothing, io, tag, attrs...)
 
-const _htmlescape_chars = Dict('<'=>"&lt;",   '>'=>"&gt;",
-                               '"'=>"&quot;", '&'=>"&amp;",
-                               # ' '=>"&nbsp;",
-                               )
-for ch in "'`!\$%()=+{}[]"
-    _htmlescape_chars[ch] = "&#$(Int(ch));"
-end
-
 function htmlesc(io::IO, s::AbstractString)
-    # s1 = replace(s, r"&(?!(\w+|\#\d+);)" => "&amp;")
-    for ch in s
-        print(io, get(_htmlescape_chars, ch, ch))
-    end
+    replace(io, s, '<'=>"&lt;", '>'=>"&gt;", '"'=>"&quot;", '&'=>"&amp;")
 end
 function htmlesc(io::IO, s::Symbol)
     htmlesc(io, string(s))
