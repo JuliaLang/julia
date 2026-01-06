@@ -1653,4 +1653,41 @@ end
     @test expected == actual
 end
 
+@testset "indexing and iterator interface" begin
+    md = md"""
+    # Headline
+
+    Some text
+
+    - item 1
+    - item 2
+
+    ***
+
+    The end.
+    """
+
+    hr = Markdown.HorizontalRule()
+
+    @test !isempty(md)
+    @test length(md) == 5
+    @test firstindex(md) == 1
+    @test lastindex(md) == 5
+    @test md[4] isa Markdown.HorizontalRule  # getindex!
+    md[4] = hr  # setindex!
+    @test md[4] === hr
+    # broadcast via iteration
+    @test typeof.(md) == [Markdown.Header{1}, Markdown.Paragraph, Markdown.List, Markdown.HorizontalRule, Markdown.Paragraph]
+    @test Base.IteratorSize(md) == Base.HasLength()
+    @test eltype(md) == Any
+
+    push!(md, hr)
+    @test !isempty(md)
+    @test length(md) == 6
+    @test firstindex(md) == 1
+    @test lastindex(md) == 6
+    @test md[6] === hr
+    @test typeof.(md) == [Markdown.Header{1}, Markdown.Paragraph, Markdown.List, Markdown.HorizontalRule, Markdown.Paragraph, Markdown.HorizontalRule]
+end
+
 include("test_spec.jl")
