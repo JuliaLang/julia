@@ -698,6 +698,237 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
     _resolve_scopes(ctx, ex, nothing)
 end
 
+#-------------------------------------------------------------------------------
+# Basic-block-local dominance analysis to identify never-undef variables.
+# For single-assigned, never-undef captured variables, we can avoid Box allocation.
+# This is similar to flisp's `lambda-optimize-vars!` function.
+#
+# NOTE: This is a simplified analysis on tree-structured IR. A more robust approach
+# would be to internally linearize each lambda body and perform proper dominance
+# analysis on the CFG, as flisp does. The current implementation only tracks the
+# "first basic block" by detecting control flow constructs, which is conservative
+# but handles common cases.
+#
+# To handle common patterns like early return guards (`x === nothing && return`),
+# we recognize these patterns and don't treat them as control flow that breaks
+# the basic block, since code after an early return guard will definitely execute
+# if we reach it.
+
+# Check if expression kind represents control flow that breaks basic blocks.
+# Note: `while`/`for` are desugared to `_while`/`_do_while`, `try` to `trycatchelse`/`tryfinally`,
+# and `continue` to `break` before scope analysis.
+function is_control_flow(k::Kind)
+    k in KSet"if elseif _while _do_while break return break_block symbolic_label symbolic_goto tryfinally trycatchelse"
+end
+
+# Check if an expression only contains early exits (return/break) and will
+# never fall through to subsequent code.
+# Note: `continue` is desugared to `break` before scope analysis.
+function is_early_exit_only(ex)
+    k = kind(ex)
+    if k in KSet"return break"
+        return true
+    elseif k == K"block"
+        cs = children(ex)
+        # A block is early-exit-only if its last statement is an early exit
+        return !isempty(cs) && is_early_exit_only(last(cs))
+    end
+    return false
+end
+
+# Check if a control flow expression is an "early return guard" pattern.
+# These patterns check a condition and return early, but code after them
+# will definitely execute if we reach it. Examples:
+#   - `x === nothing && return nothing`
+#   - `if x === nothing; return nothing; end`
+#
+# For these patterns, we don't want to set `seen_control_flow = true` because
+# the subsequent code is still in the "first basic block" conceptually.
+#
+# Note: `&&` and `||` are desugared to `if` before scope analysis:
+#   - `x && return` becomes `if x; return; else false; end`
+#   - `x || return` becomes `if x; true; else return; end`
+function is_early_return_guard(ex)
+    kind(ex) == K"if" || return false
+    nchs = numchildren(ex)
+    if nchs == 2  # condition + then-branch, no else
+        # Pattern: if cond; return/break/continue; end
+        return is_early_exit_only(ex[2])
+    elseif nchs == 3
+        # Check for desugared `&&` or `||` patterns:
+        # - `if cond; early_exit; else value; end` - from `&&`
+        #   Code after this is reachable if we took the else branch
+        # - `if cond; value; else early_exit; end` - from `||`
+        #   Code after this is reachable if we took the then branch
+        then_branch = ex[2]
+        else_branch = ex[3]
+        then_is_exit = is_early_exit_only(then_branch)
+        else_is_exit = is_early_exit_only(else_branch)
+        # If exactly one branch is an early exit, code after is reachable
+        # from the non-exit branch
+        return then_is_exit ⊻ else_is_exit
+    end
+    return false
+end
+
+"""
+    optimize_captured_vars!(ctx, ex)
+
+Perform basic-block-local dominance analysis to find variables that are
+single-assigned and assigned before any control flow (never-undef).
+For such variables, we can mark them as `is_always_defined=true` to avoid
+unnecessary `Core.Box` allocations during closure conversion.
+
+This is called on the outermost lambda, and recursively processes nested lambdas.
+"""
+function optimize_captured_vars!(ctx, ex)
+    k = kind(ex)
+    if k != K"lambda"
+        return
+    end
+
+    # First, recursively optimize nested lambdas (depth-first)
+    if numchildren(ex) >= 3
+        _optimize_nested_lambdas!(ctx, ex[3])
+    end
+
+    # Now optimize this lambda
+    _optimize_lambda_vars!(ctx, ex)
+end
+
+function _optimize_nested_lambdas!(ctx, ex)
+    k = kind(ex)
+    if k == K"lambda"
+        optimize_captured_vars!(ctx, ex)
+    elseif !is_leaf(ex) && !is_quoted(ex)
+        for child in children(ex)
+            _optimize_nested_lambdas!(ctx, child)
+        end
+    end
+end
+
+function _optimize_lambda_vars!(ctx, ex)
+    lambda_bindings = ex.lambda_bindings
+
+    # Collect candidate variables: captured and single-assigned
+    # We check binfo.is_captured instead of lbinfo (is_capt) because for variables
+    # defined in this lambda and captured by inner lambdas, lbinfo may be false
+    # but binfo.is_captured will be true.
+    candidates = Set{IdTag}()
+    for (id, _) in lambda_bindings.locals_capt
+        binfo = get_binding(ctx, id)
+        if binfo.is_captured && binfo.is_assigned_once && binfo.kind == :local
+            push!(candidates, id)
+        end
+    end
+
+    isempty(candidates) && return
+
+    # Track variables that are assigned in the current basic block (before any branch)
+    live = Set{IdTag}()
+    # Track all variables we've seen assigned
+    seen = Set{IdTag}()
+    # Flag to indicate if we've seen control flow
+    seen_control_flow = Ref(false)
+
+    function visit(e)
+        ek = kind(e)
+        if ek == K"BindingId"
+            # Variable use - if it's a candidate and we haven't assigned it yet
+            # in this block, it might be used before definition
+            id = e.var_id
+            if id in candidates && !(id in live) && !seen_control_flow[]
+                # Used before assigned in this block - remove from candidates
+                delete!(candidates, id)
+            end
+        elseif is_leaf(e) || is_quoted(e)
+            return
+        elseif ek == K"="
+            # Visit RHS first
+            visit(e[2])
+            # Then record assignment
+            lhs = e[1]
+            if kind(lhs) == K"BindingId"
+                id = lhs.var_id
+                if id in candidates && !seen_control_flow[]
+                    push!(live, id)
+                    push!(seen, id)
+                end
+            end
+        elseif ek == K"lambda"
+            # A nested lambda captures variables at the point it's defined.
+            # Any candidate that's captured but not yet assigned needs boxing.
+            nested_lb = e.lambda_bindings
+            for (id, is_capt) in nested_lb.locals_capt
+                if is_capt && id in candidates && !(id in live)
+                    # This variable is captured by a closure before it's assigned
+                    delete!(candidates, id)
+                end
+            end
+            # Don't recurse into nested lambdas - they have their own analysis
+            return
+        elseif ek == K"local"
+            # Local declarations are not uses - skip them
+            return
+        elseif ek == K"method_defs" || ek == K"function_decl"
+            # Function definitions also capture variables
+            # Process any nested lambdas within to check captures
+            for child in children(e)
+                visit(child)
+            end
+            return
+        elseif is_control_flow(ek)
+            if is_early_return_guard(e)
+                # Early return guards (e.g., `x && return`) don't break the basic block.
+                # Code after them will definitely execute if we reach it, so we can
+                # continue tracking assignments without setting seen_control_flow.
+                # We need to visit the condition and the fall-through branch.
+                visit(e[1])  # Visit condition
+                # For 3-child if (desugared && or ||), visit the fall-through branch
+                if numchildren(e) == 3
+                    then_branch = e[2]
+                    else_branch = e[3]
+                    # Visit whichever branch is NOT the early exit
+                    if is_early_exit_only(then_branch)
+                        visit(else_branch)  # else is fall-through
+                    else
+                        visit(then_branch)  # then is fall-through
+                    end
+                end
+            else
+                # Regular control flow - mark that we've seen it
+                seen_control_flow[] = true
+                # Still visit children to find any remaining assignments
+                for child in children(e)
+                    visit(child)
+                end
+            end
+        else
+            for child in children(e)
+                visit(child)
+            end
+        end
+    end
+
+    # Visit the lambda body
+    if numchildren(ex) >= 3
+        body = ex[3]
+        if kind(body) == K"block"
+            for stmt in children(body)
+                visit(stmt)
+            end
+        else
+            visit(body)
+        end
+    end
+
+    # Variables in `live` (assigned before control flow) are never-undef
+    # Update their is_always_defined flag
+    for id in live
+        get_binding(ctx, id).is_always_defined = true
+    end
+end
+
 """
 This pass analyzes scopes and the names (locals/globals etc) used within them.
 
@@ -714,5 +945,6 @@ enclosing lambda form and information about variables captured by closures.
     ctx3 = VariableAnalysisContext(
         ctx2.graph, ctx2.bindings, ctx2.mod, ctx2.scopes, ex2.lambda_bindings)
     analyze_variables!(ctx3, ex2)
+    optimize_captured_vars!(ctx3, ex2)
     ctx3, ex2
 end

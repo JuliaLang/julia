@@ -129,6 +129,7 @@ end
 
 ########################################
 # @islocal with function arguments
+# (y is single-assigned before capture, so no Box needed)
 begin
     local y = 2
     function f(x)

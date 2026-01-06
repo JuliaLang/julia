@@ -1,5 +1,5 @@
 ########################################
-# Simple closure
+# Simple closure - single-assigned capture before control flow doesn't need Box
 # (FIXME: #self# should have `read` flag set)
 let
     x = 1
@@ -8,15 +8,15 @@ let
     end
 end
 #---------------------
-1   (= slot₂/x (call core.Box))
-2   1
-3   slot₂/x
-4   (call core.setfield! %₃ :contents %₂)
-5   (call core.svec :x)
-6   (call core.svec true)
-7   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₅ %₆)
-8   latestworld
-9   TestMod.#f##0
+1   (= slot₂/x 1)
+2   (call core.svec :x)
+3   (call core.svec false)
+4   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₂ %₃)
+5   latestworld
+6   TestMod.#f##0
+7   slot₂/x
+8   (call core.typeof %₇)
+9   (call core.apply_type %₆ %₈)
 10  slot₂/x
 11  (new %₉ %₁₀)
 12  (= slot₁/f %₁₁)
@@ -26,17 +26,11 @@ end
 16  SourceLocation::3:14
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(!read) slot₂/y slot₃/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/y]
     1   TestMod.+
     2   (call core.getfield slot₁/#self# :x)
-    3   (call core.isdefined %₂ :contents)
-    4   (gotoifnot %₃ label₆)
-    5   (goto label₈)
-    6   (newvar slot₃/x)
-    7   slot₃/x
-    8   (call core.getfield %₂ :contents)
-    9   (call %₁ %₈ slot₂/y)
-    10  (return %₉)
+    3   (call %₁ %₂ slot₂/y)
+    4   (return %₃)
 19  latestworld
 20  slot₁/f
 21  (return %₂₀)
@@ -473,7 +467,7 @@ function f(::g) where {g}
 end
 
 ########################################
-# Opaque closure
+# Opaque closure (y is single-assigned before capture, no Box needed)
 let y = 1
     Base.Experimental.@opaque (x, z::T)->2x + y - z
 end
@@ -728,7 +722,7 @@ let T=Blah
     x
 end
 #---------------------
-slots: [slot₁/#self#(!read) slot₂/T(!read,maybe_undef) slot₃/tmp(!read)]
+slots: [slot₁/#self#(!read) slot₂/tmp(!read)]
 1   2.0
 2   (call core.getfield slot₁/#self# :x)
 3   (call core.getfield slot₁/#self# :T)
