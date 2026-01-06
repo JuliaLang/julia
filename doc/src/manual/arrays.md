@@ -483,7 +483,7 @@ julia> A[2, 4]
 17
 ```
 
-In the above example, we have a $5 \times 7$ array, and we want to select the element in the $2^{nd}$ row and $4^{th}$ column, which is $11$. The row is considered the first dimension, and the column is considered the second dimension. The row axis goes from $1$ to $5$ and the column axis goes from $1$ to $7$.
+In the above example, we have a $5 \times 7$ array, and we want to select the element in the $2^{nd}$ row and $4^{th}$ column, which is $17$. The row is considered the first dimension with its axis going from 1 to 5, and the column is considered the second dimension with its axis going from 1 to 7.
 
 ```jldoctest
 julia> axes(A, 1)  # indices for the 1st dimension
@@ -504,7 +504,7 @@ julia> A[begin+1, end-2]
 
 We got the $1 + 1 = 2^{nd}$ row, and within that, the $7 - 1 = 6^{th}$ column. At first glance, `begin` might seem  a bit redundant, but if somebody has a crazy implementation of `AbstractArray` where the indexing begins with $0$, or $42$, or something else, `begin` starts to make a lot more sense.
 
-Indexing into a multidimensional array is similar, we choose the block from each dimension that will lead us to the element we want to select. To understand this better, lets first create a 4-dimensional array with dimensions $3 \times 4 \times 2 \times 3$. 
+Indexing into a multidimensional array is similar, we choose the block from each dimension that will lead us to the element we want to select. To understand this better, lets first create a $3 \times 4 \times 2 \times 3$ four-dimensional array.
 
 ```jldoctest
 julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3)
@@ -540,7 +540,7 @@ julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3)
  63  66  69  72
 ```
 
-One way to visualize this array is to think of it as having a bunch of 2-dimensional ($3 \times 4$) arrays. I have $2$ such arrays in a block, and I have $3$ such blocks, to give me a total of $6$ 2-dimensional arrays.
+One way to visualize this array is to think of it as having a bunch of two-dimensional ($3 \times 4$) arrays. I have $2$ such arrays in a block, and I have $3$ such blocks, to give me a total of $6$ two-dimensional arrays.
 
 ![four dimensional array with axis of dim 3](./img/array-dim-3.png)
 
@@ -553,7 +553,7 @@ julia> B[2, 4, 2, 3]
 
 When indexing, set the indices from the right until you reach the $3 \times 4$ array you want to choose. In the example above, reading from the right, I first want to choose the $3^{rd}$ outer block. Put another way, I want to choose the $3^{rd}$ element along the fourth dimension. Within that, I want to choose the $2^{nd}$ inner block. Again, put another way, I want to choose the $2^{nd}$ element along the third dimension. This gives me the $3 \times 4$ array I want. Once I have that, I choose the row and column as before -- choose the $2^{nd}$ row and $4^{th}$ column. You can continue to read this from the right, i.e., select the $4^{th}$ element along the second dimension, and then finally select the $2^{nd}$ element along the first dimension. 
 
-We need to provide an index for each dimension, for `A`, we need to provide 2 numbers in the index, for `B` we need to provide 4 numbers in the index, and so on. Otherwise we'll get an error. Except, if you only provide a single number, in which case we'll get an element back. The reason for this is discussed in the **Linear Indexing** section. For now, remember that we need to provide an index for each dimension.
+We need to provide an index for each dimension, for `A`, we need to provide 2 numbers in the index, for `B` we need to provide 4 numbers in the index, and so on. Otherwise we'll get an error. Except, if you only provide a single number, in which case we'll get an element back. The reason for this is discussed in the [Linear Indexing](@ref) section. For now, remember that we need to provide an index for each dimension.
 
 ### Range Indices
 
@@ -581,7 +581,7 @@ Range indices and some of the other indexing styles that we'll discuss below giv
 
 ### Array Indices
 
-What if the elements I want cannot be specified in a range? In this case I can "cherry-pick" the elements I want in a particular dimension by specifying them in a vector. In the example below, I am choosing the $2^{nd}$ and the $5^{th}$ rows, and in those rows I am choosing the first column. 
+What if the elements we want cannot be specified in a range? In this case we can "cherry-pick" the elements we want in a particular dimension by specifying them in a vector. In the example below, I am choosing the $2^{nd}$ and the $5^{th}$ rows, and in those rows I am choosing the first column. 
 
 ```jldoctest
 julia> A[[2, 5], 1]
@@ -590,7 +590,7 @@ julia> A[[2, 5], 1]
  5
 ```
 
-I can cherry-pick elements along multiple dimensions. Lets go back to `B`, say I want to choose the $2^{nd}$ and the $3^{rd}$ elements from the fourth dimension, and within that the $1^{st}$ element from the third dimension. This will give us the following two 2-D arrays.
+We can cherry-pick elements along multiple dimensions. Lets go back to `B`, say we want to choose the $2^{nd}$ and the $3^{rd}$ elements from the fourth dimension, and within that, the $1^{st}$ element from the third dimension. This will give us the following two 2-D arrays.
 
 ```math
 \begin{bmatrix}
@@ -623,7 +623,7 @@ julia> B[2, [4, 1, 3, 1], 1, [2, 3]]
 
 #### Output Dimensionality
 
-As can be seen, the result of using these vectorized indices is also an array. The dimensions of the resulting array are based on the dimensions of the input indices. Ignoring all the scalar indices, the resulting array's shape is the length of the vectorized indices. For example if `J` is a vector of indices, then `B[2, J, 1, 2]` is an array with `length(J)`, and its `j`th element is `B[1, J[j], 1, 2]`. More generally speaking, if $y = X[I_1, I_2, \cdots, I_n]$ and all $I_k$ indices are vectors, then $y$ will be an $n$-dimentional array its shape will be $(length(I_1), length(I_2), \cdots, length(I_n))$, with $y[i_1, i_2, \cdots, i_n] = X[\;I_1[i_1], I_2[i_2], \cdots, I_n[i_n]\;]$. 
+As can be seen, the result of using these vectorized indices is also an array. The dimensions of the resulting array are based on the dimensions of the input indices. Ignoring all the scalar indices, the resulting array's shape is the length of the vectorized indices. For example if `J` is a vector of indices, then `B[2, J, 1, 2]` is an array with `length(J)`, and its `j`th element is `B[1, J[j], 1, 2]`. More generally speaking, if $y = X[I_1, I_2, \cdots, I_n]$ and all $I_k$ indices are vectors, then $y$ will be an $n$-dimensional array its shape will be $(length(I_1), length(I_2), \cdots, length(I_n))$, with $y[i_1, i_2, \cdots, i_n] = X[\;I_1[i_1], I_2[i_2], \cdots, I_n[i_n]\;]$. 
 
 But why stop at vectorized indices? Why not have matrices as indices?
 
@@ -639,11 +639,11 @@ julia> B[2, [4 1; 3 1], 1, [2, 3]]
  56  50
 ```
 
-This is still cherry picking the same 4 elements along the 2nd dimension, but now they are just arranged differently. In the previous example with using vector indices, our output was two-dimensional. Here, with using matrix as on of our indices, our output is three-dimensional. Using matrices added a dimension to our output. In our general example $y = X[I_1, I_2, \cdots, I_n]$, if one of the indices $I_k$ is a two-dimensional matrix instead of a one-dimensional vector, then $y$ will have $n+1$ dimensions and its shape of will be $(length(I_1), length(I_2), \cdots, size(I_k, 1), size(I_k, 2), \cdots, length(I_n))$, and $y[i_1, i_2, \cdots, i_{n+1}] = X[\; I_1[i_1], I_2[i_2], \cdots, I_k[i_k, i_{k+1}], \cdots, I_n[i_{n+1}] \;]$.
+This is still cherry picking the same 8 elements, but now they are just arranged differently. In the previous example with using vector indices, our output was two-dimensional. Here, with using matrix as one of our indices, our output is three-dimensional. Using a matrix added a dimension to our output. In our general example $y = X[I_1, I_2, \cdots, I_n]$, if one of the indices $I_k$ is a two-dimensional matrix instead of a one-dimensional vector, then $y$ will have $n+1$ dimensions and its shape of will be $(length(I_1), length(I_2), \cdots, size(I_k, 1), size(I_k, 2), \cdots, length(I_n))$, and $y[i_1, i_2, \cdots, i_{n+1}] = X[\; I_1[i_1], I_2[i_2], \cdots, I_k[i_k, i_{k+1}], \cdots, I_n[i_{n+1}] \;]$.
 
 ### Boolean Indices
 
-What if the elements I want to select cannot be chosen as blocks along specific dimensions? Lets say I want to select the diagonal elements along our $5 \times 7$ 2-D matrix. I can create a boolean mask, which is an array similar in shape to my main array, but it is made up of boolean values. Coordinates of cells set to `true` in the mask will be used to select individual elements in our main array. This style of indexing is also known as Logical Indexing.
+What if the elements I want to select cannot be chosen as blocks along specific dimensions? Lets say I want to select the diagonal elements along our $5 \times 7$ two-dimensional matrix. I can create a boolean mask, which is an array similar in shape to my main array, but it is made up of boolean values. Coordinates of cells set to `true` in the mask will be used to select individual elements in our main array. This style of indexing is also known as Logical Indexing.
 
 ```jldoctest
 julia> idx = [
@@ -696,7 +696,7 @@ julia> B[2, 4, mask]
 
 The output vector has its elements in the column order of the mask's coordinates, i.e., `B[2, 4, 1, 2]` shows up first and `B[2, 4, 2, 3]` shows up after. 
 
-In previous sections on scalar indices, range indices, and array indices, we needed to provide an index for each dimension. However, this does not seem to hold for examples in this section. `A[idx]` has a single item in the index for a 2-dimensional array, `B[2, 4, mask]` are just 3 items, whereas `B` has 4 dimensions. So what gives? Remember, the boolean mask is expanded to the coordinates of all its `true` cells. `A[idx]` expands to `A[1, 1], A[2, 2], etc.`. Similarly `B[2, 4, mask]` expands to  `B[2, 4, 2, 3]` and `B[2, 4, 1, 2]`. We are stil providing an index for each dimension, its just...masked  ;-) For this reason the dimensions of the `mask` should match the dimensions that I am specifying. Remember, `B` is $3 \times 4 \times 2 \times 3$, i.e., its last two dimensions are $2 \times\ 3$, and because `mask` is trying to specify the coordinates of elements in these two dimensions, it must also be a $2 \times 3$ array. Of course this idea can be extended to any number of dimensions. If I want to specify the last three dimensions, then I need to use a $4 \times 2 \times 3$ mask, and so on.
+In previous sections on scalar indices, range indices, and array indices, we needed to provide an index for each dimension. However, this does not seem to hold for examples in this section. `A[idx]` has a single item in the index for a 2-dimensional array. `B[2, 4, mask]` are just 3 items, whereas `B` has 4 dimensions. So what gives? Remember, the boolean mask is expanded to the coordinates of all its `true` cells. `A[idx]` expands to `A[1, 1], A[2, 2], etc.`. Similarly `B[2, 4, mask]` expands to  `B[2, 4, 2, 3]` and `B[2, 4, 1, 2]`. We are stil providing an index for each dimension, its just...masked  ;-) For this reason the dimensions of the `mask` should match the dimensions that I am specifying. Remember, `B` is $3 \times 4 \times 2 \times 3$, i.e., its last two dimensions are $2 \times\ 3$, and because `mask` is trying to specify the coordinates of elements in these two dimensions, it must also be a $2 \times 3$ array. Of course this idea can be extended to any number of dimensions. If I want to specify the last three dimensions, then I need to use a $4 \times 2 \times 3$ mask, and so on.
 
 It seems pretty tedious to create boolean masks by hand, and indeed this is not the way boolean masks are used. We usually use some sort of a predicate function that will filter elements from our main array and use that predicate to create our mask. Lets say we have a two-dimensional matrix of integers -
 
@@ -709,7 +709,7 @@ julia> R = rand(1:100, 4, 4)
  52  89  49  64
 ```
 
-Further, lets say we want to select all the even elements from this matrix. We can use the [`iseven()`](@ref) function for this. However, this function only accepts a `Number`,  not an **array** of numbers. As you will see in the [Array and Vectorized Operators and Functions](@ref) section, we can use the dot-syntax to automatically apply this function to each element of the array. 
+Further, lets say we want to select all the even elements from this matrix. We can use the [`iseven()`](@ref) function for this. However, this function only accepts a `Number`,  not an **array** of numbers. As you will see in the [Array and Vectorized Operators and Functions](@ref man-array-and-vectorized-operators-and-functions) section, we can use the dot-syntax to automatically apply this function to each element of the array. 
 
 ```jldoctest
 julia> iseven.(R)
@@ -735,7 +735,7 @@ julia> R[iseven.(R)]
 
 ### Cartesian Indexing
 
-The indexing style we have been using so far is called Cartesian, because we specify the coordinates of the elements we want to select along each dimension. The `CartesianIndex{N}` type formalizes this concept. It is parameterized by the number of dimensions we want to index with it. 
+The indexing style we have been using so far is called Cartesian, because we specify the coordinates of the elements we want to select. The `CartesianIndex{N}` type formalizes this concept. It is parameterized by the number of dimensions we want to index with it. 
 
 ```jldoctest
 julia> idx = CartesianIndex(2, 4, 2, 3)
@@ -761,7 +761,7 @@ iteration](https://julialang.org/blog/2016/02/iteration).
 
 Here we are using a single index `idx` to index into a four-dimensional array, but just like we saw with boolean arrays, this is not violating our rule of having to specify as many indices as the number of dimensions. Think of the `CartesianIndex` object as expanding out its inner state and indexing our main array with 4 indices.
 
-As if one `CartesianIndex` object was not enough fun, we can have even more fun with a full vector of them :-). Lets go back to our motivating example for boolean indices of selecting the diagonal elements from our two-dimensional array. Here, instead of using a boolean mask, we will use a vector of `CartesianIndex{2}` objects. This style of indexing is sometimes also referred to as pointwise indexing.
+As if one `CartesianIndex` object was not enough fun, we can have even more fun with a full vector of them :-). Lets go back to our motivating example for boolean indices -- selecting the diagonal elements from our two-dimensional array. Here, instead of using a boolean mask, we will use a vector of `CartesianIndex{2}` objects. This style of indexing is sometimes also referred to as pointwise indexing.
 
 ```jldoctest
 julia> diag = [
@@ -941,7 +941,7 @@ introspect which is which).
 
 ### Omitted and Extra Indices
 
-In addition to linear indexing, an `N`-dimensional array may be indexed with
+Keeping linear indexing aside, an `N`-dimensional array may be indexed with
 fewer or more than `N` indices in certain situations.
 
 Indices may be omitted if the trailing dimensions that are not indexed into are
