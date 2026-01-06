@@ -855,7 +855,7 @@ The value of `N` in `CartesianIndex{N}` must be the number of dimensions it is r
     `end` keyword to represent the last index of a dimension. Do not use `end`
     in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
 
-### Linear indexing
+### Linear Indexing
 
 In Julia's default implementation, a multi-dimensional array is internally represented as one big contiguous single-dimensional array in column major form. For example, the following matrix 
 
