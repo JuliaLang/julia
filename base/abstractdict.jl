@@ -227,7 +227,7 @@ function merge!(d::AbstractDict, others::AbstractDict...)
             otherlen = length(other)
             if otherlen > 0 && haslength(d)
                 n = length(d) + otherlen
-                _safe_nonshrinking_sizehint!(d, n)
+                _compat_sizehint!(d, n; shrink=false)
             end
         end
         for (k,v) in other

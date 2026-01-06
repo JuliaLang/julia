@@ -3584,9 +3584,9 @@ pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 sizehint!(a::AbstractVector, _; shrink::Bool=true) = a
 sizehint!(a::AbstractVector, n::Integer; shrink::Bool=true) = a
 
-function _safe_nonshrinking_sizehint!(a, n::Integer)
+function _compat_sizehint!(a, n::Integer; shrink::Bool=true)
     try
-        return sizehint!(a, n; shrink=false)
+        return sizehint!(a, n; shrink=shrink)
     catch err
         if !(err isa MethodError)
             rethrow()
