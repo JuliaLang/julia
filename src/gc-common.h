@@ -3,6 +3,7 @@
 #ifndef JL_GC_COMMON_H
 #define JL_GC_COMMON_H
 
+#include "dtypes.h"
 #include "julia.h"
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
@@ -23,6 +24,7 @@
 #include <malloc.h> // for malloc_trim
 #endif
 
+#include "mimalloc.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,26 +89,89 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 #endif
 
 // =========================================================================== //
-// malloc wrappers, aligned allocation
+// malloc wrappers
 // =========================================================================== //
+#define MIMALLOC_ENABLED 1
 
-#if defined(_OS_WINDOWS_)
-STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
+#ifdef MIMALLOC_ENABLED
+STATIC_INLINE void *jl_malloc_wrapper(size_t sz)
+{
+    return mi_malloc(sz);
+}
+STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz)
+{
+    return mi_calloc(nm, sz);
+}
+STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz)
+{
+    return mi_realloc(p, sz);
+}
+STATIC_INLINE void jl_free_wrapper(void *p)
+{
+    mi_free(p);
+}
+STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align)
+{
+    return mi_malloc_aligned(sz, align);
+}
+STATIC_INLINE void *jl_realloc_aligned_wrapper(void *p, size_t sz, size_t oldsz,
+                                       size_t align)
+{
+    return mi_realloc_aligned(p, sz, align);
+}
+STATIC_INLINE void jl_free_aligned_wrapper(void *p) JL_NOTSAFEPOINT
+{
+    mi_free(p);
+}
+#elif defined(_OS_WINDOWS_)
+STATIC_INLINE void *jl_malloc_wrapper(size_t sz)
+{
+    return malloc(sz);
+}
+STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz)
+{
+    return calloc(nm, sz);
+}
+STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz)
+{
+    return realloc(p, sz);
+}
+STATIC_INLINE void *jl_free_wrapper(void *p)
+{
+    free(p);
+}
+STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align)
 {
     return _aligned_malloc(sz ? sz : 1, align);
 }
-STATIC_INLINE void *jl_realloc_aligned(void *p, size_t sz, size_t oldsz,
+STATIC_INLINE void *jl_realloc_aligned_wrapper(void *p, size_t sz, size_t oldsz,
                                        size_t align)
 {
     (void)oldsz;
     return _aligned_realloc(p, sz ? sz : 1, align);
 }
-STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_free_aligned_wrapper(void *p) JL_NOTSAFEPOINT
 {
     _aligned_free(p);
 }
 #else
-STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
+STATIC_INLINE void *jl_malloc_wrapper(size_t sz)
+{
+    return malloc(sz);
+}
+STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz)
+{
+    return calloc(nm, sz);
+}
+STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz)
+{
+    return realloc(p, sz);
+}
+STATIC_INLINE void *jl_free_wrapper(void *p)
+{
+    free(p);
+}
+STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align)
 {
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
@@ -117,7 +182,7 @@ STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
         return NULL;
     return ptr;
 }
-STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
+STATIC_INLINE void *jl_realloc_aligned_wrapper(void *d, size_t sz, size_t oldsz,
                                        size_t align)
 {
 #if defined(_P64) || defined(__APPLE__)
@@ -131,14 +196,15 @@ STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
     }
     return b;
 }
-STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_free_aligned_wrapper(void *p) JL_NOTSAFEPOINT
 {
     free(p);
 }
 #endif
-#define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
-#define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
-#define malloc_page_align(sz) jl_malloc_aligned(sz, jl_getpagesize())
+
+#define malloc_cache_align(sz) jl_malloc_aligned_wrapper(sz, JL_CACHE_BYTE_ALIGNMENT)
+#define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned_wrapper(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
+#define malloc_page_align(sz) jl_malloc_aligned_wrapper(sz, jl_getpagesize())
 
 // =========================================================================== //
 // Pointer tagging

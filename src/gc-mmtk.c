@@ -595,7 +595,7 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
     if (isaligned)
-        jl_free_aligned(d);
+        jl_free_aligned_wrapper(d);
     else
         free(d);
     gc_num.freed += freed_bytes;
@@ -975,7 +975,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    void *data = malloc(sz);
+    void *data = jl_malloc_wrapper(sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, sz);
@@ -988,7 +988,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    void *data = calloc(nm, sz);
+    void *data = jl_calloc_wrapper(nm, sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, nm * sz);
@@ -1001,7 +1001,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    free(p);
+    jl_free_wrapper(p);
     if (pgcstack != NULL && ct->world_age) {
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, -sz);
     }
@@ -1019,7 +1019,7 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         else
             jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
     }
-    return realloc(p, sz);
+    return jl_realloc_wrapper(p, sz);
 }
 
 void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset)

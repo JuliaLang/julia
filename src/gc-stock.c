@@ -488,7 +488,7 @@ FORCE_INLINE void sweep_unlink_and_free(bigval_t *v) JL_NOTSAFEPOINT
     memset(v, 0xbb, v->sz);
 #endif
     gc_invoke_callbacks(jl_gc_cb_notify_external_free_t, gc_cblist_notify_external_free, (v));
-    jl_free_aligned(v);
+    jl_free_aligned_wrapper(v);
 }
 
 static bigval_t *sweep_list_of_young_bigvals(bigval_t *young) JL_NOTSAFEPOINT
@@ -641,7 +641,7 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
     if (isaligned)
-        jl_free_aligned(d);
+        jl_free_aligned_wrapper(d);
     else
         free(d);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
@@ -3793,7 +3793,7 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
-    void *data = malloc(sz);
+    void *data = jl_malloc_wrapper(sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);
@@ -3810,7 +3810,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
-    void *data = calloc(nm, sz);
+    void *data = jl_calloc_wrapper(nm, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);
@@ -3827,7 +3827,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
-    free(p);
+    jl_free_wrapper(p);
     jl_task_t *ct = jl_get_current_task();
     if (ct != NULL)
         jl_batch_accum_free_size(ct->ptls, sz);
@@ -3835,7 +3835,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
-    void *data = realloc(p, sz);
+    void *data = jl_realloc_wrapper(p, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);

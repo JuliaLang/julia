@@ -61,6 +61,7 @@ USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
+USE_SYSTEM_MIMALLOC:=0
 USE_SYSTEM_LLD:=0
 
 # Link libjulia-internal with static libgcc and libstdc++
@@ -1387,6 +1388,13 @@ else
   LIBUV_INC := $(build_includedir)
 endif
 
+ifeq ($(OS), WINNT)
+MIMALLOC := $(build_libdir)/libmimalloc-static.a
+else
+MIMALLOC := $(build_libdir)/libmimalloc.a
+endif
+MIMALLOC_INC := $(build_includedir)
+
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
   UTF8PROC_INC := $(LOCALBASE)/include
@@ -1462,7 +1470,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT MIMALLOC
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 BB_PROJECTS += MMTK_JULIA
