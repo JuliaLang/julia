@@ -512,7 +512,7 @@ function set_scope_layer(ctx, ex, layer_id, force)
     new_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
 
     ex2 = if k == K"module" || k == K"toplevel" || k == K"inert"
-        makenode(ctx, ex, ex, children(ex))
+        makenode(ctx, ex, ex, children(ex)) # TODO children not defined
     elseif k == K"."
         children = NodeId[set_scope_layer(ctx, ex[1], layer_id, force), ex[2]]
         makenode(ctx, ex, ex, children)

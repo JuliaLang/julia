@@ -132,6 +132,7 @@ end
 
 ########################################
 # @islocal with function arguments
+# (y is single-assigned before capture, so no Box needed)
 begin
     local y = 2
     function f(x)
@@ -139,25 +140,22 @@ begin
     end
 end
 #---------------------
-1   (= slot₁/y (call core.Box))
-2   2
-3   slot₁/y
-4   (call core.setfield! %₃ :contents %₂)
-5   (method TestMod.f)
-6   latestworld
-7   TestMod.f
-8   (call core.Typeof %₇)
-9   (call core.svec %₈ core.Any)
-10  (call core.svec)
-11  SourceLocation::3:14
-12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+1   (= slot₁/y 2)
+2   (method TestMod.f)
+3   latestworld
+4   TestMod.f
+5   (call core.Typeof %₄)
+6   (call core.svec %₅ core.Any)
+7   (call core.svec)
+8   SourceLocation::3:14
+9   (call core.svec %₆ %₇ %₈)
+10  --- method core.nothing %₉
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
-14  latestworld
-15  TestMod.f
-16  (return %₁₅)
+11  latestworld
+12  TestMod.f
+13  (return %₁₂)
 
 ########################################
 # @islocal with global
