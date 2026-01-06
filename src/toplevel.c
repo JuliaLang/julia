@@ -719,13 +719,23 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
 JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t *thk, int fast)
 {
     jl_task_t *ct = jl_current_task;
-    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     JL_TYPECHK(jl_eval_thunk, code_info, (jl_value_t*)thk);
     JL_TYPECHK(jl_eval_thunk, array_any, (jl_value_t*)thk->code);
+
+    // Set global jl_lineno/jl_filename to file and line info for the original
+    // start of this block.
+    int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
+    const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
+    int toplevel_lineno = 0;
+    const char* toplevel_filename = jl_debuginfo_firstline(thk->debuginfo, &toplevel_lineno);
+    jl_atomic_store_relaxed(&jl_lineno, toplevel_lineno);
+    jl_atomic_store_relaxed(&jl_filename, toplevel_filename);
 
     size_t last_age = ct->world_age;
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     ct->world_age = world;
+
+    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
 
     jl_method_instance_t *mfunc = NULL;
@@ -755,6 +765,8 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
         result = jl_interpret_toplevel_thunk(m, thk);
     }
     ct->world_age = last_age;
+    jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+    jl_atomic_store_relaxed(&jl_filename, last_filename);
 
     JL_GC_POP();
     return result;
