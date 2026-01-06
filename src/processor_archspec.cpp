@@ -1042,14 +1042,27 @@ extern "C" JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature) {
 extern "C" JL_DLLEXPORT std::pair<std::string, llvm::SmallVector<std::string, 0>>
 jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags) JL_NOTSAFEPOINT {
     flags = 0;
-    (void)imaging;
-    
+
     ensure_cmdline_targets_initialized(cpu_target);
-    
+
     // Use jit_targets if available (set after sysimg load), otherwise cmdline_targets
     const auto &targets = jit_targets.empty() ? cmdline_targets : jit_targets;
     if (!jit_targets.empty())
         flags = jit_targets[0].flags;
+
+    // Check for invalid multi-target usage when not imaging
+    if (!imaging) {
+        if (targets.size() > 1) {
+            jl_safe_printf("More than one command line CPU targets specified "
+                      "without a `--output-` flag specified");
+            exit(1);
+        }
+        if (!targets.empty() && (targets[0].flags & JL_TARGET_CLONE_ALL)) {
+            jl_safe_printf("\"clone_all\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
+        }
+    }
     
     const auto &t = targets[0];
     

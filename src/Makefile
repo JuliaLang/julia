@@ -636,6 +636,9 @@ ANALYSIS_DEPS += llvmunwind
 else ifneq ($(OS),WINNT)
 ANALYSIS_DEPS += unwind
 endif
+ifeq ($(USE_ARCHSPEC),1)
+ANALYSIS_DEPS += archspec
+endif
 .PHONY: install-analysis-deps
 install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
