@@ -607,8 +607,8 @@ We can cherry-pick elements along multiple dimensions. Lets go back to `B`, say 
 ```math
 \begin{bmatrix}
 25 & 28 & 31 & 34 \\
- {\color{Green}
- 26} & 29 & {\color{Magenta} 32} & {\color {Cyan}
+ {\color{green}
+ 26} & 29 & {\color{magenta} 32} & {\color {cyan}
  35} \\
 27 & 30 & 33 & 36  \\
 \end{bmatrix}
@@ -617,12 +617,12 @@ We can cherry-pick elements along multiple dimensions. Lets go back to `B`, say 
 ```math
 \begin{bmatrix}
 49 & 52 & 55 & 58 \\
-{\color{Green} 50} & 53 & {\color{Magenta} 56} & {\color{Cyan} 59} \\
+{\color{green} 50} & 53 & {\color{magenta} 56} & {\color{cyan} 59} \\
 51 & 54 & 57 & 60 \\
 \end{bmatrix}
 ```
 
-From here, we want the $2^{nd}$ row from both the arrays, and within that the $[{\color{Cyan} 4^{th}} ,\; {\color{Green} 1^{st}}, \; {\color{Magenta} 3^{rd}}, \; {\color{Green} 1^{st}}]$ columns.
+From here, we want the $2^{nd}$ row from both the arrays, and within that the $[{\color{cyan} 4^{th}} ,\; {\color{green} 1^{st}}, \; {\color{magenta} 3^{rd}}, \; {\color{green} 1^{st}}]$ columns.
 
 ```jldoctest
 julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3);
