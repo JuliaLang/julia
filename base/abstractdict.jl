@@ -227,11 +227,7 @@ function merge!(d::AbstractDict, others::AbstractDict...)
             otherlen = length(other)
             if otherlen > 0 && haslength(d)
                 n = length(d) + otherlen
-                if hasmethod(sizehint!, Tuple{typeof(d), typeof(n)}, (:shrink,))
-                    sizehint!(d, n; shrink = false)
-                else
-                    sizehint!(d, n)
-                end
+                _safe_nonshrinking_sizehint!(d, n)
             end
         end
         for (k,v) in other

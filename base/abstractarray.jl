@@ -3581,8 +3581,15 @@ pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
 # sizehint! does nothing by default
-sizehint!(a::AbstractVector, _) = a
+sizehint!(a::AbstractVector, _; shrink::Bool=true) = a
 sizehint!(a::AbstractVector, n::Integer; shrink::Bool=true) = a
+
+function _safe_nonshrinking_sizehint!(a, n::Integer)
+    if hasmethod(sizehint!, Tuple{typeof(a), typeof(n)}, (:shrink,))
+        return sizehint!(a, n; shrink=false)
+    end
+    return sizehint!(a, n)
+end
 
 # The semantics of `collect` are weird. Better to write our own
 function rest(a::AbstractArray{T}, state...) where {T}
