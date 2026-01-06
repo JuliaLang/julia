@@ -741,7 +741,7 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
 end
 
 #-------------------------------------------------------------------------------
-# AST destruction utilities
+# AST destructuring utilities
 
 raw"""
 Simple `SyntaxTree` pattern matching
@@ -768,7 +768,7 @@ children (bound to `p1` and `p2`), and `ps` is bound to the possibly-empty
 SyntaxList of children `3:end`.  Identifiers (except `_`) can't be re-used, but
 may check for some form of tree equivalence in a future implementation.
 
-## Extra conditions: `when`, `run`
+## Extra condition: `when`
 
 Like an escape hatch to the structure-matching mechanism.  `when=cond` requires
 `cond` to evaluate to `true` for this branch to be taken.  `cond` may also bind
@@ -829,7 +829,7 @@ function _stm(line::LineNumberNode, st, pats; debug=false)
                               :($k_gs = $kind($st_gs)),
                               :($nc_gs = $numchildren($st_gs))),
                    Expr(:if, false, nothing))
-    needs_else = out_blk.args[2].args
+    case_list_tail = out_blk.args[2].args
     for pcr in pats.args
         pcr isa LineNumberNode && (line = pcr; continue)
         p, cond, result = _stm_destruct_pat(pcr)
@@ -843,10 +843,10 @@ function _stm(line::LineNumberNode, st, pats; debug=false)
                                    Expr(:block, line,
                                         :($result_gs = $result), true)))),
                     result_gs)
-        push!(needs_else, case)
-        needs_else = needs_else[3].args
+        push!(case_list_tail, case)
+        case_list_tail = case_list_tail[3].args
     end
-    push!(needs_else,
+    push!(case_list_tail,
           :(throw(ErrorException(string(
               "No match found for `", $st_gs, "` at ", $(string(line)))))))
     return esc(out_blk)
@@ -985,7 +985,7 @@ function _stm_check_usage(pats::Expr)
         end
     end
 
-    @assert Meta.isexpr(pats, :block) "Usage: @st_match st begin; ...; end"
+    @assert Meta.isexpr(pats, :block) "Usage: @stm st begin; ...; end"
     for pcr in filter(e->!isa(e, LineNumberNode), pats.args)
         @assert(Meta.isexpr(pcr, :(->), 2), "Expected pat -> res, got malformed case: $pcr")
         if Meta.isexpr(pcr.args[1], :tuple)
