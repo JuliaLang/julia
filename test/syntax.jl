@@ -4897,4 +4897,17 @@ end
         return g
     end
     @test fieldtype(typeof(multi_if_else(true)), 1) === Core.Box
+
+    # Closure captured BEFORE if-else must see updated value (must be boxed)
+    function capture_before_if_else()
+        x = 1
+        g = () -> x
+        if rand() > 0.5
+            x = 2
+        else
+            x = 3
+        end
+        return g
+    end
+    @test fieldtype(typeof(capture_before_if_else()), 1) === Core.Box
 end
