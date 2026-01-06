@@ -581,7 +581,7 @@ Range indices and some of the other indexing styles that we'll discuss below giv
 
 ### Array Indices
 
-What if the elements we want cannot be specified in a range? In this case we can "cherry-pick" the elements we want in a particular dimension by specifying them in a vector. In the example below, I am choosing the $2^{nd}$ and the $5^{th}$ rows, and in those rows I am choosing the first column. 
+What if the elements we want cannot be specified in a range? In this case we can "cherry-pick" the elements we want in a particular dimension by specifying them in a vector. In the example below, I am choosing the $2^{nd}$ and the $5^{th}$ rows, and in those rows I am choosing the first column.
 
 ```jldoctest
 julia> A[[2, 5], 1]
@@ -889,7 +889,7 @@ julia> vec(A)
  3
  6
  7
- 1  
+ 1
 
 julia> A[5]
 7
