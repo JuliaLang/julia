@@ -16,7 +16,7 @@ import Base: show
     @test md"foo ~bar~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
     @test md"foo ~~bar~~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
     @test md"""foo
-    bar""" == MD(Paragraph(["foo bar"]))
+    bar""" == MD(Paragraph(["foo\nbar"]))
     @test md"""foo\
     bar""" == MD(Paragraph(["foo", LineBreak(), "bar"]))
 
@@ -80,7 +80,7 @@ end
 @testset "linefeeds" begin
     @test isempty(Markdown.parse("\r"))
     @test Markdown.parse("hello\r") == MD(Paragraph(["hello"]))
-    @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello ", Italic(Any["julia"])]))
+    @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello\n", Italic(Any["julia"])]))
 end
 
 @testset "footnotes" begin
@@ -376,7 +376,7 @@ end
     @test md"<mailto://a@example.com>" |> html == """<p><a href="mailto://a@example.com">mailto://a@example.com</a></p>\n"""
     @test md"<https://julialang.org/not a link>" |> html == "<p>&lt;https://julialang.org/not a link&gt;</p>\n"
     @test md"""<https://julialang.org/nota
-    link>""" |> html == "<p>&lt;https://julialang.org/nota link&gt;</p>\n"
+    link>""" |> html == "<p>&lt;https://julialang.org/nota\nlink&gt;</p>\n"
     @test md"""Hello
 
     ---
@@ -399,7 +399,14 @@ end
     h2
     ---
     not
-    == =""" |> html == "<h1>h1</h1>\n<h2>h2</h2>\n<p>not == =</p>\n"
+    == =""" |> html ==
+    """
+    <h1>h1</h1>
+    <h2>h2</h2>
+    <p>not
+    == =</p>
+    """
+
 end
 
 @testset "the 'book' example input" begin
@@ -634,7 +641,7 @@ end
     @test md"""
     no|table
     no error
-    """ == MD([Paragraph(Any["no|table no error"])])
+    """ == MD([Paragraph(Any["no|table\nno error"])])
 
     t = """a   |   b
     :-- | --:
@@ -1069,7 +1076,8 @@ end
     # Rendering tests.
     expected =
             """
-            1. A paragraph with two lines.
+            1. A paragraph
+               with two lines.
 
                ```
                indented code
@@ -1099,7 +1107,8 @@ end
     expected =
             """
             <ol>
-            <li><p>A paragraph with two lines.</p>
+            <li><p>A paragraph
+            with two lines.</p>
             <pre><code>indented code
             </code></pre>
             <blockquote>
@@ -1137,7 +1146,8 @@ end
 
     expected =
             """
-            1. A paragraph with two lines.
+            1. A paragraph
+               with two lines.
 
                .. code-block:: julia
 
