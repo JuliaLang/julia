@@ -35,10 +35,11 @@ end
 
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        print(io, isordered(list) ? "$(i + list.ordered - 1). " : "  * ")
+        bullet = isordered(list) ? "$(i + list.ordered - 1). " : "  * "
+        print(io, bullet)
         lines = split(rstrip(sprint(plain, item)), "\n")
         for (n, line) in enumerate(lines)
-            print(io, (n == 1 || isempty(line)) ? "" : "    ", line)
+            print(io, (n == 1 || isempty(line)) ? "" : (" "^length(bullet)), line)
             n < length(lines) && println(io)
         end
         println(io)

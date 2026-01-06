@@ -244,7 +244,16 @@ World""" |> Markdown.plain == "Hello\n\n---\n\nWorld\n"
 >
 > ```
 > baz
-> ```""" |> Markdown.plain == """> foo\n>\n>   * bar\n>\n> ```\n> baz\n> ```\n\n"""
+> ```""" |> Markdown.plain == """
+> foo
+>
+>   * bar
+>
+> ```
+> baz
+> ```
+
+"""
 
 # Terminal (markdown) output
 
@@ -1062,11 +1071,11 @@ end
             """
             1. A paragraph with two lines.
 
-                ```
-                indented code
-                ```
+               ```
+               indented code
+               ```
 
-                > A block quote.
+               > A block quote.
 
               * one
 
@@ -1353,14 +1362,14 @@ end
        - line\\
          break
        """
-    @test sprint(show, MIME("text/plain"), s) * "\n" ==
+    @test sprint(show, MIME("text/plain"), s) ==
             raw"""
               Misc:
               stuff
 
               • line
                 break
-            """
+            """ |> chomp
     @test Markdown.plain(s) ==
             raw"""
             Misc:
@@ -1506,7 +1515,7 @@ end
     @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end
 
-@testset "#40508: terminal rendering of nested lists, with hard breaks" begin
+@testset "rendering of nested lists, with hard breaks" begin
     #
     # Test an unordered list.
     #
@@ -1525,6 +1534,7 @@ end
     - back to top level
     """
 
+    # test HTML rendering
     expected = """
       An unordered list:
 
@@ -1544,13 +1554,39 @@ end
     actual = sprint(show, MIME("text/plain"), m)
     @test expected == actual
 
+    # test Markdown rendering
+    # FIXME: actually the hard breaks are *not* correctly round tripped,
+    # but at least the indentation is correct now
+    expected = """
+    An unordered list:
+
+      * top level
+        with an extra line
+
+          * second level
+            again with an extra line
+
+              * third level
+                yet again with an extra line
+
+                  * fourth level
+                    and another extra line
+
+                      * fifth level
+                        final extra line
+      * back to top level
+    """
+
+    actual = Markdown.plain(m)
+    @test expected == actual
+
     #
     # Test an ordered list. These behave differently if the number of list
     # entries increases to another power of ten. For example, when going from
     # 9 to 10 list entries. We test this here.
     #
     m = md"""
-    An unordered list:
+    An ordered list:
     1. top level\
        with an extra line
        1. second level\
@@ -1566,8 +1602,9 @@ end
     1. back to top level
     """
 
+    # test HTML rendering
     expected = """
-      An unordered list:
+      An ordered list:
 
       1. top level
          with an extra line
@@ -1585,6 +1622,34 @@ end
     """ |> chomp
 
     actual = sprint(show, MIME("text/plain"), m)
+    @test expected == actual
+
+    # test Markdown rendering
+    # FIXME: actually the hard breaks are *not* correctly round tripped,
+    # but at least the indentation is correct now
+    expected = """
+    An ordered list:
+
+    1. top level
+       with an extra line
+
+       1. second level
+          again with an extra line
+
+          999. third level
+               yet again with an extra line
+
+               1. fourth level
+                  and another extra line
+
+                  1. fifth level
+                     final extra line
+          1000. more third level
+                with an extra line
+    2. back to top level
+    """
+
+    actual = Markdown.plain(m)
     @test expected == actual
 end
 
