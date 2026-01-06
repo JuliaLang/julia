@@ -3394,13 +3394,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         }
     }
 
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
     if (sweep_full) {
         // issue #30653
         // empirically, the malloc runaway seemed to occur within a growth gap
         // of about 20-25%
         if (jl_maxrss() > (last_trim_maxrss/4)*5) {
+#ifdef MIMALLOC_ENABLED
+            mi_collect(true);
+#else
             malloc_trim(0);
+#endif
             last_trim_maxrss = jl_maxrss();
         }
     }
